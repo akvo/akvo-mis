@@ -8,6 +8,7 @@ import {
   RolesSection,
   HomeFooter,
   useHomeParallax,
+  PhotoGallery,
 } from "./components";
 
 const Home = () => {
@@ -25,6 +26,7 @@ const Home = () => {
       <HeroSection text={text} appName={appName} />
       <MandateSection text={text} />
       <VideoSection text={text} />
+      <PhotoGallery text={text} />
       <RolesSection text={text} />
       <HomeFooter text={text} />
     </main>

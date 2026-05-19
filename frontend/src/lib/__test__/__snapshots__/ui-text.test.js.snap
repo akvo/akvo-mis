@@ -388,19 +388,32 @@ Object {
       Test App
     </React.Fragment>,
     "homeFooterContactAddress": Array [
-      "Private Mail Bag, Suva, Fiji",
-      "Level 4, Nasilivata House, Ratu Mara Road,",
-      "Samabula, Suva",
+      "Level 1 Nasilivata House",
+      "Samabula",
     ],
     "homeFooterContactDetails": Array [
       "Department of Water and Sewerage",
       "Ministry of Public Works and Meteorological Services, and Transport",
     ],
+    "homeFooterContactEmail": "mpwmst.dws@govnet.gov.fj",
     "homeFooterContactPhone": "(+679) 3384111",
     "homeFooterContactTitle": "Contact Us",
     "homeFooterCopyrightText": "© 2025 Department of Water and Sewerage",
+    "homeFooterEmailLabel": "Email:",
+    "homeFooterPhoneLabel": "Landline:",
     "homeFooterPoweredByText": "Powered by",
     "homeFooterQuickLinksTitle": "Quick Links",
+    "homeGalleryHeadline": <React.Fragment>
+      Images from 
+      <span
+        className="accent"
+      >
+        the field
+      </span>
+      .
+    </React.Fragment>,
+    "homeGalleryText": "A selection of photos from water and sewerage operations across Fiji.",
+    "homeGalleryTitle": "Photo Gallery",
     "homeHeroCaptionEyebrowSuffix": "Platform",
     "homeHeroCaptionTitle": <React.Fragment>
       Safe, reliable water

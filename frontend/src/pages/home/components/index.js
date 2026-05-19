@@ -7,3 +7,4 @@ export { default as RoleCard } from "./RoleCard";
 export { default as RolesSection } from "./RolesSection";
 export { default as HomeFooter } from "./HomeFooter";
 export { default as useHomeParallax } from "./useHomeParallax";
+export { default as PhotoGallery } from "./PhotoGallery/PhotoGallery";

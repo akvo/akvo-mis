@@ -809,6 +809,14 @@ const uiText = {
     homeVideoText:
       "A short walkthrough of how the platform supports water and sewerage service delivery, monitoring, and decision-making across Fiji.",
     homeVideoIframeTitle: `${window.appConfig.name} introduction video"`,
+    homeGalleryTitle: "Photo Gallery",
+    homeGalleryHeadline: (
+      <Fragment>
+        Images from <span className="accent">the field</span>.
+      </Fragment>
+    ),
+    homeGalleryText:
+      "A selection of photos from water and sewerage operations across Fiji.",
     homeKeyRolesTitle: "Key Roles and Responsibilities",
     homeKeyRolesHeadline: (
       <Fragment>
@@ -857,12 +865,11 @@ const uiText = {
       "Department of Water and Sewerage",
       "Ministry of Public Works and Meteorological Services, and Transport",
     ],
-    homeFooterContactAddress: [
-      "Private Mail Bag, Suva, Fiji",
-      "Level 4, Nasilivata House, Ratu Mara Road,",
-      "Samabula, Suva",
-    ],
+    homeFooterContactAddress: ["Level 1 Nasilivata House", "Samabula"],
+    homeFooterPhoneLabel: "Landline:",
     homeFooterContactPhone: "(+679) 3384111",
+    homeFooterEmailLabel: "Email:",
+    homeFooterContactEmail: "mpwmst.dws@govnet.gov.fj",
     homeFooterAboutTitle: <Fragment>About {window.appConfig.name}</Fragment>,
     homeFooterAboutText: (
       <Fragment>
