@@ -58,7 +58,19 @@ const PhotoGallery = ({ text }) => {
           onClick={prev}
           aria-label="Previous photo"
         >
-          &#8249;
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
         </button>
         <button
           className="gallery-arrow gallery-arrow--next"
@@ -66,7 +78,19 @@ const PhotoGallery = ({ text }) => {
           onClick={next}
           aria-label="Next photo"
         >
-          &#8250;
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
 
         <div className="gallery-dots">
