@@ -8,6 +8,7 @@ const HomeFooter = ({ text }) => {
     /\(|\)|\s/g,
     ""
   )}`;
+  const emailHref = `mailto:${text.homeFooterContactEmail}`;
 
   return (
     <footer className="home-footer">
@@ -52,7 +53,12 @@ const HomeFooter = ({ text }) => {
             ))}
           </p>
           <p className="addr">
+            <span>{text.homeFooterPhoneLabel}</span>{" "}
             <a href={phoneHref}>{text.homeFooterContactPhone}</a>
+          </p>
+          <p className="addr">
+            <span>{text.homeFooterEmailLabel}</span>{" "}
+            <a href={emailHref}>{text.homeFooterContactEmail}</a>
           </p>
         </div>
         <div className="footer-col">
