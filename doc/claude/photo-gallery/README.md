@@ -48,11 +48,14 @@ Mobile (≤ 640px):
 
 ## Responsive Breakpoints
 
-| Viewport | Thumbnails | Dots | Slide aspect ratio |
-|---|---|---|---|
-| > 900px (desktop) | visible, max-width 160px | hidden | 16 / 7 |
-| 641–900px (tablet) | visible, max-width 90px | hidden | 16 / 7 |
-| ≤ 640px (mobile) | **hidden** | **visible** | 4 / 3 |
+| Viewport | Thumbnails | Dots | Thumb width | Slide aspect |
+|---|---|---|---|---|
+| > 1080px (desktop) | visible, scrollable | hidden | 140px fixed | 16 / 7 |
+| 901–1080px | visible, scrollable | hidden | 110px fixed | 16 / 7 |
+| 641–900px (tablet) | visible, scrollable | hidden | 80px fixed | 16 / 7 |
+| ≤ 640px (mobile) | **hidden** | **visible** | — | 4 / 3 |
+
+Thumbnail strip uses `overflow-x: auto` + `scroll-snap-type: x mandatory` + hidden scrollbar. Thumbnails have fixed width (`flex: 0 0 auto; width: Npx`) so they never shrink regardless of photo count.
 
 ---
 

@@ -285,17 +285,23 @@ Write from scratch (file is currently empty). Styles are standalone — no `.hom
   }
 }
 
-/* Thumbnail strip — hidden on mobile via @media */
+/* Thumbnail strip — scrollable, hidden on mobile via @media */
 .gallery-thumbs {
   margin-top: 16px;
   display: flex;
   gap: 12px;
-  justify-content: center;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
 }
 
 .gallery-thumb {
-  flex: 1;
-  max-width: 160px;
+  flex: 0 0 auto;
+  width: 140px;
+  scroll-snap-align: start;
   aspect-ratio: 4 / 3;
   border-radius: 10px;
   overflow: hidden;
@@ -333,14 +339,14 @@ Write from scratch (file is currently empty). Styles are standalone — no `.hom
 ```scss
 @media (max-width: 1080px) {
   .gallery-slider { border-radius: 16px; }
-  .gallery-thumb { max-width: 120px; }
+  .gallery-thumb { width: 110px; }
 }
 
 @media (max-width: 900px) {
-  /* Tablet — still shows thumbnails at reduced size */
+  /* Tablet — still shows thumbnails, scrollable at reduced size */
   .gallery-slider { border-radius: 14px; }
   .gallery-thumbs { gap: 8px; }
-  .gallery-thumb { max-width: 90px; border-radius: 8px; }
+  .gallery-thumb { width: 80px; border-radius: 8px; }
 }
 
 @media (max-width: 640px) {
