@@ -59,8 +59,8 @@ describe("toHistogramBarData", () => {
       ],
     };
     expect(toHistogramBarData(resp)).toEqual([
-      { label: "0-10%", value: 1, group: "0-10%" },
-      { label: "41-50%", value: 3, group: "41-50%" },
+      { label: "0-10%", value: 1 },
+      { label: "41-50%", value: 3 },
     ]);
   });
 
