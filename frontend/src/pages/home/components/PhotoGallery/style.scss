@@ -118,6 +118,7 @@
   .gallery-thumbs {
     margin-top: 16px;
     display: flex;
+    justify-content: center;
     gap: 12px;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
