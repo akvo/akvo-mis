@@ -1,11 +1,11 @@
 .home-content {
   .gallery-section {
-    width: 100%;
     background: var(--page);
     color: var(--page-ink);
   }
 
   .gallery-slider {
+    width: 100%;
     margin-top: 56px;
     position: relative;
     overflow: hidden;
@@ -164,6 +164,12 @@
       border-color: var(--teal);
       opacity: 1;
       box-shadow: 0 0 0 2px oklch(0.78 0.11 195 / 0.25);
+    }
+  }
+
+  @media (max-width: 1200px) {
+    .gallery-section {
+      max-width: 100%;
     }
   }
 
