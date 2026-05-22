@@ -76,6 +76,8 @@ jobs:
           ./ci/build.sh
 
       - name: Deploy
+        if: false  # iwsims deployment moved to akvo/iwsims repo; this step retained
+                   # for reference until DEVOPS-005 cleanup removes the deploy path entirely.
         env:
           APP_SHORT_NAME: ${{ secrets.APP_SHORT_NAME }}
           CI_COMMIT: ${{ env.COMMIT_SHORT_SHA }}
