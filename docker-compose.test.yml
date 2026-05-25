@@ -23,7 +23,7 @@ services:
       - SEMAPHORE_WORKFLOW_ID=${SEMAPHORE_WORKFLOW_ID:-}
       - SEMAPHORE_GIT_PR_NUMBER=${SEMAPHORE_GIT_PR_NUMBER:-}
       - DEBUG=True
-      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/iwsims-service-account.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/${APP_SHORT_NAME:-akvo-mis}-service-account.json
       - MAILJET_APIKEY=$MAILJET_APIKEY
       - MAILJET_SECRET=$MAILJET_SECRET
       - WEBDOMAIN=notset
