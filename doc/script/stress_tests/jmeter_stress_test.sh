@@ -12,7 +12,7 @@ else
 fi
 
 AUTH_CODE=$1
-URL="https://iwsims.akvotest.org/api/v1/device/sync"
+URL="https://your-domain.org/api/v1/device/sync"
 
 # jq function to generate a random UUID
 generate_uuid() {
