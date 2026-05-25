@@ -21,9 +21,9 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
               class="logo-wrapper"
             >
               <img
-                alt="/logo-full.png"
+                alt="/logo.svg"
                 class="small-logo"
-                src="/logo-full.png"
+                src="/logo.svg"
               />
             </div>
           </a>
@@ -68,7 +68,7 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
             >
               <img
                 alt="login-logo"
-                src="./logo192.png"
+                src="./logo-square.svg"
               />
               <div
                 class="login-content"
@@ -293,9 +293,9 @@ exports[`Login and Registration test if the registration form exists: Registrati
               class="logo-wrapper"
             >
               <img
-                alt="/logo-full.png"
+                alt="/logo.svg"
                 class="small-logo"
-                src="/logo-full.png"
+                src="/logo.svg"
               />
             </div>
           </a>
