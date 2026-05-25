@@ -1,7 +1,7 @@
 import api from "./api";
 
 const config = {
-  siteLogo: "/logo-full.png",
+  siteLogo: "/logo.svg",
   trainedStatus: [
     {
       label: "Trained",
@@ -737,7 +737,7 @@ const config = {
   },
   mapConfig: {
     defaultZoom: 6,
-    defaultCenter: [-18.1236015, 178.3805867], // Fiji
+    defaultCenter: [0, 0],
     markerSizeRange: [10, 50],
     highlightColor: "#84b4cc",
     colorRange: ["#e8f7e3", "#bbedda", "#7dcaaf", "#44a883", "#107550"],
