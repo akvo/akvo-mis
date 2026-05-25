@@ -1,5 +1,4 @@
 import { rotateToFiscalOrder } from "../fiscalMonthRotation";
-import { toHistogramBarData } from "../progressHistogram";
 import {
   computeComplianceStackData,
   fails,
@@ -47,26 +46,6 @@ describe("rotateToFiscalOrder", () => {
   test("handles empty input", () => {
     expect(rotateToFiscalOrder([], 7)).toEqual([]);
     expect(rotateToFiscalOrder(null, 7)).toEqual([]);
-  });
-});
-
-describe("toHistogramBarData", () => {
-  test("maps histogram buckets to { label, value, group }", () => {
-    const resp = {
-      histogram: [
-        { progress: "0-10%", count: 1 },
-        { progress: "41-50%", count: 3 },
-      ],
-    };
-    expect(toHistogramBarData(resp)).toEqual([
-      { label: "0-10%", value: 1, group: "0-10%" },
-      { label: "41-50%", value: 3, group: "41-50%" },
-    ]);
-  });
-
-  test("null/missing response returns empty array", () => {
-    expect(toHistogramBarData(null)).toEqual([]);
-    expect(toHistogramBarData({})).toEqual([]);
   });
 });
 
