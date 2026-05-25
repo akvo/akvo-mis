@@ -3,7 +3,7 @@ import json
 from django.core.management import BaseCommand
 from jsmin import jsmin
 
-from mis.settings import COUNTRY_NAME, APP_NAME, APP_SHORT_NAME, APK_NAME
+from mis.settings import COUNTRY_NAME, APP_NAME, APP_SHORT_NAME, APK_NAME, SHOW_LANDING_PAGE
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Levels
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
@@ -95,6 +95,7 @@ class Command(BaseCommand):
                         "name": APP_NAME,
                         "shortName": APP_SHORT_NAME,
                         "apkName": APK_NAME,
+                        "showLandingPage": SHOW_LANDING_PAGE,
                     }),
                     ";",
                     "var roleFeatures=",

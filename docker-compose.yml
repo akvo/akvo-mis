@@ -12,6 +12,7 @@ services:
       - APP_SHORT_NAME=$APP_SHORT_NAME
       - APK_SHORT_NAME=$APK_SHORT_NAME
       - APK_NAME=$APK_NAME
+      - SHOW_LANDING_PAGE=$SHOW_LANDING_PAGE
       - DB_SCHEMA=mis
       - DB_USER=akvo
       - DB_PASSWORD=password

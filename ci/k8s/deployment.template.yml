@@ -156,6 +156,12 @@ spec:
                 secretKeyRef:
                   name: ${APP_SHORT_NAME}
                   key: apk-name
+            - name: SHOW_LANDING_PAGE
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_SHORT_NAME}
+                  key: show-landing-page
+                  optional: true
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:

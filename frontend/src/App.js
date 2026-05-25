@@ -100,9 +100,22 @@ const Private = ({ element: Element, alias }) => {
 };
 
 const RouteList = () => {
+  const { user: authUser } = store.useState((state) => state);
   return (
     <Routes>
-      <Route exact path="/" element={<Home />} />
+      <Route
+        exact
+        path="/"
+        element={
+          window?.appConfig?.showLandingPage ? (
+            <Home />
+          ) : authUser ? (
+            <Navigate to="/control-center" />
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
       <Route exact path="/login" element={<Login />} />
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
