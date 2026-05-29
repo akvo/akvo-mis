@@ -30,7 +30,7 @@ services:
     environment:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
-      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/iwsims-service-account.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/${APP_SHORT_NAME:-akvo-mis}-service-account.json
       - MAILJET_APIKEY=$MAILJET_APIKEY
       - MAILJET_SECRET=$MAILJET_SECRET
       - WEBDOMAIN=http://localhost:3000
@@ -43,7 +43,7 @@ services:
       - APP_SHORT_NAME=$APP_SHORT_NAME
       - APK_SHORT_NAME=$APK_SHORT_NAME
       - APK_NAME=$APK_NAME
-      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/iwsims-service-account.json
+      - GOOGLE_APPLICATION_CREDENTIALS=/credentials/${APP_SHORT_NAME:-akvo-mis}-service-account.json
       - MAILJET_APIKEY=$MAILJET_APIKEY
       - MAILJET_SECRET=$MAILJET_SECRET
       - WEBDOMAIN=$WEBDOMAIN

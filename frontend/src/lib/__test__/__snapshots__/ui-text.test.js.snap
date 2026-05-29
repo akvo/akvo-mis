@@ -379,49 +379,44 @@ Object {
     "generating": "Generating",
     "helloText": "Hello",
     "homeFooterAboutText": <React.Fragment>
-      The Fiji Integrated Water and Sewerage Information Management System (
       Test App
-      ) is a comprehensive platform designed to enhance the management of water and sewerage services in Fiji. It serves as a centralized hub for data collection, analysis, and reporting, enabling informed decision-making and efficient resource allocation.
+       is a comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation. It serves as a centralised hub for evidence-based reporting and efficient resource allocation.
     </React.Fragment>,
     "homeFooterAboutTitle": <React.Fragment>
       About 
       Test App
     </React.Fragment>,
     "homeFooterContactAddress": Array [
-      "Private Mail Bag, Suva, Fiji",
-      "Level 4, Nasilivata House, Ratu Mara Road,",
-      "Samabula, Suva",
+      "<Your Address>",
     ],
     "homeFooterContactDetails": Array [
-      "Department of Water and Sewerage",
-      "Ministry of Public Works and Meteorological Services, and Transport",
+      "<Your Organisation>",
+      "<Your Department>",
     ],
-    "homeFooterContactPhone": "(+679) 3384111",
+    "homeFooterContactPhone": "<Your Phone Number>",
     "homeFooterContactTitle": "Contact Us",
-    "homeFooterCopyrightText": "© 2025 Department of Water and Sewerage",
+    "homeFooterCopyrightText": "© 2025 <Your Organisation>",
     "homeFooterPoweredByText": "Powered by",
     "homeFooterQuickLinksTitle": "Quick Links",
     "homeHeroCaptionEyebrowSuffix": "Platform",
     "homeHeroCaptionTitle": <React.Fragment>
-      Safe, reliable water
+      Reliable data
       <br />
-      for every community in Fiji.
+      for every community you serve.
     </React.Fragment>,
-    "homeHeroCtaLearnMore": "Learn about our mandate",
-    "homeHeroEyebrowDept": "Department of Water & Sewerage",
+    "homeHeroCtaLearnMore": "Learn more",
+    "homeHeroEyebrowDept": "<Your Department>",
     "homeHeroEyebrowLive": "Live",
-    "homeHeroEyebrowOrg": "Government of Fiji",
-    "homeHeroTitleAccent": "water & sewerage",
+    "homeHeroEyebrowOrg": "<Your Organisation>",
+    "homeHeroTitleAccent": "monitoring & information",
     "homeHeroTitlePrefix": "— a comprehensive platform for",
-    "homeHeroTitleSuffix": "services in Fiji.",
+    "homeHeroTitleSuffix": "services.",
     "homeJumbotronImage": Object {
       "alt": "Water landscape",
       "src": "https://images.unsplash.com/photo-1642450909999-7106494ef779?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     },
     "homeJumbotronSubtitle": <React.Fragment>
-      The Fiji 
-      Test App
-       is a comprehensive platform designed to enhance the management of water and sewerage services in Fiji.
+      A comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation.
     </React.Fragment>,
     "homeJumbotronTitle": <React.Fragment>
       Test App
@@ -433,39 +428,39 @@ Object {
       >
         compliance
       </span>
-       across Fiji's water sector.
+       across your sector.
     </React.Fragment>,
     "homeKeyRolesItems": Array [
       Object {
-        "imgAlt": "Water policy",
+        "imgAlt": "Policy and legislation",
         "imgSrc": "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Formulating regulatory frameworks and policies to promote a sustainable water and sewerage sector. Providing expert advice on water and sewerage issues to support effective governance.",
+        "text": "Formulating regulatory frameworks and policies to promote sustainable and equitable service delivery. Providing expert advice to support effective governance.",
         "title": "Policy & Legislation",
         "type": "right",
       },
       Object {
-        "imgAlt": "Compliance monitoring",
+        "imgAlt": "Monitoring and oversight",
         "imgSrc": "https://images.unsplash.com/photo-1708807472445-d33589e6b090?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Overseeing adherence to established policies, legislation, and industry standards. Serving as the primary government agency responsible for monitoring the activities of the Water Authority of Fiji.",
+        "text": "Overseeing adherence to established policies, legislation, and industry standards. Ensuring accountability and transparency in service delivery.",
         "title": "Monitoring & Oversight",
         "type": "left",
       },
       Object {
         "imgAlt": "Technical and policy advisory",
-        "imgSrc": "/assets/technical-advisory.jpg",
-        "text": "Providing expert advice on water and sewerage issues to support effective governance and operational efficiency.",
-        "title": "Technical and Policy Advisory",
+        "imgSrc": "/logo.svg",
+        "text": "Providing expert advice on sector issues to support effective governance and operational efficiency.",
+        "title": "Technical & Policy Advisory",
         "type": "right",
       },
       Object {
-        "imgAlt": "Compliance monitoring",
+        "imgAlt": "Service delivery oversight",
         "imgSrc": "https://plus.unsplash.com/premium_photo-1661964131234-fda88ca041c5?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Serving as the primary government agency responsible for monitoring the activities of the Water Authority of Fiji and ensuring compliance with national regulations.",
-        "title": "Water Authority of Fiji Oversight",
+        "text": "Serving as the primary organisation responsible for monitoring service delivery and ensuring compliance with national regulations and standards.",
+        "title": "Service Delivery Oversight",
         "type": "left",
       },
     ],
-    "homeKeyRolesText": "The key roles and responsibilities of the Department include policy and legislation development, technical and policy advisory, compliance monitoring, and Water Authority of Fiji oversight.",
+    "homeKeyRolesText": "The key roles and responsibilities of the organisation include policy and legislation development, technical and policy advisory, compliance monitoring, and service delivery oversight.",
     "homeKeyRolesTitle": "Key Roles and Responsibilities",
     "homeMandateHeadline": <React.Fragment>
       Ensuring a 
@@ -474,9 +469,9 @@ Object {
       >
         sustainable
       </span>
-       water and sewerage sector.
+       monitoring and reporting system.
     </React.Fragment>,
-    "homeMandateText": "The Department of Water and Sewerage is mandated with the responsibility of ensuring a sustainable water and sewerage sector through the development of innovative policies, efficient service delivery, and rigorous compliance monitoring.",
+    "homeMandateText": "Your organisation is mandated with the responsibility of ensuring sustainable service delivery through the development of evidence-based policies, efficient data management, and rigorous compliance monitoring.",
     "homeMandateTitle": "Our Mandate",
     "homeQuickLinks": Array [
       Object {
@@ -504,11 +499,11 @@ Object {
       },
     ],
     "homeStructureImage": Object {
-      "alt": "Department Structure",
-      "src": "/assets/department-structure.jpg",
+      "alt": "Organisation Structure",
+      "src": "/logo.svg",
     },
-    "homeStructureText": "The Department is headed by the Director of Water and Sewerage with the Technical Unit responsible for monitoring and compliance and Policy Unit responsible for policy and regulatory matters, supported by common cadre support staff.",
-    "homeStructureTitle": "Department Structure",
+    "homeStructureText": "Replace this text with a description of your organisation structure. This section can be updated in ui-text.js or configured via a content management system.",
+    "homeStructureTitle": "Organisation Structure",
     "homeVideoHeadline": <React.Fragment>
       See 
       <span
@@ -519,7 +514,7 @@ Object {
        in action.
     </React.Fragment>,
     "homeVideoIframeTitle": "Test App introduction video\\"",
-    "homeVideoText": "A short walkthrough of how the platform supports water and sewerage service delivery, monitoring, and decision-making across Fiji.",
+    "homeVideoText": "A short walkthrough of how the platform supports data collection, monitoring, and decision-making for your organisation.",
     "homeVideoTitle": "Watch & Learn",
     "informUser": "Inform User for Changes",
     "initialRegistration": "Initial Registration",

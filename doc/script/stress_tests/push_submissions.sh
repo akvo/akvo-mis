@@ -14,13 +14,13 @@ fi
 get_auth_token() {
     code=$1
     curl -s -X 'POST' \
-        'https://iwsims.akvotest.org/api/v1/device/auth' \
+        'https://your-domain.org/api/v1/device/auth' \
         -H 'accept: application/json' \
         -H 'Content-Type: application/json' \
         -d '{"code": "'$code'"}' | jq -r '.syncToken'
 }
 
-URL="https://iwsims.akvotest.org/api/v1/device/sync"
+URL="https://your-domain.org/api/v1/device/sync"
 MOBILE_AUTH_TOKEN=$(get_auth_token "$1")
 # exit if equal to null
 if [ "$MOBILE_AUTH_TOKEN" == "null" ]; then

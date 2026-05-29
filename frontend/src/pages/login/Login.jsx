@@ -96,7 +96,7 @@ const Login = () => {
                     </div>
                   ) : (
                     <div className="login-form-container">
-                      <img src="./logo192.png" alt="login-logo" />
+                      <img src="./logo-square.svg" alt="login-logo" />
                       <div className="login-content">
                         <h1>{text.loginTitle}</h1>
                         <ContactUsText />

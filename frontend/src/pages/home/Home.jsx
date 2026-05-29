@@ -15,7 +15,7 @@ const Home = () => {
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
-  const appName = window?.appConfig?.name || "IWSIMS";
+  const appName = window?.appConfig?.name || "Akvo MIS";
   const rootRef = useRef(null);
 
   useHomeParallax(rootRef);

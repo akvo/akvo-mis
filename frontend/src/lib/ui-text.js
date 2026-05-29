@@ -761,22 +761,22 @@ const uiText = {
     homeJumbotronTitle: <Fragment>{window.appConfig.name}</Fragment>,
     homeJumbotronSubtitle: (
       <Fragment>
-        The Fiji {window.appConfig.name} is a comprehensive platform designed to
-        enhance the management of water and sewerage services in Fiji.
+        A comprehensive platform designed to support data collection,
+        monitoring, and decision-making for your organisation.
       </Fragment>
     ),
     homeHeroEyebrowLive: "Live",
-    homeHeroEyebrowOrg: "Government of Fiji",
-    homeHeroEyebrowDept: "Department of Water & Sewerage",
+    homeHeroEyebrowOrg: "<Your Organisation>",
+    homeHeroEyebrowDept: "<Your Department>",
     homeHeroTitlePrefix: "— a comprehensive platform for",
-    homeHeroTitleAccent: "water & sewerage",
-    homeHeroTitleSuffix: "services in Fiji.",
-    homeHeroCtaLearnMore: "Learn about our mandate",
+    homeHeroTitleAccent: "monitoring & information",
+    homeHeroTitleSuffix: "services.",
+    homeHeroCtaLearnMore: "Learn more",
     homeHeroCaptionTitle: (
       <Fragment>
-        Safe, reliable water
+        Reliable data
         <br />
-        for every community in Fiji.
+        for every community you serve.
       </Fragment>
     ),
     homeHeroCaptionEyebrowSuffix: "Platform",
@@ -787,18 +787,18 @@ const uiText = {
     homeMandateTitle: "Our Mandate",
     homeMandateHeadline: (
       <Fragment>
-        Ensuring a <span className="accent">sustainable</span> water and
-        sewerage sector.
+        Ensuring a <span className="accent">sustainable</span> monitoring and
+        reporting system.
       </Fragment>
     ),
     homeMandateText:
-      "The Department of Water and Sewerage is mandated with the responsibility of ensuring a sustainable water and sewerage sector through the development of innovative policies, efficient service delivery, and rigorous compliance monitoring.",
-    homeStructureTitle: "Department Structure",
+      "Your organisation is mandated with the responsibility of ensuring sustainable service delivery through the development of evidence-based policies, efficient data management, and rigorous compliance monitoring.",
+    homeStructureTitle: "Organisation Structure",
     homeStructureText:
-      "The Department is headed by the Director of Water and Sewerage with the Technical Unit responsible for monitoring and compliance and Policy Unit responsible for policy and regulatory matters, supported by common cadre support staff.",
+      "Replace this text with a description of your organisation structure. This section can be updated in ui-text.js or configured via a content management system.",
     homeStructureImage: {
-      src: "/assets/department-structure.jpg",
-      alt: "Department Structure",
+      src: "/logo.svg",
+      alt: "Organisation Structure",
     },
     homeVideoTitle: "Watch & Learn",
     homeVideoHeadline: (
@@ -807,73 +807,65 @@ const uiText = {
       </Fragment>
     ),
     homeVideoText:
-      "A short walkthrough of how the platform supports water and sewerage service delivery, monitoring, and decision-making across Fiji.",
+      "A short walkthrough of how the platform supports data collection, monitoring, and decision-making for your organisation.",
     homeVideoIframeTitle: `${window.appConfig.name} introduction video"`,
     homeKeyRolesTitle: "Key Roles and Responsibilities",
     homeKeyRolesHeadline: (
       <Fragment>
         Policy, oversight and <span className="accent">compliance</span> across
-        Fiji&apos;s water sector.
+        your sector.
       </Fragment>
     ),
     homeKeyRolesText:
-      "The key roles and responsibilities of the Department include policy and legislation development, technical and policy advisory, compliance monitoring, and Water Authority of Fiji oversight.",
+      "The key roles and responsibilities of the organisation include policy and legislation development, technical and policy advisory, compliance monitoring, and service delivery oversight.",
     homeKeyRolesItems: [
       {
         imgSrc:
           "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        imgAlt: "Water policy",
+        imgAlt: "Policy and legislation",
         title: "Policy & Legislation",
-        text: "Formulating regulatory frameworks and policies to promote a sustainable water and sewerage sector. Providing expert advice on water and sewerage issues to support effective governance.",
+        text: "Formulating regulatory frameworks and policies to promote sustainable and equitable service delivery. Providing expert advice to support effective governance.",
         type: "right",
       },
       {
         imgSrc:
           "https://images.unsplash.com/photo-1708807472445-d33589e6b090?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        imgAlt: "Compliance monitoring",
+        imgAlt: "Monitoring and oversight",
         title: "Monitoring & Oversight",
-        text: "Overseeing adherence to established policies, legislation, and industry standards. Serving as the primary government agency responsible for monitoring the activities of the Water Authority of Fiji.",
+        text: "Overseeing adherence to established policies, legislation, and industry standards. Ensuring accountability and transparency in service delivery.",
         type: "left",
       },
       {
-        imgSrc: "/assets/technical-advisory.jpg",
+        imgSrc: "/logo.svg",
         imgAlt: "Technical and policy advisory",
-        title: "Technical and Policy Advisory",
-        text: "Providing expert advice on water and sewerage issues to support effective governance and operational efficiency.",
+        title: "Technical & Policy Advisory",
+        text: "Providing expert advice on sector issues to support effective governance and operational efficiency.",
         type: "right",
       },
       {
         imgSrc:
           "https://plus.unsplash.com/premium_photo-1661964131234-fda88ca041c5?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        imgAlt: "Compliance monitoring",
-        title: "Water Authority of Fiji Oversight",
-        text: "Serving as the primary government agency responsible for monitoring the activities of the Water Authority of Fiji and ensuring compliance with national regulations.",
+        imgAlt: "Service delivery oversight",
+        title: "Service Delivery Oversight",
+        text: "Serving as the primary organisation responsible for monitoring service delivery and ensuring compliance with national regulations and standards.",
         type: "left",
       },
     ],
     homeFooterQuickLinksTitle: "Quick Links",
     homeFooterContactTitle: "Contact Us",
-    homeFooterContactDetails: [
-      "Department of Water and Sewerage",
-      "Ministry of Public Works and Meteorological Services, and Transport",
-    ],
-    homeFooterContactAddress: [
-      "Private Mail Bag, Suva, Fiji",
-      "Level 4, Nasilivata House, Ratu Mara Road,",
-      "Samabula, Suva",
-    ],
-    homeFooterContactPhone: "(+679) 3384111",
+    homeFooterContactDetails: ["<Your Organisation>", "<Your Department>"],
+    homeFooterContactAddress: ["<Your Address>"],
+    homeFooterContactPhone: "<Your Phone Number>",
     homeFooterAboutTitle: <Fragment>About {window.appConfig.name}</Fragment>,
     homeFooterAboutText: (
       <Fragment>
-        The Fiji Integrated Water and Sewerage Information Management System (
-        {window.appConfig.name}) is a comprehensive platform designed to enhance
-        the management of water and sewerage services in Fiji. It serves as a
-        centralized hub for data collection, analysis, and reporting, enabling
-        informed decision-making and efficient resource allocation.
+        {window.appConfig.name} is a comprehensive platform designed to support
+        data collection, monitoring, and decision-making for your organisation.
+        It serves as a centralised hub for evidence-based reporting and
+        efficient resource allocation.
       </Fragment>
     ),
-    homeFooterCopyrightText: "© 2025 Department of Water and Sewerage",
+    homeFooterCopyrightText: "© 2025 <Your Organisation>",
     homeFooterPoweredByText: "Powered by",
     manageDataTab1: "Registration Data",
     manageDataTab2: "Monitoring Data",

@@ -84,7 +84,7 @@ spec:
           volumeMounts:
             - name: ${APP_SHORT_NAME}-secrets
               mountPath: "/secrets/cloudsql/credentials.json"
-              subPath: iwsims-service-account.json
+              subPath: ${APP_SHORT_NAME}-service-account.json
               readOnly: true
         - name: backend
           image: eu.gcr.io/akvo-lumen/akvo-mis/backend:${CI_COMMIT}
@@ -156,6 +156,12 @@ spec:
                 secretKeyRef:
                   name: ${APP_SHORT_NAME}
                   key: apk-name
+            - name: SHOW_LANDING_PAGE
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_SHORT_NAME}
+                  key: show-landing-page
+                  optional: true
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:
@@ -188,7 +194,7 @@ spec:
           volumeMounts:
             - name: ${APP_SHORT_NAME}-secrets
               mountPath: /secrets/credentials.json
-              subPath: iwsims-service-account.json
+              subPath: ${APP_SHORT_NAME}-service-account.json
               readOnly: true
             - name: nfs-pvc
               mountPath: "/app/storage"
@@ -279,7 +285,7 @@ spec:
           volumeMounts:
             - name: ${APP_SHORT_NAME}-secrets
               mountPath: /secrets/credentials.json
-              subPath: iwsims-service-account.json
+              subPath: ${APP_SHORT_NAME}-service-account.json
               readOnly: true
             - name: nfs-pvc
               mountPath: "/app/storage"

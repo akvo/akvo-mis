@@ -25,7 +25,7 @@ module.exports = function (app) {
       target: "http://127.0.0.1:3000",
       changeOrigin: true,
       pathRewrite: {
-        "^/app": "/apk/dws-datapro.apk",
+        "^/app": "/apk/akvo-mis.apk",
       },
     })
   );
