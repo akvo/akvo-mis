@@ -97,7 +97,7 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
             if isinstance(attrs.get("value"), list) and question.type in [
                 QuestionTypes.input,
                 QuestionTypes.text,
-                QuestionTypes.photo,
+                QuestionTypes.image,
                 QuestionTypes.date,
                 QuestionTypes.attachment,
                 QuestionTypes.signature,
@@ -147,7 +147,7 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
         ).type in [
             QuestionTypes.input,
             QuestionTypes.text,
-            QuestionTypes.photo,
+            QuestionTypes.image,
             QuestionTypes.date,
             QuestionTypes.attachment,
             QuestionTypes.signature,
@@ -224,7 +224,7 @@ class SubmitFormSerializer(serializers.Serializer):
             elif answer.get("question").type in [
                 QuestionTypes.input,
                 QuestionTypes.text,
-                QuestionTypes.photo,
+                QuestionTypes.image,
                 QuestionTypes.date,
                 QuestionTypes.autofield,
                 QuestionTypes.attachment,
@@ -670,7 +670,7 @@ class SubmitPendingFormSerializer(serializers.Serializer):
             elif question.type in [
                 QuestionTypes.input,
                 QuestionTypes.text,
-                QuestionTypes.photo,
+                QuestionTypes.image,
                 QuestionTypes.date,
                 QuestionTypes.autofield,
                 QuestionTypes.attachment,
@@ -793,7 +793,7 @@ class SubmitUpdateDraftFormSerializer(SubmitPendingFormSerializer):
             elif question.type in [
                 QuestionTypes.input,
                 QuestionTypes.text,
-                QuestionTypes.photo,
+                QuestionTypes.image,
                 QuestionTypes.date,
                 QuestionTypes.autofield,
                 QuestionTypes.attachment,

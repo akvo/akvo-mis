@@ -822,7 +822,7 @@ def transform_form_data_for_report(
                                 elif question.type in [
                                     QuestionTypes.input,
                                     QuestionTypes.text,
-                                    QuestionTypes.photo,
+                                    QuestionTypes.image,
                                     QuestionTypes.autofield,
                                     QuestionTypes.cascade,
                                     QuestionTypes.attachment,
@@ -925,7 +925,7 @@ def transform_form_data_for_report(
                         elif question.type in [
                             QuestionTypes.input,
                             QuestionTypes.text,
-                            QuestionTypes.photo,
+                            QuestionTypes.image,
                             QuestionTypes.autofield,
                             QuestionTypes.cascade,
                             QuestionTypes.attachment,

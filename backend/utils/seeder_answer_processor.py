@@ -388,7 +388,7 @@ class AnswerProcessor:
             return cls.process_option(row_value, opt_list)
         elif question_type == QuestionTypes.number:
             return cls.process_number(row_value)
-        elif question_type == QuestionTypes.photo:
+        elif question_type == QuestionTypes.image:
             return cls.process_photo(row_value)
         else:
             return cls.process_default(row_value)

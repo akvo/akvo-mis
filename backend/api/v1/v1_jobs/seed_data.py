@@ -160,7 +160,7 @@ def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
                     )
         if q.type == QuestionTypes.autofield and aw:
             answer.name = aw
-        if q.type == QuestionTypes.photo and aw:
+        if q.type == QuestionTypes.image and aw:
             answer.name = aw
         if q.type == QuestionTypes.attachment and aw:
             answer.name = aw

@@ -405,7 +405,7 @@ class AnswerProcessorPhotoTestCase(TestCase):
             mock_photo.return_value = ('result', None, None)
 
             name, value, options = AnswerProcessor.process(
-                question_type=QuestionTypes.photo,
+                question_type=QuestionTypes.image,
                 row_value='https://example.com/photo.jpg'
             )
 

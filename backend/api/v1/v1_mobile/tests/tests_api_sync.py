@@ -103,7 +103,7 @@ class MobileAssignmentApiSyncTest(
                 answers[question["id"]] = [0, 0]
             elif question["type"] == "date":
                 answers[question["id"]] = "2021-01-01T00:00:00.000Z"
-            elif question["type"] == "photo":
+            elif question["type"] == "image":
                 answers[question["id"]] = "https://picsum.photos/200/300"
             elif question["type"] == "cascade":
                 answers[question["id"]] = self.administration.id

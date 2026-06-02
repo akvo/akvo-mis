@@ -109,7 +109,7 @@
           "label": "Please take a picture",
           "short_label": "Picture",
           "meta": false,
-          "type": "photo",
+          "type": "image",
           "required": true
         },
         {

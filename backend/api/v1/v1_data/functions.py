@@ -87,7 +87,7 @@ def set_answer_data(
                 dep_values["options"],
                 length=fake.random_int(min=1, max=3)
             )
-    elif question.type == QuestionTypes.photo:
+    elif question.type == QuestionTypes.image:
         name = fake.image_url()
     elif question.type == QuestionTypes.attachment:
         name = fake.file_name()

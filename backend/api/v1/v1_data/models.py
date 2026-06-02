@@ -195,7 +195,7 @@ class Answers(models.Model):
         elif q.type in [
             QuestionTypes.input,
             QuestionTypes.text,
-            QuestionTypes.photo,
+            QuestionTypes.image,
             QuestionTypes.date,
             QuestionTypes.autofield,
             QuestionTypes.cascade,
@@ -227,7 +227,7 @@ class Answers(models.Model):
         elif q.type in [
             QuestionTypes.input,
             QuestionTypes.text,
-            QuestionTypes.photo,
+            QuestionTypes.image,
             QuestionTypes.date,
             QuestionTypes.autofield,
             QuestionTypes.cascade,

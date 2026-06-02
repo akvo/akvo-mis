@@ -229,7 +229,7 @@ class Command(BaseCommand):
         return list(
             Questions.objects.filter(
                 pk__in=question_ids,
-                type=QuestionTypes.photo,
+                type=QuestionTypes.image,
             )
         )
 
