@@ -6,7 +6,7 @@ class QuestionTypes:
     option = 5
     multiple_option = 6
     cascade = 7
-    photo = 8
+    image = 8
     date = 9
     autofield = 10
     attachment = 11
@@ -21,7 +21,7 @@ class QuestionTypes:
         option: "Option",
         multiple_option: "Multiple_Option",
         cascade: "Cascade",
-        photo: "Photo",
+        image: "Image",
         date: "Date",
         autofield: "Autofield",
         attachment: "Attachment",
@@ -53,4 +53,14 @@ class FormTypes:
     FieldStr = {
         registration: "Registration",
         monitoring: "Monitoring",
+    }
+
+
+class FormStatus:
+    draft = 1
+    published = 2
+
+    FieldStr = {
+        draft: "draft",
+        published: "published",
     }

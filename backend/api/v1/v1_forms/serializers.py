@@ -5,7 +5,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
-from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes
+from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes, FormStatus
 from api.v1.v1_forms.models import (
     Forms,
     QuestionGroup,
@@ -371,12 +371,18 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
 
 
 class ListFormSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
     class Meta:
         model = Forms
         fields = [
             "id",
             "name",
             "version",
+            "status",
             "parent",
         ]
 
@@ -544,3 +550,114 @@ class FormApproverResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Administration
         fields = ["users", "administration"]
+
+
+# ─── Form Builder CRUD Serializers ───────────────────────────────────────────
+
+
+class FormDetailQuestionSerializer(serializers.ModelSerializer):
+    """Question serializer for form builder detail/CRUD endpoints.
+
+    Returns all editor-relevant fields including disable_delete.
+    """
+    type = serializers.SerializerMethodField()
+    option = serializers.SerializerMethodField()
+    disable_delete = serializers.SerializerMethodField()
+
+    def get_type(self, instance: Questions):
+        if instance.type == QuestionTypes.administration:
+            return QuestionTypes.FieldStr.get(QuestionTypes.cascade).lower()
+        return QuestionTypes.FieldStr.get(instance.type).lower()
+
+    def get_option(self, instance: Questions):
+        return ListOptionSerializer(
+            instance=instance.options.all().order_by("order"), many=True
+        ).data
+
+    def get_disable_delete(self, instance: Questions):
+        from api.v1.v1_data.models import Answers
+        if Answers.objects.filter(question=instance).exists():
+            return True
+        return None
+
+    class Meta:
+        model = Questions
+        fields = [
+            "id",
+            "order",
+            "name",
+            "label",
+            "short_label",
+            "type",
+            "meta",
+            "required",
+            "rule",
+            "dependency",
+            "dependency_rule",
+            "api",
+            "extra",
+            "tooltip",
+            "fn",
+            "pre",
+            "display_only",
+            "option",
+            "disable_delete",
+        ]
+
+
+class FormDetailQuestionGroupSerializer(serializers.ModelSerializer):
+    question = serializers.SerializerMethodField()
+
+    def get_question(self, instance: QuestionGroup):
+        return FormDetailQuestionSerializer(
+            instance=instance.question_group_question.all().order_by("order"),
+            many=True,
+        ).data
+
+    class Meta:
+        model = QuestionGroup
+        fields = [
+            "id", "name", "label", "order",
+            "repeatable", "repeat_text", "question",
+        ]
+
+
+class FormDetailSerializer(serializers.ModelSerializer):
+    """Extended form serializer for form builder endpoints."""
+    status = serializers.SerializerMethodField()
+    question_group = serializers.SerializerMethodField()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
+    def get_question_group(self, instance: Forms):
+        return FormDetailQuestionGroupSerializer(
+            instance=instance.form_question_group.all().order_by("order"),
+            many=True,
+        ).data
+
+    class Meta:
+        model = Forms
+        fields = [
+            "id",
+            "name",
+            "version",
+            "status",
+            "published_at",
+            "type",
+            "approval_instructions",
+            "parent",
+            "question_group",
+        ]
+
+
+class FormVersionSerializer(serializers.ModelSerializer):
+    """Minimal serializer for version chain listing."""
+    status = serializers.SerializerMethodField()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
+    class Meta:
+        model = Forms
+        fields = ["id", "name", "version", "status", "published_at"]

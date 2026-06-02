@@ -43,20 +43,27 @@ class DataAccessTypes:
 
 class FeatureAccessTypes:
     invite_user = 1
+    form_builder = 2
 
     FieldStr = {
         invite_user: "Invite User",
+        form_builder: "Form Builder",
     }
 
 
 class FeatureTypes:
     user_access = 1
+    form_builder = 2
     FieldStr = {
         user_access: "User Access",
+        form_builder: "Form Builder",
     }
     FieldGroup = {
         user_access: [
            FeatureAccessTypes.invite_user
+        ],
+        form_builder: [
+            FeatureAccessTypes.form_builder
         ]
     }
 

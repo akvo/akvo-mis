@@ -74,6 +74,18 @@ class IsSuperAdminOrFormUser(BasePermission):
         return request.user.is_superuser
 
 
+class IsFormBuilder(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user.is_superuser:
+            return request.user.user_user_role.filter(
+                role__role_role_feature_access__type=FeatureTypes.form_builder,
+                role__role_role_feature_access__access=(
+                    FeatureAccessTypes.form_builder
+                ),
+            ).exists()
+        return request.user.is_superuser
+
+
 class PublicGet(BasePermission):
     def has_permission(self, request, view):
         if request.method == "GET":

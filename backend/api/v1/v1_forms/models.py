@@ -7,6 +7,7 @@ from api.v1.v1_forms.constants import (
     QuestionTypes,
     AttributeTypes,
     FormTypes,
+    FormStatus,
 )
 from api.v1.v1_users.models import SystemUser
 
@@ -26,6 +27,18 @@ class Forms(models.Model):
     type = models.IntegerField(
         choices=FormTypes.FieldStr.items(),
         default=FormTypes.registration,
+    )
+    status = models.IntegerField(
+        choices=FormStatus.FieldStr.items(),
+        default=FormStatus.draft,
+    )
+    published_at = models.DateTimeField(null=True, blank=True, default=None)
+    previous_version = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="next_versions",
+        null=True,
+        blank=True,
     )
 
     def __str__(self):

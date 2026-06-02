@@ -53,6 +53,11 @@ class Command(BaseCommand):
                     type=FeatureTypes.user_access,
                     access=FeatureAccessTypes.invite_user
                 )
+                # Add form builder feature
+                admin_role.role_role_feature_access.create(
+                    type=FeatureTypes.form_builder,
+                    access=FeatureAccessTypes.form_builder
+                )
 
             # Create Submitter role
             submitter_role, created = level.role_administration_level\
