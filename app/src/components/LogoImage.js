@@ -1,6 +1,6 @@
 import React from 'react';
 import { Image } from 'react-native';
-import appIcon from '../assets/icon.png';
+import appIcon from '../../assets/icon.png';
 
 const LogoImage = () => (
   <Image
