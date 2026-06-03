@@ -71,22 +71,27 @@ migrations.AddField(
 
 ### URL Pattern Decision
 
-Existing backend has a split pattern: `GET /api/v1/forms` (plural, list) and `GET /api/v1/form/{id}` (singular, detail/web). New CRUD endpoints use the **plural** pattern throughout:
+The API uses two URL namespaces:
+
+- `/api/v1/forms` — read-only, public, flat list (backward compat for mobile/web)
+- `/api/v1/manage/forms` — authenticated CRUD for the form builder UI (`"Manage Forms"` OpenAPI tag)
 
 | Method | URL | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/forms` | List forms (existing, extended with `status`) |
-| `POST` | `/api/v1/forms` | Create form (new) |
-| `GET` | `/api/v1/forms/{id}` | Get form detail (new, mirrors `/form/{id}` + status) |
-| `PUT` | `/api/v1/forms/{id}` | Update form or trigger version-on-edit (new) |
-| `DELETE` | `/api/v1/forms/{id}` | Delete/archive form (new) |
-| `POST` | `/api/v1/forms/{id}/publish` | Publish draft (new) |
-| `POST` | `/api/v1/forms/{id}/duplicate` | Clone as new draft (new) |
-| `GET` | `/api/v1/forms/{id}/versions` | List version chain (new) |
+| `GET` | `/api/v1/forms` | Flat list (existing, `list_form`, no auth) |
+| `GET` | `/api/v1/manage/forms` | Paginated list for form builder UI |
+| `POST` | `/api/v1/manage/forms` | Create form |
+| `GET` | `/api/v1/manage/forms/{id}` | Get form detail |
+| `PUT` | `/api/v1/manage/forms/{id}` | Update form in-place (auto-increments version if published) |
+| `DELETE` | `/api/v1/manage/forms/{id}` | Delete/archive form |
+| `POST` | `/api/v1/manage/forms/{id}/publish` | Publish draft |
+| `POST` | `/api/v1/manage/forms/{id}/duplicate` | Clone as new draft |
+| `GET` | `/api/v1/manage/forms/{id}/versions` | List version chain |
+| `POST` | `/api/v1/manage/forms/{id}/unpublish` | Hide published form from data collection (status → draft) |
 | `GET` | `/api/v1/form/{id}` | Form for web/mobile rendering (existing, **unchanged**) |
 | `GET` | `/api/v1/form/web/{id}` | Webform with admin cascade (existing, **unchanged**) |
 
-The singular `/api/v1/form/{id}` endpoint stays as-is because mobile apps and the web form submission page reference it directly. Breaking that URL would require a mobile app update.
+The singular `/api/v1/form/{id}` endpoint stays as-is because mobile apps and the web form submission page reference it directly.
 
 ### Request Payload: `FormCreateSerializer`
 
@@ -133,10 +138,12 @@ Accepts the output of the frontend `editorToApi()` transformer. This is the shar
 }
 ```
 
-**Accepted `type` values**: `"registration"`, `"monitoring"`  
-**Accepted question `type` values**: `"input"`, `"number"`, `"text"`, `"date"`, `"option"`, `"multiple_option"`, `"cascade"`, `"image"`, `"autofield"`, `"attachment"`, `"signature"`, `"geo"`, `"administration"`, `"entity"` (maps to `cascade`)
+**Accepted `type` values**: `1` (registration), `2` (monitoring), or strings `"registration"` / `"monitoring"` — both forms are equivalent  
+**Accepted question `type` values**: `"input"`, `"number"`, `"text"`, `"date"`, `"option"`, `"multiple_option"`, `"cascade"`, `"image"`, `"autofield"`, `"attachment"`, `"signature"`, `"geo"`, `"administration"`
 
 `"image"` is the canonical type name (aligned with `akvo-form-service` and the editor). The old `"photo"` string is no longer accepted — see D-3.
+
+`"entity"` is **not** a valid `type` string for the backend API. Entity questions must be sent as `type: "cascade"` with `extra: { "type": "entity", "name": "..." }`. The FB-003 transformer (`editorToApi`) is responsible for converting the editor's `"entity"` type to `"cascade"` before sending. The reverse (`apiToEditor`) converts `cascade + extra.type=entity` back to `"entity"` for the editor.
 
 ### Response Format: `FormDetailSerializer`
 
@@ -149,6 +156,7 @@ Extended from the existing `FormDataSerializer`, adds `status`, `version`, `publ
   "version": 1,
   "status": "draft",
   "published_at": null,
+  "active_version_id": null,
   "type": 1,
   "approval_instructions": null,
   "parent": null,
@@ -193,7 +201,9 @@ Extended `ListFormSerializer` adds `status` and `version` to each item:
 
 ---
 
-## Version-on-Edit Strategy
+## PUT Behavior by Status
+
+PUT always returns `200`. The form ID never changes on edit. Behavior differs by status:
 
 ```mermaid
 sequenceDiagram
@@ -201,45 +211,52 @@ sequenceDiagram
     participant BE as Backend
     participant DB as Database
 
-    FE->>BE: PUT /api/v1/forms/42 { ...changes }
+    note over FE,DB: Published form — snapshot-only path
+
+    FE->>BE: PUT /api/v1/manage/forms/42 { ...changes }
+    BE->>BE: _normalize_editor_payload(data)
     BE->>DB: SELECT form WHERE id=42
-    DB-->>BE: form (status=PUBLISHED, version=1)
-    BE->>DB: BEGIN TRANSACTION
-    BE->>DB: INSERT Forms (name, uuid=new, version=2, status=DRAFT, previous_version=42)
-    BE->>DB: INSERT QuestionGroup (copy from 42, assign to new form)
-    BE->>DB: INSERT Questions (copy from 42, apply changes)
-    BE->>DB: INSERT QuestionOptions (copy from 42, apply changes)
+    DB-->>BE: form (status=PUBLISHED, active_version=v1)
+    BE->>DB: BEGIN TRANSACTION (store_version_snapshot)
+    BE->>DB: INSERT FormPublishedVersion (version=2, schema=payload)
+    note over BE,DB: QuestionGroup / Questions NOT touched
     BE->>DB: COMMIT
-    BE-->>FE: 201 { id: 43, version: 2, status: "draft" }
-    note over FE: Frontend navigates to /form-builder/43/edit
+    BE-->>FE: 200 { id: 42, version: 1, latest_version: 2, status: "published" }
+
+    note over FE,DB: Draft form — live update path
+
+    FE->>BE: PUT /api/v1/manage/forms/42 { ...changes }
+    BE->>DB: BEGIN TRANSACTION (save_form)
+    BE->>DB: UPDATE Forms SET name=...
+    BE->>DB: UPDATE/INSERT/DELETE QuestionGroups and Questions
+    BE->>DB: COMMIT
+    BE-->>FE: 200 { id: 42, version: 1, status: "draft" }
 ```
 
-The version chain:
+Version rules:
+- **Published form**: `store_version_snapshot` inserts a new `FormPublishedVersion` with the payload as schema. Live rows (`QuestionGroup`, `Questions`) are untouched. `active_version` and `Forms.version` stay unchanged. Response is built from the new snapshot via `_form_detail_from_snapshot`.
+- **Draft form**: `save_form` updates live rows. `version` stays unchanged. `create_published_version` is not called.
+- `version` is always server-managed — values in the PUT payload are ignored.
 
-```
-Form #42 (version=1, status=PUBLISHED) ← previous_version ← Form #43 (version=2, status=DRAFT)
-```
-
-Existing `FormData` submissions still reference form `#42`. After the user is satisfied with `#43`, they publish it via `POST /api/v1/forms/43/publish`.
+**Invariant**: live question rows always equal the active version. Only `activate()` and first `publish` modify them.
 
 ---
 
 ## Decision Log
 
-### D-1: Version-on-Edit vs Lock-and-Edit
+### D-1: Always In-Place PUT
 
 **Options considered**:
-1. **Version-on-edit**: PUT on published form silently creates a new draft version
-2. **Lock-and-edit**: Published form is locked; user must explicitly "create new version" before editing
-3. **Reject**: Return `403` if trying to PUT a published form
+1. **Version-on-edit**: PUT on published form creates a new draft version (original `201` design)
+2. **Always in-place**: PUT always updates the record, returns `200`; published form auto-increments `version`
 
-**Decision**: Version-on-edit (option 1), returning `201` so the frontend knows a new form was created.
+**Decision**: Always in-place (option 2).
 
 **Rationale**:
-- Option 2 requires an extra UI step ("create new version") that adds friction without adding safety.
-- Option 3 forces the user to navigate away and duplicate manually — same as option 2 but worse UX.
-- Version-on-edit is transparent: the API contract (PUT returns 200 for draft, 201 for new version) lets the frontend navigate the user to the correct page automatically.
-- The `201` status code signals to the frontend that `Location` is a different resource — a clear, idiomatic signal.
+- Version-on-edit created a new form record on every PUT of a published form, leaving stale duplicates in the list and forcing the frontend to handle two different response codes (`200` vs `201`) and navigate to a new form ID.
+- Data integrity is already protected by the "can't delete answered questions" guard in `_save_questions` — there is no scenario where in-place editing corrupts existing `FormData` records.
+- Auto-incrementing `version` on every PUT of a published form gives traceability without the complexity of creating new rows.
+- `duplicate` action still exists for the explicit "create a copy" flow when needed.
 
 ---
 
@@ -304,24 +321,37 @@ The database enforces `UNIQUE (form_id, name)` on both `question_group` and `que
 
 | Function | Purpose |
 |---|---|
-| `save_form(data, instance=None)` | Create a new DRAFT form or fully replace an existing DRAFT; atomic |
-| `version_on_edit(original_form, data)` | Create a new DRAFT version of a PUBLISHED form; atomic |
+| `save_form(data, instance=None)` | Create a new DRAFT form or update a draft form's live rows in-place; atomic |
+| `store_version_snapshot(form, data, user)` | For published forms on PUT: store normalized payload as a new `FormPublishedVersion` schema. No live rows touched. Missing fields inherit from active version's schema; atomic |
+| `create_published_version(form, user, activate=False)` | Create a `FormPublishedVersion` from live rows using `_build_schema_snapshot`. When `activate=True` (first publish or explicit republish): sets `Forms.active_version`, `Forms.version`, and on draft→published also `status`/`published_at`; atomic |
+| `restore_from_snapshot(form, pv)` | Two-pass rollback applying snapshot to live rows: Pass 1 soft-deletes active rows absent from snapshot; Pass 2 restores/creates snapshot rows (via `qs.restore()` — creates new if ID not found), syncs all fields and options. Restores `form.name`, `form.approval_instructions`, sets `active_version = pv`, `version = pv.version`; atomic |
+| `_build_schema_snapshot(form)` | Build immutable schema JSON from live rows using `prefetch_related` (3 queries total). Called by `create_published_version` |
 | `duplicate_form(original_form)` | Deep copy any form as a new DRAFT; atomic |
 | `validate_form_payload(data)` | Return list of error strings before touching the DB |
+| `_form_detail_from_snapshot(form, pv)` | View helper: build `FormDetailSerializer`-shaped response from snapshot JSON. Batch-checks `disable_delete` in one query. Used by `retrieve()` and `update()` response for published forms |
 
 **Pattern** (`save_form`):
 ```python
 @transaction.atomic
 def save_form(data, instance=None):
-    form_type = _form_type_str_to_int(data["type"])
+    type_val = data.get("type")
     if instance is None:
-        form = Forms.objects.create(name=data["name"], type=form_type, status=FormStatus.draft, ...)
+        # CREATE — name required; type defaults to registration
+        form = Forms.objects.create(
+            name=data["name"],
+            type=_parse_form_type(type_val) if type_val else FormTypes.registration,
+            status=FormStatus.draft, ...
+        )
     else:
-        instance.name = data["name"]; instance.save(); form = instance
+        # UPDATE — only update fields present in the payload
+        if "name" in data: instance.name = data["name"]
+        if type_val is not None: instance.type = _parse_form_type(type_val)
+        instance.save(); form = instance
 
-    for group_data in data.get("question_group", []):
-        # update_or_create group via filter().update() + get() or create()
-        _save_questions(group, group_data["question"], question_names)
+    # question_group only processed when key is explicitly in payload
+    if instance is None or "question_group" in data:
+        for group_data in data.get("question_group", []):
+            _save_questions(group, group_data["question"], question_names)
     return form
 ```
 
@@ -349,16 +379,24 @@ This applies to both:
 
 ### D-8: Type Validation via `validate_form_payload`
 
-**Decision**: Type validation lives in `validate_form_payload()` in `functions.py`, not in a DRF serializer:
+**Decision**: Type validation lives in `validate_form_payload(data, partial=False)` in `functions.py`, not in a DRF serializer.
+
+- **Create** (`partial=False`): `name` is required; `type` is optional (defaults to `registration`).
+- **Update** (`partial=True`): both `name` and `type` are optional — only fields present in the payload are changed; `question_group` is only processed when the key exists in the payload.
 
 ```python
-def validate_form_payload(data):
-    """Return list of error strings, empty if valid."""
+def validate_form_payload(data, partial=False):
     errors = []
-    if not data.get("name"):
+    if not partial and not data.get("name"):
         errors.append("name is required")
-    if data.get("type") not in ("registration", "monitoring"):
-        errors.append("type must be 'registration' or 'monitoring'")
+
+    type_val = data.get("type")
+    if type_val is not None:
+        valid_ints = {FormTypes.registration, FormTypes.monitoring}  # {1, 2}
+        valid_strs = {"registration", "monitoring"}
+        if type_val not in valid_ints and type_val not in valid_strs:
+            errors.append("type must be 1 (registration) or 2 (monitoring)")
+
     for gi, group in enumerate(data.get("question_group", [])):
         for qi, q in enumerate(group.get("question", [])):
             q_type = q.get("type", "")
@@ -370,7 +408,175 @@ def validate_form_payload(data):
     return errors
 ```
 
-Views call `validate_form_payload(request.data)` before calling `save_form()`. Returns a list of error strings; callers return `400` with `errors[0]` on failure. The `getattr(QuestionTypes, q_type, None)` check requires exact attribute name match — same principle as the serializer approach, but without the DRF abstraction overhead.
+- The `create` view calls `validate_form_payload(request.data)` (partial=False).
+- The `update` view calls `validate_form_payload(request.data, partial=True)`.
+- The `getattr(QuestionTypes, q_type, None)` check requires exact lowercase attribute name for question types — `"photo"` fails, `"image"` passes.
+
+---
+
+---
+
+### D-9: Granular Permission Foundation for FB-009
+
+**Problem**: FB-009 ("Update Permission System") will need per-operation access control (`form:create`, `form:edit`, `form:publish`, `form:delete`, `form:view`). Deferring this entirely to FB-009 would require a backend schema re-wire alongside the UI work.
+
+**Decision**: Define the five granular `FeatureAccessTypes` now; add a `FormBuilderAccess(required_access)` factory in `custom_permissions.py`; update each view to declare the minimum access it requires.
+
+**Pattern** (`custom_permissions.py`):
+
+```python
+def FormBuilderAccess(required_access):
+    """Return a permission class for the given granular access type."""
+    class _Permission(BasePermission):
+        def has_permission(self, request, view):
+            if request.user.is_superuser:
+                return True
+            return request.user.user_user_role.filter(
+                role__role_role_feature_access__type=FeatureTypes.form_builder,
+                role__role_role_feature_access__access=required_access,
+            ).exists()
+    return _Permission
+```
+
+**ViewSet action mapping** (see D-10 for the ViewSet implementation):
+
+| ViewSet action | HTTP method | `required_access` |
+|---|---|---|
+| `list` | GET | `form_view` |
+| `create` | POST | `form_create` |
+| `retrieve` | GET | `form_view` |
+| `update` | PUT | `form_edit` |
+| `destroy` | DELETE | superuser only |
+| `publish` | POST | `form_publish` |
+| `unpublish` | POST | `form_publish` |
+| `duplicate` | POST | `form_create` |
+| `versions` | GET | `form_view` + `form_edit` |
+| `activate` | POST | `form_publish` |
+
+**Seeder**: Admin role is seeded with all five granular types. Non-admin roles currently get no form builder access; FB-009 assigns granular types to them via the management UI.
+
+**FB-009 migration path**: Add role management UI to assign/remove granular access types per role. No backend schema changes needed.
+
+---
+
+### D-10: ModelViewSet Instead of Individual `@api_view` Functions
+
+**Problem**: Six separate `@api_view` functions with per-method inline permission checks, a `_handle_create_form` workaround for the DRF double-wrap issue, and no shared structure for the form builder CRUD surface.
+
+**Decision**: Consolidate into a single `FormBuilderViewSet(ModelViewSet)` class.
+
+**Pattern**:
+
+```python
+class FormBuilderViewSet(viewsets.ModelViewSet):
+    pagination_class = Pagination  # project-wide custom pagination
+
+    def get_queryset(self):
+        if self.action == "list":
+            return Forms.objects.filter(parent__isnull=True)
+        return Forms.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return ListFormSerializer
+        return FormDetailSerializer
+
+    def get_permissions(self):
+        perm_map = {
+            "list":      [IsAuthenticated, FormBuilderAccess(form_view)],
+            "create":    [IsAuthenticated, FormBuilderAccess(form_create)],
+            "retrieve":  [IsAuthenticated, FormBuilderAccess(form_view)],
+            "update":    [IsAuthenticated, FormBuilderAccess(form_edit)],
+            "destroy":   [IsAuthenticated, IsSuperAdmin],
+            "publish":   [IsAuthenticated, FormBuilderAccess(form_publish)],
+            "unpublish": [IsAuthenticated, FormBuilderAccess(form_publish)],
+            "duplicate": [IsAuthenticated, FormBuilderAccess(form_create)],
+            "versions":  [IsAuthenticated, FormBuilderAccess(form_view),
+                          FormBuilderAccess(form_edit)],
+        }
+        return [p() for p in perm_map.get(self.action, [IsAuthenticated])]
+```
+
+Custom actions via `@action(detail=True, methods=["post"/"get"])`: `publish`, `unpublish`, `duplicate`, `versions`.
+
+**URL namespace**: ViewSet routes use `/api/v1/manage/forms/...` (OpenAPI tag `"Manage Forms"`). `GET /api/v1/forms` remains as a separate `list_form` `@api_view(["GET"])` for backward compat — flat list, no auth, unchanged.
+
+**`pagination_class = Pagination`**: The ViewSet uses the project's custom `Pagination` class. `GET /api/v1/manage/forms` returns `{current, total, total_page, data: [...]}`. `GET /api/v1/forms` (`list_form`) remains a flat JSON array.
+
+**URL patterns stay manual** — DRF router not used; `re_path` entries use `FormBuilderViewSet.as_view({...})` style at `/manage/forms/...`.
+
+**Removed**: `_handle_create_form`, `form_detail`, `publish_form`, `duplicate_form_view`, `form_versions` functions.
+
+**Benefit**: Per-action permissions in one `get_permissions()` dict; `_handle_create_form` workaround eliminated; clean URL separation between read-only public list and authenticated form builder CRUD.
+
+---
+
+### D-11: Null-Safe Defaults for `dependency_rule` and `display_only`
+
+**Problem**: The editor emits `dependency_rule: null` and `display_only: null` for fields that have no value set. `q_data.get("dependency_rule", "AND")` only uses the default when the key is **absent** — a present `null` passes through.
+
+**Decision**: Use `or` fallback instead of `.get(..., default)`:
+- `q_data.get("dependency_rule") or "AND"`
+- `q_data.get("display_only") or False`
+- `q_data.get("fn") or None`
+- `q_data.get("pre") or None`
+
+This normalizes `null`, `{}`, and absent key to the intended default.
+
+---
+
+### D-12: Publish / Unpublish via Existing `status` Field — No New Column
+
+**Problem**: After `list_form` was updated to filter `status=published`, there is no way to temporarily hide a published form from data collection without a permanent deletion.
+
+**Decision**: Reuse the existing `status` IntegerField with two endpoints: `publish` (extended to cover all publish transitions) and `unpublish` (replaces the old `disable`+`enable` pair). No migration needed — the column already exists.
+
+**`unpublish` is a compound action (atomic)**:
+1. Returns `400` if `form.status != published`.
+2. Auto-activate latest snapshot if there are unactivated PUT snapshots (`latest_pv != active_version`). This ensures live rows equal the admin's latest intended state before editing begins.
+3. Set `status=draft`.
+
+Without step 2, an admin who PUT three times (v1→v2→v3 snapshots, v1 active) and then unpublishes would be editing from v1's live rows — silently editing a stale state.
+
+**`publish` (extended)** now handles all publish transitions:
+- **Already published**: activates the latest snapshot if one is pending (same as before).
+- **Draft**: calls `create_published_version(form, user, activate=True)`, which creates a new snapshot from live rows and activates it. This covers both first publish and re-publish after unpublish uniformly.
+
+**`published_at` guard**: `create_published_version` uses `form.published_at is None` to detect first-ever publish — not `form.status != published`. On re-publish (status=draft, published_at already set), only `status=published` is set; `published_at` is not overwritten.
+
+**ViewSet permission**: both actions use `form_publish` access (same as `publish` and `activate`).
+
+**Full corrected lifecycle**:
+```mermaid
+stateDiagram-v2
+    draft --> published : publish
+    published --> draft : unpublish
+    draft --> published : publish (re-publish after edits)
+    note right of draft : hidden from data collection\nfully editable via PUT
+```
+
+---
+
+### D-13: Server-Side Batching for Large Forms — No Frontend Chunking
+
+**Problem**: A production form e.g. has 7+ question groups, 100+ questions, and 200+ options. Naïve per-item DB calls produce 400–600 queries per PUT.
+
+**Decision**: All performance fixes are server-side. The frontend sends one complete payload per save.
+
+**Why not frontend chunking?**
+- Chunking breaks atomicity — a partial failure leaves the form in an inconsistent state
+- A snapshot must represent the complete form at one point in time; partial chunks would require server-side reassembly
+- The actual payload size (~75–150 KB) is well within Django's 2.5 MB `DATA_UPLOAD_MAX_MEMORY_SIZE` default — there is no limit being hit
+
+**Server-side batching strategy by operation**:
+
+| Operation | N+1 risk | Fix |
+|---|---|---|
+| Published form PUT (`store_version_snapshot`) | None — one `INSERT` into `FormPublishedVersion` | Already O(1) |
+| `GET /manage/forms/{id}` published | None — reads one snapshot row | Already O(1) via `_form_detail_from_snapshot` |
+| `_build_schema_snapshot` (first publish) | Groups → questions → options | `prefetch_related("question_group_question__options")` — 3 queries total |
+| Draft form PUT (`save_form`) | One query per question/group | `filter(id__in=ids).in_bulk()` before the loop; batch delete options with `filter(question__in=questions).delete()` |
+| `restore_from_snapshot` (activate / unpublish) | One query per group and question | Pre-load all groups and questions with two `filter(form=form)` queries; use dicts keyed by ID inside the loop |
 
 ---
 
@@ -381,8 +587,8 @@ The following changes in this spec require updates to the frontend mock (spec #2
 | Change | Impact on spec #228 |
 |---|---|
 | URL is `POST /api/v1/forms` (plural) | Update Group D (URL registration) and Group G (transformer/API calls) in `implementation-plan.md` |
-| `PUT /api/v1/forms/{id}` may return `201` for published forms | `FormBuilderEdit.jsx` must handle both `200` (draft saved) and `201` (new version created) — navigate to `response.data.id` on success |
-| Response includes `status` field | `FormBuilderList` should show status badge; `FormBuilderEdit` should show "Currently published — editing creates a new version" banner when `status === "published"` |
+| `PUT /api/v1/forms/{id}` always returns `200` | `FormBuilderEdit.jsx` always stays on the same form; no navigation after save |
+| Response includes `status` field | `FormBuilderList` should show status badge; `FormBuilderEdit` may show an informational banner when `status === "published"` |
 | `image` is only accepted type string | `"photo"` is rejected; FB-003 transformer passes `"image"` unchanged |
 | `disable_delete` in question response | FB-003 editor reads this to disable delete button for answered questions |
 
