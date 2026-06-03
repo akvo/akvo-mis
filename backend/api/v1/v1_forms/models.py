@@ -10,6 +10,7 @@ from api.v1.v1_forms.constants import (
     FormStatus,
 )
 from api.v1.v1_users.models import SystemUser
+from utils.soft_deletes_model import SoftDeletes
 
 
 class Forms(models.Model):
@@ -40,6 +41,17 @@ class Forms(models.Model):
         null=True,
         blank=True,
     )
+    # Points to the snapshot currently used for new data collections.
+    # Null while the form is a draft (no published version yet).
+    # Updated by publish (auto) and activate (manual rollback).
+    active_version = models.ForeignKey(
+        "FormPublishedVersion",
+        on_delete=models.SET_NULL,
+        related_name="active_for_forms",
+        null=True,
+        blank=True,
+        default=None,
+    )
 
     def __str__(self):
         return self.name
@@ -48,7 +60,7 @@ class Forms(models.Model):
         db_table = "form"
 
 
-class QuestionGroup(models.Model):
+class QuestionGroup(SoftDeletes):
     form = models.ForeignKey(
         to=Forms, on_delete=models.CASCADE, related_name="form_question_group"
     )
@@ -56,22 +68,28 @@ class QuestionGroup(models.Model):
     label = models.TextField(null=True, default=None)
     order = models.BigIntegerField(null=True, default=None)
     repeatable = models.BooleanField(default=False)
-    repeat_text = models.CharField(max_length=255, default=None, null=True)
+    repeat_text = models.CharField(
+        max_length=255, default=None, null=True
+    )
 
     def __str__(self):
         return self.name
 
     class Meta:
-        unique_together = ("form", "name")
+        # Only active (non-deleted) groups must be unique per form.
+        # A soft-deleted group may share its name with a new active group
+        # so the editor can recreate a group after a soft-delete (FB-002A).
         constraints = [
             models.UniqueConstraint(
-                fields=["form", "name"], name="unique_form_question_group"
+                fields=["form", "name"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="unique_active_form_question_group",
             )
         ]
         db_table = "question_group"
 
 
-class Questions(models.Model):
+class Questions(SoftDeletes):
     form = models.ForeignKey(
         to=Forms, on_delete=models.CASCADE, related_name="form_questions"
     )
@@ -133,10 +151,14 @@ class Questions(models.Model):
         }
 
     class Meta:
-        unique_together = ("form", "name")
+        # Conditional unique: soft-deleted questions may share a name with a
+        # new active question on the same form (same reasoning as
+        # QuestionGroup — see FB-002A).
         constraints = [
             models.UniqueConstraint(
-                fields=["form", "name"], name="unique_form_question"
+                fields=["form", "name"],
+                condition=models.Q(deleted_at__isnull=True),
+                name="unique_active_form_question",
             )
         ]
         db_table = "question"
@@ -197,3 +219,34 @@ class QuestionAttribute(models.Model):
     class Meta:
         unique_together = ("name", "question", "attribute", "options")
         db_table = "question_attribute"
+
+
+class FormPublishedVersion(models.Model):
+    """Immutable snapshot of a form's question structure at publish time.
+
+    Created by POST /manage/forms/{id}/publish. Never modified after creation.
+    FormData.published_version references this to enable rendering historical
+    submissions against the exact schema used at collection time (FB-002A).
+    """
+    form = models.ForeignKey(
+        Forms,
+        on_delete=models.CASCADE,
+        related_name="published_versions",
+    )
+    # Auto-incremented per form by the publish action (not a global counter).
+    version = models.IntegerField()
+    # Full JSON snapshot of question_group[] at publish time.
+    # Includes all active (deleted_at__isnull=True) groups and questions.
+    schema = models.JSONField()
+    published_at = models.DateTimeField(auto_now_add=True)
+    published_by = models.ForeignKey(
+        SystemUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="published_form_versions",
+    )
+
+    class Meta:
+        unique_together = ("form", "version")
+        ordering = ["form", "version"]
+        db_table = "form_published_version"

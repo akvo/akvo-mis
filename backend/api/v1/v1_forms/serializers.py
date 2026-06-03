@@ -5,8 +5,10 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
+from api.v1.v1_data.models import Answers
 from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes, FormStatus
 from api.v1.v1_forms.models import (
+    FormPublishedVersion,
     Forms,
     QuestionGroup,
     Questions,
@@ -284,7 +286,9 @@ class ListQuestionGroupSerializer(serializers.ModelSerializer):
     @extend_schema_field(ListQuestionSerializer(many=True))
     def get_question(self, instance: QuestionGroup):
         return ListQuestionSerializer(
-            instance=instance.question_group_question.all().order_by("order"),
+            instance=instance.question_group_question.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             context=self.context,
             many=True,
         ).data
@@ -333,7 +337,9 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
     @extend_schema_field(ListQuestionGroupSerializer(many=True))
     def get_question_group(self, instance: Forms):
         return ListQuestionGroupSerializer(
-            instance=instance.form_question_group.all().order_by("order"),
+            instance=instance.form_question_group.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
             context=self.context,
         ).data
@@ -343,6 +349,7 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
         cascade_questions = Questions.objects.filter(
             type__in=[QuestionTypes.cascade, QuestionTypes.administration],
             form=instance,
+            deleted_at__isnull=True,
         ).all()
         source = []
         for cascade_question in cascade_questions:
@@ -474,7 +481,9 @@ class FormDataQuestionGroupSerializer(serializers.ModelSerializer):
     @extend_schema_field(FormDataListQuestionSerializer(many=True))
     def get_question(self, instance: QuestionGroup):
         return FormDataListQuestionSerializer(
-            instance=instance.question_group_question.all().order_by("order"),
+            instance=instance.question_group_question.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
         ).data
 
@@ -491,7 +500,9 @@ class FormDataSerializer(serializers.ModelSerializer):
     @extend_schema_field(FormDataQuestionGroupSerializer(many=True))
     def get_question_group(self, instance: Forms):
         return FormDataQuestionGroupSerializer(
-            instance=instance.form_question_group.all().order_by("order"),
+            instance=instance.form_question_group.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
         ).data
 
@@ -575,7 +586,6 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
         ).data
 
     def get_disable_delete(self, instance: Questions):
-        from api.v1.v1_data.models import Answers
         if Answers.objects.filter(question=instance).exists():
             return True
         return None
@@ -610,7 +620,9 @@ class FormDetailQuestionGroupSerializer(serializers.ModelSerializer):
 
     def get_question(self, instance: QuestionGroup):
         return FormDetailQuestionSerializer(
-            instance=instance.question_group_question.all().order_by("order"),
+            instance=instance.question_group_question.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
         ).data
 
@@ -626,13 +638,20 @@ class FormDetailSerializer(serializers.ModelSerializer):
     """Extended form serializer for form builder endpoints."""
     status = serializers.SerializerMethodField()
     question_group = serializers.SerializerMethodField()
+    latest_version = serializers.SerializerMethodField()
 
     def get_status(self, obj):
         return FormStatus.FieldStr.get(obj.status, "draft")
 
+    def get_latest_version(self, obj):
+        last = obj.published_versions.order_by("-version").first()
+        return last.version if last else obj.version
+
     def get_question_group(self, instance: Forms):
         return FormDetailQuestionGroupSerializer(
-            instance=instance.form_question_group.all().order_by("order"),
+            instance=instance.form_question_group.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
         ).data
 
@@ -642,8 +661,10 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "version",
+            "latest_version",
             "status",
             "published_at",
+            "active_version_id",
             "type",
             "approval_instructions",
             "parent",
@@ -651,13 +672,37 @@ class FormDetailSerializer(serializers.ModelSerializer):
         ]
 
 
-class FormVersionSerializer(serializers.ModelSerializer):
-    """Minimal serializer for version chain listing."""
-    status = serializers.SerializerMethodField()
+class FormPublishedVersionSerializer(serializers.ModelSerializer):
+    """Serializer for the published versions list endpoint."""
+    published_by = serializers.SerializerMethodField()
+    is_active = serializers.SerializerMethodField()
 
-    def get_status(self, obj):
-        return FormStatus.FieldStr.get(obj.status, "draft")
+    def get_published_by(self, instance):
+        return instance.published_by.email if instance.published_by else None
+
+    def get_is_active(self, instance):
+        return instance.form.active_version_id == instance.id
 
     class Meta:
-        model = Forms
-        fields = ["id", "name", "version", "status", "published_at"]
+        model = FormPublishedVersion
+        fields = ["id", "version", "published_at", "published_by", "is_active"]
+
+
+class FormUpdateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False)
+    type = serializers.IntegerField(
+        required=False,
+        help_text="1 = registration, 2 = monitoring",
+    )
+    approval_instructions = serializers.CharField(
+        required=False, allow_null=True
+    )
+    parent = serializers.IntegerField(required=False, allow_null=True)
+    question_group = serializers.ListField(
+        required=False,
+        child=serializers.DictField(),
+        help_text=(
+            "Full question group array. Omit to skip group/question updates. "
+            "Pass ?allow_delete=true to soft-delete removed groups/questions."
+        ),
+    )
