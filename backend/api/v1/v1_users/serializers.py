@@ -362,7 +362,9 @@ class AddEditUserSerializer(serializers.ModelSerializer):
     trained = CustomBooleanField(default=False)
     roles = AddRolesSerializer(many=True, required=False)
     forms = CustomPrimaryKeyRelatedField(
-        queryset=Forms.objects.filter(parent__isnull=True).all(),
+        queryset=Forms.objects.filter(
+            parent__isnull=True,
+        ).all(),
         many=True,
         required=False,
     )
@@ -681,7 +683,7 @@ class UserRoleListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'role', 'administration',
             'is_approver', 'is_submitter', 'is_editor',
-            'can_delete', 'can_invite_user',
+            'can_delete', 'can_invite_user', 'can_form_builder',
         ]
 
 
