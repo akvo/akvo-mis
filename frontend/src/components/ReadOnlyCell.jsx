@@ -18,7 +18,7 @@ const ReadOnlyCell = ({ record, lastValue = false }) => {
   const fileExtension =
     record?.type === QUESTION_TYPES.attachment ? value?.split(".").pop() : null;
   const isImageType =
-    [QUESTION_TYPES.photo, QUESTION_TYPES.signature].includes(record?.type) ||
+    [QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(record?.type) ||
     (fileExtension && IMAGE_EXTENSIONS.includes(fileExtension));
 
   useEffect(() => {

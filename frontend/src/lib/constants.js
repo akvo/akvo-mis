@@ -15,7 +15,7 @@ export const QUESTION_TYPES = {
   text: "text",
   number: "number",
   date: "date",
-  photo: "photo",
+  image: "image",
   geo: "geo",
   option: "option",
   multiple_option: "multiple_option",

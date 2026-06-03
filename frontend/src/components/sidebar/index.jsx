@@ -273,6 +273,17 @@ const Sidebar = () => {
             </Menu.SubMenu>
           )}
 
+          {/* Form builder */}
+          {ability.can("manage", "form-builder") && (
+            <Menu.Item
+              key="menu-form-builder"
+              icon={<BookOutlined />}
+              data-url="/control-center/form-builder"
+            >
+              {text.menuFormBuilder}
+            </Menu.Item>
+          )}
+
           {/* Downloads */}
           {ability.can("read", "downloads") && (
             <Menu.Item

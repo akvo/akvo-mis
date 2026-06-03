@@ -43,3 +43,6 @@ export { default as AddRole } from "./add-role/AddRole";
 export { default as EditProfile } from "./profile/EditProfile";
 export { default as ManageDraft } from "./manage-draft/ManageDraft";
 export { default as ManageDraftForm } from "./manage-draft/ManageDraftForm";
+export { default as FormBuilderList } from "./form-builder/FormBuilderList";
+export { default as FormBuilderCreate } from "./form-builder/FormBuilderCreate";
+export { default as FormBuilderEdit } from "./form-builder/FormBuilderEdit";

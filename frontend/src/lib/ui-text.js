@@ -27,6 +27,7 @@ const uiText = {
     menuManageDraft: "Manage Drafts",
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
+    menuFormBuilder: "Form Builder",
     // Login
     loginLoadingTex: (
       <Fragment>

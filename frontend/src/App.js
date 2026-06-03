@@ -52,6 +52,9 @@ import {
   AddRole,
   ManageDraft,
   ManageDraftForm,
+  FormBuilderList,
+  FormBuilderCreate,
+  FormBuilderEdit,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -158,6 +161,18 @@ const RouteList = () => {
         <Route
           path="approvers/tree"
           element={<Private element={ApproversTree} alias="approvers" />}
+        />
+        <Route
+          path="form-builder"
+          element={<Private element={FormBuilderList} alias="form-builder" />}
+        />
+        <Route
+          path="form-builder/create"
+          element={<Private element={FormBuilderCreate} alias="form-builder" />}
+        />
+        <Route
+          path="form-builder/:formId/edit"
+          element={<Private element={FormBuilderEdit} alias="form-builder" />}
         />
         <Route
           path="data"
