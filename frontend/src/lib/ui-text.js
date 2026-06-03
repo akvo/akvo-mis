@@ -120,6 +120,16 @@ const uiText = {
         </ul>
       </Fragment>
     ),
+    formBuilderDescription: (
+      <Fragment>
+        This is where you can create and manage your Forms. You can :
+        <ul>
+          <li>Create new forms with various question types</li>
+          <li>Modify existing forms with version control</li>
+          <li>Delete forms that are no longer needed</li>
+        </ul>
+      </Fragment>
+    ),
     dataDownloadTitle: "Data Download",
     dataDownloadButton: "Download Data",
     dataDownloadText: (
