@@ -131,8 +131,24 @@ Draft key pattern:
 - Create page: `form-builder-draft-new`
 - Edit page: `form-builder-draft-{formId}`
 
-On successful save (`200`): remove the draft key.
-On successful publish: do **not** clear the draft — user may continue editing after publishing.
+**Draft JSON shape**:
+```json
+{ "value": <editorOutput>, "savedAt": "<ISO timestamp>", "formVersion": <number> }
+```
+
+`formVersion` is the form's active version at draft-save time. Old drafts (before this field was added) omit it.
+
+On successful API save (`200`): remove the draft key.
+
+**Draft restore logic** (Edit page only):
+1. Parse draft from localStorage.
+2. If `draft.formVersion` is present AND differs from `apiData.version` → the form was published to a new version since the draft was saved. Remove the stale draft; load from API.
+3. Otherwise, if `draft.savedAt > (apiData.published_at || "")` → use the draft; show dismissible Alert with message "We recovered your previous work — review it before saving." and a **"Load from server"** action button.
+4. On "Load from server": clear localStorage draft, reload from API (skipping draft check), remount editor.
+
+On version activation: clear the draft before reloading the editor.
+
+**Why `typeof` check**: The `no-undefined` ESLint rule forbids referencing the `undefined` identifier. The implementation uses `typeof draft.formVersion !== "undefined"` instead of `draft.formVersion !== undefined`.
 
 ### D-5: Where CSS Is Imported
 
@@ -154,6 +170,51 @@ On successful publish: do **not** clear the draft — user may continue editing 
 | `published` | Stores snapshot only | ❌ No | ✅ Yes |
 
 The frontend does not need different code paths for draft vs published — the same `PUT` call works for both. The response shape is the same. The frontend reads `status` from the response to update its local state.
+
+### D-8: Version History Drawer
+
+`FormBuilderEdit` includes a lazy-loaded version history Drawer (implemented in FB-003; originally scoped to FB-003B):
+
+- **Versions button** appears when `formStatus === "published"` or versions have already been fetched.
+- Clicking opens a `Drawer` and calls `GET /manage/forms/{id}/versions` on demand.
+- Drawer table: Version (Active badge), Published At, Published By, Set Active button.
+- **Set Active** (non-active rows only): `POST /manage/forms/{id}/activate/{version_id}` → success clears localStorage draft, sets `initialValue = null`, re-fetches form via `loadForm(true)`, remounts editor with the activated version's content.
+- `loadForm` is wrapped in `useCallback([formId])` to satisfy `react-hooks/exhaustive-deps` without any lint-disable comments.
+
+### D-9: Version Preview — Editor Reload Pattern
+
+When the user clicks **Preview** on a version row:
+
+1. `previewLoadingId` is set to the version's `id` (shows spinner on that button).
+2. The **previous `initialValue` is saved** in a local `prevValue` constant for error recovery.
+3. **`setInitialValue(null)` is called immediately** — this causes the editor to unmount (Spin shown). This is required because `WebformEditor` ignores `initialValue` prop changes after mount; only a remount (null → non-null) reliably loads new content.
+4. `GET /api/v1/manage/forms/{id}/versions/{version_id}` is fetched — returns `FormPublishedVersionSerializer` data + `schema` JSON field.
+5. On success: the schema is passed to `apiToEditor()`, merged with current form-level metadata (`id`, `status`, etc.) from local state, and `setInitialValue(transformed)` triggers the remount.
+6. On error: `setInitialValue(prevValue)` restores the previous editor state so the user doesn't lose their work; error notification shown.
+7. Drawer closes (`setDrawerOpen(false)`).
+8. `setPreviewingVersion({ id, version })` triggers a dismissible preview banner above the editor.
+9. "Back to saved" button calls `loadForm(true)` (skips draft check, fetches real saved state) and clears `previewingVersion`.
+
+**Why null-first**: `WebformEditor` from `akvo-react-form-editor` reads `initialValue` only on mount and ignores subsequent prop changes. Passing `null` removes the component from the DOM (the null guard renders `<Spin>` instead), and the next non-null `initialValue` triggers a fresh mount with the new content. The same pattern is used in `onActivateVersion` and `onExitPreview`.
+
+**Why editor view, not Webform view**: The default tab in `WebformEditor` is the Editor tab. Showing the editor view is consistent with the page context — the user is already in a form-builder editing session.
+
+**No Modal**: Closing the drawer and loading into the editor directly avoids a nested Modal-in-Drawer layout. The preview banner provides context that the current editor content is a snapshot, not the saved state.
+
+**Active row highlight**: `rowClassName` on the Table applies a `.version-row-active` class to the active version row (green-1 background). No Preview button is rendered for the active row — it is already loaded in the editor.
+
+### D-11: i18n — All Form Builder Strings in `ui-text.js`
+
+All user-visible text in the form builder pages and sub-components is defined in `ui-text.js` under `formBuilder*` keys (plus `formBuilderStatusPublished`, `formBuilderStatusDraft`, `formBuilderResetDraft`). Dynamic strings use function keys:
+
+```js
+formBuilderPreviewingBanner: (v) => `Previewing snapshot v${v} — not the saved state.`,
+formBuilderSnapshotPending:   (v) => `Changes saved as snapshot v${v}. Click Publish to activate.`,
+formBuilderVersionActivated:  (n) => `Version ${n} is now active. Reloading editor…`,
+formBuilderActivateVersionTitle: (v) => `Activate version ${v}?`,
+```
+
+The `text` object (derived from `uiText[activeLang]` via `useMemo`) is passed as a prop to `FormEditorBanners` and `VersionHistoryDrawer` so sub-components don't need their own language store subscriptions.
 
 ---
 
@@ -231,10 +292,36 @@ question[].option[]             → question[].option[]
 frontend/src/
 ├── pages/form-builder/
 │   ├── FormBuilderList.jsx         — table with status badge, "New Form" button
-│   ├── FormBuilderCreate.jsx       — editor + POST save + auto-save
-│   └── FormBuilderEdit.jsx         — editor + PUT save + Publish + Unpublish
+│   ├── FormBuilderCreate.jsx       — editor + POST save + auto-save + draft restore
+│   ├── FormBuilderEdit.jsx         — editor + PUT save + Publish + Unpublish
+│   ├── style.scss                  — .version-row-active highlight rule
+│   └── components/
+│       ├── index.js                — barrel export
+│       ├── FormStatusTag.jsx       — Published/Draft Tag (used in List)
+│       ├── FormEditorBanners.jsx   — draft-restored / preview / info Alert group
+│       └── VersionHistoryDrawer.jsx — version history Drawer + Table + actions
 ├── lib/
-│   └── form-builder-transform.js  — editorToApi(), apiToEditor() (pure JS)
+│   ├── form-builder-transform.js  — editorToApi(), apiToEditor() (pure JS)
+│   └── ui-text.js                  — 40+ formBuilder* keys for all UI strings
 └── components/can/
     └── ability.js                  — add can("manage", "form-builder") rule
 ```
+
+### `FormEditorBanners` props
+
+| Prop | Type | Required | Description |
+|---|---|---|---|
+| `draftRestored` | bool | ✅ | Show draft-recovered alert |
+| `onDismissDraft` | func | ✅ | Called when alert is closed |
+| `onResetDraft` | func | — | Shows "Load from server" action button; clears draft and reloads from API |
+| `previewingVersion` | `{id, version}` or null | — | Show preview banner when set |
+| `onExitPreview` | func | — | Called by "Back to saved" button |
+| `infoBannerText` | string or null | — | Show info banner (e.g. snapshot-pending text) |
+| `text` | uiText object | ✅ | Current language text map |
+| `topSpacing` | bool | — | Adds `marginTop:16` to first alert (Create page context) |
+
+### `VersionHistoryDrawer` props
+
+`open`, `onClose`, `versions`, `loading`, `onRefresh`, `activatingId`, `previewLoadingId`, `onActivate(versionId, versionNumber)`, `onPreview(record)`, `text`
+
+Pagination: `{ pageSize: 10, hideOnSinglePage: true }` — client-side, handles 99+ versions; hidden when ≤10 rows.

@@ -244,33 +244,15 @@ Draft storage format:
 
 **File**: `frontend/src/pages/form-builder/FormBuilderEdit.jsx`
 
-Key implementation:
-1. `useParams()` → `formId`.
-2. On mount:
-   - `GET /api/v1/manage/forms/${formId}` → `apiToEditor()` → `apiData`
-   - Check localStorage draft: if `draft.savedAt > apiData.savedAt`, use draft
-   - `setInitialValue(draft || apiData)`
-   - Store `formStatus`, `formVersion`, `formLatestVersion` in state
-3. Published form info banner: `formStatus === "published"`:
-   - If `formLatestVersion > formVersion`: "Changes saved as snapshot v{latest_version}. Click Publish to activate."
-   - Else: "Editing a published form creates a new version snapshot. Click Publish to activate."
-4. On save (PUT):
-   - `editorToApi(editorRef.current)` → `PUT /api/v1/manage/forms/${formId}`
-   - On `200`: `message.success`, remove localStorage draft, update `formLatestVersion` from response
-5. On publish (`POST .../publish`):
-   - On `200`: `message.success("Form published")`, update `formStatus`, `formVersion`, `formLatestVersion` from response
-6. On unpublish (`POST .../unpublish`):
-   - Show `formStatus === "published"` only
-   - On `200`: `message.success("Form unpublished")`, update `formStatus` to `"draft"`
-7. Debounce auto-save to `form-builder-draft-${formId}`.
-
-Button visibility rules:
-
-| Button | Show when |
-|---|---|
-| Save | Always |
-| Publish | `can("publish", "form-builder")` AND (`status === "draft"` OR `latest_version > version`) |
-| Unpublish | `can("publish", "form-builder")` AND `status === "published"` |
+Key notes:
+- `loadForm` is wrapped in `useCallback([formId])` — satisfies `react-hooks/exhaustive-deps` without any lint-disable comment
+- **Stale draft fix**: draft JSON now includes `formVersion`; on load, reject draft if `typeof draft.formVersion !== "undefined" && draft.formVersion !== apiData.version`; silently remove stale draft from localStorage. Avoids `draft.formVersion !== undefined` to satisfy `no-undefined` ESLint rule.
+- **`onSave` draft**: `localStorage.setItem(..., JSON.stringify({ value, savedAt, formVersion }))` — stores current `formVersion` for stale detection.
+- **`onResetDraft`**: clears localStorage draft, sets `initialValue = null`, calls `loadForm(true)` (skip draft check) — wired to "Load from server" button in `FormEditorBanners`.
+- **`onSave`** → `PUT /manage/forms/{formId}` → update `formStatus`, `formVersion`, `formLatestVersion` from response
+- Info banner: snapshot pending vs. fresh-publish text depends on `formLatestVersion > formVersion`
+- Publish button shown when `formStatus === "draft"` OR `hasPendingSnapshot`
+- Unpublish button shown when `formStatus === "published"` (behind Popconfirm)
 
 ---
 
@@ -297,6 +279,173 @@ Run:
 ```bash
 cd frontend && CI=true npm test -- --testPathPattern="form-builder"
 ```
+
+---
+
+---
+
+### Group G: Version Preview ✅
+
+#### G-1: Backend — New `version_detail` action
+
+**File**: `backend/api/v1/v1_forms/views.py`
+
+Add a new `@action` to `FormBuilderViewSet`:
+
+```python
+@extend_schema(
+    tags=["Manage Forms"],
+    summary="Get a single published version snapshot with schema",
+)
+@action(
+    detail=True,
+    methods=["get"],
+    url_path=r"versions/(?P<version_id>[^/.]+)",
+)
+def version_detail(self, request, version_id=None, *args, **kwargs):
+    form = self.get_object()
+    pv = get_object_or_404(form.published_versions, pk=version_id)
+    data = FormPublishedVersionSerializer(pv).data
+    data["schema"] = pv.schema
+    return Response(data)
+```
+
+**File**: `backend/api/v1/v1_forms/urls.py`
+
+Add before the existing `versions$` pattern:
+
+```python
+re_path(
+    r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)"
+    r"/versions/(?P<version_id>[0-9]+)$",
+    FormBuilderViewSet.as_view({"get": "version_detail"}),
+),
+```
+
+No migration needed — reads existing `FormPublishedVersion.schema` field.
+
+#### G-2: Frontend — `FormBuilderEdit.jsx` changes
+
+**New state**:
+```javascript
+const [previewingVersion, setPreviewingVersion] = useState(null); // { id, version } or null
+const [previewLoadingId, setPreviewLoadingId] = useState(null);
+```
+
+**`onPreview` handler** (null-first pattern forces editor remount):
+```javascript
+const onPreview = (record) => {
+  setPreviewLoadingId(record.id);
+  const prevValue = initialValue;   // save for error recovery
+  setInitialValue(null);            // unmount editor immediately
+  api.get(`/manage/forms/${formId}/versions/${record.id}`)
+    .then((res) => {
+      const schema = res.data.schema;
+      setInitialValue(apiToEditor({
+        ...schema,
+        id: Number(formId),
+        status: formStatus,
+        latest_version: formLatestVersion,
+        active_version_id: null,
+      }));
+      setPreviewingVersion({ id: record.id, version: record.version });
+      setDrawerOpen(false);
+    })
+    .catch((err) => {
+      const msg = err.response?.data?.message || text.formBuilderPreviewError;
+      notify({ type: "error", message: msg });
+      setInitialValue(prevValue);   // restore on error
+    })
+    .finally(() => {
+      setPreviewLoadingId(null);
+    });
+};
+```
+
+**`onExitPreview` handler**:
+```javascript
+const onExitPreview = () => {
+  setPreviewingVersion(null);
+  setInitialValue(null);
+  loadForm(true);
+};
+```
+
+**Preview banner** (shown above `infoBannerText`):
+```jsx
+{previewingVersion && (
+  <Alert
+    type="warning"
+    message={`Previewing snapshot v${previewingVersion.version} — not the saved state.`}
+    action={<Button size="small" onClick={onExitPreview}>Back to saved</Button>}
+    style={{ marginBottom: 8 }}
+    showIcon
+  />
+)}
+```
+
+**versionColumns changes**:
+- Active row: `rowClassName={(r) => (r.is_active ? "version-row-active" : "")}`
+- Preview button added to Actions column for non-active rows (alongside Set Active)
+- `previewLoadingId` drives the spinner
+
+**style.scss** — add active row highlight:
+```scss
+.ant-table-row {
+  &.version-row-active {
+    background-color: #f6ffed;
+  }
+}
+```
+
+---
+
+### Group I: Reusable Components ✅
+
+**Directory**: `frontend/src/pages/form-builder/components/`
+
+Three sub-components extracted from the page files:
+
+| Component | Extracted from | Purpose |
+|---|---|---|
+| `FormStatusTag` | `FormBuilderList` columns | Published/Draft tag |
+| `FormEditorBanners` | `FormBuilderCreate` + `FormBuilderEdit` | Draft restored / Preview / Info alerts |
+| `VersionHistoryDrawer` | `FormBuilderEdit` | Drawer + Table + Activate/Preview actions |
+
+**`FormStatusTag`** props: `{ status, text }`
+
+**`FormEditorBanners`** props: `{ draftRestored, onDismissDraft, previewingVersion?, onExitPreview?, infoBannerText?, text, topSpacing? }`
+- `topSpacing=true` adds `marginTop:16` to the first alert (Create page context)
+- Optional props render nothing when absent
+
+**`VersionHistoryDrawer`** props: `{ open, onClose, versions, loading, onRefresh, activatingId, previewLoadingId, onActivate, onPreview, text }`
+
+New `ui-text.js` keys added: `formBuilderStatusPublished`, `formBuilderStatusDraft`, `formBuilderResetDraft`
+
+**`FormEditorBanners` additional prop**: `onResetDraft` — when provided, renders a "Load from server" `<Button size="small">` as the `action` of the draft-restored Alert. Clears localStorage draft and reloads from API.
+
+**`VersionHistoryDrawer` pagination**: `{ pageSize: 10, hideOnSinglePage: true }` — client-side pagination handles 99+ versions; Ant Design hides the pagination bar automatically when ≤10 rows.
+
+---
+
+### Group J: Backend — Tests for `version_detail` Endpoint ✅
+
+**File**: `backend/api/v1/v1_forms/tests/tests_manage_form_versions.py`
+
+10 tests in `ManageFormVersionDetailTestCase` covering `GET /api/v1/manage/forms/{id}/versions/{version_id}`:
+
+| Test | Assertion |
+|---|---|
+| `test_version_detail_returns_200_with_all_fields` | 200 + all 6 fields present (`id`, `version`, `published_at`, `published_by`, `is_active`, `schema`) |
+| `test_version_detail_schema_contains_question_group` | `schema` is a non-empty dict with a `question_group` list |
+| `test_version_detail_published_by_is_admin_email` | `published_by` resolves to publishing user's email |
+| `test_version_detail_is_active_true_for_active_version` | `is_active=True` for the active version |
+| `test_version_detail_is_active_false_for_pending_snapshot` | PUT-created snapshot: `is_active=False`; original v1 stays `is_active=True` |
+| `test_version_detail_404_for_nonexistent_form` | 404 when form doesn't exist |
+| `test_version_detail_404_for_nonexistent_version` | 404 when version_id doesn't belong to the form |
+| `test_version_detail_404_version_from_different_form` | 404 when version_id belongs to a sibling form |
+| `test_version_detail_requires_authentication` | 401 with no auth header |
+| `test_version_detail_any_version_retrievable_by_id` | v1 and v2 independently retrievable after two publish cycles |
 
 ---
 

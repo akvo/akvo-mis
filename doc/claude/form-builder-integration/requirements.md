@@ -55,7 +55,7 @@
 - On success: shows `message.success`, clears the localStorage draft, navigates to `/control-center/form-builder/{response.data.id}/edit`.
 - On error: shows `message.error` with server message or generic fallback.
 - Auto-saves to localStorage key `form-builder-draft-new` (debounced 2 s).
-- On mount: restores draft from localStorage if one exists, shows a dismissible "Draft restored" alert.
+- On mount: restores draft from localStorage if one exists; shows a dismissible `<Alert>` with message: **"We recovered your previous work — review it before saving."**
 
 ### FR-4: Edit Form (`/control-center/form-builder/:formId/edit`)
 
@@ -66,8 +66,12 @@
   - Response returns `version` (active, unchanged) and `latest_version` (incremented if a snapshot was created).
   - Shows `message.success`, clears localStorage draft, stays on the same edit page.
 - On error: shows `message.error`.
-- Auto-saves to localStorage key `form-builder-draft-${formId}` (debounced 2 s).
-- Draft restore: if localStorage draft is newer than API fetch, use draft and show "Draft restored" alert.
+- Auto-saves to localStorage key `form-builder-draft-${formId}` (debounced 2 s). The saved JSON includes `formVersion` (the current form version at save time).
+- Draft restore: on mount, load draft if:
+  - `draft.formVersion` matches `apiData.version` (or is absent for backward compat), AND
+  - `draft.savedAt > apiData.published_at` (or `published_at` is null).
+  - Stale drafts (version mismatch) are removed from localStorage silently.
+  - When draft is loaded: show dismissible alert **"We recovered your previous work — review it before saving."** with a **"Load from server"** action button that clears the draft and reloads the real saved state from the API.
 
 ### FR-5: Transformer (`frontend/src/lib/form-builder-transform.js`)
 
@@ -113,6 +117,31 @@
 | NF-3 | All code must pass `yarn lint` and `yarn prettier` in the frontend container |
 | NF-4 | No `// eslint-disable-next-line` comments — fix code to satisfy rules |
 | NF-5 | Single complete payload per save. No chunking, batching across requests, or partial saves. Server-side batch queries (`in_bulk`, `prefetch_related`) handle large forms. |
+| NF-6 | All user-visible strings must be defined in `ui-text.js` under form-builder keys (`formBuilder*`). No hardcoded strings in JSX. |
+
+### FR-8: Version History Drawer
+
+- A **"Versions"** button in `FormBuilderEdit` opens an Ant Design `Drawer`. Shown when `formStatus === "published"` or versions have already been fetched.
+- On open: fetches `GET /api/v1/manage/forms/{id}/versions` (lazy, not on mount).
+- Drawer table columns: **Version** (with green "Active" badge for current), **Published At**, **Published By**, **Actions**.
+- Non-active rows show a **"Set Active"** button behind a `Popconfirm`.
+- On confirm: calls `POST /api/v1/manage/forms/{id}/activate/{version_id}`.
+  - On success: updates version state, clears localStorage draft, sets `initialValue = null`, re-fetches form, remounts editor with activated content.
+  - On error: shows `message.error`.
+- A **Refresh** button inside the drawer re-fetches the versions list.
+- Table uses client-side pagination (`pageSize=10`, hidden when ≤10 rows) to handle forms with many published versions.
+
+### FR-9: Version Preview
+
+- A **"Preview"** button is shown for every **non-active** row in the Version History Drawer table.
+- The **active version row** has a green background highlight; no Preview button is shown for it.
+- On click: fetches `GET /api/v1/manage/forms/{id}/versions/{version_id}` (new endpoint) to obtain the full snapshot including `schema`.
+- The drawer closes immediately and the editor reloads with the snapshot's `question_group` data via `apiToEditor()`.
+- A dismissible `<Alert>` banner "Previewing snapshot v{n}" appears above the editor with a **"Back to saved"** button.
+  - Clicking "Back to saved" calls `loadForm(true)` and clears the preview state, restoring the real saved form.
+- A `previewLoadingId` state shows a spinner on the clicked row's button while the fetch is in flight.
+- Preview does **not** call the activate endpoint — it is a local, non-destructive state load.
+- Saving (PUT) while in preview mode is allowed; it creates a new snapshot from the previewed content.
 
 ---
 
