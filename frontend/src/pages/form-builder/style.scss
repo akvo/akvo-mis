@@ -5,3 +5,9 @@
     }
   }
 }
+
+.ant-table-row {
+  &.version-row-active {
+    background-color: #f6ffed;
+  }
+}
