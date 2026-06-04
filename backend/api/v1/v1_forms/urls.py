@@ -37,6 +37,11 @@ urlpatterns = [
         FormBuilderViewSet.as_view({"post": "duplicate"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)"
+        r"/versions/(?P<version_id>[0-9]+)$",
+        FormBuilderViewSet.as_view({"get": "version_detail"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/versions$",
         FormBuilderViewSet.as_view({"get": "versions"}),
     ),

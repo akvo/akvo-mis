@@ -606,6 +606,22 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Manage Forms"],
+        summary="Get a single published version snapshot with schema",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"versions/(?P<version_id>[^/.]+)",
+    )
+    def version_detail(self, request, version_id=None, *args, **kwargs):
+        form = self.get_object()
+        pv = get_object_or_404(form.published_versions, pk=version_id)
+        data = FormPublishedVersionSerializer(pv).data
+        data["schema"] = pv.schema
+        return Response(data)
+
+    @extend_schema(
+        tags=["Manage Forms"],
         summary="Set a specific published version as the active schema",
         request=None,
     )
