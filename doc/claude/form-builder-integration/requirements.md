@@ -153,6 +153,19 @@
   - On success: updates version state, clears localStorage draft, sets `initialValue = null`, re-fetches form, remounts editor with activated content.
   - On error: shows `message.error`.
 - A **Refresh** button inside the drawer re-fetches the versions list.
+- Table uses client-side pagination (`pageSize=10`, hidden when ≤10 rows) to handle forms with many published versions.
+
+### FR-9: Version Preview
+
+- A **"Preview"** button is shown for every **non-active** row in the Version History Drawer table.
+- The **active version row** has a green background highlight; no Preview button is shown for it.
+- On click: fetches `GET /api/v1/manage/forms/{id}/versions/{version_id}` (new endpoint) to obtain the full snapshot including `schema`.
+- The drawer closes immediately and the editor reloads with the snapshot's `question_group` data via `apiToEditor()`.
+- A dismissible `<Alert>` banner "Previewing snapshot v{n}" appears above the editor with a **"Back to saved"** button.
+  - Clicking "Back to saved" calls `loadForm(true)` and clears the preview state, restoring the real saved form.
+- A `previewLoadingId` state shows a spinner on the clicked row's button while the fetch is in flight.
+- Preview does **not** call the activate endpoint — it is a local, non-destructive state load.
+- Saving (PUT) while in preview mode is allowed; it creates a new snapshot from the previewed content.
 
 ---
 
