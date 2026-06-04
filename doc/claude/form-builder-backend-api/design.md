@@ -87,6 +87,8 @@ The API uses two URL namespaces:
 | `POST` | `/api/v1/manage/forms/{id}/publish` | Publish draft |
 | `POST` | `/api/v1/manage/forms/{id}/duplicate` | Clone as new draft |
 | `GET` | `/api/v1/manage/forms/{id}/versions` | List version chain |
+| `GET` | `/api/v1/manage/forms/{id}/versions/{version_id}` | Get single snapshot + full `schema` JSON |
+| `POST` | `/api/v1/manage/forms/{id}/activate/{version_id}` | Set a specific published version as active schema |
 | `POST` | `/api/v1/manage/forms/{id}/unpublish` | Hide published form from data collection (status → draft) |
 | `GET` | `/api/v1/form/{id}` | Form for web/mobile rendering (existing, **unchanged**) |
 | `GET` | `/api/v1/form/web/{id}` | Webform with admin cascade (existing, **unchanged**) |

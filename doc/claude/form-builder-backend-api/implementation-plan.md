@@ -374,6 +374,8 @@ Tests split by domain into six files under `backend/api/v1/v1_forms/tests/`:
 | `tests_manage_form_update.py` | `ManageFormUpdateTestCase` | `PUT` — update draft/published, add/edit/delete question, add/edit/delete option |
 | `tests_manage_form_soft_delete.py` | `ManageFormSoftDeleteTestCase` | Soft-delete vs hard-delete behavior; `allow_delete` guard |
 | `tests_manage_form_publish.py` | `ManageFormPublishTestCase` | `publish`, `duplicate`, `versions`, `activate` |
+| `tests_manage_form_snapshot_put.py` | `ManageFormSnapshotPutTestCase` | Snapshot PUT behavior on published forms; unpublish → edit → republish lifecycle; `published_at` preservation |
+| `tests_manage_form_versions.py` | `ManageFormVersionDetailTestCase` | `GET /manage/forms/{id}/versions/{version_id}` — 10 tests covering happy path, schema content, is_active flag, 404 cases, auth, cross-form isolation |
 | `tests_manage_form_delete.py` | `ManageFormDeleteTestCase` | `DELETE /api/v1/manage/forms/{id}` |
 
 Each class uses `@override_settings(USE_TZ=False, TEST_ENV=True)` and resets PostgreSQL sequences in `setUp` to avoid PK conflicts with seeded IDs.
@@ -462,6 +464,8 @@ Run all:
   api.v1.v1_forms.tests.tests_manage_form_update \
   api.v1.v1_forms.tests.tests_manage_form_soft_delete \
   api.v1.v1_forms.tests.tests_manage_form_publish \
+  api.v1.v1_forms.tests.tests_manage_form_snapshot_put \
+  api.v1.v1_forms.tests.tests_manage_form_versions \
   api.v1.v1_forms.tests.tests_manage_form_delete
 ```
 
