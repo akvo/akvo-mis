@@ -130,6 +130,59 @@ const uiText = {
         </ul>
       </Fragment>
     ),
+    formBuilderCreateTitle: "Create Form",
+    formBuilderEditTitle: "Edit Form",
+    formBuilderDraftRestored:
+      "We recovered your previous work — review it before saving.",
+    formBuilderPreviewingBanner: (v) => (
+      <Fragment>{`Previewing snapshot v${v} — not the saved state.`}</Fragment>
+    ),
+    formBuilderBackToSaved: "Back to saved",
+    formBuilderSnapshotPending: (v) => (
+      <Fragment>
+        {`Changes saved as snapshot v${v}. Click Publish to activate.`}
+      </Fragment>
+    ),
+    formBuilderPublishedInfo:
+      "Editing a published form creates a new version snapshot. Click Publish to activate it.",
+    formBuilderSaveSuccess: "Form saved",
+    formBuilderSaveError: "Failed to save form",
+    formBuilderCreateSuccess: "Form created successfully",
+    formBuilderCreateError: "Failed to create form",
+    formBuilderPublishSuccess: "Form published",
+    formBuilderPublishError: "Failed to publish form",
+    formBuilderUnpublishSuccess: "Form unpublished",
+    formBuilderUnpublishError: "Failed to unpublish form",
+    formBuilderVersionActivated: (n) => (
+      <Fragment>{`Version ${n} is now active. Reloading editor…`}</Fragment>
+    ),
+    formBuilderActivateError: "Failed to activate version",
+    formBuilderPreviewError: "Failed to load version",
+    formBuilderVersionHistoryTitle: "Version History",
+    formBuilderVersionsButton: "Versions",
+    formBuilderRefreshButton: "Refresh",
+    formBuilderVersionHistoryEmpty: "No published versions yet",
+    formBuilderVersionCol: "Version",
+    formBuilderPublishedAtCol: "Published At",
+    formBuilderPublishedByCol: "Published By",
+    formBuilderActionsCol: "Actions",
+    formBuilderActiveTag: "Active",
+    formBuilderPreviewButton: "Preview",
+    formBuilderActivateVersionTitle: (v) => (
+      <Fragment>{`Activate version ${v}?`}</Fragment>
+    ),
+    formBuilderActivateVersionDesc:
+      "This will replace the current active schema. The editor will reload.",
+    formBuilderActivateButton: "Activate",
+    formBuilderSetActiveButton: "Set Active",
+    formBuilderPublishButton: "Publish",
+    formBuilderUnpublishTitle: "Unpublish this form?",
+    formBuilderUnpublishDesc:
+      "The form will no longer be available for data collection.",
+    formBuilderUnpublishButton: "Unpublish",
+    formBuilderStatusPublished: "Published",
+    formBuilderStatusDraft: "Draft",
+    formBuilderResetDraft: "Load from server",
     dataDownloadTitle: "Data Download",
     dataDownloadButton: "Download Data",
     dataDownloadText: (

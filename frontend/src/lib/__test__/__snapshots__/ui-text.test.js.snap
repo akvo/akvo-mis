@@ -366,6 +366,59 @@ Object {
     "forgotTitle": "Reset your password",
     "formAccess": "Form Access",
     "formAssignmentError": "You don't have any form assignment, please contact the administrator",
+    "formBuilderActionsCol": "Actions",
+    "formBuilderActivateButton": "Activate",
+    "formBuilderActivateError": "Failed to activate version",
+    "formBuilderActivateVersionDesc": "This will replace the current active schema. The editor will reload.",
+    "formBuilderActivateVersionTitle": [Function],
+    "formBuilderActiveTag": "Active",
+    "formBuilderBackToSaved": "Back to saved",
+    "formBuilderCreateError": "Failed to create form",
+    "formBuilderCreateSuccess": "Form created successfully",
+    "formBuilderCreateTitle": "Create Form",
+    "formBuilderDescription": <React.Fragment>
+      This is where you can create and manage your Forms. You can :
+      <ul>
+        <li>
+          Create new forms with various question types
+        </li>
+        <li>
+          Modify existing forms with version control
+        </li>
+        <li>
+          Delete forms that are no longer needed
+        </li>
+      </ul>
+    </React.Fragment>,
+    "formBuilderDraftRestored": "We recovered your previous work — review it before saving.",
+    "formBuilderEditTitle": "Edit Form",
+    "formBuilderPreviewButton": "Preview",
+    "formBuilderPreviewError": "Failed to load version",
+    "formBuilderPreviewingBanner": [Function],
+    "formBuilderPublishButton": "Publish",
+    "formBuilderPublishError": "Failed to publish form",
+    "formBuilderPublishSuccess": "Form published",
+    "formBuilderPublishedAtCol": "Published At",
+    "formBuilderPublishedByCol": "Published By",
+    "formBuilderPublishedInfo": "Editing a published form creates a new version snapshot. Click Publish to activate it.",
+    "formBuilderRefreshButton": "Refresh",
+    "formBuilderResetDraft": "Load from server",
+    "formBuilderSaveError": "Failed to save form",
+    "formBuilderSaveSuccess": "Form saved",
+    "formBuilderSetActiveButton": "Set Active",
+    "formBuilderSnapshotPending": [Function],
+    "formBuilderStatusDraft": "Draft",
+    "formBuilderStatusPublished": "Published",
+    "formBuilderUnpublishButton": "Unpublish",
+    "formBuilderUnpublishDesc": "The form will no longer be available for data collection.",
+    "formBuilderUnpublishError": "Failed to unpublish form",
+    "formBuilderUnpublishSuccess": "Form unpublished",
+    "formBuilderUnpublishTitle": "Unpublish this form?",
+    "formBuilderVersionActivated": [Function],
+    "formBuilderVersionCol": "Version",
+    "formBuilderVersionHistoryEmpty": "No published versions yet",
+    "formBuilderVersionHistoryTitle": "Version History",
+    "formBuilderVersionsButton": "Versions",
     "formColumn": "Form",
     "formDescription": <p>
       Please fill up the webform below with relevant responses. You will need to answer all mandatory questions before you can submit.
@@ -687,6 +740,7 @@ Object {
     "menuDownloads": "Downloads",
     "menuEntities": "Entities",
     "menuEntityTypes": "Entity Types",
+    "menuFormBuilder": "Form Builder",
     "menuManageData": "Manage Data",
     "menuManageDraft": "Manage Drafts",
     "menuManageMobileUsers": "Manage Mobile Users",
