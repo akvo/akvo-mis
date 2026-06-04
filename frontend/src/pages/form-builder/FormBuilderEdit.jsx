@@ -6,16 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import { useParams } from "react-router-dom";
-import {
-  Alert,
-  Button,
-  Drawer,
-  Popconfirm,
-  Space,
-  Spin,
-  Table,
-  Tag,
-} from "antd";
+import { Button, Popconfirm, Space, Spin } from "antd";
 import { HistoryOutlined } from "@ant-design/icons";
 import WebformEditor from "akvo-react-form-editor";
 import "akvo-react-form-editor/dist/index.css";
@@ -23,6 +14,7 @@ import { Breadcrumbs } from "../../components";
 import { api, store, uiText } from "../../lib";
 import { editorToApi, apiToEditor } from "../../lib/form-builder-transform";
 import { useNotification } from "../../util/hooks";
+import { FormEditorBanners, VersionHistoryDrawer } from "./components";
 import "./style.scss";
 
 const draftKey = (formId) => `form-builder-draft-${formId}`;
@@ -45,6 +37,8 @@ const FormBuilderEdit = () => {
   const [versions, setVersions] = useState([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [activatingId, setActivatingId] = useState(null);
+  const [previewLoadingId, setPreviewLoadingId] = useState(null);
+  const [previewingVersion, setPreviewingVersion] = useState(null);
 
   const draftTimerRef = useRef(null);
 
@@ -53,12 +47,12 @@ const FormBuilderEdit = () => {
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
   const pagePath = [
-    { title: "Control Center", link: "/control-center" },
+    { title: text.controlCenter, link: "/control-center" },
     {
       title: text.menuFormBuilder,
       link: "/control-center/form-builder",
     },
-    { title: "Edit Form" },
+    { title: text.formBuilderEditTitle },
   ];
 
   const loadForm = useCallback(
@@ -68,16 +62,27 @@ const FormBuilderEdit = () => {
         setFormStatus(apiData.status);
         setFormVersion(apiData.version);
         setFormLatestVersion(apiData.latest_version);
+        setInitialValue(apiToEditor(apiData));
 
         if (!skipDraftCheck) {
           const raw = localStorage.getItem(draftKey(formId));
           if (raw) {
             try {
               const draft = JSON.parse(raw);
-              if (draft.savedAt > (apiData.published_at || "")) {
+              // Reject draft if it was saved against a different form version
+              const versionStale =
+                typeof draft.formVersion !== "undefined" &&
+                draft.formVersion !== apiData.version;
+              if (
+                !versionStale &&
+                draft.savedAt > (apiData.published_at || "")
+              ) {
                 setInitialValue(draft.value);
                 setDraftRestored(true);
                 return;
+              }
+              if (versionStale) {
+                localStorage.removeItem(draftKey(formId));
               }
             } catch (_e) {
               // ignore malformed draft
@@ -133,6 +138,7 @@ const FormBuilderEdit = () => {
         JSON.stringify({
           value: editorOutput,
           savedAt: new Date().toISOString(),
+          formVersion,
         })
       );
     }, 2000);
@@ -140,16 +146,17 @@ const FormBuilderEdit = () => {
     setSaving(true);
     const payload = editorToApi(editorOutput);
     api
-      .put(`/manage/forms/${formId}`, payload)
+      .put(`/manage/forms/${formId}?allow_delete=true`, payload)
       .then((res) => {
+        setPreviewingVersion(null);
         localStorage.removeItem(draftKey(formId));
         setFormLatestVersion(res.data.latest_version);
         setFormVersion(res.data.version);
         setFormStatus(res.data.status);
-        notify({ type: "success", message: "Form saved" });
+        notify({ type: "success", message: text.formBuilderSaveSuccess });
       })
       .catch((err) => {
-        const msg = err.response?.data?.message || "Failed to save form";
+        const msg = err.response?.data?.message || text.formBuilderSaveError;
         notify({ type: "error", message: msg });
       })
       .finally(() => {
@@ -165,10 +172,10 @@ const FormBuilderEdit = () => {
         setFormStatus(res.data.status);
         setFormVersion(res.data.version);
         setFormLatestVersion(res.data.latest_version);
-        notify({ type: "success", message: "Form published" });
+        notify({ type: "success", message: text.formBuilderPublishSuccess });
       })
       .catch((err) => {
-        const msg = err.response?.data?.message || "Failed to publish form";
+        const msg = err.response?.data?.message || text.formBuilderPublishError;
         notify({ type: "error", message: msg });
       })
       .finally(() => {
@@ -184,10 +191,11 @@ const FormBuilderEdit = () => {
         setFormStatus(res.data.status);
         setFormVersion(res.data.version);
         setFormLatestVersion(res.data.latest_version);
-        notify({ type: "success", message: "Form unpublished" });
+        notify({ type: "success", message: text.formBuilderUnpublishSuccess });
       })
       .catch((err) => {
-        const msg = err.response?.data?.message || "Failed to unpublish form";
+        const msg =
+          err.response?.data?.message || text.formBuilderUnpublishError;
         notify({ type: "error", message: msg });
       })
       .finally(() => {
@@ -205,15 +213,17 @@ const FormBuilderEdit = () => {
         setFormLatestVersion(res.data.latest_version);
         notify({
           type: "success",
-          message: `Version ${versionNumber} is now active. Reloading editor…`,
+          message: text.formBuilderVersionActivated(versionNumber),
         });
         setDrawerOpen(false);
+        setPreviewingVersion(null);
         localStorage.removeItem(draftKey(formId));
         setInitialValue(null);
         return loadForm(true);
       })
       .catch((err) => {
-        const msg = err.response?.data?.message || "Failed to activate version";
+        const msg =
+          err.response?.data?.message || text.formBuilderActivateError;
         notify({ type: "error", message: msg });
       })
       .finally(() => {
@@ -221,69 +231,58 @@ const FormBuilderEdit = () => {
       });
   };
 
+  const onPreview = (record) => {
+    setPreviewLoadingId(record.id);
+    const prevValue = initialValue;
+    setInitialValue(null);
+    api
+      .get(`/manage/forms/${formId}/versions/${record.id}`)
+      .then((res) => {
+        const schema = res.data.schema;
+        setInitialValue(
+          apiToEditor({
+            ...schema,
+            id: Number(formId),
+            status: formStatus,
+            latest_version: formLatestVersion,
+            active_version_id: null,
+          })
+        );
+        setPreviewingVersion({ id: record.id, version: record.version });
+        setDrawerOpen(false);
+      })
+      .catch((err) => {
+        const msg = err.response?.data?.message || text.formBuilderPreviewError;
+        notify({ type: "error", message: msg });
+        setInitialValue(prevValue);
+      })
+      .finally(() => {
+        setPreviewLoadingId(null);
+      });
+  };
+
+  const onResetDraft = () => {
+    localStorage.removeItem(draftKey(formId));
+    setDraftRestored(false);
+    setInitialValue(null);
+    loadForm(true);
+  };
+
+  const onExitPreview = () => {
+    setPreviewingVersion(null);
+    setInitialValue(null);
+    loadForm(true);
+  };
+
   const infoBannerText = useMemo(() => {
     if (formStatus !== "published") {
       return null;
     }
     if (formLatestVersion > formVersion) {
-      return `Changes saved as snapshot v${formLatestVersion}. Click Publish to activate.`;
+      return text.formBuilderSnapshotPending(formLatestVersion);
     }
-    return "Editing a published form creates a new version snapshot. Click Publish to activate it.";
-  }, [formStatus, formVersion, formLatestVersion]);
-
-  const versionColumns = [
-    {
-      title: "Version",
-      dataIndex: "version",
-      key: "version",
-      render: (v, record) => (
-        <Space>
-          {`v${v}`}
-          {record.is_active && <Tag color="green">Active</Tag>}
-        </Space>
-      ),
-    },
-    {
-      title: "Published At",
-      dataIndex: "published_at",
-      key: "published_at",
-      render: (v) => (v ? new Date(v).toLocaleString() : "—"),
-    },
-    {
-      title: "Published By",
-      dataIndex: "published_by",
-      key: "published_by",
-      render: (v) => v || "—",
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      render: (_, record) => {
-        if (record.is_active) {
-          return null;
-        }
-        return (
-          <Popconfirm
-            title={`Activate version ${record.version}?`}
-            description="This will replace the current active schema. The editor will reload."
-            onConfirm={() => {
-              onActivateVersion(record.id, record.version);
-            }}
-            okText="Activate"
-            cancelText="Cancel"
-          >
-            <Button
-              size="small"
-              loading={activatingId === record.id}
-              disabled={activatingId !== null && activatingId !== record.id}
-            >
-              Set Active
-            </Button>
-          </Popconfirm>
-        );
-      },
-    },
-  ];
+    return text.formBuilderPublishedInfo;
+  }, [formStatus, formVersion, formLatestVersion, text]);
 
   if (initialValue === null) {
     return (
@@ -320,7 +319,7 @@ const FormBuilderEdit = () => {
                   onClick={openDrawer}
                   disabled={saving || publishing || unpublishing}
                 >
-                  Versions
+                  {text.formBuilderVersionsButton}
                 </Button>
               )}
               {showPublish && (
@@ -330,47 +329,39 @@ const FormBuilderEdit = () => {
                   disabled={saving || unpublishing}
                   onClick={onPublish}
                 >
-                  Publish
+                  {text.formBuilderPublishButton}
                 </Button>
               )}
               {showUnpublish && (
                 <Popconfirm
-                  title="Unpublish this form?"
-                  description="The form will no longer be available for data collection."
+                  title={text.formBuilderUnpublishTitle}
+                  description={text.formBuilderUnpublishDesc}
                   onConfirm={onUnpublish}
-                  okText="Unpublish"
-                  cancelText="Cancel"
+                  okText={text.formBuilderUnpublishButton}
+                  cancelText={text.cancelButton}
                 >
                   <Button
                     loading={unpublishing}
                     disabled={saving || publishing}
                   >
-                    Unpublish
+                    {text.formBuilderUnpublishButton}
                   </Button>
                 </Popconfirm>
               )}
             </Space>
           </div>
 
-          {draftRestored && (
-            <Alert
-              type="info"
-              message="Draft restored from local storage"
-              closable
-              style={{ marginBottom: 8 }}
-              onClose={() => {
-                setDraftRestored(false);
-              }}
-            />
-          )}
-          {infoBannerText && (
-            <Alert
-              type="info"
-              message={infoBannerText}
-              style={{ marginBottom: 8 }}
-              showIcon
-            />
-          )}
+          <FormEditorBanners
+            draftRestored={draftRestored}
+            onDismissDraft={() => {
+              setDraftRestored(false);
+            }}
+            onResetDraft={onResetDraft}
+            previewingVersion={previewingVersion}
+            onExitPreview={onExitPreview}
+            infoBannerText={infoBannerText}
+            text={text}
+          />
 
           <div style={{ marginTop: 8 }}>
             <WebformEditor
@@ -381,29 +372,20 @@ const FormBuilderEdit = () => {
         </div>
       </div>
 
-      <Drawer
-        title="Version History"
-        width={640}
+      <VersionHistoryDrawer
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false);
         }}
-        extra={
-          <Button size="small" onClick={loadVersions} loading={versionsLoading}>
-            Refresh
-          </Button>
-        }
-      >
-        <Table
-          columns={versionColumns}
-          dataSource={versions}
-          rowKey="id"
-          loading={versionsLoading}
-          pagination={false}
-          size="small"
-          locale={{ emptyText: "No published versions yet" }}
-        />
-      </Drawer>
+        versions={versions}
+        loading={versionsLoading}
+        onRefresh={loadVersions}
+        activatingId={activatingId}
+        previewLoadingId={previewLoadingId}
+        onActivate={onActivateVersion}
+        onPreview={onPreview}
+        text={text}
+      />
     </div>
   );
 };

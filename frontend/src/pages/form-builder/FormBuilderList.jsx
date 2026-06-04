@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Row, Col, Table, Button, Tag, Empty } from "antd";
+import { Row, Col, Table, Button, Empty } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
+import { FormStatusTag } from "./components";
 import { api, store, uiText } from "../../lib";
 
 const FormBuilderList = () => {
@@ -51,14 +52,9 @@ const FormBuilderList = () => {
     {
       title: "Status",
       key: "status",
-      render: (_, record) => {
-        const isPublished = record.status === "published";
-        return (
-          <Tag color={isPublished ? "green" : "default"}>
-            {isPublished ? "Published" : "Draft"}
-          </Tag>
-        );
-      },
+      render: (_, record) => (
+        <FormStatusTag status={record.status} text={text} />
+      ),
     },
     {
       title: "Actions",

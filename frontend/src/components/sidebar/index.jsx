@@ -10,6 +10,7 @@ import {
   DashboardOutlined,
   DownloadOutlined,
   BookOutlined,
+  FormOutlined,
   AndroidOutlined,
 } from "@ant-design/icons";
 import { AbilityContext } from "../can";
@@ -277,7 +278,7 @@ const Sidebar = () => {
           {ability.can("manage", "form-builder") && (
             <Menu.Item
               key="menu-form-builder"
-              icon={<BookOutlined />}
+              icon={<FormOutlined />}
               data-url="/control-center/form-builder"
             >
               {text.menuFormBuilder}

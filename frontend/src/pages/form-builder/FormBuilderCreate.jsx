@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, Spin } from "antd";
+import { Spin } from "antd";
 import WebformEditor from "akvo-react-form-editor";
 import "akvo-react-form-editor/dist/index.css";
 import { Breadcrumbs } from "../../components";
 import { api, store, uiText } from "../../lib";
 import { editorToApi } from "../../lib/form-builder-transform";
 import { useNotification } from "../../util/hooks";
+import { FormEditorBanners } from "./components";
 import "./style.scss";
 
 const DRAFT_KEY = "form-builder-draft-new";
@@ -24,12 +25,12 @@ const FormBuilderCreate = () => {
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
   const pagePath = [
-    { title: "Control Center", link: "/control-center" },
+    { title: text.controlCenter, link: "/control-center" },
     {
       title: text.menuFormBuilder,
       link: "/control-center/form-builder",
     },
-    { title: "Create Form" },
+    { title: text.formBuilderCreateTitle },
   ];
 
   useEffect(() => {
@@ -52,6 +53,12 @@ const FormBuilderCreate = () => {
     };
   }, []);
 
+  const onResetDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftRestored(false);
+    setInitialValue({});
+  };
+
   const onSave = (editorOutput) => {
     if (draftTimerRef.current) {
       clearTimeout(draftTimerRef.current);
@@ -72,11 +79,11 @@ const FormBuilderCreate = () => {
       .post("/manage/forms", payload)
       .then((res) => {
         localStorage.removeItem(DRAFT_KEY);
-        notify({ type: "success", message: "Form created successfully" });
+        notify({ type: "success", message: text.formBuilderCreateSuccess });
         navigate(`/control-center/form-builder/${res.data.id}/edit`);
       })
       .catch((err) => {
-        const msg = err.response?.data?.message || "Failed to create form";
+        const msg = err.response?.data?.message || text.formBuilderCreateError;
         notify({ type: "error", message: msg });
       })
       .finally(() => {
@@ -99,17 +106,15 @@ const FormBuilderCreate = () => {
       </div>
       <div className="table-section">
         <div className="table-wrapper">
-          {draftRestored && (
-            <Alert
-              type="info"
-              message="Draft restored from local storage"
-              closable
-              style={{ marginTop: 16, marginBottom: 8 }}
-              onClose={() => {
-                setDraftRestored(false);
-              }}
-            />
-          )}
+          <FormEditorBanners
+            draftRestored={draftRestored}
+            onDismissDraft={() => {
+              setDraftRestored(false);
+            }}
+            onResetDraft={onResetDraft}
+            text={text}
+            topSpacing
+          />
           <div style={{ marginTop: 16 }}>
             <WebformEditor
               initialValue={initialValue}
