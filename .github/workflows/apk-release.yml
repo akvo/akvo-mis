@@ -61,10 +61,10 @@ jobs:
           SENTRY_ENV: production
           SENTRY_DSN: ${{ secrets.SENTRY_MOBILE_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_MOBILE_AUTH_TOKEN }}
-          APP_SHORT_NAME: ${{ secrets.APP_SHORT_NAME }}
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
         run: |
           curl -X 'POST' \
-            "https://${APP_SHORT_NAME}.akvotest.org/api/v1/device/apk/upload" \
+            "https://${APP_DOMAIN}.akvotest.org/api/v1/device/apk/upload" \
             -H 'accept: */*' \
             -H 'Content-Type: application/json' \
             -d '{
