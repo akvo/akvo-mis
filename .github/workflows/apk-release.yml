@@ -1,6 +1,7 @@
 name: Akvo MIS APK build
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
