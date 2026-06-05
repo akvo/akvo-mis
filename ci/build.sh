@@ -83,7 +83,7 @@ frontend_build () {
        sh release.sh
 
     docker build \
-        --tag "${image_prefix}/frontend:latest" \
+        --tag "${image_prefix}/frontend:latest-test" \
         --tag "${image_prefix}/frontend:${CI_COMMIT}" frontend
 
 }
@@ -91,7 +91,7 @@ frontend_build () {
 backend_build () {
 
     docker build \
-        --tag "${image_prefix}/backend:latest" \
+        --tag "${image_prefix}/backend:latest-test" \
         --tag "${image_prefix}/backend:${CI_COMMIT}" backend
 
     # Code Quality
@@ -103,7 +103,7 @@ backend_build () {
 worker_build() {
 
     docker build \
-        --tag "${image_prefix}/worker:latest" \
+        --tag "${image_prefix}/worker:latest-test" \
         --tag "${image_prefix}/worker:${CI_COMMIT}" backend -f ./backend/Dockerfile.worker
 
 }

@@ -2,7 +2,7 @@
 version: "3.9"
 services:
   backend:
-    image: eu.gcr.io/akvo-lumen/akvo-mis/backend:latest
+    image: eu.gcr.io/akvo-lumen/akvo-mis/backend:latest-test
     command: ["sh", "run.sh"]
     depends_on:
       db:
@@ -61,7 +61,7 @@ services:
       timeout: 5s
       retries: 5
   frontend:
-    image: eu.gcr.io/akvo-lumen/akvo-mis/frontend:latest
+    image: eu.gcr.io/akvo-lumen/akvo-mis/frontend:latest-test
     command: ["nginx", "-g", "daemon off;"]
     depends_on:
       - backend

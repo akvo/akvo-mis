@@ -1,68 +1,45 @@
 #!/usr/bin/env bash
 set -exuo pipefail
 
-#Detect tag for prod/staging deployment
+# Skip on tag builds (production deploy not yet configured for akvo-mis SaaS).
 tag_pattern="^[0-9]+\.[0-9]+\.[0-9]+$"
-if [[ "${CI_BRANCH}" =~ $tag_pattern && -z "${CI_TAG}" ]]; then
-    echo "This commit processed on Release CI. Skip all"
+if [[ "${CI_BRANCH}" =~ $tag_pattern || "${CI_TAG:=}" =~ $tag_pattern ]]; then
+    echo "Tag build detected. Production deploy not yet configured for akvo-mis SaaS. Skip deploy."
     exit 0
 fi
 
-[[ "${CI_BRANCH}" !=  "main" && ! "${CI_TAG:=}" =~ $tag_pattern ]] && { echo "Branch different than main and not a tag. Skip deploy"; exit 0; }
-[[ "${CI_PULL_REQUEST}" ==  "true" ]] && { echo "Pull request. Skip deploy"; exit 0; }
+[[ "${CI_BRANCH}" != "main" ]] && { echo "Branch is not main. Skip deploy."; exit 0; }
+[[ "${CI_PULL_REQUEST}" == "true" ]] && { echo "Pull request. Skip deploy."; exit 0; }
+
+NAMESPACE="akvo-mis-namespace"
+IMAGE_PREFIX="eu.gcr.io/akvo-lumen/akvo-mis"
 
 auth () {
-    gcloud auth activate-service-account --key-file=/home/runner/work/${APP_SHORT_NAME}/credentials/gcp.json
+    gcloud auth activate-service-account --key-file=/home/runner/work/akvo-mis/credentials/gcp.json
     gcloud config set project akvo-lumen
     gcloud config set container/cluster europe-west1-d
     gcloud config set compute/zone europe-west1-d
     gcloud config set container/use_client_certificate False
     gcloud auth configure-docker "eu.gcr.io"
+    gcloud container clusters get-credentials test
 }
 
 push_image () {
-    prefix="eu.gcr.io/akvo-lumen/akvo-mis"
-    docker push "${prefix}/${1}:${CI_COMMIT}"
-}
-
-prepare_deployment () {
-    cluster="test"
-
-    if [[ "${CI_TAG:=}" =~ $tag_pattern ]]; then
-        cluster="production"
-    fi
-
-    gcloud container clusters get-credentials "${cluster}"
-
-    sed -e "s/\${CI_COMMIT}/${CI_COMMIT}/g;" -e "s/\${APP_SHORT_NAME}/${APP_SHORT_NAME}/g;" \
-        ci/k8s/deployment.template.yml > ci/k8s/deployment.yml
-
-    sed -e "s/\${CI_COMMIT}/${CI_COMMIT}/g;" -e "s/\${APP_SHORT_NAME}/${APP_SHORT_NAME}/g;" \
-        ci/k8s/cronjobs.template.yml > ci/k8s/cronjobs.yml
-
-    sed -e "s/\${APP_SHORT_NAME}/${APP_SHORT_NAME}/g;" \
-        ci/k8s/service.yml > ci/k8s/service.yml.tmp && mv ci/k8s/service.yml.tmp ci/k8s/service.yml
-
-    sed -e "s/\${APP_SHORT_NAME}/${APP_SHORT_NAME}/g;" \
-        ci/k8s/volume-claim.template.yml > ci/k8s/volume-claim.template.yml.tmp && mv ci/k8s/volume-claim.template.yml.tmp ci/k8s/volume-claim.template.yml
-}
-
-apply_deployment () {
-    kubectl apply -f ci/k8s/volume-claim.template.yml
-    kubectl apply -f ci/k8s/deployment.yml
-    kubectl apply -f ci/k8s/cronjobs.yml
-    kubectl apply -f ci/k8s/service.yml
+    docker push "${IMAGE_PREFIX}/${1}:latest-test"
+    docker push "${IMAGE_PREFIX}/${1}:${CI_COMMIT}"
 }
 
 auth
 
-if [[ -z "${CI_TAG:=}" ]]; then
-    push_image backend
-    push_image worker
-    push_image frontend
-fi
+push_image backend
+push_image worker
+push_image frontend
 
-prepare_deployment
-apply_deployment
+# Rollout-restart each Deployment in the new namespace.
+for d in frontend-deployment backend-deployment worker-deployment; do
+    kubectl -n "${NAMESPACE}" rollout restart deployment/"${d}"
+done
 
-ci/k8s/wait-for-k8s-deployment-to-be-ready.sh
+# Wait for the longest-to-converge (backend) — its readiness probe holds
+# the rollout until /api/v1/health/check returns 200.
+kubectl -n "${NAMESPACE}" rollout status deployment/backend-deployment --timeout=5m
