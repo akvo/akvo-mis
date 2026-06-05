@@ -390,7 +390,12 @@ const App = () => {
     }
   }, [authUser, isLoggedIn, public_state]);
 
-  const isHome = location.pathname === "/";
+  // Only treat "/" as a public home (bypassing the auth loader) when the
+  // landing page is enabled. When it is disabled, "/" is an authenticated
+  // redirect target, so we must keep the loader until the profile fetch
+  // resolves — otherwise a valid session is wrongly redirected to /login.
+  const showLandingPage = window?.appConfig?.showLandingPage;
+  const isHome = location.pathname === "/" && showLandingPage;
 
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
