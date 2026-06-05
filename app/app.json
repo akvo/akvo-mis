@@ -29,7 +29,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "f93475fa-04c8-431a-bfd8-22389ff560cd"
+        "projectId": "0cf14548-42af-4de7-a9ec-79db98d747d7"
       }
     },
     "owner": "akvo",
@@ -72,7 +72,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/f93475fa-04c8-431a-bfd8-22389ff560cd"
+      "url": "https://u.expo.dev/0cf14548-42af-4de7-a9ec-79db98d747d7"
     }
   }
 }
