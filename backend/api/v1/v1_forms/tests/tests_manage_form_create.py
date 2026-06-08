@@ -251,3 +251,109 @@ class ManageFormCreateTestCase(TestCase):
         self.assertEqual(res.status_code, 201)
         form = Forms.objects.get(pk=res.json()["id"])
         self.assertEqual(form.type, FormTypes.monitoring)
+
+    def test_create_with_editor_ids_uses_provided_ids(self):
+        """
+        POST with editor-assigned IDs stores
+        form/group/question with those IDs.
+        """
+        FORM_ID = 1780893132324
+        GROUP_ID = 1780893132325
+        Q_ID_1 = 1780893132326
+        Q_ID_2 = 1780893218666
+
+        payload = {
+            "id": FORM_ID,
+            "name": "Editor ID Test Form",
+            "type": 1,
+            "question_group": [
+                {
+                    "id": GROUP_ID,
+                    "name": "registration",
+                    "label": "Registration",
+                    "order": 1,
+                    "repeatable": False,
+                    "question": [
+                        {
+                            "id": Q_ID_1,
+                            "order": 1,
+                            "label": "Location",
+                            "name": "location",
+                            "type": "cascade",
+                            "required": True,
+                            "meta": True,
+                            "extra": {"type": "administration"},
+                        },
+                        {
+                            "id": Q_ID_2,
+                            "order": 2,
+                            "label": "Name",
+                            "name": "name_field",
+                            "type": "input",
+                            "required": True,
+                            "meta": True,
+                            "dependency": [
+                                {"id": Q_ID_1, "options": ["yes"]}
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data["id"], FORM_ID)
+        form = Forms.objects.get(pk=FORM_ID)
+        self.assertEqual(form.id, FORM_ID)
+        from api.v1.v1_forms.models import QuestionGroup
+        grp = QuestionGroup.objects.get(pk=GROUP_ID)
+        self.assertEqual(grp.id, GROUP_ID)
+        q1 = Questions.objects.get(pk=Q_ID_1)
+        self.assertEqual(q1.id, Q_ID_1)
+        q2 = Questions.objects.get(pk=Q_ID_2)
+        self.assertEqual(q2.id, Q_ID_2)
+        # Dependency references the editor-assigned ID — still valid in DB
+        self.assertEqual(q2.dependency[0]["id"], Q_ID_1)
+
+    def test_create_with_geoshape_center(self):
+        """POST stores center field for geoshape questions."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0].update({
+            "type": "geoshape",
+            "center": [-7.5, 110],
+        })
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertEqual(q.center, [-7.5, 110])
+
+    def test_create_with_date_rule_min_max(self):
+        """POST stores minDate/maxDate in rule JSONField for date questions."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0].update({
+            "type": "date",
+            "rule": {"minDate": "2020-01-01", "maxDate": "2029-01-01"},
+        })
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertEqual(q.rule["minDate"], "2020-01-01")
+        self.assertEqual(q.rule["maxDate"], "2029-01-01")

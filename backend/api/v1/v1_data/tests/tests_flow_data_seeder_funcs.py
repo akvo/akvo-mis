@@ -109,7 +109,7 @@ class AnswerProcessorTestCase(TestCase):
     def test_process_with_question_type_administration(self):
         """Test process method with administration question type."""
         name, value, options = self.processor.process(
-            question_type=QuestionTypes.administration,
+            question_type=QuestionTypes.cascade,
             row_value="some_value",
             administration_id=123
         )

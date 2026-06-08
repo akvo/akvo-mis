@@ -160,8 +160,19 @@ def _normalize_editor_payload(data):
             q = dict(q)
             if "options" in q and "option" not in q:
                 q["option"] = q.pop("options")
-            if "displayOnly" in q and "display_only" not in q:
-                q["display_only"] = q.pop("displayOnly")
+            _CAMEL_FIELDS = {
+                "displayOnly": "display_only",
+                "shortLabel": "short_label",
+                "variableName": "variable_name",
+                "hiddenString": "hidden_string",
+                "requiredDoubleEntry": "required_double_entry",
+                "addonBefore": "addon_before",
+                "addonAfter": "addon_after",
+                "dataApiUrl": "data_api_url",
+            }
+            for camel, snake in _CAMEL_FIELDS.items():
+                if camel in q and snake not in q:
+                    q[snake] = q.pop(camel)
             if q.get("type") == "photo":
                 q["type"] = "image"
             q.pop("questionGroupId", None)

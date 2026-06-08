@@ -1,4 +1,3 @@
-import requests
 from django.db.models import Q
 from django.utils import timezone
 from django_q.tasks import async_task
@@ -103,7 +102,6 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                 QuestionTypes.signature,
                 QuestionTypes.autofield,
                 QuestionTypes.number,
-                QuestionTypes.administration,
                 QuestionTypes.cascade,
             ]:
                 raise ValidationError(
@@ -162,7 +160,6 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
             or isinstance(attrs.get("value"), float)
         ) and attrs.get("question").type in [
             QuestionTypes.number,
-            QuestionTypes.administration,
             QuestionTypes.cascade,
         ]:
             raise ValidationError(
@@ -171,7 +168,7 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                 )
             )
 
-        if attrs.get("question").type == QuestionTypes.administration:
+        if attrs.get("question").type == QuestionTypes.cascade:
             attrs["value"] = int(float(attrs.get("value")))
 
         return attrs
@@ -233,22 +230,24 @@ class SubmitFormSerializer(serializers.Serializer):
                 name = answer.get("value")
             elif answer.get("question").type == QuestionTypes.cascade:
                 id = answer.get("value")
-                ep = answer.get("question").api.get("endpoint")
+                q_api = answer.get("question").api or {}
+                ep = q_api.get("endpoint", "")
+                extra_type = (answer.get("question").extra or {}).get("type")
                 val = None
                 if "organisation" in ep:
-                    val = Organisation.objects.filter(pk=id).first()
-                    val = val.name
-                if "entity-data" in ep:
-                    val = EntityData.objects.filter(pk=id).first()
-                    val = val.name
-                if "entity-data" not in ep and "organisation" not in ep:
-                    ep = ep.split("?")[0]
-                    ep = f"{ep}?id={id}"
-                    val = requests.get(ep).json()
-                    val = val[0].get("name")
+                    obj = Organisation.objects.filter(pk=id).first()
+                    val = obj.name if obj else None
+                elif "entity-data" in ep or extra_type == "entity":
+                    obj = EntityData.objects.filter(pk=id).first()
+                    val = obj.name if obj else None
+                else:
+                    # administration cascade: store both name and integer value
+                    obj = Administration.objects.filter(pk=id).first()
+                    val = obj.name if obj else None
+                    value = id
                 name = val
             else:
-                # for administration,number question type
+                # for number question type
                 value = answer.get("value")
 
             Answers.objects.create(
@@ -679,32 +678,24 @@ class SubmitPendingFormSerializer(serializers.Serializer):
                 name = answer.get("value")
             elif question.type == QuestionTypes.cascade:
                 id = answer.get("value")
+                extra_type = (question.extra or {}).get("type")
+                q_api = question.api or {}
+                ep = q_api.get("endpoint", "")
                 val = None
-                if question.api:
-                    ep = question.api.get("endpoint")
-                    if "organisation" in ep:
-                        name = Organisation.objects.filter(pk=id).values_list(
-                            'name', flat=True).first()
-                        val = name
-                    if "entity-data" in ep:
-                        name = EntityData.objects.filter(pk=id).values_list(
-                            'name', flat=True).first()
-                        val = name
-                    if "entity-data" not in ep and "organisation" not in ep:
-                        ep = ep.split("?")[0]
-                        ep = f"{ep}?id={id}"
-                        val = requests.get(ep).json()
-                        val = val[0].get("name")
-
-                if question.extra:
-                    cs_type = question.extra.get("type")
-                    if cs_type == "entity":
-                        name = EntityData.objects.filter(pk=id).values_list(
-                            'name', flat=True).first()
-                        val = name
+                if "organisation" in ep:
+                    val = Organisation.objects.filter(pk=id).values_list(
+                        'name', flat=True).first()
+                elif "entity-data" in ep or extra_type == "entity":
+                    val = EntityData.objects.filter(pk=id).values_list(
+                        'name', flat=True).first()
+                else:
+                    # administration cascade: store both name and integer value
+                    val = Administration.objects.filter(pk=id).values_list(
+                        'name', flat=True).first()
+                    value = id
                 name = val
             else:
-                # for administration,number question type
+                # for number question type
                 value = answer.get("value")
 
             answers.append(Answers(
@@ -802,32 +793,24 @@ class SubmitUpdateDraftFormSerializer(SubmitPendingFormSerializer):
                 name = answer.get("value")
             elif question.type == QuestionTypes.cascade:
                 id = answer.get("value")
+                extra_type = (question.extra or {}).get("type")
+                q_api = question.api or {}
+                ep = q_api.get("endpoint", "")
                 val = None
-                if question.api:
-                    ep = question.api.get("endpoint")
-                    if "organisation" in ep:
-                        name = Organisation.objects.filter(pk=id).values_list(
-                            'name', flat=True).first()
-                        val = name
-                    if "entity-data" in ep:
-                        name = EntityData.objects.filter(pk=id).values_list(
-                            'name', flat=True).first()
-                        val = name
-                    if "entity-data" not in ep and "organisation" not in ep:
-                        ep = ep.split("?")[0]
-                        ep = f"{ep}?id={id}"
-                        val = requests.get(ep).json()
-                        val = val[0].get("name")
-
-                if question.extra:
-                    cs_type = question.extra.get("type")
-                    if cs_type == "entity":
-                        name = EntityData.objects.filter(pk=id).values_list(
-                            'name', flat=True).first()
-                        val = name
+                if "organisation" in ep:
+                    val = Organisation.objects.filter(pk=id).values_list(
+                        'name', flat=True).first()
+                elif "entity-data" in ep or extra_type == "entity":
+                    val = EntityData.objects.filter(pk=id).values_list(
+                        'name', flat=True).first()
+                else:
+                    # administration cascade: store both name and integer value
+                    val = Administration.objects.filter(pk=id).values_list(
+                        'name', flat=True).first()
+                    value = id
                 name = val
             else:
-                # for administration,number question type
+                # for number question type
                 value = answer.get("value")
 
             answers.append(Answers(

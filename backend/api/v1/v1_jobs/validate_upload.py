@@ -223,11 +223,13 @@ def validate_row_data(
         return False
     if isinstance(answer, str):
         answer = HText(answer).clean
-    if question.type == QuestionTypes.administration:
-        err = validate_administration(answer, adm)
-        if err:
-            default.update(err)
-            return default
+    if question.type == QuestionTypes.cascade:
+        extra_type = (question.extra or {}).get("type")
+        if extra_type not in ("entity",):
+            err = validate_administration(answer, adm)
+            if err:
+                default.update(err)
+                return default
     elif question.type == QuestionTypes.geo:
         err = validate_geo(answer)
         if err:

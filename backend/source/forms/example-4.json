@@ -29,7 +29,11 @@
           "meta": false,
           "type": "attachment",
           "rule": {
-            "allowedFileTypes": ["jpeg", "jpg", "png"]
+            "allowedFileTypes": [
+              "jpeg",
+              "jpg",
+              "png"
+            ]
           },
           "api": {
             "endpoint": "/api/v1/upload/attachments",
@@ -61,7 +65,12 @@
           "meta": false,
           "type": "attachment",
           "rule": {
-            "allowedFileTypes": ["pdf", "doc", "docx", "odt"]
+            "allowedFileTypes": [
+              "pdf",
+              "doc",
+              "docx",
+              "odt"
+            ]
           },
           "api": {
             "endpoint": "/api/v1/upload/attachments",
@@ -74,11 +83,14 @@
           "name": "subdistrict",
           "label": "Which Subdistrict are you in?",
           "order": 5,
-          "type": "administration",
+          "type": "cascade",
           "required": true,
           "meta": true,
           "api": {
             "max_level": 3
+          },
+          "extra": {
+            "type": "administration"
           }
         }
       ]

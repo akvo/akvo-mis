@@ -41,7 +41,10 @@ def get_answer_value(answer: Answers, webform: bool = False):
         return answer.options
     elif answer.question.type == QuestionTypes.number:
         return answer.value
-    elif answer.question.type == QuestionTypes.administration:
+    elif answer.question.type == QuestionTypes.cascade:
+        extra_type = (answer.question.extra or {}).get("type")
+        if extra_type == "entity" or answer.value is None:
+            return answer.name
         if webform:
             adm = Administration.objects.filter(id=answer.value).first()
             if adm:
@@ -50,7 +53,7 @@ def get_answer_value(answer: Answers, webform: bool = False):
                     for a in adm.ancestors.exclude(parent__isnull=True).all()
                 ] + [adm.id]
             return answer.value
-        return int(float(answer.value)) if answer.value else None
+        return int(float(answer.value))
     else:
         return answer.name
 
@@ -67,8 +70,11 @@ def get_answer_history(answer_history: AnswerHistory):
         value = answer_history.options
     elif answer_history.question.type == QuestionTypes.number:
         value = answer_history.value
-    elif answer_history.question.type == QuestionTypes.administration:
-        value = int(float(answer_history.value))
+    elif answer_history.question.type == QuestionTypes.cascade:
+        if answer_history.value is not None:
+            value = int(float(answer_history.value))
+        else:
+            value = answer_history.name
     else:
         value = answer_history.name
     return {"value": value, "created": created, "created_by": created_by}

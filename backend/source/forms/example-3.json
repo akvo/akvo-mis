@@ -26,8 +26,11 @@
           "label": "School Location",
           "short_label": null,
           "meta": false,
-          "type": "administration",
-          "required": true
+          "type": "cascade",
+          "required": true,
+          "extra": {
+            "type": "administration"
+          }
         },
         {
           "id": 303,
@@ -91,7 +94,9 @@
           "dependency": [
             {
               "id": 311,
-              "options": ["yes"]
+              "options": [
+                "yes"
+              ]
             },
             {
               "id": 312,

@@ -208,12 +208,11 @@ class Answers(models.Model):
             QuestionTypes.image,
             QuestionTypes.date,
             QuestionTypes.autofield,
-            QuestionTypes.cascade,
             QuestionTypes.attachment,
             QuestionTypes.signature,
         ]:
             answer = self.name
-        elif q.type == QuestionTypes.administration:
+        elif q.type == QuestionTypes.cascade:
             answer = Administration.objects.filter(pk=self.value).first()
             if answer:
                 answer = answer.administration_column

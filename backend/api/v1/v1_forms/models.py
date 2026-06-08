@@ -15,6 +15,7 @@ from utils.soft_deletes_model import SoftDeletes
 
 class Forms(models.Model):
     name = models.TextField()
+    description = models.TextField(default=None, null=True)
     version = models.IntegerField(default=1)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     approval_instructions = models.JSONField(default=None, null=True)
@@ -123,6 +124,14 @@ class Questions(SoftDeletes):
     fn = models.JSONField(default=None, null=True)
     pre = models.JSONField(default=None, null=True)
     display_only = models.BooleanField(default=False, null=True)
+    variable_name = models.CharField(max_length=255, null=True, default=None)
+    hidden_string = models.BooleanField(default=None, null=True)
+    required_double_entry = models.BooleanField(default=False)
+    disabled = models.BooleanField(default=False, null=True)
+    addon_before = models.CharField(max_length=50, null=True, default=None)
+    addon_after = models.CharField(max_length=50, null=True, default=None)
+    data_api_url = models.CharField(max_length=255, null=True, default=None)
+    center = models.JSONField(default=None, null=True)
 
     def __str__(self):
         return f"[TYPE: {self.type}] {self.label}"

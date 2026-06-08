@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('v1_forms', '0009_formpublishedversion_forms_active_version'),
+        ('v1_forms', '0007_question_model_alignment'),
         ('v1_data', '0003_add_visualization_indexes'),
     ]
 

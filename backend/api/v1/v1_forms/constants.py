@@ -1,6 +1,5 @@
 class QuestionTypes:
     geo = 1
-    administration = 2
     text = 3
     number = 4
     option = 5
@@ -12,10 +11,11 @@ class QuestionTypes:
     attachment = 11
     signature = 12
     input = 13
+    geoshape = 14
+    geotrace = 15
 
     FieldStr = {
         geo: "Geo",
-        administration: "Administration",
         text: "Text",
         number: "Number",
         option: "Option",
@@ -27,6 +27,8 @@ class QuestionTypes:
         attachment: "Attachment",
         signature: "Signature",
         input: "Input",
+        geoshape: "Geoshape",
+        geotrace: "Geotrace",
     }
 
 

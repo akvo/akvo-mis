@@ -829,21 +829,6 @@ def transform_form_data_for_report(
                                     QuestionTypes.signature,
                                 ]:
                                     value = answer.name or ""
-                                elif (
-                                    question.type
-                                    == QuestionTypes.administration
-                                ):
-                                    if answer.value:
-                                        admin = Administration.objects.filter(
-                                            pk=answer.value
-                                        ).first()
-                                        value = (
-                                            admin.name
-                                            if admin
-                                            else str(answer.value)
-                                        )
-                                    else:
-                                        value = ""
                                 else:
                                     value = (
                                         answer.value
@@ -932,7 +917,7 @@ def transform_form_data_for_report(
                             QuestionTypes.signature,
                         ]:
                             value = answer.name or ""
-                        elif question.type == QuestionTypes.administration:
+                        elif question.type == QuestionTypes.cascade:
                             if answer.value:
                                 admin = Administration.objects.filter(
                                     pk=answer.value

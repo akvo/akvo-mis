@@ -48,7 +48,35 @@ def set_answer_data(
 
     if question.type == QuestionTypes.geo:
         option = data.geo
-    elif question.type == QuestionTypes.administration:
+    elif (
+        question.type == QuestionTypes.cascade
+        and question.extra
+        and question.extra.get("type") == "entity"
+    ):
+        entity, created = Entity.objects.get_or_create(
+            name=question.extra.get("name")
+        )
+        name = None
+        if entity:
+            ed = (
+                entity.entity_data.filter(administration=data.administration)
+                .order_by("?")
+                .first()
+            )
+            if ed:
+                name = ed.name
+        if not name:
+            prefix = "{0}".format(
+                entity.name if created else question.extra.get("name")
+            )
+            entity_adm = data.administration
+            name = f"{prefix} {entity_adm.name}"
+            EntityData.objects.get_or_create(
+                entity=entity,
+                name=name,
+                administration=entity_adm,
+            )
+    elif question.type == QuestionTypes.cascade:
         name = data.administration.full_path_name.replace("|", " - ")
         value = data.administration.id
     elif (
@@ -104,34 +132,6 @@ def set_answer_data(
         name = (data.created + timedelta(days=days)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         )
-    elif (
-        question.type == QuestionTypes.cascade
-        and question.extra
-        and question.extra.get("type") == "entity"
-    ):
-        entity, created = Entity.objects.get_or_create(
-            name=question.extra.get("name")
-        )
-        name = None
-        if entity:
-            ed = (
-                entity.entity_data.filter(administration=data.administration)
-                .order_by("?")
-                .first()
-            )
-            if ed:
-                name = ed.name
-        if not name:
-            prefix = "{0}".format(
-                entity.name if created else question.extra.get("name")
-            )
-            entity_adm = data.administration
-            name = f"{prefix} {entity_adm.name}"
-            EntityData.objects.get_or_create(
-                entity=entity,
-                name=name,
-                administration=entity_adm,
-            )
     else:
         pass
 
@@ -163,12 +163,12 @@ def add_fake_answers(data):
                 meta_name.append(name)
             elif option and question.type != QuestionTypes.geo:
                 meta_name.append(",".join(option))
-            elif value and question.type != QuestionTypes.administration:
+            elif value and question.type != QuestionTypes.cascade:
                 meta_name.append(str(value))
             else:
                 pass
 
-        if question.type == QuestionTypes.administration:
+        if question.type == QuestionTypes.cascade:
             name = None
 
         seed = True

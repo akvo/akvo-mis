@@ -99,6 +99,14 @@ def _save_questions(
             fn=q_data.get("fn") or None,
             pre=q_data.get("pre") or None,
             display_only=q_data.get("display_only") or False,
+            variable_name=q_data.get("variable_name"),
+            hidden_string=q_data.get("hidden_string"),
+            required_double_entry=q_data.get("required_double_entry") or False,
+            disabled=q_data.get("disabled") or False,
+            addon_before=q_data.get("addon_before"),
+            addon_after=q_data.get("addon_after"),
+            data_api_url=q_data.get("data_api_url"),
+            center=q_data.get("center"),
         )
         update_fields = {
             k: v for k, v in q_defaults.items()
@@ -118,14 +126,14 @@ def _save_questions(
                 )
                 question = q_obj
             else:
-                question = Questions.objects.create(**q_defaults)
+                question = Questions.objects.create(id=q_id, **q_defaults)
         elif q_id:
             qs = Questions.objects_with_deleted.filter(id=q_id)
             if qs.restore():
                 qs.update(**update_fields)
                 question = qs.get()
             else:
-                question = Questions.objects.create(**q_defaults)
+                question = Questions.objects.create(id=q_id, **q_defaults)
         else:
             question = Questions.objects.create(**q_defaults)
 
@@ -168,18 +176,25 @@ def save_form(data, instance=None):
             resolved_type = FormTypes.monitoring
         else:
             resolved_type = FormTypes.registration
-        form = Forms.objects.create(
+        form_create_kwargs = dict(
             name=data["name"],
             type=resolved_type,
             status=FormStatus.draft,
+            description=data.get("description"),
             approval_instructions=data.get("approval_instructions"),
             parent_id=parent_id,
         )
+        form_id = data.get("id")
+        if form_id:
+            form_create_kwargs["id"] = form_id
+        form = Forms.objects.create(**form_create_kwargs)
     else:
         if "name" in data:
             instance.name = data["name"]
         if type_val is not None:
             instance.type = _parse_form_type(type_val)
+        if "description" in data:
+            instance.description = data["description"]
         if "approval_instructions" in data:
             instance.approval_instructions = data["approval_instructions"]
         if "parent" in data:
@@ -276,7 +291,7 @@ def save_form(data, instance=None):
                 )
                 group = g_obj
             elif g_id:
-                group = QuestionGroup.objects.create(**group_defaults)
+                group = QuestionGroup.objects.create(id=g_id, **group_defaults)
             else:
                 group = QuestionGroup.objects.create(**group_defaults)
 
@@ -300,6 +315,7 @@ def duplicate_form(original_form):
         type=original_form.type,
         status=FormStatus.draft,
         version=1,
+        description=original_form.description,
         approval_instructions=original_form.approval_instructions,
         parent_id=original_form.parent_id,
     )
@@ -332,6 +348,14 @@ def duplicate_form(original_form):
                 fn=q.fn,
                 pre=q.pre,
                 display_only=q.display_only,
+                variable_name=q.variable_name,
+                hidden_string=q.hidden_string,
+                required_double_entry=q.required_double_entry,
+                disabled=q.disabled,
+                addon_before=q.addon_before,
+                addon_after=q.addon_after,
+                data_api_url=q.data_api_url,
+                center=q.center,
             )
             for opt in q.options.all().order_by("order"):
                 QuestionOptions.objects.create(
@@ -440,6 +464,16 @@ def restore_from_snapshot(form, pv):
                 fn=q_data.get("fn"),
                 pre=q_data.get("pre"),
                 display_only=q_data.get("display_only") or False,
+                variable_name=q_data.get("variable_name"),
+                hidden_string=q_data.get("hidden_string"),
+                required_double_entry=(
+                    q_data.get("required_double_entry") or False
+                ),
+                disabled=q_data.get("disabled") or False,
+                addon_before=q_data.get("addon_before"),
+                addon_after=q_data.get("addon_after"),
+                data_api_url=q_data.get("data_api_url"),
+                center=q_data.get("center"),
             )
             if q_id in question_db:
                 q_obj = question_db[q_id]
@@ -471,11 +505,16 @@ def restore_from_snapshot(form, pv):
         QuestionOptions.objects.bulk_create(new_options)
 
     form.name = schema.get("name", form.name)
+    form.description = schema.get("description")
     form.approval_instructions = schema.get("approval_instructions")
     form.active_version = pv
     form.version = pv.version
     form.save(update_fields=[
-        "name", "approval_instructions", "active_version", "version"
+        "name",
+        "description",
+        "approval_instructions",
+        "active_version",
+        "version",
     ])
 
 
@@ -547,6 +586,14 @@ def _build_schema_snapshot(form):
                 "fn": q.fn,
                 "pre": q.pre,
                 "display_only": q.display_only,
+                "variable_name": q.variable_name,
+                "hidden_string": q.hidden_string,
+                "required_double_entry": q.required_double_entry,
+                "disabled": q.disabled,
+                "addon_before": q.addon_before,
+                "addon_after": q.addon_after,
+                "data_api_url": q.data_api_url,
+                "center": q.center,
                 "option": [
                     {
                         "order": opt.order,
@@ -569,6 +616,7 @@ def _build_schema_snapshot(form):
         })
     return {
         "name": form.name,
+        "description": form.description,
         "approval_instructions": form.approval_instructions,
         "question_group": groups,
     }

@@ -30,6 +30,24 @@ from utils.custom_serializer_fields import (
 from utils.default_serializers import CommonDataSerializer, GeoFormatSerializer
 
 
+def _question_type_str(instance: Questions) -> str:
+    """Return the semantic type string for a question.
+
+    Cascade questions are discriminated by extra.type:
+      "entity"        → "entity"
+      "administration" or absent → "administration"
+      anything else   → "cascade"
+    """
+    if instance.type == QuestionTypes.cascade:
+        extra_type = (instance.extra or {}).get("type")
+        if extra_type == "entity":
+            return "entity"
+        if extra_type not in ("administration", None):
+            return "cascade"
+        return "administration"
+    return QuestionTypes.FieldStr.get(instance.type, "").lower()
+
+
 class ListOptionSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         result = super(ListOptionSerializer, self).to_representation(instance)
@@ -68,9 +86,7 @@ class ListQuestionSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_type(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
-            return QuestionTypes.FieldStr.get(QuestionTypes.cascade).lower()
-        return QuestionTypes.FieldStr.get(instance.type).lower()
+        return _question_type_str(instance)
 
     @extend_schema_field(
         inline_serializer(
@@ -84,7 +100,11 @@ class ListQuestionSerializer(serializers.ModelSerializer):
         )
     )
     def get_api(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
+        if instance.type == QuestionTypes.cascade:
+            extra_type = (instance.extra or {}).get("type")
+            if extra_type == "entity":
+                return instance.api
+            # Administration cascade: generate dynamic user-scoped endpoint.
             user = self.context.get("user")
             administration = Administration.objects.filter(
                 parent__isnull=True
@@ -94,7 +114,6 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             ).order_by("administration__level__level").first()
             if user_role:
                 administration = user_role.administration
-            # max depth for cascade question in national form
             max_level = instance.api.get("max_level") \
                 if instance.api else None
             extra_objects = {}
@@ -119,7 +138,7 @@ class ListQuestionSerializer(serializers.ModelSerializer):
                 return {
                     "endpoint": "/api/v1/administration",
                     "list": "children",
-                    "initial":  initial,
+                    "initial": initial,
                     **extra_objects,
                 }
             return {
@@ -128,8 +147,6 @@ class ListQuestionSerializer(serializers.ModelSerializer):
                 "initial": administration.id,
                 **extra_objects,
             }
-        if instance.type == QuestionTypes.cascade:
-            return instance.api
         if instance.type == QuestionTypes.attachment:
             return instance.api
         return None
@@ -138,6 +155,8 @@ class ListQuestionSerializer(serializers.ModelSerializer):
     def get_center(self, instance: Questions):
         if instance.type == QuestionTypes.geo:
             return FORM_GEO_VALUE
+        if instance.type in (QuestionTypes.geoshape, QuestionTypes.geotrace):
+            return instance.center
         return None
 
     @extend_schema_field(
@@ -218,38 +237,28 @@ class ListQuestionSerializer(serializers.ModelSerializer):
     def get_source(self, instance: Questions):
         user = self.context.get("user")
         assignment = self.context.get("mobile_assignment")
-        max_level = False
-        extra_objects = {}
         if instance.type == QuestionTypes.cascade:
-            if instance.extra:
-                cascade_type = instance.extra.get("type")
-                cascade_name = instance.extra.get("name")
-                if cascade_type == "entity":
-                    entity_type = Entity.objects.filter(
-                        name=cascade_name
-                    ).first()
-                    entity_id = entity_type.id if entity_type else None
-                    return {
-                        "file": "entity_data.sqlite",
-                        "cascade_type": entity_id,
-                        "cascade_parent": "administrator.sqlite",
-                    }
-            return {"file": "organisation.sqlite", "parent_id": [0]}
-        if instance.type == QuestionTypes.administration:
-            if max_level:
-                extra_objects = {
-                    "max_level": 1,
+            extra_type = (instance.extra or {}).get("type")
+            if extra_type == "entity":
+                cascade_name = (instance.extra or {}).get("name")
+                entity_type = Entity.objects.filter(
+                    name=cascade_name
+                ).first()
+                entity_id = entity_type.id if entity_type else None
+                return {
+                    "file": "entity_data.sqlite",
+                    "cascade_type": entity_id,
+                    "cascade_parent": "administrator.sqlite",
                 }
+            # Administration cascade (extra.type="administration" or null).
             return {
                 "file": "administrator.sqlite",
                 "parent_id": [a.id for a in assignment.administrations.all()]
                 if assignment
                 else [
                     ur.administration.id
-                    for ur in
-                    user.user_user_role.all()
+                    for ur in user.user_user_role.all()
                 ],
-                **extra_objects,
             }
         return None
 
@@ -347,21 +356,17 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.ListField())
     def get_cascades(self, instance: Forms):
         cascade_questions = Questions.objects.filter(
-            type__in=[QuestionTypes.cascade, QuestionTypes.administration],
+            type=QuestionTypes.cascade,
             form=instance,
             deleted_at__isnull=True,
         ).all()
         source = []
         for cascade_question in cascade_questions:
-            if cascade_question.type == QuestionTypes.administration:
-                source.append("/sqlite/administrator.sqlite")
-            if (
-                cascade_question.extra
-                and cascade_question.extra.get("type") == "entity"
-            ):
+            extra_type = (cascade_question.extra or {}).get("type")
+            if extra_type == "entity":
                 source.append("/sqlite/entity_data.sqlite")
             else:
-                source.append("/sqlite/organisation.sqlite")
+                source.append("/sqlite/administrator.sqlite")
         return np.unique(source)
 
     class Meta:
@@ -420,9 +425,7 @@ class FormDataListQuestionSerializer(serializers.ModelSerializer):
         )
     )
     def get_type(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
-            return QuestionTypes.FieldStr.get(QuestionTypes.cascade).lower()
-        return QuestionTypes.FieldStr.get(instance.type).lower()
+        return _question_type_str(instance)
 
     @extend_schema_field(
         CustomMultipleChoiceField(
@@ -576,9 +579,7 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
     disable_delete = serializers.SerializerMethodField()
 
     def get_type(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
-            return QuestionTypes.FieldStr.get(QuestionTypes.cascade).lower()
-        return QuestionTypes.FieldStr.get(instance.type).lower()
+        return _question_type_str(instance)
 
     def get_option(self, instance: Questions):
         return ListOptionSerializer(
@@ -610,6 +611,14 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
             "fn",
             "pre",
             "display_only",
+            "variable_name",
+            "hidden_string",
+            "required_double_entry",
+            "disabled",
+            "addon_before",
+            "addon_after",
+            "data_api_url",
+            "center",
             "option",
             "disable_delete",
         ]
@@ -660,6 +669,7 @@ class FormDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "description",
             "version",
             "latest_version",
             "status",

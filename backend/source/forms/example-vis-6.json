@@ -52,8 +52,11 @@
           "name": "location",
           "label": "Location",
           "meta": true,
-          "type": "administration",
-          "required": true
+          "type": "cascade",
+          "required": true,
+          "extra": {
+            "type": "administration"
+          }
         },
         {
           "id": 600104,

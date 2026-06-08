@@ -369,6 +369,7 @@ class AnswerProcessor:
         row_value,
         administration_id: Optional[int] = None,
         opt_list: Optional[list] = [],
+        extra: Optional[dict] = None,
     ) -> Tuple[Optional[str], Optional[int], Optional[list]]:
         """Process answer based on question type.
 
@@ -376,11 +377,15 @@ class AnswerProcessor:
             question_type: The type of question
             row_value: The value from the CSV row
             administration_id: Administration ID for admin-type questions
+            extra: Question extra JSON (used to discriminate cascade sub-types)
 
         Returns:
             Tuple of (name, value, options)
         """
-        if question_type == QuestionTypes.administration:
+        if question_type == QuestionTypes.cascade:
+            extra_type = (extra or {}).get("type")
+            if extra_type == "entity":
+                return cls.process_default(row_value)
             return cls.process_administration(row_value, administration_id)
         elif question_type == QuestionTypes.geo:
             return cls.process_geo(row_value)
