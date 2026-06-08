@@ -183,6 +183,16 @@ const uiText = {
     formBuilderStatusPublished: "Published",
     formBuilderStatusDraft: "Draft",
     formBuilderResetDraft: "Load from server",
+    formBuilderMonitoringFor: (name) => `Creating monitoring form for: ${name}`,
+    formBuilderParentFormError:
+      "Parent form not found or not published. Cannot create monitoring form.",
+    formBuilderCreateMonitoringButton: "Create Monitoring Form",
+    formBuilderCreateButton: "Create New Form",
+    formBuilderRegistrationType: "Registration",
+    formBuilderMonitoringType: "Monitoring",
+    formBuilderNameCol: "Name",
+    formBuilderTypeCol: "Type",
+    formBuilderStatusCol: "Status",
     dataDownloadTitle: "Data Download",
     dataDownloadButton: "Download Data",
     dataDownloadText: (

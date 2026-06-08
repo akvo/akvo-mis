@@ -8,6 +8,7 @@ const FormEditorBanners = ({
   previewingVersion,
   onExitPreview,
   infoBannerText,
+  errorBannerText,
   text,
   topSpacing,
 }) => {
@@ -52,6 +53,14 @@ const FormEditorBanners = ({
         <Alert
           type="info"
           message={infoBannerText}
+          style={{ marginBottom: 8 }}
+          showIcon
+        />
+      )}
+      {errorBannerText && (
+        <Alert
+          type="error"
+          message={errorBannerText}
           style={{ marginBottom: 8 }}
           showIcon
         />

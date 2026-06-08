@@ -11,8 +11,13 @@ import { HistoryOutlined } from "@ant-design/icons";
 import WebformEditor from "akvo-react-form-editor";
 import "akvo-react-form-editor/dist/index.css";
 import { Breadcrumbs } from "../../components";
-import { api, store, uiText } from "../../lib";
-import { editorToApi, apiToEditor } from "../../lib/form-builder-transform";
+import {
+  api,
+  store,
+  uiText,
+  QUESTION_TYPES,
+  ARF_CASCASE_URLS,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { FormEditorBanners, VersionHistoryDrawer } from "./components";
 import "./style.scss";
@@ -62,7 +67,7 @@ const FormBuilderEdit = () => {
         setFormStatus(apiData.status);
         setFormVersion(apiData.version);
         setFormLatestVersion(apiData.latest_version);
-        setInitialValue(apiToEditor(apiData));
+        setInitialValue(apiData);
 
         if (!skipDraftCheck) {
           const raw = localStorage.getItem(draftKey(formId));
@@ -89,7 +94,7 @@ const FormBuilderEdit = () => {
             }
           }
         }
-        setInitialValue(apiToEditor(apiData));
+        setInitialValue(apiData);
       });
     },
     [formId]
@@ -144,9 +149,8 @@ const FormBuilderEdit = () => {
     }, 2000);
 
     setSaving(true);
-    const payload = editorToApi(editorOutput);
     api
-      .put(`/manage/forms/${formId}?allow_delete=true`, payload)
+      .put(`/manage/forms/${formId}?allow_delete=true`, editorOutput)
       .then((res) => {
         setPreviewingVersion(null);
         localStorage.removeItem(draftKey(formId));
@@ -239,15 +243,13 @@ const FormBuilderEdit = () => {
       .get(`/manage/forms/${formId}/versions/${record.id}`)
       .then((res) => {
         const schema = res.data.schema;
-        setInitialValue(
-          apiToEditor({
-            ...schema,
-            id: Number(formId),
-            status: formStatus,
-            latest_version: formLatestVersion,
-            active_version_id: null,
-          })
-        );
+        setInitialValue({
+          ...schema,
+          id: Number(formId),
+          status: formStatus,
+          latest_version: formLatestVersion,
+          active_version_id: null,
+        });
         setPreviewingVersion({ id: record.id, version: record.version });
         setDrawerOpen(false);
       })
@@ -367,6 +369,8 @@ const FormBuilderEdit = () => {
             <WebformEditor
               initialValue={initialValue}
               onSave={saving ? null : onSave}
+              limitQuestionType={Object.keys(QUESTION_TYPES)}
+              settingCascadeURL={ARF_CASCASE_URLS}
             />
           </div>
         </div>

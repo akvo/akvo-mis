@@ -1,11 +1,24 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Spin } from "antd";
 import WebformEditor from "akvo-react-form-editor";
 import "akvo-react-form-editor/dist/index.css";
 import { Breadcrumbs } from "../../components";
-import { api, store, uiText } from "../../lib";
-import { editorToApi } from "../../lib/form-builder-transform";
+import {
+  api,
+  store,
+  uiText,
+  ARF_CASCASE_URLS,
+  QUESTION_TYPES,
+  REGISTRATION_FORM,
+  MONITORING_FORM,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { FormEditorBanners } from "./components";
 import "./style.scss";
@@ -14,15 +27,42 @@ const DRAFT_KEY = "form-builder-draft-new";
 
 const FormBuilderCreate = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const parentId = searchParams.get("parent_id");
   const { notify } = useNotification();
   const [saving, setSaving] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [initialValue, setInitialValue] = useState(null);
+  const [parentForm, setParentForm] = useState(null);
+  const [parentError, setParentError] = useState(false);
   const draftTimerRef = useRef(null);
 
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
+
+  const loadParentForm = useCallback(() => {
+    if (!parentId) {
+      return;
+    }
+    api
+      .get(`/manage/forms/${parentId}`)
+      .then((res) => {
+        if (
+          res.data.status !== "published" ||
+          res.data.type !== REGISTRATION_FORM
+        ) {
+          setParentError(true);
+        } else {
+          setParentForm(res.data);
+        }
+      })
+      .catch(() => setParentError(true));
+  }, [parentId]);
+
+  useEffect(() => {
+    loadParentForm();
+  }, [loadParentForm]);
 
   const pagePath = [
     { title: text.controlCenter, link: "/control-center" },
@@ -74,7 +114,9 @@ const FormBuilderCreate = () => {
     }, 2000);
 
     setSaving(true);
-    const payload = editorToApi(editorOutput);
+    const payload = parentId
+      ? { ...editorOutput, type: MONITORING_FORM, parent: Number(parentId) }
+      : editorOutput;
     api
       .post("/manage/forms", payload)
       .then((res) => {
@@ -98,7 +140,6 @@ const FormBuilderCreate = () => {
       </div>
     );
   }
-
   return (
     <div id="form-builder-create">
       <div className="description-container">
@@ -112,13 +153,21 @@ const FormBuilderCreate = () => {
               setDraftRestored(false);
             }}
             onResetDraft={onResetDraft}
+            infoBannerText={
+              parentForm ? text.formBuilderMonitoringFor(parentForm.name) : null
+            }
+            errorBannerText={
+              parentError ? text.formBuilderParentFormError : null
+            }
             text={text}
             topSpacing
           />
           <div style={{ marginTop: 16 }}>
             <WebformEditor
               initialValue={initialValue}
-              onSave={saving ? null : onSave}
+              onSave={saving || parentError ? null : onSave}
+              limitQuestionType={Object.keys(QUESTION_TYPES)}
+              settingCascadeURL={ARF_CASCASE_URLS}
             />
           </div>
         </div>

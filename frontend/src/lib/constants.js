@@ -12,6 +12,7 @@ export const IMAGE_EXTENSIONS = [
   "ico",
 ];
 export const QUESTION_TYPES = {
+  input: "input",
   text: "text",
   number: "number",
   date: "date",
@@ -24,7 +25,6 @@ export const QUESTION_TYPES = {
   autofield: "autofield",
   attachment: "attachment",
   signature: "signature",
-  administration: "administration",
 };
 
 export const READ_ACCESS = 1;
@@ -51,3 +51,15 @@ export const ACCESS_LEVELS_LIST = Object.entries(ACCESS_LEVELS).map(
 export const APPROVAL_STATUS_PENDING = 1;
 export const APPROVAL_STATUS_APPROVED = 2;
 export const APPROVAL_STATUS_REJECTED = 3;
+
+export const ARF_CASCASE_URLS = [
+  {
+    name: "Administration",
+    endpoint: "/api/v1/public/administrations",
+    initial: 1,
+    list: "children",
+  },
+];
+
+export const REGISTRATION_FORM = 1;
+export const MONITORING_FORM = 2;

@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Row, Col, Table, Button, Empty } from "antd";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import { Row, Col, Table, Button, Empty, Space } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { FormStatusTag } from "./components";
-import { api, store, uiText } from "../../lib";
+import { api, store, uiText, REGISTRATION_FORM } from "../../lib";
 
 const FormBuilderList = () => {
   const navigate = useNavigate();
@@ -40,35 +40,52 @@ const FormBuilderList = () => {
 
   const columns = [
     {
-      title: "Name",
+      title: text.formBuilderNameCol,
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "Type",
+      title: text.formBuilderTypeCol,
       key: "type",
-      render: (_, record) => (record.parent ? "Monitoring" : "Registration"),
+      render: (_, record) =>
+        record.parent
+          ? text.formBuilderMonitoringType
+          : text.formBuilderRegistrationType,
     },
     {
-      title: "Status",
+      title: text.formBuilderStatusCol,
       key: "status",
       render: (_, record) => (
         <FormStatusTag status={record.status} text={text} />
       ),
     },
     {
-      title: "Actions",
+      title: text.formBuilderActionsCol,
       key: "actions",
       render: (_, record) => (
-        <Button
-          type="link"
-          icon={<EditOutlined />}
-          onClick={() => {
-            navigate(`/control-center/form-builder/${record.id}/edit`);
-          }}
-        >
-          Edit
-        </Button>
+        <Space size="middle">
+          <Button
+            onClick={() => {
+              navigate(`/control-center/form-builder/${record.id}/edit`);
+            }}
+            shape="round"
+          >
+            {text.editButton}
+          </Button>
+          {record.status === "published" && record.type === REGISTRATION_FORM && (
+            <Button
+              onClick={() => {
+                navigate(
+                  `/control-center/form-builder/create?parent_id=${record.id}`
+                );
+              }}
+              shape="round"
+              type="primary"
+            >
+              {text.formBuilderCreateMonitoringButton}
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
@@ -91,13 +108,14 @@ const FormBuilderList = () => {
           <Row justify="end" style={{ marginBottom: 16, marginTop: 16 }}>
             <Col>
               <Button
+                shape="round"
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => {
                   navigate("/control-center/form-builder/create");
                 }}
               >
-                New Form
+                {text.formBuilderCreateButton}
               </Button>
             </Col>
           </Row>
