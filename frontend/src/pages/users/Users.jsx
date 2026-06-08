@@ -146,7 +146,7 @@ const Users = () => {
         }`;
 
         if (
-          selectedAdministration &&
+          selectedAdministration?.id &&
           selectedAdministration?.id !== authUser?.administration?.id
         ) {
           url += `&administration=${selectedAdministration.id}`;
