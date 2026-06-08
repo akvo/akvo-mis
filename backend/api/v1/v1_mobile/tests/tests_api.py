@@ -181,7 +181,7 @@ class MobileAssignmentApiTest(TestCase, ProfileTestHelperMixin):
             **{'HTTP_AUTHORIZATION': f'Bearer {token}'},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
+        self.assertCountEqual(
             list(response.data),
             [
                 'id',
@@ -191,6 +191,9 @@ class MobileAssignmentApiTest(TestCase, ProfileTestHelperMixin):
                 'approval_instructions',
                 'parent',
                 'question_group',
+                'languages',
+                'default_language',
+                'translations',
             ],
         )
 

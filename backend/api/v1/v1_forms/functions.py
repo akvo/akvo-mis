@@ -100,6 +100,7 @@ def _save_questions(
             pre=q_data.get("pre") or None,
             display_only=q_data.get("display_only") or False,
             variable_name=q_data.get("variable_name"),
+            translations=q_data.get("translations"),
             hidden_string=q_data.get("hidden_string"),
             required_double_entry=q_data.get("required_double_entry") or False,
             disabled=q_data.get("disabled") or False,
@@ -152,6 +153,7 @@ def _save_questions(
                 ),
                 other=opt.get("other", False),
                 color=opt.get("color"),
+                translations=opt.get("translations"),
             )
 
 
@@ -183,6 +185,9 @@ def save_form(data, instance=None):
             description=data.get("description"),
             approval_instructions=data.get("approval_instructions"),
             parent_id=parent_id,
+            languages=data.get("languages"),
+            default_language=data.get("default_language"),
+            translations=data.get("translations"),
         )
         form_id = data.get("id")
         if form_id:
@@ -199,6 +204,12 @@ def save_form(data, instance=None):
             instance.approval_instructions = data["approval_instructions"]
         if "parent" in data:
             instance.parent_id = data["parent"]
+        if "languages" in data:
+            instance.languages = data["languages"]
+        if "default_language" in data:
+            instance.default_language = data["default_language"]
+        if "translations" in data:
+            instance.translations = data["translations"]
         instance.save()
         form = instance
 
@@ -276,6 +287,7 @@ def save_form(data, instance=None):
                 order=group_data.get("order"),
                 repeatable=group_data.get("repeatable", False),
                 repeat_text=group_data.get("repeat_text"),
+                translations=group_data.get("translations"),
             )
             grp_update = {
                 k: v for k, v in group_defaults.items() if k != "form"
@@ -318,6 +330,9 @@ def duplicate_form(original_form):
         description=original_form.description,
         approval_instructions=original_form.approval_instructions,
         parent_id=original_form.parent_id,
+        languages=original_form.languages,
+        default_language=original_form.default_language,
+        translations=original_form.translations,
     )
     for group in original_form.form_question_group.all().order_by("order"):
         new_group = QuestionGroup.objects.create(
@@ -327,6 +342,7 @@ def duplicate_form(original_form):
             order=group.order,
             repeatable=group.repeatable,
             repeat_text=group.repeat_text,
+            translations=group.translations,
         )
         for q in group.question_group_question.all().order_by("order"):
             new_q = Questions.objects.create(
@@ -349,6 +365,7 @@ def duplicate_form(original_form):
                 pre=q.pre,
                 display_only=q.display_only,
                 variable_name=q.variable_name,
+                translations=q.translations,
                 hidden_string=q.hidden_string,
                 required_double_entry=q.required_double_entry,
                 disabled=q.disabled,
@@ -365,6 +382,7 @@ def duplicate_form(original_form):
                     value=opt.value,
                     other=opt.other,
                     color=opt.color,
+                    translations=opt.translations,
                 )
     return new_form
 
@@ -431,6 +449,7 @@ def restore_from_snapshot(form, pv):
             order=group_data.get("order"),
             repeatable=group_data.get("repeatable", False),
             repeat_text=group_data.get("repeat_text"),
+            translations=group_data.get("translations"),
         )
         if g_id in group_db:
             g_obj = group_db[g_id]
@@ -465,6 +484,7 @@ def restore_from_snapshot(form, pv):
                 pre=q_data.get("pre"),
                 display_only=q_data.get("display_only") or False,
                 variable_name=q_data.get("variable_name"),
+                translations=q_data.get("translations"),
                 hidden_string=q_data.get("hidden_string"),
                 required_double_entry=(
                     q_data.get("required_double_entry") or False
@@ -499,6 +519,7 @@ def restore_from_snapshot(form, pv):
                     ),
                     other=opt.get("other", False),
                     color=opt.get("color"),
+                    translations=opt.get("translations"),
                 ))
 
     if new_options:
@@ -507,12 +528,18 @@ def restore_from_snapshot(form, pv):
     form.name = schema.get("name", form.name)
     form.description = schema.get("description")
     form.approval_instructions = schema.get("approval_instructions")
+    form.languages = schema.get("languages")
+    form.default_language = schema.get("default_language")
+    form.translations = schema.get("translations")
     form.active_version = pv
     form.version = pv.version
     form.save(update_fields=[
         "name",
         "description",
         "approval_instructions",
+        "languages",
+        "default_language",
+        "translations",
         "active_version",
         "version",
     ])
@@ -587,6 +614,7 @@ def _build_schema_snapshot(form):
                 "pre": q.pre,
                 "display_only": q.display_only,
                 "variable_name": q.variable_name,
+                "translations": q.translations,
                 "hidden_string": q.hidden_string,
                 "required_double_entry": q.required_double_entry,
                 "disabled": q.disabled,
@@ -601,6 +629,7 @@ def _build_schema_snapshot(form):
                         "value": opt.value,
                         "other": opt.other,
                         "color": opt.color,
+                        "translations": opt.translations,
                     }
                     for opt in q.options.all()
                 ],
@@ -612,12 +641,16 @@ def _build_schema_snapshot(form):
             "order": group.order,
             "repeatable": group.repeatable,
             "repeat_text": group.repeat_text,
+            "translations": group.translations,
             "question": questions,
         })
     return {
         "name": form.name,
         "description": form.description,
         "approval_instructions": form.approval_instructions,
+        "languages": form.languages,
+        "default_language": form.default_language,
+        "translations": form.translations,
         "question_group": groups,
     }
 
@@ -645,12 +678,28 @@ def store_version_snapshot(form, data, user):
             data["name"] if "name" in data
             else active_schema.get("name", form.name)
         ),
+        "description": (
+            data["description"] if "description" in data
+            else active_schema.get("description", form.description)
+        ),
         "approval_instructions": (
             data["approval_instructions"]
             if "approval_instructions" in data
             else active_schema.get(
                 "approval_instructions", form.approval_instructions
             )
+        ),
+        "languages": (
+            data["languages"] if "languages" in data
+            else active_schema.get("languages", form.languages)
+        ),
+        "default_language": (
+            data["default_language"] if "default_language" in data
+            else active_schema.get("default_language", form.default_language)
+        ),
+        "translations": (
+            data["translations"] if "translations" in data
+            else active_schema.get("translations", form.translations)
         ),
         "question_group": (
             data["question_group"]

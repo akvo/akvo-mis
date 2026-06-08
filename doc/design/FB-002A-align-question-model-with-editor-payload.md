@@ -251,83 +251,32 @@ if present. Full endpoint object is generated at request time.
 
 ---
 
-### D-2: Detection in `editorToApi()` — Endpoint Pattern Matching
+### D-2: Detection in `_normalize_editor_payload` — Endpoint Pattern Matching (Backend)
 
 **Context**: `akvo-react-form-editor` emits cascade questions with a full URL endpoint:
 ```json
-{"endpoint": "https://rtmis.akvotest.org/api/v1/administration", "initial": 1, "list": "children"}
+{"endpoint": "/api/v1/administrations", "initial": 1, "list": "children"}
 ```
-The editor does not set `extra.type` — it sends a generic cascade with a configured URL.
+The editor does not set `extra.type` — it sends a generic cascade with a configured URL (the `ARF_CASCASE_URLS` endpoint).
 
-**Decision**: Option 1 — endpoint pattern matching in `editorToApi()`
+> **Update**: `form-builder-transform.js` was **deleted** (see [[FB-002]] D-15). The `editorToApi()` endpoint detection was removed with it. Detection must be re-implemented in `_normalize_editor_payload` on the backend (Part 1 of this task, still pending).
 
-**Detection rule**: `api.endpoint` contains `/api/v1/administration` anywhere in the URL.
+**Decision**: Endpoint pattern matching moved to `_normalize_editor_payload` (Python)
 
-**`editorToApi()` transform**:
-```js
-const ADMIN_ENDPOINT = /\/api\/v1\/administration/;
-if (q.type === "cascade" && ADMIN_ENDPOINT.test((q.api || {}).endpoint || "")) {
-  const maxLevel = (q.api || {}).max_level || null;
-  return {
-    ...normalizeQuestion(q),
-    type: "cascade",
-    extra: { ...(q.extra || {}), type: "administration" },
-    api: maxLevel ? { max_level: maxLevel } : null,
-  };
-}
-```
+**Detection rule**: `q.api.endpoint` contains `/api/v1/administration` (or the configured ARF_CASCASE_URLS endpoint).
 
-**`apiToEditor()` roundtrip** (load form back into editor):
-```js
-if (!extraType || extraType === "administration") {
-  const maxLevel = (q.api || {}).max_level;
-  return {
-    ...snakeToCamelQuestion(q),
-    type: "cascade",
-    api: {
-      endpoint: "/api/v1/administration",
-      initial: 1,
-      list: "children",
-      ...(maxLevel ? { max_level: maxLevel } : {}),
-    },
-  };
-}
-```
-
----
-
-### D-3: `extra.type` Absent = Administration (Backward Compat)
-
-**Context**: Old rows have `extra = null` (no marker). After migration they will have
-`extra = {"type": "administration"}`. But during any overlap window, code must handle null.
-
-**Decision**: Treat `extra.type` absent/null as equivalent to `"administration"`.
-
+**`_normalize_editor_payload` transform** (TODO — Part 1 pending):
 ```python
-extra_type = (instance.extra or {}).get("type")
-is_admin = extra_type in ("administration", None)
+ADMIN_ENDPOINT_RE = re.compile(r'/api/v1/administrations?')
+if (q.get("type") == "cascade"
+        and ADMIN_ENDPOINT_RE.search((q.get("api") or {}).get("endpoint", ""))):
+    max_level = (q.get("api") or {}).get("max_level")
+    q["extra"] = {**(q.get("extra") or {}), "type": "administration"}
+    q["api"] = {"max_level": max_level} if max_level else None
 ```
 
-This matches the akvo-form-service convention.
-
----
-
-### D-4: Shared Helper Function for `get_type()`
-
-Three serializers (`ListQuestionSerializer`, `FormDataListQuestionSerializer`,
-`FormDetailQuestionSerializer`) all need the same type-resolution logic.
-
-**Decision**: Extract a module-level `_question_type_str(instance)` helper.
-
-```python
-def _question_type_str(instance: Questions) -> str:
-    if instance.type == QuestionTypes.cascade:
-        extra_type = (instance.extra or {}).get("type")
-        if extra_type == "entity":
-            return "entity"
-        return "administration"  # None or "administration"
-    return QuestionTypes.FieldStr.get(instance.type, "").lower()
-```
+**`_to_editor_format` roundtrip** (load form back into editor — already implemented):
+Administration questions are stored as `type=cascade` + `extra.type="administration"` with `api=null` (or `{max_level: N}`). `_to_editor_format` does NOT reconstruct the `api.endpoint` — that is done at request time by `get_api()` in the serializer, which generates the user-scoped dynamic endpoint. The editor receives `api.endpoint = "/api/v1/administration"` from `get_api()` via the serializer, not from `_to_editor_format`.
 
 ---
 
@@ -370,6 +319,41 @@ in the akvo-form-service reference implementation.
 **Decision**: Store them anyway — the model should accept the full editor payload
 without silently dropping fields. Downstream consumers (report generators, exports)
 can use them if needed.
+
+---
+
+### D-8: `variable_name` — Asymmetric Field Names in `akvo-react-form-editor`
+
+**Context**: `akvo-react-form-editor` uses **different key names** for the same field depending on direction:
+- **Read** (initialValue): editor reads from `question.variable`
+- **Write** (onSave payload): editor emits `variableName` (camelCase)
+
+This asymmetry is a library-level design — there is no way to change it.
+
+> **Update**: `form-builder-transform.js` was **deleted** (see [[FB-002]] D-15). The asymmetry is now handled entirely in the backend:
+
+**Transform chain** (backend-only):
+
+| Direction | Handler | Key used |
+|-----------|---------|----------|
+| Save (editor → API) | `_normalize_editor_payload`: `variableName` → `variable_name` via `_CAMEL_FIELDS`; then `variable` → `variable_name` explicit check | `variable_name` stored in DB |
+| Load (API → editor) | `_to_editor_format`: `variable_name` → `variable` | `variable` in response |
+
+```python
+# _normalize_editor_payload — handles both editor emissions
+# Editor may emit "variableName" (camelCase) or "variable" (after round-trip via _to_editor_format)
+for camel, snake in _CAMEL_FIELDS.items():          # "variableName" → "variable_name"
+    if camel in q and snake not in q:
+        q[snake] = q.pop(camel)
+if "variable" in q and "variable_name" not in q:    # "variable" → "variable_name"
+    q["variable_name"] = q.pop("variable")
+
+# _to_editor_format — rename for editor initialValue
+if "variable_name" in q:
+    q["variable"] = q.pop("variable_name")
+```
+
+`_CAMEL_FIELDS` (`"variableName": "variable_name"`) handles the first-time save from the editor. The `variable` → `variable_name` explicit check handles the round-trip case (editor loaded via `_to_editor_format`, which uses `variable`, and then saved).
 
 ---
 
@@ -434,12 +418,11 @@ can use them if needed.
 | `backend/source/forms/unused/100.prod.json` | Same |
 | `backend/source/forms/unused/1000.prod.json` | Same |
 | `backend/source/forms/unused/1710731783596.prod.json` | Same |
-| `backend/api/v1/v1_forms/serializers.py` | Add `_question_type_str()` helper; fix `get_type()` ×3, `get_api()`, `get_cascades()`; add 7 new fields to `FormDetailQuestionSerializer`; add `description` to `FormDetailSerializer` |
-| `backend/api/v1/v1_forms/views.py` | Extend `_normalize_editor_payload` with full camelCase mapping |
+| `backend/api/v1/v1_forms/views.py` | Extend `_normalize_editor_payload` with full camelCase mapping + endpoint detection for administration questions (TODO — Part 1 pending); `_to_editor_format` + `_SNAKE_TO_CAMEL_Q` already added |
 | `backend/api/v1/v1_forms/functions.py` | Propagate new fields in `_save_questions`, `duplicate_form`, `restore_from_snapshot`, `_build_schema_snapshot`; add `description` to `save_form` |
 | `backend/api/v1/v1_mobile/views.py` | Filter administration question by `extra__type` |
 | `backend/api/v1/v1_jobs/validate_upload.py` | Only run `validate_administration()` for non-entity cascade |
-| `frontend/src/lib/form-builder-transform.js` | Create: endpoint detection in `editorToApi()`, roundtrip in `apiToEditor()` (FB-003 branch) |
+| `frontend/src/lib/form-builder-transform.js` | **Deleted** — transforms moved entirely to backend; do NOT recreate |
 
 ---
 
@@ -456,7 +439,6 @@ can use them if needed.
 
 | Test Type | Coverage |
 |-----------|----------|
-| Unit | `_question_type_str()` with all `extra.type` variants |
 | Unit | `get_api()` returns correct structure for admin vs entity vs generic cascade |
 | Unit | `get_cascades()` returns correct SQLite sources per `extra.type` |
 | Unit | `_normalize_editor_payload` converts all camelCase fields correctly |

@@ -5,7 +5,9 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from api.v1.v1_forms.models import Forms, Questions
+from api.v1.v1_forms.models import (
+    Forms, Questions, QuestionGroup, QuestionOptions,
+)
 from api.v1.v1_forms.constants import QuestionTypes, FormTypes
 from api.v1.v1_users.models import SystemUser
 
@@ -357,3 +359,104 @@ class ManageFormCreateTestCase(TestCase):
         q = Questions.objects.filter(form_id=form_id).first()
         self.assertEqual(q.rule["minDate"], "2020-01-01")
         self.assertEqual(q.rule["maxDate"], "2029-01-01")
+
+    def test_create_with_translation_fields(self):
+        """POST stores languages, default_language, and translations at
+        form, group, question, and option levels."""
+        payload = {
+            "name": "Multilingual Form",
+            "type": 1,
+            "languages": ["en", "id"],
+            "default_language": "en",
+            "translations": [{"language": "id", "name": "Formulir"}],
+            "question_group": [
+                {
+                    "id": None,
+                    "name": "group_one",
+                    "label": "Group One",
+                    "order": 1,
+                    "repeatable": False,
+                    "repeat_text": None,
+                    "translations": [{"language": "id", "name": "Grup Satu"}],
+                    "question": [
+                        {
+                            "id": None,
+                            "order": 1,
+                            "label": "Choose one",
+                            "name": "choose_one",
+                            "type": "option",
+                            "meta": False,
+                            "required": True,
+                            "rule": None,
+                            "dependency": None,
+                            "dependency_rule": "AND",
+                            "api": None,
+                            "extra": None,
+                            "tooltip": None,
+                            "fn": None,
+                            "pre": None,
+                            "display_only": False,
+                            "translations": [
+                                {"language": "id", "name": "Pilih satu"}
+                            ],
+                            "option": [
+                                {
+                                    "order": 1,
+                                    "label": "Yes",
+                                    "value": "yes",
+                                    "other": False,
+                                    "color": None,
+                                    "translations": [
+                                        {"language": "id", "name": "Ya"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        # Form-level fields in response
+        self.assertEqual(data["languages"], ["en", "id"])
+        self.assertEqual(data["defaultLanguage"], "en")
+        self.assertEqual(
+            data["translations"], [{"language": "id", "name": "Formulir"}]
+        )
+        # Group-level
+        grp = data["question_group"][0]
+        self.assertEqual(
+            grp["translations"], [{"language": "id", "name": "Grup Satu"}]
+        )
+        # Question-level
+        q = grp["question"][0]
+        self.assertEqual(
+            q["translations"], [{"language": "id", "name": "Pilih satu"}]
+        )
+        # Option-level
+        self.assertEqual(
+            q["option"][0]["translations"], [{"language": "id", "name": "Ya"}]
+        )
+        # Verify DB persistence
+        form = Forms.objects.get(pk=data["id"])
+        self.assertEqual(form.languages, ["en", "id"])
+        self.assertEqual(form.default_language, "en")
+        group_obj = QuestionGroup.objects.filter(form=form).first()
+        self.assertEqual(
+            group_obj.translations, [{"language": "id", "name": "Grup Satu"}]
+        )
+        q_obj = Questions.objects.filter(form=form).first()
+        self.assertEqual(
+            q_obj.translations, [{"language": "id", "name": "Pilih satu"}]
+        )
+        opt_obj = QuestionOptions.objects.filter(question=q_obj).first()
+        self.assertEqual(
+            opt_obj.translations, [{"language": "id", "name": "Ya"}]
+        )

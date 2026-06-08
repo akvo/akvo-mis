@@ -477,3 +477,78 @@ class ManageFormPublishTestCase(TestCase):
             **self.header,
         )
         self.assertEqual(res.status_code, 404)
+
+    def test_snapshot_includes_translation_fields(self):
+        """Publish captures languages, default_language, translations in schema
+        at form, group, and question levels."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload.update({
+            "languages": ["en", "id"],
+            "default_language": "en",
+            "translations": [{"language": "id", "name": "Formulir CRUD"}],
+        })
+        payload["question_group"][0]["translations"] = [
+            {"language": "id", "name": "Info Rumah Tangga"}
+        ]
+        payload["question_group"][0]["question"][0]["translations"] = [
+            {"language": "id", "name": "Kepala Keluarga"}
+        ]
+        form_id = self._create_form(payload)
+        self._publish_form(form_id)
+        pv = FormPublishedVersion.objects.get(form_id=form_id, version=1)
+        schema = pv.schema
+        self.assertEqual(schema.get("languages"), ["en", "id"])
+        self.assertEqual(schema.get("default_language"), "en")
+        self.assertEqual(
+            schema.get("translations"),
+            [{"language": "id", "name": "Formulir CRUD"}],
+        )
+        grp = schema["question_group"][0]
+        self.assertEqual(
+            grp.get("translations"),
+            [{"language": "id", "name": "Info Rumah Tangga"}],
+        )
+        self.assertEqual(
+            grp["question"][0].get("translations"),
+            [{"language": "id", "name": "Kepala Keluarga"}],
+        )
+
+    def test_duplicate_preserves_translation_fields(self):
+        """Duplicate deep-copies languages, default_language, and translations
+        at form, group, and question levels."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload.update({
+            "languages": ["en", "id"],
+            "default_language": "en",
+            "translations": [{"language": "id", "name": "Formulir CRUD"}],
+        })
+        payload["question_group"][0]["translations"] = [
+            {"language": "id", "name": "Info Rumah Tangga"}
+        ]
+        payload["question_group"][0]["question"][0]["translations"] = [
+            {"language": "id", "name": "Kepala Keluarga"}
+        ]
+        form_id = self._create_form(payload)
+        res = self.client.post(
+            f"/api/v1/manage/forms/{form_id}/duplicate",
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        dup = res.json()
+        self.assertNotEqual(dup["id"], form_id)
+        self.assertEqual(dup["languages"], ["en", "id"])
+        self.assertEqual(dup["defaultLanguage"], "en")
+        self.assertEqual(
+            dup["translations"],
+            [{"language": "id", "name": "Formulir CRUD"}],
+        )
+        grp = dup["question_group"][0]
+        self.assertEqual(
+            grp["translations"],
+            [{"language": "id", "name": "Info Rumah Tangga"}],
+        )
+        self.assertEqual(
+            grp["question"][0]["translations"],
+            [{"language": "id", "name": "Kepala Keluarga"}],
+        )

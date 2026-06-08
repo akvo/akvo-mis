@@ -42,6 +42,11 @@ class Forms(models.Model):
         null=True,
         blank=True,
     )
+    languages = models.JSONField(default=None, null=True)
+    default_language = models.CharField(
+        max_length=255, null=True, default=None
+    )
+    translations = models.JSONField(default=None, null=True)
     # Points to the snapshot currently used for new data collections.
     # Null while the form is a draft (no published version yet).
     # Updated by publish (auto) and activate (manual rollback).
@@ -72,6 +77,7 @@ class QuestionGroup(SoftDeletes):
     repeat_text = models.CharField(
         max_length=255, default=None, null=True
     )
+    translations = models.JSONField(default=None, null=True)
 
     def __str__(self):
         return self.name
@@ -125,6 +131,7 @@ class Questions(SoftDeletes):
     pre = models.JSONField(default=None, null=True)
     display_only = models.BooleanField(default=False, null=True)
     variable_name = models.CharField(max_length=255, null=True, default=None)
+    translations = models.JSONField(default=None, null=True)
     hidden_string = models.BooleanField(default=None, null=True)
     required_double_entry = models.BooleanField(default=False)
     disabled = models.BooleanField(default=False, null=True)
@@ -182,6 +189,7 @@ class QuestionOptions(models.Model):
     value = models.CharField(max_length=255, default=None, null=True)
     other = models.BooleanField(default=False)
     color = models.TextField(default=None, null=True)
+    translations = models.JSONField(default=None, null=True)
 
     def __str__(self):
         return self.value

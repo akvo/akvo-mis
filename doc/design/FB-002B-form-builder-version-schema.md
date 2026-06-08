@@ -87,9 +87,14 @@ Goals:
 - [x] `Forms.active_version` FK added (nullable)
 - [x] `FormData.published_version` FK added (nullable, backward compat)
 - [x] `_build_schema_snapshot()`, `create_published_version()`, `store_version_snapshot()`, `restore_from_snapshot()` in `functions.py`
+- [x] `_build_schema_snapshot()` stores lowercase type strings (`.lower()`)
+- [x] `_build_schema_snapshot()` includes `variable_name` and `description` in snapshot
+- [x] `restore_from_snapshot()` maps `entity`/`administration` type strings → `cascade` via `_TYPE_ALIAS`
+- [x] `_form_detail_from_snapshot()` returns `variable_name` per question and `description` at form level
 - [x] `FormPublishedVersionSerializer` (replaces `FormVersionSerializer`)
 - [x] `GET .../versions` returns `FormPublishedVersion` records
 - [x] `POST .../activate/{version_id}` calls `restore_from_snapshot`
+- [x] `_to_editor_format()` applied to all `FormBuilderViewSet` responses (camelCase conversion for editor round-trip)
 - [ ] `GET /form/{id}` and `GET /form/web/{id}` return 404 when `active_version` is null (Group F)
 - [ ] `FormData.published_version` set on submission (Group G)
 
@@ -201,6 +206,7 @@ No data migration needed — `active_version` and `published_version` start null
 {
   "version": 2,
   "name": "Household Survey 2026",
+  "description": null,
   "approval_instructions": null,
   "question_group": [
     {
@@ -228,6 +234,7 @@ No data migration needed — `active_version` and `published_version` start null
           "fn": null,
           "pre": null,
           "display_only": false,
+          "variable_name": null,
           "option": []
         }
       ]
@@ -237,6 +244,8 @@ No data migration needed — `active_version` and `published_version` start null
 ```
 
 `disable_delete` is intentionally absent — that is a live-editor concern.
+
+**Type strings in snapshots are always lowercase** (e.g., `"input"`, `"cascade"`). `_build_schema_snapshot` applies `.lower()` to `QuestionTypes.FieldStr.get(q.type)`. `store_version_snapshot` receives types already lowercased via `editorToApi()`. Both snapshot creation paths are consistent.
 
 ### Snapshot Creation Sources
 
@@ -353,6 +362,44 @@ This ensures any snapshot can be activated regardless of whether its question ID
 
 ---
 
+### D-8: `_build_schema_snapshot` — Lowercase Type Strings
+
+`QuestionTypes.FieldStr.get(q.type)` returns PascalCase strings (e.g., `"Cascade"`, `"Text"`). The snapshot stores `QuestionTypes.FieldStr.get(q.type, "").lower()` so type strings in snapshots are always lowercase and match what the editor expects for rendering.
+
+Without `.lower()`, `version_detail` would return `"Cascade"` and the editor would fail to render questions because it only recognises lowercase type strings.
+
+---
+
+### D-9: `restore_from_snapshot` — Type Alias for `entity` and `administration`
+
+When activating a snapshot, `restore_from_snapshot` must convert snapshot type strings back to `QuestionTypes` integer constants via `getattr(QuestionTypes, type_str, None)`. But `"entity"` and `"administration"` are not attributes of `QuestionTypes` — only `"cascade"` is.
+
+**Fix**: A local alias dict maps both to `"cascade"` before the `getattr` lookup:
+
+```python
+_TYPE_ALIAS = {"entity": "cascade", "administration": "cascade"}
+raw_type = (q_data.get("type") or "").lower()
+q_type = getattr(QuestionTypes, _TYPE_ALIAS.get(raw_type, raw_type), None)
+if q_type is None:
+    continue
+```
+
+Without this, questions with `type="entity"` or `type="administration"` in a snapshot are silently skipped during restore, leaving the form with missing questions after activation.
+
+---
+
+### D-10: `_form_detail_from_snapshot` — Include `variable_name` and `description`
+
+`_form_detail_from_snapshot` builds a `FormDetailSerializer`-shaped response from the snapshot JSON for published form GET and version_detail endpoints.
+
+Both `variable_name` (per-question) and `description` (top-level form field) must be included:
+- `variable_name` is in each question dict from the snapshot
+- `description` is at the top level of the snapshot schema
+
+Without these, editing a published form would silently drop `variable_name` on every save (the editor round-trip loads the form via this function, clears the field, then saves it empty).
+
+---
+
 ## 6. Compatibility & Migration
 
 ### Backward Compatibility
@@ -380,7 +427,9 @@ This ensures any snapshot can be activated regardless of whether its question ID
 | `v1_data/migrations/0004_*` | `FormData.published_version` FK | ✅ |
 | `v1_forms/functions.py` | `_build_schema_snapshot`, `store_version_snapshot`, `create_published_version`, `restore_from_snapshot` | ✅ |
 | `v1_forms/serializers.py` | `deleted_at__isnull=True` on all querysets; `FormPublishedVersionSerializer`; `FormDetailSerializer.latest_version` | ✅ |
-| `v1_forms/views.py` | `_form_detail_from_snapshot`; `update` → `store_version_snapshot` for published; `retrieve` → latest snapshot; `publish` / `activate` / `unpublish` actions | ✅ |
+| `v1_forms/views.py` | `_form_detail_from_snapshot` (includes `variable_name` + `description`); `update` → `store_version_snapshot` for published; `retrieve` → latest snapshot; `publish` / `activate` / `unpublish` actions | ✅ |
+| `v1_forms/views.py` | `_to_editor_format()` + `_SNAKE_TO_CAMEL_Q` — camelCase conversion applied to all `FormBuilderViewSet` responses | ✅ |
+| `v1_forms/tasks.py` | `refresh_form_config()` — `clear_cache` + `generate_config` via `async_task` after publish | ✅ |
 | `v1_forms/views.py` | `web_form_details` → 404 when `active_version` null | ⏳ Group F |
 | `v1_data/views.py` | Set `published_version_id` on `FormData` create | ⏳ Group G |
 

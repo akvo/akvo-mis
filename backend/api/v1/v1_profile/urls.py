@@ -5,6 +5,7 @@ from api.v1.v1_profile.views import (
     AdministrationViewSet,
     EntityDataViewSet,
     EntityViewSet,
+    PublicAdministrationViewSet,
     RoleViewSet,
     export_administrations_template,
     export_prefilled_administrations_template,
@@ -72,6 +73,24 @@ urlpatterns = [
             }
         ),
         name="administration-attribute-list",
+    ),
+    re_path(
+        r"^(?P<version>(v1))/public/administrations/(?P<pk>[0-9]+)",
+        PublicAdministrationViewSet.as_view(
+            {
+                "get": "retrieve",
+            }
+        ),
+        name="public-administrations-detail",
+    ),
+    re_path(
+        r"^(?P<version>(v1))/public/administrations",
+        PublicAdministrationViewSet.as_view(
+            {
+                "get": "list",
+            }
+        ),
+        name="public-administrations-list",
     ),
     re_path(
         r"^(?P<version>(v1))/administrations/(?P<pk>[0-9]+)",

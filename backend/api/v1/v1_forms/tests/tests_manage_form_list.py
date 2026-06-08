@@ -144,7 +144,7 @@ class ManageFormListTestCase(TestCase):
         self.assertEqual(res.status_code, 404)
 
     def test_get_form_disable_delete_in_response(self):
-        """Questions with no answers return disable_delete=null."""
+        """Questions with no answers return disableDelete=null."""
         create_res = self.client.post(
             "/api/v1/manage/forms",
             json.dumps(FORM_PAYLOAD),
@@ -154,4 +154,4 @@ class ManageFormListTestCase(TestCase):
         form_id = create_res.json()["id"]
         res = self.client.get(f"/api/v1/manage/forms/{form_id}", **self.header)
         q = res.json()["question_group"][0]["question"][0]
-        self.assertIsNone(q.get("disable_delete"))
+        self.assertIsNone(q.get("disableDelete"))

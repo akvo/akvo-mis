@@ -91,6 +91,10 @@ previous_version = models.ForeignKey(
     null=True,
     blank=True,
 )
+# Multilingual support (matches akvo-form-service reference pattern)
+languages = models.JSONField(default=None, null=True)
+default_language = models.CharField(max_length=255, null=True, default=None)
+translations = models.JSONField(default=None, null=True)
 ```
 
 `previous_version` is separate from `parent` (monitoring ↔ registration linkage):
@@ -100,9 +104,39 @@ previous_version = models.ForeignKey(
 | `parent` | Registration ↔ Monitoring relationship (form type linkage) |
 | `previous_version` | Version chain (form evolution — set on `duplicate`, not on PUT) |
 
+### Translation Fields (all `JSONField`, `null=True`)
+
+Added to every level that carries user-visible text, matching the `akvo-form-service` reference:
+
+| Model | New fields |
+|---|---|
+| `Forms` | `languages`, `default_language`, `translations` |
+| `QuestionGroup` | `translations` |
+| `Questions` | `translations` |
+| `QuestionOptions` | `translations` |
+
+`translations` stores a JSON array of per-language overrides:
+```json
+// Forms.translations
+[{"language": "id", "name": "Survei Rumah Tangga", "description": "..."}]
+
+// QuestionGroup.translations
+[{"language": "id", "name": "Informasi Rumah Tangga"}]
+
+// Questions.translations
+[{"language": "id", "name": "Nama Kepala Keluarga", "short_label": "Kepala KK"}]
+
+// QuestionOptions.translations
+[{"language": "id", "name": "Laki-laki"}]
+```
+
+`tooltip` already embeds `translations` as `{"text": "...", "translations": [...]}` — unchanged.
+
+The editor payload uses `defaultLanguage` (camelCase); `_normalize_editor_payload` maps it to `default_language` before `save_form`.
+
 ### Migration
 
-`0007_forms_previous_version_forms_published_at_and_more.py` — sets `default=2` (PUBLISHED) with `preserve_default=False` so all existing forms stay live.
+Single migration covers all fields. Existing rows default to `null` for all translation fields.
 
 ---
 
@@ -139,7 +173,11 @@ previous_version = models.ForeignKey(
 ```json
 {
   "name": "Household Survey 2026",
+  "description": null,
   "type": "registration",
+  "defaultLanguage": "en",
+  "languages": ["en", "id"],
+  "translations": [{"language": "id", "name": "Survei Rumah Tangga 2026"}],
   "question_group": [
     {
       "id": null,
@@ -148,6 +186,7 @@ previous_version = models.ForeignKey(
       "order": 1,
       "repeatable": false,
       "repeat_text": null,
+      "translations": [{"language": "id", "name": "Informasi Rumah Tangga"}],
       "question": [
         {
           "id": null,
@@ -163,10 +202,12 @@ previous_version = models.ForeignKey(
           "dependency_rule": "AND",
           "api": null,
           "extra": null,
-          "tooltip": null,
+          "tooltip": {"text": "Enter full name", "translations": [{"language": "id", "text": "Masukkan nama lengkap"}]},
           "fn": null,
           "pre": null,
           "display_only": false,
+          "variable_name": null,
+          "translations": [{"language": "id", "name": "Nama Kepala Keluarga"}],
           "option": []
         }
       ]
@@ -177,19 +218,25 @@ previous_version = models.ForeignKey(
 
 - `type`: `1`/`2` (int) or `"registration"`/`"monitoring"` (string); defaults to `1` if omitted
 - `"image"` is the only accepted type string for photo questions (`"photo"` rejected)
-- `"entity"` is **not** a valid type — send `type: "cascade"` with `extra: {"type": "entity"}`
+- `"entity"` is **not** a valid top-level type — send `type: "cascade"` with `extra: {"type": "entity"}`
+- `"administration"` is **not** a valid top-level type — send `type: "cascade"` with `extra: {"type": "administration"}`
+- Frontend `editorToApi()` handles both automatically via `EDITOR_TYPE_ALIASES`
 
-### Response Format (`FormDetailSerializer`)
+### Response Format (`FormDetailSerializer` + `_to_editor_format`)
+
+All manage-endpoint responses are wrapped by `_to_editor_format()` before being returned. This converts question-level snake_case fields to camelCase so `akvo-react-form-editor` can use the response directly as `initialValue` without any frontend transform:
 
 ```json
 {
   "id": 42,
   "name": "Household Survey 2026",
   "version": 1,
+  "latest_version": 3,
   "status": "draft",
   "published_at": null,
   "active_version_id": null,
   "type": 1,
+  "defaultLanguage": "en",
   "approval_instructions": null,
   "parent": null,
   "question_group": [
@@ -197,15 +244,19 @@ previous_version = models.ForeignKey(
       "id": 1,
       "name": "household_information",
       "question": [
-        { "id": 10, "type": "input", "label": "Head of Household Name", "disable_delete": null },
-        { "id": 11, "type": "number", "label": "Age", "disable_delete": true }
+        {
+          "id": 10, "type": "input", "label": "Head of Household Name",
+          "variable": "var_hoh", "shortLabel": null, "displayOnly": false,
+          "dependencyRule": "AND", "disableDelete": null
+        },
+        { "id": 11, "type": "number", "label": "Age", "disableDelete": true }
       ]
     }
   ]
 }
 ```
 
-`disable_delete: true` when answers exist (follows akvo-form-service pattern — editor disables delete button).
+`disableDelete: true` when answers exist (follows akvo-form-service pattern — editor disables delete button). Fields that remain snake_case at the group/form level (`question_group`, `repeat_text`, `published_at`, etc.) are intentionally unchanged — `_to_editor_format` only converts question-level fields and `default_language`.
 
 ### PUT Behavior by Status
 
@@ -255,6 +306,9 @@ stateDiagram-v2
 | `duplicate_form(original_form)` | Deep copy as new DRAFT; atomic |
 | `validate_form_payload(data, partial=False)` | Return list of error strings before touching DB |
 | `_form_detail_from_snapshot(form, pv)` | Build `FormDetailSerializer`-shaped response from snapshot JSON (batch `disable_delete` check) |
+| `_normalize_editor_payload(data)` | Translate editor camelCase → snake_case; `variable` → `variable_name`; `questionGroups` → `question_group`; `photo` → `image` |
+| `_to_editor_format(data)` | Inverse of `_normalize_editor_payload`; convert manage-endpoint response to editor-compatible camelCase (`variable_name` → `variable`, `disable_delete` → `disableDelete`, `default_language` → `defaultLanguage`, etc.) Applied to all `FormBuilderViewSet` responses so the editor can use GET responses directly as `initialValue` |
+| `refresh_form_config()` (tasks.py) | `call_command("clear_cache")` + `call_command("generate_config")` — dispatched as `async_task` after publish so frontend `FormDropdown` and form renderer see the updated form list without blocking the response |
 
 ---
 
@@ -361,6 +415,38 @@ Editor emits `null` for absent fields. `q_data.get("dependency_rule", "AND")` do
 
 ---
 
+### D-14: `dependencyRule` Added to `_CAMEL_FIELDS`
+
+`_CAMEL_FIELDS` maps camelCase editor keys → snake_case backend keys in `_normalize_editor_payload`. `dependencyRule` was initially missing; when a form is loaded (GET returns `dependencyRule` via `_to_editor_format`) and immediately PUT back, the payload contains `dependencyRule` not `dependency_rule`. Without this mapping the PUT would silently drop the field.
+
+**Decision**: Add `"dependencyRule": "dependency_rule"` to `_CAMEL_FIELDS`.
+
+---
+
+### D-15: `_to_editor_format` — Moves Transform Logic to Backend
+
+Previously `form-builder-transform.js` in the frontend handled camelCase↔snake_case conversion for the editor (`editorToApi`, `apiToEditor`). This file was **deleted** after it became clear the backend can do the same work once and serve any client.
+
+**Decision**: Backend applies `_to_editor_format(data)` to all manage-endpoint responses.  
+- `variable_name` → `variable` (editor reads `question.variable`)  
+- `default_language` → `defaultLanguage`  
+- All other question snake_case fields → camelCase via `_SNAKE_TO_CAMEL_Q`
+
+**Impact**: Frontend `FormBuilderCreate` and `FormBuilderEdit` send editor output directly to backend and use GET responses directly as `initialValue` — no transformation code in JS.
+
+---
+
+### D-16: `async_task` for Cache/Config Invalidation After Publish
+
+Calling `python manage.py clear_cache && python manage.py generate_config` synchronously in the publish handler blocks the HTTP response and is ~1–2 s of file I/O.
+
+**Decision**: `api.v1.v1_forms.tasks.refresh_form_config()` calls both commands sequentially. The publish action dispatches it via `async_task("api.v1.v1_forms.tasks.refresh_form_config")` — the response returns immediately, the Django-Q worker picks up the task in the background.
+
+`clear_cache` invalidates the Django cache so `GET /form/web/{id}` serves fresh data.  
+`generate_config` regenerates `source/config/config.min.js` so `window.forms` in `FormDropdown.js` reflects the new published form.
+
+---
+
 ### D-12: Publish / Unpublish via Existing `status` Field — No New Column
 
 **`unpublish` is a compound action** (atomic):
@@ -442,10 +528,12 @@ See [[FB-002A]] for the full `administration`/`cascade`/`entity` semantic mappin
 | `backend/api/v1/v1_forms/migrations/0007_*.py` | Add fields; `status` default=2 |
 | `backend/api/v1/v1_forms/functions.py` | New file: all helper functions |
 | `backend/api/v1/v1_forms/serializers.py` | `ListFormSerializer`, `FormDetailSerializer`, `FormDetailQuestionSerializer`, `FormPublishedVersionSerializer` |
-| `backend/api/v1/v1_forms/views.py` | `FormBuilderViewSet`; `_normalize_editor_payload` |
+| `backend/api/v1/v1_forms/views.py` | `FormBuilderViewSet`; `_normalize_editor_payload`; `_to_editor_format`; `_SNAKE_TO_CAMEL_Q`; `async_task` dispatch in `publish` |
+| `backend/api/v1/v1_forms/tasks.py` | `refresh_form_config()` — `clear_cache` + `generate_config` via `call_command` |
 | `backend/api/v1/v1_forms/urls.py` | Add `/manage/forms/...` routes |
 | `backend/utils/custom_permissions.py` | `FormBuilderAccess` factory |
 | `backend/api/v1/v1_profile/constants.py` | Five `FeatureAccessTypes` |
+| `frontend/src/lib/form-builder-transform.js` | **Deleted** — transforms moved to backend (`_to_editor_format` / `_normalize_editor_payload`) |
 
 ---
 

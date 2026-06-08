@@ -519,3 +519,70 @@ class ManageFormUpdateTestCase(TestCase):
         self.assertEqual(data["latest_version"], 2)  # new snapshot created
         q = data["question_group"][0]["question"][0]
         self.assertEqual(q["label"], "Updated Label")
+
+    def test_update_form_level_translation_fields(self):
+        """PUT updates languages, default_language, translations on form."""
+        form_id = self._create_form()
+        payload = {
+            "languages": ["en", "fr"],
+            "default_language": "en",
+            "translations": [{"language": "fr", "name": "Formulaire CRUD"}],
+        }
+        res = self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["languages"], ["en", "fr"])
+        self.assertEqual(data["defaultLanguage"], "en")
+        self.assertEqual(
+            data["translations"],
+            [{"language": "fr", "name": "Formulaire CRUD"}],
+        )
+        form = Forms.objects.get(pk=form_id)
+        self.assertEqual(form.languages, ["en", "fr"])
+        self.assertEqual(form.default_language, "en")
+
+    def test_update_group_and_question_translations(self):
+        """PUT stores translations on group and question."""
+        form_id = self._create_form()
+        detail = self.client.get(
+            f"/api/v1/manage/forms/{form_id}", **self.header
+        ).json()
+        group = detail["question_group"][0]
+        q = group["question"][0]
+
+        payload = {
+            "question_group": [{
+                "id": group["id"],
+                "name": group["name"],
+                "label": group["label"],
+                "order": group["order"],
+                "repeatable": group["repeatable"],
+                "repeat_text": group["repeat_text"],
+                "translations": [{"language": "id", "name": "Grup Info"}],
+                "question": [{
+                    **q,
+                    "translations": [{"language": "id", "name": "Kepala KK"}],
+                    "option": [],
+                }],
+            }]
+        }
+        res = self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 200)
+        grp = res.json()["question_group"][0]
+        self.assertEqual(
+            grp["translations"], [{"language": "id", "name": "Grup Info"}]
+        )
+        self.assertEqual(
+            grp["question"][0]["translations"],
+            [{"language": "id", "name": "Kepala KK"}],
+        )

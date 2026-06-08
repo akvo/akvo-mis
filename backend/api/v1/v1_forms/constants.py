@@ -66,3 +66,16 @@ class FormStatus:
         draft: "draft",
         published: "published",
     }
+
+
+_CAMEL_FIELDS = {
+    "displayOnly": "display_only",
+    "dependencyRule": "dependency_rule",
+    "shortLabel": "short_label",
+    "variableName": "variable_name",
+    "hiddenString": "hidden_string",
+    "requiredDoubleEntry": "required_double_entry",
+    "addonBefore": "addon_before",
+    "addonAfter": "addon_after",
+    "dataApiUrl": "data_api_url",
+}

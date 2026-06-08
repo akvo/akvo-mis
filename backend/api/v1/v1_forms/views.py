@@ -15,6 +15,7 @@ from utils.custom_permissions import FormBuilderAccess, IsSuperAdmin
 from rest_framework.response import Response
 
 from django.db.models import Q
+from django_q.tasks import async_task
 from api.v1.v1_data.models import Answers, FormData
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.serializers import (
@@ -27,7 +28,11 @@ from api.v1.v1_forms.serializers import (
     FormDetailSerializer,
     FormUpdateRequestSerializer,
 )
-from api.v1.v1_forms.constants import FormStatus, FormTypes
+from api.v1.v1_forms.constants import (
+    FormStatus,
+    FormTypes,
+    _CAMEL_FIELDS,
+)
 from api.v1.v1_profile.constants import FeatureAccessTypes
 from api.v1.v1_forms.functions import (
     create_published_version,
@@ -95,6 +100,8 @@ def _form_detail_from_snapshot(form, pv):
                 "fn": q.get("fn"),
                 "pre": q.get("pre"),
                 "display_only": q.get("display_only", False),
+                "variable_name": q.get("variable_name"),
+                "translations": q.get("translations"),
                 "option": q.get("option", []),
                 "disable_delete": (
                     True if q["id"] in answered_q_ids else None
@@ -107,12 +114,14 @@ def _form_detail_from_snapshot(form, pv):
             "order": g.get("order"),
             "repeatable": g.get("repeatable", False),
             "repeat_text": g.get("repeat_text"),
+            "translations": g.get("translations"),
             "question": questions,
         })
 
     return {
         "id": form.id,
         "name": schema.get("name", form.name),
+        "description": schema.get("description"),
         "version": form.version,
         "latest_version": (
             latest_pv.version if latest_pv else form.version
@@ -125,8 +134,27 @@ def _form_detail_from_snapshot(form, pv):
         "type": form.type,
         "approval_instructions": schema.get("approval_instructions"),
         "parent": form.parent_id,
+        "languages": schema.get("languages"),
+        "default_language": schema.get("default_language"),
+        "translations": schema.get("translations"),
         "question_group": question_groups,
     }
+
+
+# Question fields that change casing between the editor (camelCase) and the
+# backend (snake_case) — used by both _normalize_editor_payload (in) and
+# _to_editor_format (out).
+_SNAKE_TO_CAMEL_Q = {
+    "short_label": "shortLabel",
+    "display_only": "displayOnly",
+    "dependency_rule": "dependencyRule",
+    "hidden_string": "hiddenString",
+    "required_double_entry": "requiredDoubleEntry",
+    "addon_before": "addonBefore",
+    "addon_after": "addonAfter",
+    "data_api_url": "dataApiUrl",
+    "disable_delete": "disableDelete",
+}
 
 
 def _normalize_editor_payload(data):
@@ -142,6 +170,9 @@ def _normalize_editor_payload(data):
     if not isinstance(data, dict):
         return data
     out = dict(data)
+    # defaultLanguage → default_language
+    if "defaultLanguage" in out and "default_language" not in out:
+        out["default_language"] = out.pop("defaultLanguage")
     # question_groups → question_group
     if "question_groups" in out and "question_group" not in out:
         out["question_group"] = out.pop("question_groups")
@@ -160,24 +191,51 @@ def _normalize_editor_payload(data):
             q = dict(q)
             if "options" in q and "option" not in q:
                 q["option"] = q.pop("options")
-            _CAMEL_FIELDS = {
-                "displayOnly": "display_only",
-                "shortLabel": "short_label",
-                "variableName": "variable_name",
-                "hiddenString": "hidden_string",
-                "requiredDoubleEntry": "required_double_entry",
-                "addonBefore": "addon_before",
-                "addonAfter": "addon_after",
-                "dataApiUrl": "data_api_url",
-            }
             for camel, snake in _CAMEL_FIELDS.items():
                 if camel in q and snake not in q:
                     q[snake] = q.pop(camel)
+            # variable → variable_name (editor uses 'variable'; inverse of
+            # _to_editor_format which renames variable_name → variable)
+            if "variable" in q and "variable_name" not in q:
+                q["variable_name"] = q.pop("variable")
             if q.get("type") == "photo":
                 q["type"] = "image"
             q.pop("questionGroupId", None)
             qs.append(q)
         g["question"] = qs
+        groups.append(g)
+    out["question_group"] = groups
+    return out
+
+
+def _to_editor_format(data):
+    """Convert API response dict to editor-compatible (camelCase) format.
+
+    Inverse of _normalize_editor_payload. Applied before returning responses
+    from form builder CRUD endpoints so the frontend can use the response
+    directly as editor initialValue without any client-side transform.
+    """
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    # default_language → defaultLanguage at form level
+    if "default_language" in out:
+        out["defaultLanguage"] = out.pop("default_language")
+    groups = []
+    for g in out.get("question_group", []):
+        g = dict(g)
+        questions = []
+        for q in g.get("question", []):
+            q = dict(q)
+            # variable_name → variable (editor convention)
+            if "variable_name" in q:
+                q["variable"] = q.pop("variable_name")
+            # snake_case → camelCase for standard question fields
+            for snake, camel in _SNAKE_TO_CAMEL_Q.items():
+                if snake in q:
+                    q[camel] = q.pop(snake)
+            questions.append(q)
+        g["question"] = questions
         groups.append(g)
     out["question_group"] = groups
     return out
@@ -465,7 +523,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(
-            FormDetailSerializer(instance=form).data,
+            _to_editor_format(FormDetailSerializer(instance=form).data),
             status=status.HTTP_201_CREATED,
         )
 
@@ -477,8 +535,12 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 or form.published_versions.order_by("-version").first()
             )
             if pv:
-                return Response(_form_detail_from_snapshot(form, pv))
-        return Response(FormDetailSerializer(instance=form).data)
+                return Response(
+                    _to_editor_format(_form_detail_from_snapshot(form, pv))
+                )
+        return Response(
+            _to_editor_format(FormDetailSerializer(instance=form).data)
+        )
 
     def update(self, request, *args, **kwargs):
         form = self.get_object()
@@ -494,7 +556,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             # changes (FR-4, D-6).
             pv = store_version_snapshot(form, data, request.user)
             form.refresh_from_db()
-            return Response(_form_detail_from_snapshot(form, pv))
+            return Response(
+                _to_editor_format(_form_detail_from_snapshot(form, pv))
+            )
 
         # Draft PUT: update live rows in-place.
         allow_delete_param = request.query_params.get("allow_delete")
@@ -512,7 +576,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 {"message": parts[0], "details": detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response(FormDetailSerializer(instance=updated).data)
+        return Response(
+            _to_editor_format(FormDetailSerializer(instance=updated).data)
+        )
 
     def destroy(self, request, *args, **kwargs):
         form = self.get_object()
@@ -558,7 +624,10 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             # only set on the very first publish, never overwritten.
             create_published_version(form, request.user, activate=True)
             form.refresh_from_db()
-        return Response(FormDetailSerializer(instance=form).data)
+        async_task("api.v1.v1_forms.tasks.refresh_form_config")
+        return Response(
+            _to_editor_format(FormDetailSerializer(instance=form).data)
+        )
 
     @extend_schema(
         tags=["Manage Forms"],
@@ -590,7 +659,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             form.refresh_from_db()
         form.status = FormStatus.draft
         form.save(update_fields=["status"])
-        return Response(FormDetailSerializer(instance=form).data)
+        return Response(
+            _to_editor_format(FormDetailSerializer(instance=form).data)
+        )
 
     @extend_schema(
         tags=["Manage Forms"],
@@ -602,7 +673,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         form = self.get_object()
         new_form = _duplicate_form(form)
         return Response(
-            FormDetailSerializer(instance=new_form).data,
+            _to_editor_format(FormDetailSerializer(instance=new_form).data),
             status=status.HTTP_201_CREATED,
         )
 
@@ -630,8 +701,8 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     def version_detail(self, request, version_id=None, *args, **kwargs):
         form = self.get_object()
         pv = get_object_or_404(form.published_versions, pk=version_id)
-        data = FormPublishedVersionSerializer(pv).data
-        data["schema"] = pv.schema
+        data = dict(FormPublishedVersionSerializer(pv).data)
+        data["schema"] = _to_editor_format(pv.schema)
         return Response(data)
 
     @extend_schema(
@@ -649,4 +720,6 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         # Validate the version belongs to this form.
         pv = get_object_or_404(form.published_versions, pk=version_id)
         restore_from_snapshot(form, pv)
-        return Response(FormDetailSerializer(instance=form).data)
+        return Response(
+            _to_editor_format(FormDetailSerializer(instance=form).data)
+        )

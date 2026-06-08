@@ -32,19 +32,7 @@ from utils.default_serializers import CommonDataSerializer, GeoFormatSerializer
 
 def _question_type_str(instance: Questions) -> str:
     """Return the semantic type string for a question.
-
-    Cascade questions are discriminated by extra.type:
-      "entity"        → "entity"
-      "administration" or absent → "administration"
-      anything else   → "cascade"
     """
-    if instance.type == QuestionTypes.cascade:
-        extra_type = (instance.extra or {}).get("type")
-        if extra_type == "entity":
-            return "entity"
-        if extra_type not in ("administration", None):
-            return "cascade"
-        return "administration"
     return QuestionTypes.FieldStr.get(instance.type, "").lower()
 
 
@@ -57,7 +45,7 @@ class ListOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuestionOptions
-        fields = ["id", "value", "label", "order", "color"]
+        fields = ["id", "value", "label", "order", "color", "translations"]
 
 
 class ListQuestionSerializer(serializers.ModelSerializer):
@@ -285,6 +273,7 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             "fn",
             "pre",
             "displayOnly",
+            "translations",
         ]
 
 
@@ -311,6 +300,7 @@ class ListQuestionGroupSerializer(serializers.ModelSerializer):
             "repeatable",
             "repeat_text",
             "order",
+            "translations",
         ]
 
 
@@ -378,6 +368,9 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
             "cascades",
             "approval_instructions",
             "parent",
+            "languages",
+            "default_language",
+            "translations",
             "question_group",
         ]
 
@@ -396,6 +389,7 @@ class ListFormSerializer(serializers.ModelSerializer):
             "version",
             "status",
             "parent",
+            "type",
         ]
 
 
@@ -619,6 +613,7 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
             "addon_after",
             "data_api_url",
             "center",
+            "translations",
             "option",
             "disable_delete",
         ]
@@ -639,7 +634,7 @@ class FormDetailQuestionGroupSerializer(serializers.ModelSerializer):
         model = QuestionGroup
         fields = [
             "id", "name", "label", "order",
-            "repeatable", "repeat_text", "question",
+            "repeatable", "repeat_text", "translations", "question",
         ]
 
 
@@ -678,6 +673,9 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "type",
             "approval_instructions",
             "parent",
+            "languages",
+            "default_language",
+            "translations",
             "question_group",
         ]
 

@@ -439,3 +439,70 @@ class SnapshotOnlyPutTestCase(TestCase):
         self.assertGreaterEqual(
             FormPublishedVersion.objects.filter(form_id=form_id).count(), 2
         )
+
+    # ─────────────────────────────────────────────
+    # Translation fields in snapshots
+    # ─────────────────────────────────────────────
+
+    def test_snapshot_inherits_translations_when_not_in_put_payload(self):
+        """PUT on a published form with only a name change creates a snapshot
+        that inherits languages, default_language, and translations from the
+        active version's schema."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload.update({
+            "languages": ["en", "id"],
+            "default_language": "en",
+            "translations": [{"language": "id", "name": "Formulir Snapshot"}],
+        })
+        form_id = self._create_form(payload)
+        self._publish(form_id)
+
+        # PUT with only a name change — no translation keys sent
+        self._put(form_id, {"name": "Renamed Snapshot Form"})
+
+        pv_latest = (
+            FormPublishedVersion.objects.filter(form_id=form_id)
+            .order_by("-version")
+            .first()
+        )
+        self.assertEqual(pv_latest.version, 2)
+        self.assertEqual(pv_latest.schema.get("languages"), ["en", "id"])
+        self.assertEqual(pv_latest.schema.get("default_language"), "en")
+        self.assertEqual(
+            pv_latest.schema.get("translations"),
+            [{"language": "id", "name": "Formulir Snapshot"}],
+        )
+
+    def test_activate_restores_translation_fields(self):
+        """Rolling back to v1 restores the form's translation fields."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload.update({
+            "languages": ["en", "id"],
+            "default_language": "en",
+            "translations": [{"language": "id", "name": "V1 Terjemahan"}],
+        })
+        form_id = self._create_form(payload)
+        self._publish(form_id)
+        v1 = FormPublishedVersion.objects.get(form_id=form_id, version=1)
+
+        # PUT with different languages → v2 snapshot
+        self._put(form_id, {
+            "languages": ["en", "fr"],
+            "translations": [{"language": "fr", "name": "V2 Traductions"}],
+        })
+        self._publish(form_id)   # activates v2
+
+        # Roll back to v1
+        res = self.client.post(
+            f"/api/v1/manage/forms/{form_id}/activate/{v1.id}",
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data.get("languages"), ["en", "id"])
+        self.assertEqual(data.get("defaultLanguage"), "en")
+        self.assertEqual(
+            data.get("translations"),
+            [{"language": "id", "name": "V1 Terjemahan"}],
+        )
