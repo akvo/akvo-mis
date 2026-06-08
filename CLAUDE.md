@@ -518,3 +518,30 @@ while maintaining data integrity through comprehensive validation on submit.
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
+
+## Design Documents
+
+Before implementing new features, check for existing design documents:
+
+### Location
+- **Design docs**: `doc/design/` - Approved feature designs
+- **Templates**: `doc/templates/` - Templates for new features
+- **Feature specs**: `doc/akvo-mis-initiative/` - Feature task breakdowns
+
+### Key Design Documents
+- `doc/design/FB-001-form-builder-data-architecture.md` - Form builder data model, versioning, and API design
+- `doc/templates/FEATURE_DESIGN_TEMPLATE.md` - Template for new feature designs
+
+### When to Create Design Documents
+Create a design document (using the template) BEFORE implementation when:
+- Adding new database models or fields
+- Designing new API endpoints
+- Making architectural decisions
+- Changes affect mobile sync or backward compatibility
+
+### Reading Design Documents
+When implementing a feature, always check if a design document exists:
+```bash
+ls doc/design/
+cat doc/design/<feature-name>.md
+```
