@@ -472,9 +472,12 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         form = self.get_object()
         if form.status == FormStatus.published:
-            latest_pv = form.published_versions.order_by("-version").first()
-            if latest_pv:
-                return Response(_form_detail_from_snapshot(form, latest_pv))
+            pv = (
+                form.active_version
+                or form.published_versions.order_by("-version").first()
+            )
+            if pv:
+                return Response(_form_detail_from_snapshot(form, pv))
         return Response(FormDetailSerializer(instance=form).data)
 
     def update(self, request, *args, **kwargs):

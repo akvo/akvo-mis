@@ -298,7 +298,9 @@ class ManageFormPublishTestCase(TestCase):
             content_type="application/json",
             **self.header,
         )
-        # Verify "age" is gone in current state
+        # Activate v2 (age removed) so GET reflects the new active state.
+        self._publish_form(form_id)
+        # Verify "age" is gone in current active state
         current = self.client.get(
             f"/api/v1/manage/forms/{form_id}", **self.header
         ).json()
@@ -360,7 +362,9 @@ class ManageFormPublishTestCase(TestCase):
             content_type="application/json",
             **self.header,
         )
-        # Verify "new_field" is present in current state
+        # Activate v2 (new_field added) so GET reflects the new active state.
+        self._publish_form(form_id)
+        # Verify "new_field" is present in current active state
         current = self.client.get(
             f"/api/v1/manage/forms/{form_id}", **self.header
         ).json()
@@ -386,13 +390,14 @@ class ManageFormPublishTestCase(TestCase):
         self._publish_form(form_id)           # v1 snapshot captures this name
         v1 = FormPublishedVersion.objects.get(form_id=form_id, version=1)
 
-        # Rename via PUT → creates v2 snapshot, active stays v1
+        # Rename via PUT → creates v2 snapshot, then publish to activate it.
         self.client.put(
             f"/api/v1/manage/forms/{form_id}",
             json.dumps({"name": "Renamed Form"}),
             content_type="application/json",
             **self.header,
         )
+        self._publish_form(form_id)   # activate v2 (name="Renamed Form")
         current = self.client.get(
             f"/api/v1/manage/forms/{form_id}", **self.header
         ).json()
@@ -415,6 +420,48 @@ class ManageFormPublishTestCase(TestCase):
         self.assertEqual(pv.schema.get("name"), "CRUD Test Form")
         self.assertIn("approval_instructions", pv.schema)
         self.assertIn("question_group", pv.schema)
+
+    def test_retrieve_returns_active_version_not_latest(self):
+        """
+        GET /manage/forms/{id} serves active_version snapshot, not latest.
+        """
+        form_id = self._create_form()
+        self._publish_form(form_id)   # v1 active
+        v1 = FormPublishedVersion.objects.get(form_id=form_id, version=1)
+
+        # Create v2 and v3 via PUT + publish
+        self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps({"name": "Version 2 Name"}),
+            content_type="application/json",
+            **self.header,
+        )
+        self._publish_form(form_id)   # activates v2
+        self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps({"name": "Version 3 Name"}),
+            content_type="application/json",
+            **self.header,
+        )
+        self._publish_form(form_id)   # activates v3
+
+        # Roll back to v1
+        self.client.post(
+            f"/api/v1/manage/forms/{form_id}/activate/{v1.id}",
+            content_type="application/json",
+            **self.header,
+        )
+        form = Forms.objects.get(pk=form_id)
+        self.assertEqual(form.active_version_id, v1.id)
+
+        # GET must return the v1 snapshot (name = "CRUD Test Form"),
+        # not the v3 snapshot (name = "Version 3 Name")
+        res = self.client.get(
+            f"/api/v1/manage/forms/{form_id}", **self.header
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["name"], "CRUD Test Form")
+        self.assertEqual(res.json()["active_version_id"], v1.id)
 
     def test_activate_wrong_form_returns_404(self):
         """POST activate with a version from a different form returns 404."""

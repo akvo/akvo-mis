@@ -157,8 +157,8 @@ class SnapshotOnlyPutTestCase(TestCase):
         )
 
     def test_update_published_retrieve_returns_snapshot_data(self):
-        """GET on a published form must return data from the latest snapshot,
-        not from stale live rows."""
+        """GET on a published form returns the active snapshot, so after PUT
+        (pending v2) + publish (activates v2) the new data is visible."""
         form_id = self._create_form()
         detail = self._get(form_id).json()
         self._publish(form_id)
@@ -172,6 +172,8 @@ class SnapshotOnlyPutTestCase(TestCase):
                 "question": [{**q, "label": "Snapshot Label", "option": []}],
             }],
         })
+        # Publish activates the pending v2 snapshot; GET must now reflect it.
+        self._publish(form_id)
 
         data = self._get(form_id).json()
         self.assertEqual(data["name"], "Snapshot Name")
@@ -182,11 +184,13 @@ class SnapshotOnlyPutTestCase(TestCase):
 
     def test_update_published_name_only_inherits_question_group(self):
         """PUT with only a name change (no question_group key) inherits
-        question_group from the active version's snapshot."""
+        question_group from the active version's snapshot. Publishing activates
+        the pending snapshot so GET reflects the new name."""
         form_id = self._create_form()
         self._publish(form_id)
 
         self._put(form_id, {"name": "Renamed Only"})
+        self._publish(form_id)
 
         data = self._get(form_id).json()
         self.assertEqual(data["name"], "Renamed Only")
