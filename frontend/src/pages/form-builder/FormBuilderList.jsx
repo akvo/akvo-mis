@@ -40,6 +40,21 @@ const FormBuilderList = () => {
 
   const columns = [
     {
+      title: text.formBuilderLastUpdatedCol,
+      dataIndex: "updated",
+      key: "updated",
+      render: (val, record) => {
+        const date = val || record.created;
+        if (!date) {
+          return "—";
+        }
+        return new Date(date).toLocaleString("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
+      },
+    },
+    {
       title: text.formBuilderNameCol,
       dataIndex: "name",
       key: "name",
@@ -58,6 +73,11 @@ const FormBuilderList = () => {
       render: (_, record) => (
         <FormStatusTag status={record.status} text={text} />
       ),
+    },
+    {
+      title: text.formBuilderVersionCol,
+      key: "version",
+      render: (_, record) => record.version || 1,
     },
     {
       title: text.formBuilderActionsCol,
