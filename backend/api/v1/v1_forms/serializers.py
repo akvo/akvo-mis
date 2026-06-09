@@ -603,6 +603,12 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
             return True
         return None
 
+    def to_representation(self, instance):
+        result = super().to_representation(instance)
+        return OrderedDict(
+            [(key, result[key]) for key in result if result[key] is not None]
+        )
+
     class Meta:
         model = Questions
         fields = [

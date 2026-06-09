@@ -82,7 +82,7 @@ def _form_detail_from_snapshot(form, pv):
             type_str = q.get("type", "").lower()
             if type_str == "administration":
                 type_str = "cascade"
-            questions.append({
+            q_dict = {
                 "id": q["id"],
                 "order": q.get("order"),
                 "name": q.get("name"),
@@ -106,7 +106,10 @@ def _form_detail_from_snapshot(form, pv):
                 "disable_delete": (
                     True if q["id"] in answered_q_ids else None
                 ),
-            })
+            }
+            questions.append(
+                {k: v for k, v in q_dict.items() if v is not None}
+            )
         question_groups.append({
             "id": g["id"],
             "name": g.get("name"),
