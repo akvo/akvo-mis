@@ -6,7 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import { useParams } from "react-router-dom";
-import { Button, Popconfirm, Space, Spin } from "antd";
+import { Button, Popconfirm, Space } from "antd";
 import { HistoryOutlined } from "@ant-design/icons";
 import WebformEditor from "akvo-react-form-editor";
 import "akvo-react-form-editor/dist/index.css";
@@ -44,6 +44,7 @@ const FormBuilderEdit = () => {
   const [activatingId, setActivatingId] = useState(null);
   const [previewLoadingId, setPreviewLoadingId] = useState(null);
   const [previewingVersion, setPreviewingVersion] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const draftTimerRef = useRef(null);
 
@@ -61,56 +62,48 @@ const FormBuilderEdit = () => {
   ];
 
   const loadForm = useCallback(
-    (skipDraftCheck) => {
-      return api.get(`/manage/forms/${formId}`).then((res) => {
-        const apiData = res.data;
-        setFormStatus(apiData.status);
-        setFormVersion(apiData.version);
-        setFormLatestVersion(apiData.latest_version);
-        setInitialValue(apiData);
+    async (skipDraftCheck) => {
+      const res = await api.get(`/manage/forms/${formId}`);
+      const apiData = res.data;
+      setFormStatus(apiData.status);
+      setFormVersion(apiData.version);
+      setFormLatestVersion(apiData.latest_version);
+      setInitialValue(apiData);
 
-        if (!skipDraftCheck) {
-          const raw = localStorage.getItem(draftKey(formId));
-          if (raw) {
-            try {
-              const draft = JSON.parse(raw);
-              // Reject draft if it was saved against a different form version
-              const versionStale =
-                typeof draft.formVersion !== "undefined" &&
-                draft.formVersion !== apiData.version;
-              if (
-                !versionStale &&
-                draft.savedAt > (apiData.published_at || "")
-              ) {
-                setInitialValue(draft.value);
-                setDraftRestored(true);
-                return;
-              }
-              if (versionStale) {
-                localStorage.removeItem(draftKey(formId));
-              }
-            } catch (_e) {
-              // ignore malformed draft
+      if (!skipDraftCheck) {
+        const raw = localStorage.getItem(draftKey(formId));
+        if (raw) {
+          try {
+            const draft = JSON.parse(raw);
+            // Reject draft if it was saved against a different form version
+            const versionStale =
+              typeof draft.formVersion !== "undefined" &&
+              draft.formVersion !== apiData.version;
+            if (!versionStale && draft.savedAt > (apiData.published_at || "")) {
+              setInitialValue(draft.value);
+              setDraftRestored(true);
+              return;
             }
+            if (versionStale) {
+              localStorage.removeItem(draftKey(formId));
+            }
+            setLoading(false);
+          } catch (_e) {
+            // ignore malformed draft
+            setLoading(false);
           }
+        } else {
+          setLoading(false);
         }
-        setInitialValue(apiData);
-      });
+      } else {
+        setLoading(false);
+      }
     },
     [formId]
   );
 
   useEffect(() => {
-    loadForm(false).catch((err) => {
-      console.error("Failed to load form", err);
-      setInitialValue({});
-    });
-
-    return () => {
-      if (draftTimerRef.current) {
-        clearTimeout(draftTimerRef.current);
-      }
-    };
+    loadForm();
   }, [loadForm]);
 
   const loadVersions = () => {
@@ -286,14 +279,6 @@ const FormBuilderEdit = () => {
     return text.formBuilderPublishedInfo;
   }, [formStatus, formVersion, formLatestVersion, text]);
 
-  if (initialValue === null) {
-    return (
-      <div style={{ textAlign: "center", paddingTop: 80 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
   const hasPendingSnapshot = formLatestVersion > formVersion;
   const showPublish = formStatus === "draft" || hasPendingSnapshot;
   const showUnpublish = formStatus === "published";
@@ -367,7 +352,7 @@ const FormBuilderEdit = () => {
 
           <div style={{ marginTop: 8 }}>
             <WebformEditor
-              initialValue={initialValue}
+              initialValue={loading ? null : initialValue}
               onSave={saving ? null : onSave}
               limitQuestionType={Object.keys(QUESTION_TYPES)}
               settingCascadeURL={ARF_CASCASE_URLS}
