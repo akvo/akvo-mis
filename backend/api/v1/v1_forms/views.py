@@ -145,7 +145,7 @@ def _form_detail_from_snapshot(form, pv):
 # backend (snake_case) — used by both _normalize_editor_payload (in) and
 # _to_editor_format (out).
 _SNAKE_TO_CAMEL_Q = {
-    "short_label": "shortLabel",
+    "short_label": "short_label",
     "display_only": "displayOnly",
     "dependency_rule": "dependencyRule",
     "hidden_string": "hiddenString",
@@ -200,6 +200,10 @@ def _normalize_editor_payload(data):
                 q["variable_name"] = q.pop("variable")
             if q.get("type") == "photo":
                 q["type"] = "image"
+            # tree type: editor sends option as a JSON string → tree_option
+            if isinstance(q.get("option"), str):
+                q["tree_option"] = q.pop("option")
+                q["option"] = []
             q.pop("questionGroupId", None)
             qs.append(q)
         g["question"] = qs
@@ -514,7 +518,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         try:
-            form = save_form(data)
+            form = save_form(data, user=request.user)
         except ValueError as exc:
             parts = str(exc).split("|", 1)
             detail = parts[1] if len(parts) > 1 else ""
@@ -568,7 +572,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 "allow_delete": allow_delete_param.lower() in ("true", "1"),
             }
         try:
-            updated = save_form(data, instance=form)
+            updated = save_form(data, instance=form, user=request.user)
         except ValueError as exc:
             parts = str(exc).split("|", 1)
             detail = parts[1] if len(parts) > 1 else ""
@@ -671,7 +675,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def duplicate(self, request, *args, **kwargs):
         form = self.get_object()
-        new_form = _duplicate_form(form)
+        new_form = _duplicate_form(form, user=request.user)
         return Response(
             _to_editor_format(FormDetailSerializer(instance=new_form).data),
             status=status.HTTP_201_CREATED,

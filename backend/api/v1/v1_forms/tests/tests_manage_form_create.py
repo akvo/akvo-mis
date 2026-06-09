@@ -460,3 +460,41 @@ class ManageFormCreateTestCase(TestCase):
         self.assertEqual(
             opt_obj.translations, [{"language": "id", "name": "Ya"}]
         )
+
+    # ─────────────────────────────────────────────
+    # Audit fields
+    # ─────────────────────────────────────────────
+
+    def test_create_sets_created_by(self):
+        """POST sets created_by to the authenticated user."""
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form = Forms.objects.get(pk=res.json()["id"])
+        self.assertEqual(form.created_by, self.admin)
+        self.assertIsNone(form.updated_by)
+        self.assertIsNotNone(form.created)
+        self.assertIsNone(form.updated)
+
+    def test_create_response_includes_audit_fields(self):
+        """POST response includes created, updated, created_by, updated_by."""
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertIn("created_by", data)
+        self.assertIn("updated_by", data)
+        self.assertIn("created", data)
+        self.assertIn("updated", data)
+        self.assertEqual(data["created_by"], self.admin.email)
+        self.assertIsNone(data["updated_by"])
+        self.assertIsNotNone(data["created"])
+        self.assertIsNone(data["updated"])

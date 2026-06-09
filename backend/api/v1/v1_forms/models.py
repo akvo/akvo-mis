@@ -58,6 +58,20 @@ class Forms(models.Model):
         blank=True,
         default=None,
     )
+    created = models.DateTimeField(auto_now_add=True, null=True)
+    updated = models.DateTimeField(default=None, null=True)
+    created_by = models.ForeignKey(
+        SystemUser,
+        on_delete=models.SET_NULL,
+        related_name="forms_created",
+        null=True,
+    )
+    updated_by = models.ForeignKey(
+        SystemUser,
+        on_delete=models.SET_NULL,
+        related_name="forms_updated",
+        null=True,
+    )
 
     def __str__(self):
         return self.name
@@ -139,6 +153,9 @@ class Questions(SoftDeletes):
     addon_after = models.CharField(max_length=50, null=True, default=None)
     data_api_url = models.CharField(max_length=255, null=True, default=None)
     center = models.JSONField(default=None, null=True)
+    tree_option = models.CharField(max_length=191, null=True, default=None)
+    limit = models.IntegerField(default=None, null=True)
+    columns = models.JSONField(default=None, null=True)
 
     def __str__(self):
         return f"[TYPE: {self.type}] {self.label}"

@@ -2,6 +2,7 @@ import re
 
 from django.db import transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 
 from api.v1.v1_data.models import Answers
 from api.v1.v1_forms.constants import FormStatus, FormTypes, QuestionTypes
@@ -108,6 +109,9 @@ def _save_questions(
             addon_after=q_data.get("addon_after"),
             data_api_url=q_data.get("data_api_url"),
             center=q_data.get("center"),
+            tree_option=q_data.get("tree_option"),
+            limit=q_data.get("limit"),
+            columns=q_data.get("columns"),
         )
         update_fields = {
             k: v for k, v in q_defaults.items()
@@ -158,7 +162,7 @@ def _save_questions(
 
 
 @transaction.atomic
-def save_form(data, instance=None):
+def save_form(data, instance=None, user=None):
     """Create or update a DRAFT form.
 
     On create (instance=None): name is required; type defaults to registration.
@@ -166,6 +170,7 @@ def save_form(data, instance=None):
     processed when the key is explicitly included in the payload.
     allow_delete=True skips the answered-question guard, allowing deletion
     of questions/groups that have existing answers (answers cascade).
+    user: sets created_by on create, updated_by + updated on update.
     """
     allow_delete = bool(data.get("allow_delete", False))
     type_val = data.get("type")
@@ -188,6 +193,7 @@ def save_form(data, instance=None):
             languages=data.get("languages"),
             default_language=data.get("default_language"),
             translations=data.get("translations"),
+            created_by=user,
         )
         form_id = data.get("id")
         if form_id:
@@ -210,6 +216,8 @@ def save_form(data, instance=None):
             instance.default_language = data["default_language"]
         if "translations" in data:
             instance.translations = data["translations"]
+        instance.updated_by = user
+        instance.updated = timezone.now()
         instance.save()
         form = instance
 
@@ -320,7 +328,7 @@ def save_form(data, instance=None):
 
 
 @transaction.atomic
-def duplicate_form(original_form):
+def duplicate_form(original_form, user=None):
     """Create a DRAFT deep copy of any form."""
     new_form = Forms.objects.create(
         name=f"{original_form.name} (Copy)",
@@ -333,6 +341,7 @@ def duplicate_form(original_form):
         languages=original_form.languages,
         default_language=original_form.default_language,
         translations=original_form.translations,
+        created_by=user,
     )
     for group in original_form.form_question_group.all().order_by("order"):
         new_group = QuestionGroup.objects.create(
@@ -622,6 +631,9 @@ def _build_schema_snapshot(form):
                 "addon_after": q.addon_after,
                 "data_api_url": q.data_api_url,
                 "center": q.center,
+                "tree_option": q.tree_option,
+                "limit": q.limit,
+                "columns": q.columns,
                 "option": [
                     {
                         "order": opt.order,
@@ -708,12 +720,16 @@ def store_version_snapshot(form, data, user):
         ),
     }
 
-    return FormPublishedVersion.objects.create(
+    pv = FormPublishedVersion.objects.create(
         form=form,
         version=next_version,
         schema=schema,
         published_by=user,
     )
+    form.updated_by = user
+    form.updated = timezone.now()
+    form.save(update_fields=["updated_by", "updated"])
+    return pv
 
 
 @transaction.atomic

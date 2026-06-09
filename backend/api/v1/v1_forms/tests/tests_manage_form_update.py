@@ -586,3 +586,86 @@ class ManageFormUpdateTestCase(TestCase):
             grp["question"][0]["translations"],
             [{"language": "id", "name": "Kepala KK"}],
         )
+
+    # ─────────────────────────────────────────────
+    # Audit fields
+    # ─────────────────────────────────────────────
+
+    def test_draft_put_sets_updated_by(self):
+        """PUT on draft sets updated_by and updated on the form."""
+        create_res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        form_id = create_res.json()["id"]
+        form = Forms.objects.get(pk=form_id)
+        self.assertIsNone(form.updated_by)
+        self.assertIsNone(form.updated)
+
+        put_res = self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps({"name": "Updated Name"}),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(put_res.status_code, 200)
+        form.refresh_from_db()
+        self.assertEqual(form.updated_by, self.admin)
+        self.assertIsNotNone(form.updated)
+
+    def test_draft_put_response_includes_audit_fields(self):
+        """PUT response includes all four audit fields."""
+        create_res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        form_id = create_res.json()["id"]
+        res = self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps({"name": "Updated Name"}),
+            content_type="application/json",
+            **self.header,
+        )
+        data = res.json()
+        self.assertIn("created_by", data)
+        self.assertIn("updated_by", data)
+        self.assertIn("created", data)
+        self.assertIn("updated", data)
+        self.assertEqual(data["updated_by"], self.admin.email)
+        self.assertIsNotNone(data["updated"])
+
+    def test_published_put_sets_updated_by(self):
+        """
+        PUT on published form (snapshot path) also sets updated_by/updated.
+        """
+        create_res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        form_id = create_res.json()["id"]
+        self.client.post(
+            f"/api/v1/manage/forms/{form_id}/publish",
+            content_type="application/json",
+            **self.header,
+        )
+        form = Forms.objects.get(pk=form_id)
+        initial_updated = form.updated
+
+        res = self.client.put(
+            f"/api/v1/manage/forms/{form_id}",
+            json.dumps({"name": "New Snapshot Name"}),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 200)
+        form.refresh_from_db()
+        self.assertEqual(form.updated_by, self.admin)
+        self.assertIsNotNone(form.updated)
+        # updated timestamp must have changed
+        self.assertNotEqual(form.updated, initial_updated)

@@ -58,6 +58,21 @@ Goal:
 - [x] All write operations wrapped in `@transaction.atomic`
 - [x] All new endpoints have test coverage
 - [x] `POST /api/v1/manage/forms` accepts optional `id` (and group/question `id`s) — uses editor-assigned IDs as PKs when provided (preserves dependency references across questions)
+- [x] `Forms.created`, `Forms.updated`, `Forms.created_by`, `Forms.updated_by` fields added via migration
+- [x] `save_form(data, instance=None, user=None)` sets `created_by` (create) / `updated_by` + `updated` (update)
+- [x] `store_version_snapshot(form, data, user)` sets `updated_by` + `updated` on the parent form
+- [x] List response includes `created`, `updated`, `created_by` (email), `updated_by` (email)
+- [x] Detail response includes all four audit fields
+- [x] `duplicate_form` copies `created_by` from the calling user; `updated_by=None`, `updated=None` on the clone
+- [x] All new audit-field paths have test coverage
+- [x] `QuestionTypes.tree = 16`, `QuestionTypes.table = 17` added to constants and `FieldStr`
+- [x] `Questions.tree_option`, `Questions.limit`, `Questions.columns` fields added via migration 0007
+- [x] `ListQuestionSerializer.get_option` returns `instance.tree_option` when `type == tree`
+- [x] `FormDetailQuestionSerializer.get_option` returns `instance.tree_option` when `type == tree`
+- [x] `columns` and `limit` included in both question serializer field lists
+- [x] `_normalize_editor_payload` converts string `option` → `tree_option` (editor sends tree structure as JSON string)
+- [x] `_save_questions` and `_build_schema_snapshot` include `tree_option`, `limit`, `columns`
+- [x] `get_answer_value` / `get_answer_history` in `utils/functions.py` handle `QuestionTypes.tree` (returns `answer.options`)
 
 ---
 
@@ -95,6 +110,21 @@ previous_version = models.ForeignKey(
 languages = models.JSONField(default=None, null=True)
 default_language = models.CharField(max_length=255, null=True, default=None)
 translations = models.JSONField(default=None, null=True)
+# Audit fields — matches FormData pattern
+created = models.DateTimeField(auto_now_add=True, null=True)
+updated = models.DateTimeField(default=None, null=True)
+created_by = models.ForeignKey(
+    SystemUser,
+    on_delete=models.SET_NULL,
+    related_name="forms_created",
+    null=True,
+)
+updated_by = models.ForeignKey(
+    SystemUser,
+    on_delete=models.SET_NULL,
+    related_name="forms_updated",
+    null=True,
+)
 ```
 
 `previous_version` is separate from `parent` (monitoring ↔ registration linkage):
@@ -103,6 +133,30 @@ translations = models.JSONField(default=None, null=True)
 |---|---|
 | `parent` | Registration ↔ Monitoring relationship (form type linkage) |
 | `previous_version` | Version chain (form evolution — set on `duplicate`, not on PUT) |
+
+**Audit field notes**:
+- `created` uses `auto_now_add=True, null=True` — null=True required so the migration can add the column without a default on existing rows
+- `updated` is set manually by `save_form()` and `store_version_snapshot()` (same as `FormData.updated`); NOT `auto_now` so it is not bumped by publish/status changes that don't touch the schema
+- `created_by` / `updated_by` are nullable — existing rows have no associated user; `on_delete=SET_NULL` (not CASCADE) so deleting a user doesn't delete forms
+- Both FKs set from `request.user` in the view; `save_form()` and `store_version_snapshot()` accept a `user` parameter
+
+### New Fields on `Questions`
+
+Three fields added to support `tree` and `table` question types:
+
+```python
+tree_option = models.CharField(max_length=191, null=True, default=None)
+limit = models.IntegerField(default=None, null=True)
+columns = models.JSONField(default=None, null=True)
+```
+
+| Field | Type | Purpose |
+|---|---|---|
+| `tree_option` | `CharField(191)` | Stores the tree hierarchy JSON (as string) for `tree` type questions; editor sends this as the `option` field |
+| `limit` | `IntegerField` | Optional numeric limit for constrained input types |
+| `columns` | `JSONField` | Column definitions for `table` type questions |
+
+**Tree type flow**: editor sends `option` as a JSON string → `_normalize_editor_payload` detects `isinstance(option, str)` and routes it to `tree_option`; serializer's `get_option` returns `tree_option` for rendering.
 
 ### Translation Fields (all `JSONField`, `null=True`)
 
@@ -239,6 +293,10 @@ All manage-endpoint responses are wrapped by `_to_editor_format()` before being 
   "defaultLanguage": "en",
   "approval_instructions": null,
   "parent": null,
+  "created": "2026-06-09T10:00:00Z",
+  "updated": "2026-06-09T11:30:00Z",
+  "created_by": "admin@example.com",
+  "updated_by": "editor@example.com",
   "question_group": [
     {
       "id": 1,
@@ -464,6 +522,18 @@ Without step 2, an admin who PUT three times (v1→v2→v3 snapshots, v1 active)
 
 ---
 
+### D-17: Audit Fields — `SET_NULL` on User Delete, Manual `updated`
+
+**Options**: (1) `on_delete=CASCADE` — delete the form when the user is deleted; (2) `on_delete=SET_NULL` — retain the form, null out the FK.
+
+**Decision**: `SET_NULL` — forms outlive their creators; losing audit trail is acceptable, losing form data is not.
+
+**`updated` is manual (not `auto_now`)**: `auto_now=True` bumps the timestamp on every `.save()` call, including status changes (publish, unpublish) that don't reflect a schema edit. Manual assignment in `save_form()` and `store_version_snapshot()` ensures `updated` means "last schema/content edit", separate from `published_at`.
+
+**`created_by` nullable**: Existing rows have no associated user; Django cannot backfill a real FK. `null=True, auto_now_add=True, null=True` on `created` for the same reason.
+
+---
+
 ### D-13: Server-Side Batching — No Frontend Chunking
 
 Production forms can have 100+ questions and 200+ options. All performance fixes are server-side. Frontend sends one complete payload per save.
@@ -500,6 +570,8 @@ Payload size (~75–150 KB) is well within Django's 2.5 MB `DATA_UPLOAD_MAX_MEMO
 | `signature` | `QuestionTypes.signature` | 12 | |
 | `geoshape` | `QuestionTypes.geoshape` | 14 | |
 | `geotrace` | `QuestionTypes.geotrace` | 15 | |
+| `tree` | `QuestionTypes.tree` | 16 | Tree select; `option` field holds JSON string (stored in `tree_option`) |
+| `table` | `QuestionTypes.table` | 17 | Table input; column definitions in `columns` field |
 
 See [[FB-002A]] for the full `administration`/`cascade`/`entity` semantic mapping.
 
@@ -532,6 +604,7 @@ See [[FB-002A]] for the full `administration`/`cascade`/`entity` semantic mappin
 | `backend/api/v1/v1_forms/tasks.py` | `refresh_form_config()` — `clear_cache` + `generate_config` via `call_command` |
 | `backend/api/v1/v1_forms/urls.py` | Add `/manage/forms/...` routes |
 | `backend/utils/custom_permissions.py` | `FormBuilderAccess` factory |
+| `backend/utils/functions.py` | `get_answer_value` / `get_answer_history` handle `tree` type |
 | `backend/api/v1/v1_profile/constants.py` | Five `FeatureAccessTypes` |
 | `frontend/src/lib/form-builder-transform.js` | **Deleted** — transforms moved to backend (`_to_editor_format` / `_normalize_editor_payload`) |
 

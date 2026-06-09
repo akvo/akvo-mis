@@ -70,6 +70,8 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             return ListOptionSerializer(
                 instance=instance.options.all(), many=True
             ).data
+        if instance.type == QuestionTypes.tree:
+            return instance.tree_option
         return None
 
     @extend_schema_field(OpenApiTypes.STR)
@@ -274,6 +276,8 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             "pre",
             "displayOnly",
             "translations",
+            "columns",
+            "limit",
         ]
 
 
@@ -377,9 +381,17 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
 
 class ListFormSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
+    created_by = serializers.SerializerMethodField()
+    updated_by = serializers.SerializerMethodField()
 
     def get_status(self, obj):
         return FormStatus.FieldStr.get(obj.status, "draft")
+
+    def get_created_by(self, obj):
+        return obj.created_by.email if obj.created_by else None
+
+    def get_updated_by(self, obj):
+        return obj.updated_by.email if obj.updated_by else None
 
     class Meta:
         model = Forms
@@ -390,6 +402,10 @@ class ListFormSerializer(serializers.ModelSerializer):
             "status",
             "parent",
             "type",
+            "created",
+            "updated",
+            "created_by",
+            "updated_by",
         ]
 
 
@@ -576,6 +592,8 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
         return _question_type_str(instance)
 
     def get_option(self, instance: Questions):
+        if instance.type == QuestionTypes.tree:
+            return instance.tree_option
         return ListOptionSerializer(
             instance=instance.options.all().order_by("order"), many=True
         ).data
@@ -614,6 +632,8 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
             "data_api_url",
             "center",
             "translations",
+            "columns",
+            "limit",
             "option",
             "disable_delete",
         ]
@@ -643,6 +663,8 @@ class FormDetailSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     question_group = serializers.SerializerMethodField()
     latest_version = serializers.SerializerMethodField()
+    created_by = serializers.SerializerMethodField()
+    updated_by = serializers.SerializerMethodField()
 
     def get_status(self, obj):
         return FormStatus.FieldStr.get(obj.status, "draft")
@@ -658,6 +680,12 @@ class FormDetailSerializer(serializers.ModelSerializer):
             ).order_by("order"),
             many=True,
         ).data
+
+    def get_created_by(self, obj):
+        return obj.created_by.email if obj.created_by else None
+
+    def get_updated_by(self, obj):
+        return obj.updated_by.email if obj.updated_by else None
 
     class Meta:
         model = Forms
@@ -676,6 +704,10 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "languages",
             "default_language",
             "translations",
+            "created",
+            "updated",
+            "created_by",
+            "updated_by",
             "question_group",
         ]
 

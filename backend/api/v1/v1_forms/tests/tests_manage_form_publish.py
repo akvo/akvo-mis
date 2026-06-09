@@ -552,3 +552,20 @@ class ManageFormPublishTestCase(TestCase):
             grp["question"][0]["translations"],
             [{"language": "id", "name": "Kepala Keluarga"}],
         )
+
+    def test_duplicate_sets_created_by(self):
+        """
+        Duplicate sets created_by to calling user; updated_by/updated null.
+        """
+        form_id = self._create_form()
+        res = self.client.post(
+            f"/api/v1/manage/forms/{form_id}/duplicate",
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        dup = Forms.objects.get(pk=res.json()["id"])
+        self.assertEqual(dup.created_by, self.admin)
+        self.assertIsNone(dup.updated_by)
+        self.assertIsNone(dup.updated)
+        self.assertIsNotNone(dup.created)

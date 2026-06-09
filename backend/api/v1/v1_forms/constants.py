@@ -13,6 +13,8 @@ class QuestionTypes:
     input = 13
     geoshape = 14
     geotrace = 15
+    tree = 16
+    table = 17
 
     FieldStr = {
         geo: "Geo",
@@ -29,6 +31,8 @@ class QuestionTypes:
         input: "Input",
         geoshape: "Geoshape",
         geotrace: "Geotrace",
+        tree: "Tree",
+        table: "Table",
     }
 
 
