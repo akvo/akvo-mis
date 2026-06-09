@@ -53,7 +53,6 @@ Already done in FB-002B (no changes needed in this branch):
 | U-6 | Successful save shows a success notification |
 | U-7 | Failed save shows an error notification with a message |
 | U-8 | Users can preview the form while editing (built into the editor component) |
-| U-9 | In-progress edits are auto-saved locally so work is not lost on accidental navigation |
 | U-10 | Form Builder list shows all forms with name, type, and status (Draft / Published) |
 | U-11 | When editing a published form, users see an info banner about version snapshots |
 | U-12 | Users can unpublish and re-publish a form |
@@ -68,8 +67,8 @@ Already done in FB-002B (no changes needed in this branch):
 
 - **FR-1** Permission gate: `ability.js` grants `can("manage", "form-builder")` when any role has `can_form_builder: true`
 - **FR-2** `FormBuilderList`: paginated table from `GET /api/v1/manage/forms`, status badge, Edit action, New Form button
-- **FR-3** `FormBuilderCreate`: editor with `POST /api/v1/manage/forms`; navigate to edit page on success; auto-save to localStorage `form-builder-draft-new`; pass `settingCascadeURL={ARF_CASCASE_URLS}` to `WebformEditor`
-- **FR-4** `FormBuilderEdit`: fetch/transform on mount; PUT save; publish/unpublish buttons; info banner for published forms; stale draft detection via `formVersion`; pass `settingCascadeURL={ARF_CASCASE_URLS}` to `WebformEditor`
+- **FR-3** `FormBuilderCreate`: editor with `POST /api/v1/manage/forms`; navigate to edit page on success; pass `settingCascadeURL={ARF_CASCASE_URLS}` to `WebformEditor`
+- **FR-4** `FormBuilderEdit`: fetch/transform on mount; PUT save; publish/unpublish buttons; info banner for published forms; pass `settingCascadeURL={ARF_CASCASE_URLS}` to `WebformEditor`
 - **FR-5** ~~`form-builder-transform.js`~~ — **Deleted**. Backend handles all transforms. Frontend sends editor `onSave` output directly to the backend and uses `GET /manage/forms/{id}` response directly as `initialValue` (no JS conversion needed). See [[FB-002]] D-15.
 - **FR-6** Publish: `POST .../publish` for draft→published and re-publish; activates pending snapshot when already published
 - **FR-7** Unpublish: `POST .../unpublish`; same Publish button doubles as re-publish
@@ -81,7 +80,7 @@ Already done in FB-002B (no changes needed in this branch):
 
 | # | Requirement |
 |---|---|
-| NF-1 | Auto-save must not block UI; localStorage writes after 2 s debounce |
+| NF-1 | ~~Auto-save to localStorage~~ — **Removed** (see D-18); `akvo-react-form-editor` does not expose an `onChange` hook suitable for reliable auto-save |
 | NF-2 | ~~Transformer is pure JS~~ — N/A; transforms moved to backend (see D-13) |
 | NF-3 | All code passes `yarn lint` and `yarn prettier` in the frontend container |
 | NF-4 | No `// eslint-disable-next-line` comments — fix code to satisfy rules |
@@ -94,9 +93,9 @@ Already done in FB-002B (no changes needed in this branch):
 - [x] ~~`editorToApi()` / `apiToEditor()`~~ — Deleted; transforms moved to backend `_to_editor_format` + `_normalize_editor_payload`
 - [x] Both `FormBuilderCreate` and `FormBuilderEdit` pass `settingCascadeURL={ARF_CASCASE_URLS}` to `WebformEditor`
 - [x] `FormBuilderList` renders status badge, pagination, empty state, loading skeleton
-- [x] `FormBuilderCreate` saves draft, navigates to edit on success, restores draft on mount
+- [x] `FormBuilderCreate` navigates to edit on success (no localStorage)
 - [x] `FormBuilderEdit` loads form, shows info banner when published, PUT+publish+unpublish work
-- [x] Stale draft detection (formVersion mismatch → silently discard)
+- [x] ~~Stale draft detection~~ — removed; no localStorage
 - [x] Version History Drawer opens on demand, Set Active calls activate endpoint
 - [x] Version Preview remounts editor with snapshot content; Back to saved restores real state
 - [x] Reusable `FormStatusTag`, `FormEditorBanners`, `VersionHistoryDrawer` components
@@ -114,16 +113,6 @@ Already done in FB-002B (no changes needed in this branch):
 ## 3. Data Model Changes
 
 No new models. This is a frontend-only spec. All backend models are provided by [[FB-002]] and [[FB-002B]].
-
-### Draft Storage Format
-
-localStorage key: `form-builder-draft-new` (create) / `form-builder-draft-{formId}` (edit)
-
-```json
-{ "value": { ...editorOutput }, "savedAt": "2026-06-01T10:00:00.000Z", "formVersion": 2 }
-```
-
-`formVersion` is the form's active version at draft-save time. Used for stale draft detection.
 
 ---
 
@@ -247,7 +236,7 @@ frontend/src/
 │   └── components/
 │       ├── index.js                   — barrel export
 │       ├── FormStatusTag.jsx          — Published/Draft Tag
-│       ├── FormEditorBanners.jsx      — draft-restored / preview / info Alert group; parentFormName banner
+│       ├── FormEditorBanners.jsx      — preview / info / error Alert group; no draft banner
 │       └── VersionHistoryDrawer.jsx   — Drawer + Table + Activate/Preview actions
 ├── lib/
 │   ├── constants.js                   — ARF_CASCASE_URLS (re-exported via lib/index.js)
@@ -406,21 +395,13 @@ Both `akvo-react-form-editor` and the backend use `"image"`. No transform needed
 
 ---
 
-### D-4: Auto-Save to localStorage
+### D-4: ~~Auto-Save to localStorage~~ — **Removed**
 
-Draft JSON shape:
-```json
-{ "value": <editorOutput>, "savedAt": "<ISO timestamp>", "formVersion": <number> }
-```
+**Original design**: debounced localStorage writes on every `onSave` call.
 
-Draft restore logic (Edit page):
-1. Parse draft from localStorage.
-2. If `typeof draft.formVersion !== "undefined" && draft.formVersion !== apiData.version` → stale draft, silently remove.
-3. If `draft.savedAt > (apiData.published_at || "")` → use draft; show dismissible Alert with "Load from server" action button.
-4. On "Load from server": clear localStorage, reload from API, skip draft check, remount editor.
-5. On version activation: clear the draft before reloading the editor.
+**Decision**: Deleted entirely.
 
-**Why `typeof` check**: The `no-undefined` ESLint rule forbids referencing the `undefined` identifier. Use `typeof draft.formVersion !== "undefined"` not `draft.formVersion !== undefined`.
+**Why**: `akvo-react-form-editor` does not expose an `onChange` hook suitable for reliable auto-save. The only stable hook is `onSave` (triggered by user clicking Save). Simulating auto-save via `onSave` would require injecting a hidden timer — fragile and likely to trigger spurious saves mid-edit. Without a proper change hook, the draft state would be stale or incorrect more often than not. All localStorage draft code (`draftKey`, `draftRestored`, `onResetDraft`, `draftTimerRef`) removed from `FormBuilderCreate` and `FormBuilderEdit`; draft props removed from `FormEditorBanners`.
 
 ---
 
@@ -476,7 +457,7 @@ Frontend does not need different code paths — same PUT call, same 200 response
 7. Set `previewingVersion = { id, version }` → preview banner shown.
 8. Drawer closes.
 
-**"Back to saved"** calls `loadForm(true)` (skip draft check) and clears `previewingVersion`.
+**"Back to saved"** (`onExitPreview`) sets `loading=true`, clears `initialValue`, calls `loadForm()`, and clears `previewingVersion`.
 
 Preview is purely local — `activate` endpoint is NOT called.
 
@@ -582,6 +563,35 @@ When `parent_id` is present, the frontend sets `type: MONITORING_FORM` in the pa
 
 ---
 
+---
+
+### D-18: `setLoading(true)` Must Precede Every `setInitialValue(null)` (Null-Safety Pattern)
+
+**Problem**: `WebformEditor` renders inside `loading ? {} : initialValue`. If `loading` is already `false` when `setInitialValue(null)` fires, the editor receives `null` before the next render sets `loading=true`. This causes:
+
+```
+Uncaught TypeError: can't convert null to object
+  at QuestionPrefilled.jsx:196
+```
+
+**Decision**: Every transition function (`onActivateVersion`, `onPreview`, `onExitPreview`) must set `setLoading(true)` **before** `setInitialValue(null)`. This guarantees the editor is unmounted (rendering `{}`) before it can observe the null value.
+
+**Pattern**:
+```javascript
+// CORRECT
+setLoading(true);
+setInitialValue(null);
+await loadForm();
+
+// WRONG — race: editor may see null while loading=false
+setInitialValue(null);
+setLoading(true);
+```
+
+**Why this is not obvious**: `setState` calls within the same synchronous block are batched by React 18 in concurrent mode, but in the `async`/`await` context (after an `await`) each `setState` may flush individually. The safe rule is: always update `loading` first regardless of batching semantics.
+
+---
+
 ### D-11: i18n — All Form Builder Strings in `ui-text.js`
 
 All user-visible text under `formBuilder*` keys. Dynamic strings use function keys:
@@ -673,7 +683,7 @@ Run before every commit:
 | `FormBuilderCreate.test.jsx` | Save error: error message shown |
 | `FormBuilderEdit.test.jsx` | Loads form; uses GET response directly as `initialValue` (no transform) |
 | `FormBuilderEdit.test.jsx` | Shows info banner when `status="published"` |
-| `FormBuilderEdit.test.jsx` | PUT 200: stays on page, updates `latest_version`, clears localStorage |
+| `FormBuilderEdit.test.jsx` | PUT 200: stays on page, updates `latest_version` |
 | `FormBuilderEdit.test.jsx` | Publish success: updates status and version |
 | `FormBuilderEdit.test.jsx` | Unpublish success: status changes to draft |
 | `FormBuilderCreate.test.jsx` | `?parent_id=42` → fetches parent, shows banner with name |

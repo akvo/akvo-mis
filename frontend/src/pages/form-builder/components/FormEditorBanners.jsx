@@ -1,41 +1,15 @@
 import React from "react";
-import { Alert, Button, Space } from "antd";
+import { Alert, Button } from "antd";
 
 const FormEditorBanners = ({
-  draftRestored,
-  onDismissDraft,
-  onResetDraft,
   previewingVersion,
   onExitPreview,
   infoBannerText,
   errorBannerText,
   text,
-  topSpacing,
 }) => {
-  const draftStyle = topSpacing
-    ? { marginTop: 16, marginBottom: 8 }
-    : { marginBottom: 8 };
-
   return (
     <>
-      {draftRestored && (
-        <Alert
-          type="info"
-          message={text.formBuilderDraftRestored}
-          action={
-            onResetDraft && (
-              <Space>
-                <Button size="small" onClick={onResetDraft}>
-                  {text.formBuilderResetDraft}
-                </Button>
-              </Space>
-            )
-          }
-          closable
-          style={draftStyle}
-          onClose={onDismissDraft}
-        />
-      )}
       {previewingVersion && (
         <Alert
           type="warning"
