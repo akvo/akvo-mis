@@ -87,7 +87,11 @@ const ManageDataTable = ({
   };
 
   useEffect(() => {
-    if (isAdministrationLoaded && activeFilter !== selectedAdministration?.id) {
+    if (
+      isAdministrationLoaded &&
+      selectedAdministration?.id &&
+      activeFilter !== selectedAdministration?.id
+    ) {
       setActiveFilter(selectedAdministration.id);
       if (!updateRecord) {
         setCurrentPage(1);

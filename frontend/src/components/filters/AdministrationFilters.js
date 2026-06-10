@@ -22,8 +22,8 @@ const AdministrationFilters = ({
   maxLevel = null,
   search = null,
 }) => {
-  // const authUser = store.useState((s) => s.user);
   const language = store.useState((s) => s.language);
+  const administration = store.useState((s) => s.administration);
   const { active: activeLang } = language;
   const text = useMemo(() => {
     return uiText[activeLang];
@@ -75,11 +75,13 @@ const AdministrationFilters = ({
               persist={search ? false : true}
               onChange={onAdministrationChange}
             />
-            <RemoveFiltersButton
-              extra={(s) => {
-                s.filters = { trained: null, role: null, organisation: null };
-              }}
-            />
+            {administration?.length > 0 && (
+              <RemoveFiltersButton
+                extra={(s) => {
+                  s.filters = { trained: null, role: null, organisation: null };
+                }}
+              />
+            )}
           </div>
         </Col>
       </Row>

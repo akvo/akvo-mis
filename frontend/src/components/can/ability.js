@@ -17,6 +17,8 @@ const defineAbilityFor = (user) => {
     const is_editor = roles.filter((r) => r?.is_mobile).length > 0;
     const can_delete = roles.filter((r) => r?.can_delete).length > 0;
     const can_invite_user = roles.filter((r) => r?.can_invite_user).length > 0;
+    const can_form_builder =
+      roles.filter((r) => r?.can_form_builder).length > 0;
 
     if (is_approver) {
       can("manage", "approvals");
@@ -37,6 +39,9 @@ const defineAbilityFor = (user) => {
     }
     if (can_invite_user) {
       can("manage", "user");
+    }
+    if (can_form_builder) {
+      can("manage", "form-builder");
     }
     can("read", "data");
     can("read", "downloads");

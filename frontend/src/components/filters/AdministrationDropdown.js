@@ -59,12 +59,12 @@ const AdministrationDropdown = ({
 
   useEffect(() => {
     const multiadministration = administration?.find(
-      (admLevel) => admLevel.level === currLevel.level - 1
+      (admLevel) => admLevel?.level === currLevel?.level - 1
     )?.children;
     if (multiadministration?.length === selectedAdministrations?.length) {
       setChecked(true);
     }
-  }, [administration, selectedAdministrations, currLevel.level]);
+  }, [administration, selectedAdministrations, currLevel?.level]);
 
   const handleChange = async (e, index) => {
     if (!e) {
@@ -73,7 +73,7 @@ const AdministrationDropdown = ({
     let admItems = null;
     if (Array.isArray(e)) {
       const multiadministration = administration
-        ?.find((admLevel) => admLevel.level === currLevel.level - 1)
+        ?.find((admLevel) => admLevel?.level === currLevel?.level - 1)
         ?.children.filter((admItem) => e.includes(admItem.id));
       admItems = multiadministration;
     } else {
@@ -95,7 +95,7 @@ const AdministrationDropdown = ({
       setChecked(true);
       const admItems =
         administration?.find(
-          (admLevel) => admLevel.level === currLevel.level - 1
+          (admLevel) => admLevel?.level === currLevel?.level - 1
         )?.children || [];
       if (selectedAdministrations.length === admItems.length) {
         return;
@@ -123,12 +123,12 @@ const AdministrationDropdown = ({
       setChecked(false);
       store.update((s) => {
         s.administration = s.administration.filter(
-          (data) => data.level <= currLevel.level - 1
+          (data) => data.level <= currLevel?.level - 1
         );
       });
       if (onChange) {
         onChange(
-          administration.filter((data) => data.level <= currLevel.level - 1)
+          administration.filter((data) => data.level <= currLevel?.level - 1)
         );
       }
     }

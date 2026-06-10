@@ -1,0 +1,13 @@
+#root {
+  #control-center {
+    .ant-card {
+      padding-bottom: 0 !important;
+    }
+  }
+}
+
+.ant-table-row {
+  &.version-row-active {
+    background-color: #f6ffed;
+  }
+}
