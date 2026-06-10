@@ -3,11 +3,7 @@
 **Task ID**: FB-003
 **Author**: Iwan
 **Date**: 2026-06-08
-**Status**: Implemented (branch: feature/228-integrate-akvo-react-form-editor-in-frontend)
 
----
-
-## 1. Context & Problem Statement
 
 ```
 Currently:
