@@ -822,28 +822,13 @@ def transform_form_data_for_report(
                                 elif question.type in [
                                     QuestionTypes.input,
                                     QuestionTypes.text,
-                                    QuestionTypes.photo,
+                                    QuestionTypes.image,
                                     QuestionTypes.autofield,
                                     QuestionTypes.cascade,
                                     QuestionTypes.attachment,
                                     QuestionTypes.signature,
                                 ]:
                                     value = answer.name or ""
-                                elif (
-                                    question.type
-                                    == QuestionTypes.administration
-                                ):
-                                    if answer.value:
-                                        admin = Administration.objects.filter(
-                                            pk=answer.value
-                                        ).first()
-                                        value = (
-                                            admin.name
-                                            if admin
-                                            else str(answer.value)
-                                        )
-                                    else:
-                                        value = ""
                                 else:
                                     value = (
                                         answer.value
@@ -925,14 +910,14 @@ def transform_form_data_for_report(
                         elif question.type in [
                             QuestionTypes.input,
                             QuestionTypes.text,
-                            QuestionTypes.photo,
+                            QuestionTypes.image,
                             QuestionTypes.autofield,
                             QuestionTypes.cascade,
                             QuestionTypes.attachment,
                             QuestionTypes.signature,
                         ]:
                             value = answer.name or ""
-                        elif question.type == QuestionTypes.administration:
+                        elif question.type == QuestionTypes.cascade:
                             if answer.value:
                                 admin = Administration.objects.filter(
                                     pk=answer.value

@@ -78,12 +78,18 @@ class EntitiesDataBulkUploadTemplateExportTestCase(
         )
 
     def test_export_prefilled_entity_with_selected_adm_template(self):
-        entity_type = Entity.objects.order_by('?').first()
+        entity_type = Entity.objects.first()
         api_url = "/api/v1/export/prefilled-entity-data-template"
-        lowest_level = Levels.objects.order_by('-level').first()
-        adm = Administration.objects.filter(
-            level=lowest_level
-        ).first()
+        # Use second-to-lowest level (Subdistrict in test data) instead of
+        # the lowest level (Village).
+        # AdministrationCSVTestCase.test_delete_data_in_csv
+        # runs in parallel and
+        # deletes the lowest-level row from the shared CSV,
+        # which would produce an empty DataFrame when filtering by village_id.
+        # Subdistrict rows are never deleted by that parallel test.
+        levels = list(Levels.objects.order_by('-level'))
+        target_level = levels[1] if len(levels) > 1 else levels[0]
+        adm = Administration.objects.filter(level=target_level).first()
         response = cast(
             Response,
             self.client.get(
@@ -96,4 +102,7 @@ class EntitiesDataBulkUploadTemplateExportTestCase(
         self.assertEqual(response["Content-Type"], self.XLSX_MIME)
 
         df = pd.read_excel(response.content, sheet_name=entity_type.name)
-        self.assertEqual(df.iloc[0]["Village"], adm.name)
+        self.assertGreater(
+            len(df), 0, "Filtered template must contain at least one row"
+        )
+        self.assertEqual(df.iloc[0][target_level.name], adm.name)

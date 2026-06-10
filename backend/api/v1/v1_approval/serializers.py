@@ -537,7 +537,7 @@ class ListBatchSummarySerializer(serializers.ModelSerializer):
                 question_id=instance.question.id
             ).aggregate(Sum("value"))
             return val.get("value__sum")
-        elif instance.question.type == QuestionTypes.administration:
+        elif instance.question.type == QuestionTypes.cascade:
             return (
                 Answers.objects.filter(
                     data__data_batch_list__batch=batch,

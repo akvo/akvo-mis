@@ -69,7 +69,7 @@ class MobileAssignmentApiSyncTest(
         cascades = [
             q
             for q in data["question_group"][0]["question"]
-            if q["type"] == "cascade"
+            if q["type"] in ("cascade", "administration")
         ]
         self.assertEqual(
             cascades[0]["source"]["parent_id"],
@@ -103,9 +103,9 @@ class MobileAssignmentApiSyncTest(
                 answers[question["id"]] = [0, 0]
             elif question["type"] == "date":
                 answers[question["id"]] = "2021-01-01T00:00:00.000Z"
-            elif question["type"] == "photo":
+            elif question["type"] == "image":
                 answers[question["id"]] = "https://picsum.photos/200/300"
-            elif question["type"] == "cascade":
+            elif question["type"] in ("cascade", "administration"):
                 answers[question["id"]] = self.administration.id
             else:
                 answers[question["id"]] = "testing"

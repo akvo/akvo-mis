@@ -232,6 +232,8 @@ Accepts editor JSON output after frontend transformation:
 
 ### Response Format (Detail)
 
+`_to_editor_format()` is applied to all manage-endpoint responses, converting snake_case question fields to camelCase so the editor can use the response directly as `initialValue`:
+
 ```json
 {
   "id": 42,
@@ -241,6 +243,7 @@ Accepts editor JSON output after frontend transformation:
   "published_at": null,
   "active_version_id": null,
   "type": 1,
+  "defaultLanguage": "en",
   "approval_instructions": null,
   "parent": null,
   "question_group": [
@@ -252,19 +255,21 @@ Accepts editor JSON output after frontend transformation:
           "id": 10,
           "type": "input",
           "label": "Head of Household Name",
-          "disable_delete": null
+          "disableDelete": null
         },
         {
           "id": 11,
           "type": "number",
           "label": "Age",
-          "disable_delete": true
+          "disableDelete": true
         }
       ]
     }
   ]
 }
 ```
+
+> Note: `disable_delete` → `disableDelete`, `default_language` → `defaultLanguage`, `variable_name` → `variable`, and other snake_case question fields converted to camelCase by `_to_editor_format` in `views.py`.
 
 ---
 
@@ -458,15 +463,17 @@ class FeatureAccessTypes:
 
 ### Entity Type Mapping
 
-`"entity"` is NOT a valid API type. Frontend must transform:
+`"entity"` is NOT a valid API type. The backend handles this:
 
 ```
 Editor: type="entity"
-   ↓ editorToApi()
-API: type="cascade", extra={"type": "entity", "name": "..."}
-   ↓ apiToEditor()
+   ↓ (sent directly, no frontend transform)
+API POST/PUT: type="cascade", extra={"type": "entity", "name": "..."}
+   ↓ _to_editor_format() on GET response
 Editor: type="entity"
 ```
+
+The backend `_normalize_editor_payload` accepts `type="entity"` from the editor (which sends it as a cascade with `extra.type`), and `_to_editor_format` converts `cascade+extra.type=entity` back to `"entity"` for the editor `initialValue`. No frontend transform code is needed.
 
 ### Form Types
 

@@ -354,6 +354,7 @@ def prepare_answer_data(
             row_value=row_value,
             administration_id=administration_id,
             opt_list=opt_list,
+            extra=question.extra,
         )
 
         if name is None and value is None and options is None:

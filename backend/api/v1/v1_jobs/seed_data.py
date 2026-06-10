@@ -90,20 +90,22 @@ def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
 
         # Create an Answers object instead of PendingAnswers
         answer = Answers(question_id=q.id, created_by=user)
-        if q.type == QuestionTypes.administration:
-            if isinstance(aw, str):
-                adm = get_administration(aw=aw)
-                if adm:
-                    administration = adm.id
+        if q.type == QuestionTypes.cascade:
+            extra_type = (q.extra or {}).get("type")
+            if extra_type not in ("entity",):
+                if isinstance(aw, str):
+                    adm = get_administration(aw=aw)
+                    if adm:
+                        administration = adm.id
+                        answer.value = administration
+                        if q.meta:
+                            names.append(adm.name)
+                else:
+                    adm = Administration.objects.get(pk=aw)
+                    administration = aw
                     answer.value = administration
-                    if q.meta:
+                    if adm and q.meta:
                         names.append(adm.name)
-            else:
-                adm = Administration.objects.get(pk=aw)
-                administration = aw
-                answer.value = administration
-                if adm and q.meta:
-                    names.append(adm.name)
 
         if q.type == QuestionTypes.geo:
             if aw:
@@ -160,7 +162,7 @@ def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
                     )
         if q.type == QuestionTypes.autofield and aw:
             answer.name = aw
-        if q.type == QuestionTypes.photo and aw:
+        if q.type == QuestionTypes.image and aw:
             answer.name = aw
         if q.type == QuestionTypes.attachment and aw:
             answer.name = aw

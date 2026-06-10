@@ -1,0 +1,500 @@
+import json
+
+from django.core.management import call_command
+from django.db import connection
+from django.test import TestCase
+from django.test.utils import override_settings
+
+from api.v1.v1_forms.models import (
+    Forms, Questions, QuestionGroup, QuestionOptions,
+)
+from api.v1.v1_forms.constants import QuestionTypes, FormTypes
+from api.v1.v1_users.models import SystemUser
+
+
+FORM_PAYLOAD = {
+    "name": "CRUD Test Form",
+    "type": 1,
+    "approval_instructions": None,
+    "parent": None,
+    "question_group": [
+        {
+            "id": None,
+            "name": "household_info",
+            "label": "Household Information",
+            "order": 1,
+            "repeatable": False,
+            "repeat_text": None,
+            "question": [
+                {
+                    "id": None,
+                    "order": 1,
+                    "label": "Head of Household",
+                    "short_label": None,
+                    "name": "head_of_household",
+                    "type": "input",
+                    "meta": True,
+                    "required": True,
+                    "rule": None,
+                    "dependency": None,
+                    "dependency_rule": "AND",
+                    "api": None,
+                    "extra": None,
+                    "tooltip": None,
+                    "fn": None,
+                    "pre": None,
+                    "display_only": False,
+                    "option": [],
+                }
+            ],
+        }
+    ],
+}
+
+
+def _login(client, email="admin@akvo.org", password="Test105*"):
+    res = client.post(
+        "/api/v1/login",
+        {"email": email, "password": password},
+        content_type="application/json",
+    )
+    return {"HTTP_AUTHORIZATION": f"Bearer {res.json().get('token')}"}
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class ManageFormCreateTestCase(TestCase):
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("fake_organisation_seeder", "--repeat", 3)
+        call_command("default_roles_seeder", "--test")
+        call_command("form_seeder", "--test")
+        with connection.cursor() as cur:
+            for tbl in ["form", "question_group", "question", "option"]:
+                cur.execute(
+                    f"SELECT setval("
+                    f"pg_get_serial_sequence('{tbl}', 'id'),"
+                    f"(SELECT COALESCE(MAX(id), 0) FROM \"{tbl}\") + 1,"
+                    f"false)"
+                )
+        self.header = _login(self.client)
+        self.admin = SystemUser.objects.filter(
+            email="admin@akvo.org"
+        ).first()
+
+    # ─────────────────────────────────────────────
+    # POST /api/v1/manage/forms — Create
+    # ─────────────────────────────────────────────
+
+    def test_create_draft_form(self):
+        """POST /api/v1/manage/forms returns 201 and status=draft."""
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data["status"], "draft")
+        self.assertEqual(data["version"], 1)
+        self.assertEqual(data["name"], "CRUD Test Form")
+        self.assertIsNone(data["published_at"])
+        self.assertIn("question_group", data)
+        self.assertEqual(len(data["question_group"]), 1)
+
+    def test_create_requires_auth(self):
+        """POST /api/v1/manage/forms returns 401/403 without auth."""
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+        )
+        self.assertIn(res.status_code, [401, 403])
+
+    def test_create_missing_name_returns_400(self):
+        """POST /api/v1/manage/forms without name returns 400."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        del payload["name"]
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_create_invalid_question_type(self):
+        """POST /api/v1/manage/forms returns 400 for unknown question type."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0]["type"] = "unknown_type"
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_create_with_image_type(self):
+        """
+        POST /api/v1/manage/forms accepts 'image' as canonical photo type.
+        """
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0]["type"] = "image"
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertEqual(q.type, QuestionTypes.image)
+
+    def test_create_with_option_question(self):
+        """POST /api/v1/manage/forms with option question creates options."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0].update({
+            "type": "option",
+            "option": [
+                {
+                    "order": 1, "label": "Yes", "value": "yes",
+                    "other": False, "color": None,
+                },
+                {
+                    "order": 2, "label": "No", "value": "no",
+                    "other": False, "color": None,
+                },
+            ],
+        })
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertEqual(q.options.count(), 2)
+
+    def test_create_name_autogenerated_if_missing(self):
+        """Question without 'name' gets a slugified name from label."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0]["name"] = None
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertIsNotNone(q.name)
+        self.assertNotEqual(q.name, "")
+
+    def test_create_type_as_integer(self):
+        """POST /api/v1/manage/forms accepts type as integer."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["type"] = 1
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form = Forms.objects.get(pk=res.json()["id"])
+        self.assertEqual(form.type, FormTypes.registration)
+
+    def test_create_type_defaults_to_registration_without_parent(self):
+        """POST without type and without parent → registration."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        del payload["type"]
+        payload["parent"] = None
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form = Forms.objects.get(pk=res.json()["id"])
+        self.assertEqual(form.type, FormTypes.registration)
+
+    def test_create_type_inferred_as_monitoring_with_parent(self):
+        """POST without type but with a parent → monitoring."""
+        # Create and publish a registration form to use as parent
+        reg_res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        reg_id = reg_res.json()["id"]
+        self.client.post(
+            f"/api/v1/manage/forms/{reg_id}/publish",
+            content_type="application/json",
+            **self.header,
+        )
+
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        del payload["type"]
+        payload["parent"] = reg_id
+        payload["name"] = "Monitoring Form"
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form = Forms.objects.get(pk=res.json()["id"])
+        self.assertEqual(form.type, FormTypes.monitoring)
+
+    def test_create_with_editor_ids_uses_provided_ids(self):
+        """
+        POST with editor-assigned IDs stores
+        form/group/question with those IDs.
+        """
+        FORM_ID = 1780893132324
+        GROUP_ID = 1780893132325
+        Q_ID_1 = 1780893132326
+        Q_ID_2 = 1780893218666
+
+        payload = {
+            "id": FORM_ID,
+            "name": "Editor ID Test Form",
+            "type": 1,
+            "question_group": [
+                {
+                    "id": GROUP_ID,
+                    "name": "registration",
+                    "label": "Registration",
+                    "order": 1,
+                    "repeatable": False,
+                    "question": [
+                        {
+                            "id": Q_ID_1,
+                            "order": 1,
+                            "label": "Location",
+                            "name": "location",
+                            "type": "cascade",
+                            "required": True,
+                            "meta": True,
+                            "extra": {"type": "administration"},
+                        },
+                        {
+                            "id": Q_ID_2,
+                            "order": 2,
+                            "label": "Name",
+                            "name": "name_field",
+                            "type": "input",
+                            "required": True,
+                            "meta": True,
+                            "dependency": [
+                                {"id": Q_ID_1, "options": ["yes"]}
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data["id"], FORM_ID)
+        form = Forms.objects.get(pk=FORM_ID)
+        self.assertEqual(form.id, FORM_ID)
+        from api.v1.v1_forms.models import QuestionGroup
+        grp = QuestionGroup.objects.get(pk=GROUP_ID)
+        self.assertEqual(grp.id, GROUP_ID)
+        q1 = Questions.objects.get(pk=Q_ID_1)
+        self.assertEqual(q1.id, Q_ID_1)
+        q2 = Questions.objects.get(pk=Q_ID_2)
+        self.assertEqual(q2.id, Q_ID_2)
+        # Dependency references the editor-assigned ID — still valid in DB
+        self.assertEqual(q2.dependency[0]["id"], Q_ID_1)
+
+    def test_create_with_geoshape_center(self):
+        """POST stores center field for geoshape questions."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0].update({
+            "type": "geoshape",
+            "center": [-7.5, 110],
+        })
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertEqual(q.center, [-7.5, 110])
+
+    def test_create_with_date_rule_min_max(self):
+        """POST stores minDate/maxDate in rule JSONField for date questions."""
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"][0].update({
+            "type": "date",
+            "rule": {"minDate": "2020-01-01", "maxDate": "2029-01-01"},
+        })
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form_id = res.json()["id"]
+        q = Questions.objects.filter(form_id=form_id).first()
+        self.assertEqual(q.rule["minDate"], "2020-01-01")
+        self.assertEqual(q.rule["maxDate"], "2029-01-01")
+
+    def test_create_with_translation_fields(self):
+        """POST stores languages, default_language, and translations at
+        form, group, question, and option levels."""
+        payload = {
+            "name": "Multilingual Form",
+            "type": 1,
+            "languages": ["en", "id"],
+            "default_language": "en",
+            "translations": [{"language": "id", "name": "Formulir"}],
+            "question_group": [
+                {
+                    "id": None,
+                    "name": "group_one",
+                    "label": "Group One",
+                    "order": 1,
+                    "repeatable": False,
+                    "repeat_text": None,
+                    "translations": [{"language": "id", "name": "Grup Satu"}],
+                    "question": [
+                        {
+                            "id": None,
+                            "order": 1,
+                            "label": "Choose one",
+                            "name": "choose_one",
+                            "type": "option",
+                            "meta": False,
+                            "required": True,
+                            "rule": None,
+                            "dependency": None,
+                            "dependency_rule": "AND",
+                            "api": None,
+                            "extra": None,
+                            "tooltip": None,
+                            "fn": None,
+                            "pre": None,
+                            "display_only": False,
+                            "translations": [
+                                {"language": "id", "name": "Pilih satu"}
+                            ],
+                            "option": [
+                                {
+                                    "order": 1,
+                                    "label": "Yes",
+                                    "value": "yes",
+                                    "other": False,
+                                    "color": None,
+                                    "translations": [
+                                        {"language": "id", "name": "Ya"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        # Form-level fields in response
+        self.assertEqual(data["languages"], ["en", "id"])
+        self.assertEqual(data["defaultLanguage"], "en")
+        self.assertEqual(
+            data["translations"], [{"language": "id", "name": "Formulir"}]
+        )
+        # Group-level
+        grp = data["question_group"][0]
+        self.assertEqual(
+            grp["translations"], [{"language": "id", "name": "Grup Satu"}]
+        )
+        # Question-level
+        q = grp["question"][0]
+        self.assertEqual(
+            q["translations"], [{"language": "id", "name": "Pilih satu"}]
+        )
+        # Option-level
+        self.assertEqual(
+            q["option"][0]["translations"], [{"language": "id", "name": "Ya"}]
+        )
+        # Verify DB persistence
+        form = Forms.objects.get(pk=data["id"])
+        self.assertEqual(form.languages, ["en", "id"])
+        self.assertEqual(form.default_language, "en")
+        group_obj = QuestionGroup.objects.filter(form=form).first()
+        self.assertEqual(
+            group_obj.translations, [{"language": "id", "name": "Grup Satu"}]
+        )
+        q_obj = Questions.objects.filter(form=form).first()
+        self.assertEqual(
+            q_obj.translations, [{"language": "id", "name": "Pilih satu"}]
+        )
+        opt_obj = QuestionOptions.objects.filter(question=q_obj).first()
+        self.assertEqual(
+            opt_obj.translations, [{"language": "id", "name": "Ya"}]
+        )
+
+    # ─────────────────────────────────────────────
+    # Audit fields
+    # ─────────────────────────────────────────────
+
+    def test_create_sets_created_by(self):
+        """POST sets created_by to the authenticated user."""
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        form = Forms.objects.get(pk=res.json()["id"])
+        self.assertEqual(form.created_by, self.admin)
+        self.assertIsNone(form.updated_by)
+        self.assertIsNotNone(form.created)
+        self.assertIsNone(form.updated)
+
+    def test_create_response_includes_audit_fields(self):
+        """POST response includes created, updated, created_by, updated_by."""
+        res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertIn("created_by", data)
+        self.assertIn("updated_by", data)
+        self.assertIn("created", data)
+        self.assertIn("updated", data)
+        self.assertEqual(data["created_by"], self.admin.email)
+        self.assertIsNone(data["updated_by"])
+        self.assertIsNotNone(data["created"])
+        self.assertIsNone(data["updated"])

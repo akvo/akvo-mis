@@ -51,6 +51,16 @@ class FormData(SoftDeletes, Draft):
     duration = models.IntegerField(default=0)
     submitter = models.CharField(max_length=255, default=None, null=True)
     is_pending = models.BooleanField(default=False)
+    # Snapshot active at submission time. Null for submissions collected
+    # before schema versioning was deployed (backward compat).
+    published_version = models.ForeignKey(
+        "v1_forms.FormPublishedVersion",
+        on_delete=models.SET_NULL,
+        related_name="form_data",
+        null=True,
+        blank=True,
+        default=None,
+    )
 
     # Custom managers
     objects = DraftSoftDeletesManager()
@@ -195,15 +205,14 @@ class Answers(models.Model):
         elif q.type in [
             QuestionTypes.input,
             QuestionTypes.text,
-            QuestionTypes.photo,
+            QuestionTypes.image,
             QuestionTypes.date,
             QuestionTypes.autofield,
-            QuestionTypes.cascade,
             QuestionTypes.attachment,
             QuestionTypes.signature,
         ]:
             answer = self.name
-        elif q.type == QuestionTypes.administration:
+        elif q.type == QuestionTypes.cascade:
             answer = Administration.objects.filter(pk=self.value).first()
             if answer:
                 answer = answer.administration_column
@@ -227,7 +236,7 @@ class Answers(models.Model):
         elif q.type in [
             QuestionTypes.input,
             QuestionTypes.text,
-            QuestionTypes.photo,
+            QuestionTypes.image,
             QuestionTypes.date,
             QuestionTypes.autofield,
             QuestionTypes.cascade,

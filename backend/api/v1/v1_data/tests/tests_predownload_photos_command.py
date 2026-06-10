@@ -92,7 +92,7 @@ class PredownloadPhotosGetPhotoQuestionsTestCase(TestCase):
             name="test_photo",
             label="Test Photo Question",
             order=1,
-            type=QuestionTypes.photo
+            type=QuestionTypes.image
         )
 
         # Create non-photo question
@@ -131,7 +131,7 @@ class PredownloadPhotosGetPhotoQuestionsTestCase(TestCase):
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].pk, self.photo_question.pk)
-        self.assertEqual(result[0].type, QuestionTypes.photo)
+        self.assertEqual(result[0].type, QuestionTypes.image)
 
     def test_get_photo_questions_from_child_dict(self):
         """Test extracting photo questions from child DataFrame dict."""
@@ -176,7 +176,7 @@ class PredownloadPhotosGetPhotoQuestionsTestCase(TestCase):
             name="test_photo_2",
             label="Test Photo Question 2",
             order=3,
-            type=QuestionTypes.photo
+            type=QuestionTypes.image
         )
 
         cmd = Command()
@@ -323,7 +323,7 @@ class PredownloadPhotosHandleTestCase(TestCase):
             name="test_photo",
             label="Test Photo Question",
             order=1,
-            type=QuestionTypes.photo
+            type=QuestionTypes.image
         )
 
     @patch(
@@ -595,7 +595,7 @@ class PredownloadPhotosWorkerOptionTestCase(TestCase):
             name="photo",
             label="Photo",
             order=1,
-            type=QuestionTypes.photo
+            type=QuestionTypes.image
         )
 
         mock_get_form.return_value = form

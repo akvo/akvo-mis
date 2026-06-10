@@ -43,21 +43,40 @@ class DataAccessTypes:
 
 class FeatureAccessTypes:
     invite_user = 1
+    form_view = 3
+    form_create = 4
+    form_edit = 5
+    form_publish = 6
+    form_delete = 7
 
     FieldStr = {
         invite_user: "Invite User",
+        form_view: "Form View",
+        form_create: "Form Create",
+        form_edit: "Form Edit",
+        form_publish: "Form Publish",
+        form_delete: "Form Delete",
     }
 
 
 class FeatureTypes:
     user_access = 1
+    form_builder = 2
     FieldStr = {
         user_access: "User Access",
+        form_builder: "Form Builder",
     }
     FieldGroup = {
         user_access: [
-           FeatureAccessTypes.invite_user
-        ]
+            FeatureAccessTypes.invite_user,
+        ],
+        form_builder: [
+            FeatureAccessTypes.form_view,
+            FeatureAccessTypes.form_create,
+            FeatureAccessTypes.form_edit,
+            FeatureAccessTypes.form_publish,
+            FeatureAccessTypes.form_delete,
+        ],
     }
 
 

@@ -30,7 +30,10 @@
           "meta": false,
           "type": "option",
           "required": true,
-          "attributes": ["chart", "table"],
+          "attributes": [
+            "chart",
+            "table"
+          ],
           "options": [
             {
               "label": "Male",
@@ -54,7 +57,9 @@
           "short_label": "Phone Number",
           "meta": true,
           "type": "number",
-          "attributes": ["chart"],
+          "attributes": [
+            "chart"
+          ],
           "required": true
         },
         {
@@ -64,8 +69,11 @@
           "label": "Location",
           "short_label": null,
           "meta": true,
-          "type": "administration",
-          "required": true
+          "type": "cascade",
+          "required": true,
+          "extra": {
+            "type": "administration"
+          }
         },
         {
           "id": 105,
@@ -85,7 +93,9 @@
           "short_label": null,
           "meta": true,
           "type": "multiple_option",
-          "attributes": ["chart"],
+          "attributes": [
+            "chart"
+          ],
           "required": true,
           "options": [
             {
@@ -109,7 +119,7 @@
           "label": "Please take a picture",
           "short_label": "Picture",
           "meta": false,
-          "type": "photo",
+          "type": "image",
           "required": true
         },
         {
@@ -187,7 +197,9 @@
           "dependency": [
             {
               "id": 114,
-              "options": ["yes"]
+              "options": [
+                "yes"
+              ]
             }
           ],
           "options": [

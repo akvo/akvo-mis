@@ -429,7 +429,7 @@ class FormDataAddListView(APIView):
             elif question.type in [
                 QuestionTypes.input,
                 QuestionTypes.text,
-                QuestionTypes.photo,
+                QuestionTypes.image,
                 QuestionTypes.date,
                 QuestionTypes.attachment,
                 QuestionTypes.signature,
@@ -818,7 +818,7 @@ class PendingFormDataView(APIView):
             elif question.type in [
                 QuestionTypes.input,
                 QuestionTypes.text,
-                QuestionTypes.photo,
+                QuestionTypes.image,
                 QuestionTypes.date,
                 QuestionTypes.attachment,
                 QuestionTypes.signature,

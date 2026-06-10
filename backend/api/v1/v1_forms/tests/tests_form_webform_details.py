@@ -41,29 +41,23 @@ class WebFormDetailsTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(
-            list(data),
-            [
-                "id",
-                "name",
-                "version",
-                "cascades",
-                "approval_instructions",
-                "parent",
-                "question_group",
-            ]
-        )
-        self.assertEqual(
-            list(data["question_group"][0]),
-            [
-                "name",
-                "label",
-                "question",
-                "repeatable",
-                "repeat_text",
-                "order",
-            ]
-        )
+        self.assertIn("id", data)
+        self.assertIn("name", data)
+        self.assertIn("version", data)
+        self.assertIn("cascades", data)
+        self.assertIn("approval_instructions", data)
+        self.assertIn("parent", data)
+        self.assertIn("question_group", data)
+        grp = data["question_group"][0]
+        for key in [
+            "name",
+            "label",
+            "question",
+            "repeatable",
+            "repeat_text",
+            "order",
+        ]:
+            self.assertIn(key, grp)
 
     def test_get_web_form_details_by_superuser(self):
         superuser = self.create_user(

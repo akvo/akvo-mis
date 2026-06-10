@@ -14,7 +14,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 from rest_framework.request import Request
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 from api.v1.v1_profile.models import (
     Administration,
     AdministrationAttribute,
@@ -47,7 +47,7 @@ from utils.custom_pagination import Pagination
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework import serializers, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from utils.email_helper import send_email, EmailTypes
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.custom_generator import administration_csv_delete
@@ -185,6 +185,31 @@ class AdministrationViewSet(ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(tags=["Public"])
+class PublicAdministrationViewSet(ReadOnlyModelViewSet):
+    serializer_class = AdministrationSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = Administration.objects.select_related(
+            'level'
+        ).prefetch_related(
+            'parent_administration',
+        ).all()
+
+        parent_id = self.request.query_params.get("parent")
+        if parent_id:
+            queryset = queryset.filter(parent_id=parent_id)
+
+        return queryset.order_by("id")
+
+    def get_serializer(self, *args, **kwargs):
+        if self.action == "list":
+            kwargs.update({"compact": True})
+        return super().get_serializer(*args, **kwargs)
 
 
 @extend_schema(tags=["Administration"])

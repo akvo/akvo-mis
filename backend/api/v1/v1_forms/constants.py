@@ -1,32 +1,38 @@
 class QuestionTypes:
     geo = 1
-    administration = 2
     text = 3
     number = 4
     option = 5
     multiple_option = 6
     cascade = 7
-    photo = 8
+    image = 8
     date = 9
     autofield = 10
     attachment = 11
     signature = 12
     input = 13
+    geoshape = 14
+    geotrace = 15
+    tree = 16
+    table = 17
 
     FieldStr = {
         geo: "Geo",
-        administration: "Administration",
         text: "Text",
         number: "Number",
         option: "Option",
         multiple_option: "Multiple_Option",
         cascade: "Cascade",
-        photo: "Photo",
+        image: "Image",
         date: "Date",
         autofield: "Autofield",
         attachment: "Attachment",
         signature: "Signature",
         input: "Input",
+        geoshape: "Geoshape",
+        geotrace: "Geotrace",
+        tree: "Tree",
+        table: "Table",
     }
 
 
@@ -54,3 +60,26 @@ class FormTypes:
         registration: "Registration",
         monitoring: "Monitoring",
     }
+
+
+class FormStatus:
+    draft = 1
+    published = 2
+
+    FieldStr = {
+        draft: "draft",
+        published: "published",
+    }
+
+
+_CAMEL_FIELDS = {
+    "displayOnly": "display_only",
+    "dependencyRule": "dependency_rule",
+    "shortLabel": "short_label",
+    "variableName": "variable_name",
+    "hiddenString": "hidden_string",
+    "requiredDoubleEntry": "required_double_entry",
+    "addonBefore": "addon_before",
+    "addonAfter": "addon_after",
+    "dataApiUrl": "data_api_url",
+}

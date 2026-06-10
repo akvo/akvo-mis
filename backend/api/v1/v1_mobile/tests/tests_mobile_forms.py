@@ -92,7 +92,7 @@ class MobileFormsApiTest(TestCase, AssignmentTokenTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(
+        self.assertCountEqual(
             list(data),
             [
                 "id",
@@ -102,6 +102,9 @@ class MobileFormsApiTest(TestCase, AssignmentTokenTestHelperMixin):
                 "approval_instructions",
                 "parent",
                 "question_group",
+                "languages",
+                "default_language",
+                "translations",
             ],
         )
         self.assertEqual(data["id"], self.form.id)

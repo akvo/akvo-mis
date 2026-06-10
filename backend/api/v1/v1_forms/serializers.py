@@ -5,8 +5,10 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
 
-from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes
+from api.v1.v1_data.models import Answers
+from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes, FormStatus
 from api.v1.v1_forms.models import (
+    FormPublishedVersion,
     Forms,
     QuestionGroup,
     Questions,
@@ -28,6 +30,12 @@ from utils.custom_serializer_fields import (
 from utils.default_serializers import CommonDataSerializer, GeoFormatSerializer
 
 
+def _question_type_str(instance: Questions) -> str:
+    """Return the semantic type string for a question.
+    """
+    return QuestionTypes.FieldStr.get(instance.type, "").lower()
+
+
 class ListOptionSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         result = super(ListOptionSerializer, self).to_representation(instance)
@@ -37,7 +45,7 @@ class ListOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuestionOptions
-        fields = ["id", "value", "label", "order", "color"]
+        fields = ["id", "value", "label", "order", "color", "translations"]
 
 
 class ListQuestionSerializer(serializers.ModelSerializer):
@@ -62,13 +70,13 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             return ListOptionSerializer(
                 instance=instance.options.all(), many=True
             ).data
+        if instance.type == QuestionTypes.tree:
+            return instance.tree_option
         return None
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_type(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
-            return QuestionTypes.FieldStr.get(QuestionTypes.cascade).lower()
-        return QuestionTypes.FieldStr.get(instance.type).lower()
+        return _question_type_str(instance)
 
     @extend_schema_field(
         inline_serializer(
@@ -82,7 +90,11 @@ class ListQuestionSerializer(serializers.ModelSerializer):
         )
     )
     def get_api(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
+        if instance.type == QuestionTypes.cascade:
+            extra_type = (instance.extra or {}).get("type")
+            if extra_type == "entity":
+                return instance.api
+            # Administration cascade: generate dynamic user-scoped endpoint.
             user = self.context.get("user")
             administration = Administration.objects.filter(
                 parent__isnull=True
@@ -92,7 +104,6 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             ).order_by("administration__level__level").first()
             if user_role:
                 administration = user_role.administration
-            # max depth for cascade question in national form
             max_level = instance.api.get("max_level") \
                 if instance.api else None
             extra_objects = {}
@@ -117,7 +128,7 @@ class ListQuestionSerializer(serializers.ModelSerializer):
                 return {
                     "endpoint": "/api/v1/administration",
                     "list": "children",
-                    "initial":  initial,
+                    "initial": initial,
                     **extra_objects,
                 }
             return {
@@ -126,8 +137,6 @@ class ListQuestionSerializer(serializers.ModelSerializer):
                 "initial": administration.id,
                 **extra_objects,
             }
-        if instance.type == QuestionTypes.cascade:
-            return instance.api
         if instance.type == QuestionTypes.attachment:
             return instance.api
         return None
@@ -136,6 +145,8 @@ class ListQuestionSerializer(serializers.ModelSerializer):
     def get_center(self, instance: Questions):
         if instance.type == QuestionTypes.geo:
             return FORM_GEO_VALUE
+        if instance.type in (QuestionTypes.geoshape, QuestionTypes.geotrace):
+            return instance.center
         return None
 
     @extend_schema_field(
@@ -216,38 +227,28 @@ class ListQuestionSerializer(serializers.ModelSerializer):
     def get_source(self, instance: Questions):
         user = self.context.get("user")
         assignment = self.context.get("mobile_assignment")
-        max_level = False
-        extra_objects = {}
         if instance.type == QuestionTypes.cascade:
-            if instance.extra:
-                cascade_type = instance.extra.get("type")
-                cascade_name = instance.extra.get("name")
-                if cascade_type == "entity":
-                    entity_type = Entity.objects.filter(
-                        name=cascade_name
-                    ).first()
-                    entity_id = entity_type.id if entity_type else None
-                    return {
-                        "file": "entity_data.sqlite",
-                        "cascade_type": entity_id,
-                        "cascade_parent": "administrator.sqlite",
-                    }
-            return {"file": "organisation.sqlite", "parent_id": [0]}
-        if instance.type == QuestionTypes.administration:
-            if max_level:
-                extra_objects = {
-                    "max_level": 1,
+            extra_type = (instance.extra or {}).get("type")
+            if extra_type == "entity":
+                cascade_name = (instance.extra or {}).get("name")
+                entity_type = Entity.objects.filter(
+                    name=cascade_name
+                ).first()
+                entity_id = entity_type.id if entity_type else None
+                return {
+                    "file": "entity_data.sqlite",
+                    "cascade_type": entity_id,
+                    "cascade_parent": "administrator.sqlite",
                 }
+            # Administration cascade (extra.type="administration" or null).
             return {
                 "file": "administrator.sqlite",
                 "parent_id": [a.id for a in assignment.administrations.all()]
                 if assignment
                 else [
                     ur.administration.id
-                    for ur in
-                    user.user_user_role.all()
+                    for ur in user.user_user_role.all()
                 ],
-                **extra_objects,
             }
         return None
 
@@ -274,6 +275,9 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             "fn",
             "pre",
             "displayOnly",
+            "translations",
+            "columns",
+            "limit",
         ]
 
 
@@ -284,7 +288,9 @@ class ListQuestionGroupSerializer(serializers.ModelSerializer):
     @extend_schema_field(ListQuestionSerializer(many=True))
     def get_question(self, instance: QuestionGroup):
         return ListQuestionSerializer(
-            instance=instance.question_group_question.all().order_by("order"),
+            instance=instance.question_group_question.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             context=self.context,
             many=True,
         ).data
@@ -298,6 +304,7 @@ class ListQuestionGroupSerializer(serializers.ModelSerializer):
             "repeatable",
             "repeat_text",
             "order",
+            "translations",
         ]
 
 
@@ -333,7 +340,9 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
     @extend_schema_field(ListQuestionGroupSerializer(many=True))
     def get_question_group(self, instance: Forms):
         return ListQuestionGroupSerializer(
-            instance=instance.form_question_group.all().order_by("order"),
+            instance=instance.form_question_group.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
             context=self.context,
         ).data
@@ -341,20 +350,17 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.ListField())
     def get_cascades(self, instance: Forms):
         cascade_questions = Questions.objects.filter(
-            type__in=[QuestionTypes.cascade, QuestionTypes.administration],
+            type=QuestionTypes.cascade,
             form=instance,
+            deleted_at__isnull=True,
         ).all()
         source = []
         for cascade_question in cascade_questions:
-            if cascade_question.type == QuestionTypes.administration:
-                source.append("/sqlite/administrator.sqlite")
-            if (
-                cascade_question.extra
-                and cascade_question.extra.get("type") == "entity"
-            ):
+            extra_type = (cascade_question.extra or {}).get("type")
+            if extra_type == "entity":
                 source.append("/sqlite/entity_data.sqlite")
             else:
-                source.append("/sqlite/organisation.sqlite")
+                source.append("/sqlite/administrator.sqlite")
         return np.unique(source)
 
     class Meta:
@@ -366,18 +372,40 @@ class WebFormDetailSerializer(serializers.ModelSerializer):
             "cascades",
             "approval_instructions",
             "parent",
+            "languages",
+            "default_language",
+            "translations",
             "question_group",
         ]
 
 
 class ListFormSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+    created_by = serializers.SerializerMethodField()
+    updated_by = serializers.SerializerMethodField()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
+    def get_created_by(self, obj):
+        return obj.created_by.email if obj.created_by else None
+
+    def get_updated_by(self, obj):
+        return obj.updated_by.email if obj.updated_by else None
+
     class Meta:
         model = Forms
         fields = [
             "id",
             "name",
             "version",
+            "status",
             "parent",
+            "type",
+            "created",
+            "updated",
+            "created_by",
+            "updated_by",
         ]
 
 
@@ -407,9 +435,7 @@ class FormDataListQuestionSerializer(serializers.ModelSerializer):
         )
     )
     def get_type(self, instance: Questions):
-        if instance.type == QuestionTypes.administration:
-            return QuestionTypes.FieldStr.get(QuestionTypes.cascade).lower()
-        return QuestionTypes.FieldStr.get(instance.type).lower()
+        return _question_type_str(instance)
 
     @extend_schema_field(
         CustomMultipleChoiceField(
@@ -468,7 +494,9 @@ class FormDataQuestionGroupSerializer(serializers.ModelSerializer):
     @extend_schema_field(FormDataListQuestionSerializer(many=True))
     def get_question(self, instance: QuestionGroup):
         return FormDataListQuestionSerializer(
-            instance=instance.question_group_question.all().order_by("order"),
+            instance=instance.question_group_question.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
         ).data
 
@@ -485,7 +513,9 @@ class FormDataSerializer(serializers.ModelSerializer):
     @extend_schema_field(FormDataQuestionGroupSerializer(many=True))
     def get_question_group(self, instance: Forms):
         return FormDataQuestionGroupSerializer(
-            instance=instance.form_question_group.all().order_by("order"),
+            instance=instance.form_question_group.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
             many=True,
         ).data
 
@@ -544,3 +574,181 @@ class FormApproverResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Administration
         fields = ["users", "administration"]
+
+
+# ─── Form Builder CRUD Serializers ───────────────────────────────────────────
+
+
+class FormDetailQuestionSerializer(serializers.ModelSerializer):
+    """Question serializer for form builder detail/CRUD endpoints.
+
+    Returns all editor-relevant fields including disable_delete.
+    """
+    type = serializers.SerializerMethodField()
+    option = serializers.SerializerMethodField()
+    disable_delete = serializers.SerializerMethodField()
+
+    def get_type(self, instance: Questions):
+        return _question_type_str(instance)
+
+    def get_option(self, instance: Questions):
+        if instance.type == QuestionTypes.tree:
+            return instance.tree_option
+        return ListOptionSerializer(
+            instance=instance.options.all().order_by("order"), many=True
+        ).data
+
+    def get_disable_delete(self, instance: Questions):
+        if Answers.objects.filter(question=instance).exists():
+            return True
+        return None
+
+    def to_representation(self, instance):
+        result = super().to_representation(instance)
+        return OrderedDict(
+            [(key, result[key]) for key in result if result[key] is not None]
+        )
+
+    class Meta:
+        model = Questions
+        fields = [
+            "id",
+            "order",
+            "name",
+            "label",
+            "short_label",
+            "type",
+            "meta",
+            "required",
+            "rule",
+            "dependency",
+            "dependency_rule",
+            "api",
+            "extra",
+            "tooltip",
+            "fn",
+            "pre",
+            "display_only",
+            "variable_name",
+            "hidden_string",
+            "required_double_entry",
+            "disabled",
+            "addon_before",
+            "addon_after",
+            "data_api_url",
+            "center",
+            "translations",
+            "columns",
+            "limit",
+            "option",
+            "disable_delete",
+        ]
+
+
+class FormDetailQuestionGroupSerializer(serializers.ModelSerializer):
+    question = serializers.SerializerMethodField()
+
+    def get_question(self, instance: QuestionGroup):
+        return FormDetailQuestionSerializer(
+            instance=instance.question_group_question.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
+            many=True,
+        ).data
+
+    class Meta:
+        model = QuestionGroup
+        fields = [
+            "id", "name", "label", "order",
+            "repeatable", "repeat_text", "translations", "question",
+        ]
+
+
+class FormDetailSerializer(serializers.ModelSerializer):
+    """Extended form serializer for form builder endpoints."""
+    status = serializers.SerializerMethodField()
+    question_group = serializers.SerializerMethodField()
+    latest_version = serializers.SerializerMethodField()
+    created_by = serializers.SerializerMethodField()
+    updated_by = serializers.SerializerMethodField()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
+    def get_latest_version(self, obj):
+        last = obj.published_versions.order_by("-version").first()
+        return last.version if last else obj.version
+
+    def get_question_group(self, instance: Forms):
+        return FormDetailQuestionGroupSerializer(
+            instance=instance.form_question_group.filter(
+                deleted_at__isnull=True
+            ).order_by("order"),
+            many=True,
+        ).data
+
+    def get_created_by(self, obj):
+        return obj.created_by.email if obj.created_by else None
+
+    def get_updated_by(self, obj):
+        return obj.updated_by.email if obj.updated_by else None
+
+    class Meta:
+        model = Forms
+        fields = [
+            "id",
+            "name",
+            "description",
+            "version",
+            "latest_version",
+            "status",
+            "published_at",
+            "active_version_id",
+            "type",
+            "approval_instructions",
+            "parent",
+            "languages",
+            "default_language",
+            "translations",
+            "created",
+            "updated",
+            "created_by",
+            "updated_by",
+            "question_group",
+        ]
+
+
+class FormPublishedVersionSerializer(serializers.ModelSerializer):
+    """Serializer for the published versions list endpoint."""
+    published_by = serializers.SerializerMethodField()
+    is_active = serializers.SerializerMethodField()
+
+    def get_published_by(self, instance):
+        return instance.published_by.email if instance.published_by else None
+
+    def get_is_active(self, instance):
+        return instance.form.active_version_id == instance.id
+
+    class Meta:
+        model = FormPublishedVersion
+        fields = ["id", "version", "published_at", "published_by", "is_active"]
+
+
+class FormUpdateRequestSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False)
+    type = serializers.IntegerField(
+        required=False,
+        help_text="1 = registration, 2 = monitoring",
+    )
+    approval_instructions = serializers.CharField(
+        required=False, allow_null=True
+    )
+    parent = serializers.IntegerField(required=False, allow_null=True)
+    question_group = serializers.ListField(
+        required=False,
+        child=serializers.DictField(),
+        help_text=(
+            "Full question group array. Omit to skip group/question updates. "
+            "Pass ?allow_delete=true to soft-delete removed groups/questions."
+        ),
+    )

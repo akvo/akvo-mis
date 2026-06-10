@@ -18,10 +18,13 @@
           "label": "School Location",
           "short_label": null,
           "meta": false,
-          "type": "administration",
+          "type": "cascade",
           "required": true,
           "api": {
             "endpoint": "/api/v1/administrations/"
+          },
+          "extra": {
+            "type": "administration"
           }
         },
         {

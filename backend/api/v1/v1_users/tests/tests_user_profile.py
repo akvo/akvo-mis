@@ -97,6 +97,7 @@ class UserProfileTestCase(TestCase, ProfileTestHelperMixin):
                 'is_editor',
                 'can_delete',
                 'can_invite_user',
+                'can_form_builder',
             ]
         )
         self.assertEqual(

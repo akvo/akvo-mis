@@ -53,6 +53,18 @@ class Command(BaseCommand):
                     type=FeatureTypes.user_access,
                     access=FeatureAccessTypes.invite_user
                 )
+                # Add form builder feature (granular access types)
+                for fb_access in [
+                    FeatureAccessTypes.form_view,
+                    FeatureAccessTypes.form_create,
+                    FeatureAccessTypes.form_edit,
+                    FeatureAccessTypes.form_publish,
+                    FeatureAccessTypes.form_delete,
+                ]:
+                    admin_role.role_role_feature_access.create(
+                        type=FeatureTypes.form_builder,
+                        access=fb_access,
+                    )
 
             # Create Submitter role
             submitter_role, created = level.role_administration_level\
