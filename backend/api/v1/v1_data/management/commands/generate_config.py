@@ -15,6 +15,7 @@ from api.v1.v1_profile.models import Levels
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
 from api.v1.v1_forms.serializers import FormDataSerializer
 from api.v1.v1_visualization.functions import refresh_materialized_data
+from api.v1.v1_forms.constants import FormStatus
 
 
 class Command(BaseCommand):
@@ -59,7 +60,7 @@ class Command(BaseCommand):
                     "level": level.level,
                 }
             )
-        for form in Forms.objects.all():
+        for form in Forms.objects.filter(status=FormStatus.published).all():
             forms.append(
                 {
                     "id": form.id,
