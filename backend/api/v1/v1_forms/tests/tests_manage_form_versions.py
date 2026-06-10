@@ -5,7 +5,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from api.v1.v1_forms.models import FormPublishedVersion
+from api.v1.v1_forms.models import FormPublishedVersion, Questions
 from api.v1.v1_users.models import SystemUser
 
 
@@ -266,3 +266,132 @@ class ManageFormVersionDetailTestCase(TestCase):
         )
         self.assertEqual(res_v2.status_code, 200)
         self.assertEqual(res_v2.json()["version"], 2)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class ActivateSequenceSyncTestCase(TestCase):
+    """Tests for the PK-sequence sync guard in restore_from_snapshot.
+
+    The form editor saves questions with JS timestamp IDs directly into
+    the question table, leaving the PostgreSQL sequence far behind.
+    When a snapshot contains a question ID that is absent from the DB,
+    restore_from_snapshot must INSERT a fresh row.  Without the sequence
+    sync the auto-generated PK collides with an existing small-integer
+    row from seeded data.
+    """
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("fake_organisation_seeder", "--repeat", 3)
+        call_command("default_roles_seeder", "--test")
+        call_command("form_seeder", "--test")
+        with connection.cursor() as cur:
+            for tbl in ["form", "question_group", "question", "option"]:
+                cur.execute(
+                    f"SELECT setval("
+                    f"pg_get_serial_sequence('{tbl}', 'id'),"
+                    f"(SELECT COALESCE(MAX(id), 0) FROM \"{tbl}\") + 1,"
+                    f"false)"
+                )
+        res = self.client.post(
+            "/api/v1/login",
+            {"email": "admin@akvo.org", "password": "Test105*"},
+            content_type="application/json",
+        )
+        self.header = {
+            "HTTP_AUTHORIZATION": f"Bearer {res.json().get('token')}"
+        }
+
+    def _create_and_publish(self):
+        form_res = self.client.post(
+            "/api/v1/manage/forms",
+            json.dumps(FORM_PAYLOAD),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(form_res.status_code, 201)
+        form_id = form_res.json()["id"]
+        pub_res = self.client.post(
+            f"/api/v1/manage/forms/{form_id}/publish",
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(pub_res.status_code, 200)
+        return form_id
+
+    def test_activate_succeeds_when_snapshot_has_editor_generated_id(self):
+        """activate returns 200 when a snapshot question ID is an editor-
+        generated timestamp not present in the DB and the PK sequence
+        is wound back to a value that would collide without the guard."""
+        form_id = self._create_and_publish()
+        v1 = FormPublishedVersion.objects.get(form_id=form_id, version=1)
+
+        # Replace the real question PK in the snapshot with a JS-timestamp
+        # style ID that does not exist in the question table — this is what
+        # happens in production when the editor generates its own IDs.
+        fake_editor_id = 1780000000000
+        schema = v1.schema
+        schema["question_group"][0]["question"][0]["id"] = fake_editor_id
+        FormPublishedVersion.objects.filter(id=v1.id).update(schema=schema)
+
+        # Wind the sequence back to (real_q_id - 1) so its next value
+        # equals an existing PK — guaranteed IntegrityError without the fix.
+        real_q_id = Questions.objects.filter(form_id=form_id).first().id
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT setval("
+                "pg_get_serial_sequence('question', 'id'), %s)",
+                [real_q_id - 1],
+            )
+
+        res = self.client.post(
+            f"/api/v1/manage/forms/{form_id}/activate/{v1.id}",
+            content_type="application/json",
+            **self.header,
+        )
+
+        self.assertEqual(res.status_code, 200)
+        q_names = {
+            q["name"]
+            for g in res.json()["question_group"]
+            for q in g["question"]
+        }
+        self.assertIn("question_one", q_names)
+
+    def test_activate_new_question_id_does_not_collide_after_sync(self):
+        """The fresh row created for an absent snapshot question gets a PK
+        strictly above all existing rows (sequence was synced to MAX)."""
+        form_id = self._create_and_publish()
+        v1 = FormPublishedVersion.objects.get(form_id=form_id, version=1)
+
+        fake_editor_id = 1780000000001
+        schema = v1.schema
+        schema["question_group"][0]["question"][0]["id"] = fake_editor_id
+        FormPublishedVersion.objects.filter(id=v1.id).update(schema=schema)
+
+        # Use objects_with_deleted to capture the true max PK including
+        # any soft-deleted rows, so the baseline is the absolute ceiling.
+        max_id_before = Questions.objects_with_deleted.order_by(
+            "-id"
+        ).values_list("id", flat=True).first()
+
+        real_q_id = Questions.objects.filter(form_id=form_id).first().id
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT setval("
+                "pg_get_serial_sequence('question', 'id'), %s)",
+                [real_q_id - 1],
+            )
+
+        res = self.client.post(
+            f"/api/v1/manage/forms/{form_id}/activate/{v1.id}",
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 200)
+
+        new_q = Questions.objects.filter(
+            form_id=form_id, name="question_one"
+        ).first()
+        self.assertIsNotNone(new_q)
+        self.assertGreater(new_q.id, max_id_before)
