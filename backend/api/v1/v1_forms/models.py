@@ -13,7 +13,7 @@ from api.v1.v1_users.models import SystemUser
 from utils.soft_deletes_model import SoftDeletes
 
 
-class Forms(models.Model):
+class Forms(SoftDeletes):
     name = models.TextField()
     description = models.TextField(default=None, null=True)
     version = models.IntegerField(default=1)
