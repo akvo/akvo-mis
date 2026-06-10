@@ -11,3 +11,13 @@
     background-color: #f6ffed;
   }
 }
+
+#form-builder-list {
+  // The Active/Archived tab bar has only two fixed tabs and never overflows.
+  // AntD still renders its overflow "more" node (.ant-tabs-nav-operations)
+  // and a ResizeObserver toggles .ant-tabs-nav-operations-hidden, which
+  // causes a visible show/hide flicker. Hide the node to stop the glitch.
+  .ant-tabs-nav-operations {
+    display: none !important;
+  }
+}
