@@ -1,6 +1,6 @@
 import re
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 
@@ -445,6 +445,20 @@ def restore_from_snapshot(form, pv):
         QuestionOptions.objects.filter(
             question_id__in=snapshot_q_ids
         ).delete()
+
+    # Sync PK sequences: editor inserts use JS timestamp IDs directly,
+    # leaving the PostgreSQL sequences far behind. Without this, auto-
+    # created rows (editor IDs absent from the DB) collide with existing
+    # small-integer PKs from seeded data.
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT setval(pg_get_serial_sequence('question_group', 'id'),"
+            " COALESCE((SELECT MAX(id) FROM question_group), 1))"
+        )
+        cur.execute(
+            "SELECT setval(pg_get_serial_sequence('question', 'id'),"
+            " COALESCE((SELECT MAX(id) FROM question), 1))"
+        )
 
     new_options = []
 

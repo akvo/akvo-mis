@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import tempfile
 from io import StringIO
 
 from django.test.utils import override_settings
@@ -15,7 +17,7 @@ from api.v1.v1_forms.management.commands.form_seeder import (
     migrate_question_answers,
 )
 from api.v1.v1_users.models import SystemUser
-from utils.functions import atomic_write, atomic_write_json
+from utils.functions import atomic_write_json
 
 
 def seed_administration_test():
@@ -309,14 +311,15 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
     def test_question_truly_removed_is_deleted(self):
         """When a question is removed from all forms (not just moved),
         the question itself should be deleted by the seeder."""
-        source_folder = "./source/forms/"
-        form1_path = os.path.join(source_folder, "example-1.json")
-
-        with open(form1_path, "r") as f:
-            form1_orig = f.read()
+        # Isolated copy so we never mutate the shared repo fixtures
+        # (races with other fixture-mutating tests under --parallel).
+        tmp_source = tempfile.mkdtemp(prefix="form_seeder_removed_")
+        shutil.copytree("./source/forms/", tmp_source, dirs_exist_ok=True)
+        form1_path = os.path.join(tmp_source, "example-1.json")
 
         try:
-            form1_json = json.loads(form1_orig)
+            with open(form1_path, "r") as f:
+                form1_json = json.load(f)
             # Remove question 111 (autofield: multiple_of_two)
             form1_json["question_groups"][0]["questions"] = [
                 q
@@ -326,31 +329,30 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
             atomic_write_json(form1_path, form1_json)
 
             call_command(
-                "form_seeder", "--test",
+                "form_seeder", "--test", source=tmp_source,
                 stdout=StringIO(), stderr=StringIO()
             )
             self.assertFalse(Questions.objects.filter(pk=111).exists())
         finally:
-            atomic_write(form1_path, form1_orig)
+            shutil.rmtree(tmp_source, ignore_errors=True)
 
     def test_empty_question_group_cleaned_after_cross_form_move(self):
         """When all questions in a group move to another form,
         the now-empty group should be deleted in the same seeder run."""
-        source_folder = "./source/forms/"
-        form1_path = os.path.join(source_folder, "example-1.json")
-        mon_path = os.path.join(
-            source_folder, "example-1.1.monitoring.json"
-        )
-
-        with open(form1_path, "r") as f:
-            form1_orig = f.read()
-        with open(mon_path, "r") as f:
-            mon_orig = f.read()
+        # Isolated copy so we never mutate the shared repo fixtures
+        # (races with other fixture-mutating tests under --parallel).
+        tmp_source = tempfile.mkdtemp(prefix="form_seeder_emptyqg_")
+        shutil.copytree("./source/forms/", tmp_source, dirs_exist_ok=True)
+        form1_path = os.path.join(tmp_source, "example-1.json")
+        mon_path = os.path.join(tmp_source, "example-1.1.monitoring.json")
 
         try:
+            with open(form1_path, "r") as f:
+                form1_json = json.load(f)
+            with open(mon_path, "r") as f:
+                mon_orig = f.read()
             # Add a second question group (id=12) with one question
             # (id=112) to form 1
-            form1_json = json.loads(form1_orig)
             form1_json["question_groups"].append({
                 "id": 12,
                 "order": 2,
@@ -370,7 +372,7 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
 
             # Seed so QG 12 with question 112 exists in DB
             call_command(
-                "form_seeder", "--test",
+                "form_seeder", "--test", source=tmp_source,
                 stdout=StringIO(), stderr=StringIO()
             )
             self.assertTrue(QG.objects.filter(pk=12).exists())
@@ -398,7 +400,7 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
 
             # Re-seed: question moves, group should be cleaned up
             call_command(
-                "form_seeder", "--test",
+                "form_seeder", "--test", source=tmp_source,
                 stdout=StringIO(), stderr=StringIO()
             )
 
@@ -410,5 +412,4 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
             self.assertFalse(QG.objects.filter(pk=12).exists())
 
         finally:
-            atomic_write(form1_path, form1_orig)
-            atomic_write(mon_path, mon_orig)
+            shutil.rmtree(tmp_source, ignore_errors=True)

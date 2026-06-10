@@ -14,9 +14,12 @@ from api.v1.v1_profile.models import Administration
 def refresh_materialized_data():
     with connection.cursor() as cursor:
         cursor.execute(
-            """
-            REFRESH MATERIALIZED VIEW view_data_options;
-            """
+            "SELECT 1 FROM pg_matviews WHERE matviewname = 'view_data_options'"
+        )
+        if not cursor.fetchone():
+            return
+        cursor.execute(
+            "REFRESH MATERIALIZED VIEW view_data_options;"
         )
 
 

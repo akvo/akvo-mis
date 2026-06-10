@@ -8,6 +8,7 @@ from django.db.models import Q
 from api.v1.v1_mobile.authentication import MobileAssignmentToken
 from api.v1.v1_profile.models import Administration, Entity
 from api.v1.v1_data.models import FormData
+from api.v1.v1_forms.constants import FormStatus
 from utils.custom_serializer_fields import (
     CustomCharField,
     CustomIntegerField,
@@ -70,10 +71,16 @@ class MobileAssignmentFormsSerializer(serializers.Serializer):
     @extend_schema_field(MobileFormSerializer(many=True))
     def get_formsUrl(self, obj):
         # get all forms and its children forms
-        base_forms = list(obj.forms.all().order_by("id"))
+        base_forms = list(obj.forms.filter(
+            status=FormStatus.published
+        ).all().order_by("id"))
         child_forms = []
         for form in base_forms:
-            child_forms.extend(list(form.children.all().order_by("id")))
+            child_forms.extend(list(
+                form.children.filter(
+                    status=FormStatus.published
+                ).all().order_by("id")
+            ))
         forms = base_forms + child_forms
         return MobileFormSerializer(instance=forms, many=True).data
 

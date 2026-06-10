@@ -1,5 +1,6 @@
 import os
 import shutil
+import uuid
 import zipfile
 from io import StringIO
 
@@ -77,10 +78,18 @@ ADMIN_ROWS = [
 ]
 
 
+def _extract_dir():
+    """Per-process zip extraction dir. The plain './tmp/zip_extract' is
+    shared across Django --parallel workers (separate processes, one
+    filesystem); concurrent extract/rmtree races corrupt reads. Keying on
+    the worker PID isolates each worker."""
+    return f"./tmp/zip_extract_{os.getpid()}"
+
+
 def _cleanup_zip(zip_path: str, job_result: str) -> None:
     """Remove local files and remote storage after a test."""
-    if os.path.exists("./tmp/zip_extract"):
-        shutil.rmtree("./tmp/zip_extract")
+    if os.path.exists(_extract_dir()):
+        shutil.rmtree(_extract_dir())
     if os.path.exists(zip_path):
         os.remove(zip_path)
     storage.delete(url=f"download/{job_result}")
@@ -151,7 +160,7 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
             info=info,
             result="placeholder.zip",
         )
-        job.result = f"download-test-{job.id}.zip"
+        job.result = f"download-test-{uuid.uuid4().hex}.zip"
         job.save()
         return job
 
@@ -173,7 +182,7 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
             info=info,
             result="placeholder.xlsx",
         )
-        job.result = f"download-test-{job.id}.xlsx"
+        job.result = f"download-test-{uuid.uuid4().hex}.xlsx"
         job.save()
         return job
 
@@ -195,9 +204,9 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             self.assertIn(reg_name, zf.namelist())
-            zf.extract(reg_name, "./tmp/zip_extract/")
+            zf.extract(reg_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{reg_name}", sheet_name="data"
+                f"{_extract_dir()}/{reg_name}", sheet_name="data"
             )
             self.assertEqual(
                 len(df), len(selected),
@@ -233,9 +242,9 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
 
         with zipfile.ZipFile(zip_path, "r") as zf:
             self.assertIn(child_name, zf.namelist())
-            zf.extract(child_name, "./tmp/zip_extract/")
+            zf.extract(child_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{child_name}", sheet_name="data"
+                f"{_extract_dir()}/{child_name}", sheet_name="data"
             )
             if len(df) > 0:
                 self.assertIn("parent_id", df.columns)
@@ -260,9 +269,9 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
         reg_name = _sanitize_form_name(self.form.name) + ".xlsx"
 
         with zipfile.ZipFile(zip_normal, "r") as zf:
-            zf.extract(reg_name, "./tmp/zip_extract/")
+            zf.extract(reg_name, _extract_dir() + "/")
             df_normal = pd.read_excel(
-                f"./tmp/zip_extract/{reg_name}", sheet_name="data"
+                f"{_extract_dir()}/{reg_name}", sheet_name="data"
             )
         normal_count = len(df_normal)
         _cleanup_zip(zip_normal, job_normal.result)
@@ -276,9 +285,9 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
         zip_empty = f"./tmp/{job_empty.result}"
 
         with zipfile.ZipFile(zip_empty, "r") as zf:
-            zf.extract(reg_name, "./tmp/zip_extract/")
+            zf.extract(reg_name, _extract_dir() + "/")
             df_empty = pd.read_excel(
-                f"./tmp/zip_extract/{reg_name}", sheet_name="data"
+                f"{_extract_dir()}/{reg_name}", sheet_name="data"
             )
         empty_count = len(df_empty)
         _cleanup_zip(zip_empty, job_empty.result)

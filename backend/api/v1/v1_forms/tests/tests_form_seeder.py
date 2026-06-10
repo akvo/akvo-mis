@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import tempfile
 from io import StringIO
 
 from django.test.utils import override_settings
@@ -9,7 +11,7 @@ from api.v1.v1_data.models import FormData, Answers, AnswerHistory
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_users.models import SystemUser
 from django.test import TestCase
-from utils.functions import atomic_write, atomic_write_json
+from utils.functions import atomic_write_json
 
 
 def seed_administration_test():
@@ -186,8 +188,16 @@ class FormSeederTestCase(TestCase):
         be redistributed to monitoring FormData children."""
         seed_administration_test()
 
-        # Step 1: Seed forms — question 109 belongs to form 1
-        self.call_command("--test")
+        # Work on an isolated copy of the fixtures so this test never
+        # mutates the shared repo fixtures. Mutating the real files races
+        # with other fixture-mutating tests under --parallel (they run in
+        # separate processes sharing one filesystem).
+        real_source = "./source/forms/"
+        tmp_source = tempfile.mkdtemp(prefix="form_seeder_move_")
+
+        # Step 1: Seed forms from the copy — question 109 belongs to form 1
+        shutil.copytree(real_source, tmp_source, dirs_exist_ok=True)
+        self.call_command("--test", source=tmp_source)
 
         reg_form = Forms.objects.get(pk=1)
         mon_form = Forms.objects.get(pk=10001)
@@ -232,21 +242,15 @@ class FormSeederTestCase(TestCase):
             parent=reg_data,
         )
 
-        # Step 3: Modify fixtures to move question 109 to monitoring
-        source_folder = "./source/forms/"
-        form1_path = os.path.join(source_folder, "example-1.json")
-        mon_path = os.path.join(
-            source_folder, "example-1.1.monitoring.json"
-        )
-
-        with open(form1_path, "r") as f:
-            form1_orig = f.read()
-        with open(mon_path, "r") as f:
-            mon_orig = f.read()
+        # Step 3: Modify the copied fixtures to move question 109
+        form1_path = os.path.join(tmp_source, "example-1.json")
+        mon_path = os.path.join(tmp_source, "example-1.1.monitoring.json")
 
         try:
-            form1_json = json.loads(form1_orig)
-            mon_json = json.loads(mon_orig)
+            with open(form1_path, "r") as f:
+                form1_json = json.load(f)
+            with open(mon_path, "r") as f:
+                mon_json = json.load(f)
 
             # Extract question 109 from registration form
             q109 = next(
@@ -271,7 +275,7 @@ class FormSeederTestCase(TestCase):
             atomic_write_json(mon_path, mon_json)
 
             # Step 4: Re-run seeder with modified fixtures
-            self.call_command("--test")
+            self.call_command("--test", source=tmp_source)
 
             # Step 5: Assert question now belongs to monitoring form
             question_109.refresh_from_db()
@@ -305,6 +309,5 @@ class FormSeederTestCase(TestCase):
             self.assertFalse(reg_history.exists())
 
         finally:
-            # Restore original fixtures
-            atomic_write(form1_path, form1_orig)
-            atomic_write(mon_path, mon_orig)
+            # Remove the isolated copy; real fixtures were never touched
+            shutil.rmtree(tmp_source, ignore_errors=True)

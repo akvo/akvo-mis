@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import uuid
 import zipfile
 from datetime import datetime, time, timedelta
 from dateutil import parser
@@ -585,12 +586,17 @@ def _generate_zip_download(job, **kwargs):
     date_from = kwargs.get("date_from")
     date_to = kwargs.get("date_to")
 
+    # Unique token for intermediate scratch files so concurrent download
+    # jobs (and parallel test workers sharing ./tmp) never clobber each
+    # other's Excel files mid-zip. job.id alone is not enough under
+    # --parallel, where each worker DB reuses the same ids.
+    scratch = uuid.uuid4().hex
     tmp_files = []
     try:
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             # Registration Excel
             reg_name = _sanitize_form_name(form.name)
-            reg_path = f"./tmp/reg_{job.id}.xlsx"
+            reg_path = f"./tmp/reg_{scratch}.xlsx"
             tmp_files.append(reg_path)
             with pd.ExcelWriter(reg_path, engine="xlsxwriter") as rw:
                 generate_data_sheet(
@@ -620,7 +626,7 @@ def _generate_zip_download(job, **kwargs):
                     child_form.name, form_id=child_form.id
                 )
                 child_path = (
-                    f"./tmp/child_{child_form.id}_{job.id}.xlsx"
+                    f"./tmp/child_{child_form.id}_{scratch}.xlsx"
                 )
                 tmp_files.append(child_path)
                 with pd.ExcelWriter(
