@@ -1,4 +1,5 @@
 import os
+import uuid
 import zipfile
 from datetime import timedelta
 from io import StringIO
@@ -22,6 +23,14 @@ from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import SystemUser
 from rest_framework import status
 from utils import storage
+
+
+def _extract_dir():
+    """Per-process zip extraction dir. The plain './tmp/zip_extract' is
+    shared across Django --parallel workers (separate processes, one
+    filesystem); concurrent extract/rmtree races corrupt reads. Keying on
+    the worker PID isolates each worker."""
+    return f"./tmp/zip_extract_{os.getpid()}"
 
 
 @override_settings(USE_TZ=False)
@@ -126,7 +135,7 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             info=info,
             result="placeholder.zip",
         )
-        job.result = f"download-test-{job.id}.zip"
+        job.result = f"download-test-{uuid.uuid4().hex}.zip"
         job.save()
         return job
 
@@ -147,7 +156,7 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             info=info,
             result="placeholder.xlsx",
         )
-        job.result = f"download-test-{job.id}.xlsx"
+        job.result = f"download-test-{uuid.uuid4().hex}.xlsx"
         job.save()
         return job
 
@@ -180,15 +189,15 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
         with zipfile.ZipFile(zip_path, 'r') as zf:
             reg_name = _sanitize_form_name(self.form.name) + ".xlsx"
             self.assertIn(reg_name, zf.namelist())
-            zf.extract(reg_name, "./tmp/zip_extract/")
+            zf.extract(reg_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{reg_name}", sheet_name="data"
+                f"{_extract_dir()}/{reg_name}", sheet_name="data"
             )
             self.assertNotIn("parent_id", df.columns)
         # Cleanup
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -206,9 +215,9 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
                 ) + ".xlsx"
             )
             self.assertIn(child_name, zf.namelist())
-            zf.extract(child_name, "./tmp/zip_extract/")
+            zf.extract(child_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{child_name}", sheet_name="data"
+                f"{_extract_dir()}/{child_name}", sheet_name="data"
             )
             self.assertIn("parent_id", df.columns)
             self.assertIn("id", df.columns)
@@ -221,8 +230,8 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             for pid in df["parent_id"].dropna():
                 self.assertIn(int(pid), reg_ids)
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -248,9 +257,9 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
                     form_id=self.child_form.id
                 ) + ".xlsx"
             )
-            zf.extract(child_name, "./tmp/zip_extract/")
+            zf.extract(child_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{child_name}", sheet_name="data"
+                f"{_extract_dir()}/{child_name}", sheet_name="data"
             )
             if len(df) > 0:
                 parent_ids = df["parent_id"].tolist()
@@ -259,8 +268,8 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
                     "Recent mode should have one row per parent"
                 )
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -279,17 +288,17 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
                     form_id=self.child_form.id
                 ) + ".xlsx"
             )
-            zf.extract(child_name, "./tmp/zip_extract/")
+            zf.extract(child_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{child_name}", sheet_name="data"
+                f"{_extract_dir()}/{child_name}", sheet_name="data"
             )
             if len(df) > 0:
                 parent_ids = df["parent_id"].tolist()
                 unique_parents = set(parent_ids)
                 self.assertGreaterEqual(len(parent_ids), len(unique_parents))
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -328,17 +337,17 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
                     form_id=self.child_form.id
                 ) + ".xlsx"
             )
-            zf.extract(child_name, "./tmp/zip_extract/")
+            zf.extract(child_name, _extract_dir() + "/")
             df = pd.read_excel(
-                f"./tmp/zip_extract/{child_name}", sheet_name="data"
+                f"{_extract_dir()}/{child_name}", sheet_name="data"
             )
             if len(children) >= 2 and len(df) > 0:
                 result_ids = df["id"].tolist()
                 self.assertNotIn(children[0].id, result_ids)
                 self.assertIn(children[1].id, result_ids)
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -385,9 +394,9 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             ) + ".xlsx"
         )
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extract(reg_name, "./tmp/zip_extract/")
+            zf.extract(reg_name, _extract_dir() + "/")
             reg_df = pd.read_excel(
-                f"./tmp/zip_extract/{reg_name}", sheet_name="data"
+                f"{_extract_dir()}/{reg_name}", sheet_name="data"
             )
             reg_ids = reg_df["id"].tolist()
             self.assertIn(
@@ -395,14 +404,14 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
                 "Registration created before date_from must be included "
                 "because its monitoring child falls within the range."
             )
-            zf.extract(child_name, "./tmp/zip_extract/")
+            zf.extract(child_name, _extract_dir() + "/")
             child_df = pd.read_excel(
-                f"./tmp/zip_extract/{child_name}", sheet_name="data"
+                f"{_extract_dir()}/{child_name}", sheet_name="data"
             )
             child_ids = child_df["id"].tolist()
             self.assertIn(child.id, child_ids)
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -414,15 +423,15 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
         zip_path = f"./tmp/{job.result}"
         with zipfile.ZipFile(zip_path, 'r') as zf:
             for name in zf.namelist():
-                zf.extract(name, "./tmp/zip_extract/")
-                xlsx = pd.ExcelFile(f"./tmp/zip_extract/{name}")
+                zf.extract(name, _extract_dir() + "/")
+                xlsx = pd.ExcelFile(f"{_extract_dir()}/{name}")
                 self.assertIn(
                     "questions", xlsx.sheet_names,
                     f"Missing 'questions' sheet in {name}"
                 )
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")
@@ -440,16 +449,16 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             ) + ".xlsx"
         )
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall("./tmp/zip_extract/")
+            zf.extractall(_extract_dir() + "/")
             # Registration has context sheet
-            reg_xlsx = pd.ExcelFile(f"./tmp/zip_extract/{reg_name}")
+            reg_xlsx = pd.ExcelFile(f"{_extract_dir()}/{reg_name}")
             self.assertIn("context", reg_xlsx.sheet_names)
             # Monitoring does NOT have context sheet
-            child_xlsx = pd.ExcelFile(f"./tmp/zip_extract/{child_name}")
+            child_xlsx = pd.ExcelFile(f"{_extract_dir()}/{child_name}")
             self.assertNotIn("context", child_xlsx.sheet_names)
         import shutil
-        if os.path.exists("./tmp/zip_extract"):
-            shutil.rmtree("./tmp/zip_extract")
+        if os.path.exists(_extract_dir()):
+            shutil.rmtree(_extract_dir())
         if os.path.exists(zip_path):
             os.remove(zip_path)
         storage.delete(url=f"download/{job.result}")

@@ -92,12 +92,21 @@ class Command(BaseCommand):
                             nargs="?",
                             default=False,
                             type=str)
+        parser.add_argument("-s",
+                            "--source",
+                            nargs="?",
+                            default=None,
+                            type=str)
 
     def handle(self, *args, **options):
         TEST = options.get("test")
         JSON_FILE = options.get("file")
-        # Form source
-        source_folder = './source/forms/'
+        # Form source. Overridable via --source so tests can point the
+        # seeder at an isolated copy of the fixtures instead of mutating
+        # the shared repo fixtures (which races under --parallel).
+        source_folder = options.get("source") or './source/forms/'
+        if not source_folder.endswith(os.sep):
+            source_folder = f"{source_folder}{os.sep}"
         source_files = [
             f"{source_folder}{json_file}"
             for json_file in os.listdir(source_folder)

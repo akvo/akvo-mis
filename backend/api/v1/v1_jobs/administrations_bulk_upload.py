@@ -139,7 +139,11 @@ def validate_administrations_bulk_upload(io_file):
     headers = list(df)
     headers = [h for h in headers if 'Code' not in h]
     header_count = len(headers)
-    levels = list(Levels.objects.all())
+    # Must match the template column order (generate_template orders level
+    # headers by `level`). A bare .all() relies on DB heap order, which is
+    # unspecified and makes validate_level_headers compare mismatched
+    # positions under --parallel/--shuffle (flaky spurious header errors).
+    levels = list(Levels.objects.order_by('level'))
     level_count = len(levels)
     excel_cols = list(itertools.islice(
         generate_excel_columns(),
