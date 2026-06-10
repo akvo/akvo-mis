@@ -3,7 +3,7 @@
 **Task ID**: FB-004
 **Author**: Iwan
 **Date**: 2026-06-09
-**Status**: Draft
+**Status**: Implemented (see §14 Implementation Notes for deltas from this design)
 
 **Builds on**: FB-001 (data architecture), FB-002 (backend CRUD API), FB-003 (frontend editor integration)
 
@@ -120,10 +120,11 @@ Related managers resolve through `Forms._default_manager`, so archived forms als
 | Field | Source | Use |
 |-------|--------|-----|
 | `name`, `version`, `status`, `type`, `parent` | `Forms` | columns + filters |
+| `parent_name` | derived: `obj.parent.name` | parent label in the flattened monitoring view (D-4) |
 | `created`, `updated` | `Forms` | "Last Updated" column |
 | `published_at` | `Forms` | shown in detail / version history |
 | `deleted_at` | `Forms` | drives the "Archived" status display |
-| `submission_count` | derived: `FormData.objects.filter(form=form).count()` | archive impact warning |
+| `submission_count` | derived: `obj.form_form_data.count()` | archive impact warning |
 
 ---
 
@@ -194,6 +195,7 @@ GET /api/v1/manage/forms?search=household&status=published&type=registration&pag
       "status": "published",
       "version": 2,
       "parent": null,
+      "parent_name": null,
       "updated": "2026-06-09T10:20:00Z",
       "created": "2026-01-15T10:30:00Z",
       "published_at": "2026-01-20T14:22:00Z",
@@ -207,6 +209,7 @@ GET /api/v1/manage/forms?search=household&status=published&type=registration&pag
           "status": "draft",
           "version": 1,
           "parent": 1,
+          "parent_name": "Household Survey 2026",
           "updated": "2026-06-08T09:00:00Z",
           "created": "2026-05-30T09:00:00Z",
           "published_at": null,
@@ -217,11 +220,13 @@ GET /api/v1/manage/forms?search=household&status=published&type=registration&pag
       ]
     }
   ],
+  "current": 1,
   "total": 1,
-  "page": 1,
-  "per_page": 10
+  "total_page": 1
 }
 ```
+
+The pagination envelope is the project-standard `Pagination` shape: `{ current, total, total_page, data }` (page size 10).
 
 ```
 POST /api/v1/manage/forms/1/archive    -> 200 { "id": 1, "status": "archived", "deleted_at": "2026-06-09T11:00:00Z" }
@@ -529,6 +534,26 @@ No open questions remain. Ready for `/sc:design` or implementation.
 - `backend/api/v1/v1_forms/serializers.py` — `ListFormSerializer`
 - `backend/utils/soft_deletes_model.py` — `SoftDeletes` mixin reused for Archive
 - `backend/api/v1/v1_forms/functions.py` — existing soft-delete usage for questions/groups (precedent)
+
+---
+
+## 14. Implementation Notes (deltas from this design)
+
+Recorded after implementation so the design matches what shipped.
+
+### Backend (commit `9d8e1998`)
+- Migration: `0008_forms_deleted_at` adds the nullable `deleted_at` column; no backfill.
+- `submission_count` is computed via the reverse manager (`obj.form_form_data.count()`), not a queryset annotation. This is an intentional N+1 over a ≤10-parent page plus its few children — acceptable per Q-5; revisit with `annotate(Count(...))` if pages grow heavy.
+- `ListFormSerializer` adds `parent_name` (`obj.parent.name`) so the flattened monitoring view (D-4) can show the parent without a second request.
+- `reset_forms` management command switched from `form.delete()` to `form.hard_delete()` — a ripple of the manager swap caught by `tests_reset_forms` (the soft-delete would have collided on PK at re-seed).
+- Tests: `tests_manage_form_archive.py` (12) and `tests_manage_form_list_filters.py` (10). Full `v1_forms` (164) and `v1_mobile` (107) suites green; flake8 clean.
+
+### Frontend (commit `df2a8b8a`)
+- **Permission gating delta (D-10 / D-11)**: the design specifies the FE gates **Delete permanently** on `form_delete`. The frontend CASL model is coarse — it only exposes `can("manage", "form-builder")`, with **no granular `form_delete` signal** ([ability.js](../../frontend/src/components/can/ability.js)). The button is therefore FE-gated on **`is_superuser` + `submission_count === 0`**. The **backend remains authoritative** (`destroy` requires `form_delete`, D-11), so a non-superuser with the `form_delete` role can still delete via the API — they just won't see the button. **Follow-up**: expose `can_form_delete` per role in the login/user response and add it to `ability.js` to fully honor D-11 in the UI. Other actions (Publish/Archive/Duplicate) are not FE-gated beyond page access; a missing backend permission surfaces as an error toast.
+- **Expand-by-default**: registration rows with monitoring children are expanded on load via controlled `expandedRowKeys` (recomputed whenever the list reloads); users can still collapse individual rows. Not in the original design — added on request.
+- **Conditional expand icon**: a custom `expandable.expandIcon` renders the `+`/`−` toggle only for rows that actually have children, and a fixed-width spacer otherwise (keeps the Name column aligned).
+- **Tabs glitch fix**: AntD renders a tab-overflow "more" node (`.ant-tabs-nav-operations`) whose `ResizeObserver` flickered the `-hidden` class with our two-tab bar. Hidden via a scoped rule in `style.scss` (two fixed tabs never overflow).
+- Pagination envelope is the project-standard `{ current, total, total_page, data }`.
 
 ---
 
