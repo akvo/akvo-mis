@@ -113,6 +113,8 @@ const FormBuilderEdit = () => {
         setFormVersion(res.data.version);
         setFormLatestVersion(res.data.latest_version);
         notify({ type: "success", message: text.formBuilderPublishSuccess });
+        // window.forms is a global bundle — reload to pick up the updated object
+        window.location.reload();
       })
       .catch((err) => {
         const msg = err.response?.data?.message || text.formBuilderPublishError;
@@ -132,6 +134,8 @@ const FormBuilderEdit = () => {
         setFormVersion(res.data.version);
         setFormLatestVersion(res.data.latest_version);
         notify({ type: "success", message: text.formBuilderUnpublishSuccess });
+        // window.forms is a global bundle — reload to pick up the updated object
+        window.location.reload();
       })
       .catch((err) => {
         const msg =
