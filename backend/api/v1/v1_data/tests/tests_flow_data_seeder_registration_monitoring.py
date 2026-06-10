@@ -27,6 +27,7 @@ import pandas as pd
 import tempfile
 import shutil
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
 from django.test.utils import override_settings
 from io import StringIO
@@ -68,6 +69,17 @@ class BaseFlowDataSeederTest(TestCase):
         # Create forms (parent ID=4, child ID=40004) using form seeder
         call_command("form_seeder", "--test", 4)
 
+        # The seeder creates registration (parent) FormData with EXPLICIT
+        # ids equal to the fixture datapoint_ids (411-413) while monitoring
+        # children auto-increment. PostgreSQL sequences are not rolled back
+        # between TestCases, so under --parallel a prior test can leave the
+        # 'data' sequence in the 411-413 range, making an auto-increment
+        # child PK collide with an explicit parent PK. That IntegrityError
+        # is swallowed inside an atomic block and poisons the transaction
+        # (TransactionManagementError surfaces on the next query). Force the
+        # sequence well above the explicit parent ids to remove the overlap.
+        self._raise_form_data_sequence()
+
         # Create user
         self.user = SystemUser.objects.create_user(
             email="test@example.com",
@@ -107,6 +119,15 @@ class BaseFlowDataSeederTest(TestCase):
 
         # Copy and update fixture files
         self.copy_fixture_files()
+
+    @staticmethod
+    def _raise_form_data_sequence(floor=10_000_000):
+        """Set the FormData PK sequence above the explicit parent PKs."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT setval(pg_get_serial_sequence(%s, 'id'), %s, false)",
+                [FormData._meta.db_table, floor],
+            )
 
     def copy_fixture_files(self):
         """Copy and update fixture files for testing."""
