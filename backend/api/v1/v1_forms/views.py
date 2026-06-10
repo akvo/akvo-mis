@@ -666,6 +666,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             form.refresh_from_db()
         form.status = FormStatus.draft
         form.save(update_fields=["status"])
+        async_task("api.v1.v1_forms.tasks.refresh_form_config")
         return Response(
             _to_editor_format(FormDetailSerializer(instance=form).data)
         )
