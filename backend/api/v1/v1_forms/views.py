@@ -506,6 +506,10 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         data = []
         for parent in page:
             child_qs = parent.children.all()
+            if status_param in self._STATUS_MAP:
+                child_qs = child_qs.filter(
+                    status=self._STATUS_MAP[status_param]
+                )
             parent_matches = (not search) or (
                 search.lower() in parent.name.lower()
             )
@@ -678,6 +682,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         # Permanent removal. Forms is soft-deletable (D-1), so the default
         # .delete() would soft-delete — call hard_delete() explicitly (D-9).
         form.hard_delete()
+        async_task("api.v1.v1_forms.tasks.refresh_form_config")
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
