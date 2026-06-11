@@ -6,7 +6,11 @@ from mis.settings import PROD
 from django.core.management import BaseCommand
 from django.db import transaction
 
-from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes
+from api.v1.v1_forms.constants import (
+    QuestionTypes,
+    AttributeTypes,
+    FormStatus,
+)
 from api.v1.v1_forms.models import (
     Forms, Questions,
     QuestionGroup as QG,
@@ -164,6 +168,7 @@ class Command(BaseCommand):
                             'approval_instructions'
                         ),
                         type=json_form.get("type"),
+                        status=FormStatus.published,
                     )
                     if json_form.get("parent_id"):
                         parent = Forms.objects.filter(
