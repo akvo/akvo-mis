@@ -49,6 +49,8 @@ const FormBuilderList = () => {
 
   const isArchivedTab = activeTab === "archived";
   const isSuperuser = Boolean(user?.is_superuser);
+  const hasFormDelete =
+    isSuperuser || (user?.roles || []).some((r) => r.can_form_delete);
 
   const pagePath = [
     { title: "Control Center", link: "/control-center" },
@@ -288,7 +290,7 @@ const FormBuilderList = () => {
           {text.formBuilderRestoreButton}
         </Button>
       </Popconfirm>
-      {isSuperuser && renderDeletePermanently(record)}
+      {hasFormDelete && renderDeletePermanently(record)}
     </Space>
   );
 

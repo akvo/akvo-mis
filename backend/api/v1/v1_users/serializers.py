@@ -684,6 +684,7 @@ class UserRoleListSerializer(serializers.ModelSerializer):
             'id', 'role', 'administration',
             'is_approver', 'is_submitter', 'is_editor',
             'can_delete', 'can_invite_user', 'can_form_builder',
+            'can_form_delete',
         ]
 
 
