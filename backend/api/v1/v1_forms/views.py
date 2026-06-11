@@ -11,7 +11,7 @@ from rest_framework import status, serializers, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
-from utils.custom_permissions import FormBuilderAccess, IsSuperAdmin
+from utils.custom_permissions import FormBuilderAccess
 from rest_framework.response import Response
 
 from django.db.models import Q
@@ -436,19 +436,93 @@ def check_form_approver(request, form_id, version):
     ),
     destroy=extend_schema(
         tags=["Manage Forms"],
-        summary="Delete a form (superuser only)",
+        summary="Permanently delete a form (requires form_delete access)",
     ),
 )
 class FormBuilderViewSet(viewsets.ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
+        # archive/restore/destroy operate on archived (soft-deleted) rows,
+        # which the default manager cannot see (D-9, D-10).
+        if self.action in ("archive", "restore", "destroy"):
+            return Forms.objects_with_deleted.all()
         return Forms.objects.all()
 
     def get_serializer_class(self):
         if self.action == "list":
             return ListFormSerializer
         return FormDetailSerializer
+
+    # ── List with filtering, hierarchy and archived tab (FB-004) ──
+
+    _STATUS_MAP = {
+        "draft": FormStatus.draft,
+        "published": FormStatus.published,
+    }
+    _TYPE_MAP = {
+        "registration": FormTypes.registration,
+        "monitoring": FormTypes.monitoring,
+    }
+
+    def _serialize_form(self, form):
+        return ListFormSerializer(instance=form).data
+
+    def list(self, request, *args, **kwargs):
+        params = request.query_params
+        archived = params.get("archived") == "true"
+        search = (params.get("search") or "").strip()
+        type_param = params.get("type")
+        status_param = params.get("status")
+
+        base = Forms.objects_deleted if archived else Forms.objects
+        qs = base.all()
+        if status_param in self._STATUS_MAP:
+            qs = qs.filter(status=self._STATUS_MAP[status_param])
+
+        # Flat modes: a single explicit type, or the archived tab. No nesting.
+        if archived or type_param in self._TYPE_MAP:
+            if type_param in self._TYPE_MAP:
+                qs = qs.filter(type=self._TYPE_MAP[type_param])
+            if search:
+                qs = qs.filter(name__icontains=search)
+            page = self.paginate_queryset(qs.order_by("-id"))
+            data = [self._serialize_form(f) for f in page]
+            return self.get_paginated_response(data)
+
+        # "Active" tab, no type filter: registration parents with monitoring
+        # children nested (D-2, D-4). Search also matches children, pulling
+        # in their parent as a container (D-5).
+        parents = qs.filter(type=FormTypes.registration)
+        if search:
+            parents = parents.filter(
+                Q(name__icontains=search)
+                | Q(
+                    children__name__icontains=search,
+                    children__deleted_at__isnull=True,
+                )
+            ).distinct()
+        page = self.paginate_queryset(parents.order_by("-id"))
+        data = []
+        for parent in page:
+            child_qs = parent.children.all()
+            if status_param in self._STATUS_MAP:
+                child_qs = child_qs.filter(
+                    status=self._STATUS_MAP[status_param]
+                )
+            parent_matches = (not search) or (
+                search.lower() in parent.name.lower()
+            )
+            if search and not parent_matches:
+                # Parent pulled in only by a matching child (D-5): return
+                # just the matching children.
+                child_qs = child_qs.filter(name__icontains=search)
+            row = dict(self._serialize_form(parent))
+            row["children"] = [
+                self._serialize_form(c) for c in child_qs.order_by("-id")
+            ]
+            data.append(row)
+        return self.get_paginated_response(data)
 
     def get_permissions(self):
         perm_map = {
@@ -468,7 +542,18 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_edit),
             ],
-            "destroy": [IsAuthenticated, IsSuperAdmin],
+            "destroy": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_delete),
+            ],
+            "archive": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_publish),
+            ],
+            "restore": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_publish),
+            ],
             "publish": [
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_publish),
@@ -594,8 +679,65 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 {"message": "Cannot delete form with existing submissions"},
                 status=status.HTTP_409_CONFLICT,
             )
-        form.delete()
+        # Permanent removal. Forms is soft-deletable (D-1), so the default
+        # .delete() would soft-delete — call hard_delete() explicitly (D-9).
+        form.hard_delete()
+        async_task("api.v1.v1_forms.tasks.refresh_form_config")
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Archive a form — reversible soft-delete",
+        request=None,
+        description=(
+            "Soft-deletes the form (sets deleted_at). Archived forms are "
+            "removed from data collection (web and mobile) via the default "
+            "manager and moved to the Archived tab. Allowed even when the "
+            "form has submissions; they are preserved. Reversible via "
+            "/restore (D-1)."
+        ),
+    )
+    @action(detail=True, methods=["post"])
+    def archive(self, request, *args, **kwargs):
+        form = self.get_object()
+        if form.deleted_at is not None:
+            return Response(
+                {"message": "Form is already archived"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        form.soft_delete()
+        async_task("api.v1.v1_forms.tasks.refresh_form_config")
+        return Response(
+            {
+                "id": form.id,
+                "status": "archived",
+                "deleted_at": form.deleted_at,
+            }
+        )
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Restore an archived form (returns it to draft)",
+        request=None,
+        description=(
+            "Clears deleted_at and sets status=draft. The form must be "
+            "re-published to resume data collection (D-7)."
+        ),
+    )
+    @action(detail=True, methods=["post"])
+    def restore(self, request, *args, **kwargs):
+        form = self.get_object()
+        if form.deleted_at is None:
+            return Response(
+                {"message": "Form is not archived"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        form.deleted_at = None
+        form.status = FormStatus.draft
+        form.save(update_fields=["deleted_at", "status"])
+        return Response(
+            {"id": form.id, "status": "draft", "deleted_at": None}
+        )
 
     @extend_schema(
         tags=["Manage Forms"],

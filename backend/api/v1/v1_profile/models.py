@@ -246,6 +246,12 @@ class UserRole(models.Model):
             access=FeatureAccessTypes.form_view,
         ).exists()
 
+    def can_form_delete(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.form_builder,
+            access=FeatureAccessTypes.form_delete,
+        ).exists()
+
     def __str__(self):
         return f"{self.user.name} - {self.role.name} ({self.administration})"
 

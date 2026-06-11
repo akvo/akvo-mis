@@ -383,8 +383,14 @@ class ListFormSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     created_by = serializers.SerializerMethodField()
     updated_by = serializers.SerializerMethodField()
+    parent_name = serializers.SerializerMethodField()
+    submission_count = serializers.SerializerMethodField()
 
     def get_status(self, obj):
+        # "archived" is derived from deleted_at; the underlying draft/
+        # published status integer is preserved for restore (FB-004 D-6).
+        if obj.deleted_at is not None:
+            return "archived"
         return FormStatus.FieldStr.get(obj.status, "draft")
 
     def get_created_by(self, obj):
@@ -392,6 +398,12 @@ class ListFormSerializer(serializers.ModelSerializer):
 
     def get_updated_by(self, obj):
         return obj.updated_by.email if obj.updated_by else None
+
+    def get_parent_name(self, obj):
+        return obj.parent.name if obj.parent else None
+
+    def get_submission_count(self, obj):
+        return obj.form_form_data.count()
 
     class Meta:
         model = Forms
@@ -401,9 +413,13 @@ class ListFormSerializer(serializers.ModelSerializer):
             "version",
             "status",
             "parent",
+            "parent_name",
             "type",
             "created",
             "updated",
+            "published_at",
+            "deleted_at",
+            "submission_count",
             "created_by",
             "updated_by",
         ]

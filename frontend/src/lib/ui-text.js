@@ -194,6 +194,44 @@ const uiText = {
     formBuilderCreateButton: "Create New Form",
     formBuilderRegistrationType: "Registration",
     formBuilderMonitoringType: "Monitoring",
+    formBuilderTabActive: "Active",
+    formBuilderTabArchived: "Archived",
+    formBuilderSearchPlaceholder: "Search by name",
+    formBuilderFilterStatusAll: "All Statuses",
+    formBuilderFilterTypeAll: "All Types",
+    formBuilderArchivedAtCol: "Archived",
+    formBuilderDuplicateButton: "Duplicate",
+    formBuilderArchiveButton: "Archive",
+    formBuilderRestoreButton: "Restore",
+    formBuilderDeleteButton: "Delete permanently",
+    formBuilderPublishConfirmTitle: "Publish this form?",
+    formBuilderPublishConfirmDesc:
+      "It will become available for data collection.",
+    formBuilderArchiveConfirmTitle: "Archive this form?",
+    formBuilderArchiveConfirmDesc: (count) =>
+      count > 0
+        ? `It will be removed from data collection (web and mobile) and ` +
+          `moved to the Archived tab. This form has ${count} ` +
+          `submission(s) — they are preserved. You can restore it later.`
+        : `It will be removed from data collection (web and mobile) and ` +
+          `moved to the Archived tab. You can restore it later.`,
+    formBuilderRestoreConfirmTitle: "Restore this form?",
+    formBuilderRestoreConfirmDesc:
+      "It will return as a draft; re-publish it to resume data collection.",
+    formBuilderDeleteConfirmTitle: "Permanently delete this form?",
+    formBuilderDeleteConfirmDesc: "This action cannot be undone.",
+    formBuilderDeleteDisabledTooltip:
+      "Forms with submissions can't be deleted — keep it archived or restore it.",
+    formBuilderArchiveSuccess: "Form archived",
+    formBuilderArchiveError: "Failed to archive form",
+    formBuilderRestoreSuccess: "Form restored",
+    formBuilderRestoreError: "Failed to restore form",
+    formBuilderDuplicateSuccess: "Form duplicated",
+    formBuilderDuplicateError: "Failed to duplicate form",
+    formBuilderDeleteSuccess: "Form permanently deleted",
+    formBuilderDeleteError: "Failed to delete form",
+    formBuilderStatusArchived: "Archived",
+    formBuilderEmptyText: "No forms found",
     dataDownloadTitle: "Data Download",
     dataDownloadButton: "Download Data",
     dataDownloadText: (

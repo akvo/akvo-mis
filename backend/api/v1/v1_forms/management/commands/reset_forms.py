@@ -35,10 +35,13 @@ class Command(BaseCommand):
                 mobile_forms[mobile_assignment.id] = [
                     form for form in mobile_assignment.forms.all()
                 ]
-        # truncate all forms and related data
+        # truncate all forms and related data. Forms is soft-deletable
+        # (FB-004), so use hard_delete() to actually remove the rows —
+        # a plain delete() would only set deleted_at and re-seeding would
+        # then collide on the primary key.
         forms = Forms.objects.all()
         for form in forms:
-            form.delete()
+            form.hard_delete()
         # Call form_seeder command to repopulate the forms
         test = options.get("test", False)
         if test:

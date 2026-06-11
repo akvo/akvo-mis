@@ -1,31 +1,87 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Row, Col, Table, Button, Empty, Space } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import {
+  Row,
+  Col,
+  Table,
+  Button,
+  Empty,
+  Space,
+  Tabs,
+  Input,
+  Select,
+  Popconfirm,
+  Tooltip,
+} from "antd";
+import {
+  PlusOutlined,
+  SearchOutlined,
+  PlusSquareOutlined,
+  MinusSquareOutlined,
+} from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { FormStatusTag } from "./components";
 import { api, store, uiText, REGISTRATION_FORM } from "../../lib";
+import { useNotification } from "../../util/hooks";
+import "./style.scss";
+
+const SEARCH_DEBOUNCE_MS = 400;
 
 const FormBuilderList = () => {
   const navigate = useNavigate();
+  const { notify } = useNotification();
+
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
-  const { language } = store.useState((s) => s);
+  const [activeTab, setActiveTab] = useState("active");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [expandedKeys, setExpandedKeys] = useState([]);
+
+  const { language, user } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
+
+  const isArchivedTab = activeTab === "archived";
+  const isSuperuser = Boolean(user?.is_superuser);
+  const hasFormDelete =
+    isSuperuser || (user?.roles || []).some((r) => r.can_form_delete);
 
   const pagePath = [
     { title: "Control Center", link: "/control-center" },
     { title: text.menuFormBuilder },
   ];
 
+  // Debounce the search input, resetting to the first page on change.
   useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setCurrentPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
+
+  const loadForms = useCallback(() => {
     setLoading(true);
+    const params = new URLSearchParams({ page: currentPage });
+    if (isArchivedTab) {
+      params.set("archived", "true");
+    } else if (statusFilter) {
+      params.set("status", statusFilter);
+    }
+    if (typeFilter) {
+      params.set("type", typeFilter);
+    }
+    if (search) {
+      params.set("search", search);
+    }
     api
-      .get(`/manage/forms?page=${currentPage}`)
+      .get(`/manage/forms?${params.toString()}`)
       .then((res) => {
         setForms(res.data.data);
         setTotalCount(res.data.total);
@@ -36,79 +92,276 @@ const FormBuilderList = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, [currentPage]);
+  }, [currentPage, isArchivedTab, statusFilter, typeFilter, search]);
 
-  const columns = [
-    {
-      title: text.formBuilderLastUpdatedCol,
-      dataIndex: "updated",
-      key: "updated",
-      render: (val, record) => {
-        const date = val || record.created;
-        if (!date) {
-          return "—";
-        }
-        return new Date(date).toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
+  useEffect(() => {
+    loadForms();
+  }, [loadForms]);
+
+  // Expand every registration row that has monitoring children by default
+  // whenever the list (re)loads; the user can still collapse individual rows.
+  useEffect(() => {
+    setExpandedKeys(
+      forms.filter((f) => f.children && f.children.length > 0).map((f) => f.id)
+    );
+  }, [forms]);
+
+  const onTabChange = (key) => {
+    setActiveTab(key);
+    setCurrentPage(1);
+  };
+
+  const runAction = (request, successMsg, errorMsg) => {
+    request
+      .then(() => {
+        notify({ type: "success", message: successMsg });
+        loadForms();
+      })
+      .catch((err) => {
+        notify({
+          type: "error",
+          message: err?.response?.data?.message || errorMsg,
         });
-      },
-    },
-    {
-      title: text.formBuilderNameCol,
-      dataIndex: "name",
-      key: "name",
-    },
-    {
-      title: text.formBuilderTypeCol,
-      key: "type",
-      render: (_, record) =>
-        record.parent
-          ? text.formBuilderMonitoringType
-          : text.formBuilderRegistrationType,
-    },
-    {
-      title: text.formBuilderStatusCol,
-      key: "status",
-      render: (_, record) => (
-        <FormStatusTag status={record.status} text={text} />
-      ),
-    },
-    {
-      title: text.formBuilderVersionCol,
-      key: "version",
-      render: (_, record) => record.version || 1,
-    },
-    {
-      title: text.formBuilderActionsCol,
-      key: "actions",
-      render: (_, record) => (
-        <Space size="middle">
-          <Button
-            onClick={() => {
-              navigate(`/control-center/form-builder/${record.id}/edit`);
-            }}
-            shape="round"
-          >
-            {text.editButton}
+      });
+  };
+
+  const onPublish = (id) =>
+    runAction(
+      api.post(`/manage/forms/${id}/publish`, {}),
+      text.formBuilderPublishSuccess,
+      text.formBuilderPublishError
+    );
+
+  const onArchive = (id) =>
+    runAction(
+      api.post(`/manage/forms/${id}/archive`, {}),
+      text.formBuilderArchiveSuccess,
+      text.formBuilderArchiveError
+    );
+
+  const onRestore = (id) =>
+    runAction(
+      api.post(`/manage/forms/${id}/restore`, {}),
+      text.formBuilderRestoreSuccess,
+      text.formBuilderRestoreError
+    );
+
+  const onDuplicate = (id) =>
+    runAction(
+      api.post(`/manage/forms/${id}/duplicate`, {}),
+      text.formBuilderDuplicateSuccess,
+      text.formBuilderDuplicateError
+    );
+
+  const onDelete = (id) =>
+    runAction(
+      api.delete(`/manage/forms/${id}`),
+      text.formBuilderDeleteSuccess,
+      text.formBuilderDeleteError
+    );
+
+  const formatDate = (value) => {
+    if (!value) {
+      return "—";
+    }
+    return new Date(value).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
+
+  const nameColumn = {
+    title: text.formBuilderNameCol,
+    dataIndex: "name",
+    key: "name",
+  };
+
+  const typeColumn = {
+    title: text.formBuilderTypeCol,
+    key: "type",
+    render: (_, record) =>
+      record.parent
+        ? text.formBuilderMonitoringType
+        : text.formBuilderRegistrationType,
+  };
+
+  const statusColumn = {
+    title: text.formBuilderStatusCol,
+    key: "status",
+    render: (_, record) => <FormStatusTag status={record.status} text={text} />,
+  };
+
+  const versionColumn = {
+    title: text.formBuilderVersionCol,
+    key: "version",
+    render: (_, record) => record.version || 1,
+  };
+
+  const renderActiveActions = (_, record) => (
+    <Space size="middle" wrap>
+      <Button
+        shape="round"
+        onClick={() => {
+          navigate(`/control-center/form-builder/${record.id}/edit`);
+        }}
+      >
+        {text.editButton}
+      </Button>
+      <Button shape="round" onClick={() => onDuplicate(record.id)}>
+        {text.formBuilderDuplicateButton}
+      </Button>
+      {record.status === "draft" && (
+        <Popconfirm
+          title={text.formBuilderPublishConfirmTitle}
+          description={text.formBuilderPublishConfirmDesc}
+          okText={text.formBuilderPublishButton}
+          onConfirm={() => onPublish(record.id)}
+        >
+          <Button shape="round" type="primary">
+            {text.formBuilderPublishButton}
           </Button>
-          {record.status === "published" && record.type === REGISTRATION_FORM && (
-            <Button
-              onClick={() => {
-                navigate(
-                  `/control-center/form-builder/create?parent_id=${record.id}`
-                );
-              }}
-              shape="round"
-              type="primary"
-            >
-              {text.formBuilderCreateMonitoringButton}
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
+        </Popconfirm>
+      )}
+      <Popconfirm
+        title={text.formBuilderArchiveConfirmTitle}
+        description={text.formBuilderArchiveConfirmDesc(
+          record.submission_count || 0
+        )}
+        okText={text.formBuilderArchiveButton}
+        okButtonProps={{ danger: true }}
+        onConfirm={() => onArchive(record.id)}
+      >
+        <Button shape="round" danger>
+          {text.formBuilderArchiveButton}
+        </Button>
+      </Popconfirm>
+      {record.status === "published" && record.type === REGISTRATION_FORM && (
+        <Button
+          shape="round"
+          type="primary"
+          onClick={() => {
+            navigate(
+              `/control-center/form-builder/create?parent_id=${record.id}`
+            );
+          }}
+        >
+          {text.formBuilderCreateMonitoringButton}
+        </Button>
+      )}
+    </Space>
+  );
+
+  const renderDeletePermanently = (record) => {
+    if (record.submission_count === 0) {
+      return (
+        <Popconfirm
+          title={text.formBuilderDeleteConfirmTitle}
+          description={text.formBuilderDeleteConfirmDesc}
+          okText={text.formBuilderDeleteButton}
+          okButtonProps={{ danger: true }}
+          onConfirm={() => onDelete(record.id)}
+        >
+          <Button shape="round" danger>
+            {text.formBuilderDeleteButton}
+          </Button>
+        </Popconfirm>
+      );
+    }
+    return (
+      <Tooltip title={text.formBuilderDeleteDisabledTooltip}>
+        <span>
+          <Button shape="round" danger disabled>
+            {text.formBuilderDeleteButton}
+          </Button>
+        </span>
+      </Tooltip>
+    );
+  };
+
+  const renderArchivedActions = (_, record) => (
+    <Space size="middle" wrap>
+      <Popconfirm
+        title={text.formBuilderRestoreConfirmTitle}
+        description={text.formBuilderRestoreConfirmDesc}
+        okText={text.formBuilderRestoreButton}
+        onConfirm={() => onRestore(record.id)}
+      >
+        <Button shape="round" type="primary">
+          {text.formBuilderRestoreButton}
+        </Button>
+      </Popconfirm>
+      {hasFormDelete && renderDeletePermanently(record)}
+    </Space>
+  );
+
+  // Show the expand toggle only for registration forms that actually have
+  // monitoring children; otherwise render a fixed-width spacer so the Name
+  // column stays aligned.
+  const renderExpandIcon = ({ expanded, onExpand, record }) => {
+    const hasChildren = record.children && record.children.length > 0;
+    if (!hasChildren) {
+      return <span style={{ display: "inline-block", width: 17 }} />;
+    }
+    return (
+      <Button
+        type="text"
+        size="small"
+        style={{ marginRight: 4 }}
+        icon={expanded ? <MinusSquareOutlined /> : <PlusSquareOutlined />}
+        onClick={(e) => onExpand(record, e)}
+      />
+    );
+  };
+
+  const columns = isArchivedTab
+    ? [
+        nameColumn,
+        typeColumn,
+        statusColumn,
+        versionColumn,
+        {
+          title: text.formBuilderArchivedAtCol,
+          key: "archived",
+          render: (_, record) => formatDate(record.deleted_at),
+        },
+        {
+          title: text.formBuilderActionsCol,
+          key: "actions",
+          render: renderArchivedActions,
+        },
+      ]
+    : [
+        {
+          title: text.formBuilderLastUpdatedCol,
+          dataIndex: "updated",
+          key: "updated",
+          render: (val, record) => formatDate(val || record.created),
+        },
+        nameColumn,
+        typeColumn,
+        statusColumn,
+        versionColumn,
+        {
+          title: text.formBuilderActionsCol,
+          key: "actions",
+          render: renderActiveActions,
+        },
+      ];
+
+  // Strip empty children arrays so AntD does not render an expand toggle
+  // on registration forms that have no monitoring children.
+  const dataSource = useMemo(
+    () =>
+      forms.map((form) => {
+        if (form.children && form.children.length > 0) {
+          return form;
+        }
+        const copy = { ...form };
+        delete copy.children;
+        return copy;
+      }),
+    [forms]
+  );
 
   return (
     <div id="form-builder-list">
@@ -125,28 +378,101 @@ const FormBuilderList = () => {
       </div>
       <div className="table-section">
         <div className="table-wrapper">
-          <Row justify="end" style={{ marginBottom: 16, marginTop: 16 }}>
+          <Row justify="space-between" align="middle" wrap>
             <Col>
-              <Button
-                shape="round"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  navigate("/control-center/form-builder/create");
+              <Tabs activeKey={activeTab} onChange={onTabChange}>
+                <Tabs.TabPane tab={text.formBuilderTabActive} key="active" />
+                <Tabs.TabPane
+                  tab={text.formBuilderTabArchived}
+                  key="archived"
+                />
+              </Tabs>
+            </Col>
+            {!isArchivedTab && (
+              <Col>
+                <Button
+                  shape="round"
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    navigate("/control-center/form-builder/create");
+                  }}
+                >
+                  {text.formBuilderCreateButton}
+                </Button>
+              </Col>
+            )}
+          </Row>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col>
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder={text.formBuilderSearchPlaceholder}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                style={{ width: 240 }}
+              />
+            </Col>
+            {!isArchivedTab && (
+              <Col>
+                <Select
+                  value={statusFilter}
+                  style={{ width: 180 }}
+                  onChange={(val) => {
+                    setStatusFilter(val);
+                    setCurrentPage(1);
+                  }}
+                  options={[
+                    { value: "", label: text.formBuilderFilterStatusAll },
+                    {
+                      value: "draft",
+                      label: text.formBuilderStatusDraft,
+                    },
+                    {
+                      value: "published",
+                      label: text.formBuilderStatusPublished,
+                    },
+                  ]}
+                />
+              </Col>
+            )}
+            <Col>
+              <Select
+                value={typeFilter}
+                style={{ width: 180 }}
+                onChange={(val) => {
+                  setTypeFilter(val);
+                  setCurrentPage(1);
                 }}
-              >
-                {text.formBuilderCreateButton}
-              </Button>
+                options={[
+                  { value: "", label: text.formBuilderFilterTypeAll },
+                  {
+                    value: "registration",
+                    label: text.formBuilderRegistrationType,
+                  },
+                  {
+                    value: "monitoring",
+                    label: text.formBuilderMonitoringType,
+                  },
+                ]}
+              />
             </Col>
           </Row>
-          {!loading && forms.length === 0 ? (
-            <Empty description="No forms found" />
+          {!loading && dataSource.length === 0 ? (
+            <Empty description={text.formBuilderEmptyText} />
           ) : (
             <Table
               columns={columns}
-              dataSource={forms}
+              dataSource={dataSource}
               rowKey="id"
               loading={loading}
+              childrenColumnName="children"
+              expandable={{
+                expandIcon: renderExpandIcon,
+                expandedRowKeys: expandedKeys,
+                onExpandedRowsChange: setExpandedKeys,
+              }}
               pagination={{
                 current: currentPage,
                 total: totalCount,

@@ -37,6 +37,14 @@ urlpatterns = [
         FormBuilderViewSet.as_view({"post": "duplicate"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/archive$",
+        FormBuilderViewSet.as_view({"post": "archive"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/restore$",
+        FormBuilderViewSet.as_view({"post": "restore"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)"
         r"/versions/(?P<version_id>[0-9]+)$",
         FormBuilderViewSet.as_view({"get": "version_detail"}),
