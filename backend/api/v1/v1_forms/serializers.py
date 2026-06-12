@@ -24,6 +24,7 @@ from api.v1.v1_users.models import SystemUser
 from mis.settings import FORM_GEO_VALUE
 from utils.custom_serializer_fields import (
     CustomChoiceField,
+    CustomFileField,
     CustomPrimaryKeyRelatedField,
     CustomMultipleChoiceField,
 )
@@ -768,3 +769,16 @@ class FormUpdateRequestSerializer(serializers.Serializer):
             "Pass ?allow_delete=true to soft-delete removed groups/questions."
         ),
     )
+
+
+class ImportPreflightSerializer(serializers.Serializer):
+    file = CustomFileField()
+
+
+class ImportFormSerializer(serializers.Serializer):
+    file = CustomFileField()
+    mode = serializers.ChoiceField(
+        choices=["create_or_update", "create_copy"],
+        default="create_or_update",
+    )
+    parent_id = serializers.IntegerField(required=False)

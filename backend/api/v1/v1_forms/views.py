@@ -52,6 +52,8 @@ from api.v1.v1_forms.serializers import (
     FormApproverResponseSerializer,
     FormDetailSerializer,
     FormUpdateRequestSerializer,
+    ImportPreflightSerializer,
+    ImportFormSerializer,
 )
 from api.v1.v1_jobs.constants import JobStatus, JobTypes
 from api.v1.v1_jobs.models import Jobs
@@ -930,10 +932,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Manage Forms"],
         summary="Validate an import file without writing (preflight, FB-007)",
-        request=inline_serializer(
-            "ImportPreflightRequest",
-            fields={"file": serializers.FileField()},
-        ),
+        request={"multipart/form-data": ImportPreflightSerializer},
     )
     @action(
         detail=False,
@@ -1012,33 +1011,31 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             "resolved": resolved_parent,
         }
 
-        return Response({
-            "valid": len(errors) == 0,
-            "errors": errors,
-            "warnings": warnings,
-            "form": {
-                "id": norm.get("form_id"),
-                "name": norm.get("name"),
-                "type": norm.get("type"),
+        is_valid = len(errors) == 0
+        return Response(
+            {
+                "valid": is_valid,
+                "errors": errors,
+                "warnings": warnings,
+                "form": {
+                    "id": norm.get("form_id"),
+                    "name": norm.get("name"),
+                    "type": norm.get("type"),
+                },
+                "match": match_info,
+                "parent": parent_info,
             },
-            "match": match_info,
-            "parent": parent_info,
-        })
+            status=(
+                status.HTTP_200_OK
+                if is_valid
+                else status.HTTP_400_BAD_REQUEST
+            ),
+        )
 
     @extend_schema(
         tags=["Manage Forms"],
         summary="Enqueue a form definition import job (FB-007)",
-        request=inline_serializer(
-            "ImportRequest",
-            fields={
-                "file": serializers.FileField(),
-                "mode": serializers.ChoiceField(
-                    choices=["create_or_update", "create_copy"],
-                    default="create_or_update",
-                ),
-                "parent_id": serializers.IntegerField(required=False),
-            },
-        ),
+        request={"multipart/form-data": ImportFormSerializer},
     )
     @action(
         detail=False,
@@ -1105,7 +1102,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             and file_form_id is not None
             and Forms.objects.filter(id=file_form_id).exists()
         ):
-            edit_perm = FormBuilderAccess(FeatureAccessTypes.form_edit)
+            edit_perm = FormBuilderAccess(FeatureAccessTypes.form_edit)()
             if not edit_perm.has_permission(request, self):
                 return Response(status=status.HTTP_403_FORBIDDEN)
 
