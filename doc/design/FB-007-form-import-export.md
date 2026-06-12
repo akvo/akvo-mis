@@ -454,7 +454,9 @@ do. **Never writes.** Response `200`:
   "errors": [],
   "warnings": [
     { "code": "foreign_api_endpoint",
-      "message": "question 'location' api.endpoint points to https://rtmis.akvotest.org" }
+      "message": "question 'location' api.endpoint points to https://rtmis.akvotest.org" },
+    { "code": "unknown_entity_type",
+      "message": "question 'facility' entity 'Health Facility' not found in this environment" }
   ],
   "form": { "id": 1781169836775, "name": "Community Culinary Survey 2021", "type": 1 },
   "match": {
@@ -558,8 +560,10 @@ def validate_form_definition(norm: dict) -> list[dict]
     #   pre keys resolve to question names/option values
     # - name uniqueness per form; option value uniqueness per question
     # - warnings (non-blocking): foreign api.endpoint URLs (DD-4)
-    # Returns [{code, path, message}] — same shape end-to-end (preflight,
-    # import job result, seeder stderr).
+    # - warnings (non-blocking): entity cascade questions whose extra.name
+    #   does not match any Entity row in the target environment (unknown_entity_type)
+    # Returns [{code, path, message, level}] — level "error"|"warning",
+    # same shape end-to-end (preflight, import job result, seeder stderr).
 
 def export_form_definition(form) -> dict
     # _build_schema_snapshot(form) + id/type/parent/metadata envelope,
@@ -725,6 +729,30 @@ gating differs (FR-16). **Impact**: one small additional view reading the
       forms are bundled into mobile config/SQLite (existing behaviour).
 - [x] SQLite schema changes: no.
 - [x] Version detection: unchanged (publish flow).
+
+### Cascade Data & Mobile SQLite
+
+**Mobile SQLite files are out of scope for import.** `generate_sqlite` builds
+SQLite databases for `Administration`, `Organisation`, `Entity`, and
+`EntityData` — mobile reference/master data. It runs at initial seeding and
+after bulk master-data uploads (`v1_jobs`). Form import never triggers
+`generate_sqlite` — importing a form definition changes none of those models.
+Imported forms reach mobile only after an explicit publish, which triggers
+`refresh_form_config` (form-list config regeneration) as today.
+
+**Cascade question data dependencies after import.** The export carries the
+form *definition* only — cascade data sources are environment-local:
+
+| Question type | Data source | After import |
+|---|---|---|
+| Administration cascade / tree | Target environment's Administration hierarchy | Always available; hierarchy may differ between environments |
+| Entity cascade (`extra.type = "entity"`) | `Entity`/`EntityData` in target environment | Silently broken if the named `Entity` does not exist; preflight emits `unknown_entity_type` warning |
+| API-driven cascade (`api.endpoint`) | External URL | Preflight emits `foreign_api_endpoint` warning (DD-4) |
+
+The user should verify that all referenced entity types and administration
+hierarchy are seeded before publishing a form that uses cascade questions.
+Entity data can be seeded via the existing bulk entity upload pipeline;
+`generate_sqlite` regenerates the mobile SQLite after that upload automatically.
 
 ### Seeder/CLI Compatibility
 - [x] Existing seeder invocations work unchanged.
@@ -938,6 +966,195 @@ nothing and Gender would degrade to delete + create. Conversely, because plain
 integers like `1781169836775` are only unique per environment, Path B can
 **false-match an unrelated form** (R-1) — which is why the confirmation dialog
 must always show *which* form is about to be updated.
+
+---
+
+## Appendix B — Import Process: Concrete Template Example
+
+This traces a single import of "Community Culinary Survey 2021" from staging
+into production, exercising the create path (form id unknown) with one entity
+cascade question and one dependency.
+
+### B.1 File received (abbreviated)
+
+```json
+{
+  "metadata": { "format_version": 1, "exported_at": "2026-06-12T08:00:00Z",
+                "source": "staging.mis.akvo.org" },
+  "id": 1781169836775,
+  "name": "Community Culinary Survey 2021",
+  "type": 1,
+  "question_group": [
+    {
+      "id": 1781169836774,
+      "name": "registration",
+      "order": 1,
+      "question": [
+        { "id": 6,  "name": "gender",   "type": "option",  "order": 6,
+          "questionGroupId": 1781169836774,
+          "option": [{"label": "Male", "value": "male", "order": 1},
+                     {"label": "Female", "value": "female", "order": 2}] },
+        { "id": 7,  "name": "marital_status", "type": "option", "order": 7,
+          "questionGroupId": 1781169836774,
+          "dependency": [{"id": 6, "options": ["female", "male"]}] },
+        { "id": 12, "name": "facility",  "type": "cascade", "order": 12,
+          "questionGroupId": 1781169836774,
+          "extra": {"type": "entity", "name": "Health Facility"},
+          "api": {"endpoint": "https://staging.mis.akvo.org/api/v1/cascade/"} }
+      ]
+    }
+  ]
+}
+```
+
+### B.2 `normalize_form_definition(raw)` output (snake_case canonical)
+
+```python
+{
+  "_meta": {
+    "format_version": 1,
+    "exported_at": "2026-06-12T08:00:00Z",
+    "source": "staging.mis.akvo.org",
+  },
+  "form_id": 1781169836775,
+  "name": "Community Culinary Survey 2021",
+  "type": 1,          # FormTypes.registration
+  "parent_hint": None,
+  "question_group": [
+    {
+      "id": 1781169836774,
+      "name": "registration",
+      "order": 1,
+      "question": [
+        {"id": 6,  "name": "gender",   "type": "option",  "order": 6,
+         "dependency": None, "dependency_rule": "AND",
+         "option": [{"label": "Male", "value": "male", "order": 1},
+                    {"label": "Female", "value": "female", "order": 2}]},
+        {"id": 7,  "name": "marital_status", "type": "option", "order": 7,
+         "dependency": [{"id": 6, "options": ["female", "male"]}],
+         "dependency_rule": "AND", "option": []},
+        {"id": 12, "name": "facility",  "type": "cascade", "order": 12,
+         "extra": {"type": "entity", "name": "Health Facility"},
+         "api": {"endpoint": "https://staging.mis.akvo.org/api/v1/cascade/"}}
+      ]
+    }
+  ]
+}
+```
+
+### B.3 `validate_form_definition(norm)` result
+
+```python
+# errors (blocking)
+[]
+
+# warnings (non-blocking)
+[
+  {
+    "code": "unknown_entity_type",
+    "path": "question_group[0].question[2].extra.name",
+    "message": "entity 'Health Facility' not found in this environment",
+    "level": "warning"
+  },
+  {
+    "code": "foreign_api_endpoint",
+    "path": "question_group[0].question[2].api.endpoint",
+    "message": "api.endpoint 'https://staging.mis.akvo.org/api/v1/cascade/' "
+               "points to a different environment",
+    "level": "warning"
+  }
+]
+```
+
+### B.4 Preflight response (to frontend)
+
+```json
+{
+  "valid": true,
+  "errors": [],
+  "warnings": [
+    { "code": "unknown_entity_type",
+      "path": "question_group[0].question[2].extra.name",
+      "message": "entity 'Health Facility' not found in this environment" },
+    { "code": "foreign_api_endpoint",
+      "path": "question_group[0].question[2].api.endpoint",
+      "message": "api.endpoint points to staging.mis.akvo.org" }
+  ],
+  "form": { "id": 1781169836775, "name": "Community Culinary Survey 2021", "type": 1 },
+  "match": { "exists": false, "form": null, "name_mismatch": false },
+  "parent": { "required": false, "hint": null, "resolved": null }
+}
+```
+
+### B.5 `import_form_definition(norm, user, mode="create_or_update")` — create path
+
+```
+form id 1781169836775 does not exist in production
+→ CREATE path (FR-8)
+
+Step 1 — check for id collisions (production DB already has q.id = 6 from seeded data)
+  group 1781169836774 → free (no collision)
+  question 6           → COLLISION (existing production question, different form)
+  question 7           → free
+  question 12          → free
+
+Step 2 — build id remap for colliding ids only
+  id_remap = {6: <new_id_from_sequence>}   e.g. {6: 1090}
+  Apply remap throughout the normalized form:
+    question[0].id          6       → 1090
+    question[1].dependency  [{"id": 6, ...}] → [{"id": 1090, ...}]
+  (questionGroupId, leading_question, extra.parentId also remapped if present)
+
+Step 3 — setval PK sequence guard
+  SELECT setval(pg_get_serial_sequence('form', 'id'),
+                COALESCE((SELECT MAX(id) FROM form), 1))
+  SELECT setval(pg_get_serial_sequence('question_group', 'id'),
+                COALESCE((SELECT MAX(id) FROM question_group), 1))
+  SELECT setval(pg_get_serial_sequence('question', 'id'),
+                COALESCE((SELECT MAX(id) FROM question), 1))
+
+Step 4 — DB writes (inside @transaction.atomic)
+  Forms.objects.create(id=1781169836775, name="Community Culinary Survey 2021",
+                       type=1, status=draft, created_by=user)
+  QuestionGroup.objects.create(id=1781169836774, form=new_form, name="registration", order=1)
+  Questions.objects.create(id=1090, form=new_form, group=grp, name="gender", type=option, ...)
+  Questions.objects.create(id=7,    form=new_form, group=grp, name="marital_status",
+                           dependency=[{"id": 1090, "options": ["female", "male"]}], ...)
+  Questions.objects.create(id=12,   form=new_form, group=grp, name="facility", type=cascade, ...)
+  QuestionOptions.objects.bulk_create([Male(q=1090), Female(q=1090)])
+
+Step 5 — return (new_form, "created")
+```
+
+### B.6 Job task flow (complete)
+
+```
+POST /api/v1/manage/forms/import (file, mode="create_or_update")
+  → re-run validate server-side
+  → Jobs.create(type=8, status=on_progress, user=user,
+                info={"file": "import-form-<uuid>.json", "mode": "create_or_update"})
+  → async_task("api.v1.v1_forms.tasks.import_form_job", job.id,
+               hook="api.v1.v1_forms.tasks.import_form_job_result")
+  → return {"task_id": "<django-q-task-id>", "job_id": <id>}
+
+Worker (import_form_job):
+  1. load file from storage, parse JSON
+  2. normalize_form_definition(raw) → norm
+  3. validate_form_definition(norm) → if errors → Jobs.status=failed, result=errors; return
+  4. import_form_definition(norm, user, mode="create_or_update") → (form, "created")
+  5. Jobs.status=done, result={"form_id": 1781169836775, "action": "created"}
+
+GET /api/v1/manage/forms/import/status/<task_id>
+  → {"status": "done",
+     "form": {"id": 1781169836775, "name": "Community Culinary Survey 2021",
+              "action": "created"}}
+```
+
+Note: The two warnings (`unknown_entity_type`, `foreign_api_endpoint`) are
+non-blocking — the import succeeds. The user sees them in the confirmation
+modal and must fix the entity cascade question via the form editor before
+publishing. Entity data can be imported via the bulk entity upload pipeline;
+`generate_sqlite` will regenerate the mobile SQLite automatically after that.
 
 ---
 
