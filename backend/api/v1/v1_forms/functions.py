@@ -1,11 +1,22 @@
 import re
+from datetime import datetime, timezone as dt_timezone
 
+from django.conf import settings
 from django.db import connection, transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 
 from api.v1.v1_data.models import Answers
-from api.v1.v1_forms.constants import FormStatus, FormTypes, QuestionTypes
+from api.v1.v1_forms.constants import (
+    FORM_IMPORT_SUPPORTED_VERSIONS,
+    FormStatus,
+    FormTypes,
+    QuestionTypes,
+    _CAMEL_FIELDS,
+    _SNAKE_TO_CAMEL,
+    _TYPE_STR_TO_INT,
+    _TYPE_INT_TO_STR,
+)
 from api.v1.v1_forms.models import (
     FormPublishedVersion,
     Forms,
@@ -13,6 +24,7 @@ from api.v1.v1_forms.models import (
     Questions,
     QuestionOptions,
 )
+from api.v1.v1_profile.models import Entity
 
 
 def _parse_form_type(type_val):
@@ -789,3 +801,777 @@ def create_published_version(form, user, activate=False):
         form.save(update_fields=update_fields)
 
     return pv
+
+
+# ---------------------------------------------------------------------------
+# FB-007: Form Import/Export (normalize / validate / export / import)
+# ---------------------------------------------------------------------------
+
+def normalize_form_definition(raw):
+    """Return canonical snake_case structure accepted by validate/import.
+
+    Accepts:
+      (a) FB-007 export — metadata envelope + editor camelCase keys
+      (b) Bare editor/akvo-react-form payload — no metadata
+      (c) Legacy seeder format — form/question_groups/questions keys
+
+    Extra top-level keys on the return value:
+      _meta       : metadata dict (None if absent)
+      form_id     : int or None
+      parent_hint : {id, name} | None
+    """
+    meta = raw.get("metadata")
+    name = raw.get("name") or raw.get("form")
+
+    raw_type = raw.get("type")
+    if isinstance(raw_type, str):
+        type_val = (
+            FormTypes.registration
+            if raw_type.lower() == "registration"
+            else FormTypes.monitoring
+        )
+    else:
+        type_val = raw_type
+
+    parent_hint = raw.get("parent")
+    if parent_hint and not isinstance(parent_hint, dict):
+        parent_hint = None
+
+    groups_raw = raw.get("question_group") or raw.get("question_groups") or []
+    groups = []
+    for g in groups_raw:
+        questions_raw = g.get("question") or g.get("questions") or []
+        questions = [_normalize_import_question(q) for q in questions_raw]
+        groups.append({
+            "id": g.get("id"),
+            "name": g.get("name"),
+            "label": g.get("label"),
+            "description": g.get("description"),
+            "order": g.get("order"),
+            "repeatable": g.get("repeatable", False),
+            "repeat_text": g.get("repeatText") or g.get("repeat_text"),
+            "translations": g.get("translations"),
+            "leading_question": (
+                g.get("leading_question") or g.get("leadingQuestion")
+            ),
+            "question": questions,
+        })
+
+    return {
+        "_meta": meta,
+        "form_id": raw.get("id"),
+        "name": name,
+        "description": raw.get("description"),
+        "type": type_val,
+        "version": raw.get("version"),
+        "parent_hint": parent_hint,
+        "languages": raw.get("languages"),
+        "default_language": (
+            raw.get("defaultLanguage") or raw.get("default_language")
+        ),
+        "translations": raw.get("translations"),
+        "approval_instructions": raw.get("approval_instructions"),
+        "question_group": groups,
+    }
+
+
+def _normalize_import_question(q):
+    """Return a single question dict in canonical snake_case form."""
+    result = {}
+    for key, val in q.items():
+        result[_CAMEL_FIELDS.get(key, key)] = val
+
+    q_type = result.get("type")
+    if isinstance(q_type, int):
+        result["type"] = _TYPE_INT_TO_STR.get(q_type, q_type)
+    elif isinstance(q_type, str):
+        result["type"] = q_type.lower()
+
+    if "questionGroupId" in result:
+        result["question_group_id"] = result.pop("questionGroupId")
+
+    return result
+
+
+def validate_form_definition(norm, check_entities=True):
+    """Return [{code, path, message, level}] — empty list means valid.
+
+    level = "error"   -> blocking; import must not proceed
+    level = "warning" -> non-blocking; import proceeds but user is informed
+    """
+    issues = []
+
+    meta = norm.get("_meta")
+    if meta:
+        fv = meta.get("format_version")
+        if fv is not None and fv not in FORM_IMPORT_SUPPORTED_VERSIONS:
+            issues.append({
+                "code": "unsupported_format_version",
+                "path": "metadata.format_version",
+                "message": (
+                    f"format_version {fv!r} is not supported; "
+                    f"supported: {sorted(FORM_IMPORT_SUPPORTED_VERSIONS)}"
+                ),
+                "level": "error",
+            })
+            return issues
+
+    if not norm.get("name"):
+        issues.append({
+            "code": "missing_name",
+            "path": "name",
+            "message": "name is required",
+            "level": "error",
+        })
+
+    type_val = norm.get("type")
+    if type_val not in (FormTypes.registration, FormTypes.monitoring):
+        issues.append({
+            "code": "invalid_type",
+            "path": "type",
+            "message": (
+                f"type must be 1 (registration) or 2 (monitoring), "
+                f"got {type_val!r}"
+            ),
+            "level": "error",
+        })
+
+    group_ids = {}
+    question_ids = {}
+    question_names = set()
+    group_names = set()
+
+    for gi, g in enumerate(norm.get("question_group", [])):
+        g_path = f"question_group[{gi}]"
+        g_id = g.get("id")
+        g_name = g.get("name")
+
+        if g_id is not None:
+            if g_id in group_ids:
+                issues.append({
+                    "code": "duplicate_group_id",
+                    "path": f"{g_path}.id",
+                    "message": (
+                        f"id {g_id} already used in {group_ids[g_id]}"
+                    ),
+                    "level": "error",
+                })
+            else:
+                group_ids[g_id] = g_path
+
+        if g_name:
+            if g_name in group_names:
+                issues.append({
+                    "code": "duplicate_group_name",
+                    "path": f"{g_path}.name",
+                    "message": f"group name '{g_name}' used more than once",
+                    "level": "error",
+                })
+            else:
+                group_names.add(g_name)
+
+        for qi, q in enumerate(g.get("question", [])):
+            q_path = f"{g_path}.question[{qi}]"
+            q_id = q.get("id")
+            q_name = q.get("name")
+
+            if q_id is not None:
+                if q_id in question_ids:
+                    issues.append({
+                        "code": "duplicate_question_id",
+                        "path": f"{q_path}.id",
+                        "message": (
+                            f"id {q_id} already used in {question_ids[q_id]}"
+                        ),
+                        "level": "error",
+                    })
+                else:
+                    question_ids[q_id] = q_path
+
+            if q_name:
+                question_names.add(q_name)
+
+    for gi, g in enumerate(norm.get("question_group", [])):
+        g_path = f"question_group[{gi}]"
+
+        lq = g.get("leading_question")
+        if lq is not None and lq not in question_ids:
+            issues.append({
+                "code": "dangling_leading_question",
+                "path": f"{g_path}.leading_question",
+                "message": f"leading_question id {lq} not found in file",
+                "level": "error",
+            })
+
+        for qi, q in enumerate(g.get("question", [])):
+            q_path = f"{g_path}.question[{qi}]"
+            q_type = q.get("type")
+
+            if q_type not in _TYPE_STR_TO_INT:
+                issues.append({
+                    "code": "invalid_question_type",
+                    "path": f"{q_path}.type",
+                    "message": f"unknown question type {q_type!r}",
+                    "level": "error",
+                })
+
+            qgid = q.get("question_group_id")
+            if qgid is not None and qgid not in group_ids:
+                issues.append({
+                    "code": "dangling_question_group_id",
+                    "path": f"{q_path}.question_group_id",
+                    "message": f"questionGroupId {qgid} not found in file",
+                    "level": "error",
+                })
+
+            for di, dep in enumerate(q.get("dependency") or []):
+                dep_id = dep.get("id")
+                if dep_id is not None and dep_id not in question_ids:
+                    issues.append({
+                        "code": "dangling_dependency_id",
+                        "path": f"{q_path}.dependency[{di}].id",
+                        "message": f"dependency id {dep_id} not found in file",
+                        "level": "error",
+                    })
+
+            extra = q.get("extra") or {}
+            parent_id_ref = extra.get("parentId")
+            if parent_id_ref is not None and parent_id_ref not in question_ids:
+                issues.append({
+                    "code": "dangling_extra_parent_id",
+                    "path": f"{q_path}.extra.parentId",
+                    "message": (
+                        f"extra.parentId {parent_id_ref} not found in file"
+                    ),
+                    "level": "error",
+                })
+
+            fn = q.get("fn") or {}
+            fn_string = fn.get("fnString") or ""
+            for ref_name in re.findall(r"#(\w+)#", fn_string):
+                if ref_name not in question_names:
+                    issues.append({
+                        "code": "dangling_fn_ref",
+                        "path": f"{q_path}.fn.fnString",
+                        "message": (
+                            f"#{ref_name}# references unknown question name "
+                            f"'{ref_name}'"
+                        ),
+                        "level": "error",
+                    })
+
+            api = q.get("api") or {}
+            endpoint = api.get("endpoint") or ""
+            if endpoint:
+                web_domain = getattr(settings, "WEBDOMAIN", "")
+                if web_domain and web_domain.rstrip("/") not in endpoint:
+                    issues.append({
+                        "code": "foreign_api_endpoint",
+                        "path": f"{q_path}.api.endpoint",
+                        "message": (
+                            f"api.endpoint '{endpoint}' points to a "
+                            "different environment; fix in the form "
+                            "editor before publishing"
+                        ),
+                        "level": "warning",
+                    })
+
+            if check_entities and q_type == "cascade":
+                entity_name = extra.get("name")
+                if extra.get("type") == "entity" and entity_name:
+                    if not Entity.objects.filter(name=entity_name).exists():
+                        issues.append({
+                            "code": "unknown_entity_type",
+                            "path": f"{q_path}.extra.name",
+                            "message": (
+                                f"entity '{entity_name}' not found in this "
+                                "environment; seed entity data "
+                                "before publishing"
+                            ),
+                            "level": "warning",
+                        })
+
+    return issues
+
+
+def export_form_definition(form):
+    """Return the FB-007 JSON export envelope for the given form.
+
+    Builds from live rows via the same 3-query strategy as
+    _build_schema_snapshot, then applies the editor key convention
+    (snake -> camelCase) and wraps in the metadata envelope.
+    """
+    snapshot = _build_schema_snapshot(form)
+
+    groups = []
+    for g in snapshot.get("question_group", []):
+        questions = []
+        for q in g.get("question", []):
+            questions.append(_export_question_to_editor_keys(q, g["id"]))
+        groups.append({
+            "id": g["id"],
+            "name": g["name"],
+            "label": g.get("label"),
+            "description": g.get("description"),
+            "order": g.get("order"),
+            "repeatable": g.get("repeatable", False),
+            "repeatText": g.get("repeat_text"),
+            "translations": g.get("translations"),
+            "question": questions,
+        })
+
+    parent_hint = None
+    if form.parent_id:
+        try:
+            parent_hint = {"id": form.parent.id, "name": form.parent.name}
+        except Exception:
+            pass
+
+    return {
+        "metadata": {
+            "format_version": 1,
+            "exported_at": datetime.now(tz=dt_timezone.utc).isoformat(
+                timespec="seconds"
+            ),
+            "source": getattr(settings, "WEBDOMAIN", ""),
+        },
+        "id": form.id,
+        "name": snapshot["name"],
+        "description": snapshot.get("description"),
+        "type": form.type,
+        "version": form.version,
+        "parent": parent_hint,
+        "languages": snapshot.get("languages"),
+        "defaultLanguage": snapshot.get("default_language"),
+        "translations": snapshot.get("translations"),
+        "approval_instructions": snapshot.get("approval_instructions"),
+        "question_group": groups,
+    }
+
+
+def _export_question_to_editor_keys(q, group_id):
+    """Translate a snapshot question dict to editor/akvo-react-form keys."""
+    result = {}
+    for key, val in q.items():
+        result[_SNAKE_TO_CAMEL.get(key, key)] = val
+    result["questionGroupId"] = group_id
+    if "type" in result and isinstance(result["type"], str):
+        result["type"] = result["type"].lower()
+    return result
+
+
+@transaction.atomic
+def import_form_definition(norm, user, *, mode, parent_id=None):
+    """Create or update a form from a normalized definition.
+
+    Parameters
+    ----------
+    norm      : output of normalize_form_definition()
+    user      : SystemUser performing the import
+    mode      : "create_or_update" | "create_copy"
+    parent_id : int | None — overrides/satisfies parent hint for monitoring
+
+
+    Returns
+    -------
+    (form, action) where action in {"created", "updated", "copied"}
+    """
+    file_form_id = norm.get("form_id")
+    form_type = norm.get("type", FormTypes.registration)
+
+    parent_form = _resolve_import_parent(norm, parent_id, form_type)
+
+    existing_form = None
+    if mode != "create_copy" and file_form_id is not None:
+        existing_form = Forms.objects.filter(id=file_form_id).first()
+
+    if existing_form is not None:
+        _apply_import_update_path(existing_form, norm, user)
+        return existing_form, "updated"
+    else:
+        new_form = _apply_import_create_path(
+            norm, user, parent_form,
+            force_new_id=(mode == "create_copy"),
+        )
+        action = "copied" if mode == "create_copy" else "created"
+        return new_form, action
+
+
+def _resolve_import_parent(norm, override_parent_id, form_type):
+    """Return the parent Forms instance, or None if not required."""
+    if form_type != FormTypes.monitoring:
+        return None
+
+    if override_parent_id:
+        try:
+            return Forms.objects.get(id=override_parent_id)
+        except Forms.DoesNotExist:
+            raise ValueError(
+                f"parent_id {override_parent_id} not found"
+            )
+
+    hint = norm.get("parent_hint")
+    if hint and hint.get("id"):
+        parent = Forms.objects.filter(id=hint["id"]).first()
+        if parent:
+            return parent
+
+    raise ValueError(
+        "Monitoring form requires a parent registration form; "
+        "provide parent_id or ensure the parent exists in this environment"
+    )
+
+
+def _sync_import_pk_sequences():
+    """Sync PK sequences for form, question_group, question tables.
+
+    Without this, auto-created rows with auto-increment IDs collide with
+    existing large editor-generated timestamp IDs already in the DB.
+    """
+    with connection.cursor() as cur:
+        for table in ("form", "question_group", "question"):
+            cur.execute(
+                f"SELECT setval(pg_get_serial_sequence('{table}', 'id'),"
+                f" COALESCE((SELECT MAX(id) FROM {table}), 1))"
+            )
+
+
+def _build_import_id_remap(norm):
+    """Return (group_id_remap, question_id_remap) for ids already in the DB."""
+    file_group_ids = [
+        g["id"] for g in norm.get("question_group", [])
+        if g.get("id") is not None
+    ]
+    file_q_ids = [
+        q["id"]
+        for g in norm.get("question_group", [])
+        for q in g.get("question", [])
+        if q.get("id") is not None
+    ]
+
+    taken_group_ids = set(
+        QuestionGroup.objects_with_deleted.filter(
+            id__in=file_group_ids
+        ).values_list("id", flat=True)
+    )
+    taken_q_ids = set(
+        Questions.objects_with_deleted.filter(
+            id__in=file_q_ids
+        ).values_list("id", flat=True)
+    )
+
+    group_remap = {
+        gid: None for gid in file_group_ids if gid in taken_group_ids
+    }
+    q_remap = {
+        qid: None for qid in file_q_ids if qid in taken_q_ids
+    }
+    return group_remap, q_remap
+
+
+def _apply_import_create_path(norm, user, parent_form, force_new_id):
+    """Create a new draft form, preserving file IDs when free."""
+    file_form_id = norm.get("form_id")
+    form_type = norm.get("type", FormTypes.registration)
+
+    if not force_new_id and file_form_id is not None:
+        form_id_taken = Forms.objects_with_deleted.filter(
+            id=file_form_id
+        ).exists()
+        use_file_form_id = not form_id_taken
+    else:
+        use_file_form_id = False
+
+    group_remap, q_remap = _build_import_id_remap(norm)
+    _sync_import_pk_sequences()
+
+    create_kwargs = dict(
+        name=norm["name"],
+        description=norm.get("description"),
+        type=form_type,
+        status=FormStatus.draft,
+        parent=parent_form,
+        languages=norm.get("languages"),
+        default_language=norm.get("default_language"),
+        translations=norm.get("translations"),
+        approval_instructions=norm.get("approval_instructions"),
+        created_by=user,
+        updated_by=user,
+    )
+    if use_file_form_id:
+        create_kwargs["id"] = file_form_id
+
+    form = Forms.objects.create(**create_kwargs)
+
+    if use_file_form_id:
+        _sync_import_pk_sequences()
+
+    final_q_id_map = {}
+    new_options = []
+
+    for g in norm.get("question_group", []):
+        g_id = g.get("id")
+        use_g_id = (
+            not force_new_id
+            and g_id is not None
+            and g_id not in group_remap
+        )
+
+        grp_kwargs = dict(
+            form=form,
+            name=g["name"],
+            label=g.get("label"),
+            order=g.get("order"),
+            repeatable=g.get("repeatable", False),
+            repeat_text=g.get("repeat_text"),
+            translations=g.get("translations"),
+        )
+        if use_g_id:
+            grp_kwargs["id"] = g_id
+
+        grp = QuestionGroup.objects.create(**grp_kwargs)
+        if g_id is not None:
+            group_remap[g_id] = grp.id
+
+        for q in g.get("question", []):
+            q_id = q.get("id")
+            use_q_id = (
+                not force_new_id
+                and q_id is not None
+                and q_id not in q_remap
+            )
+
+            q_type = _TYPE_STR_TO_INT.get(q.get("type") or "")
+            if q_type is None:
+                continue
+
+            q_kwargs = dict(
+                form=form,
+                question_group=grp,
+                order=q.get("order"),
+                name=q["name"],
+                label=q.get("label", q["name"]),
+                short_label=q.get("short_label"),
+                type=q_type,
+                meta=q.get("meta", False),
+                required=q.get("required", True),
+                rule=q.get("rule"),
+                dependency=q.get("dependency"),
+                dependency_rule=q.get("dependency_rule") or "AND",
+                api=q.get("api"),
+                extra=q.get("extra"),
+                tooltip=q.get("tooltip"),
+                fn=q.get("fn"),
+                pre=q.get("pre"),
+                display_only=q.get("display_only") or False,
+                variable_name=q.get("variable_name"),
+                translations=q.get("translations"),
+                hidden_string=q.get("hidden_string"),
+                required_double_entry=q.get("required_double_entry") or False,
+                disabled=q.get("disabled") or False,
+                addon_before=q.get("addon_before"),
+                addon_after=q.get("addon_after"),
+                data_api_url=q.get("data_api_url"),
+                center=q.get("center"),
+                tree_option=q.get("tree_option"),
+                limit=q.get("limit"),
+                columns=q.get("columns"),
+            )
+            if use_q_id:
+                q_kwargs["id"] = q_id
+
+            q_obj = Questions.objects.create(**q_kwargs)
+            if q_id is not None:
+                final_q_id_map[q_id] = q_obj.id
+
+            for opt in q.get("option", []):
+                new_options.append(QuestionOptions(
+                    question_id=q_obj.id,
+                    order=opt.get("order", 1),
+                    label=opt["label"],
+                    value=opt.get("value") or re.sub(
+                        r"\s+", "_", str(opt["label"]).lower()
+                    ),
+                    other=opt.get("other", False),
+                    color=opt.get("color"),
+                    translations=opt.get("translations"),
+                ))
+
+    if new_options:
+        QuestionOptions.objects.bulk_create(new_options)
+
+    _fixup_import_dependency_refs(form, final_q_id_map)
+    return form
+
+
+def _fixup_import_dependency_refs(form, final_q_id_map):
+    """Update dependency[].id refs for questions whose ids were remapped."""
+    changed = {old: new for old, new in final_q_id_map.items() if old != new}
+    if not changed:
+        return
+
+    for q_obj in Questions.objects.filter(form=form):
+        deps = q_obj.dependency
+        if not deps:
+            continue
+        updated = False
+        for dep in deps:
+            old_id = dep.get("id")
+            if old_id in changed:
+                dep["id"] = changed[old_id]
+                updated = True
+        if updated:
+            q_obj.save(update_fields=["dependency"])
+
+
+def _apply_import_update_path(form, norm, user):
+    """Update an existing form's live structure to match the normalized def.
+
+    Semantics identical to restore_from_snapshot:
+    - Pass 1: soft-delete groups/questions absent from the file.
+    - Pass 2: upsert by exported id; create new rows for unknown ids.
+    - Options are recreated wholesale.
+    - status and active_version are NOT touched (D-6).
+    """
+    snapshot_group_ids = {
+        g["id"]
+        for g in norm.get("question_group", [])
+        if g.get("id") is not None
+    }
+    snapshot_q_ids = {
+        q["id"]
+        for g in norm.get("question_group", [])
+        for q in g.get("question", [])
+        if q.get("id") is not None
+    }
+
+    Questions.objects.filter(form=form).exclude(
+        id__in=snapshot_q_ids
+    ).soft_delete()
+    form.form_question_group.exclude(
+        id__in=snapshot_group_ids
+    ).soft_delete()
+
+    group_db = {
+        g.id: g
+        for g in QuestionGroup.objects_with_deleted.filter(form=form)
+    }
+    question_db = {
+        q.id: q
+        for q in Questions.objects_with_deleted.filter(
+            question_group__form=form
+        )
+    }
+
+    if snapshot_q_ids:
+        QuestionOptions.objects.filter(
+            question_id__in=snapshot_q_ids
+        ).delete()
+
+    _sync_import_pk_sequences()
+
+    new_options = []
+
+    for g in norm.get("question_group", []):
+        g_id = g.get("id")
+        grp_fields = dict(
+            deleted_at=None,
+            name=g["name"],
+            label=g.get("label"),
+            order=g.get("order"),
+            repeatable=g.get("repeatable", False),
+            repeat_text=g.get("repeat_text"),
+            translations=g.get("translations"),
+        )
+        if g_id is not None and g_id in group_db:
+            g_obj = group_db[g_id]
+            for k, v in grp_fields.items():
+                setattr(g_obj, k, v)
+            g_obj.save(update_fields=list(grp_fields.keys()))
+        else:
+            g_obj = QuestionGroup.objects.create(form=form, **grp_fields)
+            if g_id is not None:
+                group_db[g_id] = g_obj
+
+        for q in g.get("question", []):
+            q_id = q.get("id")
+            q_type = _TYPE_STR_TO_INT.get(q.get("type") or "")
+            if q_type is None:
+                continue
+            q_fields = dict(
+                deleted_at=None,
+                order=q.get("order"),
+                label=q.get("label", q.get("name", "")),
+                short_label=q.get("short_label"),
+                name=q["name"],
+                type=q_type,
+                meta=q.get("meta", False),
+                required=q.get("required", True),
+                rule=q.get("rule"),
+                dependency=q.get("dependency"),
+                dependency_rule=q.get("dependency_rule") or "AND",
+                api=q.get("api"),
+                extra=q.get("extra"),
+                tooltip=q.get("tooltip"),
+                fn=q.get("fn"),
+                pre=q.get("pre"),
+                display_only=q.get("display_only") or False,
+                variable_name=q.get("variable_name"),
+                translations=q.get("translations"),
+                hidden_string=q.get("hidden_string"),
+                required_double_entry=q.get("required_double_entry") or False,
+                disabled=q.get("disabled") or False,
+                addon_before=q.get("addon_before"),
+                addon_after=q.get("addon_after"),
+                data_api_url=q.get("data_api_url"),
+                center=q.get("center"),
+                tree_option=q.get("tree_option"),
+                limit=q.get("limit"),
+                columns=q.get("columns"),
+            )
+            if q_id is not None and q_id in question_db:
+                q_obj = question_db[q_id]
+                for k, v in q_fields.items():
+                    setattr(q_obj, k, v)
+                q_obj.save(update_fields=list(q_fields.keys()))
+                live_q_id = q_id
+            else:
+                q_obj = Questions.objects.create(
+                    form=form, question_group=g_obj, **q_fields
+                )
+                if q_id is not None:
+                    question_db[q_id] = q_obj
+                live_q_id = q_obj.id
+
+            for opt in q.get("option", []):
+                new_options.append(QuestionOptions(
+                    question_id=live_q_id,
+                    order=opt.get("order", 1),
+                    label=opt["label"],
+                    value=opt.get("value") or re.sub(
+                        r"\s+", "_", str(opt["label"]).lower()
+                    ),
+                    other=opt.get("other", False),
+                    color=opt.get("color"),
+                    translations=opt.get("translations"),
+                ))
+
+    if new_options:
+        QuestionOptions.objects.bulk_create(new_options)
+
+    form.name = norm.get("name", form.name)
+    form.description = norm.get("description")
+    form.approval_instructions = norm.get("approval_instructions")
+    form.languages = norm.get("languages")
+    form.default_language = norm.get("default_language")
+    form.translations = norm.get("translations")
+    form.updated_by = user
+    form.save(update_fields=[
+        "name",
+        "description",
+        "approval_instructions",
+        "languages",
+        "default_language",
+        "translations",
+        "updated_by",
+    ])
