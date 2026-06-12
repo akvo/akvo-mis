@@ -796,27 +796,30 @@ Commands: `./dc.sh exec backend python manage.py test api.v1.v1_forms`,
 ## 14. Implementation Plan (file touch list)
 
 **Backend**
-1. `api/v1/v1_jobs/constants.py` — `JobTypes.import_form = 8` + `FieldStr`
+1. [x] `api/v1/v1_jobs/constants.py` — `JobTypes.import_form = 8` + `FieldStr`
    entry, then `makemigrations v1_jobs` (AlterField on `Jobs.type` choices —
    see §4 Migration Strategy)
-2. `mis/settings.py` — `FORM_IMPORT_MAX_FILE_SIZE`
-3. `api/v1/v1_forms/form_definition.py` — **new**: normalize / validate /
-   export / import (§8)
-4. `api/v1/v1_forms/tasks.py` — `import_form_job`, `import_form_job_result`
-5. `api/v1/v1_forms/views.py` — 4 new `@action`s on `FormBuilderViewSet` +
+2. [x] `mis/settings.py` — `FORM_IMPORT_MAX_FILE_SIZE`
+3. [x] normalize / validate / export / import (§8) — merged into
+   `api/v1/v1_forms/functions.py` (constants in `constants.py`) instead of a
+   separate `form_definition.py` module
+4. [x] `api/v1/v1_forms/tasks.py` — `import_form_job`, `import_form_job_result`
+5. [x] `api/v1/v1_forms/views.py` — 4 new `@action`s on `FormBuilderViewSet` +
    permission map entries
-6. `api/v1/v1_forms/serializers.py` — request/response serializers for
-   drf-spectacular
-7. `api/v1/v1_forms/management/commands/form_seeder.py` — refactor onto shared
-   parser
-8. Tests per §13
+6. [x] `api/v1/v1_forms/serializers.py` — `ImportPreflightSerializer` /
+   `ImportFormSerializer` (multipart, `CustomFileField`) for drf-spectacular
+7. [ ] `api/v1/v1_forms/management/commands/form_seeder.py` — refactor onto
+   shared parser
+8. [x] Tests per §13 — `tests_manage_form_import.py` (39 tests),
+   `tests_manage_form_export.py` (12 tests)
 
 **Frontend**
-1. `src/pages/form-builder/FormBuilderList.jsx` — export action, import button
-2. `src/pages/form-builder/ImportFormModal.jsx` — **new** (upload → preflight →
-   confirm → poll)
-3. `src/pages/form-builder/FormBuilderEdit.jsx` — export action
-4. Tests per §13
+1. [x] `src/pages/form-builder/FormBuilderList.jsx` — export action, import
+   button
+2. [x] `src/pages/form-builder/components/ImportFormModal.jsx` — **new**
+   (upload → preflight → confirm → poll)
+3. [x] `src/pages/form-builder/FormBuilderEdit.jsx` — export action
+4. [ ] Tests per §13 (frontend RTL)
 
 Suggested order: backend 1–3 (+unit tests) → 4–5 (+integration tests) → 7
 (+seeder regression) → 6 → frontend → round-trip test.
