@@ -292,7 +292,10 @@ the reverse migration.
 
 Deployment note: if a reverse proxy limits request body size below the
 configured cap, raise `client_max_body_size` in
-`frontend/nginx/conf.d/default.conf` accordingly (NFR-2).
+`frontend/nginx/conf.d/default.conf` accordingly (NFR-2). Verified: the
+server block already sets `client_max_body_size 50M` — 10× the 5 MB default
+cap, so no change is needed unless `FORM_IMPORT_MAX_FILE_SIZE` is raised
+above 50 MB.
 
 ---
 
@@ -808,8 +811,11 @@ Commands: `./dc.sh exec backend python manage.py test api.v1.v1_forms`,
    permission map entries
 6. [x] `api/v1/v1_forms/serializers.py` — `ImportPreflightSerializer` /
    `ImportFormSerializer` (multipart, `CustomFileField`) for drf-spectacular
-7. [ ] `api/v1/v1_forms/management/commands/form_seeder.py` — refactor onto
-   shared parser
+7. [x] `api/v1/v1_forms/management/commands/form_seeder.py` — refactored onto
+   shared parser (`normalize → validate → import_form_definition` with
+   seeder-only `require_parent=False` + `claim_foreign_questions=True`;
+   answer migration, hard-delete, QA attributes, publish/version bumps stay
+   in the command)
 8. [x] Tests per §13 — `tests_manage_form_import.py` (39 tests),
    `tests_manage_form_export.py` (12 tests)
 

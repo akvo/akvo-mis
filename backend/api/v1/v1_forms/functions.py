@@ -836,6 +836,9 @@ def normalize_form_definition(raw):
     parent_hint = raw.get("parent")
     if parent_hint and not isinstance(parent_hint, dict):
         parent_hint = None
+    if parent_hint is None and raw.get("parent_id"):
+        # Legacy seeder format carries a bare parent_id
+        parent_hint = {"id": raw["parent_id"], "name": None}
 
     groups_raw = raw.get("question_group") or raw.get("question_groups") or []
     groups = []
@@ -889,6 +892,9 @@ def _normalize_import_question(q):
 
     if "questionGroupId" in result:
         result["question_group_id"] = result.pop("questionGroupId")
+
+    if "options" in result and "option" not in result:
+        result["option"] = result.pop("options")
 
     return result
 
@@ -1035,6 +1041,9 @@ def validate_form_definition(norm, check_entities=True):
                     })
 
             extra = q.get("extra") or {}
+            if not isinstance(extra, dict):
+                # Legacy seeder files use extra as a list of placement hints
+                extra = {}
             parent_id_ref = extra.get("parentId")
             if parent_id_ref is not None and parent_id_ref not in question_ids:
                 issues.append({
@@ -1047,6 +1056,8 @@ def validate_form_definition(norm, check_entities=True):
                 })
 
             fn = q.get("fn") or {}
+            if not isinstance(fn, dict):
+                fn = {}
             fn_string = fn.get("fnString") or ""
             for ref_name in re.findall(r"#(\w+)#", fn_string):
                 if ref_name not in question_names:
@@ -1061,6 +1072,8 @@ def validate_form_definition(norm, check_entities=True):
                     })
 
             api = q.get("api") or {}
+            if not isinstance(api, dict):
+                api = {}
             endpoint = api.get("endpoint") or ""
             if endpoint:
                 web_domain = getattr(settings, "WEBDOMAIN", "")
@@ -1161,7 +1174,15 @@ def _export_question_to_editor_keys(q, group_id):
 
 
 @transaction.atomic
-def import_form_definition(norm, user, *, mode, parent_id=None):
+def import_form_definition(
+    norm,
+    user,
+    *,
+    mode,
+    parent_id=None,
+    require_parent=True,
+    claim_foreign_questions=False,
+):
     """Create or update a form from a normalized definition.
 
     Parameters
@@ -1170,7 +1191,14 @@ def import_form_definition(norm, user, *, mode, parent_id=None):
     user      : SystemUser performing the import
     mode      : "create_or_update" | "create_copy"
     parent_id : int | None — overrides/satisfies parent hint for monitoring
-
+    require_parent : bool — when False, an unresolvable parent on a
+        monitoring form is tolerated instead of raising (seeder/CLI only;
+        the API always requires a resolvable parent — FR-10)
+    claim_foreign_questions : bool — when True, the update path matches
+        file question ids globally and reassigns rows attached to another
+        form (cross-form question moves, seeder/CLI only). The API must
+        keep this False so an import can never steal questions from an
+        unrelated form.
 
     Returns
     -------
@@ -1179,14 +1207,19 @@ def import_form_definition(norm, user, *, mode, parent_id=None):
     file_form_id = norm.get("form_id")
     form_type = norm.get("type", FormTypes.registration)
 
-    parent_form = _resolve_import_parent(norm, parent_id, form_type)
+    parent_form = _resolve_import_parent(
+        norm, parent_id, form_type, required=require_parent
+    )
 
     existing_form = None
     if mode != "create_copy" and file_form_id is not None:
         existing_form = Forms.objects.filter(id=file_form_id).first()
 
     if existing_form is not None:
-        _apply_import_update_path(existing_form, norm, user)
+        _apply_import_update_path(
+            existing_form, norm, user,
+            claim_foreign_questions=claim_foreign_questions,
+        )
         return existing_form, "updated"
     else:
         new_form = _apply_import_create_path(
@@ -1197,7 +1230,7 @@ def import_form_definition(norm, user, *, mode, parent_id=None):
         return new_form, action
 
 
-def _resolve_import_parent(norm, override_parent_id, form_type):
+def _resolve_import_parent(norm, override_parent_id, form_type, required=True):
     """Return the parent Forms instance, or None if not required."""
     if form_type != FormTypes.monitoring:
         return None
@@ -1215,6 +1248,9 @@ def _resolve_import_parent(norm, override_parent_id, form_type):
         parent = Forms.objects.filter(id=hint["id"]).first()
         if parent:
             return parent
+
+    if not required:
+        return None
 
     raise ValueError(
         "Monitoring form requires a parent registration form; "
@@ -1384,7 +1420,7 @@ def _apply_import_create_path(norm, user, parent_form, force_new_id):
             if q_id is not None:
                 final_q_id_map[q_id] = q_obj.id
 
-            for opt in q.get("option", []):
+            for opt in q.get("option") or []:
                 new_options.append(QuestionOptions(
                     question_id=q_obj.id,
                     order=opt.get("order", 1),
@@ -1424,7 +1460,7 @@ def _fixup_import_dependency_refs(form, final_q_id_map):
             q_obj.save(update_fields=["dependency"])
 
 
-def _apply_import_update_path(form, norm, user):
+def _apply_import_update_path(form, norm, user, claim_foreign_questions=False):
     """Update an existing form's live structure to match the normalized def.
 
     Semantics identical to restore_from_snapshot:
@@ -1432,6 +1468,11 @@ def _apply_import_update_path(form, norm, user):
     - Pass 2: upsert by exported id; create new rows for unknown ids.
     - Options are recreated wholesale.
     - status and active_version are NOT touched (D-6).
+
+    With claim_foreign_questions=True (seeder/CLI only), file question ids
+    are matched globally and rows currently attached to another form are
+    reassigned to this form (cross-form question moves keep their PK so
+    answers stay linked).
     """
     snapshot_group_ids = {
         g["id"]
@@ -1456,12 +1497,20 @@ def _apply_import_update_path(form, norm, user):
         g.id: g
         for g in QuestionGroup.objects_with_deleted.filter(form=form)
     }
-    question_db = {
-        q.id: q
-        for q in Questions.objects_with_deleted.filter(
-            question_group__form=form
-        )
-    }
+    if claim_foreign_questions:
+        question_db = {
+            q.id: q
+            for q in Questions.objects_with_deleted.filter(
+                id__in=snapshot_q_ids
+            )
+        }
+    else:
+        question_db = {
+            q.id: q
+            for q in Questions.objects_with_deleted.filter(
+                question_group__form=form
+            )
+        }
 
     if snapshot_q_ids:
         QuestionOptions.objects.filter(
@@ -1489,6 +1538,11 @@ def _apply_import_update_path(form, norm, user):
                 setattr(g_obj, k, v)
             g_obj.save(update_fields=list(grp_fields.keys()))
         else:
+            # Preserve the exported id when free (FR-7/R-2) so later
+            # re-imports keep matching this group by id
+            if g_id is not None and not QuestionGroup.objects_with_deleted\
+                    .filter(id=g_id).exists():
+                grp_fields["id"] = g_id
             g_obj = QuestionGroup.objects.create(form=form, **grp_fields)
             if g_id is not None:
                 group_db[g_id] = g_obj
@@ -1531,11 +1585,21 @@ def _apply_import_update_path(form, norm, user):
             )
             if q_id is not None and q_id in question_db:
                 q_obj = question_db[q_id]
+                if claim_foreign_questions:
+                    # Cross-form move: reassign the row, keeping its PK so
+                    # existing answers stay linked (seeder semantics)
+                    q_fields["form"] = form
+                    q_fields["question_group"] = g_obj
                 for k, v in q_fields.items():
                     setattr(q_obj, k, v)
                 q_obj.save(update_fields=list(q_fields.keys()))
                 live_q_id = q_id
             else:
+                # Preserve the exported id when free (FR-7/R-2) so later
+                # re-imports keep matching this question by id
+                if q_id is not None and not Questions.objects_with_deleted\
+                        .filter(id=q_id).exists():
+                    q_fields["id"] = q_id
                 q_obj = Questions.objects.create(
                     form=form, question_group=g_obj, **q_fields
                 )
@@ -1543,7 +1607,7 @@ def _apply_import_update_path(form, norm, user):
                     question_db[q_id] = q_obj
                 live_q_id = q_obj.id
 
-            for opt in q.get("option", []):
+            for opt in q.get("option") or []:
                 new_options.append(QuestionOptions(
                     question_id=live_q_id,
                     order=opt.get("order", 1),
@@ -1558,6 +1622,9 @@ def _apply_import_update_path(form, norm, user):
 
     if new_options:
         QuestionOptions.objects.bulk_create(new_options)
+
+    # Explicit-ID inserts above may have left the sequences behind
+    _sync_import_pk_sequences()
 
     form.name = norm.get("name", form.name)
     form.description = norm.get("description")

@@ -1,32 +1,22 @@
 import json
 import os
-import re
 
 from mis.settings import PROD
 from django.core.management import BaseCommand
 from django.db import transaction
 
-from api.v1.v1_forms.constants import (
-    QuestionTypes,
-    AttributeTypes,
-    FormStatus,
+from api.v1.v1_forms.constants import AttributeTypes, FormStatus
+from api.v1.v1_forms.functions import (
+    import_form_definition,
+    normalize_form_definition,
+    validate_form_definition,
 )
 from api.v1.v1_forms.models import (
     Forms, Questions,
     QuestionGroup as QG,
-    QuestionOptions as QO,
     QuestionAttribute as QA)
 from api.v1.v1_data.models import (
     Answers, AnswerHistory, FormData)
-
-
-def clean_string(input_string):
-    stripped_string = input_string.strip()
-    lowercase_string = stripped_string.lower()
-    no_special_chars_string = re.sub(r'[^a-z0-9 ]', '', lowercase_string)
-    underscore_string = no_special_chars_string.replace(' ', '_')
-    final_string = underscore_string.strip('_')
-    return final_string
 
 
 def migrate_question_answers(question, target_form_id):
@@ -125,28 +115,38 @@ class Command(BaseCommand):
         if JSON_FILE:
             source_files = [f"{source_folder}{JSON_FILE}.prod.json"]
 
-        # Sort forms based on parent_id: forms without parent_id first,
-        # then forms with parent_id
+        # Parse every file through the shared FB-007 parser (D-8) and
+        # sort: forms without a parent hint first, then children.
+        norms = {}
         parent_forms = []
         child_forms = []
 
         for source in source_files:
             with open(source, 'r') as f:
-                json_form = json.load(f)
-                if json_form.get("parent_id"):
-                    child_forms.append(source)
-                else:
-                    parent_forms.append(source)
+                raw = json.load(f)
+            norm = normalize_form_definition(raw)
+            # Legacy files may omit order fields; default them by position
+            # (same fallback the legacy seeder applied).
+            for gi, g in enumerate(norm["question_group"]):
+                if not g.get("order"):
+                    g["order"] = gi + 1
+                for qi, q in enumerate(g["question"]):
+                    if not q.get("order"):
+                        q["order"] = qi + 1
+            norms[source] = norm
+            if norm.get("parent_hint"):
+                child_forms.append(source)
+            else:
+                parent_forms.append(source)
 
-        # Build global question-to-form map from all form JSONs
+        # Build global question-to-form map from all form files
         # {question_id: target_form_id}
         question_target_map = {}
         for source in parent_forms + child_forms:
-            with open(source, 'r') as f:
-                json_form = json.load(f)
-            for qg in json_form["question_groups"]:
-                for q in qg["questions"]:
-                    question_target_map[q["id"]] = json_form["id"]
+            norm = norms[source]
+            for g in norm["question_group"]:
+                for q in g["question"]:
+                    question_target_map[q["id"]] = norm["form_id"]
 
         # Process all form sources in the correct order
         # (parents first, then children)
@@ -154,64 +154,65 @@ class Command(BaseCommand):
         all_form_ids = []
         with transaction.atomic():
             for source in parent_forms + child_forms:
-                with open(source, 'r') as f:
-                    json_form = json.load(f)
+                norm = norms[source]
 
-                form = Forms.objects.filter(id=json_form["id"]).first()
-                QA.objects.filter(question__form=form).all().delete()
-                if not form:
-                    form = Forms.objects.create(
-                        id=json_form["id"],
-                        name=json_form["form"],
-                        version=1,
-                        approval_instructions=json_form.get(
-                            'approval_instructions'
-                        ),
-                        type=json_form.get("type"),
-                        status=FormStatus.published,
-                    )
-                    if json_form.get("parent_id"):
-                        parent = Forms.objects.filter(
-                            id=json_form["parent_id"]).first()
-                        if parent:
-                            form.parent = parent
-                            form.save()
-                    if not TEST:
-                        self.stdout.write(
-                            f"Form Created | {form.name} V{form.version}")
-                else:
-                    form.name = json_form["form"]
-                    form.version += 1
-                    if json_form.get("parent_id"):
-                        parent = Forms.objects.filter(
-                            id=json_form["parent_id"]).first()
-                        if parent:
-                            form.parent = parent
-                    if json_form.get("approval_instructions"):
-                        form.approval_instructions = json_form.get(
-                            "approval_instructions"
+                issues = validate_form_definition(norm, check_entities=False)
+                errors = [i for i in issues if i.get("level") == "error"]
+                if errors:
+                    for e in errors:
+                        self.stderr.write(
+                            f"{source}: [{e['code']}] "
+                            f"{e['path']}: {e['message']}"
                         )
-                    else:
-                        form.approval_instructions = None
-                    if json_form.get("type"):
-                        form.type = json_form.get("type")
+                    continue
+
+                form = Forms.objects.filter(id=norm["form_id"]).first()
+                created = form is None
+
+                parent = None
+                hint = norm.get("parent_hint")
+                if hint and hint.get("id"):
+                    parent = Forms.objects.filter(id=hint["id"]).first()
+
+                if created:
+                    # The shared import path creates drafts (FR-11); the
+                    # seeder pre-creates the row so it can keep its legacy
+                    # publish-on-seed behaviour, then lets the update path
+                    # write the structure.
+                    form = Forms.objects.create(
+                        id=norm["form_id"],
+                        name=norm["name"],
+                        version=1,
+                        approval_instructions=norm.get(
+                            "approval_instructions"
+                        ),
+                        type=norm.get("type"),
+                        status=FormStatus.published,
+                        parent=parent,
+                    )
+                else:
+                    form.version += 1
+                    if parent:
+                        form.parent = parent
+                    if norm.get("type"):
+                        form.type = norm.get("type")
                     form.save()
-                    if not TEST:
-                        self.stdout.write(
-                            f"Form Updated | {form.name} V{form.version}")
-                # Collect IDs from JSON before processing
+
+                # Collect IDs from the file before processing
                 list_of_question_ids = []
                 list_of_question_group_ids = []
-                all_form_ids.append(json_form["id"])
-                for qg in json_form["question_groups"]:
-                    list_of_question_group_ids.append(qg["id"])
+                all_form_ids.append(norm["form_id"])
+                for g in norm["question_group"]:
+                    list_of_question_group_ids.append(g["id"])
                     list_of_question_ids += [
-                        q["id"] for q in qg["questions"]
+                        q["id"] for q in g["question"]
                     ]
                 all_question_group_ids += list_of_question_group_ids
 
-                # Handle removed questions BEFORE processing
-                # to avoid unique constraint violations
+                # Handle removed questions BEFORE the import runs:
+                # a question moving to another form keeps its row (the
+                # target form claims it via claim_foreign_questions); a
+                # truly removed question is hard-deleted.
                 removed_qs = Questions.objects.filter(
                     form=form
                 ).exclude(id__in=list_of_question_ids)
@@ -226,100 +227,45 @@ class Command(BaseCommand):
                         # Question truly removed — delete it
                         question.delete()
 
-                # question group loop
-                for qgi, qg in enumerate(json_form["question_groups"]):
-                    question_group = QG.objects.filter(pk=qg["id"]).first()
-                    if not question_group:
-                        question_group = QG.objects.create(
-                            id=qg["id"],
-                            name=qg["name"],
-                            label=qg["label"],
-                            form=form,
-                            order=qg["order"],
-                            repeatable=qg.get("repeatable", False),
-                            repeat_text=qg.get("repeatText"),
-                        )
-                    else:
-                        question_group.name = qg["name"]
-                        question_group.label = qg["label"]
-                        question_group.order = qg["order"]
-                        question_group.repeatable = qg.get(
-                            "repeatable", False)
-                        question_group.repeat_text = qg.get("repeatText")
-                        question_group.save()
-                    for qi, q in enumerate(qg["questions"]):
-                        question = Questions.objects.filter(
-                            pk=q["id"]).first()
-                        if not question:
-                            question = Questions.objects.create(
-                                id=q.get("id"),
-                                name=q["name"],
-                                label=q["label"],
-                                short_label=q.get("short_label"),
-                                form=form,
-                                order=q.get("order") or qi + 1,
-                                meta=q.get("meta"),
-                                question_group=question_group,
-                                rule=q.get("rule"),
-                                required=q.get("required"),
-                                dependency=q.get("dependency"),
-                                dependency_rule=q.get("dependency_rule"),
-                                api=q.get("api"),
-                                type=getattr(QuestionTypes, q["type"]),
-                                tooltip=q.get("tooltip"),
-                                fn=q.get("fn"),
-                                pre=q.get("pre"),
-                                display_only=q.get("displayOnly"),
-                                extra=q.get("extra"),
-                            )
-                        else:
-                            question.form = form
-                            question.question_group = question_group
-                            question.name = q["name"]
-                            question.label = q["label"]
-                            question.short_label = q.get("short_label")
-                            question.order = q.get("order") or qi + 1
-                            question.meta = q.get("meta")
-                            question.rule = q.get("rule")
-                            question.required = q.get("required")
-                            question.dependency = q.get("dependency")
-                            question.dependency_rule = q.get(
-                                "dependency_rule")
-                            question.type = getattr(
-                                QuestionTypes, q["type"])
-                            question.api = q.get("api")
-                            question.extra = q.get("extra")
-                            question.tooltip = q.get("tooltip")
-                            question.fn = q.get("fn")
-                            question.display_only = q.get("displayOnly")
-                            question.pre = q.get("pre")
-                            question.save()
-                        QO.objects.filter(
-                            question=question).all().delete()
-                        if q.get("options"):
-                            QO.objects.bulk_create([
-                                QO(
-                                    label=o["label"].strip(),
-                                    value=o["value"] if o.get("value")
-                                    else clean_string(
-                                        o["label"]
-                                    ),
-                                    question=question,
-                                    order=o["order"] if o.get("order")
-                                    else io + 1,
-                                    color=o.get("color")
-                                ) for io, o in enumerate(q.get("options"))
-                            ])
-                        QA.objects.filter(
-                            question=question).all().delete()
-                        if q.get("attributes"):
-                            QA.objects.bulk_create([
-                                QA(
-                                    attribute=getattr(
-                                        AttributeTypes, a),
-                                    question=question,
-                                ) for a in q.get("attributes")
-                            ])
+                QA.objects.filter(question__form=form).all().delete()
+
+                # Shared write path (D-8): groups/questions/options upsert
+                # by exported id; cross-form moves claimed by PK so answers
+                # stay linked.
+                import_form_definition(
+                    norm,
+                    None,
+                    mode="create_or_update",
+                    require_parent=False,
+                    claim_foreign_questions=True,
+                )
+
+                # Question attributes stay a seeder concern (not part of
+                # the FB-007 export format).
+                qa_rows = []
+                for g in norm["question_group"]:
+                    for q in g["question"]:
+                        attrs = q.get("attributes")
+                        if not attrs:
+                            continue
+                        db_q = Questions.objects.filter(
+                            form=form, name=q["name"]
+                        ).first()
+                        if not db_q:
+                            continue
+                        qa_rows += [
+                            QA(
+                                attribute=getattr(AttributeTypes, a),
+                                question=db_q,
+                            ) for a in attrs
+                        ]
+                if qa_rows:
+                    QA.objects.bulk_create(qa_rows)
+
+                if not TEST:
+                    verb = "Created" if created else "Updated"
+                    self.stdout.write(
+                        f"Form {verb} | {norm['name']} V{form.version}")
 
             # Final cleanup: delete question groups not present in any
             # JSON and with no remaining questions. This catches groups
