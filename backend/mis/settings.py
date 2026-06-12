@@ -236,6 +236,9 @@ MASTER_DATA = "./source"
 STORAGE_PATH = environ.get("STORAGE_PATH", "./storage")
 
 FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
+FORM_IMPORT_MAX_FILE_SIZE = int(
+    environ.get("FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024)
+)
 
 BUCKET_NAME = "mis"
 FAKE_STORAGE = False
