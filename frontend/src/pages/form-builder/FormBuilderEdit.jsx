@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Button, Popconfirm, Space } from "antd";
-import { HistoryOutlined } from "@ant-design/icons";
+import { HistoryOutlined, DownloadOutlined } from "@ant-design/icons";
 import WebformEditor from "akvo-react-form-editor";
 import "akvo-react-form-editor/dist/index.css";
 import { Breadcrumbs } from "../../components";
@@ -15,6 +15,8 @@ import {
 import { useNotification } from "../../util/hooks";
 import { FormEditorBanners, VersionHistoryDrawer } from "./components";
 import "./style.scss";
+
+const regExpFilename = /filename="(?<filename>.*)"/;
 
 const FormBuilderEdit = () => {
   const { formId } = useParams();
@@ -212,6 +214,31 @@ const FormBuilderEdit = () => {
     await loadForm();
   };
 
+  const onExport = () => {
+    api
+      .get(`/manage/forms/${formId}/export`, { responseType: "blob" })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({ type: "error", message: text.formBuilderExportError });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        notify({ type: "error", message: text.formBuilderExportError });
+      });
+  };
+
   const infoBannerText = useMemo(() => {
     if (formStatus !== "published") {
       return null;
@@ -243,6 +270,13 @@ const FormBuilderEdit = () => {
             }}
           >
             <Space>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={onExport}
+                disabled={saving || publishing || unpublishing}
+              >
+                {text.formBuilderExportButton}
+              </Button>
               {hasVersionHistory && (
                 <Button
                   icon={<HistoryOutlined />}

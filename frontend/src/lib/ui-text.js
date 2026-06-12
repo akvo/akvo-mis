@@ -232,6 +232,40 @@ const uiText = {
     formBuilderDeleteError: "Failed to delete form",
     formBuilderStatusArchived: "Archived",
     formBuilderEmptyText: "No forms found",
+    formBuilderExportButton: "Export",
+    formBuilderExportError: "Failed to export form",
+    formBuilderImportButton: "Import Form",
+    formBuilderImportModalTitle: "Import Form",
+    formBuilderImportDraggerText: "Click or drag a form export file here",
+    formBuilderImportDraggerHint: (mb) =>
+      `Only .json form export files, up to ${mb} MB`,
+    formBuilderImportFileTooLarge: (mb) => `File exceeds the ${mb} MB limit`,
+    formBuilderImportInvalidFile: "Only .json files are supported",
+    formBuilderImportPreflightError: "Failed to validate the file",
+    formBuilderImportErrorsTitle: "Validation errors",
+    formBuilderImportWarningsTitle: "Warnings",
+    formBuilderImportFormLabel: "Form",
+    formBuilderImportUpdateTitle: (name) => `Update existing form "${name}"?`,
+    formBuilderImportUpdateDesc: (count) =>
+      `A form with the same ID already exists in this environment` +
+      (count > 0 ? ` and has ${count} submission(s)` : "") +
+      `. Updating changes its structure in place; submissions are preserved.`,
+    formBuilderImportNameMismatchWarning:
+      "The name in the file differs from the existing form's name — " +
+      "make sure you are updating the right form.",
+    formBuilderImportModeUpdate: "Update existing form",
+    formBuilderImportModeCopy: "Import as new copy",
+    formBuilderImportParentLabel: "Parent registration form",
+    formBuilderImportParentPlaceholder: "Select a registration form",
+    formBuilderImportParentRequired:
+      "A monitoring form requires a parent registration form.",
+    formBuilderImportConfirmButton: "Import",
+    formBuilderImportInProgress: "Importing form…",
+    formBuilderImportSuccess: "Form imported",
+    formBuilderImportFailed: "Import failed",
+    formBuilderImportOpenEditor: "Open in editor",
+    formBuilderImportRetryButton: "Try another file",
+    formBuilderImportCloseButton: "Close",
     dataDownloadTitle: "Data Download",
     dataDownloadButton: "Download Data",
     dataDownloadText: (
