@@ -21,6 +21,8 @@
           "type": "cascade",
           "required": true,
           "api": {
+            "list": "children",
+            "initial": 1,
             "endpoint": "/api/v1/administrations/"
           },
           "extra": {
@@ -64,6 +66,8 @@
           "type": "cascade",
           "required": true,
           "api": {
+            "list": "children",
+            "initial": 1,
             "endpoint": "/api/v1/organisation/"
           }
         }

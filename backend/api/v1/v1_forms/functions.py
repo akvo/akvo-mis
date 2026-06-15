@@ -1089,6 +1089,32 @@ def validate_form_definition(norm, check_entities=True):
                         "level": "warning",
                     })
 
+            # Entity cascade uses extra.type="entity" and its own rendering
+            # path; it does not need api.list or api.initial.  All other
+            # cascade questions with an endpoint do require both fields.
+            if (
+                q_type == "cascade"
+                and endpoint
+                and extra.get("type") != "entity"
+            ):
+                missing = [
+                    f for f in ("list", "initial")
+                    if not api.get(f)
+                ]
+                if missing:
+                    issues.append({
+                        "code": "incomplete_cascade_api",
+                        "path": f"{q_path}.api",
+                        "message": (
+                            f"cascade question '{q.get('name')}' api "
+                            "config is missing required field(s): "
+                            f"{', '.join(missing)}; akvo-react-form "
+                            "requires api.list and api.initial to "
+                            "populate the cascade dropdown"
+                        ),
+                        "level": "error",
+                    })
+
             if check_entities and q_type == "cascade":
                 entity_name = extra.get("name")
                 if extra.get("type") == "entity" and entity_name:
