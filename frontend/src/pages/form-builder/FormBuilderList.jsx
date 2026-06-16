@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useNavigate } from "react-router-dom";
 import {
   Row,
@@ -12,20 +14,27 @@ import {
   Select,
   Popconfirm,
   Tooltip,
+  Dropdown,
+  Modal,
 } from "antd";
 import {
   PlusOutlined,
   SearchOutlined,
   PlusSquareOutlined,
   MinusSquareOutlined,
+  UploadOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
-import { FormStatusTag } from "./components";
+import { FormStatusTag, ImportFormModal } from "./components";
 import { api, store, uiText, REGISTRATION_FORM } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import "./style.scss";
 
+dayjs.extend(customParseFormat);
+
 const SEARCH_DEBOUNCE_MS = 400;
+const regExpFilename = /filename="(?<filename>.*)"/;
 
 const FormBuilderList = () => {
   const navigate = useNavigate();
@@ -42,6 +51,7 @@ const FormBuilderList = () => {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [expandedKeys, setExpandedKeys] = useState([]);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const { language, user } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -160,14 +170,44 @@ const FormBuilderList = () => {
       text.formBuilderDeleteError
     );
 
+  const onExport = (id) => {
+    api
+      .get(`/manage/forms/${id}/export`, { responseType: "blob" })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({ type: "error", message: text.formBuilderExportError });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        notify({ type: "error", message: text.formBuilderExportError });
+      });
+  };
+
   const formatDate = (value) => {
     if (!value) {
       return "—";
     }
-    return new Date(value).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const parsed = dayjs(
+      value,
+      ["DD-MM-YYYY HH:mm:ss", "YYYY-MM-DDTHH:mm:ssZ", dayjs.ISO_8601],
+      true
+    );
+    if (!parsed.isValid()) {
+      return value;
+    }
+    return parsed.format("MMM D, YYYY, h:mm A");
   };
 
   const nameColumn = {
@@ -197,59 +237,75 @@ const FormBuilderList = () => {
     render: (_, record) => record.version || 1,
   };
 
-  const renderActiveActions = (_, record) => (
-    <Space size="middle" wrap>
-      <Button
-        shape="round"
-        onClick={() => {
-          navigate(`/control-center/form-builder/${record.id}/edit`);
-        }}
-      >
-        {text.editButton}
-      </Button>
-      <Button shape="round" onClick={() => onDuplicate(record.id)}>
-        {text.formBuilderDuplicateButton}
-      </Button>
-      {record.status === "draft" && (
-        <Popconfirm
-          title={text.formBuilderPublishConfirmTitle}
-          description={text.formBuilderPublishConfirmDesc}
-          okText={text.formBuilderPublishButton}
-          onConfirm={() => onPublish(record.id)}
-        >
-          <Button shape="round" type="primary">
-            {text.formBuilderPublishButton}
-          </Button>
-        </Popconfirm>
-      )}
-      <Popconfirm
-        title={text.formBuilderArchiveConfirmTitle}
-        description={text.formBuilderArchiveConfirmDesc(
-          record.submission_count || 0
-        )}
-        okText={text.formBuilderArchiveButton}
-        okButtonProps={{ danger: true }}
-        onConfirm={() => onArchive(record.id)}
-      >
-        <Button shape="round" danger>
-          {text.formBuilderArchiveButton}
-        </Button>
-      </Popconfirm>
-      {record.status === "published" && record.type === REGISTRATION_FORM && (
+  const renderActiveActions = (_, record) => {
+    const canCreateMonitoring =
+      record.status === "published" && record.type === REGISTRATION_FORM;
+    const menuItems = [
+      { key: "duplicate", label: text.formBuilderDuplicateButton },
+      { key: "export", label: text.formBuilderExportButton },
+    ];
+    if (record.status === "draft") {
+      menuItems.push({ key: "publish", label: text.formBuilderPublishButton });
+    }
+    if (canCreateMonitoring) {
+      menuItems.push({
+        key: "create-monitoring",
+        label: text.formBuilderCreateMonitoringButton,
+      });
+    }
+    menuItems.push({ type: "divider" });
+    menuItems.push({
+      key: "archive",
+      label: text.formBuilderArchiveButton,
+      danger: true,
+    });
+
+    const onMenuClick = ({ key }) => {
+      if (key === "duplicate") {
+        onDuplicate(record.id);
+      } else if (key === "export") {
+        onExport(record.id);
+      } else if (key === "publish") {
+        Modal.confirm({
+          title: text.formBuilderPublishConfirmTitle,
+          content: text.formBuilderPublishConfirmDesc,
+          okText: text.formBuilderPublishButton,
+          onOk: () => onPublish(record.id),
+        });
+      } else if (key === "create-monitoring") {
+        navigate(`/control-center/form-builder/create?parent_id=${record.id}`);
+      } else if (key === "archive") {
+        Modal.confirm({
+          title: text.formBuilderArchiveConfirmTitle,
+          content: text.formBuilderArchiveConfirmDesc(
+            record.submission_count || 0
+          ),
+          okText: text.formBuilderArchiveButton,
+          okButtonProps: { danger: true },
+          onOk: () => onArchive(record.id),
+        });
+      }
+    };
+
+    return (
+      <Space size="small">
         <Button
           shape="round"
-          type="primary"
           onClick={() => {
-            navigate(
-              `/control-center/form-builder/create?parent_id=${record.id}`
-            );
+            navigate(`/control-center/form-builder/${record.id}/edit`);
           }}
         >
-          {text.formBuilderCreateMonitoringButton}
+          {text.editButton}
         </Button>
-      )}
-    </Space>
-  );
+        <Dropdown
+          trigger={["click"]}
+          menu={{ items: menuItems, onClick: onMenuClick }}
+        >
+          <Button shape="round" icon={<MoreOutlined />} />
+        </Dropdown>
+      </Space>
+    );
+  };
 
   const renderDeletePermanently = (record) => {
     if (record.submission_count === 0) {
@@ -390,16 +446,27 @@ const FormBuilderList = () => {
             </Col>
             {!isArchivedTab && (
               <Col>
-                <Button
-                  shape="round"
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    navigate("/control-center/form-builder/create");
-                  }}
-                >
-                  {text.formBuilderCreateButton}
-                </Button>
+                <Space>
+                  <Button
+                    shape="round"
+                    icon={<UploadOutlined />}
+                    onClick={() => {
+                      setImportModalOpen(true);
+                    }}
+                  >
+                    {text.formBuilderImportButton}
+                  </Button>
+                  <Button
+                    shape="round"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      navigate("/control-center/form-builder/create");
+                    }}
+                  >
+                    {text.formBuilderCreateButton}
+                  </Button>
+                </Space>
               </Col>
             )}
           </Row>
@@ -485,6 +552,14 @@ const FormBuilderList = () => {
           )}
         </div>
       </div>
+      <ImportFormModal
+        open={importModalOpen}
+        onClose={() => {
+          setImportModalOpen(false);
+        }}
+        onImported={loadForms}
+        text={text}
+      />
     </div>
   );
 };

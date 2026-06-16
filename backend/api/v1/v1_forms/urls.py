@@ -68,4 +68,22 @@ urlpatterns = [
         r"^(?P<version>(v1))/manage/forms$",
         FormBuilderViewSet.as_view({"get": "list", "post": "create"}),
     ),
+
+    # FB-007: Form Import/Export
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/export$",
+        FormBuilderViewSet.as_view({"get": "export_definition"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/import/preflight$",
+        FormBuilderViewSet.as_view({"post": "import_preflight"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/import/status/(?P<task_id>[^/.]+)$",
+        FormBuilderViewSet.as_view({"get": "import_status"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/import$",
+        FormBuilderViewSet.as_view({"post": "import_definition"}),
+    ),
 ]

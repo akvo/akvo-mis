@@ -83,3 +83,17 @@ _CAMEL_FIELDS = {
     "addonAfter": "addon_after",
     "dataApiUrl": "data_api_url",
 }
+
+# Inverse of _CAMEL_FIELDS: snake_case -> camelCase (for export)
+_SNAKE_TO_CAMEL = {v: k for k, v in _CAMEL_FIELDS.items()}
+
+# Form Import/Export (FB-007)
+FORM_IMPORT_SUPPORTED_VERSIONS = frozenset({1})
+
+_TYPE_STR_TO_INT = {
+    v.lower(): k for k, v in QuestionTypes.FieldStr.items()
+}
+
+_TYPE_INT_TO_STR = {
+    k: v.lower() for k, v in QuestionTypes.FieldStr.items()
+}

@@ -1,4 +1,8 @@
 # Create your views here.
+import json
+import re
+from uuid import uuid4
+
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     extend_schema,
@@ -10,13 +14,34 @@ from drf_spectacular.utils import (
 from rest_framework import status, serializers, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.generics import get_object_or_404
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from utils.custom_permissions import FormBuilderAccess
 from rest_framework.response import Response
 
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 from django.db.models import Q
+from django.http import HttpResponse
 from django_q.tasks import async_task
+
 from api.v1.v1_data.models import Answers, FormData
+from api.v1.v1_forms.constants import (
+    FormStatus,
+    FormTypes,
+    _CAMEL_FIELDS,
+)
+from api.v1.v1_forms.functions import (
+    create_published_version,
+    export_form_definition,
+    normalize_form_definition,
+    restore_from_snapshot,
+    save_form,
+    store_version_snapshot,
+    duplicate_form as _duplicate_form,
+    validate_form_definition,
+    validate_form_payload,
+)
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.serializers import (
     FormPublishedVersionSerializer,
@@ -27,21 +52,12 @@ from api.v1.v1_forms.serializers import (
     FormApproverResponseSerializer,
     FormDetailSerializer,
     FormUpdateRequestSerializer,
+    ImportPreflightSerializer,
+    ImportFormSerializer,
 )
-from api.v1.v1_forms.constants import (
-    FormStatus,
-    FormTypes,
-    _CAMEL_FIELDS,
-)
+from api.v1.v1_jobs.constants import JobStatus, JobTypes
+from api.v1.v1_jobs.models import Jobs
 from api.v1.v1_profile.constants import FeatureAccessTypes
-from api.v1.v1_forms.functions import (
-    create_published_version,
-    restore_from_snapshot,
-    save_form,
-    store_version_snapshot,
-    duplicate_form as _duplicate_form,
-    validate_form_payload,
-)
 from api.v1.v1_profile.models import (
     Administration,
     DataAccessTypes,
@@ -50,6 +66,7 @@ from api.v1.v1_profile.models import (
 from api.v1.v1_data.functions import get_cache, create_cache
 from utils.custom_pagination import Pagination
 from utils.custom_serializer_fields import validate_serializers_message
+import utils.storage as storage
 
 
 def _form_detail_from_snapshot(form, pv):
@@ -575,6 +592,22 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_publish),
             ],
+            "export_definition": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_view),
+            ],
+            "import_preflight": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_create),
+            ],
+            "import_definition": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_create),
+            ],
+            "import_status": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_create),
+            ],
         }
         return [p() for p in perm_map.get(self.action, [IsAuthenticated])]
 
@@ -873,3 +906,284 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         return Response(
             _to_editor_format(FormDetailSerializer(instance=form).data)
         )
+
+    # -----------------------------------------------------------------------
+    # FB-007: Form Import/Export
+    # -----------------------------------------------------------------------
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Export form definition as JSON (FB-007)",
+        responses={(200, "application/json"): OpenApiTypes.BINARY},
+    )
+    @action(detail=True, methods=["get"], url_path="export")
+    def export_definition(self, request, *args, **kwargs):
+        form = self.get_object()
+        payload = export_form_definition(form)
+        slug = re.sub(r"[^a-z0-9]+", "-", form.name.lower()).strip("-")
+        from django.utils import timezone as tz
+        date_str = tz.now().strftime("%Y%m%d")
+        filename = f"form-{form.id}-{slug}-{date_str}.json"
+        body = json.dumps(payload, ensure_ascii=False, indent=2)
+        resp = HttpResponse(body, content_type="application/json")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Validate an import file without writing (preflight, FB-007)",
+        request={"multipart/form-data": ImportPreflightSerializer},
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import/preflight",
+        parser_classes=[MultiPartParser],
+    )
+    def import_preflight(self, request, *args, **kwargs):
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"message": "file is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_size = getattr(
+            settings, "FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024
+        )
+        if file_obj.size > max_size:
+            return Response(
+                {"message": "File too large"},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        try:
+            raw = json.loads(file_obj.read().decode("utf-8"))
+        except Exception:
+            return Response(
+                {"message": "Invalid JSON file"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        norm = normalize_form_definition(raw)
+        issues = validate_form_definition(norm)
+        errors = [i for i in issues if i.get("level") == "error"]
+        warnings = [i for i in issues if i.get("level") == "warning"]
+
+        # Match check
+        file_form_id = norm.get("form_id")
+        match_info = {"exists": False, "form": None, "name_mismatch": False}
+        if file_form_id is not None:
+            existing = Forms.objects.filter(id=file_form_id).first()
+            if existing:
+                submission_count = existing.form_data.count() if hasattr(
+                    existing, "form_data"
+                ) else 0
+                match_info = {
+                    "exists": True,
+                    "form": {
+                        "id": existing.id,
+                        "name": existing.name,
+                        "status": FormStatus.FieldStr.get(existing.status),
+                        "submission_count": submission_count,
+                        "updated": (
+                            existing.updated.isoformat()
+                            if existing.updated else None
+                        ),
+                    },
+                    "name_mismatch": (
+                        existing.name != norm.get("name")
+                    ),
+                }
+
+        # Parent resolution info
+        is_monitoring = norm.get("type") == FormTypes.monitoring
+        parent_hint = norm.get("parent_hint")
+        resolved_parent = None
+        if is_monitoring and parent_hint and parent_hint.get("id"):
+            p = Forms.objects.filter(id=parent_hint["id"]).first()
+            if p:
+                resolved_parent = {"id": p.id, "name": p.name}
+
+        parent_info = {
+            "required": is_monitoring,
+            "hint": parent_hint,
+            "resolved": resolved_parent,
+        }
+
+        is_valid = len(errors) == 0
+        return Response(
+            {
+                "valid": is_valid,
+                "errors": errors,
+                "warnings": warnings,
+                "form": {
+                    "id": norm.get("form_id"),
+                    "name": norm.get("name"),
+                    "type": norm.get("type"),
+                },
+                "match": match_info,
+                "parent": parent_info,
+            },
+            status=(
+                status.HTTP_200_OK
+                if is_valid
+                else status.HTTP_400_BAD_REQUEST
+            ),
+        )
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Enqueue a form definition import job (FB-007)",
+        request={"multipart/form-data": ImportFormSerializer},
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import",
+        parser_classes=[MultiPartParser],
+    )
+    def import_definition(self, request, *args, **kwargs):
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"message": "file is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_size = getattr(
+            settings, "FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024
+        )
+        if file_obj.size > max_size:
+            return Response(
+                {"message": "File too large"},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        mode = request.data.get("mode", "create_or_update")
+        if mode not in ("create_or_update", "create_copy"):
+            return Response(
+                {"message": "mode must be create_or_update or create_copy"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parent_id = request.data.get("parent_id")
+        if parent_id:
+            try:
+                parent_id = int(parent_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"message": "parent_id must be an integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Server-side re-validation (preflight is advisory, never trusted)
+        try:
+            raw = json.loads(file_obj.read().decode("utf-8"))
+        except Exception:
+            return Response(
+                {"message": "Invalid JSON file"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        norm = normalize_form_definition(raw)
+        issues = validate_form_definition(norm)
+        errors = [i for i in issues if i.get("level") == "error"]
+        if errors:
+            return Response(
+                {"valid": False, "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # update-mode: require form_edit permission
+        file_form_id = norm.get("form_id")
+        if (
+            mode == "create_or_update"
+            and file_form_id is not None
+            and Forms.objects.filter(id=file_form_id).exists()
+        ):
+            edit_perm = FormBuilderAccess(FeatureAccessTypes.form_edit)()
+            if not edit_perm.has_permission(request, self):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+
+        # Persist file to upload storage (DD-6)
+        file_obj.seek(0)
+        fs = FileSystemStorage()
+        uid = "_".join(str(uuid4()).split("-")[:-1])
+        filename = f"import-form-{request.user.id}-{uid}.json"
+        tmp = fs.save(f"./tmp/{file_obj.name}", file_obj)
+        tmp_path = fs.path(tmp)
+        storage.upload(file=tmp_path, filename=filename, folder="upload")
+
+        job = Jobs.objects.create(
+            type=JobTypes.import_form,
+            status=JobStatus.on_progress,
+            user=request.user,
+            info={
+                "file": filename,
+                "mode": mode,
+                "parent_id": parent_id,
+                "form_id": file_form_id,
+            },
+        )
+        task_id = async_task(
+            "api.v1.v1_forms.tasks.import_form_job",
+            job.id,
+            hook="api.v1.v1_forms.tasks.import_form_job_result",
+        )
+        job.task_id = task_id
+        job.save(update_fields=["task_id"])
+
+        return Response(
+            {"task_id": task_id, "job_id": job.id},
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Poll import job status (FB-007)",
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"import/status/(?P<task_id>[^/.]+)",
+    )
+    def import_status(self, request, task_id=None, *args, **kwargs):
+        try:
+            job = Jobs.objects.get(
+                task_id=task_id,
+                type=JobTypes.import_form,
+                user=request.user,
+            )
+        except Jobs.DoesNotExist:
+            return Response(
+                {"message": "Job not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        resp = {
+            "status": JobStatus.FieldStr.get(job.status),
+            "form": None,
+            "errors": None,
+            "warnings": None,
+        }
+
+        if job.status == JobStatus.done and job.result:
+            try:
+                result = json.loads(job.result)
+                resp["form"] = {
+                    "id": result.get("form_id"),
+                    "name": result.get("form_name"),
+                    "action": result.get("action"),
+                }
+                resp["warnings"] = result.get("warnings")
+            except Exception:
+                pass
+
+        if job.status == JobStatus.failed and job.result:
+            try:
+                resp["errors"] = json.loads(job.result)
+            except Exception:
+                resp["errors"] = [{"code": "unknown", "message": job.result}]
+
+        return Response(resp)
