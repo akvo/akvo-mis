@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useContext,
+} from "react";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useNavigate } from "react-router-dom";
@@ -30,6 +36,7 @@ import { FormStatusTag, ImportFormModal } from "./components";
 import { api, store, uiText, REGISTRATION_FORM } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import "./style.scss";
+import { AbilityContext, Can } from "../../components/can";
 
 dayjs.extend(customParseFormat);
 
@@ -66,6 +73,7 @@ const FormBuilderList = () => {
     { title: "Control Center", link: "/control-center" },
     { title: text.menuFormBuilder },
   ];
+  const ability = useContext(AbilityContext);
 
   // Debounce the search input, resetting to the first page on change.
   useEffect(() => {
@@ -240,11 +248,8 @@ const FormBuilderList = () => {
   const renderActiveActions = (_, record) => {
     const canCreateMonitoring =
       record.status === "published" && record.type === REGISTRATION_FORM;
-    const menuItems = [
-      { key: "duplicate", label: text.formBuilderDuplicateButton },
-      { key: "export", label: text.formBuilderExportButton },
-    ];
-    if (record.status === "draft") {
+    const menuItems = [{ key: "export", label: text.formBuilderExportButton }];
+    if (record.status === "draft" && ability.can("publish", "form-builder")) {
       menuItems.push({ key: "publish", label: text.formBuilderPublishButton });
     }
     if (canCreateMonitoring) {
@@ -253,12 +258,22 @@ const FormBuilderList = () => {
         label: text.formBuilderCreateMonitoringButton,
       });
     }
-    menuItems.push({ type: "divider" });
-    menuItems.push({
-      key: "archive",
-      label: text.formBuilderArchiveButton,
-      danger: true,
-    });
+
+    if (ability.can("create", "form-builder")) {
+      menuItems.push({
+        key: "duplicate",
+        label: text.formBuilderDuplicateButton,
+      });
+    }
+
+    if (ability.can("delete", "form-builder")) {
+      menuItems.push({ type: "divider" });
+      menuItems.push({
+        key: "archive",
+        label: text.formBuilderArchiveButton,
+        danger: true,
+      });
+    }
 
     const onMenuClick = ({ key }) => {
       if (key === "duplicate") {
@@ -289,14 +304,16 @@ const FormBuilderList = () => {
 
     return (
       <Space size="small">
-        <Button
-          shape="round"
-          onClick={() => {
-            navigate(`/control-center/form-builder/${record.id}/edit`);
-          }}
-        >
-          {text.editButton}
-        </Button>
+        <Can I="edit" a="form-builder">
+          <Button
+            shape="round"
+            onClick={() => {
+              navigate(`/control-center/form-builder/${record.id}/edit`);
+            }}
+          >
+            {text.editButton}
+          </Button>
+        </Can>
         <Dropdown
           trigger={["click"]}
           menu={{ items: menuItems, onClick: onMenuClick }}
@@ -310,42 +327,46 @@ const FormBuilderList = () => {
   const renderDeletePermanently = (record) => {
     if (record.submission_count === 0) {
       return (
-        <Popconfirm
-          title={text.formBuilderDeleteConfirmTitle}
-          description={text.formBuilderDeleteConfirmDesc}
-          okText={text.formBuilderDeleteButton}
-          okButtonProps={{ danger: true }}
-          onConfirm={() => onDelete(record.id)}
-        >
-          <Button shape="round" danger>
-            {text.formBuilderDeleteButton}
-          </Button>
-        </Popconfirm>
+        <Can I="delete" a="form-builder">
+          <Popconfirm
+            title={text.formBuilderDeleteConfirmTitle}
+            description={text.formBuilderDeleteConfirmDesc}
+            okText={text.formBuilderDeleteButton}
+            okButtonProps={{ danger: true }}
+            onConfirm={() => onDelete(record.id)}
+          >
+            <Button shape="round" danger>
+              {text.formBuilderDeleteButton}
+            </Button>
+          </Popconfirm>
+        </Can>
       );
     }
     return (
       <Tooltip title={text.formBuilderDeleteDisabledTooltip}>
-        <span>
+        <Can I="delete" a="form-builder">
           <Button shape="round" danger disabled>
             {text.formBuilderDeleteButton}
           </Button>
-        </span>
+        </Can>
       </Tooltip>
     );
   };
 
   const renderArchivedActions = (_, record) => (
     <Space size="middle" wrap>
-      <Popconfirm
-        title={text.formBuilderRestoreConfirmTitle}
-        description={text.formBuilderRestoreConfirmDesc}
-        okText={text.formBuilderRestoreButton}
-        onConfirm={() => onRestore(record.id)}
-      >
-        <Button shape="round" type="primary">
-          {text.formBuilderRestoreButton}
-        </Button>
-      </Popconfirm>
+      <Can I="delete" a="form-builder">
+        <Popconfirm
+          title={text.formBuilderRestoreConfirmTitle}
+          description={text.formBuilderRestoreConfirmDesc}
+          okText={text.formBuilderRestoreButton}
+          onConfirm={() => onRestore(record.id)}
+        >
+          <Button shape="round" type="primary">
+            {text.formBuilderRestoreButton}
+          </Button>
+        </Popconfirm>
+      </Can>
       {hasFormDelete && renderDeletePermanently(record)}
     </Space>
   );
@@ -446,27 +467,29 @@ const FormBuilderList = () => {
             </Col>
             {!isArchivedTab && (
               <Col>
-                <Space>
-                  <Button
-                    shape="round"
-                    icon={<UploadOutlined />}
-                    onClick={() => {
-                      setImportModalOpen(true);
-                    }}
-                  >
-                    {text.formBuilderImportButton}
-                  </Button>
-                  <Button
-                    shape="round"
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => {
-                      navigate("/control-center/form-builder/create");
-                    }}
-                  >
-                    {text.formBuilderCreateButton}
-                  </Button>
-                </Space>
+                <Can I="create" a="form-builder">
+                  <Space>
+                    <Button
+                      shape="round"
+                      icon={<UploadOutlined />}
+                      onClick={() => {
+                        setImportModalOpen(true);
+                      }}
+                    >
+                      {text.formBuilderImportButton}
+                    </Button>
+                    <Button
+                      shape="round"
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        navigate("/control-center/form-builder/create");
+                      }}
+                    >
+                      {text.formBuilderCreateButton}
+                    </Button>
+                  </Space>
+                </Can>
               </Col>
             )}
           </Row>

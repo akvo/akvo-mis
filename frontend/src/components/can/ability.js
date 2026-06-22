@@ -19,6 +19,11 @@ const defineAbilityFor = (user) => {
     const can_invite_user = roles.filter((r) => r?.can_invite_user).length > 0;
     const can_form_builder =
       roles.filter((r) => r?.can_form_builder).length > 0;
+    const can_form_delete = roles.filter((r) => r?.can_form_delete).length > 0;
+    const can_form_create = roles.filter((r) => r?.can_form_create).length > 0;
+    const can_form_edit = roles.filter((r) => r?.can_form_edit).length > 0;
+    const can_form_publish =
+      roles.filter((r) => r?.can_form_publish).length > 0;
 
     if (is_approver) {
       can("manage", "approvals");
@@ -41,7 +46,19 @@ const defineAbilityFor = (user) => {
       can("manage", "user");
     }
     if (can_form_builder) {
-      can("manage", "form-builder");
+      can("read", "form-builder");
+    }
+    if (can_form_delete) {
+      can("delete", "form-builder");
+    }
+    if (can_form_create) {
+      can("create", "form-builder");
+    }
+    if (can_form_edit) {
+      can("edit", "form-builder");
+    }
+    if (can_form_publish) {
+      can("publish", "form-builder");
     }
     can("read", "data");
     can("read", "downloads");

@@ -275,7 +275,7 @@ const Sidebar = () => {
           )}
 
           {/* Form builder */}
-          {ability.can("manage", "form-builder") && (
+          {ability.can("read", "form-builder") && (
             <Menu.Item
               key="menu-form-builder"
               icon={<FormOutlined />}
