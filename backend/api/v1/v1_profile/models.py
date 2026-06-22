@@ -252,6 +252,24 @@ class UserRole(models.Model):
             access=FeatureAccessTypes.form_delete,
         ).exists()
 
+    def can_form_create(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.form_builder,
+            access=FeatureAccessTypes.form_create,
+        ).exists()
+
+    def can_form_edit(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.form_builder,
+            access=FeatureAccessTypes.form_edit,
+        ).exists()
+
+    def can_form_publish(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.form_builder,
+            access=FeatureAccessTypes.form_publish
+        ).exists()
+
     def __str__(self):
         return f"{self.user.name} - {self.role.name} ({self.administration})"
 
