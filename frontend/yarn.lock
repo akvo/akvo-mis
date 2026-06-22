@@ -4252,12 +4252,12 @@ akvo-charts@^1.3.4:
     postcss-flexbugs-fixes "^5.0.2"
     topojson-client "^3.1.0"
 
-akvo-react-form-editor@^2.0.3:
-  version "2.0.3"
-  resolved "https://registry.yarnpkg.com/akvo-react-form-editor/-/akvo-react-form-editor-2.0.3.tgz#11a233d4b9dfff4b76e04715257f938f1972c0e9"
-  integrity sha512-bVpAENQafENI6/WWICs3srit/NQg7iS6KnDBn9tScEpF85NikqzJkEIeeEKtrRexk+rzR/37H/MIr3ppIleOkw==
+akvo-react-form-editor@^2.0.4:
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/akvo-react-form-editor/-/akvo-react-form-editor-2.0.4.tgz#60de518f0e62832690eaf2b0451ca2e9fb02167e"
+  integrity sha512-Z1lg/Ai0ATcGcvTf9jYWfjn3b2h8yb8XigjxNiughJbfI3VF1meCxRe6NMqpoz1EUI+SIaPsnuPt6BRDe2oqBw==
   dependencies:
-    akvo-react-form "^2.7.8"
+    akvo-react-form "^2.7.9"
     antd "^4.20.0"
     locale-codes "^1.3.1"
     lodash "^4.17.21"
@@ -4265,31 +4265,10 @@ akvo-react-form-editor@^2.0.3:
     react-color "^2.19.3"
     react-icons "^4.4.0"
 
-akvo-react-form@^2.7.7:
-  version "2.7.7"
-  resolved "https://registry.yarnpkg.com/akvo-react-form/-/akvo-react-form-2.7.7.tgz#ede3b54e36935110ee7b560a167b6db41f2c07b6"
-  integrity sha512-YLOxKi3fKrduDvFUrCxDSVqdenyt+nuZHbMDt/u3gIpb2tpwmRB/Mhp8wg4zf0ImRvH/mD4nleBp9zmbLIDImA==
-  dependencies:
-    "@react-leaflet/core" ">=1.0.0 <1.1.0 || ^1.1.1"
-    antd "^4.20.0"
-    antd-table-saveas-excel "^2.2.1"
-    axios "^0.23.0"
-    dexie "^3.2.2"
-    html-react-parser "^1.4.10"
-    leaflet "^1.7.1"
-    locale-codes "^1.3.1"
-    lodash "^4.17.21"
-    pullstate "^1.24.0"
-    react-html-parser "^2.0.2"
-    react-icons "^4.3.1"
-    react-leaflet "^4.0.2"
-    react-signature-canvas "^1.1.0-alpha.2"
-    uuid "^9.0.1"
-
-akvo-react-form@^2.7.8:
-  version "2.7.8"
-  resolved "https://registry.yarnpkg.com/akvo-react-form/-/akvo-react-form-2.7.8.tgz#f2b45e4d44f9ac870f971aec1f7eb65cfbc57630"
-  integrity sha512-mL5zZOfeSnRUCewml8PpyYq2roBdVENiQPr9waNiqImo+7orjjmJerjZFkcbCnV/N56ptxr3UyfSWg0zB29ksQ==
+akvo-react-form@^2.7.9:
+  version "2.7.9"
+  resolved "https://registry.yarnpkg.com/akvo-react-form/-/akvo-react-form-2.7.9.tgz#359372a662d6a7424a05d5c3ff84c4d19f3c5d8d"
+  integrity sha512-eK6bXpKmJvvuL8IUDsbRf3J6BY1cuDi8parIK3b6eof9mU8a5p9CE+zdWpOr7l90Vgk9C4OvbY+7XHWwXGPNdQ==
   dependencies:
     "@react-leaflet/core" ">=1.0.0 <1.1.0 || ^1.1.1"
     antd "^4.20.0"
