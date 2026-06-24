@@ -15,6 +15,7 @@ import {
 import { useNotification } from "../../util/hooks";
 import { FormEditorBanners, VersionHistoryDrawer } from "./components";
 import "./style.scss";
+import { Can } from "../../components/can";
 
 const regExpFilename = /filename="(?<filename>.*)"/;
 
@@ -277,40 +278,47 @@ const FormBuilderEdit = () => {
               >
                 {text.formBuilderExportButton}
               </Button>
+
               {hasVersionHistory && (
-                <Button
-                  icon={<HistoryOutlined />}
-                  onClick={openDrawer}
-                  disabled={saving || publishing || unpublishing}
-                >
-                  {text.formBuilderVersionsButton}
-                </Button>
+                <Can I="publish" a="form-builder">
+                  <Button
+                    icon={<HistoryOutlined />}
+                    onClick={openDrawer}
+                    disabled={saving || publishing || unpublishing}
+                  >
+                    {text.formBuilderVersionsButton}
+                  </Button>
+                </Can>
               )}
               {showPublish && (
-                <Button
-                  type="primary"
-                  loading={publishing}
-                  disabled={saving || unpublishing}
-                  onClick={onPublish}
-                >
-                  {text.formBuilderPublishButton}
-                </Button>
+                <Can I="publish" a="form-builder">
+                  <Button
+                    type="primary"
+                    loading={publishing}
+                    disabled={saving || unpublishing}
+                    onClick={onPublish}
+                  >
+                    {text.formBuilderPublishButton}
+                  </Button>
+                </Can>
               )}
               {showUnpublish && (
-                <Popconfirm
-                  title={text.formBuilderUnpublishTitle}
-                  description={text.formBuilderUnpublishDesc}
-                  onConfirm={onUnpublish}
-                  okText={text.formBuilderUnpublishButton}
-                  cancelText={text.cancelButton}
-                >
-                  <Button
-                    loading={unpublishing}
-                    disabled={saving || publishing}
+                <Can I="publish" a="form-builder">
+                  <Popconfirm
+                    title={text.formBuilderUnpublishTitle}
+                    description={text.formBuilderUnpublishDesc}
+                    onConfirm={onUnpublish}
+                    okText={text.formBuilderUnpublishButton}
+                    cancelText={text.cancelButton}
                   >
-                    {text.formBuilderUnpublishButton}
-                  </Button>
-                </Popconfirm>
+                    <Button
+                      loading={unpublishing}
+                      disabled={saving || publishing}
+                    >
+                      {text.formBuilderUnpublishButton}
+                    </Button>
+                  </Popconfirm>
+                </Can>
               )}
             </Space>
           </div>
