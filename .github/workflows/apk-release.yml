@@ -1,10 +1,10 @@
-name: Akvo MIS APK build
+name: MOHHS MIS APK build
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - tenant/mohhs-mis
     paths:
       - app/**
 
@@ -57,11 +57,11 @@ jobs:
       - name: 🌟 Send APK
         env:
           APK_VERSION: ${{ env.APK_VERSION }}
-          SECRET: ${{ secrets.APK_UPLOAD_SECRET }}
+          SECRET: ${{ secrets.MOHHS_MIS_APK_UPLOAD_SECRET }}
           SENTRY_ENV: production
-          SENTRY_DSN: ${{ secrets.SENTRY_MOBILE_DSN }}
+          SENTRY_DSN: ${{ secrets.MOHHS_MIS_SENTRY_MOBILE_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_MOBILE_AUTH_TOKEN }}
-          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+          APP_DOMAIN: mohhs-mis
         run: |
           curl -X 'POST' \
             "https://${APP_DOMAIN}.akvotest.org/api/v1/device/apk/upload" \
