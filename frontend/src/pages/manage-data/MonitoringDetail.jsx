@@ -36,6 +36,7 @@ import {
 } from "@ant-design/icons";
 import { useParams, useNavigate } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
+import { getForms } from "../../util/form";
 import DataDetail from "./DataDetail";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { useNotification } from "../../util/hooks";
@@ -56,7 +57,7 @@ const MonitoringDetail = () => {
     user: authUser,
   } = store.useState((s) => s);
   const childrenForms = useMemo(() => {
-    return window?.forms?.filter((f) => `${f.content?.parent}` === form);
+    return getForms().filter((f) => `${f.content?.parent}` === form);
   }, [form]);
 
   // Get form_id from URL as default selectedForm
@@ -112,12 +113,11 @@ const MonitoringDetail = () => {
   const { questionGroups } = store.useState((state) => state);
 
   const overviewQuestions = useMemo(() => {
-    const forms =
-      window?.forms?.filter((f) =>
-        selectedForm
-          ? f?.id === selectedForm
-          : f?.content?.parent === parseInt(form, 10)
-      ) || [];
+    const forms = getForms().filter((f) =>
+      selectedForm
+        ? f?.id === selectedForm
+        : f?.content?.parent === parseInt(form, 10)
+    );
     return forms
       .map((f) => f.content.question_group)
       .flat()
@@ -215,7 +215,7 @@ const MonitoringDetail = () => {
   useEffect(() => {
     if (questionGroups.length === 0 && dataset.length > 0) {
       store.update((s) => {
-        s.questionGroups = window.forms.find(
+        s.questionGroups = getForms().find(
           (f) => f.id === dataset[0]?.form
         ).content.question_group;
       });

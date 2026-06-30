@@ -1,6 +1,5 @@
 import "@testing-library/jest-dom";
 import store from "../store";
-import { sortArray } from "../../util/form";
 
 describe("Store", () => {
   test("check the initial state", () => {
@@ -22,7 +21,8 @@ describe("Store", () => {
       administration: [],
       selectedAdministration: null,
       loadingMap: false,
-      forms: window.forms.sort(sortArray),
+      allForms: [],
+      forms: [],
       levels: window.levels,
       selectedForm: null,
       loadingForm: false,

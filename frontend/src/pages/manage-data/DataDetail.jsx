@@ -52,7 +52,7 @@ const DataDetail = ({
   const isEditor = ability.can("edit", "data") || authUser?.is_superuser;
 
   const questionGroups = useMemo(() => {
-    const formList = window?.forms || allForms || [];
+    const formList = allForms || [];
     return formList?.find((f) => f.id === record?.form)?.content
       ?.question_group;
   }, [record?.form, allForms]);

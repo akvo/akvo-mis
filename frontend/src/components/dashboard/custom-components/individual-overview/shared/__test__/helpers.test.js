@@ -12,13 +12,17 @@ import {
   __resetAdministrationNameCache,
 } from "../helpers";
 import { api } from "../../../../../../lib";
+import { getForms } from "../../../../../../util/form";
 
 jest.mock("../../../../../../lib", () => ({
   __esModule: true,
   api: { get: jest.fn() },
 }));
 
-const originalForms = window.forms;
+jest.mock("../../../../../../util/form", () => ({
+  __esModule: true,
+  getForms: jest.fn(() => []),
+}));
 
 const FORMS_FIXTURE = [
   {
@@ -77,11 +81,7 @@ const FORMS_FIXTURE = [
 ];
 
 beforeEach(() => {
-  window.forms = FORMS_FIXTURE;
-});
-
-afterAll(() => {
-  window.forms = originalForms;
+  getForms.mockReturnValue(FORMS_FIXTURE);
 });
 
 describe("findQuestion", () => {
@@ -97,13 +97,13 @@ describe("findQuestion", () => {
     expect(findQuestion(999)).toBeNull();
   });
 
-  test("returns null when window.forms is empty", () => {
-    window.forms = [];
+  test("returns null when there are no forms", () => {
+    getForms.mockReturnValue([]);
     expect(findQuestion(101)).toBeNull();
   });
 
-  test("returns null when window.forms is missing", () => {
-    delete window.forms;
+  test("returns null when forms is empty", () => {
+    getForms.mockReturnValue([]);
     expect(findQuestion(101)).toBeNull();
   });
 });
@@ -243,8 +243,8 @@ describe("findQuestionGroup", () => {
     expect(findQuestionGroup(null)).toBeNull();
   });
 
-  test("returns null when window.forms is missing", () => {
-    delete window.forms;
+  test("returns null when there are no forms", () => {
+    getForms.mockReturnValue([]);
     expect(findQuestionGroup(2001)).toBeNull();
   });
 });

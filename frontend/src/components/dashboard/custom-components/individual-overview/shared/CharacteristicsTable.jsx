@@ -5,7 +5,7 @@ import { findAnswer, findQuestion, formatAnswerValue } from "./helpers";
 import useAdministrationNames from "./useAdministrationNames";
 
 /**
- * Two-column AntD <Table> rendering Question (window.forms label) /
+ * Two-column AntD <Table> rendering Question (published-form label) /
  * Answer (formatAnswerValue) for a list of question ids. Skips qids with
  * no resolvable answer rather than rendering blank rows.
  */

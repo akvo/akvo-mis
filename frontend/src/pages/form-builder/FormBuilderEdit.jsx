@@ -13,6 +13,7 @@ import {
   ARF_CASCASE_URLS,
 } from "../../lib";
 import { useNotification } from "../../util/hooks";
+import { fetchPublishedForms } from "../../util/form";
 import { FormEditorBanners, VersionHistoryDrawer } from "./components";
 import "./style.scss";
 import { Can } from "../../components/can";
@@ -116,8 +117,9 @@ const FormBuilderEdit = () => {
         setFormVersion(res.data.version);
         setFormLatestVersion(res.data.latest_version);
         notify({ type: "success", message: text.formBuilderPublishSuccess });
-        // window.forms is a global bundle — reload to pick up the updated object
-        window.location.reload();
+        // Refresh the published-forms global store so dropdowns/dashboards
+        // pick up the newly published form without a full page reload.
+        fetchPublishedForms();
       })
       .catch((err) => {
         const msg = err.response?.data?.message || text.formBuilderPublishError;
@@ -137,8 +139,9 @@ const FormBuilderEdit = () => {
         setFormVersion(res.data.version);
         setFormLatestVersion(res.data.latest_version);
         notify({ type: "success", message: text.formBuilderUnpublishSuccess });
-        // window.forms is a global bundle — reload to pick up the updated object
-        window.location.reload();
+        // Refresh the published-forms global store so the unpublished form
+        // is removed from dropdowns/dashboards without a full page reload.
+        fetchPublishedForms();
       })
       .catch((err) => {
         const msg =
@@ -170,6 +173,9 @@ const FormBuilderEdit = () => {
       setInitialValue(null);
       setActivatingId(null);
       await loadForm();
+      // Refresh the published-forms global store so the newly activated
+      // version's content propagates to dropdowns/dashboards.
+      fetchPublishedForms();
     } catch (err) {
       setActivatingId(null);
       const msg = err.response?.data?.message || text.formBuilderActivateError;

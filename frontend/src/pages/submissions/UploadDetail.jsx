@@ -18,6 +18,7 @@ import { ApproverDetailTable, RawDataTable } from "../../components";
 import { isEqual, flatten } from "lodash";
 import { useNotification } from "../../util/hooks";
 import { getTimeDifferenceText } from "../../util/date";
+import { getForms } from "../../util/form";
 import UploadAttachmentModal from "./UploadAttachmentModal";
 const { TabPane } = Tabs;
 
@@ -343,7 +344,7 @@ const UploadDetail = ({ record: batch, setReload }) => {
     setRawValues((rv) =>
       rv.map((rI) => (rI.id === record?.id ? { ...rI, loading: true } : rI))
     );
-    const qg = window.forms.find((f) => f.id === record?.form).content
+    const qg = getForms().find((f) => f.id === record?.form).content
       .question_group;
     setQuestionGroups(qg);
     fetchData(record?.id, qg);
