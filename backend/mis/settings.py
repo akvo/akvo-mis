@@ -200,7 +200,7 @@ LANGUAGE_CODE = "en-us"
 
 """
 The TIME_ZONE has been set to 'Pacific/Majuro'
-to align with the application's focus on Fiji.
+to align with the application's focus on the Marshall Islands.
 """
 TIME_ZONE = "Pacific/Majuro"
 
@@ -235,7 +235,9 @@ APK_UPLOAD_SECRET = environ.get("APK_UPLOAD_SECRET")
 MASTER_DATA = "./source"
 STORAGE_PATH = environ.get("STORAGE_PATH", "./storage")
 
-FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
+FORM_GEO_VALUE = {
+    "lat": 7.0897, "lng": 171.3803
+}  # Marshall Islands (Majuro) coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(
     environ.get("FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024)
 )
