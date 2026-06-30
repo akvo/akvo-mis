@@ -6,6 +6,7 @@ import { FaChevronDown } from "react-icons/fa";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { config, store, uiText } from "../../lib";
 import { eraseCookieFromAllPaths } from "../../util/date";
+import { getForms } from "../../util/form";
 import { listVisualizations } from "../../config/visualizations";
 
 const Header = ({ className = "header", ...props }) => {
@@ -19,7 +20,7 @@ const Header = ({ className = "header", ...props }) => {
   }, [activeLang]);
   const dashboardForms = useMemo(() => {
     const registered = listVisualizations();
-    const availableFormIds = new Set((window?.forms || []).map((f) => f.id));
+    const availableFormIds = new Set(getForms().map((f) => f.id));
     return registered.filter((d) => availableFormIds.has(d.parent_form_id));
   }, []);
   const showDashboardsMenu =

@@ -61,7 +61,7 @@ import { store, api, config } from "./lib";
 import { Layout, PageLoader } from "./components";
 import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
-import { reloadData } from "./util/form";
+import { reloadData, fetchPublishedForms } from "./util/form";
 import { ability, AbilityContext } from "./components/can";
 
 const Private = ({ element: Element, alias }) => {
@@ -340,6 +340,7 @@ const App = () => {
   const { user: authUser, isLoggedIn } = store.useState((state) => state);
   const [cookies] = useCookies(["AUTH_TOKEN"]);
   const [loading, setLoading] = useState(true);
+  const [formsLoading, setFormsLoading] = useState(true);
   const { notify } = useNotification();
   const pageLocation = useLocation();
 
@@ -354,6 +355,19 @@ const App = () => {
       s.showAdvancedFilters = false;
     });
   }, [pageLocation]);
+
+  // Fetch published forms once at bootstrap (replaces the window.forms global
+  // baked into config.js). Gates render so dropdowns/dashboards never show an
+  // empty list before the forms resolve.
+  useEffect(() => {
+    fetchPublishedForms()
+      .catch((err) => {
+        console.error(err);
+      })
+      .finally(() => {
+        setFormsLoading(false);
+      });
+  }, []);
 
   useEffect(() => {
     if (!location.pathname.includes("/login")) {
@@ -421,7 +435,7 @@ const App = () => {
       <Layout>
         <Layout.Header />
         <Layout.Body>
-          {loading && !isHome && !isPublic ? (
+          {(loading || formsLoading) && !isHome && !isPublic ? (
             <PageLoader message="Initializing. Please wait.." />
           ) : (
             <RouteList />

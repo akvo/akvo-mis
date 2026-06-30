@@ -50,6 +50,7 @@ const EscalationTable = ({
   });
   uiText;
   const { active: activeLang } = store.useState((s) => s.language);
+  const allForms = store.useState((s) => s.allForms);
   const text = useMemo(() => {
     return uiText?.[activeLang] || uiText.en;
   }, [activeLang]);
@@ -59,13 +60,12 @@ const EscalationTable = ({
     [item.columns]
   );
 
-  // window.forms is populated once at app load — stable reference, no deps.
   const allQuestions = useMemo(
     () =>
-      window.forms?.flatMap((f) =>
+      allForms?.flatMap((f) =>
         f?.content?.question_group?.flatMap((qg) => qg?.question)
       ),
-    []
+    [allForms]
   );
 
   const summaryColumns = useMemo(() => {

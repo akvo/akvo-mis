@@ -54,6 +54,7 @@ const ManageDraft = () => {
     selectedForm,
     user,
     forms: registrationForms,
+    allForms,
   } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => {
@@ -72,8 +73,8 @@ const ManageDraft = () => {
   }, [selectedAdministration, administration, user?.administration?.id]);
 
   const childrenForms = useMemo(() => {
-    return window?.forms?.filter((f) => f?.content?.parent === selectedForm);
-  }, [selectedForm]);
+    return (allForms || []).filter((f) => f?.content?.parent === selectedForm);
+  }, [selectedForm, allForms]);
 
   const goToAddForm = () => {
     navigate(`/control-center/data/draft/${selectedForm}`, {

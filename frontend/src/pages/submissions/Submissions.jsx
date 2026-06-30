@@ -15,6 +15,7 @@ import {
   columnsPending as defaultPendingCols,
 } from "../../lib";
 import { useNotification } from "../../util/hooks";
+import { getForms } from "../../util/form";
 import UploadDetail from "./UploadDetail";
 import BatchDetail from "./BatchDetail";
 import { DataFilters } from "../../components";
@@ -56,7 +57,7 @@ const Submissions = () => {
       link: "/control-center",
     },
     {
-      title: window.forms?.find((x) => x.id === selectedForm)?.name,
+      title: getForms().find((x) => x.id === selectedForm)?.name,
     },
   ];
 

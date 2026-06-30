@@ -12,6 +12,7 @@ import { scaleQuantize } from "d3-scale";
 import { GradationLegend, MapView, MarkerLegend } from "../../../components";
 import { api, store, uiText, geo, QUESTION_TYPES, config } from "../../../lib";
 import { color } from "../../../util";
+import { getForms } from "../../../util/form";
 const { getBounds } = geo;
 
 const ManageDataMap = () => {
@@ -62,13 +63,13 @@ const ManageDataMap = () => {
   }, [activeLang]);
 
   const mapForms = useMemo(() => {
-    return window?.forms?.filter((f) => f.content?.parent === selectedForm);
+    return getForms().filter((f) => f.content?.parent === selectedForm);
   }, [selectedForm]);
   const [mapForm, setMapForm] = useState(mapForms?.[0]?.id);
 
   const mapQuestions = useMemo(() => {
-    const f = window?.forms?.find((f) => f.id === mapForm);
-    const registrationGroup = window?.forms?.find((f) => f.id === selectedForm);
+    const f = getForms().find((f) => f.id === mapForm);
+    const registrationGroup = getForms().find((f) => f.id === selectedForm);
     const groupQuestions =
       registrationGroup?.content?.question_group &&
       f?.content?.question_group?.length

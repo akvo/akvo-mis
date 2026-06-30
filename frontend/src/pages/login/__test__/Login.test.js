@@ -8,6 +8,12 @@ import "@testing-library/jest-dom";
 jest.mock("axios");
 
 describe("Login and Registration", () => {
+  beforeEach(() => {
+    // App bootstrap fetches GET /forms/published on mount; give every
+    // api call a resolvable default so the unmocked fetch doesn't reject.
+    axios.mockResolvedValue({ status: 200, data: [] });
+  });
+
   test("test if the login form exists", () => {
     const { asFragment } = render(<TestApp />);
     userEvent.click(screen.getByText("Log in"), { button: 0 });

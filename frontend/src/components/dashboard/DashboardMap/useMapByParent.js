@@ -8,7 +8,8 @@ import getQuestionOptions from "./getQuestionOptions";
  * /visualization/values/formula (decision #22):
  *   - formula filters pass the config JSON directly
  *   - question-id filters build an equivalent option_equals formula
- *     from window.forms so the formula endpoint handles both modes
+ *     from the published forms (getForms()) so the formula endpoint
+ *     handles both modes
  *
  * @param {{
  *   activeFilter: Object | null,

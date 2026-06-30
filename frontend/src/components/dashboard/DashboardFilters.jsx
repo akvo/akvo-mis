@@ -4,16 +4,18 @@ import { FilterOutlined } from "@ant-design/icons";
 import PropTypes from "prop-types";
 import AdministrationDropdown from "../filters/AdministrationDropdown";
 import { store } from "../../lib";
+import { getForms } from "../../util/form";
 
 const { RangePicker } = DatePicker;
 
 /**
- * Look up a question's option[] by scanning `window.forms` (populated at app
- * startup) for the matching form_id, then walking its question groups.
- * Returns an empty array if the form, question, or its options aren't found.
+ * Look up a question's option[] by scanning the published forms (fetched at
+ * app startup into the store) for the matching form_id, then walking its
+ * question groups. Returns an empty array if the form, question, or its
+ * options aren't found.
  */
-const extractOptionsFromWindow = (formId, questionId) => {
-  const form = (window.forms || []).find((f) => f.id === Number(formId));
+const extractOptionsFromStore = (formId, questionId) => {
+  const form = getForms().find((f) => f.id === Number(formId));
   const groups = form?.content?.question_group || [];
   for (let i = 0; i < groups.length; i += 1) {
     const q = (groups[i].question || []).find((x) => x.id === questionId);
@@ -68,12 +70,12 @@ const DashboardFilters = ({ filterItems, filters, onChange }) => {
     [filterItems]
   );
 
-  // Resolve option lists for each custom filter from window.forms (populated
-  // at app startup). No extra fetch required.
+  // Resolve option lists for each custom filter from the published forms in
+  // the store (fetched at app startup). No extra fetch required.
   const customOptions = useMemo(() => {
     const out = {};
     customDefs.forEach((d) => {
-      out[d.key] = extractOptionsFromWindow(d.form_id, d.question_id);
+      out[d.key] = extractOptionsFromStore(d.form_id, d.question_id);
     });
     return out;
   }, [customDefs]);

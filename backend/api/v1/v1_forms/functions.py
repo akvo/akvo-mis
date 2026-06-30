@@ -11,6 +11,7 @@ from api.v1.v1_forms.constants import (
     FORM_IMPORT_SUPPORTED_VERSIONS,
     FormStatus,
     FormTypes,
+    PUBLISHED_FORMS_CACHE,
     QuestionTypes,
     _CAMEL_FIELDS,
     _SNAKE_TO_CAMEL,
@@ -25,6 +26,32 @@ from api.v1.v1_forms.models import (
     QuestionOptions,
 )
 from api.v1.v1_profile.models import Entity
+from api.v1.v1_data.functions import get_cache, create_cache
+from api.v1.v1_forms.serializers import FormDataSerializer
+
+
+def get_published_forms_payload():
+    """Return all published forms with full content for the web frontend.
+
+    Shape matches what generate_config used to bake into window.forms:
+    [{"id", "name", "version", "content": FormDataSerializer(...)}].
+    Cached via the shared date-prefixed cache (bypassed under TEST_ENV);
+    invalidated by the form-mutation signal cache.clear() and clear_cache.
+    """
+    cached = get_cache(PUBLISHED_FORMS_CACHE)
+    if cached is not None:
+        return cached
+    payload = [
+        {
+            "id": form.id,
+            "name": form.name,
+            "version": form.version,
+            "content": FormDataSerializer(instance=form).data,
+        }
+        for form in Forms.objects.filter(status=FormStatus.published).all()
+    ]
+    create_cache(PUBLISHED_FORMS_CACHE, payload)
+    return payload
 
 
 def _parse_form_type(type_val):

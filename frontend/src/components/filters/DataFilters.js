@@ -50,6 +50,7 @@ const DataFilters = ({
   const showAdvancedFilters = store.useState((s) => s.showAdvancedFilters);
   const dateRange = store.useState((s) => s.dateRange);
   const activeLang = store.useState((s) => s.language?.active);
+  const allForms = store.useState((s) => s.allForms);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { notify } = useNotification();
@@ -67,8 +68,8 @@ const DataFilters = ({
   }, [activeLang]);
 
   const childForms = useMemo(() => {
-    return window.forms?.filter((f) => f?.content?.parent === selectedForm);
-  }, [selectedForm]);
+    return allForms?.filter((f) => f?.content?.parent === selectedForm);
+  }, [selectedForm, allForms]);
 
   const selectedAdm = takeRight(administration, 1)[0];
 

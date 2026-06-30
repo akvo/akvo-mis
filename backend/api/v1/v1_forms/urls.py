@@ -3,6 +3,7 @@ from django.urls import re_path
 from api.v1.v1_forms.views import (
     web_form_details,
     list_form,
+    list_published_forms,
     form_data,
     check_form_approver,
     form_approver,
@@ -12,6 +13,9 @@ from api.v1.v1_forms.views import (
 
 urlpatterns = [
     # Existing read-only (unchanged)
+    re_path(
+        r"^(?P<version>(v1))/forms/published$", list_published_forms
+    ),
     re_path(r"^(?P<version>(v1))/forms$", list_form),
     re_path(r"^(?P<version>(v1))/form/(?P<form_id>[0-9]+)", form_data),
     re_path(

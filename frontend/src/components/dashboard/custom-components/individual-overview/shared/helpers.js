@@ -1,12 +1,13 @@
 /**
  * Pure lookup + formatting helpers for the Individual Overview pattern.
  *
- * Centralises every walk over `window.forms` and every transform applied to
- * a `/data/<id>` answer payload, so shell components stay free of
- * form-walking code.
+ * Centralises every walk over the published forms (from getForms()) and
+ * every transform applied to a `/data/<id>` answer payload, so shell
+ * components stay free of form-walking code.
  */
 
 import { api } from "../../../../../lib";
+import { getForms } from "../../../../../util/form";
 
 const toNumericId = (id) => {
   if (typeof id === "number") {
@@ -17,9 +18,9 @@ const toNumericId = (id) => {
 };
 
 /**
- * Find a question definition by id across every form in `window.forms`.
+ * Find a question definition by id across every published form (getForms()).
  *
- * `window.forms` shape (set at app startup):
+ * forms shape (fetched at app startup into the store):
  *   [{ id, name, content: { question_group: [{ question: [{ id, label, type, option }] }] } }]
  *
  * @param {number|string} questionId
@@ -30,7 +31,7 @@ export const findQuestion = (questionId) => {
     return null;
   }
   const target = toNumericId(questionId);
-  const forms = window.forms || [];
+  const forms = getForms();
   for (let i = 0; i < forms.length; i += 1) {
     const groups = forms[i]?.content?.question_group || [];
     for (let j = 0; j < groups.length; j += 1) {
@@ -281,8 +282,8 @@ export const extractPhotoUrl = (values, questionId) => {
 };
 
 /**
- * Find a question group definition by its id across every form in
- * `window.forms`. Returns null when not found.
+ * Find a question group definition by its id across every published form
+ * (getForms()). Returns null when not found.
  *
  * @param {number|string} groupId
  * @returns {object|null}
@@ -292,7 +293,7 @@ export const findQuestionGroup = (groupId) => {
     return null;
   }
   const target = toNumericId(groupId);
-  const forms = window.forms || [];
+  const forms = getForms();
   for (let i = 0; i < forms.length; i += 1) {
     const groups = forms[i]?.content?.question_group || [];
     const found = groups.find((g) => g?.id === target);
