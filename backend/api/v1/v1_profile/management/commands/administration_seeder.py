@@ -55,12 +55,15 @@ def seed_administration(row: dict, geo_config: list = []) -> None:
         if not name and geo["level"] == 0:
             name = COUNTRY_NAME.capitalize()
         if name:
+            # Key on name + level + parent: in the Marshall Islands many
+            # islets share their atoll's (municipality's) name, so name
+            # alone is not unique across the hierarchy.
             Administration.objects.update_or_create(
                 name=name,
+                level=level,
+                parent=parent,
                 defaults={
-                    "level": level,
                     "code": code,
-                    "parent": parent,
                 },
             )
 
@@ -94,36 +97,40 @@ def seed_administration_prod() -> int:
             for f in fg.get('geometries', [])
         ]
         if administrations:
-            # Get first row of administrations to seed_levels
-            first_row = administrations[0]
-            geo_config = list(first_row.keys())
-            # Filter out keys that end with pattern "_<digit>"
-            # eg: "Province_1"
-            geo_config = [
-                key for key in geo_config if (
-                    key.split("_")[-1].isdigit()
-                    and not key.startswith("code_")
-                )
+            # HDX TopoJSON files concatenate the adm0/adm1/adm2 layers, but
+            # only the leaf features carry the full "<alias>_<level>" path
+            # (e.g. National_0, Municipality_1, Islet_2). The top layers lack
+            # those keys, so keep only features that carry the alias path --
+            # otherwise the level config can't be derived and the keyless
+            # rows create a spurious root via the COUNTRY_NAME fallback.
+            def level_keys(row: dict) -> list:
+                return [
+                    k for k in row.keys()
+                    if k.split("_")[-1].isdigit() and not k.startswith("code_")
+                ]
+
+            administrations = [
+                adm for adm in administrations if level_keys(adm)
             ]
+
+            # Build the level config from the union of alias keys (one per
+            # level, deduplicated) so it doesn't depend on the first row.
+            alias_by_level = {}
+            for adm in administrations:
+                for key in level_keys(adm):
+                    alias_by_level[int(key.split("_")[-1])] = \
+                        key.split("_")[0]
             geo_config = [
-                {
-                    "level": int(key.split("_")[-1]),
-                    "alias": key.split("_")[0],
-                }
-                for i, key in enumerate(geo_config)
+                {"level": level, "alias": alias}
+                for level, alias in sorted(alias_by_level.items())
             ]
-            # Order geo_config by level
-            geo_config.sort(key=lambda x: x["level"])
-            # Add id to geo_config
+            # Ensure a national (level 0) level exists for files that only
+            # provide sub-national levels (e.g. levels starting at 1).
+            if not any(geo["level"] == 0 for geo in geo_config):
+                geo_config.insert(0, {"level": 0, "alias": "National"})
+            # Assign sequential ids ordered by level.
             for i, geo in enumerate(geo_config):
-                # Assign id starting from 2
-                # to avoid conflict with the national level
-                geo["id"] = i + 2
-            # Add the national level
-            geo_config.insert(
-                0,
-                {"id": 1, "level": 0, "alias": "National"}
-            )
+                geo["id"] = i + 1
             seed_levels(geo_config=geo_config)
 
             for adm in administrations:

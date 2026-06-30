@@ -43,11 +43,11 @@ def generate_sqlite(model, test: bool = False):
 
     if "parent" in field_names:
         data["parent"] = data["parent"].apply(
-            lambda x: int(x) if x == x else 0
+            lambda x: int(x) if pd.notna(x) else 0
         )
     elif "administration" in field_names:
         data["parent"] = data["administration"].apply(
-            lambda x: int(x) if x == x else 0
+            lambda x: int(x) if pd.notna(x) else 0
         )
     else:
         data["parent"] = 0
