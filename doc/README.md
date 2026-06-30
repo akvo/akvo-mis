@@ -4,7 +4,7 @@
 2. [Form and Data Workflow](https://app.excalidraw.com/l/2tVeGVHqKIQ/1ktf3ES2YYn), Excalidraw
 3. [DB Design](https://dbdocs.io/deden/akvo-mis), DBdocs
 4. [DB Model](https://dbdocs.io/deden/akvo-mis-django), DBdocs
-5. [TopoJSON](https://github.com/akvo/akvo-mis/tree/main/backend/source/fiji.topojson) and [GeoJSON](https://github.com/akvo/akvo-mis/blob/main/doc/resource/fiji.geojson) Resources
+5. [TopoJSON](https://github.com/akvo/akvo-mis/tree/main/backend/source/marshall_island.topojson) and [GeoJSON](https://github.com/akvo/akvo-mis/blob/main/doc/resource/marshall_island.geojson) Resources
 
 ## SCRIPTS
 
