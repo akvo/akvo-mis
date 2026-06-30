@@ -95,6 +95,43 @@ Answer each prompt by entering 'y' or 'n' followed by the Enter key.
 
 Default Fake User's password: `Test#123`
 
+### Changing the Country / Tenant Administration Data
+
+The administration hierarchy is seeded from a TopoJSON file selected by the
+`COUNTRY_NAME` setting in [`backend/mis/settings.py`](backend/mis/settings.py)
+(also set `TIME_ZONE` to match). For `COUNTRY_NAME = "marshall_island"` the
+seeders read `backend/source/marshall_island.topojson`.
+
+To switch to another country:
+
+1. Add `backend/source/<country>.topojson` (an HDX/OCHA admin-boundary
+   TopoJSON works as-is). Each **leaf** feature must carry the full level
+   path as `"<Alias>_<level>"` properties plus matching `code_<level>` values,
+   e.g. `National_0`, `Municipality_1`, `Islet_2` and `code_0`, `code_1`,
+   `code_2`. The level **aliases become the `Levels` names** — only the leaf
+   layer needs these keys; upper layers (ADM0/ADM1) are ignored.
+2. Set `COUNTRY_NAME` (and `TIME_ZONE`) in `settings.py`.
+3. Seed the levels and administrations:
+
+   ```bash
+   ./dc.sh exec backend python manage.py administration_seeder
+   # add --clean to wipe existing levels/administrations first
+   ```
+
+4. Generate the random geo points used by the fake-data seeder (writes
+   `backend/source/<country>_random_points.csv`, one centroid-based set of
+   points per leaf administration):
+
+   ```bash
+   ./dc.sh exec backend python manage.py generate_random_points
+   ```
+
+5. Regenerate the mobile SQLite master data:
+
+   ```bash
+   ./dc.sh exec backend python manage.py generate_sqlite
+   ```
+
 Generate QR Code for Mobile App Download:
 
 To generate a QR code image for the mobile app download link, run:
