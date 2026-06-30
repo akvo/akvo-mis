@@ -12,31 +12,36 @@ const FormDropdown = ({
   width = 160,
   ...props
 }) => {
-  const { forms, selectedForm, loadingForm } = store.useState((state) => state);
+  const { forms, allForms, selectedForm, loadingForm } = store.useState(
+    (state) => state
+  );
   const filterForms = useMemo(() => {
-    const form_items = title ? window.forms : forms;
+    const form_items = title ? allForms : forms;
     return form_items.filter((f) => !f.content?.parent);
-  }, [title, forms]);
+  }, [title, forms, allForms]);
 
-  const handleChange = useCallback((e) => {
-    if (!e) {
-      return;
-    }
-    store.update((s) => {
-      s.loadingForm = true;
-    });
-    store.update((s) => {
-      s.questionGroups = window.forms.find(
-        (f) => f.id === e
-      ).content.question_group;
-      s.selectedForm = e;
-      s.loadingForm = false;
-      s.advancedFilters = [];
-      s.showAdvancedFilters = false;
-    });
-  }, []);
+  const handleChange = useCallback(
+    (e) => {
+      if (!e) {
+        return;
+      }
+      store.update((s) => {
+        s.loadingForm = true;
+      });
+      store.update((s) => {
+        s.questionGroups = allForms.find(
+          (f) => f.id === e
+        ).content.question_group;
+        s.selectedForm = e;
+        s.loadingForm = false;
+        s.advancedFilters = [];
+        s.showAdvancedFilters = false;
+      });
+    },
+    [allForms]
+  );
   useEffect(() => {
-    const findForm = window.forms.find((f) => f.id === selectedForm);
+    const findForm = allForms.find((f) => f.id === selectedForm);
     const urlParams = new URLSearchParams(window.location.search);
     if (
       urlParams.has("form_id") &&
@@ -57,7 +62,7 @@ const FormDropdown = ({
     ) {
       handleChange(filterForms[0].id);
     }
-  }, [filterForms, selectedForm, handleChange]);
+  }, [filterForms, selectedForm, handleChange, allForms]);
   if (filterForms && !hidden) {
     return (
       <Select

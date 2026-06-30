@@ -97,3 +97,6 @@ _TYPE_STR_TO_INT = {
 _TYPE_INT_TO_STR = {
     k: v.lower() for k, v in QuestionTypes.FieldStr.items()
 }
+
+# Cache key for the published-forms payload served to the web frontend.
+PUBLISHED_FORMS_CACHE = "published-forms"

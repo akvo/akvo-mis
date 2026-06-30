@@ -1,5 +1,4 @@
 import { Store } from "pullstate";
-import { sortArray } from "../util/form";
 
 const defaultUIState = {
   isLoggedIn: false,
@@ -19,7 +18,11 @@ const defaultUIState = {
   administration: [],
   selectedAdministration: null,
   loadingMap: false,
-  forms: window.forms.sort(sortArray),
+  // allForms: full published list fetched at runtime from
+  // GET /api/v1/forms/published (replaces the old window.forms global).
+  // forms: assignment-filtered, sorted subset rendered by the UI.
+  allForms: [],
+  forms: [],
   levels: window.levels,
   selectedForm: null,
   selectedFormData: null,

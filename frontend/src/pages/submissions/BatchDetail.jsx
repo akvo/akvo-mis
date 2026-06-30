@@ -9,6 +9,7 @@ import {
 } from "../../lib";
 import { isEqual, flatten } from "lodash";
 import { useNotification } from "../../util/hooks";
+import { getForms } from "../../util/form";
 import { validateDependency } from "../../util";
 
 const BatchDetail = ({
@@ -31,7 +32,7 @@ const BatchDetail = ({
     return uiText[activeLang];
   }, [activeLang]);
 
-  const questionGroups = window.forms
+  const questionGroups = getForms()
     .find((f) => f.id === expanded.form)
     ?.content?.question_group?.filter(
       (qg) =>

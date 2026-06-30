@@ -5,6 +5,22 @@ Object {
   "administration": Array [],
   "administrationLevel": null,
   "advancedFilters": Array [],
+  "allForms": Array [
+    Object {
+      "id": 1,
+      "name": "Example 1",
+      "type": 1,
+      "type_text": "County",
+      "version": 1,
+    },
+    Object {
+      "id": 2,
+      "name": "Example 2",
+      "type": 2,
+      "type_text": "National",
+      "version": 1,
+    },
+  ],
   "dateRange": null,
   "filters": Object {
     "attributeType": null,
@@ -39,28 +55,7 @@ Object {
       "en": "English",
     },
   },
-  "levels": Array [
-    Object {
-      "id": 1,
-      "level": 0,
-      "name": "National",
-    },
-    Object {
-      "id": 2,
-      "level": 1,
-      "name": "County",
-    },
-    Object {
-      "id": 3,
-      "level": 2,
-      "name": "Sub-County",
-    },
-    Object {
-      "id": 4,
-      "level": 3,
-      "name": "Ward",
-    },
-  ],
+  "levels": undefined,
   "loadingForm": false,
   "loadingMap": false,
   "masterData": Object {

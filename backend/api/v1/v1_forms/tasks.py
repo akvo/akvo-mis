@@ -13,14 +13,17 @@ from api.v1.v1_forms.functions import (
 
 
 def refresh_form_config():
-    """Clear the Django cache and regenerate config.min.js.
+    """Clear the Django cache after a form is published.
 
-    Dispatched asynchronously after a form is published so the web form
-    renderer and the frontend FormDropdown both see the updated form list
-    without blocking the publish HTTP response.
+    Dispatched asynchronously after a form is published. Forms are no longer
+    baked into config.min.js — the web frontend fetches them at runtime from
+    GET /api/v1/forms/published (see doc/claude/
+    remove-window-forms-runtime-fetch.md). Clearing the cache evicts the
+    cached published-forms payload and the per-form webform-{id} entries so
+    the next fetch returns the updated form list. generate_config is no
+    longer needed on the publish path.
     """
     call_command("clear_cache")
-    call_command("generate_config")
 
 
 def import_form_job(job_id):

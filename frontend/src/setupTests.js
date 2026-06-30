@@ -4,6 +4,7 @@
 // learn more: https://github.com/testing-library/jest-dom
 import "@testing-library/jest-dom";
 import "jest-canvas-mock";
+import store from "./lib/store";
 
 window.topojson = {
   objects: { marshall_island: { geometries: [{ properties: {} }] } },
@@ -14,10 +15,17 @@ window.levels = [
   { id: 3, name: "Sub-County", level: 2 },
   { id: 4, name: "Ward", level: 3 },
 ];
-window.forms = [
+const formsFixture = [
   { id: 1, name: "Example 1", type: 1, version: 1, type_text: "County" },
   { id: 2, name: "Example 2", type: 2, version: 1, type_text: "National" },
 ];
+// Forms are no longer a window global; components read them from the store
+// (populated at runtime from GET /api/v1/forms/published). Seed both the
+// full list (allForms) and the rendered list (forms) for tests.
+store.update((s) => {
+  s.allForms = formsFixture;
+  s.forms = formsFixture;
+});
 
 window.visualisation = [];
 

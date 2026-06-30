@@ -10,12 +10,9 @@ from mis.settings import (
     APK_NAME,
     SHOW_LANDING_PAGE,
 )
-from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Levels
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
-from api.v1.v1_forms.serializers import FormDataSerializer
 from api.v1.v1_visualization.functions import refresh_materialized_data
-from api.v1.v1_forms.constants import FormStatus
 
 
 class Command(BaseCommand):
@@ -51,22 +48,16 @@ class Command(BaseCommand):
         # write config
         config_file = jsmin(open("source/config/config.js").read())
         levels = []
-        forms = []
+        # NOTE: forms are no longer baked here. The web frontend fetches them
+        # at runtime from GET /api/v1/forms/published so newly published forms
+        # reflect without a config rebuild. See doc/claude/
+        # remove-window-forms-runtime-fetch.md
         for level in Levels.objects.all():
             levels.append(
                 {
                     "id": level.id,
                     "name": level.name,
                     "level": level.level,
-                }
-            )
-        for form in Forms.objects.filter(status=FormStatus.published).all():
-            forms.append(
-                {
-                    "id": form.id,
-                    "name": form.name,
-                    "version": form.version,
-                    "content": FormDataSerializer(instance=form).data,
                 }
             )
         role_features = []
@@ -93,9 +84,6 @@ class Command(BaseCommand):
                     "var levels=",
                     json.dumps(levels),
                     ";",
-                    "var forms=",
-                    json.dumps(forms),
-                    ";",
                     config_file,
                     "var appConfig=",
                     json.dumps({
@@ -114,7 +102,6 @@ class Command(BaseCommand):
         open("source/config/config.min.js", "w").write(min_config)
         # os.remove(administration_json)
         del levels
-        del forms
         del min_config
         if options.get("refresh_views"):
             refresh_materialized_data()
