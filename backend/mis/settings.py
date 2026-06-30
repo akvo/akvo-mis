@@ -199,10 +199,10 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 
 """
-The TIME_ZONE has been set to 'Pacific/Fiji'
+The TIME_ZONE has been set to 'Pacific/Majuro'
 to align with the application's focus on Fiji.
 """
-TIME_ZONE = "Pacific/Fiji"
+TIME_ZONE = "Pacific/Majuro"
 
 USE_I18N = True
 
@@ -248,7 +248,7 @@ MAILJET_API_KEY = environ["MAILJET_APIKEY"]
 MAILJET_API_SECRET = environ["MAILJET_SECRET"]
 EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")
 
-COUNTRY_NAME = "fiji"
+COUNTRY_NAME = "marshall_island"
 
 TEST_ENV = False
 
