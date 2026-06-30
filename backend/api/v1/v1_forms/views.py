@@ -15,7 +15,7 @@ from rest_framework import status, serializers, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from utils.custom_permissions import FormBuilderAccess
 from rest_framework.response import Response
 
@@ -34,6 +34,7 @@ from api.v1.v1_forms.constants import (
 from api.v1.v1_forms.functions import (
     create_published_version,
     export_form_definition,
+    get_published_forms_payload,
     normalize_form_definition,
     restore_from_snapshot,
     save_form,
@@ -281,6 +282,27 @@ def list_form(request, version):
         ListFormSerializer(instance=instance, many=True).data,
         status=status.HTTP_200_OK,
     )
+
+
+@extend_schema(
+    tags=["Form"],
+    summary="Published forms with full content for the web frontend",
+    description=(
+        "Returns every published form (parents and children) with its full "
+        "content definition. Replaces the window.forms global previously "
+        "baked into config.min.js so newly published forms reflect without "
+        "a config rebuild. Public, like config.js."
+    ),
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def list_published_forms(request, version):
+    response = Response(
+        get_published_forms_payload(),
+        status=status.HTTP_200_OK,
+    )
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 @extend_schema(
