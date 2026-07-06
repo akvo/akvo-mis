@@ -161,7 +161,7 @@ const FormDataDetails = ({ navigation, route }) => {
         );
       }
     }
-    if ([QUESTION_TYPES.photo, QUESTION_TYPES.signature].includes(q.type) && answer) {
+    if ([QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(q.type) && answer) {
       return (
         <ImageView
           key={q.id}

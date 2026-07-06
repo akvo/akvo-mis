@@ -66,7 +66,7 @@ const QuestionField = ({
             {...questionField}
           />
         );
-      case QUESTION_TYPES.photo:
+      case QUESTION_TYPES.image:
         return (
           <TypeImage
             keyform={keyform}
