@@ -5,6 +5,7 @@ import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
 
 import QuestionField from './QuestionField';
 import { FieldGroupHeader, RepeatSection } from '../support';
+import { generateValidationSchemaFieldLevel } from '../lib';
 import { FormState } from '../../store';
 import styles from '../styles';
 
@@ -50,11 +51,28 @@ const QuestionGroup = ({ index, group, activeQuestions, dependantQuestions = [] 
   }, [group, activeQuestions]);
 
   // Handle onChange for all questions
-  const handleOnChange = (id, value) => {
+  const handleOnChange = (id, value, question) => {
     // Handle dependencies with dependantQuestions
     FormState.update((s) => {
       s.currentValues = { ...s.currentValues, [id]: value };
     });
+    /**
+     * Clear a stale "... is required" message as soon as the field is answered.
+     * Only act when an error is currently shown for this field: this avoids
+     * re-validating and re-rendering every field on each keystroke for fields
+     * that have no active error.
+     */
+    const currentFeedback = FormState.getRawState().feedback?.[id];
+    if (question?.id && currentFeedback && currentFeedback !== true) {
+      generateValidationSchemaFieldLevel(value, question).then((result) => {
+        const nextFeedback = result?.[question.id];
+        FormState.update((s) => {
+          if (s.feedback?.[id] !== nextFeedback) {
+            s.feedback = { ...s.feedback, [id]: nextFeedback };
+          }
+        });
+      });
+    }
   };
 
   const handleContentSizeChange = (width, height) => {
