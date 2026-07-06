@@ -107,7 +107,7 @@ const backgroundTaskStatus = async (TASK_NAME) => {
 const handleOnUploadFiles = async (
   data,
   apiURL = '/images',
-  questionTypes = [QUESTION_TYPES.photo],
+  questionTypes = [QUESTION_TYPES.image],
 ) => {
   // Extract files from submissions
   const allFiles = data.reduce((files, d) => {
@@ -188,7 +188,7 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
   // Defensive defaults: under OOM conditions, Hermes can produce incomplete return objects
   // from handleOnUploadFiles. The `|| {}` + default values prevent TypeError on spread.
   const { uploadedFiles: photos = [], failedDataIDs: failedPhotos = new Set() } =
-    (await handleOnUploadFiles(data, '/images', [QUESTION_TYPES.photo])) || {};
+    (await handleOnUploadFiles(data, '/images', [QUESTION_TYPES.image])) || {};
   const { uploadedFiles: attachments = [], failedDataIDs: failedAttachments = new Set() } =
     (await handleOnUploadFiles(data, '/attachments', [QUESTION_TYPES.attachment])) || {};
 
