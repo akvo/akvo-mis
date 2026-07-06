@@ -3,7 +3,7 @@
     "newArchEnabled": true,
     "name": "Akvo MIS",
     "slug": "akvo-mis-mobile",
-    "version": "4.1.25",
+    "version": "4.1.26",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.akvo.akvo_mis",
-      "versionCode": 4125
+      "versionCode": 4126
     },
     "web": {
       "favicon": "./assets/favicon.png"
