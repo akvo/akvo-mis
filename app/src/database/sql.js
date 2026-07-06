@@ -311,7 +311,10 @@ const dropColumn = async (db, table, columnName) => {
  */
 const withTransaction = async (db, fn) => {
   try {
-    await db.execAsync('BEGIN TRANSACTION');
+    // BEGIN IMMEDIATE acquires the write lock up front so busy_timeout applies.
+    // A deferred BEGIN can fail with SQLITE_BUSY on lock upgrade, which
+    // busy_timeout does not retry in WAL mode.
+    await db.execAsync('BEGIN IMMEDIATE TRANSACTION');
     const result = await fn(db);
     await db.execAsync('COMMIT');
     return result;

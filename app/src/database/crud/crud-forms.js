@@ -139,7 +139,7 @@ const formsQuery = () => ({
         LEFT JOIN datapoints dp ON f.id = dp.form AND dp.uuid = ?
         WHERE f.parentId = ?
         GROUP BY f.id, f.formId, f.version, f.name, f.json;`;
-    const rows = await sql.executeQuery(db, selectJoin, [uuid, parentId, uuid]);
+    const rows = await sql.executeQuery(db, selectJoin, [uuid, parentId]);
     return rows;
   },
 });

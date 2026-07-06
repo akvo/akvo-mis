@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Dialog, Text, Icon } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
-import * as SQLite from 'expo-sqlite';
 import { AuthState, UserState, FormState, UIState, DatapointSyncState } from '../store';
 import { api, cascades, i18n } from '../lib';
-import { DATABASE_NAME } from '../lib/constants';
+import { openDatabase } from '../database';
 import sql from '../database/sql';
 
 const LogoutButton = () => {
@@ -20,9 +19,7 @@ const LogoutButton = () => {
   };
 
   const handleYesPress = async () => {
-    const db = await SQLite.openDatabaseAsync(DATABASE_NAME, {
-      useNewConnection: true,
-    });
+    const db = await openDatabase();
     const tables = [
       'sessions',
       'users',

@@ -6,7 +6,6 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundTask from 'expo-background-task';
 import * as Sentry from '@sentry/react-native';
 import * as Location from 'expo-location';
-import * as SQLite from 'expo-sqlite';
 import { SENTRY_DSN, SENTRY_ENV } from '@env';
 import { SQLiteProvider } from 'expo-sqlite';
 
@@ -29,7 +28,7 @@ import {
   MAX_ATTEMPT,
   jobStatus,
 } from './src/lib/constants';
-import { tables } from './src/database';
+import { tables, openDatabase } from './src/database';
 import sql from './src/database/sql';
 import { m03, m04, m05 } from './src/database/migrations';
 
@@ -48,9 +47,7 @@ defineSyncDatapointBackgroundTask();
 
 TaskManager.defineTask(SYNC_FORM_SUBMISSION_TASK_NAME, async () => {
   try {
-    const db = await SQLite.openDatabaseAsync(DATABASE_NAME, {
-      useNewConnection: true,
-    });
+    const db = await openDatabase();
     const pendingToSync = await crudDataPoints.selectSubmissionToSync(db);
     const activeJob = await crudJobs.getActiveJob(db, SYNC_FORM_SUBMISSION_TASK_NAME);
 
@@ -192,6 +189,9 @@ const App = () => {
   };
 
   const migrateDbIfNeeded = async (db) => {
+    // Connection-level pragma: wait up to 5s for a concurrent writer instead of
+    // failing immediately with "database is locked" (SQLITE_BUSY).
+    await db.execAsync('PRAGMA busy_timeout = 5000;');
     let { user_version: currentDbVersion } = await db.getFirstAsync('PRAGMA user_version');
     if (currentDbVersion >= DATABASE_VERSION) {
       await handleInitConfig(db);
