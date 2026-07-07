@@ -1,6 +1,6 @@
 {
   "name": "akvo-mis-mobile",
-  "version": "4.1.26",
+  "version": "4.1.27",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start --port 19000",

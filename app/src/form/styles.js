@@ -73,6 +73,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
     opacity: 0.5,
   },
+  textAreaContainer: {
+    paddingHorizontal: 10,
+    borderColor: 'grey',
+    borderWidth: 0.5,
+    borderRadius: 5,
+    borderBottomWidth: 0.5,
+    minHeight: 120,
+    alignItems: 'flex-start',
+    paddingTop: 10,
+  },
   radioFieldContainer: {
     backgroundColor: 'transparent',
     paddingVertical: 5,

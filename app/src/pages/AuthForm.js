@@ -94,6 +94,7 @@ const AuthForm = ({ navigation }) => {
     setError(null);
     setLoading(true);
     api.setServerURL(serverURL);
+    console.info('[AuthForm] Attempting login to:', serverURL);
     api
       .post('/auth', { code: passcode })
       .then(async (res) => {
@@ -123,6 +124,17 @@ const AuthForm = ({ navigation }) => {
         }, 500);
       })
       .catch((err) => {
+        console.error('[AuthForm] Login error:', {
+          message: err?.message,
+          code: err?.code,
+          status: err?.response?.status,
+          responseData: err?.response?.data,
+          config: {
+            url: err?.config?.url,
+            baseURL: err?.config?.baseURL,
+            method: err?.config?.method,
+          },
+        });
         const { status: errorCode } = err?.response || {};
         if ([400, 401].includes(errorCode)) {
           setError(`${errorCode}: ${trans.authErrorPasscode}`);
