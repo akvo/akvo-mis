@@ -23,6 +23,7 @@ const tables = [
       gpsThreshold: 'INTEGER NULL',
       gpsAccuracyLevel: 'INTEGER NULL',
       geoLocationTimeout: 'INTEGER NULL',
+      imageQuality: "VARCHAR(20) DEFAULT 'low'",
     },
   },
   {

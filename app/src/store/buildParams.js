@@ -19,6 +19,7 @@ const BuildParamsState = new Store({
   gpsInterval: 60, // seconds
   gpsAccuracyLevel: 4, // High
   geoLocationTimeout: 60, // seconds
+  imageQuality: 'low', // Image compression quality preset
 });
 
 export default BuildParamsState;

@@ -30,7 +30,7 @@ import {
 } from './src/lib/constants';
 import { tables, openDatabase } from './src/database';
 import sql from './src/database/sql';
-import { m03, m04, m05 } from './src/database/migrations';
+import { m03, m04, m05, m06 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -122,6 +122,7 @@ const App = () => {
   const gpsThreshold = BuildParamsState.useState((s) => s.gpsThreshold);
   const gpsAccuracyLevel = BuildParamsState.useState((s) => s.gpsAccuracyLevel);
   const geoLocationTimeout = BuildParamsState.useState((s) => s.geoLocationTimeout);
+  const imageQuality = BuildParamsState.useState((s) => s.imageQuality);
   const appVersion = BuildParamsState.useState((s) => s.appVersion);
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
 
@@ -137,6 +138,7 @@ const App = () => {
         gpsThreshold,
         gpsAccuracyLevel,
         geoLocationTimeout,
+        imageQuality,
       });
     }
     if (serverURL) {
@@ -154,6 +156,7 @@ const App = () => {
         s.gpsThreshold = configExist.gpsThreshold;
         s.gpsAccuracyLevel = configExist.gpsAccuracyLevel;
         s.geoLocationTimeout = configExist.geoLocationTimeout;
+        s.imageQuality = configExist.imageQuality || 'low';
       });
 
       UserState.update((s) => {
@@ -241,6 +244,13 @@ const App = () => {
         await txDb.execAsync('PRAGMA user_version = 5');
       });
       currentDbVersion = 5;
+    }
+    if (currentDbVersion === 5) {
+      await sql.withTransaction(db, async (txDb) => {
+        await m06.up(txDb);
+        await txDb.execAsync('PRAGMA user_version = 6');
+      });
+      currentDbVersion = 6;
     }
   };
 
