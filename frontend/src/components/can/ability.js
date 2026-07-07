@@ -14,7 +14,7 @@ const defineAbilityFor = (user) => {
     const roles = user?.roles || [];
     const is_approver = roles.filter((r) => r?.is_approver).length > 0;
     const is_submitter = roles.filter((r) => r?.is_submitter).length > 0;
-    const is_editor = roles.filter((r) => r?.is_mobile).length > 0;
+    const is_editor = roles.filter((r) => r?.is_editor).length > 0;
     const can_delete = roles.filter((r) => r?.can_delete).length > 0;
     const can_invite_user = roles.filter((r) => r?.can_invite_user).length > 0;
     const can_form_builder =
@@ -34,6 +34,7 @@ const defineAbilityFor = (user) => {
       can("manage", "mobile");
       can("create", "downloads");
       can("edit", "data");
+      can("upload", "data");
     }
     if (is_editor) {
       can("edit", "data");

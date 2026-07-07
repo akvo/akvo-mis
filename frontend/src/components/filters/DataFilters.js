@@ -13,7 +13,7 @@ import {
   Input,
   DatePicker,
 } from "antd";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import AdministrationDropdown from "./AdministrationDropdown";
 import FormDropdown from "./FormDropdown.js";
 import { useNotification } from "../../util/hooks";
@@ -24,7 +24,7 @@ import AdvancedFilters from "./AdvancedFilters";
 import {
   PlusOutlined,
   DownloadOutlined,
-  // UploadOutlined,
+  UploadOutlined,
   FileWordOutlined,
   DownOutlined,
   SearchOutlined,
@@ -346,13 +346,13 @@ const DataFilters = ({
         </Col>
         <Col>
           <Space>
-            {/* <Can I="upload" a="data">
+            <Can I="upload" a="data">
               <Link to="/control-center/data/upload">
                 <Button shape="round" icon={<UploadOutlined />}>
                   {text.bulkUpload}
                 </Button>
               </Link>
-            </Can> */}
+            </Can>
             {pathname === "/control-center/data" && (
               <Space>
                 {selectedRowKeys.length === 0 ? (

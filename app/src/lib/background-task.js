@@ -2,8 +2,8 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Network from 'expo-network';
 import * as Sentry from '@sentry/react-native';
-import * as SQLite from 'expo-sqlite';
 import api from './api';
+import { openDatabase } from '../database';
 import { crudForms, crudDataPoints, crudUsers, crudConfig, crudSyncQueue } from '../database/crud';
 import {
   downloadDatapointsJson,
@@ -14,7 +14,6 @@ import notification from './notification';
 import crudJobs from '../database/crud/crud-jobs';
 import { UIState, DatapointSyncState } from '../store';
 import {
-  DATABASE_NAME,
   QUESTION_TYPES,
   SYNC_DATAPOINT_BACKGROUND_TASK_NAME,
   SYNC_DATAPOINT_JOB_NAME,
@@ -73,9 +72,7 @@ const syncFormVersion = async (
 };
 
 const registerBackgroundTask = async (TASK_NAME, settingsValue = null) => {
-  const db = await SQLite.openDatabaseAsync(DATABASE_NAME, {
-    useNewConnection: true,
-  });
+  const db = await openDatabase();
   try {
     const config = await crudConfig.getConfig(db);
     const syncIntervalSec = settingsValue || parseInt(config?.syncInterval, 10) || 3600;
@@ -339,9 +336,7 @@ const backgroundTask = backgroundTaskHandler();
 
 export const defineSyncFormVersionTask = () =>
   TaskManager.defineTask(SYNC_FORM_VERSION_TASK_NAME, async () => {
-    const db = await SQLite.openDatabaseAsync(DATABASE_NAME, {
-      useNewConnection: true,
-    });
+    const db = await openDatabase();
     try {
       await syncFormVersion(db, {
         sendPushNotification: notification.sendPushNotification,
@@ -362,9 +357,7 @@ export const defineSyncFormVersionTask = () =>
  * Each background trigger continues from where the last one left off.
  */
 const syncDatapointsBackground = async () => {
-  const db = await SQLite.openDatabaseAsync(DATABASE_NAME, {
-    useNewConnection: true,
-  });
+  const db = await openDatabase();
   try {
     const session = await crudUsers.getActiveUser(db);
     if (!session?.token) {
@@ -457,7 +450,7 @@ export const defineSyncDatapointBackgroundTask = () =>
 
 export const defineSyncFormSubmissionTask = () => {
   TaskManager.defineTask(SYNC_FORM_SUBMISSION_TASK_NAME, async () => {
-    const db = await SQLite.openDatabaseAsync(DATABASE_NAME, { useNewConnection: true });
+    const db = await openDatabase();
     try {
       await syncFormSubmission(db);
       return BackgroundTask.BackgroundTaskResult.Success;
