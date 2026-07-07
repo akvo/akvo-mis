@@ -142,6 +142,7 @@ const uiText = {
     emptyDraftMessageInfo: 'No draft data available',
     emptyDraftMessageAction: 'Saved forms will appear here',
     draftText: 'Draft',
+    compressingImage: 'Compressing...',
   },
   fr: {
     latitude: 'Latitude',
@@ -281,6 +282,7 @@ const uiText = {
     emptyDraftMessageInfo: 'Aucune donnée de brouillon disponible',
     emptyDraftMessageAction: 'Les formulaires enregistrés apparaîtront ici',
     draftText: 'Brouillon',
+    compressingImage: 'Compression...',
   },
 };
 

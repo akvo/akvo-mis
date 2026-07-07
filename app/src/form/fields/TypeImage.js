@@ -1,12 +1,13 @@
-import React from 'react';
-import { View, PermissionsAndroid, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, PermissionsAndroid, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import * as ImagePicker from 'expo-image-picker';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import { FieldLabel } from '../support';
-import { FormState } from '../../store';
+import { FormState, BuildParamsState } from '../../store';
 import { i18n } from '../../lib';
+import { compressImage, formatFileSize } from '../../lib/image-compressor';
 
 const TypeImage = ({
   onChange,
@@ -20,16 +21,31 @@ const TypeImage = ({
   tooltip = null,
 }) => {
   const activeLang = FormState.useState((s) => s.lang);
+  const imageQuality = BuildParamsState.useState((s) => s.imageQuality);
   const trans = i18n.text(activeLang);
   const requiredValue = required ? requiredSign : null;
 
-  const handleOnChange = (dataResult) => {
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [fileSize, setFileSize] = useState(null);
+
+  const handleOnChange = async (dataResult) => {
     const { uri: imageUri } = dataResult.assets[0];
     /**
      * Property fileName is only available for iOS
      * docs: https://docs.expo.dev/versions/latest/sdk/imagepicker/#imagepickerasset
      */
-    onChange(id, imageUri);
+    setIsCompressing(true);
+    try {
+      const result = await compressImage(imageUri, imageQuality);
+      setFileSize(result.size);
+      onChange(id, result.uri);
+    } catch (error) {
+      console.error('[TypeImage] Compression error:', error);
+      setFileSize(null);
+      onChange(id, imageUri);
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
   const selectFile = async () => {
@@ -41,7 +57,7 @@ const TypeImage = ({
       base64: true,
     });
     if (!result?.canceled) {
-      handleOnChange(result);
+      await handleOnChange(result);
     }
   };
 
@@ -68,26 +84,47 @@ const TypeImage = ({
         base64: true,
       });
       if (!result?.canceled) {
-        handleOnChange(result);
+        await handleOnChange(result);
       }
     }
+  };
+
+  const handleRemove = () => {
+    setFileSize(null);
+    onChange(id, null);
   };
 
   return (
     <View style={{ marginBottom: 20 }}>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <View style={styles.fieldImageContainer}>
-        <Button type="outline" onPress={handleCamera} testID="btn-use-camera">
+        <Button
+          type="outline"
+          onPress={handleCamera}
+          testID="btn-use-camera"
+          disabled={isCompressing}
+        >
           <Icon name="camera" size={18} color="dodgerblue" />
           {` ${trans.buttonUseCamera}`}
         </Button>
         {useGallery && (
-          <Button type="outline" onPress={selectFile} testID="btn-from-gallery">
+          <Button
+            type="outline"
+            onPress={selectFile}
+            testID="btn-from-gallery"
+            disabled={isCompressing}
+          >
             <Icon name="image" size={18} color="dodgerblue" />
             {` ${trans.buttonFromGallery}`}
           </Button>
         )}
-        {value && typeof value === 'string' && (
+        {isCompressing && (
+          <View style={styles.compressingContainer}>
+            <ActivityIndicator size="small" color="dodgerblue" />
+            <Text style={styles.compressingText}>{trans.compressingImage || 'Compressing...'}</Text>
+          </View>
+        )}
+        {value && typeof value === 'string' && !isCompressing && (
           <View>
             <Image
               source={{ uri: value }}
@@ -95,13 +132,14 @@ const TypeImage = ({
               PlaceholderContent={<ActivityIndicator />}
               testID="image-preview"
             />
+            {fileSize !== null && (
+              <Text style={styles.fileSizeText}>{formatFileSize(fileSize)}</Text>
+            )}
             <Button
               containerStyle={styles.buttonRemoveFile}
               title={trans.buttonRemove}
               color="secondary"
-              onPress={() => {
-                onChange(id, null);
-              }}
+              onPress={handleRemove}
               disabled={!value}
               testID="btn-remove"
             />
@@ -125,5 +163,22 @@ const styles = StyleSheet.create({
   imagePreview: { width: '100%', height: 200, resizeMode: 'contain' },
   buttonRemoveFile: {
     paddingVertical: 8,
+  },
+  compressingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  compressingText: {
+    color: 'dodgerblue',
+    fontSize: 14,
+  },
+  fileSizeText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 12,
+    marginTop: 4,
   },
 });
