@@ -10,14 +10,21 @@ import { BuildParamsState, UIState, AuthState, UserState } from '../../store';
 import DialogForm from './DialogForm';
 import { i18n } from '../../lib';
 import { accuracyLevels } from '../../lib/loc';
+import { getQualityOptions } from '../../lib/image-compressor';
 import { crudConfig } from '../../database/crud';
 
 const SettingsForm = ({ route }) => {
   const [edit, setEdit] = useState(null);
   const [showDialog, setShowDialog] = useState(false);
 
-  const { serverURL, dataSyncInterval, gpsThreshold, gpsAccuracyLevel, geoLocationTimeout } =
-    BuildParamsState.useState((s) => s);
+  const {
+    serverURL,
+    dataSyncInterval,
+    gpsThreshold,
+    gpsAccuracyLevel,
+    geoLocationTimeout,
+    imageQuality,
+  } = BuildParamsState.useState((s) => s);
   const { password, authenticationCode, useAuthenticationCode } = AuthState.useState((s) => s);
   const { lang, isDarkMode, fontSize } = UIState.useState((s) => s);
   const { name, syncWifiOnly } = UserState.useState((s) => s);
@@ -44,6 +51,7 @@ const SettingsForm = ({ route }) => {
     gpsThreshold,
     gpsAccuracyLevel,
     geoLocationTimeout,
+    imageQuality,
   });
 
   const nonEnglish = lang !== 'en';
@@ -81,6 +89,7 @@ const SettingsForm = ({ route }) => {
       'gpsThreshold',
       'gpsAccuracyLevel',
       'geoLocationTimeout',
+      'imageQuality',
     ];
     if (configFields.includes(field)) {
       await crudConfig.updateConfig(db, { [field]: value });
@@ -143,6 +152,11 @@ const SettingsForm = ({ route }) => {
     if (fieldName === 'gpsAccuracyLevel' && settingsState?.[fieldName]) {
       const findLevel = accuracyLevels.find((l) => l.value === settingsState[fieldName]);
       return findLevel?.label || itemDesc;
+    }
+    if (fieldName === 'imageQuality' && settingsState?.[fieldName]) {
+      const qualityOptions = getQualityOptions();
+      const findQuality = qualityOptions.find((q) => q.value === settingsState[fieldName]);
+      return findQuality?.label || itemDesc;
     }
     return settingsState?.[fieldName];
   };
