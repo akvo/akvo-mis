@@ -1,5 +1,12 @@
 import { accuracyLevels } from '../../lib/loc';
-import { getQualityOptions } from '../../lib/image-compressor';
+
+// Define quality options inline to avoid importing expo-image-manipulator at module load time
+const imageQualityOptions = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'Original', value: 'original' },
+];
 
 export const config = [
   {
@@ -231,7 +238,7 @@ export const config = [
             name: 'Niveau de compression',
           },
         ],
-        options: getQualityOptions(),
+        options: imageQualityOptions,
       },
     ],
   },
