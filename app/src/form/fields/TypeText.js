@@ -20,8 +20,8 @@ const TypeText = ({
   const requiredValue = required ? requiredSign : null;
   const inputContainerStyle =
     metaUUID || disabled
-      ? { ...styles.inputFieldContainer, ...styles.inputFieldDisabled }
-      : styles.inputFieldContainer;
+      ? { ...styles.textAreaContainer, ...styles.inputFieldDisabled }
+      : styles.textAreaContainer;
 
   const handleFocus = () => {
     if (onFocus) {
@@ -35,7 +35,8 @@ const TypeText = ({
       <Input
         inputContainerStyle={inputContainerStyle}
         multiline
-        numberOfLines={1}
+        numberOfLines={4}
+        style={{ textAlignVertical: 'top' }}
         onChangeText={(val) => {
           if (onChange) {
             onChange(id, val);
