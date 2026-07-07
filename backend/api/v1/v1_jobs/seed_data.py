@@ -22,7 +22,12 @@ from api.v1.v1_profile.models import (
     DataAccessTypes,
 )
 from api.v1.v1_users.models import SystemUser
-from api.v1.v1_approval.models import DataBatch
+from api.v1.v1_approval.models import (
+    DataBatch,
+    DataBatchList,
+    DataApproval,
+)
+from api.v1.v1_approval.constants import DataApprovalStatus
 from utils.email_helper import send_email, EmailTypes
 from uuid import uuid4
 
@@ -295,8 +300,12 @@ def save_data(
             parent=parent,
             is_pending=True,
         )
-        batch.batch_data_list.add(data)
-        batch.save()
+        # DataBatchList is a through model (OneToOneField to FormData), so the
+        # entry must be created explicitly. batch.batch_data_list.add(data)
+        # raises TypeError (expects a DataBatchList, not a FormData) and aborts
+        # the whole seed after the first datapoint — leaving a datapoint with
+        # no answers behind.
+        DataBatchList.objects.create(batch=batch, data=data)
 
     # Always create Answers objects (not PendingAnswers)
     answer_to_create = []
@@ -391,11 +400,22 @@ def seed_excel_data(job: Jobs, test: bool = False):
         if not test:
             os.remove(file)
         return None
-    if batch and len(batch.approvers()):
+    approvers = batch.approvers() if batch else []
+    if approvers:
+        # Assign approvers so the batch can move through the approval workflow.
+        # This mirrors the POST /batch flow; without it, bulk-uploaded batches
+        # have no DataApproval rows, so their approver list shows empty and the
+        # batch can never be approved.
+        for approver in approvers:
+            DataApproval.objects.create(
+                batch=batch,
+                administration=approver["administration"],
+                role=approver["role"],
+                user=approver["user"],
+                status=DataApprovalStatus.pending,
+            )
         # Send email to all approvers
-        emails = [
-            approver.user.email for approver in batch.approvers()
-        ]
+        emails = [approver["user"].email for approver in approvers]
         number_of_records = batch.batch_data_list.count()
         data = {
             "send_to": emails,
