@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { View, StyleSheet, Platform, ToastAndroid } from 'react-native';
+import { View, StyleSheet, Platform, ToastAndroid, TouchableOpacity } from 'react-native';
 import { Input, Button, Text } from '@rneui/themed';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -26,6 +26,7 @@ const AuthForm = ({ navigation }) => {
   const [hidden, setHidden] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [showServerURL, setShowServerURL] = useState(false);
   const trans = i18n.text(activeLang);
   const db = useSQLiteContext();
 
@@ -179,7 +180,12 @@ const AuthForm = ({ navigation }) => {
       >
         {trans.buttonLogin}
       </Button>
-      <Text>App version - {appVersion}</Text>
+      <TouchableOpacity onPress={() => setShowServerURL(!showServerURL)}>
+        <Text style={styles.versionText}>App version - {appVersion}</Text>
+      </TouchableOpacity>
+      {showServerURL && (
+        <Text style={styles.serverURLText}>{serverURL || 'No server URL configured'}</Text>
+      )}
     </CenterLayout>
   );
 };
@@ -207,6 +213,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     color: '#CCCCCC',
+  },
+  versionText: {
+    textAlign: 'center',
+    color: '#999999',
+    marginTop: 8,
+  },
+  serverURLText: {
+    textAlign: 'center',
+    color: '#666666',
+    fontSize: 12,
+    marginTop: 4,
   },
 });
 

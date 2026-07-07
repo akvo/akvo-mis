@@ -10,8 +10,15 @@ import { BuildParamsState, UIState, AuthState, UserState } from '../../store';
 import DialogForm from './DialogForm';
 import { i18n } from '../../lib';
 import { accuracyLevels } from '../../lib/loc';
-import { getQualityOptions } from '../../lib/image-compressor';
 import { crudConfig } from '../../database/crud';
+
+// Define quality options inline to avoid importing expo-image-manipulator at module load time
+const imageQualityOptions = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'Original', value: 'original' },
+];
 
 const SettingsForm = ({ route }) => {
   const [edit, setEdit] = useState(null);
@@ -154,8 +161,7 @@ const SettingsForm = ({ route }) => {
       return findLevel?.label || itemDesc;
     }
     if (fieldName === 'imageQuality' && settingsState?.[fieldName]) {
-      const qualityOptions = getQualityOptions();
-      const findQuality = qualityOptions.find((q) => q.value === settingsState[fieldName]);
+      const findQuality = imageQualityOptions.find((q) => q.value === settingsState[fieldName]);
       return findQuality?.label || itemDesc;
     }
     return settingsState?.[fieldName];
