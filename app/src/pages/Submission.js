@@ -6,10 +6,13 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
+  ToastAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LucideIcon from '@react-native-vector-icons/lucide';
 import * as SQLite from 'expo-sqlite';
+import * as Sentry from '@sentry/react-native';
 import moment from 'moment';
 import { FormState, UIState, UserState } from '../store';
 import { i18n } from '../lib';
@@ -112,49 +115,53 @@ const Submission = ({ navigation, route }) => {
   };
 
   const fetchData = useCallback(async () => {
-    if (!activeForm.id) {
-      return;
-    }
-    const draftCount = await crudDataPoints.totalSavedData(
-      db,
-      activeForm.id,
-      route?.params?.uuid || null,
-    );
-    setTotalSavedData(draftCount);
-    /**
-     * Fetch data points from the database based on the active form ID and user ID.
-     * The data points are filtered by the submitted status (1 for submitted).
-     * The results are then formatted to include
-     * createdAt and syncedAt dates in a readable format.
-     * The syncedAt date is set to '-' if it is null.
-     * The isSynced property is set to true if syncedAt is not null.
-     * The data points are then set to the state variable 'data'.
-     */
-    let rows = await crudDataPoints.selectDataPointsByFormAndSubmitted(db, {
-      form: activeForm.id,
-      submitted: isSubmitted,
-      user: activeUserId,
-      uuid: route?.params?.uuid || null,
-    });
-    rows = rows.map((res) => {
-      const createdAt = moment(res.createdAt).format('DD/MM/YYYY hh:mm A');
-      const syncedAt = res.syncedAt ? moment(res.syncedAt).format('DD/MM/YYYY hh:mm A') : '-';
-      return {
-        ...res,
-        createdAt,
-        syncedAt,
-        isSynced: !!res.syncedAt,
-      };
-    });
-    setData(rows);
-    if (rows.length === 0) {
+    if (!activeForm?.id) {
       setLoading(false);
       return;
     }
-    setTimeout(() => {
+    try {
+      const draftCount = await crudDataPoints.totalSavedData(
+        db,
+        activeForm.id,
+        route?.params?.uuid || null,
+      );
+      setTotalSavedData(draftCount);
+      /**
+       * Fetch data points from the database based on the active form ID and user ID.
+       * The data points are filtered by the submitted status (1 for submitted).
+       * The results are then formatted to include
+       * createdAt and syncedAt dates in a readable format.
+       * The syncedAt date is set to '-' if it is null.
+       * The isSynced property is set to true if syncedAt is not null.
+       * The data points are then set to the state variable 'data'.
+       */
+      let rows = await crudDataPoints.selectDataPointsByFormAndSubmitted(db, {
+        form: activeForm.id,
+        submitted: isSubmitted,
+        user: activeUserId,
+        uuid: route?.params?.uuid || null,
+      });
+      rows = rows.map((res) => {
+        const createdAt = moment(res.createdAt).format('DD/MM/YYYY hh:mm A');
+        const syncedAt = res.syncedAt ? moment(res.syncedAt).format('DD/MM/YYYY hh:mm A') : '-';
+        return {
+          ...res,
+          createdAt,
+          syncedAt,
+          isSynced: !!res.syncedAt,
+        };
+      });
+      setData(rows);
+    } catch (error) {
+      Sentry.captureMessage('[Submission] Unable to fetch data points');
+      Sentry.captureException(error);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`SQL: ${error}`, ToastAndroid.LONG);
+      }
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, [activeForm.id, activeUserId, db, isSubmitted, route?.params?.uuid]);
+    }
+  }, [activeForm?.id, activeUserId, db, isSubmitted, route?.params?.uuid]);
 
   useEffect(() => {
     fetchData();

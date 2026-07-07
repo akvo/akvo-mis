@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   questionGroupListContainer: {
-    paddingVertical: 24,
+    paddingTop: 24,
     flex: 1,
     width: '100%',
   },

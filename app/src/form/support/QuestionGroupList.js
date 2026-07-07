@@ -1,8 +1,12 @@
-import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { ScrollView, View } from 'react-native';
 import { Text, Divider } from '@rneui/themed';
 import QuestionGroupListItem from './QuestionGroupListItem';
-import { onFilterDependency, generateDataPointName } from '../lib';
+import {
+  onFilterDependency,
+  generateDataPointName,
+  generateValidationSchemaFieldLevel,
+} from '../lib';
 import styles from '../styles';
 import { FormState } from '../../store';
 
@@ -29,6 +33,50 @@ export const checkCompleteQuestionGroup = (form, values) => {
         .filter((x) => x).length === filteredQuestions.length
     );
   });
+};
+
+/**
+ * Schema-based counter that mirrors the Submit gate (validateAllGroups in
+ * FormNavigation). A required question counts as "filled" only if it passes the
+ * same Yup field-level schema used at submit time, so reaching totalFilled ===
+ * totalRequired guarantees the form is actually submittable.
+ */
+export const countValidRequiredQuestions = async (form, values) => {
+  // Extract all questions for recursive dependency checking
+  const allQuestions = form.question_group.flatMap((qg) => qg.question).filter((q) => q);
+
+  let totalRequired = 0;
+  const validations = [];
+  form.question_group.forEach((questionGroup) => {
+    const requiredQuestions = questionGroup.question.filter((q) => q.required);
+    requiredQuestions.forEach((question) => {
+      // Skip dependent questions whose dependency is not currently satisfied
+      if (
+        question?.dependency &&
+        !onFilterDependency(questionGroup, values, question, 0, allQuestions)
+      ) {
+        return;
+      }
+      // Mirror validateAllGroups: entity questions without a value are skipped
+      // (their options depend on prevAdmAnswer and are not gated at submit).
+      if (question?.extra?.type === 'entity' && values?.[question.id] === undefined) {
+        return;
+      }
+      totalRequired += 1;
+      const defaultVal = ['cascade', 'multiple_option', 'option', 'geo'].includes(question?.type)
+        ? null
+        : '';
+      const fieldValue = values?.[question.id] === undefined ? defaultVal : values[question.id];
+      validations.push(generateValidationSchemaFieldLevel(fieldValue, question));
+    });
+  });
+
+  const results = await Promise.allSettled(validations);
+  const totalFilled = results.filter(
+    ({ status, value }) => status === 'fulfilled' && Object.values(value || {})[0] === true,
+  ).length;
+
+  return { totalFilled, totalRequired };
 };
 
 export const checkGroupHasErrors = (form, values) => {
@@ -80,11 +128,34 @@ const QuestionGroupList = ({
   };
 
   const dataPointNameText = generateDataPointName(forms, currentValues, cascades)?.dpName;
+  const [requiredCount, setRequiredCount] = useState({ totalFilled: 0, totalRequired: 0 });
+  useEffect(() => {
+    let ignore = false;
+    /**
+     * Validating every required field (Yup schema) is expensive and currentValues
+     * changes on each keystroke, so debounce the run. The `ignore` flag ensures
+     * only the latest run commits its result and prevents setState after unmount;
+     * clearTimeout drops the pending timer so it cannot leak past unmount.
+     */
+    const timer = setTimeout(() => {
+      countValidRequiredQuestions(form, currentValues).then((res) => {
+        if (!ignore) {
+          setRequiredCount(res);
+        }
+      });
+    }, 300);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [form, currentValues]);
+  const { totalFilled, totalRequired } = requiredCount;
 
   return (
     <View style={styles.questionGroupListContainer}>
       <Text style={styles.questionGroupListFormTitle} testID="form-name">
         {form.name}
+        {totalRequired ? ` (${totalFilled}/${totalRequired})` : ''}
       </Text>
       <Divider style={styles.divider} />
       {dataPointNameText && (
@@ -95,19 +166,21 @@ const QuestionGroupList = ({
           <Divider style={styles.divider} />
         </>
       )}
-      {form.question_group.map((questionGroup, qx) => (
-        <QuestionGroupListItem
-          key={questionGroup.id}
-          label={questionGroup.label}
-          active={activeQuestionGroup === qx}
-          completedQuestionGroup={
-            completedQuestionGroup[qx] && visitedQuestionGroup.includes(questionGroup.id)
-          }
-          hasErrors={groupHasErrors[qx]}
-          visited={visitedQuestionGroup.includes(questionGroup.id)}
-          onPress={() => handleOnPress(qx)}
-        />
-      ))}
+      <ScrollView>
+        {form.question_group.map((questionGroup, qx) => (
+          <QuestionGroupListItem
+            key={questionGroup.id}
+            label={questionGroup.label}
+            active={activeQuestionGroup === qx}
+            completedQuestionGroup={
+              completedQuestionGroup[qx] && visitedQuestionGroup.includes(questionGroup.id)
+            }
+            hasErrors={groupHasErrors[qx]}
+            visited={visitedQuestionGroup.includes(questionGroup.id)}
+            onPress={() => handleOnPress(qx)}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 };
