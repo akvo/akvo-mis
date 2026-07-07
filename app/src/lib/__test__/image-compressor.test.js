@@ -9,8 +9,6 @@ import {
   getQualityOptions,
 } from '../image-compressor';
 
-jest.mock('expo-image-manipulator');
-jest.mock('expo-file-system');
 
 describe('image-compressor tests', () => {
   beforeEach(() => {
