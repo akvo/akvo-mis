@@ -28,9 +28,13 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📦 Install dependencies
+        env:
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
         run: |
           cd ./app/
           cp ./src/build.testing.js ./src/build.js
+          sed -i "s|http://localhost:3000|https://${APP_DOMAIN}.akvotest.org|" ./src/build.js
+          sed -i "s|apkURL: ''|apkURL: 'https://${APP_DOMAIN}.akvotest.org/app'|" ./src/build.js
           npm install --legacy-peer-deps
 
       - name: 🚀 Release to Expo Dev
