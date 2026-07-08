@@ -277,6 +277,7 @@ const UploadData = () => {
                     type="primary"
                     onClick={downloadTemplate}
                     shape="round"
+                    disabled={!formId}
                   >
                     {text.download}
                   </Button>

@@ -420,6 +420,9 @@ def form_approver(request, version):
 @permission_classes([IsAuthenticated])
 def check_form_approver(request, form_id, version):
     form = get_object_or_404(Forms, pk=form_id)
+    # Super admins bypass approver check
+    if request.user.is_superuser:
+        return Response({"count": 1}, status=status.HTTP_200_OK)
     by_ancestors = Q()
     for ur in request.user.user_user_role.all():
         adm = ur.administration
