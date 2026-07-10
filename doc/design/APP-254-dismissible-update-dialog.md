@@ -55,7 +55,7 @@ remount (navigating back to Home) and app restart.
 ### User Acceptance Criteria
 - [x] The update dialog shows two actions: **Later** and **Update**.
 - [x] Tapping **Later** closes the dialog immediately.
-- [x] Android hardware back also dismisses the dialog (same effect as **Later**), instead of being swallowed.
+- [x] **Later** is the only way to dismiss: hardware back and backdrop taps do nothing (see [D-4](#d-4-how-the-dialog-may-be-dismissed)).
 - [x] The dialog does not reappear for 24 hours — including after killing and relaunching the app.
 - [x] After 24 hours, the next online Home visit shows it again.
 - [x] While dismissed, the user can open forms and collect data normally.
@@ -212,18 +212,33 @@ Neither (1) nor (2) is currently in `app/package.json`.
 
 **Impact**: `checkVersion` reads `config` only on the silent path.
 
-### D-4: What the Android back button should do
+### D-4: How the dialog may be dismissed
 
 **Options Considered**:
-1. Keep swallowing back (`() => true`).
-2. Delete the `BackHandler` effect entirely.
-3. Route back through `handleSkip`.
+1. Only the **Later** button dismisses. Back and backdrop stay inert.
+2. Back and backdrop also dismiss, routed through `handleSkip`.
+3. Delete the `BackHandler` effect entirely.
 
-**Decision**: Option 3.
+**Decision**: Option 1 — dismissal requires pressing **Later**.
 
-**Rationale**: (1) contradicts the whole feature. (2) is worse than it looks — RNEUI's `Dialog` does not close itself on back, so back would navigate away from `Home` while the dialog is still mounted over the next screen. (3) makes back mean exactly what "Later" means, which is what Android users expect from a dismissible dialog.
+**Rationale**: Dismissing costs the user a full day of silence on an update
+they may actually need. That is too large a consequence to attach to a stray tap
+outside the dialog, or to a reflexive back press aimed at something else. An
+explicit button press makes the choice deliberate.
 
-**Impact**: `Home.js` `BackHandler` listener calls `handleSkip()` and returns `true`.
+Option 1 was originally rejected because swallowing back locked the user out —
+but that was true only when **Later** did not exist. Now that the dialog always
+offers a way out, an inert back press is a nudge toward that button, not a trap.
+
+Option 3 is wrong regardless: RNEUI's `Dialog` does not close itself on back, so
+deleting the handler would navigate away from `Home` with the dialog still
+mounted over the next screen.
+
+**Impact**: `Home.js` keeps `BackHandler` returning `true` and `onBackdropPress={() => {}}`.
+`handleSkip` has exactly one caller: the **Later** button.
+
+**Cost accepted**: an inert back button is mildly unusual on Android. It is
+bounded — the dialog is never more than one visible tap from being dismissed.
 
 ### D-5: Flat window, not version-aware
 
@@ -286,7 +301,7 @@ the request must fire anyway and Option 2 becomes nearly free.
 | `app/src/lib/constants.js` | `DATABASE_VERSION = 7`; add `SKIP_UPDATE_DURATION_MS` |
 | `app/App.js` | Import `m07`; add `currentDbVersion === 6` migration block |
 | `app/src/hooks/use-version-check.js` | Add `handleSkip`; gate the silent check on the skip window |
-| `app/src/pages/Home.js` | Add the **Later** dialog button; route `BackHandler` to `handleSkip` |
+| `app/src/pages/Home.js` | Add the **Later** dialog button |
 | `app/src/lib/i18n/ui-text.js` | Add `buttonLater` (en, fr) |
 
 `app/src/pages/About/About.js` needs no change — it destructures only what it
@@ -347,21 +362,13 @@ const {
   handleUpdate,
   handleSkip,
 } = useVersionCheck({ autoCheck: true });
-
-useEffect(() => {
-  if (!updateDialogVisible) {
-    return () => {};
-  }
-  const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-    handleSkip();
-    return true;
-  });
-  return () => subscription.remove();
-}, [updateDialogVisible, handleSkip]);
 ```
 
+The `BackHandler` effect is unchanged — back is still swallowed, and the backdrop
+is still inert. See [D-4](#d-4-how-the-dialog-may-be-dismissed).
+
 ```jsx
-<Dialog isVisible={updateDialogVisible} onBackdropPress={handleSkip}>
+<Dialog isVisible={updateDialogVisible} onBackdropPress={() => {}}>
   <Dialog.Title title={trans.updateRequiredTitle} />
   <Text>{updateInfo.text}</Text>
   <Dialog.Actions>
@@ -375,8 +382,7 @@ useEffect(() => {
 </Dialog>
 ```
 
-Backdrop press now dismisses as well — with an explicit **Later** action present,
-a no-op backdrop is just a dead zone.
+`handleSkip` has exactly one caller: the **Later** button.
 
 ### Resulting flow
 
@@ -396,7 +402,7 @@ sequenceDiagram
         V->>A: GET /apk/version/:appVersion
         A-->>V: 200 { version }
         V-->>H: setVisible(true)
-        U->>H: tap "Later" / back / backdrop
+        U->>H: tap "Later" (back and backdrop are inert)
         H->>V: handleSkip()
         V-->>H: setVisible(false)
         V->>C: updateConfig({ updateSkippedUntil: now + 24h })
@@ -454,8 +460,8 @@ Verification is therefore manual:
 | Fresh install, online, newer APK on server | Dialog appears with **Later** and **Update** |
 | Tap **Later** | Dialog closes; forms open; a submission can be created |
 | Kill and relaunch within 24h | No dialog; no `/apk/version/...` request in the network log |
-| Hardware back while dialog visible | Dialog closes; stays on Home, does not navigate |
-| Backdrop tap while dialog visible | Same as **Later** |
+| Hardware back while dialog visible | Nothing happens; dialog stays, does not navigate |
+| Backdrop tap while dialog visible | Nothing happens; dialog stays |
 | Set `config.updateSkippedUntil` to a past instant, relaunch | Dialog reappears |
 | `About` → *Update application* during the window | Result still shown (window ignored) |
 | Upgrade an APK carrying `user_version = 6` | Migration 07 runs once; `PRAGMA user_version` = 7; no data lost |
