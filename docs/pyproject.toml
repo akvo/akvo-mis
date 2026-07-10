@@ -1,0 +1,8 @@
+[project]
+name = "akvo-mis-docs"
+version = "0"
+# sphinx-rtd-theme 1.0.0 (matching requirements.txt / the deployed RTD theme)
+# pulls in docutils 0.17 and Sphinx 5.x, which no longer install on modern
+# Python. 3.10 is the newest interpreter the whole pin set resolves against.
+requires-python = "==3.10.*"
+dependencies = ["sphinx-rtd-theme==1.0.0"]
