@@ -1,14 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Linking, Alert } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import { useSQLiteContext } from 'expo-sqlite';
 import { BuildParamsState, UIState } from '../store';
 import { api, i18n } from '../lib';
+import { SKIP_UPDATE_DURATION_MS } from '../lib/constants';
+import crudConfig from '../database/crud/crud-config';
 
 const useVersionCheck = ({ autoCheck = false } = {}) => {
   const { appVersion, apkURL } = BuildParamsState.useState((s) => s);
   const isOnline = UIState.useState((s) => s.online);
   const { lang } = UIState.useState((s) => s);
   const trans = i18n.text(lang);
+  const db = useSQLiteContext();
 
   const [visible, setVisible] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -16,9 +20,18 @@ const useVersionCheck = ({ autoCheck = false } = {}) => {
   const hasChecked = useRef(false);
 
   const checkVersion = useCallback(
-    (silent = false) => {
+    async (silent = false) => {
       if (!isOnline) {
         return;
+      }
+      if (silent) {
+        // Suppress the unsolicited prompt while the user's "Later" window is open.
+        // Checked before the request so a dismissed user spends no bandwidth.
+        const config = await crudConfig.getConfig(db);
+        const skippedUntil = config?.updateSkippedUntil;
+        if (skippedUntil && new Date(skippedUntil) > new Date()) {
+          return;
+        }
       }
       setChecking(true);
       if (!silent) {
@@ -46,7 +59,7 @@ const useVersionCheck = ({ autoCheck = false } = {}) => {
           setChecking(false);
         });
     },
-    [appVersion, isOnline, trans.newVersionAvailable, trans.noUpdateFound],
+    [db, appVersion, isOnline, trans.newVersionAvailable, trans.noUpdateFound],
   );
 
   const handleUpdate = useCallback(async () => {
@@ -63,6 +76,18 @@ const useVersionCheck = ({ autoCheck = false } = {}) => {
     }
   }, [apkURL]);
 
+  const handleSkip = useCallback(async () => {
+    // Close first: a failed write must never re-trap the user in the dialog.
+    setVisible(false);
+    try {
+      const skipUntil = new Date(Date.now() + SKIP_UPDATE_DURATION_MS).toISOString();
+      await crudConfig.updateConfig(db, { updateSkippedUntil: skipUntil });
+    } catch (error) {
+      Sentry.captureMessage('[VersionCheck] Unable to persist update skip');
+      Sentry.captureException(error);
+    }
+  }, [db]);
+
   useEffect(() => {
     if (!autoCheck || hasChecked.current) {
       return;
@@ -75,7 +100,7 @@ const useVersionCheck = ({ autoCheck = false } = {}) => {
     }
   }, [autoCheck, isOnline, checkVersion]);
 
-  return { visible, setVisible, checking, updateInfo, checkVersion, handleUpdate };
+  return { visible, setVisible, checking, updateInfo, checkVersion, handleUpdate, handleSkip };
 };
 
 export default useVersionCheck;

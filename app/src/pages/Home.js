@@ -57,6 +57,7 @@ const Home = ({ navigation, route }) => {
     visible: updateDialogVisible,
     updateInfo,
     handleUpdate,
+    handleSkip,
   } = useVersionCheck({ autoCheck: true });
 
   const goToSubmission = (id) => {
@@ -237,9 +238,12 @@ const Home = ({ navigation, route }) => {
     if (!updateDialogVisible) {
       return () => {};
     }
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleSkip();
+      return true;
+    });
     return () => subscription.remove();
-  }, [updateDialogVisible]);
+  }, [updateDialogVisible, handleSkip]);
 
   useEffect(() => {
     if (loading) {
@@ -372,11 +376,16 @@ const Home = ({ navigation, route }) => {
           !isOnline || syncLoading || syncDisabled || statusBar?.type === SYNC_STATUS.on_progress
         }
       />
-      <Dialog isVisible={updateDialogVisible} onBackdropPress={() => {}}>
+      <Dialog isVisible={updateDialogVisible} onBackdropPress={handleSkip}>
         <Dialog.Title title={trans.updateRequiredTitle} />
         <Text>{updateInfo.text}</Text>
         <Dialog.Actions>
-          <Dialog.Button onPress={handleUpdate}>{trans.buttonUpdate}</Dialog.Button>
+          <Dialog.Button testID="update-skip-button" onPress={handleSkip}>
+            {trans.buttonLater}
+          </Dialog.Button>
+          <Dialog.Button testID="update-confirm-button" onPress={handleUpdate}>
+            {trans.buttonUpdate}
+          </Dialog.Button>
         </Dialog.Actions>
       </Dialog>
     </BaseLayout>
