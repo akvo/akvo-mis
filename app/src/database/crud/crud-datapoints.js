@@ -5,14 +5,9 @@ const selectDataPointById = async (db, { id }) => {
   if (!current) {
     return false;
   }
-  let jsonVal = JSON.parse(current.json.replace(/''/g, "'"));
-  // If json is a string that starts with '{', parse it as JSON
-  if (typeof jsonVal === 'string' && jsonVal.startsWith('{')) {
-    jsonVal = JSON.parse(jsonVal);
-  }
   return {
     ...current,
-    json: jsonVal,
+    json: JSON.parse(current.json.replace(/''/g, "'")),
   };
 };
 
@@ -57,6 +52,7 @@ const dataPointsQuery = () => ({
       draftId,
       id,
       locallyCreated,
+      submissionKey,
     },
   ) => {
     try {
@@ -70,6 +66,7 @@ const dataPointsQuery = () => ({
       const idVal = id ? { id } : {};
       const locallyCreatedVal =
         locallyCreated !== undefined ? { locallyCreated: locallyCreated === 1 ? 1 : 0 } : {};
+      const submissionKeyVal = submissionKey ? { submissionKey } : {};
 
       const dataToInsert = {
         form,
@@ -88,6 +85,7 @@ const dataPointsQuery = () => ({
         ...draftVal,
         ...idVal,
         ...locallyCreatedVal,
+        ...submissionKeyVal,
       };
 
       const res = await sql.insertRow(db, 'datapoints', dataToInsert);
@@ -98,7 +96,19 @@ const dataPointsQuery = () => ({
   },
   updateDataPoint: async (
     db,
-    { id, name, geo, submitted, duration, submittedAt, syncedAt, json, repeats, locallyCreated },
+    {
+      id,
+      name,
+      geo,
+      submitted,
+      duration,
+      submittedAt,
+      syncedAt,
+      json,
+      repeats,
+      locallyCreated,
+      submissionKey,
+    },
   ) => {
     try {
       const repeatsVal = repeats ? { repeats } : {};
@@ -106,6 +116,7 @@ const dataPointsQuery = () => ({
       const syncedAtVal = syncedAt !== undefined ? { syncedAt } : {};
       const locallyCreatedVal =
         locallyCreated !== undefined ? { locallyCreated: locallyCreated === 1 ? 1 : 0 } : {};
+      const submissionKeyVal = submissionKey ? { submissionKey } : {};
 
       const res = await sql.updateRow(
         db,
@@ -122,6 +133,7 @@ const dataPointsQuery = () => ({
           ...repeatsVal,
           ...syncedAtVal,
           ...locallyCreatedVal,
+          ...submissionKeyVal,
         },
       );
       return res;
@@ -183,10 +195,6 @@ const dataPointsQuery = () => ({
       [0],
       'deleteDraftIdIsNull',
     );
-    return res;
-  },
-  deleteById: async (db, { id }) => {
-    const res = await sql.deleteRow(db, 'datapoints', id);
     return res;
   },
   deleteDraftSynced: async (db) => {

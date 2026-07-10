@@ -217,6 +217,10 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
           answerValues[file?.id] = file?.file;
         });
 
+      // submission_key is minted once per submission and resent unchanged on
+      // every retry, so the backend recognises a replay and stores one row.
+      const submissionKeyVal = d.submissionKey ? { submission_key: d.submissionKey } : {};
+
       const syncData = {
         formId: d.formId,
         name: d.name,
@@ -225,6 +229,7 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
         submitter: session.name,
         answers: answerValues,
         uuid: d.uuid,
+        ...submissionKeyVal,
         ...geoVal,
       };
 
