@@ -129,6 +129,23 @@ const dataPointsQuery = () => ({
       throw new Error(`Error updating datapoint: ${error.message}`);
     }
   },
+  /**
+   * Confirms an upload: the backend now has this row, so it is no longer
+   * local-only. Writes only these two columns — passing a raw row through
+   * updateDataPoint would re-stringify its already-serialised json.
+   */
+  markSynced: async (db, id) => {
+    const res = await sql.updateRow(
+      db,
+      'datapoints',
+      { id },
+      {
+        syncedAt: new Date().toISOString(),
+        locallyCreated: 0,
+      },
+    );
+    return res;
+  },
   saveAsPending: async (db, id) => {
     const res = await sql.updateRow(
       db,

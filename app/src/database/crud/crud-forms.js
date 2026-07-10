@@ -11,6 +11,7 @@ const formsQuery = () => ({
           f.version,
           f.name,
           f.json,
+          -- Card title suffix: registration datapoints the backend has.
           COUNT(
             DISTINCT CASE WHEN dp.submitted = 1 AND dp.locallyCreated = 0
             THEN dp.id END
@@ -32,8 +33,9 @@ const formsQuery = () => ({
             THEN dp.id END
           ) AS draft,
           COUNT(
-            DISTINCT CASE WHEN dp.syncedAt IS NOT NULL
-              AND (dp.submitted = 0 OR dp.locallyCreated = 1)
+            DISTINCT CASE WHEN dp.submitted = 1
+              AND dp.locallyCreated = 0
+              AND dp.syncedAt IS NOT NULL
             THEN dp.id END
           ) + COALESCE((
             SELECT COUNT(DISTINCT mdp.id)
@@ -41,7 +43,7 @@ const formsQuery = () => ({
             INNER JOIN forms mf ON mdp.form = mf.id
             WHERE mf.parentId = f.formId
               AND mdp.user = ?
-              AND mdp.locallyCreated = 1
+              AND mdp.locallyCreated = 0
               AND mdp.submitted = 1
               AND mdp.syncedAt IS NOT NULL
           ), 0) AS synced
@@ -124,7 +126,7 @@ const formsQuery = () => ({
           f.name,
           f.json,
           COUNT(
-            DISTINCT CASE WHEN dp.submitted = 1 AND dp.locallyCreated = 1
+            DISTINCT CASE WHEN dp.submitted = 1
             THEN dp.id END
           ) AS submitted,
           COUNT(
@@ -132,7 +134,7 @@ const formsQuery = () => ({
             AND dp.syncedAt IS NULL THEN dp.id END
           ) AS draft,
           COUNT(
-            DISTINCT CASE WHEN dp.locallyCreated = 1 AND dp.syncedAt IS NOT NULL
+            DISTINCT CASE WHEN dp.submitted = 1 AND dp.syncedAt IS NOT NULL
             THEN dp.id END
           ) AS synced
         FROM forms f

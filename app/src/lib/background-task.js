@@ -238,10 +238,7 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
       }
       const res = await api.post(syncURL, syncData);
       if (res.status === 200) {
-        await crudDataPoints.updateDataPoint(db, {
-          ...d,
-          syncedAt: new Date().toISOString(),
-        });
+        await crudDataPoints.markSynced(db, d.id);
       }
       counts.success += 1;
     } catch (error) {
