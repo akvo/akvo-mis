@@ -20,6 +20,15 @@ uv run make html      # output in build/html/
 The toolchain is pinned to Python 3.10 and `sphinx-rtd-theme==1.0.0`, matching
 the theme deployed on ReadTheDocs.
 
+For a live-reload preview while editing — rebuilds and refreshes the browser on
+every save (`sphinx-autobuild` ships as a dev dependency):
+
+```bash
+cd docs
+# port 8899 to avoid the dev stack, which uses 3000/5050/5432/8000/8888
+uv run sphinx-autobuild --port 8899 source build/html   # http://127.0.0.1:8899
+```
+
 ### With Docker
 
 Uses a prebuilt Sphinx image; needs only Docker:

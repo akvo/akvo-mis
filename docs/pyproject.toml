@@ -6,3 +6,8 @@ version = "0"
 # Python. 3.10 is the newest interpreter the whole pin set resolves against.
 requires-python = "==3.10.*"
 dependencies = ["sphinx-rtd-theme==1.0.0"]
+
+# Dev-only: live-reload server for editing docs. Installed by default with
+# `uv run`; not part of the published build.
+[dependency-groups]
+dev = ["sphinx-autobuild"]
