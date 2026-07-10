@@ -142,9 +142,11 @@ const dataPointsQuery = () => ({
     }
   },
   /**
-   * Confirms an upload: the backend now has this row, so it is no longer
-   * local-only. Writes only these two columns — passing a raw row through
-   * updateDataPoint would re-stringify its already-serialised json.
+   * Confirms an upload by stamping syncedAt. Writes only that one column —
+   * passing a raw row through updateDataPoint would re-stringify its
+   * already-serialised json. locallyCreated is an immutable origin flag and is
+   * deliberately NOT touched: a device-created row stays locallyCreated = 1
+   * after syncing, so "device data that reached the server" remains queryable.
    */
   markSynced: async (db, id) => {
     const res = await sql.updateRow(
@@ -153,7 +155,6 @@ const dataPointsQuery = () => ({
       { id },
       {
         syncedAt: new Date().toISOString(),
-        locallyCreated: 0,
       },
     );
     return res;

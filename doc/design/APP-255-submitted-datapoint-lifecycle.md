@@ -62,7 +62,7 @@ The reported symptom is a *counter and provenance* bug, not a *retention* bug. T
 - [ ] Two genuine monitoring visits to the same datapoint still produce two rows.
 
 ### Technical Acceptance Criteria
-- [ ] `locallyCreated = 1` ⟺ the backend has never acknowledged this row.
+- [ ] `locallyCreated = 1` ⟺ this device created the row (immutable origin flag, D-17); `syncedAt IS NOT NULL` ⟺ the backend has acknowledged it. The two are independent, so "device data that has / has not synced" is a queryable audit.
 - [ ] No `DELETE` is introduced against `submitted = 1` rows.
 - [ ] Local primary keys are never assigned from backend primary keys.
 - [ ] `POST /device/sync` is idempotent with respect to a client-supplied submission token, for **every** form type and every `is_draft` / `is_pending` combination.
@@ -98,10 +98,12 @@ Postgres treats `NULL` as distinct under a `UNIQUE` index, so unlimited rows may
 
 ### Semantics of `locallyCreated`
 
-| Column | Today | After |
+Two orthogonal axes (D-17): `locallyCreated` is provenance, `syncedAt` is lifecycle. Neither counter nor sync step mutates the provenance flag.
+
+| Column | Today (broken) | After (D-17) |
 |---|---|---|
-| `locallyCreated` | Set to 1 at creation, **never cleared**. Back-filled to 1 for all pre-existing rows. | Set to 1 at creation, cleared to 0 the moment the backend acknowledges the upload. |
-| `syncedAt` | Upload timestamp | unchanged |
+| `locallyCreated` | Set to 1 at creation, and migration 05 back-filled 1 onto **downloaded** rows too — so it no longer meant "device-created". | Set to 1 at creation on a device write, `0` (schema default) on a download. **Immutable thereafter.** `1` = this device made it; `0` = the server did. |
+| `syncedAt` | Upload timestamp | unchanged — `NULL` until the backend acknowledges, `<ts>` after. This is the only signal that a row is server-backed. |
 | `submitted` | 0 = draft, 1 = submitted | unchanged |
 
 ### State machine
@@ -132,10 +134,12 @@ stateDiagram-v2
     note right of ServerBacked
         submitted = 1
         syncedAt = <timestamp>
-        locallyCreated = 0
+        locallyCreated = 1 (unchanged — device origin)
         counted in "Synced"
     end note
 ```
+
+Under D-17 the sync 200 sets `syncedAt` and leaves `locallyCreated` alone. A downloaded datapoint enters `ServerBacked` directly with `locallyCreated = 0`; a device submission enters it with `locallyCreated = 1`. The two are distinguishable forever, which is the whole point.
 
 There is no terminal delete state for `submitted = 1`. Rows only leave the table when a draft round-trips (`deleteDraftIdIsNull` / `deleteDraftSynced`), which is existing, correct behaviour.
 
@@ -145,19 +149,20 @@ There is no terminal delete state for `submitted = 1`. Rows only leave the table
 >
 > Nothing in this design modifies an existing Django migration. `0005_formdata_submission_key.py` is a **new file**. [`0003_add_visualization_indexes.py`](../../backend/api/v1/v1_data/migrations/0003_add_visualization_indexes.py) is cited only as the existing example of the `atomic = False` + `RunSQL` pattern in this repo — copy its shape, do not touch it.
 
-**Mobile — one migration, doing both jobs.** [`08_submission_key_and_locally_created.js`](../../app/src/database/migrations/08_submission_key_and_locally_created.js):
+**Mobile — one migration, adding one column** (D-17). [`08_add_submission_key.js`](../../app/src/database/migrations/08_add_submission_key.js):
 
 ```javascript
 const up = async (db) => {
   await sql.addNewColumn(db, tableName, 'submissionKey', 'TEXT');
-  await db.execAsync(`UPDATE ${tableName} SET locallyCreated = 0 WHERE syncedAt IS NOT NULL`);
 };
 ```
+
+The `UPDATE ... SET locallyCreated = 0` that an earlier revision folded in is **gone** (D-17). It cannot repair migration 05's over-broad back-fill: among the `(locallyCreated = 1, syncedAt = <ts>)` rows that migration 05 produced, a device-synced submission and a downloaded datapoint are already indistinguishable, so no `UPDATE` can restore the origin flag. The only correct state is a fresh database — downloads default to `0`, device writes set `1` — and D-10 already requires wiping every dev device. Provenance correctness comes from the wipe, not from SQL.
 
 `submissionKey` is also declared in `tables.js`, following the precedent of `locallyCreated` (migration 05): `createTable` builds it on a fresh database, `addNewColumn` adds it to an existing one. `addNewColumn` checks `PRAGMA table_info` first, so both paths converge and the migration stays idempotent. `DATABASE_VERSION` stays at `8` (D-10).
 
 - **Idempotent**: re-running is a no-op, which matters because the transaction rolls back and retries on next launch if it throws.
-- **Data preservation**: no rows deleted, one column added, one column corrected.
+- **Data preservation**: no rows deleted, one column added.
 - **Rollback**: none, matching migrations 05 and 07 — `down()` throws. A correction ships as migration 09.
 
 **Backend — one new migration.** `data` grows without bound in production (D-14), so the column and its index are added separately:
@@ -258,6 +263,8 @@ Returning `200` rather than `409` is deliberate: a replay is not a client error,
 
 ### D-1: Where is "the backend has this row" confirmed?
 
+> **Amended by [D-17](#d-17-locallycreated-is-an-immutable-origin-flag--supersedes-the-flag-clearing-in-d-1-and-d-4).** The decision below to clear `locallyCreated` on the sync 200 was wrong — it destroyed the device-vs-server provenance axis. D-17 keeps the flag immutable and reads lifecycle from `syncedAt` instead. What survives from D-1 is the *timing* — the sync 200 is still the acknowledgement signal that sets `syncedAt`.
+
 **Options Considered**:
 
 1. **Delete on sync** (the issue's proposal) — remove `submitted = 1 AND syncedAt IS NOT NULL`.
@@ -326,6 +333,8 @@ Under D-1 (flip at upload) this guard is harmless and stays exactly as it is —
 ---
 
 ### D-4: Write a narrow `markSynced` instead of reusing `updateDataPoint`
+
+> **Amended by [D-17](#d-17-locallycreated-is-an-immutable-origin-flag--supersedes-the-flag-clearing-in-d-1-and-d-4).** The reason for `markSynced` existing — writing a couple of columns without re-stringifying `d.json` — is correct and stands. What changes is *which* columns: under D-17 it writes **only** `syncedAt`, not `locallyCreated`. Read the snippet below as `{ syncedAt: ... }`.
 
 `processBatch` confirms an upload with:
 
@@ -460,13 +469,15 @@ So drafts mint a fresh `submission_key` per save, while a submission mints one p
 
 ---
 
-### D-10: Fold `submissionKey` into migration 08 rather than adding an 09
+### D-10: Put `submissionKey` in migration 08 rather than adding an 09
+
+> Under [D-17](#d-17-locallycreated-is-an-immutable-origin-flag--supersedes-the-flag-clearing-in-d-1-and-d-4) migration 08 does one thing — add `submissionKey` — and is named [`08_add_submission_key.js`](../../app/src/database/migrations/08_add_submission_key.js). The `locallyCreated` repair this decision once bundled in has been removed; the reasoning below about *editing an unshipped migration in place* is unchanged and is why the edit is allowed at all.
 
 **Options Considered**:
 
 1. New migration `09_add_submissionKey_to_datapoints.js`, plus `DATABASE_VERSION` → 9 and another branch in `migrateDbIfNeeded`.
 2. Declare the column in `tables.js` only, and recreate the local database. No migration at all.
-3. Rewrite migration 08 in place so it adds `submissionKey` **and** repairs `locallyCreated`.
+3. Add `submissionKey` to migration 08 by editing it in place (it had not shipped).
 
 **Decision**: Option 3.
 
@@ -680,22 +691,77 @@ A comment saying "do not pass a backend id here" would be a comment about a func
 
 ---
 
+### D-17: `locallyCreated` is an immutable origin flag — supersedes the flag-clearing in D-1 and D-4
+
+> This decision **corrects a flaw in D-1 and D-4.** Read it as authoritative wherever it conflicts with them. The banners on those two decisions point here.
+
+**The flaw.** D-1 clears `locallyCreated` to `0` the moment a submission syncs (`markSynced` writes both `syncedAt` and `locallyCreated = 0`). §6 claimed this left the flag "provenance only". It does the opposite. Once cleared, a **device-created row that has synced is byte-identical to a row downloaded from the server** — both are `locallyCreated = 0, syncedAt = <ts>`. The flag became a *lifecycle* signal ("acknowledged or not") and the *provenance* axis (device vs server) was destroyed.
+
+That axis is not cosmetic. It is what lets the app answer "of the data this device produced, how much has reached the server?" — the natural audit for an offline-first field tool. Under the flag-clearing model that question is unanswerable, because device-synced and downloaded rows are indistinguishable.
+
+**The correct model: two orthogonal axes.**
+
+| Axis | Column | Meaning | Mutability |
+|---|---|---|---|
+| Provenance | `locallyCreated` | `1` = born on this device; `0` = came from the server | **Immutable** — set once at insert, never changed |
+| Lifecycle | `syncedAt` | `NULL` = the backend has not acknowledged it; `<ts>` = it has | Set once on the sync 200 |
+
+Truth table:
+
+| Row | `locallyCreated` | `syncedAt` |
+|---|---|---|
+| Device submission, not yet synced | `1` | NULL |
+| Device submission, synced | `1` (**kept**) | `<ts>` |
+| Downloaded from server | `0` (schema default) | `<ts>` |
+
+Every audit is then a plain query:
+
+- Device-created total → `locallyCreated = 1`
+- Device-created **synced** → `locallyCreated = 1 AND syncedAt IS NOT NULL`
+- Device-created **pending** → `locallyCreated = 1 AND syncedAt IS NULL`
+- Downloaded → `locallyCreated = 0`
+
+**This still fixes the original #255 counter bug.** The reason the "Submitted" counter never drained was never that the flag stayed `1` — it was that (a) migration 05 back-filled `locallyCreated = 1` onto *downloaded* rows, so they wrongly counted as submissions, and (b) the counter did not consult `syncedAt`, so it could not tell pending from done. D-1 "fixed" this by nuking the flag on sync. The real fix is:
+
+- **(a)** downloaded rows carry `locallyCreated = 0` (the schema default), which holds on a freshly-built database — and D-10 already requires wiping every dev device, so no back-fill is needed;
+- **(b)** the pending counter gains `AND syncedAt IS NULL`, so it drains as rows sync **while the origin flag is preserved**.
+
+The flip-on-sync was solving the wrong half of the bug and paying for it with the provenance axis.
+
+**Decision**:
+
+1. `markSynced` writes **only** `syncedAt`. It no longer touches `locallyCreated`. (Amends D-4; the double-encode reason for `markSynced` existing at all still stands.)
+2. Migration 08 **drops** its `UPDATE ... SET locallyCreated = 0 WHERE syncedAt IS NOT NULL` line and does nothing but add `submissionKey`. It is renamed [`08_add_submission_key.js`](../../app/src/database/migrations/08_add_submission_key.js) to match. Provenance correctness on-device comes from the D-10 wipe, not from SQL — migration 05's back-fill cannot be un-done by query, because it already collapsed device-synced and downloaded rows into the same `locallyCreated = 1`.
+3. The Home-card counters are re-derived on the two-axis model — see §6.
+
+**Why a wipe is the only honest repair.** Migration 05 set `locallyCreated = 1` on *every* pre-existing row. Among the resulting `(1, syncedAt=<ts>)` rows, a device-synced submission and a downloaded datapoint are already indistinguishable — the information needed to separate them was never stored. No `UPDATE` can recover it. A fresh database, where downloads default to `0` and device writes set `1`, is the only state where provenance is correct. D-10 already mandates the wipe, so this costs nothing new.
+
+**Impact**: `crud-datapoints.js` (`markSynced`), migration 08 (+ `index.js`, `App.js` import), `crud-forms.js` (`selectLatestFormVersion` counters). No backend change. No change to `getFormOptions`, which never referenced `locallyCreated`.
+
+---
+
 ## 6. Counter Semantics
 
-`locallyCreated` currently does double duty as provenance *and* lifecycle. After D-1 it is provenance only, and lifecycle is read from `syncedAt`.
+Under D-17, `locallyCreated` is provenance and `syncedAt` is lifecycle — two orthogonal axes. Every counter is derived by combining them, and none of them mutates the flag.
 
 ### `selectLatestFormVersion` (Home form card)
 
-| Counter | Today | After | Note |
+| Counter | Predicate (D-17) | Means | Consumer |
 |---|---|---|---|
-| `registered` | `submitted = 1 AND locallyCreated = 0` | unchanged predicate | Not read by [`Home.js`](../../app/src/pages/Home.js), but [`BaseLayout/Content.js:34`](../../app/src/components/BaseLayout/Content.js#L34) renders it as the card title suffix — `Household (147)`. Its meaning ("datapoints the backend has") is already correct, and once D-1 clears the flag a synced local submission correctly joins the count. |
-| `submitted` | `submitted = 1 AND locallyCreated = 1` (+ monitoring subquery) | unchanged predicate | Now drains to 0 after upload, because the flag is cleared. **No SQL change.** |
-| `draft` | `submitted = 0` | unchanged | |
-| `synced` | `syncedAt IS NOT NULL AND (submitted = 0 OR locallyCreated = 1)` | `submitted = 1 AND locallyCreated = 0 AND syncedAt IS NOT NULL` (+ monitoring subquery) | The old predicate would read 0 forever once the flag is cleared. The new one means "datapoints the backend has", which keeps the existing i18n label honest. |
+| `registered` | `submitted = 1 AND syncedAt IS NOT NULL` | Every registration datapoint the backend holds, whoever made it (downloaded **+** this device's synced submissions). | Card title suffix `Household (147)` — [`BaseLayout/Content.js:34`](../../app/src/components/BaseLayout/Content.js#L34). |
+| `submitted` | `submitted = 1 AND locallyCreated = 1 AND syncedAt IS NULL` (+ monitoring subquery) | This device's submissions **still waiting to upload**. Drains as `syncedAt` fills in; the flag stays `1`. | Subtitle `Submitted: N`. |
+| `draft` | `submitted = 0` | Unchanged. | Subtitle `Draft: N`. |
+| `synced` | `submitted = 1 AND locallyCreated = 1 AND syncedAt IS NOT NULL` (+ monitoring subquery) | This device's submissions **that reached the server** — the audit number. | Subtitle `Synced: N`. |
 
-Only `synced` changes. `registered` and `submitted` keep their exact predicates, which is the point: fixing the flag's meaning fixes both counters for free.
+The set relationships are now clean and non-overlapping in intent:
 
-`registered` and `synced` select overlapping sets — every `locallyCreated = 0` row carries a `syncedAt`. They stay separate because `synced` folds in the monitoring subquery and `registered` does not: the card *title* counts registration datapoints, the *subtitle* counts everything the backend holds for this form tree.
+- `registered` is origin-agnostic (`syncedAt IS NOT NULL`); it is the total on the server.
+- `submitted` + `synced` partition **this device's** submissions by lifecycle: `syncedAt IS NULL` vs `syncedAt IS NOT NULL`. Their sum is the device's lifetime output; the split is exactly the sync audit.
+- `registered − synced` = datapoints the device did *not* create = downloads. Falls out for free.
+
+**Why `registered` changes from D-1's version.** D-1 had `registered = submitted = 1 AND locallyCreated = 0`. Under D-17 a device's *synced* submission is `locallyCreated = 1`, so that predicate would now count downloads only and the card title would silently drop the surveyor's own synced work. Switching to `syncedAt IS NOT NULL` keeps the title meaning "everything the backend has for this form".
+
+The monitoring subqueries fold in on the same axes: pending device monitoring is `mdp.locallyCreated = 1 AND mdp.submitted = 1 AND mdp.syncedAt IS NULL` (for `submitted`), and synced device monitoring is `mdp.locallyCreated = 1 AND mdp.submitted = 1 AND mdp.syncedAt IS NOT NULL` (for `synced`).
 
 ### `getFormOptions` (monitoring form list)
 
@@ -705,7 +771,7 @@ Only `synced` changes. `registered` and `submitted` keep their exact predicates,
 | `draft` | `submitted = 0 AND syncedAt IS NULL` | unchanged |
 | `synced` | `locallyCreated = 1 AND syncedAt IS NOT NULL` | `submitted = 1 AND syncedAt IS NOT NULL` |
 
-This query is scoped to `f.parentId = ?` and `dp.uuid = ?`, so every row it sees is a monitoring submission for one datapoint. `{item.name} ({item.submitted})` in [`FormOptions.js:61`](../../app/src/pages/FormOptions.js#L61) should count *all* monitoring submissions for that datapoint, synced or not — dropping `locallyCreated` from the predicate restores that and survives the flag flip.
+This query is scoped to `f.parentId = ?` and `dp.uuid = ?`, so every row it sees is a monitoring submission for one datapoint. `{item.name} ({item.submitted})` in [`FormOptions.js:61`](../../app/src/pages/FormOptions.js#L61) is a **total** count of monitoring visits for that datapoint, synced or not — which is why it never references `locallyCreated`. It is therefore independent of D-17: the origin flag being immutable or not does not affect a count that ignores origin. `getFormOptions` needs no change.
 
 ---
 
@@ -721,8 +787,8 @@ This query is scoped to `f.parentId = ?` and `dp.uuid = ?`, so every row it sees
 
 ### Mobile App Impact
 - Sync endpoints affected: `POST /device/sync` gains one optional request field.
-- SQLite schema changes: `submissionKey TEXT`, added by migration 08 and declared in `tables.js`.
-- `DATABASE_VERSION` stays at `8` — migration 08 is rewritten, not appended to (D-10).
+- SQLite schema changes: `submissionKey TEXT`, added by migration 08 and declared in `tables.js`. `locallyCreated` is unchanged in schema; only its *lifecycle* changes — it is no longer cleared on sync (D-17).
+- `DATABASE_VERSION` stays at `8` — migration 08 is edited in place, not appended to (D-10).
 - Devices already at `user_version = 8` must clear app storage; they will not re-run the rewritten migration.
 
 ### Frontend Impact
@@ -743,7 +809,7 @@ sequenceDiagram
 
     Note over API: deploy 0005_formdata_submission_key
     Dev->>DB: clear app storage if already at user_version 8 (D-10)
-    Note over DB: migration 08 → addNewColumn(submissionKey)<br/>+ repair locallyCreated
+    Note over DB: migration 08 → addNewColumn(submissionKey)
 
     Dev->>DB: submit form → submissionKey minted once
     Dev->>DB: selectSubmissionToSync (syncedAt IS NULL)
