@@ -246,6 +246,8 @@ def sync_pending_form_data(request, version):
     }
     if request.data.get("uuid"):
         payload["uuid"] = request.data["uuid"]
+    if request.data.get("submission_key"):
+        payload["submission_key"] = request.data["submission_key"]
     data = {
         "data": payload,
         "answer": answers,

@@ -34,6 +34,12 @@ class FormData(SoftDeletes, Draft):
     )
     geo = models.JSONField(null=True, default=None)
     uuid = models.CharField(max_length=255, default=uuid.uuid4, null=True)
+    # Per-submission idempotency token, minted by the client. NULL for rows
+    # created before this field existed and for any caller that omits it;
+    # Postgres treats NULLs as distinct under UNIQUE, so they never collide.
+    submission_key = models.CharField(
+        max_length=64, null=True, unique=True, default=None
+    )
     created_by = models.ForeignKey(
         to=SystemUser,
         on_delete=models.CASCADE,
