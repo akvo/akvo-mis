@@ -109,7 +109,9 @@ const handleOnUploadFiles = async (
   // Extract files from submissions
   const allFiles = data.reduce((files, d) => {
     try {
-      const answers = JSON.parse(d.json);
+      // Same unescaping as processBatch — a raw parse here can throw on SQL-escaped
+      // quotes and silently skip file extraction while processBatch still syncs
+      const answers = JSON.parse(d.json.replace(/''/g, "'"));
       const questions = JSON.parse(d.json_form)?.question_group?.flatMap((qg) => qg.question) || [];
       const questionFiles = questions.filter((q) => questionTypes.includes(q.type));
       if (!questionFiles.length) return files;
@@ -216,6 +218,19 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
         .forEach((file) => {
           answerValues[file?.id] = file?.file;
         });
+
+      // Never send local file URIs to the server — if any survived the upload
+      // step (parse mismatch, form-version mismatch, missed question type),
+      // keep the datapoint pending so retry paths re-attempt the upload
+      const localFileUri = Object.values(answerValues).find(
+        (v) => typeof v === 'string' && v.startsWith('file://'),
+      );
+      if (localFileUri) {
+        counts.failed += 1;
+        Sentry.captureMessage(`[background-task] local file URI left in answers, dataID: ${d.id}`);
+        await crudDataPoints.saveAsPending(db, d.id);
+        return;
+      }
 
       // submission_key is minted once per submission and resent unchanged on
       // every retry, so the backend recognises a replay and stores one row.
