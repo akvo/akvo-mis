@@ -24,6 +24,7 @@ const tables = [
       gpsAccuracyLevel: 'INTEGER NULL',
       geoLocationTimeout: 'INTEGER NULL',
       imageQuality: "VARCHAR(20) DEFAULT 'low'",
+      updateSkippedUntil: 'DATETIME',
     },
   },
   {

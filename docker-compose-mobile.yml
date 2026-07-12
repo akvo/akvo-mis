@@ -21,6 +21,7 @@ services:
       - SENTRY_ENV=${SENTRY_MOBILE_ENV}
       - SENTRY_DSN=${SENTRY_MOBILE_DSN}
       - SENTRY_AUTH_TOKEN=${SENTRY_MOBILE_AUTH_TOKEN}
+      - WEBDOMAIN=${WEBDOMAIN}
     network_mode: service:mainnetwork
 volumes:
   akvo-mis-mobile-docker-sync:
