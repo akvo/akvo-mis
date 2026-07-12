@@ -58,12 +58,7 @@ const Submission = ({ navigation, route }) => {
     const { json: valuesJSON, name: dataPointName } = item;
 
     FormState.update((s) => {
-      /**
-       * Double parse to ensure that the JSON is correctly formatted
-       * and to handle cases where the JSON string contains escaped quotes.
-       */
-      const jsonData = typeof valuesJSON === 'string' ? JSON.parse(valuesJSON) : valuesJSON;
-      s.currentValues = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+      s.currentValues = typeof valuesJSON === 'string' ? JSON.parse(valuesJSON) : valuesJSON;
     });
 
     navigation.push('FormDataDetails', { name: dataPointName });

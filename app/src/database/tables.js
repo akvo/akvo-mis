@@ -60,6 +60,7 @@ const tables = [
       uuid: 'VARCHAR(191)',
       repeats: 'TEXT',
       locallyCreated: 'TINYINT DEFAULT 0',
+      submissionKey: 'TEXT',
     },
   },
   {

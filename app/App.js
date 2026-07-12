@@ -30,7 +30,7 @@ import {
 } from './src/lib/constants';
 import { tables, openDatabase } from './src/database';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -258,6 +258,13 @@ const App = () => {
         await txDb.execAsync('PRAGMA user_version = 7');
       });
       currentDbVersion = 7;
+    }
+    if (currentDbVersion === 7) {
+      await sql.withTransaction(db, async (txDb) => {
+        await m08.up(txDb);
+        await txDb.execAsync('PRAGMA user_version = 8');
+      });
+      currentDbVersion = 8;
     }
   };
 

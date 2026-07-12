@@ -103,6 +103,9 @@ const FormPage = ({ navigation, route }) => {
         json: jsonAnswers,
         uuid: route.params?.uuid || Crypto.randomUUID(),
         geo: dpGeo,
+        // A draft save is a deliberate overwrite, so each save mints a fresh
+        // key. Only an unintended replay reuses one.
+        submissionKey: Crypto.randomUUID(),
       };
 
       const duration = getDurationInMinutes(surveyStart) + surveyDuration;
@@ -158,6 +161,10 @@ const FormPage = ({ navigation, route }) => {
         json: answers,
         uuid: route.params?.uuid || Crypto.randomUUID(),
         locallyCreated: 1,
+        // Minted once here and resent unchanged on every retry. saveAsPending
+        // clears syncedAt but never this, which is what makes a retry a replay
+        // rather than a second submission.
+        submissionKey: Crypto.randomUUID(),
       };
       const duration = getDurationInMinutes(surveyStart) + surveyDuration;
       const payload = {

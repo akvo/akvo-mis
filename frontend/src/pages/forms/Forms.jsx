@@ -63,6 +63,13 @@ const Forms = () => {
   ];
 
   const webformRef = useRef();
+  /**
+   * Idempotency token for the current submission attempt. Minted once and
+   * reused across retries, so a POST that succeeded server-side but lost its
+   * response does not create a second datapoint when the user presses submit
+   * again. Cleared only after the backend confirms.
+   */
+  const submissionKeyRef = useRef(null);
 
   const backURL = useMemo(
     () =>
@@ -213,6 +220,10 @@ const Forms = () => {
       ? names
       : `${authUser.administration.name} - ${moment().format("MMM YYYY")}`;
 
+    if (!submissionKeyRef.current) {
+      submissionKeyRef.current = crypto.randomUUID();
+    }
+
     const dataPayload = {
       administration: administration
         ? Array.isArray(administration)
@@ -222,6 +233,7 @@ const Forms = () => {
       name: datapointName,
       geo: geo || null,
       ...(uuid && { uuid }),
+      submission_key: submissionKeyRef.current,
     };
 
     const payload = {
@@ -242,6 +254,9 @@ const Forms = () => {
 
     try {
       await api.post(`form-pending-data/${formId}`, payload);
+      // Confirmed. The next submission is a new one and must mint a new key;
+      // reusing this one would make the backend treat it as a replay.
+      submissionKeyRef.current = null;
       if (uuid) {
         store.update((s) => {
           s.initialValue = [];

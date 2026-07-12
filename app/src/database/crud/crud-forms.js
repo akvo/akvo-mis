@@ -11,12 +11,18 @@ const formsQuery = () => ({
           f.version,
           f.name,
           f.json,
+          -- Card title suffix: registration datapoints the backend holds,
+          -- whoever made them (downloaded + this device's synced submissions).
           COUNT(
-            DISTINCT CASE WHEN dp.submitted = 1 AND dp.locallyCreated = 0
+            DISTINCT CASE WHEN dp.submitted = 1 AND dp.syncedAt IS NOT NULL
             THEN dp.id END
           ) AS registered,
+          -- "Submitted": this device's submissions still waiting to upload.
+          -- Drains as syncedAt fills in; the origin flag stays 1 (APP-255 D-17).
           COUNT(
-            DISTINCT CASE WHEN dp.submitted = 1 AND dp.locallyCreated = 1
+            DISTINCT CASE WHEN dp.submitted = 1
+              AND dp.locallyCreated = 1
+              AND dp.syncedAt IS NULL
             THEN dp.id END
           ) + COALESCE((
             SELECT COUNT(DISTINCT mdp.id)
@@ -26,14 +32,24 @@ const formsQuery = () => ({
               AND mdp.user = ?
               AND mdp.locallyCreated = 1
               AND mdp.submitted = 1
+              AND mdp.syncedAt IS NULL
           ), 0) AS submitted,
           COUNT(
             DISTINCT CASE WHEN dp.submitted = 0
             THEN dp.id END
-          ) AS draft,
+          ) + COALESCE((
+            SELECT COUNT(DISTINCT mdp.id)
+            FROM datapoints mdp
+            INNER JOIN forms mf ON mdp.form = mf.id
+            WHERE mf.parentId = f.formId
+              AND mdp.user = ?
+              AND mdp.submitted = 0
+          ), 0) AS draft,
+          -- "Synced": this device's submissions that reached the server.
           COUNT(
-            DISTINCT CASE WHEN dp.syncedAt IS NOT NULL
-              AND (dp.submitted = 0 OR dp.locallyCreated = 1)
+            DISTINCT CASE WHEN dp.submitted = 1
+              AND dp.locallyCreated = 1
+              AND dp.syncedAt IS NOT NULL
             THEN dp.id END
           ) + COALESCE((
             SELECT COUNT(DISTINCT mdp.id)
@@ -49,7 +65,9 @@ const formsQuery = () => ({
         LEFT JOIN datapoints dp ON f.id = dp.form AND dp.user = ?
         WHERE f.latest = ? AND f.parentId IS NULL
         GROUP BY f.id, f.formId, f.version, f.name, f.json;`;
-    const rows = await sql.executeQuery(db, selectJoin, [user, user, user, latest]);
+    // Five ? binds, left to right: submitted / draft / synced monitoring
+    // subqueries (user), the LEFT JOIN dp.user, and f.latest.
+    const rows = await sql.executeQuery(db, selectJoin, [user, user, user, user, latest]);
     return rows;
   },
   selectFormById: async (db, { id }) => {
@@ -124,7 +142,7 @@ const formsQuery = () => ({
           f.name,
           f.json,
           COUNT(
-            DISTINCT CASE WHEN dp.submitted = 1 AND dp.locallyCreated = 1
+            DISTINCT CASE WHEN dp.submitted = 1
             THEN dp.id END
           ) AS submitted,
           COUNT(
@@ -132,7 +150,7 @@ const formsQuery = () => ({
             AND dp.syncedAt IS NULL THEN dp.id END
           ) AS draft,
           COUNT(
-            DISTINCT CASE WHEN dp.locallyCreated = 1 AND dp.syncedAt IS NOT NULL
+            DISTINCT CASE WHEN dp.submitted = 1 AND dp.syncedAt IS NOT NULL
             THEN dp.id END
           ) AS synced
         FROM forms f
