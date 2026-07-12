@@ -148,13 +148,18 @@ const dataPointsQuery = () => ({
    * deliberately NOT touched: a device-created row stays locallyCreated = 1
    * after syncing, so "device data that reached the server" remains queryable.
    */
-  markSynced: async (db, id) => {
+  markSynced: async (db, id, draftId = null) => {
+    // draftId is the backend row id returned by /sync. Storing it right away
+    // makes the next save of this draft sync as ?id=<draftId> (an update)
+    // instead of creating a duplicate backend draft.
+    const draftIdVal = draftId ? { draftId } : {};
     const res = await sql.updateRow(
       db,
       'datapoints',
       { id },
       {
         syncedAt: new Date().toISOString(),
+        ...draftIdVal,
       },
     );
     return res;

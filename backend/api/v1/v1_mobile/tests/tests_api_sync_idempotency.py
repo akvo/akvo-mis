@@ -160,6 +160,55 @@ class MobileSyncIdempotencyTest(
         self.assertEqual(children.count(), 2)
         self.assertEqual(children.filter(parent=parent).count(), 2)
 
+    def test_replay_returns_original_row_id(self):
+        key = "88888888-8888-8888-8888-888888888888"
+
+        first = self.post_sync(submission_key=key)
+        second = self.post_sync(submission_key=key)
+
+        row = FormData.objects.filter(form=self.form).first()
+        self.assertEqual(first.json()["id"], row.id)
+        # The replay early-return must expose the original row's identity,
+        # not mint a new one.
+        self.assertEqual(second.json()["id"], row.id)
+
+    def test_monitoring_draft_resave_with_returned_id_updates_in_place(self):
+        parent = FormData.objects.create(
+            name="parent datapoint",
+            form=self.form,
+            administration=self.administration,
+            created_by=self.user,
+        )
+
+        # First save of a monitoring draft: the device has no draftId yet.
+        first = self.post_sync(
+            form=self.monitoring_form,
+            query="?is_draft=true",
+            uuid=str(parent.uuid),
+            submission_key="99999999-9999-9999-9999-999999999999",
+        )
+        draft_id = first.json()["id"]
+
+        # The uuid fallback cannot match child forms (a monitoring draft
+        # carries its PARENT's uuid), so the returned id is the only thing
+        # standing between a re-saved draft and a duplicate row. The device
+        # stores it as draftId and re-saves with ?id=.
+        second = self.post_sync(
+            form=self.monitoring_form,
+            query=f"?is_draft=true&id={draft_id}",
+            uuid=str(parent.uuid),
+            submission_key="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        )
+
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.json()["id"], draft_id)
+        self.assertEqual(
+            FormData.objects_draft.filter(
+                form=self.monitoring_form
+            ).count(),
+            1,
+        )
+
     def test_draft_resave_still_updates_in_place(self):
         self.post_sync(
             query="?is_draft=true",

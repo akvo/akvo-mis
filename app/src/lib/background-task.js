@@ -258,7 +258,10 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
       }
       const res = await api.post(syncURL, syncData);
       if (res.status === 200) {
-        await crudDataPoints.markSynced(db, d.id);
+        // Only drafts keep the backend id: a draftId on a submitted row would
+        // flip its sync URL to the is_published variant.
+        const backendId = !d.submitted ? res?.data?.id : null;
+        await crudDataPoints.markSynced(db, d.id, backendId);
       }
       counts.success += 1;
     } catch (error) {

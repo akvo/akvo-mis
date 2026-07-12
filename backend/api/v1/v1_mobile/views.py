@@ -288,7 +288,7 @@ def sync_pending_form_data(request, version):
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
-    serializer.save()
+    instance = serializer.save()
     is_published = request.GET.get("is_published", False)
     is_published = True if is_published in ["true", "True", "1"] else False
     if is_published and draft_exists:
@@ -297,7 +297,13 @@ def sync_pending_form_data(request, version):
         if direct_to_data and not draft_exists.parent:
             draft_exists.save_to_file
 
-    return Response({"message": "ok"}, status=status.HTTP_200_OK)
+    # The id lets the device store the backend identity of a draft right
+    # after its first upload, so the next save syncs as ?id=<draft> instead
+    # of creating a duplicate (the uuid fallback cannot match child forms).
+    return Response(
+        {"message": "ok", "id": instance.id},
+        status=status.HTTP_200_OK,
+    )
 
 
 @extend_schema(tags=["Mobile Device Form"], summary="Get SQLITE File")

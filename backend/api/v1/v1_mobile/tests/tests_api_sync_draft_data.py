@@ -98,13 +98,15 @@ class MobileAssignmentApiSyncNewDraftTest(
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(
-            data,
-            {"message": "ok"},
-        )
 
         draft = FormData.objects_draft.first()
         self.assertIsNotNone(draft)
+        # The device stores this id as draftId so its next save syncs as
+        # ?id=<draft> (an update) instead of creating a duplicate draft.
+        self.assertEqual(
+            data,
+            {"message": "ok", "id": draft.id},
+        )
 
     def test_sync_update_existing_draft_with_form_and_uuid(self):
         # Create an initial draft submission
@@ -154,7 +156,7 @@ class MobileAssignmentApiSyncNewDraftTest(
         data = response.json()
         self.assertEqual(
             data,
-            {"message": "ok"},
+            {"message": "ok", "id": draft.id},
         )
         draft_total = FormData.objects_draft.count()
         self.assertEqual(draft_total, 1)
@@ -213,7 +215,7 @@ class MobileAssignmentApiSyncNewDraftTest(
         data = response.json()
         self.assertEqual(
             data,
-            {"message": "ok"},
+            {"message": "ok", "id": draft.id},
         )
 
         draft_total = FormData.objects_draft.count()
