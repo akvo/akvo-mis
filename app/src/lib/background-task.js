@@ -12,6 +12,7 @@ import {
   markSyncComplete,
 } from './sync-datapoints';
 import notification from './notification';
+import cascades from './cascades';
 import crudJobs from '../database/crud/crud-jobs';
 import { UIState, DatapointSyncState } from '../store';
 import {
@@ -180,6 +181,46 @@ const handleOnUploadFiles = async (
   return { uploadedFiles, failedDataIDs };
 };
 
+// The backend's /draft-list serializes cascade answers as display names
+// (Answers.to_key returns name, not id). Those names get written back into
+// the local datapoint json, and the backend rejects them on the next sync
+// (administration expects a pk). Resolve them back to ids via the cascade
+// sqlite so stuck drafts can sync again.
+export const repairCascadeAnswers = async (answerValues, jsonForm) => {
+  const questions =
+    JSON.parse(jsonForm.replace(/''/g, "'"))?.question_group?.flatMap((qg) => qg.question) || [];
+  const cascadeQuestions = questions.filter(
+    (q) => q.type === QUESTION_TYPES.cascade && q?.source?.file,
+  );
+  await cascadeQuestions.reduce(async (prev, q) => {
+    await prev;
+    const keys = Object.keys(answerValues).filter((k) => `${k}`.split('-')[0] === `${q.id}`);
+    const brokenKeys = keys.filter((k) => {
+      const v = answerValues[k];
+      return typeof v === 'string' || (Array.isArray(v) && v.some((x) => typeof x === 'string'));
+    });
+    if (!brokenKeys.length) {
+      return;
+    }
+    const rows = await cascades.loadDataSource(q.source);
+    brokenKeys.forEach((k) => {
+      const val = answerValues[k];
+      const names = Array.isArray(val) ? val : [val];
+      const resolved = names.map((n) => {
+        if (typeof n !== 'string') {
+          return n;
+        }
+        // ponytail: name match can be ambiguous across levels; prefer
+        // full_path_name, fall back to name, keep original if unresolved
+        const row = rows.find((r) => r?.full_path_name === n) || rows.find((r) => r?.name === n);
+        return row?.id ?? n;
+      });
+      answerValues[k] = Array.isArray(val) ? resolved : resolved[0];
+    });
+  }, Promise.resolve());
+  return answerValues;
+};
+
 // Recursive batch processor: fetches BATCH_SIZE items, processes them,
 // then recurses if more remain. Stops on empty result or failures.
 const processBatch = async (db, activeJob, session, counts = { success: 0, failed: 0 }) => {
@@ -215,7 +256,10 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
 
     try {
       const geoVal = d.geo ? { geo: d.geo.split('|')?.map((x) => parseFloat(x)) } : {};
-      const answerValues = JSON.parse(d.json.replace(/''/g, "'"));
+      const answerValues = await repairCascadeAnswers(
+        JSON.parse(d.json.replace(/''/g, "'")),
+        d.json_form,
+      );
 
       // Add photos and attachments to answers
       [...photos, ...attachments]
