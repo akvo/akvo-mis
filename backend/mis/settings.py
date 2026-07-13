@@ -199,10 +199,10 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 
 """
-The TIME_ZONE has been set to 'Pacific/Fiji'
-to align with the application's focus on Fiji.
+The TIME_ZONE has been set to 'Pacific/Pohnpei'
+to align with the application's focus on FSM (Federated States of Micronesia).
 """
-TIME_ZONE = "Pacific/Fiji"
+TIME_ZONE = "Pacific/Pohnpei"
 
 USE_I18N = True
 
@@ -235,7 +235,9 @@ APK_UPLOAD_SECRET = environ.get("APK_UPLOAD_SECRET")
 MASTER_DATA = "./source"
 STORAGE_PATH = environ.get("STORAGE_PATH", "./storage")
 
-FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
+FORM_GEO_VALUE = {
+    "lat": 6.9147, "lng": 158.1610
+}  # FSM (Palikir, Pohnpei) coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(
     environ.get("FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024)
 )
@@ -248,7 +250,7 @@ MAILJET_API_KEY = environ["MAILJET_APIKEY"]
 MAILJET_API_SECRET = environ["MAILJET_SECRET"]
 EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")
 
-COUNTRY_NAME = "fiji"
+COUNTRY_NAME = "fsm"
 
 TEST_ENV = False
 
