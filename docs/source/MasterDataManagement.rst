@@ -20,7 +20,7 @@ Administrative List
     :alt: Administrative List
     :width: 100%
 
-1. To edit an existing administration, click the Edit button next to the administration, Once data is updated click on the :bolditalic:`Save` Button
+2. To edit an existing administration, click the Edit button next to the administration, Once data is updated click on the :bolditalic:`Save` Button
 
 .. image:: ../assets/administration-2a.png
     :alt: Click edit button to edit administration
@@ -30,7 +30,7 @@ Administrative List
     :alt: Click Save button to save administration
     :width: 100%
 
-3.To delete click the Delete button. Next, confirm you are deleting the administration by clicking the OK button in the pop-up window.
+3. To delete click the Delete button. Next, confirm you are deleting the administration by clicking the OK button in the pop-up window.
 
 .. image:: ../assets/administration-3.png
     :alt: Deleting Administration
@@ -46,7 +46,7 @@ Manage Attributes
     :alt: Attribute image1
     :width: 100%
 
-1. To delete or edit an existing attribute, click the Edit button next to the attribute, Once data is updated click on the :bolditalic:`Save` Button, For deleting the attribute Click :bolditalic:`Delete` Button. Next, click on the confirmation popup window for deleting attribute.
+2. To delete or edit an existing attribute, click the Edit button next to the attribute, Once data is updated click on the :bolditalic:`Save` Button, For deleting the attribute Click :bolditalic:`Delete` Button. Next, click on the confirmation popup window for deleting attribute.
 
 .. image:: ../assets/administration-attributes-2.png
     :alt: Click edit button to edit attribute
@@ -85,7 +85,7 @@ Manage Organizations
     :alt: Save Updated Organisation
     :width: 100%
 
-1. For deleting the organisation Click :bolditalic:`Delete` Button. Also make sure that no user is associated with the deleting organisation. Next, click on the confirmation popup window for deleting organisation.    
+4. For deleting the organisation Click :bolditalic:`Delete` Button. Also make sure that no user is associated with the deleting organisation. Next, click on the confirmation popup window for deleting organisation.    
 
 .. image:: ../assets/organisation-4.png
     :alt: Delete Organisation

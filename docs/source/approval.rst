@@ -21,19 +21,19 @@ Submitting Data for Approval
      :alt: Pending submission
      :width: 100%
 
-1. Next, select all the datasets you are submitting for approval by ticking the checkbox next to each data set then click the :bolditalic:`BATCH SELECTED DATASETS` button.
+2. Next, select all the datasets you are submitting for approval by ticking the checkbox next to each data set then click the :bolditalic:`BATCH SELECTED DATASETS` button.
 
   .. image:: ../assets/pending-submission-2.png
      :alt: Select submission to create a new batch
      :width: 100%
 
-1. In the pop-up window, label your batch with a relevant name and add any comment for your approver. Next, click the :bolditalic:`CREATE A NEW BATCH` button.
+3. In the pop-up window, label your batch with a relevant name and add any comment for your approver. Next, click the :bolditalic:`CREATE A NEW BATCH` button.
 
 .. image:: ../assets/pending-submission-3.png
     :alt: Create a new batch
     :width: 100%
 
-1. Your dataset is now submitted for approval and will appear in the :bolditalic:`pending approval` tab. You can expand each data set to see your approver who will receive an email notification to approve your data.Notifications/Alerts
+4. Your dataset is now submitted for approval and will appear in the :bolditalic:`pending approval` tab. You can expand each data set to see your approver who will receive an email notification to approve your data.Notifications/Alerts
 
 .. image:: ../assets/pending-submission-4.png
     :alt: Pending approval
@@ -54,7 +54,7 @@ Approving Data
     :alt: Pending Approval
     :width: 100%
 
-1. To approve or decline a dataset, expand the toggle button next to each data set. Here we have two tabs:
+3. To approve or decline a dataset, expand the toggle button next to each data set. Here we have two tabs:
 **Data Summary**: A quick snapshot of the data you are approving.
 **Raw Data**: From this tab, you can access the raw data, make edits and save edits.
 You can add notes and feedback and the data submitter will receive an email notification once the dataset is approved or declined.
@@ -73,7 +73,7 @@ You can add notes and feedback and the data submitter will receive an email noti
   :alt: Approved Data
   :width: 100%
 
-1. Note: Rejected datasets will appear in the :bolditalic:`My Pending Approvals` tab with the status :bolditalic:`Rejected:bolditalic:`. The status will change to :bolditalic:`Pending` when the data submitter updates the rejected dataset as per the Approver’s instructions.
+5. Note: Rejected datasets will appear in the :bolditalic:`My Pending Approvals` tab with the status :bolditalic:`Rejected:bolditalic:`. The status will change to :bolditalic:`Pending` when the data submitter updates the rejected dataset as per the Approver’s instructions.
 
 
 Handling Rejected Data
@@ -85,7 +85,7 @@ Handling Rejected Data
     :alt: Rejected Data
     :width: 100%
 
-1. From the :bolditalic:`Raw Data` tab, make any edits as per your Approver’s instructions. You can reset to default values in case you make an error while editing. Finally, when you are done with all edits click the :bolditalic:`SAVE EDITS` button. Your dataset will now appear under :bolditalic:`Pending Approval` with the status :bolditalic:`Pending` and your Approver will be able to review and approve again.
+2. From the :bolditalic:`Raw Data` tab, make any edits as per your Approver’s instructions. You can reset to default values in case you make an error while editing. Finally, when you are done with all edits click the :bolditalic:`SAVE EDITS` button. Your dataset will now appear under :bolditalic:`Pending Approval` with the status :bolditalic:`Pending` and your Approver will be able to review and approve again.
 
 .. image:: ../assets/batch-rejected-2.png
     :alt: Re-submit Rejected Data
