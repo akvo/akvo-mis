@@ -6,7 +6,7 @@
   "dataSyncInterval": 30,
   "errorHandling": true,
   "loggingLevel": "verbose",
-  "appVersion": "4.1.29",
+  "appVersion": "4.1.30",
   "lang": "en",
   "gpsThreshold": 30,
   "apkName": "Akvo MIS"
