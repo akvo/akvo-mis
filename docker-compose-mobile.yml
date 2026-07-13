@@ -17,6 +17,17 @@ services:
       - APK_NAME=${APK_NAME}
       - APK_SHORT_NAME=${APK_SHORT_NAME}
       - BACKEND_IP_ADDRESS=${IP_ADDRESS}
+      # Expo runs inside this container but is reached from a physical device on
+      # the LAN, so Metro must advertise the host's LAN IP in the manifest/bundle
+      # URLs instead of the container-internal 127.0.0.1. Empty is fine when only
+      # using a local emulator.
+      - REACT_NATIVE_PACKAGER_HOSTNAME=${EXPO_HOST}
+      # This app configures EAS Update (updates.url + runtimeVersion), so by
+      # default `expo start` serves a signed update manifest that requires an
+      # Expo account / EXPO_TOKEN. For local Expo Go development we have no
+      # token, so run offline: Expo serves a plain local manifest from Metro and
+      # the device loads the dev bundle directly instead of a remote update.
+      - EXPO_OFFLINE=1
       - EXPO_TOKEN
       - SENTRY_ENV=${SENTRY_MOBILE_ENV}
       - SENTRY_DSN=${SENTRY_MOBILE_DSN}
