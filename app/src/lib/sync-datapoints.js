@@ -144,6 +144,12 @@ export const downloadDatapointsJson = async (
   // Skip-unchanged: check if local datapoint is already up-to-date
   const uuid = url.split('/').pop().replace('.json', '');
   const existing = await crudDataPoints.getByUUID(db, { uuid, form: form?.id });
+  // Never clobber a local row with pending changes (syncedAt NULL): it is
+  // queued for upload and its answers are newer than the server copy —
+  // overwriting would lose the edits AND falsely mark them as synced
+  if (existing && !existing.syncedAt) {
+    return;
+  }
   if (existing?.syncedAt && lastUpdated && existing.syncedAt >= lastUpdated) {
     return;
   }

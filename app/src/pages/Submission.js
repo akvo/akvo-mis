@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import LucideIcon from '@react-native-vector-icons/lucide';
+import * as FileSystem from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import moment from 'moment';
@@ -61,7 +62,11 @@ const Submission = ({ navigation, route }) => {
       s.currentValues = typeof valuesJSON === 'string' ? JSON.parse(valuesJSON) : valuesJSON;
     });
 
-    navigation.push('FormDataDetails', { name: dataPointName });
+    navigation.push('FormDataDetails', {
+      name: dataPointName,
+      id: item.id,
+      isSynced: item.isSynced,
+    });
   };
 
   const goToFormOptions = (item) => {
@@ -136,16 +141,40 @@ const Submission = ({ navigation, route }) => {
         user: activeUserId,
         uuid: route?.params?.uuid || null,
       });
-      rows = rows.map((res) => {
-        const createdAt = moment(res.createdAt).format('DD/MM/YYYY hh:mm A');
-        const syncedAt = res.syncedAt ? moment(res.syncedAt).format('DD/MM/YYYY hh:mm A') : '-';
-        return {
-          ...res,
-          createdAt,
-          syncedAt,
-          isSynced: !!res.syncedAt,
-        };
-      });
+      rows = await Promise.all(
+        rows.map(async (res) => {
+          const createdAt = moment(res.createdAt).format('DD/MM/YYYY hh:mm A');
+          const syncedAt = res.syncedAt ? moment(res.syncedAt).format('DD/MM/YYYY hh:mm A') : '-';
+          // Flag unsynced rows whose local photo files no longer exist —
+          // they will never upload until the user retakes the photo
+          let needsRetake = false;
+          if (!res.syncedAt && res.json) {
+            try {
+              const values = JSON.parse(res.json.replace(/''/g, "'"));
+              const fileUris = Object.values(values).filter(
+                (v) => typeof v === 'string' && v.startsWith('file://'),
+              );
+              const filesExist = await Promise.all(
+                fileUris.map((uri) =>
+                  FileSystem.getInfoAsync(uri)
+                    .then((info) => info.exists)
+                    .catch(() => false),
+                ),
+              );
+              needsRetake = filesExist.some((exists) => !exists);
+            } catch (error) {
+              needsRetake = false;
+            }
+          }
+          return {
+            ...res,
+            createdAt,
+            syncedAt,
+            isSynced: !!res.syncedAt,
+            needsRetake,
+          };
+        }),
+      );
       setData(rows);
     } catch (error) {
       Sentry.captureMessage('[Submission] Unable to fetch data points');
@@ -206,6 +235,11 @@ const Submission = ({ navigation, route }) => {
           {item.submitted === 0 && (
             <View style={styles.draftBadge}>
               <Text style={styles.draftText}>{trans.draftText}</Text>
+            </View>
+          )}
+          {item.needsRetake && (
+            <View style={styles.retakeBadge} testID={`retake-badge-${item.id}`}>
+              <Text style={styles.retakeText}>{trans.photoMissingText}</Text>
             </View>
           )}
           <Text style={styles.itemDate}>
@@ -388,6 +422,17 @@ const styles = StyleSheet.create({
   draftText: {
     fontSize: 12,
     color: '#212121',
+    fontWeight: 'bold',
+  },
+  retakeBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
+  retakeText: {
+    fontSize: 12,
+    color: '#B91C1C',
     fontWeight: 'bold',
   },
 });

@@ -212,6 +212,43 @@ const dataPointsQuery = () => ({
     );
     return res;
   },
+  /**
+   * Writes only the json column. Used to repair answers (e.g. retake a missing
+   * photo) without touching syncedAt, so the row stays in the upload queue.
+   */
+  updateJson: async (db, id, json) => {
+    const res = await sql.updateRow(
+      db,
+      'datapoints',
+      { id },
+      { json: JSON.stringify(json).replace(/'/g, "''") },
+    );
+    return res;
+  },
+  /**
+   * Links a local draft to its backend row without stamping syncedAt, so the
+   * local answers stay queued and the next upload updates the backend draft
+   * in place instead of creating a duplicate.
+   */
+  linkDraftId: async (db, id, draftId) => {
+    const res = await sql.updateRow(db, 'datapoints', { id }, { draftId });
+    return res;
+  },
+  /**
+   * Finds a local pending draft matching a backend draft by uuid. Drafts
+   * uploaded by app versions before draftId bookkeeping existed can only be
+   * matched this way, otherwise the draft download inserts a duplicate.
+   */
+  getDraftByUUID: async (db, { uuid, form }) => {
+    const res = await sql.safeGetFirstRow(
+      db,
+      `SELECT * FROM datapoints
+        WHERE uuid = ? AND form = ? AND submitted = ? AND draftId IS NULL`,
+      [uuid, form, 0],
+      'getDraftByUUID',
+    );
+    return res;
+  },
   getByUUID: async (db, { uuid, form }) => {
     const formVal = form ? { form } : {};
     const res = await sql.getFirstRow(db, 'datapoints', { uuid, ...formVal });

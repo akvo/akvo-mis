@@ -41,7 +41,11 @@ const FormOptions = ({ navigation, route }) => {
     FormState.update((s) => {
       s.currentValues = dataValues;
     });
-    navigation.push('FormDataDetails', { name: dataPointName });
+    navigation.push('FormDataDetails', {
+      name: dataPointName,
+      id: item?.id,
+      isSynced: !!item?.syncedAt,
+    });
   };
 
   const renderItem = ({ item }) => (
