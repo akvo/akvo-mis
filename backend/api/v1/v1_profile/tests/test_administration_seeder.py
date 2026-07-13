@@ -34,7 +34,7 @@ class AdministrationSeederTestCase(TestCase):
                 "name": national.name,
                 "parent": None,
                 "children": list(children.data),
-                "children_level_name": "Division",
+                "children_level_name": "State",
                 "full_name": national.full_name,
                 "path": None,
             },
