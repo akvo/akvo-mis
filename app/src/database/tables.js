@@ -24,6 +24,7 @@ const tables = [
       gpsAccuracyLevel: 'INTEGER NULL',
       geoLocationTimeout: 'INTEGER NULL',
       imageQuality: "VARCHAR(20) DEFAULT 'low'",
+      updateSkippedUntil: 'DATETIME',
     },
   },
   {
@@ -59,6 +60,7 @@ const tables = [
       uuid: 'VARCHAR(191)',
       repeats: 'TEXT',
       locallyCreated: 'TINYINT DEFAULT 0',
+      submissionKey: 'TEXT',
     },
   },
   {

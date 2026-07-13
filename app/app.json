@@ -3,7 +3,7 @@
     "newArchEnabled": true,
     "name": "MOHHS MIS",
     "slug": "mohhs-mis-mobile",
-    "version": "4.1.28",
+    "version": "4.1.30",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.akvo.mohhs_mis",
-      "versionCode": 4128
+      "versionCode": 4130
     },
     "web": {
       "favicon": "./assets/favicon.png"

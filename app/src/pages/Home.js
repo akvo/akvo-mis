@@ -57,6 +57,7 @@ const Home = ({ navigation, route }) => {
     visible: updateDialogVisible,
     updateInfo,
     handleUpdate,
+    handleSkip,
   } = useVersionCheck({ autoCheck: true });
 
   const goToSubmission = (id) => {
@@ -237,6 +238,8 @@ const Home = ({ navigation, route }) => {
     if (!updateDialogVisible) {
       return () => {};
     }
+    // Dismissing suppresses the prompt for 24h, so it must be a deliberate
+    // press on "Later" — not a stray back press. The dialog always offers it.
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => subscription.remove();
   }, [updateDialogVisible]);
@@ -376,7 +379,12 @@ const Home = ({ navigation, route }) => {
         <Dialog.Title title={trans.updateRequiredTitle} />
         <Text>{updateInfo.text}</Text>
         <Dialog.Actions>
-          <Dialog.Button onPress={handleUpdate}>{trans.buttonUpdate}</Dialog.Button>
+          <Dialog.Button testID="update-confirm-button" onPress={handleUpdate}>
+            {trans.buttonUpdate}
+          </Dialog.Button>
+          <Dialog.Button testID="update-skip-button" onPress={handleSkip}>
+            {trans.buttonLater}
+          </Dialog.Button>
         </Dialog.Actions>
       </Dialog>
     </BaseLayout>

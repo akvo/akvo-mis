@@ -5,14 +5,9 @@ const selectDataPointById = async (db, { id }) => {
   if (!current) {
     return false;
   }
-  let jsonVal = JSON.parse(current.json.replace(/''/g, "'"));
-  // If json is a string that starts with '{', parse it as JSON
-  if (typeof jsonVal === 'string' && jsonVal.startsWith('{')) {
-    jsonVal = JSON.parse(jsonVal);
-  }
   return {
     ...current,
-    json: jsonVal,
+    json: JSON.parse(current.json.replace(/''/g, "'")),
   };
 };
 
@@ -57,6 +52,7 @@ const dataPointsQuery = () => ({
       draftId,
       id,
       locallyCreated,
+      submissionKey,
     },
   ) => {
     try {
@@ -70,6 +66,7 @@ const dataPointsQuery = () => ({
       const idVal = id ? { id } : {};
       const locallyCreatedVal =
         locallyCreated !== undefined ? { locallyCreated: locallyCreated === 1 ? 1 : 0 } : {};
+      const submissionKeyVal = submissionKey ? { submissionKey } : {};
 
       const dataToInsert = {
         form,
@@ -88,6 +85,7 @@ const dataPointsQuery = () => ({
         ...draftVal,
         ...idVal,
         ...locallyCreatedVal,
+        ...submissionKeyVal,
       };
 
       const res = await sql.insertRow(db, 'datapoints', dataToInsert);
@@ -98,7 +96,19 @@ const dataPointsQuery = () => ({
   },
   updateDataPoint: async (
     db,
-    { id, name, geo, submitted, duration, submittedAt, syncedAt, json, repeats, locallyCreated },
+    {
+      id,
+      name,
+      geo,
+      submitted,
+      duration,
+      submittedAt,
+      syncedAt,
+      json,
+      repeats,
+      locallyCreated,
+      submissionKey,
+    },
   ) => {
     try {
       const repeatsVal = repeats ? { repeats } : {};
@@ -106,6 +116,7 @@ const dataPointsQuery = () => ({
       const syncedAtVal = syncedAt !== undefined ? { syncedAt } : {};
       const locallyCreatedVal =
         locallyCreated !== undefined ? { locallyCreated: locallyCreated === 1 ? 1 : 0 } : {};
+      const submissionKeyVal = submissionKey ? { submissionKey } : {};
 
       const res = await sql.updateRow(
         db,
@@ -122,12 +133,36 @@ const dataPointsQuery = () => ({
           ...repeatsVal,
           ...syncedAtVal,
           ...locallyCreatedVal,
+          ...submissionKeyVal,
         },
       );
       return res;
     } catch (error) {
       throw new Error(`Error updating datapoint: ${error.message}`);
     }
+  },
+  /**
+   * Confirms an upload by stamping syncedAt. Writes only that one column —
+   * passing a raw row through updateDataPoint would re-stringify its
+   * already-serialised json. locallyCreated is an immutable origin flag and is
+   * deliberately NOT touched: a device-created row stays locallyCreated = 1
+   * after syncing, so "device data that reached the server" remains queryable.
+   */
+  markSynced: async (db, id, draftId = null) => {
+    // draftId is the backend row id returned by /sync. Storing it right away
+    // makes the next save of this draft sync as ?id=<draftId> (an update)
+    // instead of creating a duplicate backend draft.
+    const draftIdVal = draftId ? { draftId } : {};
+    const res = await sql.updateRow(
+      db,
+      'datapoints',
+      { id },
+      {
+        syncedAt: new Date().toISOString(),
+        ...draftIdVal,
+      },
+    );
+    return res;
   },
   saveAsPending: async (db, id) => {
     const res = await sql.updateRow(
@@ -168,16 +203,49 @@ const dataPointsQuery = () => ({
     );
     return res;
   },
-  deleteById: async (db, { id }) => {
-    const res = await sql.deleteRow(db, 'datapoints', id);
-    return res;
-  },
   deleteDraftSynced: async (db) => {
     const res = await sql.safeExecuteQuery(
       db,
       'DELETE FROM datapoints WHERE submitted = ? AND draftId IS NOT NULL AND syncedAt IS NOT NULL',
       [0],
       'deleteDraftSynced',
+    );
+    return res;
+  },
+  /**
+   * Writes only the json column. Used to repair answers (e.g. retake a missing
+   * photo) without touching syncedAt, so the row stays in the upload queue.
+   */
+  updateJson: async (db, id, json) => {
+    const res = await sql.updateRow(
+      db,
+      'datapoints',
+      { id },
+      { json: JSON.stringify(json).replace(/'/g, "''") },
+    );
+    return res;
+  },
+  /**
+   * Links a local draft to its backend row without stamping syncedAt, so the
+   * local answers stay queued and the next upload updates the backend draft
+   * in place instead of creating a duplicate.
+   */
+  linkDraftId: async (db, id, draftId) => {
+    const res = await sql.updateRow(db, 'datapoints', { id }, { draftId });
+    return res;
+  },
+  /**
+   * Finds a local pending draft matching a backend draft by uuid. Drafts
+   * uploaded by app versions before draftId bookkeeping existed can only be
+   * matched this way, otherwise the draft download inserts a duplicate.
+   */
+  getDraftByUUID: async (db, { uuid, form }) => {
+    const res = await sql.safeGetFirstRow(
+      db,
+      `SELECT * FROM datapoints
+        WHERE uuid = ? AND form = ? AND submitted = ? AND draftId IS NULL`,
+      [uuid, form, 0],
+      'getDraftByUUID',
     );
     return res;
   },

@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 import { FieldLabel } from '../support';
 import { FormState } from '../../store';
 import { helpers, i18n } from '../../lib';
+import { persistImage } from '../../lib/image-compressor';
 import MIME_TYPES from '../../lib/mime_types';
 
 const TypeAttachment = ({
@@ -45,7 +46,8 @@ const TypeAttachment = ({
       });
       if (!canceled && assets && assets.length > 0) {
         const result = assets[0];
-        onChange(id, result?.uri);
+        // Move out of the purgeable cache dir so the file survives until synced
+        onChange(id, await persistImage(result?.uri, 'attachments'));
         setSelectedFile(result);
       }
     } catch (error) {

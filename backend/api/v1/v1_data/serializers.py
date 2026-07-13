@@ -1,3 +1,4 @@
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django_q.tasks import async_task
@@ -38,6 +39,9 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
     submitter = CustomCharField(required=False)
     duration = CustomIntegerField(required=False)
     uuid = serializers.CharField(required=False)
+    submission_key = serializers.CharField(
+        required=False, allow_null=True, max_length=64
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,6 +58,7 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
             "submitter",
             "duration",
             "uuid",
+            "submission_key",
         ]
 
 
@@ -620,13 +625,40 @@ class SubmitPendingFormSerializer(serializers.Serializer):
         data["created_by"] = self.context.get("user")
         is_draft = self.context.get("is_draft", False)
 
+        # Idempotency: a client that resends the same submission -- after a
+        # killed process or a lost HTTP response -- must not create a second
+        # row. Returning early also skips the answer loop below, so a replay
+        # writes nothing at all.
+        #
+        # _base_manager, not objects: the default manager filters
+        # deleted_at__isnull=True, but the unique index does not. A
+        # soft-deleted row still owns its submission_key.
+        submission_key = data.get("submission_key")
+        if submission_key:
+            existing = FormData._base_manager.filter(
+                submission_key=submission_key
+            ).first()
+            if existing:
+                return existing
+
         # check user role and form type
         user = self.context.get("user")
         is_super_admin = user.is_superuser
 
         direct_to_data = is_super_admin
 
-        obj_data = self.fields.get("data").create(data)
+        try:
+            # The savepoint keeps a losing INSERT from poisoning an outer
+            # transaction, so the recovery query below can still run. Without
+            # it this breaks the moment ATOMIC_REQUESTS is turned on.
+            with transaction.atomic():
+                obj_data = self.fields.get("data").create(data)
+        except IntegrityError:
+            # Lost the race with a concurrent retry. The unique index is the
+            # real guard; the lookup above can be passed by both racers.
+            if not submission_key:
+                raise
+            return FormData._base_manager.get(submission_key=submission_key)
         # If the form is a child form, it should have a parent
         if data.get("uuid") and obj_data.form.parent:
             obj_data.uuid = data["uuid"]

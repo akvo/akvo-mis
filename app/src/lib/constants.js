@@ -18,7 +18,10 @@ export const SUBMISSION_TYPES = {
 
 export const DATABASE_NAME = 'app.db';
 
-export const DATABASE_VERSION = 6;
+export const DATABASE_VERSION = 8;
+
+// How long the automatic update dialog stays suppressed after "Later".
+export const SKIP_UPDATE_DURATION_MS = 24 * 60 * 60 * 1000;
 
 export const QUESTION_TYPES = {
   text: 'text',

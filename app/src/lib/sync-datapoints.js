@@ -144,6 +144,12 @@ export const downloadDatapointsJson = async (
   // Skip-unchanged: check if local datapoint is already up-to-date
   const uuid = url.split('/').pop().replace('.json', '');
   const existing = await crudDataPoints.getByUUID(db, { uuid, form: form?.id });
+  // Never clobber a local row with pending changes (syncedAt NULL): it is
+  // queued for upload and its answers are newer than the server copy —
+  // overwriting would lose the edits AND falsely mark them as synced
+  if (existing && !existing.syncedAt) {
+    return;
+  }
   if (existing?.syncedAt && lastUpdated && existing.syncedAt >= lastUpdated) {
     return;
   }
@@ -155,7 +161,7 @@ export const downloadDatapointsJson = async (
   }
 
   const jsonData = response.data;
-  const { datapoint_name: name, geolocation: geo, answers, id: dpID } = jsonData || {};
+  const { datapoint_name: name, geolocation: geo, answers } = jsonData || {};
 
   // DB operations INSIDE the transaction
   await sql.withTransaction(db, async (txDb) => {
@@ -194,7 +200,9 @@ export const downloadDatapointsJson = async (
       return;
     }
 
-    // Insert new datapoint only if it doesn't exist
+    // Insert new datapoint only if it doesn't exist. The local id is left to
+    // SQLite: the backend's id draws from the same small-integer space, so
+    // reusing it would overwrite an unrelated local row. Identity is uuid + form.
     const datapointData = {
       uuid,
       user,
@@ -208,10 +216,8 @@ export const downloadDatapointsJson = async (
       json: answers,
       syncedAt: lastUpdated,
       repeats: JSON.stringify(repeats),
-      id: dpID,
     };
 
-    await crudDataPoints.deleteById(txDb, { id: dpID });
     await crudDataPoints.saveDataPoint(txDb, datapointData);
   });
 };

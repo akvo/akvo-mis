@@ -97,6 +97,14 @@ const SyncService = () => {
         return;
       }
 
+      // Zombie job: PENDING with retries exhausted is never executed but
+      // still blocks new jobs from being created — delete it so the next
+      // sync tick starts fresh with attempt 0
+      if (activeJob.status === jobStatus.PENDING && activeJob.attempt >= MAX_ATTEMPT) {
+        await crudJobs.deleteJob(db, activeJob.id);
+        return;
+      }
+
       // PENDING → execute sync
       if (activeJob.status === jobStatus.PENDING && activeJob.attempt < MAX_ATTEMPT) {
         UIState.update((s) => {
@@ -453,6 +461,17 @@ const SyncService = () => {
             } else {
               const form = await crudForms.getByFormId(db, { formId });
               if (!form) {
+                return;
+              }
+
+              // Drafts uploaded by versions without draftId bookkeeping can
+              // only be matched by uuid — link instead of inserting a
+              // duplicate; local answers stay queued and win on next upload
+              const localDraft = d?.uuid
+                ? await crudDataPoints.getDraftByUUID(db, { uuid: d.uuid, form: form.id })
+                : null;
+              if (localDraft) {
+                await crudDataPoints.linkDraftId(db, localDraft.id, draftId);
                 return;
               }
 
