@@ -23,6 +23,13 @@ Environment Setup
 
 Expected that PORT 5432 and 3000 are not being used by other services.
 
+First, create your environment file from the template and adjust it as needed
+(database credentials, secrets, email, and so on):
+
+.. code:: bash
+
+   cp env.example .env
+
 Start
 ^^^^^
 
@@ -73,6 +80,29 @@ container access instead (run on the host, where ``chcon`` is available):
 
 Then re-run ``./dc.sh up -d``.
 
+Seed initial data
+^^^^^^^^^^^^^^^^^
+
+A freshly started stack has an empty database — no super admin and no forms.
+Run the seeder to create them:
+
+.. code:: bash
+
+   ./dc.sh exec backend ./seeder.sh
+
+The script prompts you through seeding the administration hierarchy, forms, a
+super admin account, organisations, administration attributes, and optional
+sample data. Without this step you cannot log in, so it is required for a
+usable app.
+
+To also run the mobile app locally, create its volume and start the mobile dev
+server (see the Mobile App section for details):
+
+.. code:: bash
+
+   docker volume create akvo-mis-mobile-docker-sync
+   ./dc-mobile.sh up -d
+
 The app should be running at:
 `localhost:3000 <http://localhost:3000>`__. Any endpoints with prefix -
 ``^/api/*`` is redirected to
@@ -91,9 +121,9 @@ Log
 
 .. code:: bash
 
-   ./dc.sh log --follow <container_name>
+   ./dc.sh logs --follow <container_name>
 
-Available containers: - backend - frontend - mainnetwork - db - pgadmin
+Available containers: - backend - worker - frontend - mainnetwork - db - pgadmin
 
 Stop
 ^^^^
@@ -107,5 +137,5 @@ Teardown
 
 .. code:: bash
 
-   docker-compose down -v
+   ./dc.sh down -v
    docker volume rm akvo-mis-docker-sync

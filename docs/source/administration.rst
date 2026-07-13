@@ -36,7 +36,7 @@ Manage Users (Add, Delete and Modify Users)
    :alt: Delete User
    :width: 100%
 
-1. To modify an existing user, expand the toggle button next to the user and click the :bolditalic:`EDIT` button. Edit the user details in the new page and then click the :bolditalic:`UPDATE USER` button.
+4. To modify an existing user, expand the toggle button next to the user and click the :bolditalic:`EDIT` button. Edit the user details in the new page and then click the :bolditalic:`UPDATE USER` button.
 
 .. image:: ../assets/users-edit-expand.png
    :alt: Expand to edit user
