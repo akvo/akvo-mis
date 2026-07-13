@@ -2,7 +2,7 @@
 version: "3.9"
 services:
   backend:
-    image: eu.gcr.io/akvo-lumen/akvo-mis/backend:latest-test
+    image: eu.gcr.io/akvo-lumen/unicef-fsm/backend:latest-test
     working_dir: /app/backend
     volumes:
       - ./:/app:delegated

@@ -8,11 +8,11 @@ if [[ "${CI_BRANCH}" =~ $tag_pattern || "${CI_TAG:=}" =~ $tag_pattern ]]; then
     exit 0
 fi
 
-[[ "${CI_BRANCH}" != "main" ]] && { echo "Branch is not main. Skip deploy."; exit 0; }
+[[ "${CI_BRANCH}" != "tenant/unicef-fsm" ]] && { echo "Branch is not tenant/unicef-fsm. Skip deploy."; exit 0; }
 [[ "${CI_PULL_REQUEST}" == "true" ]] && { echo "Pull request. Skip deploy."; exit 0; }
 
-NAMESPACE="akvo-mis-namespace"
-IMAGE_PREFIX="eu.gcr.io/akvo-lumen/akvo-mis"
+NAMESPACE="unicef-fsm-namespace"
+IMAGE_PREFIX="eu.gcr.io/akvo-lumen/unicef-fsm"
 
 auth () {
     gcloud auth activate-service-account --key-file=/home/runner/work/akvo-mis/credentials/gcp.json

@@ -38,7 +38,7 @@ then
     FRONTEND_CHANGES=1
 fi
 
-if [[ "${CI_TAG}" =~ $tag_pattern || "${CI_BRANCH}" ==  "main" || "${CI_BRANCH}" ==  "develop" && "${CI_PULL_REQUEST}" !=  "true" ]];
+if [[ "${CI_TAG}" =~ $tag_pattern || "${CI_BRANCH}" ==  "main" || "${CI_BRANCH}" ==  "develop" && "${CI_PULL_REQUEST}" !=  "true" || "${CI_BRANCH}" ==  "tenant/unicef-fsm" ]];
 then
     BACKEND_CHANGES=1
     FRONTEND_CHANGES=1
@@ -50,7 +50,7 @@ then
     exit 1
 fi
 
-image_prefix="eu.gcr.io/akvo-lumen/akvo-mis"
+image_prefix="eu.gcr.io/akvo-lumen/unicef-fsm"
 
 dc () {
     docker compose \

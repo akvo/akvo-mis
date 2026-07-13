@@ -1,8 +1,8 @@
 {
   "expo": {
     "newArchEnabled": true,
-    "name": "Akvo MIS",
-    "slug": "akvo-mis-mobile",
+    "name": "UNICEF FSM",
+    "slug": "unicef-fsm-mobile",
     "version": "4.1.29",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.akvo.akvo_mis",
+      "package": "com.akvo.unicef_fsm",
       "versionCode": 4129
     },
     "web": {
@@ -29,7 +29,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "0cf14548-42af-4de7-a9ec-79db98d747d7"
+        "projectId": "2eae1427-a94d-475e-9e8a-04d68b3c4cd8"
       }
     },
     "owner": "akvo",
@@ -40,7 +40,7 @@
           "url": "https://sentry.io/",
           "note": "Use SENTRY_AUTH_TOKEN env to authenticate with Sentry.",
           "organization": "akvo-foundation",
-          "project": "akvo-mis-mobile",
+          "project": "unicef-fsm-mobile",
           "setCommits": true,
           "experimental_android": {
             "enableAndroidGradlePlugin": true
@@ -72,7 +72,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/0cf14548-42af-4de7-a9ec-79db98d747d7"
+      "url": "https://u.expo.dev/2eae1427-a94d-475e-9e8a-04d68b3c4cd8"
     }
   }
 }

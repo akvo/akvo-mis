@@ -2,7 +2,7 @@
 version: "3.9"
 services:
   backend:
-    image: eu.gcr.io/akvo-lumen/akvo-mis/backend:latest-test
+    image: eu.gcr.io/akvo-lumen/unicef-fsm/backend:latest-test
     command: ["sh", "run.sh"]
     depends_on:
       db:
@@ -61,7 +61,7 @@ services:
       timeout: 5s
       retries: 5
   frontend:
-    image: eu.gcr.io/akvo-lumen/akvo-mis/frontend:latest-test
+    image: eu.gcr.io/akvo-lumen/unicef-fsm/frontend:latest-test
     # In CI all services share one network namespace (network_mode:
     # service:mainnetwork), so the backend is reachable at localhost rather
     # than via the "backend" Service DNS used in K8s. Rewrite the upstream to
