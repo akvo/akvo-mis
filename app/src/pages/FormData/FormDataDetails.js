@@ -13,6 +13,8 @@ import { Image, Button } from '@rneui/themed';
 import moment from 'moment';
 import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import { FormState, UIState, BuildParamsState } from '../../store';
@@ -22,6 +24,7 @@ import { crudDataPoints } from '../../database/crud';
 import { BaseLayout } from '../../components';
 import FormDataNavigation from './FormDataNavigation';
 import { QUESTION_TYPES } from '../../lib/constants';
+import MIME_TYPES from '../../lib/mime_types';
 
 const ImageView = ({
   label,
@@ -81,6 +84,105 @@ const ImageView = ({
         {label}
       </Text>
       {content}
+    </View>
+  );
+};
+
+const AttachmentView = ({
+  label,
+  uri,
+  index,
+  onReattach = null,
+  missingText = '',
+  reattachLabel = '',
+  openLabel = '',
+  isReattaching = false,
+  processingLabel = '',
+}) => {
+  // Non-image files render no Image, so there is no onError signal — an
+  // explicit existence check is the only way (one call per attachment).
+  const [fileMissing, setFileMissing] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (uri?.startsWith('file://')) {
+      FileSystem.getInfoAsync(uri)
+        .then(({ exists }) => {
+          if (active) {
+            setFileMissing(!exists);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setFileMissing(true);
+          }
+        });
+    } else {
+      setFileMissing(false);
+    }
+    return () => {
+      active = false;
+    };
+  }, [uri]);
+
+  const openFileManager = async () => {
+    const supported = await Linking.canOpenURL(uri);
+    if (supported) {
+      await Linking.openURL(uri);
+    } else {
+      Alert.alert("Don't know how to open this URL:", uri);
+    }
+  };
+
+  let content = (
+    <View style={{ width: '100%' }}>
+      <Text
+        testID={`text-answer-${index}`}
+        style={{ color: 'blue', textDecorationLine: 'underline' }}
+      >
+        {uri.split('/').pop()}
+      </Text>
+      <Button
+        title={openLabel}
+        onPress={openFileManager}
+        testID={`open-file-button-${index}`}
+        buttonStyle={{ width: '100%', backgroundColor: '#1E90FF', marginTop: 8 }}
+      />
+    </View>
+  );
+  if (fileMissing) {
+    content = (
+      <View>
+        <Text style={styles.missingText} testID={`attachment-missing-${index}`}>
+          {missingText}
+        </Text>
+        {!!onReattach && !!uri?.startsWith('file://') && (
+          <Button
+            title={reattachLabel}
+            onPress={onReattach}
+            testID={`attachment-reattach-${index}`}
+          />
+        )}
+      </View>
+    );
+  }
+  if (isReattaching) {
+    content = (
+      <View style={styles.processingContainer} testID={`attachment-processing-${index}`}>
+        <ActivityIndicator size="small" color="dodgerblue" />
+        <Text style={styles.processingText}>{processingLabel}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listItem}>
+      <View style={styles.listItemContent}>
+        <Text style={styles.listItemTitle} testID={`text-question-${index}`}>
+          {label}
+        </Text>
+        {content}
+      </View>
     </View>
   );
 };
@@ -233,6 +335,34 @@ const FormDataDetails = ({ navigation, route }) => {
     }
   };
 
+  const handleReattach = async (questionKey, rule = null) => {
+    const { allowedFileTypes } = rule || {};
+    const fileTypes = allowedFileTypes?.length
+      ? allowedFileTypes.map((t) => MIME_TYPES?.[t] || 'application/octet-stream')
+      : '*/*';
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: false,
+      type: fileTypes,
+      copyToCacheDirectory: true,
+    });
+    if (result?.canceled || !result?.assets?.length) {
+      return;
+    }
+    setRetakingKey(questionKey);
+    try {
+      // Move out of the purgeable cache dir so the file survives until synced
+      const newUri = await persistImage(result.assets[0].uri, 'attachments');
+      const updatedValues = { ...currentValues, [questionKey]: newUri };
+      FormState.update((s) => {
+        s.currentValues = updatedValues;
+      });
+      await crudDataPoints.updateJson(db, datapointId, updatedValues);
+      ToastAndroid.show(trans.reattachSuccess, ToastAndroid.LONG);
+    } finally {
+      setRetakingKey(null);
+    }
+  };
+
   const { json: formJSON } = selectedForm || {};
 
   const form = formJSON ? JSON.parse(formJSON) : {};
@@ -280,17 +410,33 @@ const FormDataDetails = ({ navigation, route }) => {
       if (helpers.isImageFile(fileExtension)) {
         return (
           <ImageView
-            key={q.id}
+            key={`${q.id}-${answer}`}
             label={q.label}
             uri={answer}
             textTestID={`text-question-${qIndex}`}
             imageTestID={`image-question-${qIndex}`}
-            missingText={trans.fileMissingText}
-            retakeLabel={trans.buttonRetakePhoto}
-            onRetake={canRetake ? () => handleRetake(q.id) : null}
+            missingText={trans.attachmentMissingText}
+            retakeLabel={trans.buttonReattachFile}
+            onRetake={canRetake ? () => handleReattach(q.id, q.rule) : null}
+            isRetaking={retakingKey === q.id}
+            processingLabel={trans.compressingImage}
           />
         );
       }
+      return (
+        <AttachmentView
+          key={`${q.id}-${answer}`}
+          label={q.label}
+          uri={answer}
+          index={qIndex}
+          missingText={trans.attachmentMissingText}
+          reattachLabel={trans.buttonReattachFile}
+          openLabel={trans.openFileButton}
+          onReattach={canRetake ? () => handleReattach(q.id, q.rule) : null}
+          isReattaching={retakingKey === q.id}
+          processingLabel={trans.compressingImage}
+        />
+      );
     }
     if ([QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(q.type) && answer) {
       return (

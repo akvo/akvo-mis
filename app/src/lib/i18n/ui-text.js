@@ -83,9 +83,13 @@ const uiText = {
     buttonUseCamera: 'Use Camera',
     buttonFromGallery: 'From Gallery',
     buttonRetakePhoto: 'Retake photo',
-    photoMissingText: 'Photo missing',
+    buttonReattachFile: 'Re-attach file',
+    photoMissingText: 'File missing',
     fileMissingText: 'Photo file is missing on this device. Retake it to allow syncing.',
+    attachmentMissingText:
+      'Attached file is missing on this device. Re-attach it to allow syncing.',
     retakeSuccess: 'Photo updated. It will be uploaded on the next sync.',
+    reattachSuccess: 'File updated. It will be uploaded on the next sync.',
     confirmReset:
       "By resetting, you'll lose all saved data including users, forms and data-points. Are you sure?",
     offlineText: "You're offline...",
@@ -231,10 +235,14 @@ const uiText = {
     buttonUseCamera: 'Utiliser la caméra',
     buttonFromGallery: 'De la galerie',
     buttonRetakePhoto: 'Reprendre la photo',
-    photoMissingText: 'Photo manquante',
+    buttonReattachFile: 'Joindre à nouveau le fichier',
+    photoMissingText: 'Fichier manquant',
     fileMissingText:
       'Le fichier photo est manquant sur cet appareil. Reprenez-la pour permettre la synchronisation.',
+    attachmentMissingText:
+      'Le fichier joint est manquant sur cet appareil. Joignez-le à nouveau pour permettre la synchronisation.',
     retakeSuccess: 'Photo mise à jour. Elle sera envoyée lors de la prochaine synchronisation.',
+    reattachSuccess: 'Fichier mis à jour. Il sera envoyé lors de la prochaine synchronisation.',
     confirmReset:
       'En réinitialisant, vous perdrez toutes les données enregistrées, y compris les utilisateurs, les formulaires et les points de données. Es-tu sûr?',
     offlineText: 'Tu es hors ligne...',

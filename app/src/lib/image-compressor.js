@@ -78,15 +78,16 @@ export const formatFileSize = (bytes) => {
 };
 
 /**
- * Moves a captured image out of the OS-purgeable cache directory into
- * documentDirectory, so pending submissions never lose their photos to a
+ * Moves a captured file out of the OS-purgeable cache directory into
+ * documentDirectory, so pending submissions never lose their files to a
  * cache purge. Returns the new URI, or the original one if the move fails.
- * @param {string} uri - Image URI (typically in cacheDirectory)
+ * @param {string} uri - File URI (typically in cacheDirectory)
+ * @param {string} subDir - documentDirectory subfolder ('images', 'attachments')
  * @returns {Promise<string>}
  */
-export const persistImage = async (uri) => {
+export const persistImage = async (uri, subDir = 'images') => {
   try {
-    const dir = `${FileSystem.documentDirectory}images`;
+    const dir = `${FileSystem.documentDirectory}${subDir}`;
     const { exists } = await FileSystem.getInfoAsync(dir);
     if (!exists) {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
