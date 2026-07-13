@@ -1,6 +1,7 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Network from 'expo-network';
+import * as FileSystem from 'expo-file-system';
 import * as Sentry from '@sentry/react-native';
 import api from './api';
 import { openDatabase } from '../database';
@@ -11,6 +12,7 @@ import {
   markSyncComplete,
 } from './sync-datapoints';
 import notification from './notification';
+import cascades from './cascades';
 import crudJobs from '../database/crud/crud-jobs';
 import { UIState, DatapointSyncState } from '../store';
 import {
@@ -112,7 +114,11 @@ const handleOnUploadFiles = async (
       // Same unescaping as processBatch — a raw parse here can throw on SQL-escaped
       // quotes and silently skip file extraction while processBatch still syncs
       const answers = JSON.parse(d.json.replace(/''/g, "'"));
-      const questions = JSON.parse(d.json_form)?.question_group?.flatMap((qg) => qg.question) || [];
+      // json_form is stored SQL-escaped like d.json — a raw parse throws on
+      // forms containing apostrophes and silently skips file extraction
+      const questions =
+        JSON.parse(d.json_form.replace(/''/g, "'"))?.question_group?.flatMap((qg) => qg.question) ||
+        [];
       const questionFiles = questions.filter((q) => questionTypes.includes(q.type));
       if (!questionFiles.length) return files;
 
@@ -175,6 +181,46 @@ const handleOnUploadFiles = async (
   return { uploadedFiles, failedDataIDs };
 };
 
+// The backend's /draft-list serializes cascade answers as display names
+// (Answers.to_key returns name, not id). Those names get written back into
+// the local datapoint json, and the backend rejects them on the next sync
+// (administration expects a pk). Resolve them back to ids via the cascade
+// sqlite so stuck drafts can sync again.
+export const repairCascadeAnswers = async (answerValues, jsonForm) => {
+  const questions =
+    JSON.parse(jsonForm.replace(/''/g, "'"))?.question_group?.flatMap((qg) => qg.question) || [];
+  const cascadeQuestions = questions.filter(
+    (q) => q.type === QUESTION_TYPES.cascade && q?.source?.file,
+  );
+  await cascadeQuestions.reduce(async (prev, q) => {
+    await prev;
+    const keys = Object.keys(answerValues).filter((k) => `${k}`.split('-')[0] === `${q.id}`);
+    const brokenKeys = keys.filter((k) => {
+      const v = answerValues[k];
+      return typeof v === 'string' || (Array.isArray(v) && v.some((x) => typeof x === 'string'));
+    });
+    if (!brokenKeys.length) {
+      return;
+    }
+    const rows = await cascades.loadDataSource(q.source);
+    brokenKeys.forEach((k) => {
+      const val = answerValues[k];
+      const names = Array.isArray(val) ? val : [val];
+      const resolved = names.map((n) => {
+        if (typeof n !== 'string') {
+          return n;
+        }
+        // ponytail: name match can be ambiguous across levels; prefer
+        // full_path_name, fall back to name, keep original if unresolved
+        const row = rows.find((r) => r?.full_path_name === n) || rows.find((r) => r?.name === n);
+        return row?.id ?? n;
+      });
+      answerValues[k] = Array.isArray(val) ? resolved : resolved[0];
+    });
+  }, Promise.resolve());
+  return answerValues;
+};
+
 // Recursive batch processor: fetches BATCH_SIZE items, processes them,
 // then recurses if more remain. Stops on empty result or failures.
 const processBatch = async (db, activeJob, session, counts = { success: 0, failed: 0 }) => {
@@ -210,7 +256,10 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
 
     try {
       const geoVal = d.geo ? { geo: d.geo.split('|')?.map((x) => parseFloat(x)) } : {};
-      const answerValues = JSON.parse(d.json.replace(/''/g, "'"));
+      const answerValues = await repairCascadeAnswers(
+        JSON.parse(d.json.replace(/''/g, "'")),
+        d.json_form,
+      );
 
       // Add photos and attachments to answers
       [...photos, ...attachments]
@@ -261,7 +310,17 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
         // Only drafts keep the backend id: a draftId on a submitted row would
         // flip its sync URL to the is_published variant.
         const backendId = !d.submitted ? res?.data?.id : null;
+        // Persist the server file paths locally so previews keep working
+        // after the uploaded local copies are removed below
+        await crudDataPoints.updateJson(db, d.id, answerValues);
         await crudDataPoints.markSynced(db, d.id, backendId);
+        // Uploaded local copies are no longer needed — free the storage
+        const uploadedForThis = [...photos, ...attachments].filter((f) => f?.dataID === d.id);
+        await Promise.all(
+          uploadedForThis.map((f) =>
+            FileSystem.deleteAsync(f.value, { idempotent: true }).catch(() => null),
+          ),
+        );
       }
       counts.success += 1;
     } catch (error) {
