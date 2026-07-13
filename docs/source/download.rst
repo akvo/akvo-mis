@@ -5,6 +5,6 @@ Download PDF
 
 .. |PDF Download| raw:: html
 
-   <a href="https://iwsims.readthedocs.io/_/downloads/en/latest/pdf/" target="_blank"><img src="./_images/download.png"></img>
+   <a href="/_/downloads/en/latest/pdf/" target="_blank"><img src="./_images/download.png"></img>
 
-.. |Download Image| image:: ../assests/download.png
+.. |Download Image| image:: ../assets/download.png
