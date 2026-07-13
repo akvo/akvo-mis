@@ -36,17 +36,21 @@ Webforms
     :alt: New Submission
     :width: 100%
 
-.. Bulk Upload
-.. ------------
+Bulk Upload
+------------
 
-.. 1. From the submissions section of the control centre, click the :bolditalic:`BULK UPLOAD` button.
+Instead of entering submissions one at a time, you can upload many at once from
+a spreadsheet. Open :bolditalic:`Data` → :bolditalic:`Data Upload` from the
+control-center sidebar.
 
-.. .. image:: ../assets/image33.png 
-..     :alt: Bulk Upload
-..     :width: 100%
+.. image:: ../assets/data-upload.png
+    :alt: Bulk data upload page
+    :width: 100%
 
-.. 2. Select the questionnaire and village you would like to bulk upload data against and select the spreadsheet file on your computer. If you are updating existing data, make sure you tick the ‘update existing data’ checkbox.
-
-.. .. image:: ../assets/image27.png
-..     :alt: Update
-..     :width: 100%
+1. :bolditalic:`Download the template.` Under *"If you do not already have a
+   template"*, select the questionnaire and click :bolditalic:`Download` to get
+   a spreadsheet with the correct columns for that form.
+2. :bolditalic:`Fill in the template` on your computer, one submission per row.
+3. :bolditalic:`Upload your data.` Select the questionnaire and administrative
+   area, then choose your file. To update existing submissions rather than add
+   new ones, tick :bolditalic:`Update Existing Data` first.

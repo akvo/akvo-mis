@@ -244,19 +244,28 @@ To delete a draft submission, expand the toggle button next to the draft submiss
    :width: 100%
 
 
-.. Downloading data
-.. -----------------
+Downloading data
+-----------------
 
-.. 1. Select the questionnaire and hover over the :bolditalic:`Download Data` button. You will have two options:
-..     * **All data**: Get all data from the selected questionnaire.
-..     * **Latest data**: Get only the latest data (new or updated) from the selected questionnaire.
+Select the questionnaire and use the :bolditalic:`Download Data` option to
+export its submissions. You can choose to export all data or only the latest
+(new or updated) data. The export is generated in the background; you collect
+the finished file from the :doc:`Downloads page <download>`.
 
-.. .. image:: ../assets/manage-data-download-data.png
-..     :alt: Download data
-..     :width: 100%
+Dashboards and Reports
+----------------------
 
-.. 2. After selecting an option, you will be redirected to the Download page, where the following label information related to your action will be displayed.
+Beyond the per-questionnaire :bolditalic:`Monitoring Overview` and
+:bolditalic:`Map View` above, the platform provides aggregated
+:bolditalic:`Dashboards` and generated :bolditalic:`Reports`, reached from the
+dropdown in the top header (not the control-center sidebar):
 
-.. .. image:: ../assets/download-page.png
-..     :alt: Download data page
-..     :width: 100%
+- :bolditalic:`Dashboards` present charts and maps that summarise the collected
+  data across administrative areas.
+- :bolditalic:`Reports` let you choose a report template and generate a
+  document (for example a ``.docx`` report) for a selected questionnaire and
+  area. See the Outputs section for more on generated report documents.
+
+.. note::
+   Dashboards and report templates are configured per deployment, so the exact
+   items available depend on your platform's configuration.
