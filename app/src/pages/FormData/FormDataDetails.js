@@ -1,27 +1,86 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, SectionList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  SectionList,
+  ToastAndroid,
+  PermissionsAndroid,
+  ActivityIndicator,
+} from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import moment from 'moment';
 import * as Linking from 'expo-linking';
-import { FormState, UIState } from '../../store';
+import * as ImagePicker from 'expo-image-picker';
+import { useSQLiteContext } from 'expo-sqlite';
+import * as Sentry from '@sentry/react-native';
+import { FormState, UIState, BuildParamsState } from '../../store';
 import { api, cascades, helpers, i18n } from '../../lib';
+import { compressImage, persistImage } from '../../lib/image-compressor';
+import { crudDataPoints } from '../../database/crud';
 import { BaseLayout } from '../../components';
 import FormDataNavigation from './FormDataNavigation';
 import { QUESTION_TYPES } from '../../lib/constants';
 
-const ImageView = ({ label, uri, textTestID, imageTestID }) => {
+const ImageView = ({
+  label,
+  uri,
+  textTestID,
+  imageTestID,
+  onRetake = null,
+  missingText = '',
+  retakeLabel = '',
+  isRetaking = false,
+  processingLabel = '',
+}) => {
+  // No upfront file check: the Image load itself reports a dead file:// path
+  // via onError, so missing files cost no extra I/O.
+  const [fileMissing, setFileMissing] = useState(false);
   // get base path from http://example.com/api/v2/any/ to http://example.com
   const baseURL = api.getConfig().baseURL?.replace(/\/api\/v\d+\/.*$/, '');
   const imageURL =
     !uri?.includes('file://') && !uri?.startsWith('http') && !uri.startsWith('data:image')
       ? `${baseURL}${uri}`
       : uri;
+  // Retake only makes sense for local files pending upload, not remote images
+  const showRetake = !!onRetake && !!uri?.startsWith('file://');
+
+  let content = (
+    <Image
+      source={{ uri: imageURL }}
+      testID={imageTestID}
+      style={styles.image}
+      onError={() => setFileMissing(true)}
+    />
+  );
+  if (fileMissing) {
+    content = (
+      <View>
+        <Text style={styles.missingText} testID={`${imageTestID}-missing`}>
+          {missingText}
+        </Text>
+        {showRetake && (
+          <Button title={retakeLabel} onPress={onRetake} testID={`${imageTestID}-retake`} />
+        )}
+      </View>
+    );
+  }
+  if (isRetaking) {
+    content = (
+      <View style={styles.processingContainer} testID={`${imageTestID}-processing`}>
+        <ActivityIndicator size="small" color="dodgerblue" />
+        <Text style={styles.processingText}>{processingLabel}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.containerImage}>
       <Text style={styles.title} testID={textTestID}>
         {label}
       </Text>
-      <Image source={{ uri: imageURL }} testID={imageTestID} style={styles.image} />
+      {content}
     </View>
   );
 };
@@ -116,12 +175,81 @@ const FormDataDetails = ({ navigation, route }) => {
   const selectedForm = FormState.useState((s) => s.form);
   const currentValues = FormState.useState((s) => s.currentValues);
   const [currentPage, setCurrentPage] = useState(0);
+  const [retakingKey, setRetakingKey] = useState(null);
+  const activeLang = UIState.useState((s) => s.lang);
+  const imageQuality = BuildParamsState.useState((s) => s.imageQuality);
+  const trans = i18n.text(activeLang);
+  const db = useSQLiteContext();
+
+  const datapointId = route?.params?.id;
+  // Retake only repairs local rows still waiting to upload
+  const canRetake = !!datapointId && !route?.params?.isSynced;
+
+  const ensureCameraPermission = async () => {
+    const isGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+    if (isGranted) {
+      return true;
+    }
+    const askPermission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+      title: trans.imageStoragePerm,
+      message: trans.imageCameraPerm,
+      buttonNeutral: trans.imageAskLater,
+      buttonNegative: trans.buttonCancel,
+      buttonPositive: trans.buttonOk,
+    });
+    return askPermission === PermissionsAndroid.RESULTS.GRANTED;
+  };
+
+  const handleRetake = async (questionKey) => {
+    const allowed = await ensureCameraPermission();
+    if (!allowed) {
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ base64: true });
+    if (result?.canceled) {
+      return;
+    }
+    setRetakingKey(questionKey);
+    try {
+      const { uri: imageUri } = result.assets[0];
+      let newUri = imageUri;
+      try {
+        const compressed = await compressImage(imageUri, imageQuality);
+        newUri = compressed.uri;
+      } catch (error) {
+        Sentry.captureMessage(`Image compression failed for ${imageUri}`);
+        Sentry.captureException(error);
+      }
+      // Move out of the purgeable cache dir so the photo survives until synced
+      newUri = await persistImage(newUri);
+      const updatedValues = { ...currentValues, [questionKey]: newUri };
+      FormState.update((s) => {
+        s.currentValues = updatedValues;
+      });
+      await crudDataPoints.updateJson(db, datapointId, updatedValues);
+      ToastAndroid.show(trans.retakeSuccess, ToastAndroid.LONG);
+    } finally {
+      setRetakingKey(null);
+    }
+  };
 
   const { json: formJSON } = selectedForm || {};
 
   const form = formJSON ? JSON.parse(formJSON) : {};
-  const currentGroup = form?.question_group?.[currentPage] || [];
-  const totalPage = form?.question_group?.length || 0;
+  // Skip question groups without any answered question — repeat-suffixed
+  // keys (qid-1, qid-2, ...) count for their base question id
+  const answeredQuestionIds = new Set(
+    Object.entries(currentValues)
+      .filter(
+        ([, value]) => value != null && value !== '' && !(Array.isArray(value) && !value.length),
+      )
+      .map(([key]) => key.split('-')[0]),
+  );
+  const questionGroups = (form?.question_group || []).filter((qg) =>
+    qg?.question?.some((q) => answeredQuestionIds.has(`${q.id}`)),
+  );
+  const currentGroup = questionGroups[currentPage] || [];
+  const totalPage = questionGroups.length || 0;
   const questions = currentGroup?.question || [];
   const numberOfRepeat =
     Object.entries(currentValues).filter(([key]) => {
@@ -157,6 +285,9 @@ const FormDataDetails = ({ navigation, route }) => {
             uri={answer}
             textTestID={`text-question-${qIndex}`}
             imageTestID={`image-question-${qIndex}`}
+            missingText={trans.fileMissingText}
+            retakeLabel={trans.buttonRetakePhoto}
+            onRetake={canRetake ? () => handleRetake(q.id) : null}
           />
         );
       }
@@ -164,11 +295,16 @@ const FormDataDetails = ({ navigation, route }) => {
     if ([QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(q.type) && answer) {
       return (
         <ImageView
-          key={q.id}
+          key={`${q.id}-${answer}`}
           label={q.label}
           uri={answer}
           textTestID={`text-question-${qIndex}`}
           imageTestID={`image-question-${qIndex}`}
+          missingText={trans.fileMissingText}
+          retakeLabel={trans.buttonRetakePhoto}
+          onRetake={canRetake && q.type === QUESTION_TYPES.photo ? () => handleRetake(q.id) : null}
+          isRetaking={retakingKey === q.id}
+          processingLabel={trans.compressingImage}
         />
       );
     }
@@ -266,6 +402,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     aspectRatio: 1,
+  },
+  missingText: {
+    color: '#b91c1c',
+    marginBottom: 8,
+  },
+  processingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  processingText: {
+    color: 'dodgerblue',
+    fontSize: 14,
   },
   listItem: {
     flexDirection: 'row',

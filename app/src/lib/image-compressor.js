@@ -78,6 +78,29 @@ export const formatFileSize = (bytes) => {
 };
 
 /**
+ * Moves a captured image out of the OS-purgeable cache directory into
+ * documentDirectory, so pending submissions never lose their photos to a
+ * cache purge. Returns the new URI, or the original one if the move fails.
+ * @param {string} uri - Image URI (typically in cacheDirectory)
+ * @returns {Promise<string>}
+ */
+export const persistImage = async (uri) => {
+  try {
+    const dir = `${FileSystem.documentDirectory}images`;
+    const { exists } = await FileSystem.getInfoAsync(dir);
+    if (!exists) {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    }
+    const to = `${dir}/${Date.now()}_${uri.split('/').pop()}`;
+    await FileSystem.moveAsync({ from: uri, to });
+    return to;
+  } catch (error) {
+    console.error('[ImageCompressor] Persist failed, keeping cache uri:', error);
+    return uri;
+  }
+};
+
+/**
  * Compress an image based on quality preset
  * @param {string} uri - Original image URI
  * @param {string} qualityPreset - Quality preset key ('low', 'medium', 'high', 'original')

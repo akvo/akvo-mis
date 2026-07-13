@@ -7,7 +7,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { FieldLabel } from '../support';
 import { FormState, BuildParamsState } from '../../store';
 import { i18n } from '../../lib';
-import { compressImage, formatFileSize } from '../../lib/image-compressor';
+import { compressImage, formatFileSize, persistImage } from '../../lib/image-compressor';
 
 const TypeImage = ({
   onChange,
@@ -38,11 +38,11 @@ const TypeImage = ({
     try {
       const result = await compressImage(imageUri, imageQuality);
       setFileSize(result.size);
-      onChange(id, result.uri);
+      onChange(id, await persistImage(result.uri));
     } catch (error) {
       console.error('[TypeImage] Compression error:', error);
       setFileSize(null);
-      onChange(id, imageUri);
+      onChange(id, await persistImage(imageUri));
     } finally {
       setIsCompressing(false);
     }

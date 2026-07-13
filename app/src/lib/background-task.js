@@ -1,6 +1,7 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Network from 'expo-network';
+import * as FileSystem from 'expo-file-system';
 import * as Sentry from '@sentry/react-native';
 import api from './api';
 import { openDatabase } from '../database';
@@ -112,7 +113,11 @@ const handleOnUploadFiles = async (
       // Same unescaping as processBatch — a raw parse here can throw on SQL-escaped
       // quotes and silently skip file extraction while processBatch still syncs
       const answers = JSON.parse(d.json.replace(/''/g, "'"));
-      const questions = JSON.parse(d.json_form)?.question_group?.flatMap((qg) => qg.question) || [];
+      // json_form is stored SQL-escaped like d.json — a raw parse throws on
+      // forms containing apostrophes and silently skips file extraction
+      const questions =
+        JSON.parse(d.json_form.replace(/''/g, "'"))?.question_group?.flatMap((qg) => qg.question) ||
+        [];
       const questionFiles = questions.filter((q) => questionTypes.includes(q.type));
       if (!questionFiles.length) return files;
 
@@ -261,7 +266,17 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
         // Only drafts keep the backend id: a draftId on a submitted row would
         // flip its sync URL to the is_published variant.
         const backendId = !d.submitted ? res?.data?.id : null;
+        // Persist the server file paths locally so previews keep working
+        // after the uploaded local copies are removed below
+        await crudDataPoints.updateJson(db, d.id, answerValues);
         await crudDataPoints.markSynced(db, d.id, backendId);
+        // Uploaded local copies are no longer needed — free the storage
+        const uploadedForThis = [...photos, ...attachments].filter((f) => f?.dataID === d.id);
+        await Promise.all(
+          uploadedForThis.map((f) =>
+            FileSystem.deleteAsync(f.value, { idempotent: true }).catch(() => null),
+          ),
+        );
       }
       counts.success += 1;
     } catch (error) {
