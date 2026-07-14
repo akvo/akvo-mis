@@ -112,8 +112,8 @@ const AddAssignment = () => {
   const handleFormChange = useCallback(
     (selectedValues) => {
       const prevValues = prevFormsRef.current;
-      const currentIds = selectedValues.map((v) => v.value || v);
-      const prevIds = prevValues.map((v) => v.value || v);
+      const currentIds = selectedValues.map((v) => v.value);
+      const prevIds = prevValues.map((v) => v.value);
 
       // Detect unchecked registration forms (parents removed)
       const registrationForms = userForms.filter((f) => !f?.content?.parent);
@@ -124,8 +124,8 @@ const AddAssignment = () => {
       );
 
       // Remove children of unchecked registrations
-      let filteredIds = currentIds.filter((formId) => {
-        const formItem = userForms.find((f) => f.id === formId);
+      const filteredValues = selectedValues.filter((v) => {
+        const formItem = userForms.find((f) => f.id === v.value);
         if (formItem?.content?.parent) {
           return !uncheckedRegistrations.includes(formItem.content.parent);
         }
@@ -133,15 +133,26 @@ const AddAssignment = () => {
       });
 
       // For each selected child, ensure its parent is also selected
-      const selectedSet = new Set(filteredIds);
-      filteredIds.forEach((formId) => {
-        const formItem = userForms.find((f) => f.id === formId);
-        if (formItem?.content?.parent) {
-          selectedSet.add(formItem.content.parent);
+      const selectedMap = new Map(filteredValues.map((v) => [v.value, v]));
+      filteredValues.forEach((v) => {
+        const formItem = userForms.find((f) => f.id === v.value);
+        if (
+          formItem?.content?.parent &&
+          !selectedMap.has(formItem.content.parent)
+        ) {
+          const parentForm = userForms.find(
+            (f) => f.id === formItem.content.parent
+          );
+          if (parentForm) {
+            selectedMap.set(parentForm.id, {
+              value: parentForm.id,
+              label: parentForm.name,
+            });
+          }
         }
       });
 
-      const newValues = Array.from(selectedSet);
+      const newValues = Array.from(selectedMap.values());
       prevFormsRef.current = newValues;
       form.setFieldsValue({ forms: newValues });
     },
@@ -171,12 +182,15 @@ const AddAssignment = () => {
         .get(`/mobile-assignments/${id}`)
         .then(({ data }) => {
           setEditAssignment(data);
-          const formIds = data.forms.map((f) => f?.id);
-          prevFormsRef.current = formIds;
+          const formLabeledValues = data.forms.map((f) => ({
+            value: f?.id,
+            label: f?.name,
+          }));
+          prevFormsRef.current = formLabeledValues;
           form.setFieldsValue({
             ...data,
             administrations: data.administrations.map((a) => a?.id),
-            forms: formIds,
+            forms: formLabeledValues,
           });
         })
         .catch((error) => {
@@ -233,7 +247,7 @@ const AddAssignment = () => {
         : authUser?.roles?.map((r) => r?.administration?.id);
       const payload = {
         name,
-        forms,
+        forms: forms.map((f) => f.value),
         administrations,
       };
       if (id) {
