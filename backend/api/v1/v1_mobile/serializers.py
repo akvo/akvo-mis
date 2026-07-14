@@ -70,18 +70,10 @@ class MobileAssignmentFormsSerializer(serializers.Serializer):
 
     @extend_schema_field(MobileFormSerializer(many=True))
     def get_formsUrl(self, obj):
-        # get all forms and its children forms
-        base_forms = list(obj.forms.filter(
+        # Return only explicitly assigned forms (no auto-include of children)
+        forms = obj.forms.filter(
             status=FormStatus.published
-        ).all().order_by("id"))
-        child_forms = []
-        for form in base_forms:
-            child_forms.extend(list(
-                form.children.filter(
-                    status=FormStatus.published
-                ).all().order_by("id")
-            ))
-        forms = base_forms + child_forms
+        ).order_by("id")
         return MobileFormSerializer(instance=forms, many=True).data
 
     def get_syncToken(self, obj):
@@ -116,6 +108,7 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
         return {
             "id": value.pk,
             "name": value.name,
+            "type": "monitoring" if value.parent_id else "registration",
         }
 
     def get_queryset(self):
@@ -123,6 +116,33 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
         request = self.context.get("request")
         selected_adm = request.data.get("administrations") if request else None
         selected_forms = request.data.get("forms") if request else None
+
+        # Validate monitoring forms have their parent registration included
+        # Use the filtered queryset (published forms only) for validation
+        if selected_forms:
+            selected_form_objs = queryset.filter(pk__in=selected_forms)
+            monitoring_forms = selected_form_objs.filter(
+                parent__isnull=False
+            ).select_related("parent")
+            registration_ids = set(
+                selected_form_objs.filter(
+                    parent__isnull=True
+                ).values_list("id", flat=True)
+            )
+
+            missing_parents = []
+            for mf in monitoring_forms:
+                if mf.parent_id not in registration_ids:
+                    missing_parents.append({
+                        "form": mf.id,
+                        "monitoring_form": mf.name,
+                        "required_registration": mf.parent.name,
+                        "required_registration_id": mf.parent_id,
+                    })
+
+            if missing_parents:
+                raise serializers.ValidationError(missing_parents)
+
         entity_forms = queryset.filter(
             pk__in=selected_forms, form_questions__extra__icontains="entity"
         ).distinct()
@@ -176,7 +196,7 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
 
 class MobileAssignmentSerializer(serializers.ModelSerializer):
     forms = FormsAndEntityValidation(
-        queryset=Forms.objects.filter(parent__isnull=True).all(),
+        queryset=Forms.objects.filter(status=FormStatus.published).all(),
         many=True
     )
     administrations = IdAndNameRelatedField(
