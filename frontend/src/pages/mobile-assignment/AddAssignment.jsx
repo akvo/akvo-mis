@@ -220,6 +220,14 @@ const AddAssignment = () => {
       const { forms: _formErrors } = JSON.parse(errorResponse || "{}");
       if (_formErrors) {
         const _formFeedback = _formErrors.map((f) => {
+          // Handle parent/child validation errors
+          if (f.required_registration) {
+            return text.errorMonitoringRequiresRegistration(
+              f.monitoring_form,
+              f.required_registration
+            );
+          }
+          // Handle entity validation errors
           if (f.exists === "True") {
             return text.errorEntityData(f.entity);
           }

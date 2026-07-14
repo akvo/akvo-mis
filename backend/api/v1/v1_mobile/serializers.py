@@ -118,8 +118,9 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
         selected_forms = request.data.get("forms") if request else None
 
         # Validate monitoring forms have their parent registration included
+        # Use the filtered queryset (published forms only) for validation
         if selected_forms:
-            selected_form_objs = Forms.objects.filter(pk__in=selected_forms)
+            selected_form_objs = queryset.filter(pk__in=selected_forms)
             monitoring_forms = selected_form_objs.filter(
                 parent__isnull=False
             ).select_related("parent")

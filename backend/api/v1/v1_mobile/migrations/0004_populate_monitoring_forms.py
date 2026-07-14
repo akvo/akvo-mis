@@ -19,32 +19,36 @@ def populate_monitoring_forms(apps, schema_editor):
     # FormStatus.published = 2
     PUBLISHED_STATUS = 2
 
-    for assignment in MobileAssignment.objects.all():
-        # Get all registration forms (parent=null) in this assignment
-        registration_forms = assignment.forms.filter(parent__isnull=True)
+    for assignment in MobileAssignment.objects.prefetch_related('forms').all():
+        # Get registration form IDs in this assignment
+        registration_ids = list(
+            assignment.forms.filter(
+                parent__isnull=True
+            ).values_list('id', flat=True)
+        )
 
-        for reg_form in registration_forms:
-            # Find all published monitoring forms for this registration
+        if registration_ids:
+            # Get all published monitoring forms for these registrations
+            # in a single query
             monitoring_forms = Forms.objects.filter(
-                parent=reg_form,
+                parent_id__in=registration_ids,
                 status=PUBLISHED_STATUS
             )
             # Add them to the assignment
             assignment.forms.add(*monitoring_forms)
 
 
-def reverse_populate_monitoring_forms(apps, schema_editor):
+def reverse_noop(apps, schema_editor):
     """
-    Reverse migration: remove all monitoring forms from assignments,
-    leaving only registration forms.
-    """
-    MobileAssignment = apps.get_model('v1_mobile', 'MobileAssignment')
+    No-op reverse migration.
 
-    for assignment in MobileAssignment.objects.all():
-        # Get all monitoring forms (parent is not null) in this assignment
-        monitoring_forms = assignment.forms.filter(parent__isnull=False)
-        # Remove them from the assignment
-        assignment.forms.remove(*monitoring_forms)
+    We don't remove monitoring forms on rollback because:
+    1. After this migration, users may have explicitly configured
+       monitoring form assignments
+    2. Removing all monitoring forms would cause data loss
+    3. The old behavior (auto-include) still works with explicit assignments
+    """
+    pass
 
 
 class Migration(migrations.Migration):
@@ -57,6 +61,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             populate_monitoring_forms,
-            reverse_code=reverse_populate_monitoring_forms,
+            reverse_code=reverse_noop,
         ),
     ]
