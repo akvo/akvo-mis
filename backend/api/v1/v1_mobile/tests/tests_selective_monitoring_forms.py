@@ -38,16 +38,19 @@ class SelectiveMonitoringFormsTestCase(
             status=FormStatus.published,
             children__isnull=False
         ).distinct().first()
+        self.assertIsNotNone(self.registration_form)
 
         # Get monitoring form that is a child of the registration form
         self.monitoring_form = Forms.objects.filter(
             parent=self.registration_form,
             status=FormStatus.published
         ).first()
+        self.assertIsNotNone(self.monitoring_form)
 
         self.administration = Administration.objects.filter(
             level__level__gt=0
         ).first()
+        self.assertIsNotNone(self.administration)
 
         self.assertIsNotNone(
             self.registration_form,
