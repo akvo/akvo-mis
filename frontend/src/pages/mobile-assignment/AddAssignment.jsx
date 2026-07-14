@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Row, Col, Form, Button, Input, Select, Space, Modal, Tag } from "antd";
+import {
+  Row,
+  Col,
+  Form,
+  Button,
+  Input,
+  Select,
+  Space,
+  Modal,
+  TreeSelect,
+} from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import {
@@ -31,7 +41,6 @@ const AddAssignment = () => {
   const [level, setLevel] = useState(userAdmLevel);
   const [admLevel, setAdmLevel] = useState(null);
   const [selectedAdministrations, setSelectedAdministrations] = useState([]);
-  const [formErrors, setFormErrors] = useState([]);
   const [formFeedback, setFormFeedback] = useState(null);
 
   const lowestLevel = levels
@@ -69,7 +78,45 @@ const AddAssignment = () => {
       title: pageTitle,
     },
   ];
-  const formOptions = userForms.filter((f) => !f?.content?.parent);
+  // Build tree data for form selection
+  // Registration forms are parents, monitoring forms are children
+  const formTreeData = useMemo(() => {
+    const registrationForms = userForms.filter((f) => !f?.content?.parent);
+    return registrationForms.map((reg) => {
+      const monitoringForms = userForms.filter(
+        (f) => f?.content?.parent === reg.id
+      );
+      return {
+        title: reg.name,
+        value: reg.id,
+        key: `reg-${reg.id}`,
+        children: monitoringForms.map((mon) => ({
+          title: mon.name,
+          value: mon.id,
+          key: `mon-${mon.id}`,
+        })),
+      };
+    });
+  }, [userForms]);
+
+  // Handle form selection change - auto-select parent when child is selected
+  const handleFormChange = useCallback(
+    (selectedValues) => {
+      const selectedSet = new Set(selectedValues);
+
+      // For each selected form, ensure its parent is also selected
+      selectedValues.forEach((formId) => {
+        const formItem = userForms.find((f) => f.id === formId);
+        if (formItem?.content?.parent) {
+          selectedSet.add(formItem.content.parent);
+        }
+      });
+
+      const newValues = Array.from(selectedSet);
+      form.setFieldsValue({ forms: newValues });
+    },
+    [userForms, form]
+  );
 
   const fetchUserAdmin = useCallback(async () => {
     try {
@@ -146,7 +193,6 @@ const AddAssignment = () => {
   const onFinish = async ({ name, forms }) => {
     setSubmitting(true);
     setFormFeedback(null);
-    setFormErrors([]);
     try {
       const administrations = selectedAdministrations?.length
         ? selectedAdministrations?.map((adm) => adm?.id || adm)
@@ -180,33 +226,9 @@ const AddAssignment = () => {
           return text.errorEntityNotExists(f.entity);
         });
         setFormFeedback(_formFeedback);
-        setFormErrors(_formErrors);
       }
       setSubmitting(false);
     }
-  };
-
-  const tagRender = (props) => {
-    const { label, value, closable, onClose } = props;
-    const onPreventMouseDown = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    const isError = formErrors.find((err) => err.form === `${value}`);
-    const color = isError ? "red" : "default";
-    return (
-      <Tag
-        onMouseDown={onPreventMouseDown}
-        closable={closable}
-        onClose={onClose}
-        style={{
-          marginRight: 3,
-        }}
-        color={color}
-      >
-        {label}
-      </Tag>
-    );
   };
 
   const fetchData = useCallback(async () => {
@@ -382,16 +404,18 @@ const AddAssignment = () => {
                   </ul>
                 }
               >
-                <Select
+                <TreeSelect
                   getPopupContainer={(trigger) => trigger.parentNode}
                   placeholder={text.mobileSelectForms}
-                  mode="multiple"
+                  treeData={formTreeData}
+                  treeCheckable
+                  showCheckedStrategy={TreeSelect.SHOW_ALL}
+                  treeDefaultExpandAll
                   allowClear
                   loading={loading}
-                  fieldNames={{ value: "id", label: "name" }}
-                  options={formOptions}
+                  onChange={handleFormChange}
                   className="custom-select"
-                  tagRender={tagRender}
+                  maxTagCount="responsive"
                 />
               </Form.Item>
             </div>
