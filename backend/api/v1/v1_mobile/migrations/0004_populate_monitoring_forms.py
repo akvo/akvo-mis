@@ -21,9 +21,12 @@ def populate_monitoring_forms(apps, schema_editor):
 
     for assignment in MobileAssignment.objects.prefetch_related('forms').all():
         # Get registration form IDs in this assignment
+        # Only consider published registration forms to avoid assigning
+        # monitoring forms for draft/unpublished registrations
         registration_ids = list(
             assignment.forms.filter(
-                parent__isnull=True
+                parent__isnull=True,
+                status=PUBLISHED_STATUS
             ).values_list('id', flat=True)
         )
 

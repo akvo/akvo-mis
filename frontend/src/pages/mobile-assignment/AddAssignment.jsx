@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import {
   Row,
   Col,
@@ -99,13 +105,36 @@ const AddAssignment = () => {
     });
   }, [userForms]);
 
+  // Track previous form selection to detect unchecking
+  const prevFormsRef = useRef([]);
+
   // Handle form selection change - auto-select parent when child is selected
   const handleFormChange = useCallback(
     (selectedValues) => {
-      const selectedSet = new Set(selectedValues);
+      const prevValues = prevFormsRef.current;
+      const currentIds = selectedValues.map((v) => v.value || v);
+      const prevIds = prevValues.map((v) => v.value || v);
 
-      // For each selected form, ensure its parent is also selected
-      selectedValues.forEach((formId) => {
+      // Detect unchecked registration forms (parents removed)
+      const registrationForms = userForms.filter((f) => !f?.content?.parent);
+      const uncheckedRegistrations = prevIds.filter(
+        (formId) =>
+          registrationForms.some((r) => r.id === formId) &&
+          !currentIds.includes(formId)
+      );
+
+      // Remove children of unchecked registrations
+      let filteredIds = currentIds.filter((formId) => {
+        const formItem = userForms.find((f) => f.id === formId);
+        if (formItem?.content?.parent) {
+          return !uncheckedRegistrations.includes(formItem.content.parent);
+        }
+        return true;
+      });
+
+      // For each selected child, ensure its parent is also selected
+      const selectedSet = new Set(filteredIds);
+      filteredIds.forEach((formId) => {
         const formItem = userForms.find((f) => f.id === formId);
         if (formItem?.content?.parent) {
           selectedSet.add(formItem.content.parent);
@@ -113,6 +142,7 @@ const AddAssignment = () => {
       });
 
       const newValues = Array.from(selectedSet);
+      prevFormsRef.current = newValues;
       form.setFieldsValue({ forms: newValues });
     },
     [userForms, form]
@@ -141,10 +171,12 @@ const AddAssignment = () => {
         .get(`/mobile-assignments/${id}`)
         .then(({ data }) => {
           setEditAssignment(data);
+          const formIds = data.forms.map((f) => f?.id);
+          prevFormsRef.current = formIds;
           form.setFieldsValue({
             ...data,
             administrations: data.administrations.map((a) => a?.id),
-            forms: data.forms.map((f) => f?.id),
+            forms: formIds,
           });
         })
         .catch((error) => {
@@ -417,6 +449,7 @@ const AddAssignment = () => {
                   placeholder={text.mobileSelectForms}
                   treeData={formTreeData}
                   treeCheckable
+                  treeCheckStrictly
                   showCheckedStrategy={TreeSelect.SHOW_ALL}
                   treeDefaultExpandAll
                   allowClear

@@ -49,6 +49,19 @@ class SelectiveMonitoringFormsTestCase(
             level__level__gt=0
         ).first()
 
+        self.assertIsNotNone(
+            self.registration_form,
+            "Test requires a published registration form with children"
+        )
+        self.assertIsNotNone(
+            self.monitoring_form,
+            "Test requires a published monitoring form"
+        )
+        self.assertIsNotNone(
+            self.administration,
+            "Test requires an administration with level > 0"
+        )
+
     def test_create_assignment_with_monitoring_form_without_parent_fails(self):
         """
         Creating an assignment with a monitoring form but without its
