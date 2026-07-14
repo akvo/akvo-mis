@@ -862,6 +862,8 @@ const uiText = {
       `The selected administration doesn't have ${entity} entities`,
     errorEntityNotExists: (entity) =>
       `Unfortunately, ${entity} entities are not yet available. Please get in touch with Admin to add it`,
+    errorMonitoringRequiresRegistration: (monitoring, registration) =>
+      `"${monitoring}" requires its parent registration form "${registration}" to be selected`,
     questionCol: "Question",
     responseCol: "Response",
     lastResponseCol: "Last Response",

@@ -13,4 +13,4 @@ notify.team.sh
 **/app.env
 **/db.env
 .virtual_documents/
-android/
+android/.claude/
