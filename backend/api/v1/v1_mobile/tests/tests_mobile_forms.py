@@ -9,6 +9,7 @@ from api.v1.v1_profile.models import (
 from django.core.management import call_command
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_forms.models import Forms, UserForms
+from api.v1.v1_forms.constants import FormStatus
 from rest_framework import status
 
 
@@ -57,7 +58,11 @@ class MobileFormsApiTest(TestCase, AssignmentTokenTestHelperMixin):
         # Explicitly add monitoring forms (children) to the assignment
         # Since selective monitoring form assignment feature,
         # children are no longer auto-included
-        self.form_children = Forms.objects.filter(parent=self.form)
+        # Filter to published status to match API behavior
+        self.form_children = Forms.objects.filter(
+            parent=self.form,
+            status=FormStatus.published
+        )
         self.mobile_assignment.forms.add(*self.form_children)
 
     def test_get_forms_list(self):

@@ -618,6 +618,7 @@ class MobileAssignmentViewSet(ModelViewSet):
                     )
                 ),
             },
+            many=True,
         )
     },
     tags=["Mobile Assignment"],

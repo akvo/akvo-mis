@@ -120,7 +120,9 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
         # Validate monitoring forms have their parent registration included
         if selected_forms:
             selected_form_objs = Forms.objects.filter(pk__in=selected_forms)
-            monitoring_forms = selected_form_objs.filter(parent__isnull=False)
+            monitoring_forms = selected_form_objs.filter(
+                parent__isnull=False
+            ).select_related("parent")
             registration_ids = set(
                 selected_form_objs.filter(
                     parent__isnull=True
