@@ -2,13 +2,13 @@
 
     <style>
       .bolditalic {font-style: italic; font-weight: 700;}
-      .heading {font-size: 34px; font-weight: 700;}
     </style>
 
 .. role:: bolditalic
-.. role:: heading
 
-:heading:`Configuring Dependencies`
+========================
+Configuring Dependencies
+========================
 
 A :bolditalic:`dependency` (also called :bolditalic:`skip logic`) makes a
 question appear only when another question has a particular answer. This keeps

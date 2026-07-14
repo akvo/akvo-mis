@@ -2,13 +2,13 @@
 
     <style>
       .bolditalic {font-style: italic; font-weight: 700;}
-      .heading {font-size: 34px; font-weight: 700;}
     </style>
 
 .. role:: bolditalic
-.. role:: heading
 
-:heading:`Form Builder Best Practices`
+===========================
+Form Builder Best Practices
+===========================
 
 A few habits make forms easier to analyse, safer to change, and more pleasant to
 fill in — especially on mobile. This page collects the ones that matter most.

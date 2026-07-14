@@ -2,13 +2,13 @@
 
     <style>
       .bolditalic {font-style: italic; font-weight: 700;}
-      .heading {font-size: 34px; font-weight: 700;}
     </style>
 
 .. role:: bolditalic
-.. role:: heading
 
-:heading:`Question Types`
+==============
+Question Types
+==============
 
 When you add a question in the Form Builder, you choose its :bolditalic:`type`
 from the :bolditalic:`Question Type` dropdown. The type decides what kind of

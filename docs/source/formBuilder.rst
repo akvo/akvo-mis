@@ -2,13 +2,13 @@
 
     <style>
       .bolditalic {font-style: italic; font-weight: 700;}
-      .heading {font-size: 34px; font-weight: 700;}
     </style>
 
 .. role:: bolditalic
-.. role:: heading
 
-:heading:`Form Builder`
+============
+Form Builder
+============
 
 The Form Builder lets authorised users design and publish their own
 questionnaires — no developer involvement required. A form you build here
