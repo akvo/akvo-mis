@@ -18,7 +18,7 @@ from mis.settings import (
 )
 from django.http import HttpResponse
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 
 from rest_framework import status, serializers
 from rest_framework.response import Response
@@ -52,6 +52,7 @@ from .serializers import (
 )
 from .models import MobileAssignment, MobileApk
 from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
+from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_data.models import FormData
 from api.v1.v1_forms.serializers import WebFormDetailSerializer
 from api.v1.v1_data.serializers import (
@@ -596,6 +597,65 @@ class MobileAssignmentViewSet(ModelViewSet):
                 | Q(user__email__icontains=search)
             )
         return qs
+
+
+@extend_schema(
+    responses={
+        (200, "application/json"): inline_serializer(
+            "FormsTreeResponse",
+            fields={
+                "id": serializers.IntegerField(),
+                "name": serializers.CharField(),
+                "type": serializers.CharField(),
+                "children": serializers.ListField(
+                    child=inline_serializer(
+                        "FormsTreeChildResponse",
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "name": serializers.CharField(),
+                            "type": serializers.CharField(),
+                        },
+                    )
+                ),
+            },
+        )
+    },
+    tags=["Mobile Assignment"],
+    summary="Get forms in tree structure for assignment selection",
+    description=(
+        "Returns published forms in a hierarchical tree structure "
+        "with registration forms as parents and monitoring forms as children. "
+        "Used for the mobile assignment form selection UI."
+    ),
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_forms_tree(request, version):
+    """Returns published forms in tree structure for assignment UI."""
+    registration_forms = Forms.objects.filter(
+        parent__isnull=True,
+        status=FormStatus.published
+    ).prefetch_related(
+        Prefetch(
+            "children",
+            queryset=Forms.objects.filter(
+                status=FormStatus.published
+            ).order_by("name")
+        )
+    ).order_by("name")
+
+    result = []
+    for reg in registration_forms:
+        result.append({
+            "id": reg.id,
+            "name": reg.name,
+            "type": "registration",
+            "children": [
+                {"id": m.id, "name": m.name, "type": "monitoring"}
+                for m in reg.children.all()
+            ]
+        })
+    return Response(result, status=status.HTTP_200_OK)
 
 
 @extend_schema(

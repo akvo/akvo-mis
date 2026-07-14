@@ -13,6 +13,7 @@ from .views import (
     check_apk_version,
     UploadAttachmentsView,
     DraftFormDataViewSet,
+    get_forms_tree,
 )
 
 urlpatterns = [
@@ -25,6 +26,11 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/mobile-assignments",
         MobileAssignmentViewSet.as_view({"get": "list", "post": "create"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/forms-tree",
+        get_forms_tree,
+        name="forms-tree",
     ),
     re_path(r"^(?P<version>(v1))/device/auth", get_mobile_forms),
     re_path(

@@ -54,6 +54,11 @@ class MobileFormsApiTest(TestCase, AssignmentTokenTestHelperMixin):
             *self.administration_children
         )
         self.mobile_assignment.forms.add(self.form)
+        # Explicitly add monitoring forms (children) to the assignment
+        # Since selective monitoring form assignment feature,
+        # children are no longer auto-included
+        self.form_children = Forms.objects.filter(parent=self.form)
+        self.mobile_assignment.forms.add(*self.form_children)
 
     def test_get_forms_list(self):
         code = {"code": self.passcode}
@@ -65,19 +70,18 @@ class MobileFormsApiTest(TestCase, AssignmentTokenTestHelperMixin):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(len(data["formsUrl"]), 2)
+        # 1 registration form + monitoring forms (explicitly assigned)
+        expected_count = 1 + self.form_children.count()
+        self.assertEqual(len(data["formsUrl"]), expected_count)
 
-        form_children = Forms.objects.filter(
-            parent=self.form
-        ).values_list("id", flat=True)
         # Check if the form children are included in the response
-        for form_id in form_children:
+        for form_child in self.form_children:
             self.assertIn(
                 {
-                    "id": form_id,
+                    "id": form_child.id,
                     "parentId": self.form.id,
                     "version": str(self.form.version),
-                    "url": f"/form/{form_id}",
+                    "url": f"/form/{form_child.id}",
                 },
                 data["formsUrl"],
             )
