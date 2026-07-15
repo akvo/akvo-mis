@@ -204,8 +204,7 @@ def sync_pending_form_data(request, version):
             # If user has a role with data access, use that administration
             administration = user_role.administration
 
-    is_draft = request.GET.get("is_draft", False)
-    is_draft = True if is_draft in ["true", "True", "1"] else False
+    is_draft = params.validated_data["is_draft"]
     # Allow empty answers for drafts only
     if not request.data.get("answers") and not is_draft:
         return Response(
