@@ -50,7 +50,7 @@ Approving Data
 
 2. All datasets that are pending approval will appear in the :bolditalic:`Verification` section of the Control center. Click the :bolditalic:`View All` button to begin the approval process.
 
-.. image:: ../assets/approal-pending-1.png
+.. image:: ../assets/approval-pending-1.png
     :alt: Pending Approval
     :width: 100%
 
@@ -59,17 +59,17 @@ Approving Data
 **Raw Data**: From this tab, you can access the raw data, make edits and save edits.
 You can add notes and feedback and the data submitter will receive an email notification once the dataset is approved or declined.
 
-.. image:: ../assets/approal-pending-2.png
+.. image:: ../assets/approval-pending-2.png
   :alt: Pending Approval Raw Data
   :width: 100%
 
-.. image:: ../assets/approal-pending-3.png
+.. image:: ../assets/approval-pending-3.png
   :alt: Pending Approval Data Summary
   :width: 100%
 
 4. Once the data is is approved it will move to the approved tab.  
 
-.. image:: ../assets/approal-pending-4.png
+.. image:: ../assets/approval-pending-4.png
   :alt: Approved Data
   :width: 100%
 
