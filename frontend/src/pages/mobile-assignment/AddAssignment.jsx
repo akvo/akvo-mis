@@ -1,5 +1,21 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Row, Col, Form, Button, Input, Select, Space, Modal, Tag } from "antd";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import {
+  Row,
+  Col,
+  Form,
+  Button,
+  Input,
+  Select,
+  Space,
+  Modal,
+  TreeSelect,
+} from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import {
@@ -31,7 +47,6 @@ const AddAssignment = () => {
   const [level, setLevel] = useState(userAdmLevel);
   const [admLevel, setAdmLevel] = useState(null);
   const [selectedAdministrations, setSelectedAdministrations] = useState([]);
-  const [formErrors, setFormErrors] = useState([]);
   const [formFeedback, setFormFeedback] = useState(null);
 
   const lowestLevel = levels
@@ -69,7 +84,80 @@ const AddAssignment = () => {
       title: pageTitle,
     },
   ];
-  const formOptions = userForms.filter((f) => !f?.content?.parent);
+  // Build tree data for form selection
+  // Registration forms are parents, monitoring forms are children
+  const formTreeData = useMemo(() => {
+    const registrationForms = userForms.filter((f) => !f?.content?.parent);
+    return registrationForms.map((reg) => {
+      const monitoringForms = userForms.filter(
+        (f) => f?.content?.parent === reg.id
+      );
+      return {
+        title: reg.name,
+        value: reg.id,
+        key: `reg-${reg.id}`,
+        children: monitoringForms.map((mon) => ({
+          title: mon.name,
+          value: mon.id,
+          key: `mon-${mon.id}`,
+        })),
+      };
+    });
+  }, [userForms]);
+
+  // Track previous form selection to detect unchecking
+  const prevFormsRef = useRef([]);
+
+  // Handle form selection change - auto-select parent when child is selected
+  const handleFormChange = useCallback(
+    (selectedValues) => {
+      const prevValues = prevFormsRef.current;
+      const currentIds = selectedValues.map((v) => v.value);
+      const prevIds = prevValues.map((v) => v.value);
+
+      // Detect unchecked registration forms (parents removed)
+      const registrationForms = userForms.filter((f) => !f?.content?.parent);
+      const uncheckedRegistrations = prevIds.filter(
+        (formId) =>
+          registrationForms.some((r) => r.id === formId) &&
+          !currentIds.includes(formId)
+      );
+
+      // Remove children of unchecked registrations
+      const filteredValues = selectedValues.filter((v) => {
+        const formItem = userForms.find((f) => f.id === v.value);
+        if (formItem?.content?.parent) {
+          return !uncheckedRegistrations.includes(formItem.content.parent);
+        }
+        return true;
+      });
+
+      // For each selected child, ensure its parent is also selected
+      const selectedMap = new Map(filteredValues.map((v) => [v.value, v]));
+      filteredValues.forEach((v) => {
+        const formItem = userForms.find((f) => f.id === v.value);
+        if (
+          formItem?.content?.parent &&
+          !selectedMap.has(formItem.content.parent)
+        ) {
+          const parentForm = userForms.find(
+            (f) => f.id === formItem.content.parent
+          );
+          if (parentForm) {
+            selectedMap.set(parentForm.id, {
+              value: parentForm.id,
+              label: parentForm.name,
+            });
+          }
+        }
+      });
+
+      const newValues = Array.from(selectedMap.values());
+      prevFormsRef.current = newValues;
+      form.setFieldsValue({ forms: newValues });
+    },
+    [userForms, form]
+  );
 
   const fetchUserAdmin = useCallback(async () => {
     try {
@@ -94,10 +182,15 @@ const AddAssignment = () => {
         .get(`/mobile-assignments/${id}`)
         .then(({ data }) => {
           setEditAssignment(data);
+          const formLabeledValues = data.forms.map((f) => ({
+            value: f?.id,
+            label: f?.name,
+          }));
+          prevFormsRef.current = formLabeledValues;
           form.setFieldsValue({
             ...data,
             administrations: data.administrations.map((a) => a?.id),
-            forms: data.forms.map((f) => f?.id),
+            forms: formLabeledValues,
           });
         })
         .catch((error) => {
@@ -146,7 +239,6 @@ const AddAssignment = () => {
   const onFinish = async ({ name, forms }) => {
     setSubmitting(true);
     setFormFeedback(null);
-    setFormErrors([]);
     try {
       const administrations = selectedAdministrations?.length
         ? selectedAdministrations?.map((adm) => adm?.id || adm)
@@ -155,7 +247,7 @@ const AddAssignment = () => {
         : authUser?.roles?.map((r) => r?.administration?.id);
       const payload = {
         name,
-        forms,
+        forms: forms.map((f) => f.value),
         administrations,
       };
       if (id) {
@@ -174,39 +266,23 @@ const AddAssignment = () => {
       const { forms: _formErrors } = JSON.parse(errorResponse || "{}");
       if (_formErrors) {
         const _formFeedback = _formErrors.map((f) => {
+          // Handle parent/child validation errors
+          if (f.required_registration) {
+            return text.errorMonitoringRequiresRegistration(
+              f.monitoring_form,
+              f.required_registration
+            );
+          }
+          // Handle entity validation errors
           if (f.exists === "True") {
             return text.errorEntityData(f.entity);
           }
           return text.errorEntityNotExists(f.entity);
         });
         setFormFeedback(_formFeedback);
-        setFormErrors(_formErrors);
       }
       setSubmitting(false);
     }
-  };
-
-  const tagRender = (props) => {
-    const { label, value, closable, onClose } = props;
-    const onPreventMouseDown = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    const isError = formErrors.find((err) => err.form === `${value}`);
-    const color = isError ? "red" : "default";
-    return (
-      <Tag
-        onMouseDown={onPreventMouseDown}
-        closable={closable}
-        onClose={onClose}
-        style={{
-          marginRight: 3,
-        }}
-        color={color}
-      >
-        {label}
-      </Tag>
-    );
   };
 
   const fetchData = useCallback(async () => {
@@ -382,16 +458,19 @@ const AddAssignment = () => {
                   </ul>
                 }
               >
-                <Select
+                <TreeSelect
                   getPopupContainer={(trigger) => trigger.parentNode}
                   placeholder={text.mobileSelectForms}
-                  mode="multiple"
+                  treeData={formTreeData}
+                  treeCheckable
+                  treeCheckStrictly
+                  showCheckedStrategy={TreeSelect.SHOW_ALL}
+                  treeDefaultExpandAll
                   allowClear
                   loading={loading}
-                  fieldNames={{ value: "id", label: "name" }}
-                  options={formOptions}
+                  onChange={handleFormChange}
                   className="custom-select"
-                  tagRender={tagRender}
+                  maxTagCount="responsive"
                 />
               </Form.Item>
             </div>

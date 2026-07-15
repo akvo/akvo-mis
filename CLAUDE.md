@@ -9,6 +9,29 @@ Akvo MIS (Management Information System) is a Real Time Monitoring Information S
 - **Frontend**: React web application (Create React App)
 - **Mobile App**: React Native mobile application (Expo)
 
+## Important Development Rules
+
+### Always Use Docker Compose Wrappers
+
+**ALWAYS** use `./dc.sh` or `./dc-mobile.sh` for running any commands. Never use raw `docker-compose` commands or run commands directly on the host machine.
+
+- **Backend/Frontend/Worker**: Use `./dc.sh exec <service> <command>`
+- **Mobile App**: Use `./dc-mobile.sh exec <service> <command>`
+
+Examples:
+```bash
+# Correct
+./dc.sh exec backend python manage.py migrate
+./dc.sh exec backend flake8
+./dc.sh exec frontend npm run lint
+./dc-mobile.sh exec mobile npm test
+
+# Incorrect - DO NOT DO THIS
+docker-compose exec backend python manage.py migrate
+python manage.py migrate  # Running directly on host
+cd frontend && npm run lint  # Running on host instead of container
+```
+
 ## Architecture
 
 ### Multi-Tier Application Structure
@@ -479,6 +502,27 @@ Key variables in `.env`:
 - `./generate_config.sh`: Generate config files
 
 ## Git Workflow
+
+### Pre-Commit Checklist
+
+**Before committing any changes**, run the following checks:
+
+1. **Backend changes** - Run flake8 linter:
+```bash
+./dc.sh exec backend flake8
+```
+
+2. **Frontend changes** - Run ESLint:
+```bash
+./dc.sh exec frontend npm run lint
+```
+
+3. **Mobile app changes** - Run ESLint:
+```bash
+./dc-mobile.sh exec mobile npm run lint
+```
+
+Fix any linting errors before committing. Do not commit code with linting violations.
 
 ### Branch Naming Convention
 

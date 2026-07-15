@@ -66,6 +66,64 @@ class MobileAssignmentApiSyncNewDraftTest(
         self.mobile_assignment.forms.add(self.form)
         self.mobile_token = self.get_assignment_token(passcode)
 
+    def test_sync_new_draft_with_empty_answers(self):
+        """
+        Test creating a new draft with empty answers (blank form exit).
+        This scenario happens when user opens a form and exits without
+        entering any data.
+        """
+        payload = {
+            "formId": self.form.id,
+            "name": "Blank Draft",
+            "duration": 0,
+            "submittedAt": "2021-01-01T00:00:00.000Z",
+            "geo": self.geo,
+            "uuid": "blank-draft-uuid-1234",
+            "answers": {},
+        }
+
+        response = self.client.post(
+            "/api/v1/device/sync?is_draft=true",
+            payload,
+            content_type="application/json",
+            **{"HTTP_AUTHORIZATION": f"Bearer {self.mobile_token}"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+
+        draft = FormData.objects_draft.filter(
+            uuid="blank-draft-uuid-1234"
+        ).first()
+        self.assertIsNotNone(draft)
+        self.assertEqual(draft.name, "Blank Draft")
+        self.assertEqual(draft.data_answer.count(), 0)
+        self.assertEqual(data, {"message": "ok", "id": draft.id})
+
+    def test_sync_submission_with_empty_answers_returns_400(self):
+        """
+        Test that non-draft submissions with empty answers return 400.
+        Empty answers should only be allowed for drafts.
+        """
+        payload = {
+            "formId": self.form.id,
+            "name": "Empty Submission",
+            "duration": 0,
+            "submittedAt": "2021-01-01T00:00:00.000Z",
+            "geo": self.geo,
+            "uuid": "empty-submission-uuid",
+            "answers": {},
+        }
+
+        response = self.client.post(
+            "/api/v1/device/sync",
+            payload,
+            content_type="application/json",
+            **{"HTTP_AUTHORIZATION": f"Bearer {self.mobile_token}"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        data = response.json()
+        self.assertEqual(data["message"], "Answers is required.")
+
     def test_sync_new_draft(self):
         """
         Test creating a new draft submission.
