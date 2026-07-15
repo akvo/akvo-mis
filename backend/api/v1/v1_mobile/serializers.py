@@ -260,16 +260,11 @@ class SyncDeviceFormDataSerializer(serializers.Serializer):
             "nothing and still returns 200."
         ),
     )
-    answers = serializers.DictField()
+    answers = serializers.DictField(required=False, default=dict)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.fields.get("formId").queryset = Forms.objects.all()
-
-    def validate(self, attrs):
-        if not attrs.get("answers"):
-            raise serializers.ValidationError("Answers cannot be empty.")
-        return attrs
 
     class Meta:
         fields = [
