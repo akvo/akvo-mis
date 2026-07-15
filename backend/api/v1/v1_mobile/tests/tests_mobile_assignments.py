@@ -240,7 +240,11 @@ class MobileAssignmentTestCase(TestCase, ProfileTestHelperMixin):
         assignment = MobileAssignment.objects.get(name='secret')
         self.assertEqual(
                 CustomPasscode().encode(data['passcode']), assignment.passcode)
-        self.assertEqual(data['forms'], [{'id': form.id, 'name': form.name}])
+        self.assertEqual(data['forms'], [{
+            'id': form.id,
+            'name': form.name,
+            'type': 'registration'
+        }])
         self.assertEqual(
                 len(data['administrations']),
                 assignment.administrations.count())

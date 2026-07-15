@@ -35,6 +35,7 @@ import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { FormStatusTag, ImportFormModal } from "./components";
 import { api, store, uiText, REGISTRATION_FORM } from "../../lib";
 import { useNotification } from "../../util/hooks";
+import { fetchPublishedForms } from "../../util/form";
 import "./style.scss";
 import { AbilityContext, Can } from "../../components/can";
 
@@ -129,11 +130,14 @@ const FormBuilderList = () => {
     setCurrentPage(1);
   };
 
-  const runAction = (request, successMsg, errorMsg) => {
+  const runAction = (request, successMsg, errorMsg, refreshPublished) => {
     request
       .then(() => {
         notify({ type: "success", message: successMsg });
         loadForms();
+        if (refreshPublished) {
+          fetchPublishedForms();
+        }
       })
       .catch((err) => {
         notify({
@@ -147,21 +151,24 @@ const FormBuilderList = () => {
     runAction(
       api.post(`/manage/forms/${id}/publish`, {}),
       text.formBuilderPublishSuccess,
-      text.formBuilderPublishError
+      text.formBuilderPublishError,
+      true
     );
 
   const onArchive = (id) =>
     runAction(
       api.post(`/manage/forms/${id}/archive`, {}),
       text.formBuilderArchiveSuccess,
-      text.formBuilderArchiveError
+      text.formBuilderArchiveError,
+      true
     );
 
   const onRestore = (id) =>
     runAction(
       api.post(`/manage/forms/${id}/restore`, {}),
       text.formBuilderRestoreSuccess,
-      text.formBuilderRestoreError
+      text.formBuilderRestoreError,
+      true
     );
 
   const onDuplicate = (id) =>
