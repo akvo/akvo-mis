@@ -204,13 +204,16 @@ def sync_pending_form_data(request, version):
             # If user has a role with data access, use that administration
             administration = user_role.administration
 
-    if not request.data.get("answers"):
+    is_draft = request.GET.get("is_draft", False)
+    is_draft = True if is_draft in ["true", "True", "1"] else False
+    # Allow empty answers for drafts only
+    if not request.data.get("answers") and not is_draft:
         return Response(
             {"message": "Answers is required."},
             status=status.HTTP_400_BAD_REQUEST,
         )
     answers = []
-    qna = request.data.get("answers")
+    qna = request.data.get("answers") or {}
     adm_id = administration.id
     adm_qs = Questions.objects.filter(
         type=QuestionTypes.cascade, form_id=form.id
@@ -253,8 +256,6 @@ def sync_pending_form_data(request, version):
         "data": payload,
         "answer": answers,
     }
-    is_draft = request.GET.get("is_draft", False)
-    is_draft = True if is_draft in ["true", "True", "1"] else False
     serializer = SubmitPendingFormSerializer(
         data=data,
         context={
