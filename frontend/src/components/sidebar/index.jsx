@@ -12,6 +12,7 @@ import {
   BookOutlined,
   FormOutlined,
   AndroidOutlined,
+  LineChartOutlined,
 } from "@ant-design/icons";
 import { AbilityContext } from "../can";
 
@@ -284,6 +285,15 @@ const Sidebar = () => {
               {text.menuFormBuilder}
             </Menu.Item>
           )}
+
+          {/* RMI Dashboard */}
+          <Menu.Item
+            key="menu-rmi-dashboard"
+            icon={<LineChartOutlined />}
+            data-url="/control-center/rmi-dashboard"
+          >
+            {text.menuRmiDashboard}
+          </Menu.Item>
 
           {/* Downloads */}
           {ability.can("read", "downloads") && (

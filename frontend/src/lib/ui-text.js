@@ -1162,6 +1162,7 @@ const uiText = {
     dateFromPlaceholder: "From",
     dateToPlaceholder: "To",
     viewDetails: "View Details",
+    menuRmiDashboard: "RMI Dashboard",
   },
 
   de: {},

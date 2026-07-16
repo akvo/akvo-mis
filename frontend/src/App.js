@@ -55,6 +55,7 @@ import {
   FormBuilderList,
   FormBuilderCreate,
   FormBuilderEdit,
+  ExternalDashboard,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -307,6 +308,12 @@ const RouteList = () => {
         <Route
           path="profile/edit"
           element={<Private element={EditProfile} alias="profile" />}
+        />
+        <Route
+          path="rmi-dashboard"
+          element={
+            <Private element={ExternalDashboard} alias="control-center" />
+          }
         />
       </Route>
       <Route

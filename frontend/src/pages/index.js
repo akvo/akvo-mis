@@ -46,3 +46,4 @@ export { default as ManageDraftForm } from "./manage-draft/ManageDraftForm";
 export { default as FormBuilderList } from "./form-builder/FormBuilderList";
 export { default as FormBuilderCreate } from "./form-builder/FormBuilderCreate";
 export { default as FormBuilderEdit } from "./form-builder/FormBuilderEdit";
+export { default as ExternalDashboard } from "./external-dashboard/ExternalDashboard";
