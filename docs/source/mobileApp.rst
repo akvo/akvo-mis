@@ -23,19 +23,19 @@ Authentication is the first step to accessing the mobile application. This app u
 
 1. Press the :bolditalic:`Get started` button to begin using the application.
 
-.. image:: ../assests/mobile-auth-1.png
+.. image:: ../assets/mobile-auth-1.png
     :alt: Mobile auth step-1
     :width: 50%
 
 2. Enter the passcode correctly. If you are unsure, click **the eye icon to view the passcode**. Then click the **Login button** once you are confident.
 
-.. image:: ../assests/mobile-auth-2.png
+.. image:: ../assets/mobile-auth-2.png
     :alt: Mobile auth step-2
     :width: 50%
 
 3. If successful, you will be redirected to the application's main menu.
 
-.. image:: ../assests/mobile-homepage.png
+.. image:: ../assets/mobile-homepage.png
     :alt: Mobile homepage
     :width: 50%
 
@@ -54,19 +54,19 @@ Besides that, you can also do three things here:
 
 1. Easily search for the questionnaire you want.
 
-.. image:: ../assests/mobile-home-search.png
+.. image:: ../assets/mobile-home-search.png
     :alt: Mobile search forms
     :width: 100%
 
 2. Go to the users page to get more information about the current user.
 
-.. image:: ../assests/mobile-home-users.png
+.. image:: ../assets/mobile-home-users.png
     :alt: Mobile go to users list
     :width: 100%
 
 3. Go to the settings page to customize as needed.
 
-.. image:: ../assests/mobile-home-settings.png
+.. image:: ../assets/mobile-home-settings.png
     :alt: Mobile go to settings
     :width: 100%
 
@@ -87,7 +87,7 @@ To sync data with the server, follow these steps:
 
 1. Click the :bolditalic:`Sync Datapoints` button. Wait until the process is finished.
 
-.. image:: ../assests/mobile-sync.png
+.. image:: ../assets/mobile-sync.png
     :alt: Mobile sync datapoints
     :width: 100%
 
@@ -103,7 +103,7 @@ Registration
 A registration submission is the initial datapoint submission that undergoes an approval process and is created by users with aligned administrative access rights.
 
 
-.. image:: ../assests/mobile-registration.png
+.. image:: ../assets/mobile-registration.png
     :alt: Mobile 
     :width: 100%
 
@@ -114,7 +114,7 @@ Monitoring
 
 A monitoring submission can be made when datapoints from the server are available after synchronization. This submission also undergoes an approval process similar to registration submissions.
 
-.. image:: ../assests/mobile-monitoring.png
+.. image:: ../assets/mobile-monitoring.png
     :alt: Mobile 
     :width: 100%
 
@@ -128,14 +128,14 @@ During the form-filling process, the mobile app also assists the user in exiting
 
 * Select :bolditalic:`Exit without saving` to exit the questionnaire without saving the current progress.
 
-.. image:: ../assests/mobile-exit.png
+.. image:: ../assets/mobile-exit.png
     :alt: Mobile
     :width: 100%
 
 
 * Select :bolditalic:`Save and exit` to save the current progress. To continue filling out the form, reopen the related questionnaire and choose the :bolditalic:`Edit Saved Forms` menu, then click on the draft datapoint.
 
-.. image:: ../assests/mobile-exit-save.png
+.. image:: ../assets/mobile-exit-save.png
     :alt: Mobile
     :width: 100%
 
@@ -145,20 +145,20 @@ To ensure all question groups are answered, click the page number in the middle:
 * **Blue**: indicates all questions have been answered and validated.
 * **Gray**: indicates some questions are incomplete.
 
-.. image:: ../assests/mobile-submit-1.png
+.. image:: ../assets/mobile-submit-1.png
     :alt: Mobile
     :width: 100%
 
 Generally, completed and submitted forms will automatically sync according to the applied sync interval settings. 
 If the sync process is successful, *a green notification bar with "Done" will appear at the bottom*. The submission can then be viewed again in the :bolditalic:`View Submission Form` menu, as shown in the image below.
 
-.. image:: ../assests/mobile-submit-2.png
+.. image:: ../assets/mobile-submit-2.png
     :alt: Mobile
     :width: 100%
 
 If automatic synchronization fails for any reason, the user can perform manual synchronization by pressing the **sync icon** in the top right corner. A confirmation dialog will appear; choose **OK** to proceed with synchronization.
 
-.. image:: ../assests/mobile-submit-3-manual.png
+.. image:: ../assets/mobile-submit-3-manual.png
     :alt: Mobile
     :width: 100%
 
@@ -177,7 +177,7 @@ These settings allow you to customize your sync preferences with the following o
 * **Sync Interval**: The duration needed to sync submitted submissions to the server, measured in seconds.
 * **Sync Wifi**: A switch to enable syncing of submitted submissions to the server only when using a Wi-Fi network.
 
-.. image:: ../assests/mobile-settings-1.png
+.. image:: ../assets/mobile-settings-1.png
     :alt: Mobile advanced settings
     :width: 100%
 
@@ -196,7 +196,7 @@ These settings allow you to customize your geolocation preferences with the foll
 * **Geolocation Timeout**: The maximum amount of time allowed to obtain a GPS value.
 
 
-.. image:: ../assests/mobile-settings-2.png
+.. image:: ../assets/mobile-settings-2.png
     :alt: Mobile geolocation settings
     :width: 100%
 
@@ -216,7 +216,7 @@ To reset the application, follow these steps:
 1. Click the :bolditalic:`Reset` button.
 2. Confirm the reset process by clicking the **Yes** button.
 
-.. image:: ../assests/mobile-logout.png
+.. image:: ../assets/mobile-logout.png
     :alt: Mobile geolocation settings
     :width: 100%
 
@@ -238,6 +238,6 @@ Keeping your app up-to-date ensures you have the latest features, improvements, 
     #. Once the download is complete, follow the on-screen instructions to install the new version of the app.
 #. Otherwise, click the **Cancel** button to close the dialog.
 
-.. image:: ../assests/mobile-update-version.png
+.. image:: ../assets/mobile-update-version.png
     :alt: Mobile update version
     :width: 100%

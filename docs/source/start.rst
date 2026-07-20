@@ -11,9 +11,23 @@
 User Types & Basic principal
 -----------------------------
 
-The Akvo MIS platform is designed to accommodate various user types, each with specific roles and permissions. The primary user types include:
-- **Super Admin**: This user has full control over the system, including user management, role assignments, and system settings.
-- **Admin**: Admins are created by the Super Admin and have the ability based on roles assigned to them.
+The Akvo MIS platform uses role-based access control. There are two building
+blocks:
+
+- **Super Admin**: a system-wide administrator (the Django ``is_superuser``
+  account) with full control over the system, including user management, role
+  configuration and system settings.
+- **Roles**: every other user is granted one or more roles. A role is tied to an
+  administration level (for example National, Province or District) and carries a
+  set of granular capabilities — form access (read, submit, approve, edit,
+  delete), user access (invite users) and Form Builder access (view, create,
+  edit, publish, delete). Permissions are enforced throughout the app based on
+  the user's role and administration level.
+
+Because roles are configurable, an "admin" is simply a user whose role grants
+administrative capabilities at a given level, rather than a single fixed user
+type. See `Roles and Permissions principal`_ below and
+:doc:`administration` for managing roles and users.
 
 
 Create an Super Admin Account via CLI
@@ -69,99 +83,60 @@ Manage Roles (Add, Delete and Modify Roles)
 
 1. From the Sidebar of the control center, click the  **Manage Roles** to add a new role, modify an existing role or delete an existing role.
 
-.. image:: ../assests/roles-list.png
+.. image:: ../assets/roles-list.png
    :alt: Manage Roles
    :width: 100%
 
-1. To add a new role, click the **Add Role** button. Next, on the new page fill all the mandatory fields and then click the **Add Role** button
+2. To add a new role, click the **Add Role** button. Next, on the new page fill all the mandatory fields and then click the **Add Role** button
    to notify your new role.
 
-.. image:: ../assests/roles-add.png
+.. image:: ../assets/roles-add.png
    :alt: Add new Role
    :width: 100%
 
-1. To delete an existing role, expand the toggle button next to the role and click the **Delete** button. Next, confirm you are deleting the role by clicking the DELETE button in the pop-up window.
+3. To delete an existing role, expand the toggle button next to the role and click the **Delete** button. Next, confirm you are deleting the role by clicking the DELETE button in the pop-up window.
 
-.. image:: ../assests/roles-delete.png
+.. image:: ../assets/roles-delete.png
    :alt: Deleted Role
    :width: 100%
 
 4. To modify an existing role, expand the toggle button next to the role and click the **Edit** button. Edit the role details in the new page and then click the **Update Role** button.
 
-.. image:: ../assests/roles-expand-edit.png
+.. image:: ../assets/roles-expand-edit.png
    :alt: Expand and Edit Role
    :width: 100%
 
-.. image:: ../assests/roles-edit.png
+.. image:: ../assets/roles-edit.png
    :alt: Edited Role
    :width: 100%
 
 
 .. _manage_users:
 
-Manage Users (Add, Delete and Modify Users)
-------------------------------------------------
+Manage Users
+------------
 
-1. From the Sidebar of the control center, click the **Manage Platform Users** to add a new user, modify an existing user or delete an existing user.
+Platform users (adding, editing and deleting users, and assigning their roles)
+are managed from the **Manage Platform Users** menu. To avoid keeping two copies
+of the same walkthrough, the full step-by-step is documented once in the
+Administration section — see :doc:`administration`.
 
-.. image:: ../assests/users-list.png
-   :alt: Manage User
-   :width: 100%
-
-2. To add a new user, click the **Add New User** button. Next, on the new page fill all the mandatory fields and assign the user an organisation, designation, role with related administrative region and questionnaires. Finally, click the **Add User** button to notify your new user.
-
-.. image:: ../assests/users-add.png
-   :alt: Add new User
-   :width: 100%
-  
-.. image:: ../assests/users-add-role.png
-   :alt: Add new User Role
-   :width: 100%
-
-.. image:: ../assests/users-add-save.png
-   :alt: Add new User Save
-   :width: 100%
-
-3. A newer user will determine as pending user and will not be able to login until the user sets up their account by clicking the **Set Password** button in the invitation email.
-
-.. image:: ../assests/users-pending.png
-   :alt: Pending User
-   :width: 100%
-
-.. image:: ../assests/users-pending-expand.png
-   :alt: Pending User Expanded
-   :width: 100%
-
-4. To delete an existing user, expand the toggle button next to the user and click the **Delete** button. Next, confirm you are deleting the user by clicking the DELETE button in the pop-up window.
-
-.. image:: ../assests/users-delete.png
-   :alt: Delete User
-   :width: 100%
-
-5. To modify an existing user, expand the toggle button next to the user and click the **Edit** button. Edit the user details in the new page and then click the **Update User** button.
-
-.. image:: ../assests/users-edit-expand.png
-    :alt: Expand and Edit User
-    :width: 100%
-
-.. image:: ../assests/users-edit.png
-   :alt: Edited User
-   :width: 100%
-
-
-
+New users are invited by email and stay in a **pending** state until they set
+their password, as described next.
 
 Setting up Account for the First Time
 ---------------------------------------
 
 Users who have been registered in the MIS platform will receive an invitation email to complete the account setup process. Click the Set Password button to activate your account.
 
-.. image:: ../assests/users-setup-email.png
+.. image:: ../assets/users-setup-email.png
    :alt: Setup Email
    :width: 100%
 
-Make sure you are on the testing url iwsims.akvo.org.Set a strong password and click Set New Password to login to your account.
+Make sure you are on your platform's URL (the address of your Akvo MIS
+deployment). Set a strong password and click Set New Password to login to your
+account.
 
-.. image:: ../assests/users-setup-password.png
+.. image:: ../assets/users-setup-password.png
    :alt: Set Password
    :width: 100%
