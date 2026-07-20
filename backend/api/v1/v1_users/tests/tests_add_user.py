@@ -4,6 +4,7 @@ from django.test.utils import override_settings
 
 from api.v1.v1_users.models import Organisation, SystemUser
 from api.v1.v1_forms.models import Forms
+from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_profile.models import (
     Role,
     Administration,
@@ -48,12 +49,12 @@ class AddUserTestCase(TestCase):
         self.assertEqual(response.status_code, 201)
         data = response.json()
         self.assertEqual(data, {"message": "User added successfully"})
-        # Total forms should be all parent forms
+        # Total forms should be all published forms
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, True)
         self.assertEqual(
             user.user_form.count(),
-            Forms.objects.filter(parent__isnull=True).count()
+            Forms.objects.filter(status=FormStatus.published).count()
         )
 
     def test_add_superuser_with_forms(self):

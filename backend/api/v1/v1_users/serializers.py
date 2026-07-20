@@ -12,6 +12,7 @@ from api.v1.v1_forms.models import (
     UserForms,
     Forms,
 )
+from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_profile.constants import OrganisationTypes
 from api.v1.v1_profile.models import (
     Administration,
@@ -414,12 +415,12 @@ class AddEditUserSerializer(serializers.ModelSerializer):
             for form in forms:
                 UserForms.objects.create(user=user, form=form)
             # if forms is empty and is_superuser is True
-            # then assign all parent forms to user
+            # then assign all published forms to user
             if not forms and user.is_superuser:
-                parent_forms = Forms.objects.filter(
-                    parent__isnull=True
+                published_forms = Forms.objects.filter(
+                    status=FormStatus.published
                 ).all()
-                for form in parent_forms:
+                for form in published_forms:
                     UserForms.objects.create(user=user, form=form)
             return user
 
