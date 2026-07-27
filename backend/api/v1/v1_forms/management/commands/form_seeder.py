@@ -107,9 +107,14 @@ class Command(BaseCommand):
             if (os.path.isfile(os.path.join(source_folder, json_file))
                 and json_file.endswith('.json'))
         ]
-        source_files = list(
-            filter(lambda x: "example" in x
-                   if TEST else "example" not in x, source_files))
+        # --test narrows to the bundled example fixtures. Without it every
+        # JSON in the folder is seeded: a real deployment drops its own form
+        # definitions here and should not have to encode "not an example" in
+        # the filename. The old `else` branch did exactly that, and since the
+        # folder holds nothing but example-* files it made a plain run seed
+        # nothing at all and exit 0.
+        if TEST:
+            source_files = [f for f in source_files if "example" in f]
         if PROD:
             source_files = list(filter(lambda x: "prod" in x, source_files))
         if JSON_FILE:
