@@ -10,7 +10,7 @@ fi
 echo "Seed Form? [y/n]"
 read -r seed_form
 if [[ "${seed_form}" == 'y' || "${seed_form}" == 'Y' ]]; then
-    python manage.py form_seeder
+    python manage.py form_seeder || { echo "Form seeding failed — aborting."; exit 1; }
     python manage.py generate_config
     python manage.py clear_cache
 fi
