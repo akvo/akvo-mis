@@ -3,6 +3,7 @@ import os
 
 from mis.settings import PROD
 from django.core.management import BaseCommand
+from django.core.management.base import CommandError
 from django.db import transaction
 
 from api.v1.v1_forms.constants import AttributeTypes, FormStatus
@@ -82,10 +83,21 @@ def structure_fingerprint(form):
     the form?" without hand-maintaining a field list that would drift
     every time a column is added.
 
-    `version` is dropped because it is the very thing being decided.
+    The `version` pop is purely defensive: _build_schema_snapshot does not
+    emit a version key today, and it must never leak into the comparison
+    if that ever changes, since the version is the thing being decided.
+
+    `type` and `parent_id` are folded in by hand because the snapshot
+    builder covers only the structure below the form row, yet both are
+    columns the seeder writes from the file. Without them a definition
+    that only retypes a form — registration to monitoring, or a
+    re-parenting — would never bump the version and so would never reach
+    a mobile device, which re-downloads on version change alone.
     """
     schema = _build_schema_snapshot(form)
     schema.pop("version", None)
+    schema["type"] = form.type
+    schema["parent_id"] = form.parent_id
     return json.dumps(schema, sort_keys=True, default=str)
 
 
@@ -171,6 +183,7 @@ class Command(BaseCommand):
 
         # Process all form sources in the correct order
         # (parents first, then children)
+        failed_sources = []
         with transaction.atomic():
             for source in parent_forms + child_forms:
                 norm = norms[source]
@@ -178,11 +191,15 @@ class Command(BaseCommand):
                 issues = validate_form_definition(norm, check_entities=False)
                 errors = [i for i in issues if i.get("level") == "error"]
                 if errors:
+                    # Report every problem in every file rather than
+                    # stopping at the first, so one pass tells the operator
+                    # everything that needs fixing.
                     for e in errors:
                         self.stderr.write(
                             f"{source}: [{e['code']}] "
                             f"{e['path']}: {e['message']}"
                         )
+                    failed_sources.append(source)
                     continue
 
                 form = Forms.objects.filter(id=norm["form_id"]).first()
@@ -213,34 +230,40 @@ class Command(BaseCommand):
                     # against; it is new, so its version stands at 1.
                     before_fingerprint = None
                 else:
+                    # Snapshot before anything is written, so the
+                    # post-import comparison can tell a real edit from a
+                    # no-op re-run. It has to happen ahead of the save
+                    # below: that save applies the file's parent/type, and
+                    # those are part of the fingerprint, so capturing
+                    # afterwards would compare the new values against
+                    # themselves and hide the change.
+                    before_fingerprint = structure_fingerprint(form)
                     if parent:
                         form.parent = parent
                     if norm.get("type"):
                         form.type = norm.get("type")
                     form.save()
-                    # Snapshot before the import so the post-import
-                    # comparison can tell a real edit from a no-op re-run.
-                    before_fingerprint = structure_fingerprint(form)
 
                 # Collect IDs from the file before processing
                 list_of_question_ids = []
-                list_of_question_group_ids = []
                 for g in norm["question_group"]:
-                    list_of_question_group_ids.append(g["id"])
                     list_of_question_ids += [
                         q["id"] for q in g["question"]
                     ]
 
-                # A question this form no longer declares is left alone:
-                # deleting it would cascade to its answers, and a re-seed
-                # must never cost a submission. The one exception is a
-                # question moving to another form. `claim_foreign_questions`
-                # reassigns the row by primary key, so without this its
-                # answers would stay bound to submissions of the form it
-                # left. migrate_question_answers copies them down to the
-                # monitoring children first and only then drops the
-                # originals — it deletes strictly what it has already
-                # copied.
+                # A question this form no longer declares is left alone as
+                # long as it carries answers: deleting it would cascade to
+                # them, and a re-seed must never cost a submission. An
+                # unanswered one is still pruned by the import writer's
+                # never_delete pass, which has nothing to protect and needs
+                # the freed (form, name) slot. The one exception to leaving
+                # answered questions alone is a question moving to another
+                # form. `claim_foreign_questions` reassigns the row by
+                # primary key, so without this its answers would stay bound
+                # to submissions of the form it left. The migration helper
+                # below copies them down to the monitoring children first
+                # and only then drops the originals — it deletes strictly
+                # what it has already copied.
                 removed_qs = Questions.objects.filter(
                     form=form
                 ).exclude(id__in=list_of_question_ids)
@@ -307,3 +330,26 @@ class Command(BaseCommand):
                     verb = "Created" if created else "Updated"
                     self.stdout.write(
                         f"Form {verb} | {norm['name']} V{form.version}")
+
+            # A file that failed validation must not be a silent skip.
+            # seeder.sh calls this command bare and reports success on
+            # exit 0, so without this a client's real form could go
+            # missing while the install looks clean.
+            #
+            # The raise sits inside the atomic block on purpose. Every
+            # file was still attempted, so the operator gets the complete
+            # list of failures in one run — but the run as a whole is
+            # rolled back rather than committed half-applied. That matters
+            # because question_target_map is built from all files
+            # including the invalid ones: committing here could leave
+            # answers migrated towards a form that was never written.
+            if failed_sources:
+                raise CommandError(
+                    "form_seeder failed to load {0} of {1} definition(s): "
+                    "{2}. See the errors above; no forms were written."
+                    .format(
+                        len(failed_sources),
+                        len(source_files),
+                        ", ".join(failed_sources),
+                    )
+                )

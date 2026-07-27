@@ -1529,10 +1529,13 @@ def _apply_import_update_path(
     """Update an existing form's live structure to match the normalized def.
 
     Semantics identical to restore_from_snapshot:
-    - Pass 1: soft-delete groups/questions absent from the file.
+    - Pass 1: soft-delete groups/questions absent from the file. With
+      never_delete=True this pass is answer-aware: a stale question that
+      carries answers is kept, and so is a stale group that still holds
+      such a question. Everything else is still pruned.
     - Pass 2: upsert by exported id; create new rows for unknown ids.
     - Options are recreated wholesale.
-    - status and active_version are NOT touched (D-6).
+    - status and active_version are NOT touched.
 
     With claim_foreign_questions=True (seeder/CLI only), file question ids
     are matched globally and rows currently attached to another form are
@@ -1564,13 +1567,33 @@ def _apply_import_update_path(
         # and pruning it is what frees the (form, name) slot that
         # unique_active_form_question requires before a cross-form move can
         # claim that name. Protecting those too would make moves impossible.
+        #
+        # The flip side: moving a question into a form that already holds a
+        # live, ANSWERED question of the same name raises IntegrityError on
+        # unique_active_form_question, because the incumbent cannot be
+        # pruned to free the slot. That is deliberate. The whole import runs
+        # inside transaction.atomic(), so the run fails loudly and rolls
+        # back; the only alternative would be to silently delete answered
+        # structure — and the submissions hanging off it — to make room.
+        #
+        # Only questions the file has ACTUALLY dropped may protect a group.
+        # A question the file still declares is about to be (re)written by
+        # pass 2, possibly into a different, still-declared group. Counting
+        # it here would keep its former group alive as a permanently empty
+        # phantom that /form/web/{id}, the mobile SQLite export and
+        # _build_schema_snapshot all still serve.
         answered_q_ids = Answers.objects.filter(
             question__form=form
+        ).exclude(
+            question_id__in=snapshot_q_ids
         ).values_list("question_id", flat=True)
+        # stale_questions is already restricted to ids absent from
+        # snapshot_q_ids, so the same carve-out is a no-op there and is
+        # left off deliberately.
         stale_questions = stale_questions.exclude(id__in=answered_q_ids)
         stale_groups = stale_groups.exclude(
             question_group_question__id__in=answered_q_ids
-        ).distinct()
+        )
     stale_questions.soft_delete()
     stale_groups.soft_delete()
 
