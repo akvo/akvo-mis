@@ -1235,6 +1235,7 @@ def import_form_definition(
     parent_id=None,
     require_parent=True,
     claim_foreign_questions=False,
+    never_delete=False,
 ):
     """Create or update a form from a normalized definition.
 
@@ -1252,6 +1253,12 @@ def import_form_definition(
         form (cross-form question moves, seeder/CLI only). The API must
         keep this False so an import can never steal questions from an
         unrelated form.
+    never_delete : bool — when True, groups and questions present in the
+        database but absent from the file are left untouched instead of
+        being soft-deleted (seeder only). Options are still replaced
+        wholesale: QuestionOptions rows carry no submission data, since
+        Answers.options stores option values as a JSON list rather than
+        foreign keys.
 
     Returns
     -------
@@ -1272,6 +1279,7 @@ def import_form_definition(
         _apply_import_update_path(
             existing_form, norm, user,
             claim_foreign_questions=claim_foreign_questions,
+            never_delete=never_delete,
         )
         return existing_form, "updated"
     else:
@@ -1513,7 +1521,9 @@ def _fixup_import_dependency_refs(form, final_q_id_map):
             q_obj.save(update_fields=["dependency"])
 
 
-def _apply_import_update_path(form, norm, user, claim_foreign_questions=False):
+def _apply_import_update_path(
+    form, norm, user, claim_foreign_questions=False, never_delete=False
+):
     """Update an existing form's live structure to match the normalized def.
 
     Semantics identical to restore_from_snapshot:
@@ -1539,12 +1549,16 @@ def _apply_import_update_path(form, norm, user, claim_foreign_questions=False):
         if q.get("id") is not None
     }
 
-    Questions.objects.filter(form=form).exclude(
-        id__in=snapshot_q_ids
-    ).soft_delete()
-    form.form_question_group.exclude(
-        id__in=snapshot_group_ids
-    ).soft_delete()
+    # never_delete makes the seeder additive: a question or group the file
+    # stops mentioning keeps its row, and therefore keeps its answers. The
+    # form-import job leaves the flag off and still prunes.
+    if not never_delete:
+        Questions.objects.filter(form=form).exclude(
+            id__in=snapshot_q_ids
+        ).soft_delete()
+        form.form_question_group.exclude(
+            id__in=snapshot_group_ids
+        ).soft_delete()
 
     group_db = {
         g.id: g

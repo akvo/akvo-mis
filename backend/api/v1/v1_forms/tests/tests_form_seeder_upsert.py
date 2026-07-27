@@ -8,7 +8,11 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from api.v1.v1_forms.models import Forms
+from api.v1.v1_forms.functions import (
+    import_form_definition,
+    normalize_form_definition,
+)
+from api.v1.v1_forms.models import Forms, Questions
 
 
 def minimal_form(form_id, name, question_id):
@@ -83,3 +87,55 @@ class FormSeederFileSelectionTestCase(TestCase):
         self.seed("--test", 1)
         self.assertTrue(Forms.objects.filter(pk=801).exists())
         self.assertFalse(Forms.objects.filter(pk=802).exists())
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class ImportNeverDeleteTestCase(TestCase):
+    def build_form(self):
+        """Seed form 810 with two questions via the import writer."""
+        payload = minimal_form(810, "Never Delete", 81001)
+        group = payload["question_groups"][0]
+        group["questions"].append({
+            "id": 81002,
+            "order": 2,
+            "name": "age",
+            "label": "Age",
+            "short_label": "Age",
+            "meta": False,
+            "type": "number",
+            "required": False,
+        })
+        norm = normalize_form_definition(payload)
+        Forms.objects.create(id=810, name="Never Delete", version=1)
+        import_form_definition(
+            norm, None, mode="create_or_update", require_parent=False
+        )
+
+    def shrunk_norm(self):
+        """Same form with question 81002 dropped from the definition."""
+        return normalize_form_definition(
+            minimal_form(810, "Never Delete", 81001)
+        )
+
+    def test_never_delete_keeps_absent_question(self):
+        """With never_delete=True a question missing from the payload
+        survives, so the answers hanging off it survive too."""
+        self.build_form()
+        import_form_definition(
+            self.shrunk_norm(), None, mode="create_or_update",
+            require_parent=False, never_delete=True,
+        )
+        question = Questions.objects_with_deleted.get(pk=81002)
+        self.assertIsNone(question.deleted_at)
+
+    def test_default_still_deletes_absent_question(self):
+        """Without the flag the writer behaves exactly as before. This
+        pins the form-import job path (v1_forms/tasks.py), the only
+        other caller of import_form_definition."""
+        self.build_form()
+        import_form_definition(
+            self.shrunk_norm(), None, mode="create_or_update",
+            require_parent=False,
+        )
+        question = Questions.objects_with_deleted.get(pk=81002)
+        self.assertIsNotNone(question.deleted_at)
