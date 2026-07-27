@@ -52,16 +52,22 @@ if [[ "${fake_data}" == 'y' || "${fake_data}" == 'Y' ]]; then
         monitoring_data_count=2
     fi
 
-    echo "Do you want to include pending form data? [y/n]"
+    # Both extras default to "no". Pending and draft submissions are
+    # invisible in Manage Data, so a run that accepts the defaults must
+    # produce data the operator can actually see — otherwise a seeded
+    # environment looks broken.
+    echo "Also create pending (unapproved) data? [y/N]"
+    echo "  Needed only to exercise the approval workflow."
     read -r pending_data
-    # Invert the value of pending_data for --approved
     if [[ "${pending_data}" == 'y' || "${pending_data}" == 'Y' ]]; then
+        # --approved=false is what makes the seeder mark data pending.
         approved=false
     else
         approved=true
     fi
 
-    echo "Do you want to include draft form data? [y/n]"
+    echo "Also create draft data? [y/N]"
+    echo "  Drafts appear only under Manage Drafts, for their creator."
     read -r draft_data_input
     if [[ "${draft_data_input}" == 'y' || "${draft_data_input}" == 'Y' ]]; then
         draft_data=true
