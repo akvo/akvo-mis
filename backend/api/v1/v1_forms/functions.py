@@ -1253,12 +1253,14 @@ def import_form_definition(
         form (cross-form question moves, seeder/CLI only). The API must
         keep this False so an import can never steal questions from an
         unrelated form.
-    never_delete : bool — when True, groups and questions present in the
-        database but absent from the file are left untouched instead of
-        being soft-deleted (seeder only). Options are still replaced
-        wholesale: QuestionOptions rows carry no submission data, since
-        Answers.options stores option values as a JSON list rather than
-        foreign keys.
+    never_delete : bool — when True, a question/group absent from the file
+        is protected from soft-delete only while it still carries
+        submission data (an answered question, or a group holding one).
+        An unanswered question or empty group is still pruned — that is
+        what frees the (form, name) slot a cross-form move needs to claim
+        (seeder only). Options are still replaced wholesale: QuestionOptions
+        rows carry no submission data, since Answers.options stores option
+        values as a JSON list rather than foreign keys.
 
     Returns
     -------
@@ -1549,16 +1551,28 @@ def _apply_import_update_path(
         if q.get("id") is not None
     }
 
-    # never_delete makes the seeder additive: a question or group the file
-    # stops mentioning keeps its row, and therefore keeps its answers. The
-    # form-import job leaves the flag off and still prunes.
-    if not never_delete:
-        Questions.objects.filter(form=form).exclude(
-            id__in=snapshot_q_ids
-        ).soft_delete()
-        form.form_question_group.exclude(
-            id__in=snapshot_group_ids
-        ).soft_delete()
+    stale_questions = Questions.objects.filter(form=form).exclude(
+        id__in=snapshot_q_ids
+    )
+    stale_groups = form.form_question_group.exclude(
+        id__in=snapshot_group_ids
+    )
+    if never_delete:
+        # Protect what carries submission data, and only that. A question
+        # with answers must survive a re-seed — deleting it would take the
+        # answers with it. A question without answers has nothing to lose,
+        # and pruning it is what frees the (form, name) slot that
+        # unique_active_form_question requires before a cross-form move can
+        # claim that name. Protecting those too would make moves impossible.
+        answered_q_ids = Answers.objects.filter(
+            question__form=form
+        ).values_list("question_id", flat=True)
+        stale_questions = stale_questions.exclude(id__in=answered_q_ids)
+        stale_groups = stale_groups.exclude(
+            question_group_question__id__in=answered_q_ids
+        ).distinct()
+    stale_questions.soft_delete()
+    stale_groups.soft_delete()
 
     group_db = {
         g.id: g

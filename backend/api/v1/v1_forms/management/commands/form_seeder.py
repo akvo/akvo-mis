@@ -13,7 +13,6 @@ from api.v1.v1_forms.functions import (
 )
 from api.v1.v1_forms.models import (
     Forms, Questions,
-    QuestionGroup as QG,
     QuestionAttribute as QA)
 from api.v1.v1_data.models import (
     Answers, AnswerHistory, FormData)
@@ -155,8 +154,6 @@ class Command(BaseCommand):
 
         # Process all form sources in the correct order
         # (parents first, then children)
-        all_question_group_ids = []
-        all_form_ids = []
         with transaction.atomic():
             for source in parent_forms + child_forms:
                 norm = norms[source]
@@ -206,33 +203,29 @@ class Command(BaseCommand):
                 # Collect IDs from the file before processing
                 list_of_question_ids = []
                 list_of_question_group_ids = []
-                all_form_ids.append(norm["form_id"])
                 for g in norm["question_group"]:
                     list_of_question_group_ids.append(g["id"])
                     list_of_question_ids += [
                         q["id"] for q in g["question"]
                     ]
-                all_question_group_ids += list_of_question_group_ids
 
-                # Handle removed questions BEFORE the import runs:
-                # a question moving to another form keeps its row (the
-                # target form claims it via claim_foreign_questions); a
-                # truly removed question is hard-deleted.
+                # A question this form no longer declares is left alone:
+                # deleting it would cascade to its answers, and a re-seed
+                # must never cost a submission. The one exception is a
+                # question moving to another form. `claim_foreign_questions`
+                # reassigns the row by primary key, so without this its
+                # answers would stay bound to submissions of the form it
+                # left. migrate_question_answers copies them down to the
+                # monitoring children first and only then drops the
+                # originals — it deletes strictly what it has already
+                # copied.
                 removed_qs = Questions.objects.filter(
                     form=form
                 ).exclude(id__in=list_of_question_ids)
                 for question in removed_qs:
                     target_form_id = question_target_map.get(question.id)
                     if target_form_id and target_form_id != form.id:
-                        # Question is moving to another form;
-                        # migrate answers before it gets reassigned
-                        migrate_question_answers(
-                            question, target_form_id)
-                    else:
-                        # Question truly removed — delete it
-                        question.delete()
-
-                QA.objects.filter(question__form=form).all().delete()
+                        migrate_question_answers(question, target_form_id)
 
                 # Shared write path (D-8): groups/questions/options upsert
                 # by exported id; cross-form moves claimed by PK so answers
@@ -243,26 +236,39 @@ class Command(BaseCommand):
                     mode="create_or_update",
                     require_parent=False,
                     claim_foreign_questions=True,
+                    never_delete=True,
                 )
 
                 # Question attributes stay a seeder concern (not part of
-                # the FB-007 export format).
+                # the FB-007 export format). Reconcile rather than wipe and
+                # rebuild, and only for questions this file declares —
+                # attributes of any other question are none of its business.
+                #
+                # Dropping an attribute here is not a data-loss exception:
+                # QuestionAttribute rows are form metadata, nothing
+                # references them, and no answer depends on one.
                 qa_rows = []
                 for g in norm["question_group"]:
                     for q in g["question"]:
-                        attrs = q.get("attributes")
-                        if not attrs:
-                            continue
                         db_q = Questions.objects.filter(
                             form=form, name=q["name"]
                         ).first()
                         if not db_q:
                             continue
+                        declared = set()
+                        for a in q.get("attributes") or []:
+                            declared.add(getattr(AttributeTypes, a))
+                        current = set(
+                            QA.objects.filter(
+                                question=db_q
+                            ).values_list("attribute", flat=True)
+                        )
+                        QA.objects.filter(question=db_q).exclude(
+                            attribute__in=declared
+                        ).delete()
                         qa_rows += [
-                            QA(
-                                attribute=getattr(AttributeTypes, a),
-                                question=db_q,
-                            ) for a in attrs
+                            QA(attribute=a, question=db_q)
+                            for a in declared - current
                         ]
                 if qa_rows:
                     QA.objects.bulk_create(qa_rows)
@@ -271,14 +277,3 @@ class Command(BaseCommand):
                     verb = "Created" if created else "Updated"
                     self.stdout.write(
                         f"Form {verb} | {norm['name']} V{form.version}")
-
-            # Final cleanup: delete question groups not present in any
-            # JSON and with no remaining questions. This catches groups
-            # emptied by cross-form question moves.
-            QG.objects.filter(
-                form_id__in=all_form_ids
-            ).exclude(
-                id__in=all_question_group_ids
-            ).filter(
-                question_group_question__isnull=True
-            ).delete()
