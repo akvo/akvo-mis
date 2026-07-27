@@ -251,3 +251,47 @@ class FormSeederNoDataLossTestCase(TestCase):
         self.assertTrue(
             Answers.objects.filter(question_id=82002, data=data).exists()
         )
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class FormSeederVersionTestCase(TestCase):
+    def setUp(self):
+        self.source = tempfile.mkdtemp(prefix="form_seeder_version_")
+        self.addCleanup(shutil.rmtree, self.source, ignore_errors=True)
+
+    def write_form(self, label="Full Name"):
+        payload = minimal_form(830, "Version Form", 83001)
+        payload["question_groups"][0]["questions"][0]["label"] = label
+        path = os.path.join(self.source, "client-version.json")
+        with open(path, "w") as handle:
+            json.dump(payload, handle)
+
+    def seed(self):
+        call_command(
+            "form_seeder",
+            source=self.source,
+            stdout=StringIO(),
+            stderr=StringIO(),
+        )
+
+    def test_unchanged_reseed_keeps_version(self):
+        """Re-seeding an untouched file must not move the version. The
+        form cache is keyed form-{id}-v{version} and mobile devices
+        compare versions to decide whether to re-download, so a
+        gratuitous bump makes every device in the field re-sync."""
+        self.write_form()
+        self.seed()
+        first = Forms.objects.get(pk=830).version
+
+        self.seed()
+        self.assertEqual(Forms.objects.get(pk=830).version, first)
+
+    def test_changed_definition_bumps_version_once(self):
+        """A real edit must still reach devices."""
+        self.write_form()
+        self.seed()
+        first = Forms.objects.get(pk=830).version
+
+        self.write_form(label="Full Legal Name")
+        self.seed()
+        self.assertEqual(Forms.objects.get(pk=830).version, first + 1)

@@ -7,6 +7,7 @@ from django.db import transaction
 
 from api.v1.v1_forms.constants import AttributeTypes, FormStatus
 from api.v1.v1_forms.functions import (
+    _build_schema_snapshot,
     import_form_definition,
     normalize_form_definition,
     validate_form_definition,
@@ -70,6 +71,22 @@ def migrate_question_answers(question, target_form_id):
                     updated=history.updated,
                 )
             history.delete()
+
+
+def structure_fingerprint(form):
+    """Comparable view of a form's live structure.
+
+    Used to decide whether a re-seed actually changed anything. The
+    snapshot builder already walks groups → questions → options in a
+    fixed order, so comparing two of them answers "did this file change
+    the form?" without hand-maintaining a field list that would drift
+    every time a column is added.
+
+    `version` is dropped because it is the very thing being decided.
+    """
+    schema = _build_schema_snapshot(form)
+    schema.pop("version", None)
+    return json.dumps(schema, sort_keys=True, default=str)
 
 
 class Command(BaseCommand):
@@ -192,13 +209,18 @@ class Command(BaseCommand):
                         status=FormStatus.published,
                         parent=parent,
                     )
+                    # A form that did not exist has nothing to compare
+                    # against; it is new, so its version stands at 1.
+                    before_fingerprint = None
                 else:
-                    form.version += 1
                     if parent:
                         form.parent = parent
                     if norm.get("type"):
                         form.type = norm.get("type")
                     form.save()
+                    # Snapshot before the import so the post-import
+                    # comparison can tell a real edit from a no-op re-run.
+                    before_fingerprint = structure_fingerprint(form)
 
                 # Collect IDs from the file before processing
                 list_of_question_ids = []
@@ -272,6 +294,14 @@ class Command(BaseCommand):
                         ]
                 if qa_rows:
                     QA.objects.bulk_create(qa_rows)
+
+                # Bump only for a definition that actually differs. See
+                # structure_fingerprint for why this matters to mobile.
+                if before_fingerprint is not None:
+                    form.refresh_from_db()
+                    if structure_fingerprint(form) != before_fingerprint:
+                        form.version += 1
+                        form.save(update_fields=["version"])
 
                 if not TEST:
                     verb = "Created" if created else "Updated"
