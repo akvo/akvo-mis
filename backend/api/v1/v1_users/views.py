@@ -3,6 +3,7 @@ import datetime
 from math import ceil
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core import signing
 from django.core.management import call_command
@@ -168,8 +169,10 @@ def login(request, version):
             {"message": validate_serializers_message(serializer.errors)},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    # Add temp user for development purpose
-    if not SystemUser.objects.all().count():
+    # Legacy convenience account, now test-only: dozens of test modules
+    # log in as admin@akvo.org without seeding it first. Production
+    # never auto-creates credentials — registration is the way in.
+    if settings.TESTING and not SystemUser.objects.all().count():
         SystemUser.objects.create_superuser(
             email="admin@akvo.org",
             password="Test105*",

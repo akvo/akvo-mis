@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
+import sys
 from datetime import timedelta
 from os import environ
 from pathlib import Path
@@ -251,6 +252,11 @@ EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")
 COUNTRY_NAME = "fiji"
 
 TEST_ENV = False
+
+# True only when running under `manage.py test`. Used to keep legacy
+# test-only conveniences (the admin@akvo.org auto-create on login) out
+# of production code paths.
+TESTING = "test" in sys.argv
 
 Q_CLUSTER = {
     "name": "DjangORM",
