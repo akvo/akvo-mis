@@ -63,6 +63,7 @@ import { Layout, PageLoader } from "./components";
 import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
 import { reloadData, fetchPublishedForms } from "./util/form";
+import { fetchLevels } from "./util/level";
 import { ability, AbilityContext } from "./components/can";
 
 const Private = ({ element: Element, alias }) => {
@@ -366,6 +367,7 @@ const App = () => {
   // bootstrap call made before sign-in returns nothing and the list has to
   // be rebuilt for the tenant once we know who is asking.
   useEffect(() => {
+    fetchLevels();
     fetchPublishedForms()
       .catch((err) => {
         console.error(err);

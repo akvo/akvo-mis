@@ -23,7 +23,8 @@ const defaultUIState = {
   // forms: assignment-filtered, sorted subset rendered by the UI.
   allForms: [],
   forms: [],
-  levels: window.levels,
+  // Populated at runtime from GET /api/v1/levels (tenant-owned).
+  levels: [],
   selectedForm: null,
   selectedFormData: null,
   loadingForm: false,
