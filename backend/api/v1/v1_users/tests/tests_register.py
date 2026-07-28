@@ -1,8 +1,10 @@
 from unittest import mock
 
+from django.core.management import call_command
 from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_profile.models import Administration, Levels
 from api.v1.v1_users.models import SystemUser, Tenant
@@ -108,3 +110,36 @@ class RegisterEndpointTestCase(TestCase):
         response = self.register(password="12345678")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_each_superadmin_resolves_their_own_root(self):
+        first = self.register().json()
+        second = self.register(
+            email="owner@beta.org", subdomain="beta"
+        ).json()
+        for token, expected in ((first, "acme"), (second, "beta")):
+            profile = self.client.get(
+                "/api/v1/profile",
+                HTTP_AUTHORIZATION=f"Bearer {token['token']}",
+            )
+            self.assertEqual(profile.status_code, 200)
+            self.assertEqual(
+                profile.json()["administration"]["name"], expected
+            )
+
+    def test_tenantless_superuser_falls_back_to_unscoped_root(self):
+        # Legacy path: seeders and createsuperuser make superusers with
+        # no tenant; they must keep resolving a root administration.
+        call_command("administration_seeder", "--test")
+        user = SystemUser.objects.create_superuser(
+            email="legacy-admin@example.org",
+            password="Secret#Pass123",
+            first_name="Legacy",
+            last_name="Admin",
+        )
+        token = str(RefreshToken.for_user(user).access_token)
+        profile = self.client.get(
+            "/api/v1/profile",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(profile.status_code, 200)
+        self.assertIsNotNone(profile.json()["administration"]["id"])
