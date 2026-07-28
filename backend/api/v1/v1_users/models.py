@@ -5,6 +5,7 @@ from django.core import signing
 from django.db import models
 from django.utils import timezone
 from utils.soft_deletes_model import SoftDeletes
+from utils.tenant_scoped_model import TenantManager
 from utils.tenant_model import tenant_fk
 
 # Create your models here.
@@ -12,6 +13,8 @@ from utils.custom_manager import UserManager
 
 
 class Organisation(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     name = models.CharField(max_length=255)
     tenant = tenant_fk("organisations")
 
@@ -59,6 +62,7 @@ class Tenant(models.Model):
 
 
 class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
+    TENANT_PATH = "tenant"
     email = models.EmailField(max_length=254, unique=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     first_name = models.CharField(max_length=50)

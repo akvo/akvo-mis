@@ -9,9 +9,12 @@ from api.v1.v1_profile.constants import (
 )
 from api.v1.v1_users.models import SystemUser
 from utils.tenant_model import tenant_fk
+from utils.tenant_scoped_model import TenantManager
 
 
 class Levels(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     name = models.CharField(max_length=50)
     level = models.IntegerField()
     tenant = tenant_fk("levels")
@@ -30,6 +33,8 @@ class Levels(models.Model):
 
 
 class Administration(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     parent = models.ForeignKey(
         "self",
         on_delete=models.PROTECT,
@@ -102,6 +107,9 @@ def set_administration_path(sender, instance: Administration, **_):
 
 
 class AdministrationAttribute(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
+
     class Type(models.TextChoices):
         VALUE = "value", "Value"
         OPTION = "option", "Option"
@@ -122,6 +130,8 @@ class AdministrationAttribute(models.Model):
 
 
 class AdministrationAttributeValue(models.Model):
+    TENANT_PATH = "administration__tenant"
+    objects = TenantManager()
     administration = models.ForeignKey(
         to=Administration, on_delete=models.CASCADE, related_name="attributes"
     )
@@ -135,6 +145,8 @@ class AdministrationAttributeValue(models.Model):
 
 
 class Entity(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     name = models.TextField()
     tenant = tenant_fk("entities")
 
@@ -143,6 +155,8 @@ class Entity(models.Model):
 
 
 class EntityData(models.Model):
+    TENANT_PATH = "entity__tenant"
+    objects = TenantManager()
     name = models.TextField()
     code = models.CharField(max_length=255, null=True, default=None)
     entity = models.ForeignKey(
@@ -160,6 +174,8 @@ class EntityData(models.Model):
 
 
 class Role(models.Model):
+    TENANT_PATH = "administration_level__tenant"
+    objects = TenantManager()
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(null=True, blank=True)
     administration_level = models.ForeignKey(
@@ -218,6 +234,8 @@ class RoleFeatureAccess(models.Model):
 
 
 class UserRole(models.Model):
+    TENANT_PATH = "user__tenant"
+    objects = TenantManager()
     user = models.ForeignKey(
         to=SystemUser,
         on_delete=models.CASCADE,
