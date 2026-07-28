@@ -111,6 +111,18 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.registered_tenants().count(), 0)
 
+    def test_registration_works_on_a_seeded_database(self):
+        # administration_seeder inserts levels with explicit ids, which
+        # leaves the id sequence behind. Registration now always creates
+        # a level of its own, so a desynced sequence makes the very first
+        # sign-up on an existing deployment fail with an integrity error.
+        call_command("administration_seeder", "--test")
+        response = self.register()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            Levels.objects.get(tenant__subdomain="acme").level, 0
+        )
+
     def test_each_superadmin_resolves_their_own_root(self):
         first = self.register().json()
         second = self.register(

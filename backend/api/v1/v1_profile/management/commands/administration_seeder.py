@@ -1,6 +1,8 @@
 import json
 from mis.settings import COUNTRY_NAME
 from django.core.management.base import BaseCommand
+from django.core.management.color import no_style
+from django.db import connection
 from api.v1.v1_profile.models import Levels, Administration
 from api.v1.v1_profile.constants import (
     DEFAULT_ADMINISTRATION_DATA,
@@ -16,6 +18,14 @@ def seed_levels(geo_config: list = []) -> None:
     for geo in geo_config:
         level = Levels(id=geo["id"], name=geo["alias"], level=geo["level"])
         level.save()
+    # Saving with an explicit id bypasses the id sequence, which stays
+    # where it was. Registration creates a level of its own per tenant,
+    # so the next insert would collide with a seeded id. Realign the
+    # sequence with the rows actually present.
+    reset_sql = connection.ops.sequence_reset_sql(no_style(), [Levels])
+    with connection.cursor() as cursor:
+        for sql in reset_sql:
+            cursor.execute(sql)
 
 
 def seed_administration(row: dict, geo_config: list = []) -> None:
