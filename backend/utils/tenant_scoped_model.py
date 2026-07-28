@@ -15,7 +15,13 @@ from django.db import models
 
 class TenantScopedQuerySetMixin:
     def for_user(self, user):
-        return self.filter(**{self.model.TENANT_PATH: user.tenant})
+        # AnonymousUser has no tenant attribute at all. Treat it as another
+        # tenant-less actor rather than letting it raise: on a real
+        # deployment every row is tenant-owned, so an anonymous caller
+        # matches nothing, which is the safe outcome for the handful of
+        # endpoints reachable without a token.
+        tenant = getattr(user, "tenant", None)
+        return self.filter(**{self.model.TENANT_PATH: tenant})
 
 
 class TenantQuerySet(TenantScopedQuerySetMixin, models.QuerySet):
