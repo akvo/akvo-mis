@@ -28,9 +28,9 @@ class TenantQuerySet(TenantScopedQuerySetMixin, models.QuerySet):
     pass
 
 
-class TenantManager(models.Manager):
-    def get_queryset(self):
-        return TenantQuerySet(self.model, using=self._db)
-
-    def for_user(self, user):
-        return self.get_queryset().for_user(user)
+# from_queryset copies for_user onto the manager, so plain-manager models
+# get Model.objects.for_user(...) without hand-written delegation. The
+# soft-deletes and draft managers cannot use this — their get_queryset
+# carries with_deleted/only_draft state a generated manager would drop —
+# so they delegate explicitly instead.
+TenantManager = models.Manager.from_queryset(TenantQuerySet)
