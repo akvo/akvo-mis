@@ -24,6 +24,12 @@ class RegisterEndpointTestCase(TestCase):
             "/api/v1/register", payload, content_type="application/json"
         )
 
+    def registered_tenants(self):
+        # The backfill data migration seeds a "default" tenant, so it is
+        # present in every test database. These tests care only about the
+        # tenants registration itself creates.
+        return Tenant.objects.exclude(subdomain="default")
+
     def test_register_on_empty_database_bootstraps_everything(self):
         response = self.register()
         self.assertEqual(response.status_code, 200)
@@ -35,6 +41,8 @@ class RegisterEndpointTestCase(TestCase):
         self.assertTrue(Levels.objects.filter(level=0).exists())
         root = Administration.objects.get(parent__isnull=True)
         self.assertEqual(root.name, "acme")
+        self.assertEqual(root.tenant.subdomain, "acme")
+        self.assertEqual(Levels.objects.get(level=0).tenant.subdomain, "acme")
         # The control center is only usable if the profile resolves a
         # real administration for the fresh superuser.
         profile = self.client.get(
@@ -44,14 +52,18 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(profile.status_code, 200)
         self.assertIsNotNone(profile.json()["administration"]["id"])
 
-    def test_second_registration_reuses_the_hierarchy(self):
+    def test_second_registration_creates_its_own_hierarchy(self):
         self.register()
         response = self.register(email="owner@beta.org", subdomain="beta")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(Tenant.objects.count(), 2)
-        self.assertEqual(Levels.objects.filter(level=0).count(), 1)
+        self.assertEqual(self.registered_tenants().count(), 2)
+        # Per-tenant hierarchy: each tenant owns a level 0 and a root.
+        self.assertEqual(Levels.objects.filter(level=0).count(), 2)
+        roots = Administration.objects.filter(parent__isnull=True)
+        self.assertEqual(roots.count(), 2)
         self.assertEqual(
-            Administration.objects.filter(parent__isnull=True).count(), 1
+            set(roots.values_list("tenant__subdomain", flat=True)),
+            {"acme", "beta"},
         )
 
     def test_duplicate_subdomain_is_rejected_atomically(self):
@@ -72,7 +84,7 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(
             response.json()["message"], "Email is already registered"
         )
-        self.assertEqual(Tenant.objects.count(), 1)
+        self.assertEqual(self.registered_tenants().count(), 1)
 
     def test_losing_a_uniqueness_race_is_a_400(self):
         # Two simultaneous sign-ups can both pass the serializer's
@@ -90,9 +102,9 @@ class RegisterEndpointTestCase(TestCase):
         for bad in ("My App", "UPPER", "-lead", "trail-", "a_b"):
             response = self.register(subdomain=bad)
             self.assertEqual(response.status_code, 400)
-        self.assertEqual(Tenant.objects.count(), 0)
+        self.assertEqual(self.registered_tenants().count(), 0)
 
     def test_weak_password_is_rejected(self):
         response = self.register(password="12345678")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(Tenant.objects.count(), 0)
+        self.assertEqual(self.registered_tenants().count(), 0)

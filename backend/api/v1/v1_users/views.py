@@ -250,16 +250,19 @@ def register(request, version):
                 tenant=tenant,
             )
             # A registrant needs a resolvable profile: superuser scoping
-            # substitutes the root administration, so level 0 and a root
-            # unit must exist. Registrations after the first reuse the
-            # global hierarchy until data is tenant-scoped (future work).
-            level_zero = Levels.objects.filter(level=0).first()
-            if not level_zero:
-                level_zero = Levels.objects.create(name="", level=0)
-            if not Administration.objects.filter(parent__isnull=True).exists():
-                Administration.objects.create(
-                    parent=None, level=level_zero, name=validated["subdomain"]
-                )
+            # substitutes the tenant's root administration. Every tenant
+            # gets its own level 0 and root unit — hierarchies are
+            # disjoint from birth, even though queries are not yet
+            # tenant-filtered.
+            level_zero = Levels.objects.create(
+                name="", level=0, tenant=tenant
+            )
+            Administration.objects.create(
+                parent=None,
+                level=level_zero,
+                name=validated["subdomain"],
+                tenant=tenant,
+            )
     except IntegrityError:
         # Uniqueness is enforced once, by the database. A pre-check in the
         # serializer would only be a read before a write — two concurrent
