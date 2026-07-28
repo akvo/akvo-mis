@@ -11,13 +11,26 @@ from utils.custom_manager import UserManager
 
 
 class Organisation(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255)
+    tenant = models.ForeignKey(
+        "v1_users.Tenant",
+        on_delete=models.PROTECT,
+        related_name="organisations",
+        default=None,
+        null=True,
+    )
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "organisation"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="unique_organisation_name_per_tenant",
+            )
+        ]
 
 
 class OrganisationAttribute(models.Model):

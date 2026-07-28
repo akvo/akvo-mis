@@ -16,6 +16,13 @@ from utils.soft_deletes_model import SoftDeletes
 class Forms(SoftDeletes):
     name = models.TextField()
     description = models.TextField(default=None, null=True)
+    tenant = models.ForeignKey(
+        "v1_users.Tenant",
+        on_delete=models.PROTECT,
+        related_name="forms",
+        default=None,
+        null=True,
+    )
     version = models.IntegerField(default=1)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     approval_instructions = models.JSONField(default=None, null=True)

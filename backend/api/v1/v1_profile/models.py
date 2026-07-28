@@ -13,12 +13,25 @@ from api.v1.v1_users.models import SystemUser
 class Levels(models.Model):
     name = models.CharField(max_length=50)
     level = models.IntegerField()
+    tenant = models.ForeignKey(
+        "v1_users.Tenant",
+        on_delete=models.PROTECT,
+        related_name="levels",
+        default=None,
+        null=True,
+    )
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "levels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "level"],
+                name="unique_level_per_tenant",
+            )
+        ]
 
 
 class Administration(models.Model):
@@ -36,6 +49,13 @@ class Administration(models.Model):
     )
     name = models.TextField()
     path = models.TextField(null=True, default=None)
+    tenant = models.ForeignKey(
+        "v1_users.Tenant",
+        on_delete=models.PROTECT,
+        related_name="administrations",
+        default=None,
+        null=True,
+    )
 
     def __str__(self):
         return self.name
@@ -73,6 +93,13 @@ class Administration(models.Model):
 
     class Meta:
         db_table = "administrator"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant"],
+                condition=models.Q(parent__isnull=True),
+                name="unique_root_administration_per_tenant",
+            )
+        ]
 
 
 @receiver(pre_save, sender=Administration)
@@ -99,6 +126,13 @@ class AdministrationAttribute(models.Model):
     options = ArrayField(
         models.CharField(max_length=255, null=True), default=list, blank=True
     )
+    tenant = models.ForeignKey(
+        "v1_users.Tenant",
+        on_delete=models.PROTECT,
+        related_name="administration_attributes",
+        default=None,
+        null=True,
+    )
 
     class Meta:
         db_table = "administration_attribute"
@@ -119,6 +153,13 @@ class AdministrationAttributeValue(models.Model):
 
 class Entity(models.Model):
     name = models.TextField()
+    tenant = models.ForeignKey(
+        "v1_users.Tenant",
+        on_delete=models.PROTECT,
+        related_name="entities",
+        default=None,
+        null=True,
+    )
 
     class Meta:
         db_table = "entities"
