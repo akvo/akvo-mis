@@ -9,15 +9,14 @@ from mis.settings import (
     APK_NAME,
     SHOW_LANDING_PAGE,
 )
-from api.v1.v1_profile.models import Levels
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
 from api.v1.v1_visualization.functions import refresh_materialized_data
 
 
 class Command(BaseCommand):
     help = (
-        "Generate source/config/config.min.js (levels, "
-        "appConfig, roleFeatures) for the frontend bundle. "
+        "Generate source/config/config.min.js (appConfig, "
+        "roleFeatures) for the frontend bundle. "
         "Pass --refresh-views to also refresh the view_data_options "
         "materialized view (acquires an exclusive lock — see flag help)."
     )
@@ -45,19 +44,11 @@ class Command(BaseCommand):
 
         # write config
         config_file = jsmin(open("source/config/config.js").read())
-        levels = []
-        # NOTE: forms are no longer baked here. The web frontend fetches them
-        # at runtime from GET /api/v1/forms/published so newly published forms
-        # reflect without a config rebuild. See doc/claude/
-        # remove-window-forms-runtime-fetch.md
-        for level in Levels.objects.all():
-            levels.append(
-                {
-                    "id": level.id,
-                    "name": level.name,
-                    "level": level.level,
-                }
-            )
+        # NOTE: neither forms nor levels are baked here any more. The web
+        # frontend fetches both at runtime — forms from
+        # GET /api/v1/forms/published, levels from GET /api/v1/levels —
+        # because levels are tenant-owned and a global bake would show
+        # every tenant's tiers to everyone.
         role_features = []
         for key, value in FeatureTypes.FieldStr.items():
             role_features.append(
@@ -76,9 +67,6 @@ class Command(BaseCommand):
         min_config = jsmin(
             "".join(
                 [
-                    "var levels=",
-                    json.dumps(levels),
-                    ";",
                     config_file,
                     "var appConfig=",
                     json.dumps({
@@ -96,7 +84,6 @@ class Command(BaseCommand):
         )
         open("source/config/config.min.js", "w").write(min_config)
         # os.remove(administration_json)
-        del levels
         del min_config
         if options.get("refresh_views"):
             refresh_materialized_data()

@@ -421,12 +421,16 @@ def list_administration(request, version, administration_id):
 )
 @api_view(["GET"])
 def list_levels(request, version):
-    return Response(
+    response = Response(
         ListLevelSerializer(
             instance=Levels.objects.for_user(request.user), many=True
         ).data,
         status=status.HTTP_200_OK,
     )
+    # Levels are per-tenant and fetched at runtime now, so a cached copy
+    # would follow one tenant's tiers into another's session.
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 @extend_schema(

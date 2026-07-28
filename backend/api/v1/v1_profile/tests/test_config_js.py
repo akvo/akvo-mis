@@ -28,5 +28,17 @@ class ConfigJS(TestCase):
             content = f.read()
         os.remove(config_path)
         self.assertNotIn("var topojson", content)
-        for expected in ("var levels", "var appConfig", "var roleFeatures"):
+        # levels left the bake too once they became tenant-owned; what
+        # stays is per-deployment, not per-tenant.
+        for expected in ("var appConfig", "var roleFeatures"):
             self.assertIn(expected, content)
+
+    def test_config_has_no_levels_block(self):
+        administration_seeder.seed_administration_test()
+        if Path(config_path).exists():
+            os.remove(config_path)
+        self.client.get("/api/v1/config.js", follow=True)
+        with open(config_path) as f:
+            content = f.read()
+        os.remove(config_path)
+        self.assertNotIn("var levels", content)
