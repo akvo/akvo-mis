@@ -36,6 +36,20 @@ class OrganisationAttribute(models.Model):
         db_table = "organisation_attribute"
 
 
+class Tenant(models.Model):
+    # Free-tier registration creates one Tenant per sign-up. Only the
+    # subdomain is stored for now; tenant scoping of data and subdomain
+    # routing are future work — this table is the anchor they hang off.
+    subdomain = models.CharField(max_length=63, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.subdomain
+
+    class Meta:
+        db_table = "tenant"
+
+
 class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
     email = models.EmailField(max_length=254, unique=True)
     date_joined = models.DateTimeField(auto_now_add=True)
@@ -48,6 +62,15 @@ class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
         to=Organisation,
         on_delete=models.SET_NULL,
         related_name="user_organisation",
+        default=None,
+        null=True,
+    )
+    tenant = models.ForeignKey(
+        to=Tenant,
+        # PROTECT: deleting a tenant that still owns users must be an
+        # explicit future decision, not a silent cascade.
+        on_delete=models.PROTECT,
+        related_name="users",
         default=None,
         null=True,
     )
