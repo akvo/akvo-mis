@@ -137,8 +137,10 @@ def get_mobile_forms(request, version):
 @api_view(["GET"])
 @permission_classes([IsMobileAssignment])
 def get_mobile_form_details(request: Request, version, form_id):
-    instance = get_object_or_404(Forms, pk=form_id)
     assignment = cast(MobileAssignmentToken, request.auth).assignment
+    instance = get_object_or_404(
+        Forms.objects.for_user(assignment.user), pk=form_id
+    )
     data = WebFormDetailSerializer(
         instance=instance,
         context={
@@ -190,8 +192,11 @@ def sync_pending_form_data(request, version):
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
-    form = get_object_or_404(Forms, pk=request.data.get("formId"))
     assignment = cast(MobileAssignmentToken, request.auth).assignment
+    form = get_object_or_404(
+        Forms.objects.for_user(assignment.user),
+        pk=request.data.get("formId"),
+    )
     user = assignment.user
     administration = assignment.administrations.order_by(
         "level__level"
@@ -567,12 +572,12 @@ class MobileAssignmentViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         search = getattr(self, "_validated_search", None)
-        mobile_users = MobileAssignment.objects.prefetch_related(
-            "administrations", "forms"
-        ).filter(user=user)
+        mobile_users = MobileAssignment.objects.for_user(
+            user
+        ).prefetch_related("administrations", "forms").filter(user=user)
         adm_q = Q()
         if user.is_superuser:
-            adm = Administration.objects.filter(
+            adm = Administration.objects.for_user(user).filter(
                 parent__isnull=True
             ).first()
             adm_q = Q(
@@ -586,7 +591,9 @@ class MobileAssignmentViewSet(ModelViewSet):
                 if adm.path else f"{adm.id}."
             adm_q |= Q(administrations__path__startswith=path)
         if adm_q:
-            descendant_users = MobileAssignment.objects.prefetch_related(
+            descendant_users = MobileAssignment.objects.for_user(
+                user
+            ).prefetch_related(
                 "administrations", "forms"
             ).filter(adm_q)
             mobile_users |= descendant_users
@@ -722,7 +729,7 @@ def get_datapoint_download_list(request, version):
             administration__path__startswith=admin["path"]
         )
     # Combine both queries with the form filter
-    queryset = FormData.objects.filter(
+    queryset = FormData.objects.for_user(assignment.user).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
     )
     if assignment.last_synced_at:
@@ -779,6 +786,6 @@ class DraftFormDataViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.auth.assignment.user
-        return FormData.objects_draft.filter(
+        return FormData.objects_draft.for_user(user).filter(
             created_by=user
         ).order_by("-created")
