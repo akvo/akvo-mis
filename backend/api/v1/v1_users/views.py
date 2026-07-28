@@ -8,7 +8,7 @@ from django.contrib.auth import authenticate
 from django.core import signing
 from django.core.management import call_command
 from django.core.signing import BadSignature
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Value, Q, Count
 from django.db.models.functions import Coalesce, Concat
 from django.http import HttpResponse
@@ -155,6 +155,27 @@ def email_template(request, version):
     return HttpResponse(email)
 
 
+def authenticated_response(user):
+    # Signing in and signing up hand back the same thing: a fresh access
+    # token, the serialized user, and the cookie the SPA reads. Kept in
+    # one place so the two entry points cannot drift apart.
+    user.last_login = timezone.now()
+    user.save()
+    refresh = RefreshToken.for_user(user)
+    expiration_time = timezone.make_aware(
+        datetime.datetime.fromtimestamp(refresh.access_token["exp"])
+    )
+    data = UserSerializer(instance=user).data
+    data["token"] = str(refresh.access_token)
+    data["invite"] = signing.dumps(user.pk)
+    data["expiration_time"] = expiration_time
+    response = Response(data, status=status.HTTP_200_OK)
+    response.set_cookie(
+        "AUTH_TOKEN", str(refresh.access_token), expires=expiration_time
+    )
+    return response
+
+
 # TODO: Remove temp user entry and invite key from the response.
 @extend_schema(
     request=LoginSerializer,
@@ -191,27 +212,7 @@ def login(request, version):
                 {"message": "User has been deleted"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-        user.last_login = timezone.now()
-        user.save()
-        refresh = RefreshToken.for_user(user)
-        # Get the expiration time of the new token
-        expiration_time = datetime.datetime.fromtimestamp(
-            refresh.access_token["exp"]
-        )
-        expiration_time = timezone.make_aware(expiration_time)
-
-        data = UserSerializer(instance=user).data
-        data["token"] = str(refresh.access_token)
-        data["invite"] = signing.dumps(user.pk)
-        data["expiration_time"] = expiration_time
-        response = Response(
-            data,
-            status=status.HTTP_200_OK,
-        )
-        response.set_cookie(
-            "AUTH_TOKEN", str(refresh.access_token), expires=expiration_time
-        )
-        return response
+        return authenticated_response(user)
     return Response(
         {"message": "Invalid login credentials"},
         status=status.HTTP_401_UNAUTHORIZED,
@@ -238,44 +239,43 @@ def register(request, version):
     # Free-tier sign-up: the registrant becomes a superadmin of their own
     # tenant. Everything is one transaction so a partial tenant (user
     # without hierarchy, tenant without user) is unreachable.
-    with transaction.atomic():
-        tenant = Tenant.objects.create(subdomain=validated["subdomain"])
-        user = SystemUser.objects.create_superuser(
-            email=validated["email"],
-            password=validated["password"],
-            first_name=validated["first_name"],
-            last_name=validated["last_name"],
-            tenant=tenant,
-        )
-        # A registrant needs a resolvable profile: superuser scoping
-        # substitutes the root administration, so level 0 and a root unit
-        # must exist. Registrations after the first reuse the global
-        # hierarchy until data is tenant-scoped (future work).
-        level_zero = Levels.objects.filter(level=0).first()
-        if not level_zero:
-            level_zero = Levels.objects.create(name="", level=0)
-        if not Administration.objects.filter(parent__isnull=True).exists():
-            Administration.objects.create(
-                parent=None, level=level_zero, name=validated["subdomain"]
+    try:
+        with transaction.atomic():
+            tenant = Tenant.objects.create(subdomain=validated["subdomain"])
+            user = SystemUser.objects.create_superuser(
+                email=validated["email"],
+                password=validated["password"],
+                first_name=validated["first_name"],
+                last_name=validated["last_name"],
+                tenant=tenant,
             )
-    # Mirror the login response exactly so the frontend can reuse the
-    # login success path (token, cookie, store update).
-    user.last_login = timezone.now()
-    user.save()
-    refresh = RefreshToken.for_user(user)
-    expiration_time = datetime.datetime.fromtimestamp(
-        refresh.access_token["exp"]
-    )
-    expiration_time = timezone.make_aware(expiration_time)
-    data = UserSerializer(instance=user).data
-    data["token"] = str(refresh.access_token)
-    data["invite"] = signing.dumps(user.pk)
-    data["expiration_time"] = expiration_time
-    response = Response(data, status=status.HTTP_200_OK)
-    response.set_cookie(
-        "AUTH_TOKEN", str(refresh.access_token), expires=expiration_time
-    )
-    return response
+            # A registrant needs a resolvable profile: superuser scoping
+            # substitutes the root administration, so level 0 and a root
+            # unit must exist. Registrations after the first reuse the
+            # global hierarchy until data is tenant-scoped (future work).
+            level_zero = Levels.objects.filter(level=0).first()
+            if not level_zero:
+                level_zero = Levels.objects.create(name="", level=0)
+            if not Administration.objects.filter(parent__isnull=True).exists():
+                Administration.objects.create(
+                    parent=None, level=level_zero, name=validated["subdomain"]
+                )
+    except IntegrityError:
+        # Uniqueness is enforced once, by the database. A pre-check in the
+        # serializer would only be a read before a write — two concurrent
+        # sign-ups would both pass it and one would still lose here. The
+        # rolled-back transaction lets us name the field that lost.
+        taken = (
+            "Email"
+            if SystemUser.objects.filter(email=validated["email"]).exists()
+            else "Subdomain"
+        )
+        return Response(
+            {"message": f"{taken} is already registered"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    # Same payload as login, so the frontend reuses the login success path.
+    return authenticated_response(user)
 
 
 @extend_schema(

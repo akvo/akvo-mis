@@ -255,8 +255,9 @@ TEST_ENV = False
 
 # True only when running under `manage.py test`. Used to keep legacy
 # test-only conveniences (the admin@akvo.org auto-create on login) out
-# of production code paths.
-TESTING = "test" in sys.argv
+# of production code paths. Matched positionally, so a stray "test"
+# argument to some other command cannot switch it on.
+TESTING = sys.argv[1:2] == ["test"]
 
 Q_CLUSTER = {
     "name": "DjangORM",

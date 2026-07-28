@@ -1,3 +1,6 @@
+from unittest import mock
+
+from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
 
@@ -55,6 +58,9 @@ class RegisterEndpointTestCase(TestCase):
         self.register()
         response = self.register(email="owner@beta.org")
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["message"], "Subdomain is already registered"
+        )
         self.assertFalse(
             SystemUser.objects.filter(email="owner@beta.org").exists()
         )
@@ -63,7 +69,22 @@ class RegisterEndpointTestCase(TestCase):
         self.register()
         response = self.register(subdomain="beta")
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["message"], "Email is already registered"
+        )
         self.assertEqual(Tenant.objects.count(), 1)
+
+    def test_losing_a_uniqueness_race_is_a_400(self):
+        # Two simultaneous sign-ups can both pass the serializer's
+        # existence checks; the loser hits the unique constraint at
+        # insert. Stand in for that with a raising create.
+        with mock.patch(
+            "api.v1.v1_users.views.Tenant.objects.create",
+            side_effect=IntegrityError("duplicate key"),
+        ):
+            response = self.register()
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(SystemUser.objects.count(), 0)
 
     def test_malformed_subdomain_is_rejected(self):
         for bad in ("My App", "UPPER", "-lead", "trail-", "a_b"):

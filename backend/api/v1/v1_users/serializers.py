@@ -22,8 +22,11 @@ from api.v1.v1_profile.models import (
     Role,
     UserRole,
 )
-from api.v1.v1_users.models import SystemUser, \
-        Organisation, OrganisationAttribute, Tenant
+from api.v1.v1_users.models import (
+    SystemUser,
+    Organisation,
+    OrganisationAttribute,
+)
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_approval.models import DataBatch
 from utils.custom_serializer_fields import (
@@ -922,15 +925,9 @@ class RegisterSerializer(serializers.Serializer):
         },
     )
 
-    def validate_email(self, value):
-        if SystemUser.objects.filter(email=value).exists():
-            raise ValidationError("Email is already registered")
-        return value
-
-    def validate_subdomain(self, value):
-        if Tenant.objects.filter(subdomain=value).exists():
-            raise ValidationError("Subdomain is already taken")
-        return value
+    # Uniqueness of email and subdomain is left to the database
+    # constraints, which the register view turns into a 400 — a
+    # pre-check here could not close the race anyway.
 
     def validate(self, attrs):
         # Run Django's password validators with user context so the

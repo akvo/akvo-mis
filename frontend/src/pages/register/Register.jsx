@@ -16,13 +16,7 @@ const Register = () => {
   const onFinish = (values) => {
     setLoading(true);
     api
-      .post("register", {
-        email: values.email,
-        password: values.password,
-        first_name: values.first_name,
-        last_name: values.last_name,
-        subdomain: values.subdomain,
-      })
+      .post("register", values)
       .then((res) => {
         // Mirror the login success path: token, expiry cookie, store.
         api.setToken(res.data.token);

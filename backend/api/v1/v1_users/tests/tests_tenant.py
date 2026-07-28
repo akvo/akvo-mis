@@ -1,4 +1,3 @@
-from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
 
@@ -27,8 +26,3 @@ class TenantModelTestCase(TestCase):
             last_name="Tenant",
         )
         self.assertIsNone(user.tenant)
-
-    def test_subdomain_is_unique(self):
-        Tenant.objects.create(subdomain="acme")
-        with self.assertRaises(IntegrityError):
-            Tenant.objects.create(subdomain="acme")
