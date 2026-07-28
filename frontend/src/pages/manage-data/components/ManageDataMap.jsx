@@ -13,7 +13,6 @@ import { GradationLegend, MapView, MarkerLegend } from "../../../components";
 import { api, store, uiText, geo, QUESTION_TYPES, config } from "../../../lib";
 import { color } from "../../../util";
 import { getForms } from "../../../util/form";
-const { getBounds } = geo;
 
 const ManageDataMap = () => {
   const [loading, setLoading] = useState(true);
@@ -415,8 +414,7 @@ const ManageDataMap = () => {
         "manage-data-map:geo"
       );
       const isFormSwitch = prevForm !== selectedForm;
-      const selected = [{ prop: adm?.level_name, value: adm?.name }];
-      const pos = getBounds(selected);
+      const pos = geo.defaultPos();
       unstable_batchedUpdates(() => {
         if (isFormSwitch) {
           setPrevForm(selectedForm);
