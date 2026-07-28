@@ -22,9 +22,8 @@ def seed_levels(geo_config: list = []) -> None:
     # where it was. Registration creates a level of its own per tenant,
     # so the next insert would collide with a seeded id. Realign the
     # sequence with the rows actually present.
-    reset_sql = connection.ops.sequence_reset_sql(no_style(), [Levels])
     with connection.cursor() as cursor:
-        for sql in reset_sql:
+        for sql in connection.ops.sequence_reset_sql(no_style(), [Levels]):
             cursor.execute(sql)
 
 

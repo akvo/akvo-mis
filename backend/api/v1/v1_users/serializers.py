@@ -711,17 +711,11 @@ class UserSerializer(serializers.ModelSerializer):
             # A tenant superadmin is scoped to their own root. Tenant-less
             # superusers (seeders, createsuperuser, legacy deployments)
             # fall back to the old unscoped lookup.
-            adm = None
+            roots = Administration.objects.filter(parent__isnull=True)
             if instance.tenant_id:
-                adm = Administration.objects.filter(
-                    parent__isnull=True,
-                    tenant_id=instance.tenant_id,
-                ).first()
-            if not adm:
-                adm = Administration.objects.filter(
-                    parent__isnull=True,
-                    level__level=0,
-                ).first()
+                adm = roots.filter(tenant_id=instance.tenant_id).first()
+            else:
+                adm = roots.filter(level__level=0).first()
             return UserAdministrationSerializer(instance=adm).data
         # Check if there are multiple user roles at the minimum level
         min_level = instance.user_user_role.aggregate(

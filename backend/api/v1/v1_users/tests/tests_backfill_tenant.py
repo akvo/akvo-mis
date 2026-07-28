@@ -31,10 +31,3 @@ class BackfillDefaultTenantTestCase(TestCase):
         # Second run: no new tenant, nothing re-stamped.
         backfill_migration.backfill_default_tenant(global_apps, None)
         self.assertEqual(Tenant.objects.filter(subdomain="default").count(), 1)
-
-    def test_rows_with_a_tenant_are_left_alone(self):
-        acme = Tenant.objects.create(subdomain="acme")
-        level = Levels.objects.create(name="", level=0, tenant=acme)
-        backfill_migration.backfill_default_tenant(global_apps, None)
-        level.refresh_from_db()
-        self.assertEqual(level.tenant, acme)

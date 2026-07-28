@@ -5,6 +5,7 @@ from django.core import signing
 from django.db import models
 from django.utils import timezone
 from utils.soft_deletes_model import SoftDeletes
+from utils.tenant_model import tenant_fk
 
 # Create your models here.
 from utils.custom_manager import UserManager
@@ -12,13 +13,7 @@ from utils.custom_manager import UserManager
 
 class Organisation(models.Model):
     name = models.CharField(max_length=255)
-    tenant = models.ForeignKey(
-        "v1_users.Tenant",
-        on_delete=models.PROTECT,
-        related_name="organisations",
-        default=None,
-        null=True,
-    )
+    tenant = tenant_fk("organisations")
 
     def __str__(self):
         return self.name

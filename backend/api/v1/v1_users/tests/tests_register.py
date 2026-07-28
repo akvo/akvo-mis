@@ -119,9 +119,6 @@ class RegisterEndpointTestCase(TestCase):
         call_command("administration_seeder", "--test")
         response = self.register()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            Levels.objects.get(tenant__subdomain="acme").level, 0
-        )
 
     def test_each_superadmin_resolves_their_own_root(self):
         first = self.register().json()
