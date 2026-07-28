@@ -244,6 +244,32 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
                         <div
                           class="ant-form-item-control-input-content"
                         >
+                          <a
+                            class="login-form-forgot"
+                            href="/register"
+                          >
+                            Create an account
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="ant-form-item"
+                >
+                  <div
+                    class="ant-row ant-form-item-row"
+                  >
+                    <div
+                      class="ant-col ant-form-item-control"
+                    >
+                      <div
+                        class="ant-form-item-control-input"
+                      >
+                        <div
+                          class="ant-form-item-control-input-content"
+                        >
                           <button
                             class="ant-btn ant-btn-round ant-btn-primary"
                             type="submit"
