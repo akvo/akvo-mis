@@ -1235,6 +1235,7 @@ def import_form_definition(
     parent_id=None,
     require_parent=True,
     claim_foreign_questions=False,
+    never_delete=False,
 ):
     """Create or update a form from a normalized definition.
 
@@ -1252,6 +1253,14 @@ def import_form_definition(
         form (cross-form question moves, seeder/CLI only). The API must
         keep this False so an import can never steal questions from an
         unrelated form.
+    never_delete : bool — when True, a question/group absent from the file
+        is protected from soft-delete only while it still carries
+        submission data (an answered question, or a group holding one).
+        An unanswered question or empty group is still pruned — that is
+        what frees the (form, name) slot a cross-form move needs to claim
+        (seeder only). Options are still replaced wholesale: QuestionOptions
+        rows carry no submission data, since Answers.options stores option
+        values as a JSON list rather than foreign keys.
 
     Returns
     -------
@@ -1272,6 +1281,7 @@ def import_form_definition(
         _apply_import_update_path(
             existing_form, norm, user,
             claim_foreign_questions=claim_foreign_questions,
+            never_delete=never_delete,
         )
         return existing_form, "updated"
     else:
@@ -1513,14 +1523,19 @@ def _fixup_import_dependency_refs(form, final_q_id_map):
             q_obj.save(update_fields=["dependency"])
 
 
-def _apply_import_update_path(form, norm, user, claim_foreign_questions=False):
+def _apply_import_update_path(
+    form, norm, user, claim_foreign_questions=False, never_delete=False
+):
     """Update an existing form's live structure to match the normalized def.
 
     Semantics identical to restore_from_snapshot:
-    - Pass 1: soft-delete groups/questions absent from the file.
+    - Pass 1: soft-delete groups/questions absent from the file. With
+      never_delete=True this pass is answer-aware: a stale question that
+      carries answers is kept, and so is a stale group that still holds
+      such a question. Everything else is still pruned.
     - Pass 2: upsert by exported id; create new rows for unknown ids.
     - Options are recreated wholesale.
-    - status and active_version are NOT touched (D-6).
+    - status and active_version are NOT touched.
 
     With claim_foreign_questions=True (seeder/CLI only), file question ids
     are matched globally and rows currently attached to another form are
@@ -1539,12 +1554,48 @@ def _apply_import_update_path(form, norm, user, claim_foreign_questions=False):
         if q.get("id") is not None
     }
 
-    Questions.objects.filter(form=form).exclude(
+    stale_questions = Questions.objects.filter(form=form).exclude(
         id__in=snapshot_q_ids
-    ).soft_delete()
-    form.form_question_group.exclude(
+    )
+    stale_groups = form.form_question_group.exclude(
         id__in=snapshot_group_ids
-    ).soft_delete()
+    )
+    if never_delete:
+        # Protect what carries submission data, and only that. A question
+        # with answers must survive a re-seed — deleting it would take the
+        # answers with it. A question without answers has nothing to lose,
+        # and pruning it is what frees the (form, name) slot that
+        # unique_active_form_question requires before a cross-form move can
+        # claim that name. Protecting those too would make moves impossible.
+        #
+        # The flip side: moving a question into a form that already holds a
+        # live, ANSWERED question of the same name raises IntegrityError on
+        # unique_active_form_question, because the incumbent cannot be
+        # pruned to free the slot. That is deliberate. The whole import runs
+        # inside transaction.atomic(), so the run fails loudly and rolls
+        # back; the only alternative would be to silently delete answered
+        # structure — and the submissions hanging off it — to make room.
+        #
+        # Only questions the file has ACTUALLY dropped may protect a group.
+        # A question the file still declares is about to be (re)written by
+        # pass 2, possibly into a different, still-declared group. Counting
+        # it here would keep its former group alive as a permanently empty
+        # phantom that /form/web/{id}, the mobile SQLite export and
+        # _build_schema_snapshot all still serve.
+        answered_q_ids = Answers.objects.filter(
+            question__form=form
+        ).exclude(
+            question_id__in=snapshot_q_ids
+        ).values_list("question_id", flat=True)
+        # stale_questions is already restricted to ids absent from
+        # snapshot_q_ids, so the same carve-out is a no-op there and is
+        # left off deliberately.
+        stale_questions = stale_questions.exclude(id__in=answered_q_ids)
+        stale_groups = stale_groups.exclude(
+            question_group_question__id__in=answered_q_ids
+        )
+    stale_questions.soft_delete()
+    stale_groups.soft_delete()
 
     group_db = {
         g.id: g
