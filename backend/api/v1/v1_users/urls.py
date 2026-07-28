@@ -17,6 +17,7 @@ from api.v1.v1_users.views import (
     add_organisation,
     OrganisationEditDeleteView,
     update_profile,
+    register,
 )
 from api.v1.v1_profile.views import list_entity_data
 
@@ -28,6 +29,7 @@ urlpatterns = [
     ),
     re_path(r"^(?P<version>(v1))/profile", get_profile),
     re_path(r"^(?P<version>(v1))/login", login),
+    re_path(r"^(?P<version>(v1))/register$", register),
     re_path(r"^(?P<version>(v1))/users", list_users),
     re_path(
         r"^(?P<version>(v1))/user/(?P<user_id>[0-9]+)",

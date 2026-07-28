@@ -10,6 +10,7 @@ import {
 import {
   Home,
   Login,
+  Register,
   ControlCenterLayout,
   Users,
   AddUser,
@@ -122,6 +123,7 @@ const RouteList = () => {
       <Route exact path="/login" element={<Login />} />
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
+      <Route exact path="/register" element={<Register />} />
       <Route exact path="/data" element={<Home />} />
       <Route exact path="/dashboard/:slug" element={<Dashboard />} />
       <Route

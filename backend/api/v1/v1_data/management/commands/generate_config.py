@@ -4,7 +4,6 @@ from django.core.management import BaseCommand
 from jsmin import jsmin
 
 from mis.settings import (
-    COUNTRY_NAME,
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
@@ -17,7 +16,7 @@ from api.v1.v1_visualization.functions import refresh_materialized_data
 
 class Command(BaseCommand):
     help = (
-        "Generate source/config/config.min.js (forms, levels, topojson, "
+        "Generate source/config/config.min.js (levels, "
         "appConfig, roleFeatures) for the frontend bundle. "
         "Pass --refresh-views to also refresh the view_data_options "
         "materialized view (acquires an exclusive lock — see flag help)."
@@ -43,7 +42,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         print("GENERATING CONFIG JS")
-        topojson = open(f"source/{COUNTRY_NAME}.topojson").read()
 
         # write config
         config_file = jsmin(open("source/config/config.js").read())
@@ -78,9 +76,6 @@ class Command(BaseCommand):
         min_config = jsmin(
             "".join(
                 [
-                    "var topojson=",
-                    topojson,
-                    ";",
                     "var levels=",
                     json.dumps(levels),
                     ";",
