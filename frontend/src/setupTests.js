@@ -6,7 +6,6 @@ import "@testing-library/jest-dom";
 import "jest-canvas-mock";
 import store from "./lib/store";
 
-window.topojson = { objects: { fiji: { geometries: [{ properties: {} }] } } };
 window.levels = [
   { id: 1, name: "National", level: 0 },
   { id: 2, name: "County", level: 1 },
