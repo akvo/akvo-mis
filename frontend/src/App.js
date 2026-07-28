@@ -358,9 +358,13 @@ const App = () => {
     });
   }, [pageLocation]);
 
-  // Fetch published forms once at bootstrap (replaces the window.forms global
+  // Fetch published forms at bootstrap (replaces the window.forms global
   // baked into config.js). Gates render so dropdowns/dashboards never show an
   // empty list before the forms resolve.
+  //
+  // Refetched when auth changes: the endpoint is now tenant-scoped, so the
+  // bootstrap call made before sign-in returns nothing and the list has to
+  // be rebuilt for the tenant once we know who is asking.
   useEffect(() => {
     fetchPublishedForms()
       .catch((err) => {
@@ -369,7 +373,7 @@ const App = () => {
       .finally(() => {
         setFormsLoading(false);
       });
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!location.pathname.includes("/login")) {
