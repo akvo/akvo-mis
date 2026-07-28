@@ -1,3 +1,5 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core import exceptions as django_exceptions
 from django.core import signing
 from django.core.signing import BadSignature
 from django.utils import timezone
@@ -21,7 +23,7 @@ from api.v1.v1_profile.models import (
     UserRole,
 )
 from api.v1.v1_users.models import SystemUser, \
-        Organisation, OrganisationAttribute
+        Organisation, OrganisationAttribute, Tenant
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_approval.models import DataBatch
 from utils.custom_serializer_fields import (
@@ -900,3 +902,46 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             "phone_number",
             "organisation"
         ]
+
+
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(max_length=50)
+    last_name = serializers.CharField(max_length=50)
+    # A valid DNS label, because the subdomain will one day be one:
+    # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
+    subdomain = serializers.RegexField(
+        regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        max_length=63,
+        error_messages={
+            "invalid": (
+                "Subdomain may only contain lowercase letters, digits "
+                "and hyphens, and cannot start or end with a hyphen"
+            )
+        },
+    )
+
+    def validate_email(self, value):
+        if SystemUser.objects.filter(email=value).exists():
+            raise ValidationError("Email is already registered")
+        return value
+
+    def validate_subdomain(self, value):
+        if Tenant.objects.filter(subdomain=value).exists():
+            raise ValidationError("Subdomain is already taken")
+        return value
+
+    def validate(self, attrs):
+        # Run Django's password validators with user context so the
+        # similarity validator can compare against email and names.
+        user = SystemUser(
+            email=attrs["email"],
+            first_name=attrs["first_name"],
+            last_name=attrs["last_name"],
+        )
+        try:
+            validate_password(attrs["password"], user=user)
+        except django_exceptions.ValidationError as error:
+            raise ValidationError({"password": list(error.messages)})
+        return attrs

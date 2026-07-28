@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate
 from django.core import signing
 from django.core.management import call_command
 from django.core.signing import BadSignature
+from django.db import transaction
 from django.db.models import Value, Q, Count
 from django.db.models.functions import Coalesce, Concat
 from django.http import HttpResponse
@@ -38,6 +39,7 @@ from api.v1.v1_users.models import (
     SystemUser,
     Organisation,
     OrganisationAttribute,
+    Tenant,
 )
 from api.v1.v1_users.serializers import (
     LoginSerializer,
@@ -56,6 +58,7 @@ from api.v1.v1_users.serializers import (
     OrganisationAttributeChildrenSerializer,
     RoleOptionSerializer,
     UpdateProfileSerializer,
+    RegisterSerializer,
 )
 from mis.settings import REST_FRAMEWORK, WEBDOMAIN
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
@@ -210,6 +213,66 @@ def login(request, version):
         {"message": "Invalid login credentials"},
         status=status.HTTP_401_UNAUTHORIZED,
     )
+
+
+@extend_schema(
+    request=RegisterSerializer,
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+def register(request, version):
+    serializer = RegisterSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {
+                "message": validate_serializers_message(serializer.errors),
+                "details": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    validated = serializer.validated_data
+    # Free-tier sign-up: the registrant becomes a superadmin of their own
+    # tenant. Everything is one transaction so a partial tenant (user
+    # without hierarchy, tenant without user) is unreachable.
+    with transaction.atomic():
+        tenant = Tenant.objects.create(subdomain=validated["subdomain"])
+        user = SystemUser.objects.create_superuser(
+            email=validated["email"],
+            password=validated["password"],
+            first_name=validated["first_name"],
+            last_name=validated["last_name"],
+            tenant=tenant,
+        )
+        # A registrant needs a resolvable profile: superuser scoping
+        # substitutes the root administration, so level 0 and a root unit
+        # must exist. Registrations after the first reuse the global
+        # hierarchy until data is tenant-scoped (future work).
+        level_zero = Levels.objects.filter(level=0).first()
+        if not level_zero:
+            level_zero = Levels.objects.create(name="", level=0)
+        if not Administration.objects.filter(parent__isnull=True).exists():
+            Administration.objects.create(
+                parent=None, level=level_zero, name=validated["subdomain"]
+            )
+    # Mirror the login response exactly so the frontend can reuse the
+    # login success path (token, cookie, store update).
+    user.last_login = timezone.now()
+    user.save()
+    refresh = RefreshToken.for_user(user)
+    expiration_time = datetime.datetime.fromtimestamp(
+        refresh.access_token["exp"]
+    )
+    expiration_time = timezone.make_aware(expiration_time)
+    data = UserSerializer(instance=user).data
+    data["token"] = str(refresh.access_token)
+    data["invite"] = signing.dumps(user.pk)
+    data["expiration_time"] = expiration_time
+    response = Response(data, status=status.HTTP_200_OK)
+    response.set_cookie(
+        "AUTH_TOKEN", str(refresh.access_token), expires=expiration_time
+    )
+    return response
 
 
 @extend_schema(
