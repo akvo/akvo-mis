@@ -313,7 +313,7 @@ def list_published_forms(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def web_form_details(request, version, form_id):
-    administration = Administration.objects.filter(
+    administration = Administration.objects.for_user(request.user).filter(
         parent__isnull=True,
     ).first()
     if not request.user.is_superuser:
