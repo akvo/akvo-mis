@@ -19,15 +19,19 @@ logger = logging.getLogger(__name__)
 # [[ SEEDER ]]
 
 @transaction.atomic
-def seed_administration_data(io_file):
+def seed_administration_data(io_file, tenant=None):
     df = pd.read_excel(io_file, sheet_name='data')
     columns = list(df)
     columns = [col for col in columns if 'Code' not in col]
-    level_count = Levels.objects.count()
-    level_map = map_column_model(columns[:level_count], Levels)
+    # Scope the tier count and the column-to-model maps by tenant:
+    # level numbers repeat across tenants, so an unscoped count splits
+    # the spreadsheet columns at the wrong place.
+    level_count = Levels.objects.filter(tenant=tenant).count()
+    level_map = map_column_model(columns[:level_count], Levels, tenant)
     attribute_map = map_column_model(
         columns[level_count:],
-        AdministrationAttribute
+        AdministrationAttribute,
+        tenant,
     )
     records = df.to_dict('records')
     for row in records:
@@ -46,7 +50,9 @@ def seed_administration_data(io_file):
                 row[col],
                 administration_code
             ))
-        target_administration = seed_administrations(administration_data)
+        target_administration = seed_administrations(
+            administration_data, tenant=tenant
+        )
         if not target_administration:
             break
         attribute_data = []
@@ -58,7 +64,8 @@ def seed_administration_data(io_file):
 
 
 def seed_administrations(
-        data: List[Tuple[Levels, str, str]]
+        data: List[Tuple[Levels, str, str]],
+        tenant=None,
         ) -> Union[Administration, None]:
     last_obj = None
     for item in data:
@@ -67,13 +74,15 @@ def seed_administrations(
             Q(name__iexact=name),
             level=level,
             parent=last_obj,
+            tenant=tenant,
         ).first()
         if not obj:
             obj = Administration.objects.create(
                 name=name.title(),
                 code=code,
                 level=level,
-                parent=last_obj
+                parent=last_obj,
+                tenant=tenant,
             )
         last_obj = obj
     return last_obj
@@ -111,11 +120,11 @@ def group_attributes(
     return grouped
 
 
-def map_column_model(columns, model: Type[Model]):
+def map_column_model(columns, model: Type[Model], tenant=None):
     map = {}
     for column in columns:
         id = column.split('|')[0]
-        obj = model.objects.get(id=id)
+        obj = model.objects.get(id=id, tenant=tenant)
         map[column] = obj
     return map
 

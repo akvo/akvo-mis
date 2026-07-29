@@ -71,7 +71,7 @@ def normalize_string(s):
     return s.strip().replace('"', '')
 
 
-def validate_entity_data(filename: str):
+def validate_entity_data(filename: str, tenant=None):
     errors = []
     last_level = Levels.objects.all().order_by("level").last()
     xl = pd.ExcelFile(filename)
@@ -82,7 +82,9 @@ def validate_entity_data(filename: str):
         if all(cell.value is None for row
                in check_sheet.iter_rows() for cell in row):
             continue
-        entity = Entity.objects.filter(name=sheet).first()
+        entity = Entity.objects.filter(
+            name=sheet, tenant=tenant
+        ).first()
         if not entity:
             continue
         df = pd.read_excel(filename, sheet_name=entity.name)
@@ -154,7 +156,7 @@ def validate_entity_data(filename: str):
     return errors
 
 
-def validate_entity_file(filename: str):
+def validate_entity_file(filename: str, tenant=None):
     xl = pd.ExcelFile(filename)
     wb = openpyxl.load_workbook(filename)
     sheet_names = xl.sheet_names
@@ -166,7 +168,9 @@ def validate_entity_file(filename: str):
         if all(cell.value is None for row
                in check_sheet.iter_rows() for cell in row):
             continue
-        entity = Entity.objects.filter(name=sheet).first()
+        entity = Entity.objects.filter(
+            name=sheet, tenant=tenant
+        ).first()
         if not entity:
             errors.append({
                 "sheet": sheet,
