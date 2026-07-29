@@ -1,8 +1,10 @@
 from unittest import mock
 
+from django.core.management import call_command
 from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_profile.models import Administration, Levels
 from api.v1.v1_users.models import SystemUser, Tenant
@@ -24,6 +26,12 @@ class RegisterEndpointTestCase(TestCase):
             "/api/v1/register", payload, content_type="application/json"
         )
 
+    def registered_tenants(self):
+        # The backfill data migration seeds a "default" tenant, so it is
+        # present in every test database. These tests care only about the
+        # tenants registration itself creates.
+        return Tenant.objects.exclude(subdomain="default")
+
     def test_register_on_empty_database_bootstraps_everything(self):
         response = self.register()
         self.assertEqual(response.status_code, 200)
@@ -35,6 +43,8 @@ class RegisterEndpointTestCase(TestCase):
         self.assertTrue(Levels.objects.filter(level=0).exists())
         root = Administration.objects.get(parent__isnull=True)
         self.assertEqual(root.name, "acme")
+        self.assertEqual(root.tenant.subdomain, "acme")
+        self.assertEqual(Levels.objects.get(level=0).tenant.subdomain, "acme")
         # The control center is only usable if the profile resolves a
         # real administration for the fresh superuser.
         profile = self.client.get(
@@ -44,14 +54,18 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(profile.status_code, 200)
         self.assertIsNotNone(profile.json()["administration"]["id"])
 
-    def test_second_registration_reuses_the_hierarchy(self):
+    def test_second_registration_creates_its_own_hierarchy(self):
         self.register()
         response = self.register(email="owner@beta.org", subdomain="beta")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(Tenant.objects.count(), 2)
-        self.assertEqual(Levels.objects.filter(level=0).count(), 1)
+        self.assertEqual(self.registered_tenants().count(), 2)
+        # Per-tenant hierarchy: each tenant owns a level 0 and a root.
+        self.assertEqual(Levels.objects.filter(level=0).count(), 2)
+        roots = Administration.objects.filter(parent__isnull=True)
+        self.assertEqual(roots.count(), 2)
         self.assertEqual(
-            Administration.objects.filter(parent__isnull=True).count(), 1
+            set(roots.values_list("tenant__subdomain", flat=True)),
+            {"acme", "beta"},
         )
 
     def test_duplicate_subdomain_is_rejected_atomically(self):
@@ -72,7 +86,7 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(
             response.json()["message"], "Email is already registered"
         )
-        self.assertEqual(Tenant.objects.count(), 1)
+        self.assertEqual(self.registered_tenants().count(), 1)
 
     def test_losing_a_uniqueness_race_is_a_400(self):
         # Two simultaneous sign-ups can both pass the serializer's
@@ -90,9 +104,51 @@ class RegisterEndpointTestCase(TestCase):
         for bad in ("My App", "UPPER", "-lead", "trail-", "a_b"):
             response = self.register(subdomain=bad)
             self.assertEqual(response.status_code, 400)
-        self.assertEqual(Tenant.objects.count(), 0)
+        self.assertEqual(self.registered_tenants().count(), 0)
 
     def test_weak_password_is_rejected(self):
         response = self.register(password="12345678")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(Tenant.objects.count(), 0)
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_registration_works_on_a_seeded_database(self):
+        # administration_seeder inserts levels with explicit ids, which
+        # leaves the id sequence behind. Registration now always creates
+        # a level of its own, so a desynced sequence makes the very first
+        # sign-up on an existing deployment fail with an integrity error.
+        call_command("administration_seeder", "--test")
+        response = self.register()
+        self.assertEqual(response.status_code, 200)
+
+    def test_each_superadmin_resolves_their_own_root(self):
+        first = self.register().json()
+        second = self.register(
+            email="owner@beta.org", subdomain="beta"
+        ).json()
+        for token, expected in ((first, "acme"), (second, "beta")):
+            profile = self.client.get(
+                "/api/v1/profile",
+                HTTP_AUTHORIZATION=f"Bearer {token['token']}",
+            )
+            self.assertEqual(profile.status_code, 200)
+            self.assertEqual(
+                profile.json()["administration"]["name"], expected
+            )
+
+    def test_tenantless_superuser_falls_back_to_unscoped_root(self):
+        # Legacy path: seeders and createsuperuser make superusers with
+        # no tenant; they must keep resolving a root administration.
+        call_command("administration_seeder", "--test")
+        user = SystemUser.objects.create_superuser(
+            email="legacy-admin@example.org",
+            password="Secret#Pass123",
+            first_name="Legacy",
+            last_name="Admin",
+        )
+        token = str(RefreshToken.for_user(user).access_token)
+        profile = self.client.get(
+            "/api/v1/profile",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(profile.status_code, 200)
+        self.assertIsNotNone(profile.json()["administration"]["id"])

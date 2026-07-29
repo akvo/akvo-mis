@@ -5,19 +5,27 @@ from django.core import signing
 from django.db import models
 from django.utils import timezone
 from utils.soft_deletes_model import SoftDeletes
+from utils.tenant_model import tenant_fk
 
 # Create your models here.
 from utils.custom_manager import UserManager
 
 
 class Organisation(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=255)
+    tenant = tenant_fk("organisations")
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "organisation"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="unique_organisation_name_per_tenant",
+            )
+        ]
 
 
 class OrganisationAttribute(models.Model):

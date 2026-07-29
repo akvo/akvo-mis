@@ -8,17 +8,25 @@ from api.v1.v1_profile.constants import (
     FeatureTypes,
 )
 from api.v1.v1_users.models import SystemUser
+from utils.tenant_model import tenant_fk
 
 
 class Levels(models.Model):
     name = models.CharField(max_length=50)
     level = models.IntegerField()
+    tenant = tenant_fk("levels")
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "levels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "level"],
+                name="unique_level_per_tenant",
+            )
+        ]
 
 
 class Administration(models.Model):
@@ -36,6 +44,7 @@ class Administration(models.Model):
     )
     name = models.TextField()
     path = models.TextField(null=True, default=None)
+    tenant = tenant_fk("administrations")
 
     def __str__(self):
         return self.name
@@ -73,6 +82,13 @@ class Administration(models.Model):
 
     class Meta:
         db_table = "administrator"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant"],
+                condition=models.Q(parent__isnull=True),
+                name="unique_root_administration_per_tenant",
+            )
+        ]
 
 
 @receiver(pre_save, sender=Administration)
@@ -99,6 +115,7 @@ class AdministrationAttribute(models.Model):
     options = ArrayField(
         models.CharField(max_length=255, null=True), default=list, blank=True
     )
+    tenant = tenant_fk("administration_attributes")
 
     class Meta:
         db_table = "administration_attribute"
@@ -119,6 +136,7 @@ class AdministrationAttributeValue(models.Model):
 
 class Entity(models.Model):
     name = models.TextField()
+    tenant = tenant_fk("entities")
 
     class Meta:
         db_table = "entities"
