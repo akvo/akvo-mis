@@ -367,6 +367,10 @@ const App = () => {
   // bootstrap call made before sign-in returns nothing and the list has to
   // be rebuilt for the tenant once we know who is asking.
   useEffect(() => {
+    // Re-gate on every refetch, not just the bootstrap one: without this the
+    // post-login pass leaves the old (empty, pre-tenant) list on screen while
+    // the tenant-scoped request is in flight.
+    setFormsLoading(true);
     fetchLevels();
     fetchPublishedForms()
       .catch((err) => {
