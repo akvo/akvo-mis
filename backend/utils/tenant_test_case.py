@@ -39,7 +39,8 @@ class TenantIsolationTestCase(TestCase):
         )
         return {
             "tenant": tenant, "user": user, "form": form,
-            "root": root, "child": child, "level": level,
+            "root": root, "child": child,
+            "level": level, "child_level": child_level,
         }
 
     def auth(self, user):

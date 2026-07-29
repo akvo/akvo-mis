@@ -852,7 +852,10 @@ def list_organisations(request, version):
 def add_organisation(request, version):
     serializer = AddEditOrganisationSerializer(
         data=request.data,
-        context={"attributes": request.data.get("attributes")},
+        context={
+            "attributes": request.data.get("attributes"),
+            "user": request.user,
+        },
     )
     if not serializer.is_valid():
         return Response(
@@ -916,7 +919,10 @@ class OrganisationEditDeleteView(APIView):
         )
         serializer = AddEditOrganisationSerializer(
             data=request.data,
-            context={"attributes": request.data.get("attributes")},
+            context={
+                "attributes": request.data.get("attributes"),
+                "user": request.user,
+            },
             instance=instance,
         )
         if not serializer.is_valid():

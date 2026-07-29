@@ -7,6 +7,7 @@ from utils.custom_serializer_fields import (
     CustomListField,
 )
 from utils.custom_generator import update_sqlite
+from utils.tenant_scoped_model import TenantStampedSerializerMixin
 from utils.custom_generator import (
     administration_csv_add,
     administration_csv_update,
@@ -50,7 +51,8 @@ class AdministrationLevelsSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
-class AdministrationAttributeSerializer(serializers.ModelSerializer):
+class AdministrationAttributeSerializer(TenantStampedSerializerMixin,
+                                        serializers.ModelSerializer):
     class Meta:
         model = AdministrationAttribute
         fields = ["id", "name", "type", "options"]
@@ -156,14 +158,19 @@ class AdministrationAttributeValueSerializer(serializers.ModelSerializer):
 
 
 def validate_parent(obj: Administration):
+    # Scope by the parent's own tenant: level numbers are unique per
+    # tenant, not globally, so an unscoped get() matches one row per
+    # tenant and raises MultipleObjectsReturned as soon as a second
+    # tenant exists.
     sub_level = obj.level.level + 1
-    try:
-        Levels.objects.get(level=sub_level)
-    except Levels.DoesNotExist:
+    if not Levels.objects.filter(
+        level=sub_level, tenant=obj.tenant
+    ).exists():
         raise serializers.ValidationError("Invalid parent level")
 
 
-class AdministrationSerializer(serializers.ModelSerializer):
+class AdministrationSerializer(TenantStampedSerializerMixin,
+                               serializers.ModelSerializer):
     parent = RelatedAdministrationField(
         queryset=Administration.objects.all(), validators=[validate_parent]
     )  # type: ignore
@@ -282,15 +289,20 @@ class AdministrationSerializer(serializers.ModelSerializer):
         validated_data.update({"code": code})
 
     def _assign_level(self, validated_data):
-        parent_level = validated_data.get("parent").level.level
-        try:
-            sublevel = Levels.objects.get(level=parent_level + 1)
-        except Levels.DoesNotExist as e:
-            raise ValueError() from e
+        # Resolve the child tier within the parent's tenant: level numbers
+        # repeat across tenants, so an unscoped get() raises
+        # MultipleObjectsReturned once a second tenant exists.
+        parent = validated_data.get("parent")
+        sublevel = Levels.objects.filter(
+            level=parent.level.level + 1, tenant=parent.tenant
+        ).first()
+        if sublevel is None:
+            raise ValueError()
         validated_data.update({"level": sublevel})
 
 
-class EntitySerializer(serializers.ModelSerializer):
+class EntitySerializer(TenantStampedSerializerMixin,
+                       serializers.ModelSerializer):
     class Meta:
         model = Entity
         fields = ["id", "name"]

@@ -39,6 +39,7 @@ from utils.custom_serializer_fields import (
 from api.v1.v1_profile.constants import FeatureAccessTypes
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
+from utils.tenant_scoped_model import TenantStampedSerializerMixin
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -96,7 +97,8 @@ class OrganisationListSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'attributes', 'users']
 
 
-class AddEditOrganisationSerializer(serializers.ModelSerializer):
+class AddEditOrganisationSerializer(TenantStampedSerializerMixin,
+                                    serializers.ModelSerializer):
     attributes = CustomMultipleChoiceField(choices=list(
         OrganisationTypes.FieldStr.keys()),
                                            required=True)
@@ -362,7 +364,8 @@ class AddRolesSerializer(serializers.Serializer):
         fields = ['role', 'administration']
 
 
-class AddEditUserSerializer(serializers.ModelSerializer):
+class AddEditUserSerializer(TenantStampedSerializerMixin,
+                            serializers.ModelSerializer):
     organisation = CustomPrimaryKeyRelatedField(
         queryset=Organisation.objects.none(), required=False)
     trained = CustomBooleanField(default=False)

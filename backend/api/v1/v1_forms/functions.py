@@ -242,6 +242,7 @@ def save_form(data, instance=None, user=None):
             default_language=data.get("default_language"),
             translations=data.get("translations"),
             created_by=user,
+            tenant=getattr(user, "tenant", None),
         )
         form_id = data.get("id")
         if form_id:
