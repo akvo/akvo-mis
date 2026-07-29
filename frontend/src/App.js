@@ -63,6 +63,7 @@ import { Layout, PageLoader } from "./components";
 import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
 import { reloadData, fetchPublishedForms } from "./util/form";
+import { fetchLevels } from "./util/level";
 import { ability, AbilityContext } from "./components/can";
 
 const Private = ({ element: Element, alias }) => {
@@ -358,10 +359,19 @@ const App = () => {
     });
   }, [pageLocation]);
 
-  // Fetch published forms once at bootstrap (replaces the window.forms global
+  // Fetch published forms at bootstrap (replaces the window.forms global
   // baked into config.js). Gates render so dropdowns/dashboards never show an
   // empty list before the forms resolve.
+  //
+  // Refetched when auth changes: the endpoint is now tenant-scoped, so the
+  // bootstrap call made before sign-in returns nothing and the list has to
+  // be rebuilt for the tenant once we know who is asking.
   useEffect(() => {
+    // Re-gate on every refetch, not just the bootstrap one: without this the
+    // post-login pass leaves the old (empty, pre-tenant) list on screen while
+    // the tenant-scoped request is in flight.
+    setFormsLoading(true);
+    fetchLevels();
     fetchPublishedForms()
       .catch((err) => {
         console.error(err);
@@ -369,7 +379,7 @@ const App = () => {
       .finally(() => {
         setFormsLoading(false);
       });
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!location.pathname.includes("/login")) {

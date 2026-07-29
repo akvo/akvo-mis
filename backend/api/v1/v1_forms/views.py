@@ -274,10 +274,10 @@ def _to_editor_format(data):
 )
 @api_view(["GET"])
 def list_form(request, version):
-    instance = Forms.objects.filter(
+    instance = Forms.objects.for_user(request.user).filter(
         parent__isnull=True,
         status=FormStatus.published,
-    ).all()
+    )
     return Response(
         ListFormSerializer(instance=instance, many=True).data,
         status=status.HTTP_200_OK,
@@ -298,7 +298,7 @@ def list_form(request, version):
 @permission_classes([AllowAny])
 def list_published_forms(request, version):
     response = Response(
-        get_published_forms_payload(),
+        get_published_forms_payload(request.user),
         status=status.HTTP_200_OK,
     )
     response["Cache-Control"] = "no-cache"
@@ -313,7 +313,7 @@ def list_published_forms(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def web_form_details(request, version, form_id):
-    administration = Administration.objects.filter(
+    administration = Administration.objects.for_user(request.user).filter(
         parent__isnull=True,
     ).first()
     if not request.user.is_superuser:
@@ -322,7 +322,9 @@ def web_form_details(request, version, form_id):
         ).first()
         if user_role:
             administration = user_role.administration
-    instance = get_object_or_404(Forms, pk=form_id)
+    instance = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     # Include form.version in the cache key so that publishing, activating,
     # or editing a published form (which bumps the version) automatically
     # bypasses the stale cache entry without an explicit cache clear.
@@ -346,7 +348,9 @@ def web_form_details(request, version, form_id):
 )
 @api_view(["GET"])
 def form_data(request, version, form_id):
-    instance = get_object_or_404(Forms, pk=form_id)
+    instance = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     cache_name = f"form-{form_id}-v{instance.version}"
     cache_data = get_cache(cache_name)
     if cache_data:
@@ -419,7 +423,9 @@ def form_approver(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def check_form_approver(request, form_id, version):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     # Super admins bypass approver check
     if request.user.is_superuser:
         return Response({"count": 1}, status=status.HTTP_200_OK)
@@ -488,8 +494,8 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         # archive/restore/destroy operate on archived (soft-deleted) rows,
         # which the default manager cannot see (D-9, D-10).
         if self.action in ("archive", "restore", "destroy"):
-            return Forms.objects_with_deleted.all()
-        return Forms.objects.all()
+            return Forms.objects_with_deleted.for_user(self.request.user)
+        return Forms.objects.for_user(self.request.user)
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -518,7 +524,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         status_param = params.get("status")
 
         base = Forms.objects_deleted if archived else Forms.objects
-        qs = base.all()
+        qs = base.for_user(request.user)
         if status_param in self._STATUS_MAP:
             qs = qs.filter(status=self._STATUS_MAP[status_param])
 

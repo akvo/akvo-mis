@@ -302,7 +302,7 @@ def upload_excel(request, form_id, version):
     form_name = re.sub(r"[\W_]+", "_", form.name)
     filename = f"{form_name}-{user_name}-{uuid}.xlsx"
     storage.upload(file=file_path, filename=filename, folder="upload")
-    adm = Administration.objects.filter(
+    adm = Administration.objects.for_user(request.user).filter(
         parent__isnull=True
     ).first()
     if (

@@ -395,7 +395,9 @@ def set_user_password(request, version):
 )
 @api_view(["GET"])
 def list_administration(request, version, administration_id):
-    instance = get_object_or_404(Administration, pk=administration_id)
+    instance = get_object_or_404(
+        Administration.objects.for_user(request.user), pk=administration_id
+    )
     filter = request.GET.get("filter")
     max_level = request.GET.get("max_level")
     filter_children = request.GET.getlist("filter_children")
@@ -419,10 +421,16 @@ def list_administration(request, version, administration_id):
 )
 @api_view(["GET"])
 def list_levels(request, version):
-    return Response(
-        ListLevelSerializer(instance=Levels.objects.all(), many=True).data,
+    response = Response(
+        ListLevelSerializer(
+            instance=Levels.objects.for_user(request.user), many=True
+        ).data,
         status=status.HTTP_200_OK,
     )
+    # Levels are per-tenant and fetched at runtime now, so a cached copy
+    # would follow one tenant's tiers into another's session.
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 @extend_schema(
@@ -625,7 +633,9 @@ def list_users(request, version):
     page_size = REST_FRAMEWORK.get("PAGE_SIZE")
     the_past = timezone.now() - datetime.timedelta(days=10 * 365)
     # also filter soft deletes
-    queryset = SystemUser.objects.filter(deleted_at=None, **filter_data)
+    queryset = SystemUser.objects.for_user(request.user).filter(
+        deleted_at=None, **filter_data
+    )
     # filter by email or fullname
     if serializer.validated_data.get("search"):
         search = serializer.validated_data.get("search")
@@ -683,7 +693,11 @@ class UserEditDeleteView(APIView):
         summary="To get user details",
     )
     def get(self, request, user_id, version):
-        instance = get_object_or_404(SystemUser, pk=user_id, deleted_at=None)
+        instance = get_object_or_404(
+            SystemUser.objects.for_user(request.user),
+            pk=user_id,
+            deleted_at=None,
+        )
         return Response(
             UserDetailSerializer(
                 instance=instance,
@@ -701,7 +715,9 @@ class UserEditDeleteView(APIView):
     )
     def delete(self, request, user_id, version):
         login_user = SystemUser.objects.get(email=request.user)
-        instance = get_object_or_404(SystemUser, pk=user_id)
+        instance = get_object_or_404(
+            SystemUser.objects.for_user(request.user), pk=user_id
+        )
         # prevent self deletion
         if login_user.id == instance.id:
             return Response(
@@ -719,7 +735,11 @@ class UserEditDeleteView(APIView):
         summary="To update user",
     )
     def put(self, request, user_id, version):
-        instance = get_object_or_404(SystemUser, pk=user_id, deleted_at=None)
+        instance = get_object_or_404(
+            SystemUser.objects.for_user(request.user),
+            pk=user_id,
+            deleted_at=None,
+        )
         serializer = AddEditUserSerializer(
             data=request.data,
             context={"user": request.user},
@@ -798,7 +818,7 @@ def list_organisations(request, version):
     attributes = request.GET.get("attributes")
     search = request.GET.get("search")
 
-    instance = Organisation.objects.prefetch_related(
+    instance = Organisation.objects.for_user(request.user).prefetch_related(
         'organisation_organisation_attribute'
     ).annotate(user_count=Count('user_organisation')).all()
 
@@ -856,7 +876,7 @@ class OrganisationEditDeleteView(APIView):
     )
     def get(self, request, organisation_id, version):
         instance = get_object_or_404(
-            Organisation.objects.annotate(
+            Organisation.objects.for_user(request.user).annotate(
                 user_count=Count('user_organisation')
             ),
             pk=organisation_id
@@ -874,7 +894,9 @@ class OrganisationEditDeleteView(APIView):
         summary="To delete organisation",
     )
     def delete(self, request, organisation_id, version):
-        instance = get_object_or_404(Organisation, pk=organisation_id)
+        instance = get_object_or_404(
+            Organisation.objects.for_user(request.user), pk=organisation_id
+        )
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -889,7 +911,9 @@ class OrganisationEditDeleteView(APIView):
         summary="To update organisation",
     )
     def put(self, request, organisation_id, version):
-        instance = get_object_or_404(Organisation, pk=organisation_id)
+        instance = get_object_or_404(
+            Organisation.objects.for_user(request.user), pk=organisation_id
+        )
         serializer = AddEditOrganisationSerializer(
             data=request.data,
             context={"attributes": request.data.get("attributes")},

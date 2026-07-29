@@ -1,8 +1,10 @@
 from django.db import models
 from django.utils import timezone
 
+from utils.tenant_scoped_model import TenantScopedQuerySetMixin
 
-class SoftDeletesQuerySet(models.QuerySet):
+
+class SoftDeletesQuerySet(TenantScopedQuerySetMixin, models.QuerySet):
     def only_deleted(self):
         return self.filter(deleted_at__isnull=False)
 
@@ -52,6 +54,9 @@ class SoftDeletesManager(models.Manager):
 
     def restore(self):
         return self.get_queryset().restore()
+
+    def for_user(self, user):
+        return self.get_queryset().for_user(user)
 
 
 class SoftDeletes(models.Model):

@@ -7,7 +7,7 @@ import {
   api,
   store,
   uiText,
-  ARF_CASCASE_URLS,
+  buildAdministrationCascade,
   QUESTION_TYPES,
   REGISTRATION_FORM,
   MONITORING_FORM,
@@ -25,7 +25,13 @@ const FormBuilderCreate = () => {
   const [parentForm, setParentForm] = useState(null);
   const [parentError, setParentError] = useState(false);
 
-  const { language } = store.useState((s) => s);
+  const { language, user: authUser } = store.useState((s) => s);
+  // The cascade is authenticated now and starts at this tenant's own
+  // root administration, which the profile resolves.
+  const cascadeURL = useMemo(
+    () => buildAdministrationCascade(api.token, authUser?.administration?.id),
+    [authUser]
+  );
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
@@ -102,7 +108,7 @@ const FormBuilderCreate = () => {
               initialValue={{}}
               onSave={saving || parentError ? null : onSave}
               limitQuestionType={Object.keys(QUESTION_TYPES)}
-              settingCascadeURL={ARF_CASCASE_URLS}
+              settingCascadeURL={cascadeURL}
             />
           </div>
         </div>

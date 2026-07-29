@@ -14,7 +14,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 from rest_framework.request import Request
-from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
+from rest_framework.viewsets import ModelViewSet
 from api.v1.v1_profile.models import (
     Administration,
     AdministrationAttribute,
@@ -47,7 +47,7 @@ from utils.custom_pagination import Pagination
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework import serializers, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from utils.email_helper import send_email, EmailTypes
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.custom_generator import administration_csv_delete
@@ -95,7 +95,7 @@ def send_feedback(request, version):
 )
 @api_view(["GET"])
 def list_entity_data(request, version, entity_id, administration_id):
-    instance = EntityData.objects.filter(
+    instance = EntityData.objects.for_user(request.user).filter(
         entity__id=entity_id, administration__id=administration_id
     ).all()
     return Response(
@@ -111,7 +111,9 @@ class AdministrationViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = Administration.objects.select_related(
+        queryset = Administration.objects.for_user(
+            self.request.user
+        ).select_related(
             'level'
         ).prefetch_related(
             'parent_administration',
@@ -187,37 +189,16 @@ class AdministrationViewSet(ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Public"])
-class PublicAdministrationViewSet(ReadOnlyModelViewSet):
-    serializer_class = AdministrationSerializer
-    permission_classes = [AllowAny]
-    pagination_class = None
-
-    def get_queryset(self):
-        queryset = Administration.objects.select_related(
-            'level'
-        ).prefetch_related(
-            'parent_administration',
-        ).all()
-
-        parent_id = self.request.query_params.get("parent")
-        if parent_id:
-            queryset = queryset.filter(parent_id=parent_id)
-
-        return queryset.order_by("id")
-
-    def get_serializer(self, *args, **kwargs):
-        if self.action == "list":
-            kwargs.update({"compact": True})
-        return super().get_serializer(*args, **kwargs)
-
-
 @extend_schema(tags=["Administration"])
 class AdministrationAttributeViewSet(ModelViewSet):
-    queryset = AdministrationAttribute.objects.order_by("id").all()
     serializer_class = AdministrationAttributeSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = None
+
+    def get_queryset(self):
+        return AdministrationAttribute.objects.for_user(
+            self.request.user
+        ).order_by("id")
 
 
 @extend_schema(tags=["Entities"])
@@ -227,7 +208,7 @@ class EntityViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = Entity.objects.all()
+        queryset = Entity.objects.for_user(self.request.user)
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(name__icontains=search)
@@ -241,7 +222,9 @@ class EntityDataViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = EntityData.objects.select_related(
+        queryset = EntityData.objects.for_user(
+            self.request.user
+        ).select_related(
             "administration", "entity"
         ).all()
         search = self.request.query_params.get("search")
@@ -524,7 +507,9 @@ class RoleViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = Role.objects.order_by("administration_level__level")
+        queryset = Role.objects.for_user(self.request.user).order_by(
+            "administration_level__level"
+        )
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(name__icontains=search)
