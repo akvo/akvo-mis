@@ -30,6 +30,7 @@ from api.v1.v1_users.models import (
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_approval.models import DataBatch
 from utils.custom_serializer_fields import (
+    TenantScopedPrimaryKeyRelatedField,
     CustomEmailField,
     CustomCharField,
     CustomPrimaryKeyRelatedField,
@@ -263,12 +264,12 @@ class ListAdministrationSerializer(serializers.ModelSerializer):
 
 
 class AddRolesSerializer(serializers.Serializer):
-    role = CustomPrimaryKeyRelatedField(
+    role = TenantScopedPrimaryKeyRelatedField(
         queryset=Role.objects.none(),
         required=True,
         help_text='Role to assign to user'
     )
-    administration = CustomPrimaryKeyRelatedField(
+    administration = TenantScopedPrimaryKeyRelatedField(
         queryset=Administration.objects.none(),
         required=True,
         help_text='Administration to assign role to user'
@@ -366,7 +367,7 @@ class AddRolesSerializer(serializers.Serializer):
 
 class AddEditUserSerializer(TenantStampedSerializerMixin,
                             serializers.ModelSerializer):
-    organisation = CustomPrimaryKeyRelatedField(
+    organisation = TenantScopedPrimaryKeyRelatedField(
         queryset=Organisation.objects.none(), required=False)
     trained = CustomBooleanField(default=False)
     roles = AddRolesSerializer(many=True, required=False)

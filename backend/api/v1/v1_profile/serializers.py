@@ -3,6 +3,7 @@ import string
 from typing import Any, Dict, cast
 from rest_framework import serializers
 from utils.custom_serializer_fields import (
+    TenantScopedPrimaryKeyRelatedField,
     CustomPrimaryKeyRelatedField,
     CustomListField,
 )
@@ -32,7 +33,7 @@ from api.v1.v1_profile.constants import (
 )
 
 
-class RelatedAdministrationField(serializers.PrimaryKeyRelatedField):
+class RelatedAdministrationField(TenantScopedPrimaryKeyRelatedField):
     def use_pk_only_optimization(self):
         return False
 
