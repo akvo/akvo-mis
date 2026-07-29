@@ -40,11 +40,9 @@ def acting_user(context):
     # Serializers here are called with either context={"user": ...} or the
     # DRF default context={"request": ...}. Support both so callers do not
     # have to be normalised first.
-    user = context.get("user")
-    if user is None:
-        request = context.get("request")
-        user = getattr(request, "user", None)
-    return user
+    return context.get("user") or getattr(
+        context.get("request"), "user", None
+    )
 
 
 class TenantStampedSerializerMixin:

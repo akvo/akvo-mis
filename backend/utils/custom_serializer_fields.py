@@ -283,8 +283,7 @@ class TenantScopedPrimaryKeyRelatedField(CustomPrimaryKeyRelatedField):
     # referencing another tenant's object fails validation as
     # does_not_exist (a 400) rather than silently binding a foreign row.
     def get_queryset(self):
+        # No acting user means no context was passed: fail closed.
         queryset = super().get_queryset()
         user = acting_user(self.context)
-        if user is None:
-            return queryset.none()
-        return queryset.for_user(user)
+        return queryset.for_user(user) if user else queryset.none()

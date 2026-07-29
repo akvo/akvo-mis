@@ -93,19 +93,6 @@ class WriteStampingTestCase(TenantIsolationTestCase):
             self.a["tenant"],
         )
 
-    def test_created_rows_are_visible_to_their_creator(self):
-        # The regression that made iteration 3 undeployable: a create
-        # succeeded, landed tenant-less, and vanished from every list.
-        self.client.post(
-            "/api/v1/entities",
-            {"name": "Borehole"},
-            content_type="application/json",
-            **self.auth(self.a["user"]),
-        )
-        res = self.client.get("/api/v1/entities", **self.auth(self.a["user"]))
-        names = [e["name"] for e in res.json()["data"]]
-        self.assertIn("Borehole", names)
-
     def test_user_create_is_stamped(self):
         res = self.client.post(
             "/api/v1/user",

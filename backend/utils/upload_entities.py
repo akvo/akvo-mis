@@ -82,9 +82,7 @@ def validate_entity_data(filename: str, tenant=None):
         if all(cell.value is None for row
                in check_sheet.iter_rows() for cell in row):
             continue
-        entity = Entity.objects.filter(
-            name=sheet, tenant=tenant
-        ).first()
+        entity = Entity.objects.filter(name=sheet, tenant=tenant).first()
         if not entity:
             continue
         df = pd.read_excel(filename, sheet_name=entity.name)
@@ -168,9 +166,7 @@ def validate_entity_file(filename: str, tenant=None):
         if all(cell.value is None for row
                in check_sheet.iter_rows() for cell in row):
             continue
-        entity = Entity.objects.filter(
-            name=sheet, tenant=tenant
-        ).first()
+        entity = Entity.objects.filter(name=sheet, tenant=tenant).first()
         if not entity:
             errors.append({
                 "sheet": sheet,
