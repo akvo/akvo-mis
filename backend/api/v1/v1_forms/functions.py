@@ -390,6 +390,7 @@ def duplicate_form(original_form, user=None):
         languages=original_form.languages,
         default_language=original_form.default_language,
         translations=original_form.translations,
+        tenant=getattr(user, "tenant", None) or original_form.tenant,
         created_by=user,
     )
     for group in original_form.form_question_group.all().order_by("order"):
@@ -1406,6 +1407,7 @@ def _apply_import_create_path(norm, user, parent_form, force_new_id):
         approval_instructions=norm.get("approval_instructions"),
         created_by=user,
         updated_by=user,
+        tenant=getattr(user, "tenant", None),
     )
     if use_file_form_id:
         create_kwargs["id"] = file_form_id

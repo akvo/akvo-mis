@@ -126,3 +126,13 @@ class WriteStampingTestCase(TenantIsolationTestCase):
             SystemUser.objects.get(email="member@acme.org").tenant,
             self.a["tenant"],
         )
+
+    def test_duplicated_form_keeps_the_tenant(self):
+        res = self.client.post(
+            f"/api/v1/manage/forms/{self.a['form'].id}/duplicate",
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertIn(res.status_code, (200, 201))
+        copy = Forms.objects.get(name=f"{self.a['form'].name} (Copy)")
+        self.assertEqual(copy.tenant, self.a["tenant"])
