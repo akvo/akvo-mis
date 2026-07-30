@@ -26,6 +26,7 @@ export { default as Dashboard } from "./dashboard/Dashboard";
 export { default as MobileAssignment } from "./mobile-assignment/MobileAssignment";
 export { default as AddAssignment } from "./mobile-assignment/AddAssignment";
 export { default as MasterData } from "./master-data/MasterData";
+export { default as Levels } from "./master-data/levels/Levels";
 export { default as MasterDataAttributes } from "./master-data-attributes/MasterDataAttributes";
 export { default as ManageEntityTypes } from "./master-data-entities/ManageEntityTypes";
 export { default as AddAdministration } from "./master-data/AddAdministration";

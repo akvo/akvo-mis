@@ -15,6 +15,7 @@ const uiText = {
     menuManageRoles: "Manage Roles",
     menuMasterData: "Master Data",
     menuAdministrativeList: "Administrative List",
+    menuLevels: "Levels",
     menuAttributes: "Attributes",
     menuEntities: "Entities",
     menuEntityTypes: "Entity Types",
@@ -377,6 +378,18 @@ const uiText = {
     manageAttributes: "Manage Attributes",
     editAttributes: "Edit Attribute",
     addAttributes: "Add Attribute",
+    manageLevels: "Manage Levels",
+    manageLevelText:
+      "Define the tiers of your administrative hierarchy, from the top " +
+      "level down. Tiers can be renamed at any time, but they can only " +
+      "be added or removed while no administrative units exist below " +
+      "your top level.",
+    addLevel: "Add Level",
+    newLevelName: "New level name",
+    levelFrozenHint:
+      "Levels can no longer be added or removed because administrative " +
+      "units already exist. Renaming is still available.",
+    levelDeleteTitle: "Remove the deepest level?",
     manageEntities: "Manage Entities",
     manageEntityTypes: "Manage Entity Types",
     addEntities: "Add Entities",

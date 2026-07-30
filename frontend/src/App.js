@@ -34,6 +34,7 @@ import {
   Dashboard,
   MobileAssignment,
   AddAssignment,
+  Levels,
   MasterData,
   MasterDataAttributes,
   ManageEntityTypes,
@@ -188,6 +189,10 @@ const RouteList = () => {
         <Route
           path="master-data/administration"
           element={<Private element={MasterData} alias="master-data" />}
+        />
+        <Route
+          path="master-data/levels"
+          element={<Private element={Levels} alias="master-data" />}
         />
         <Route
           path="master-data/administration/upload"
