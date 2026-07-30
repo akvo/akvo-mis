@@ -944,6 +944,18 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         ]
 
 
+class ConfigureSerializer(serializers.Serializer):
+    # The registrant's name arrives here, not at sign-up: this is the first
+    # point at which the email is known to be real.
+    first_name = serializers.CharField(max_length=50)
+    last_name = serializers.CharField(max_length=50)
+    # The top tier's name ("National") and the unit that sits at it
+    # ("Kenya") — two different things that are easy to conflate, which is
+    # why the form carries examples.
+    level_0_name = serializers.CharField(max_length=50)
+    root_unit_name = serializers.CharField(max_length=255)
+
+
 class ResendActivationSerializer(serializers.Serializer):
     # Documents the payload for the schema; the view does not validate it,
     # because an unparseable address must get the same 200 as an unknown one.

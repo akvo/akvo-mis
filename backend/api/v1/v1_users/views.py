@@ -61,6 +61,8 @@ from api.v1.v1_users.serializers import (
     UpdateProfileSerializer,
     RegisterSerializer,
     ResendActivationSerializer,
+    ConfigureSerializer,
+    tenant_is_configured,
 )
 from mis.settings import REST_FRAMEWORK, WEBDOMAIN
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
@@ -372,6 +374,54 @@ def resend_activation(request, version):
         {"message": "If that account needs activating, an email is on its "
                     "way"},
         status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    request=ConfigureSerializer,
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Name the workspace and create its hierarchy root",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def configure_project(request, version):
+    user = request.user
+    if tenant_is_configured(user.tenant):
+        # Also the answer for a tenant-less operator account, which has no
+        # workspace to configure.
+        return Response(
+            {"message": "This workspace is already configured"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    serializer = ConfigureSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {
+                "message": validate_serializers_message(serializer.errors),
+                "details": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    validated = serializer.validated_data
+    # One transaction: a half-configured workspace — named user but no root,
+    # or a level with no unit at it — would read as unconfigured forever and
+    # leave a stray level behind on the retry.
+    with transaction.atomic():
+        user.first_name = validated["first_name"]
+        user.last_name = validated["last_name"]
+        user.save(update_fields=["first_name", "last_name"])
+        level_zero = Levels.objects.create(
+            name=validated["level_0_name"], level=0, tenant=user.tenant
+        )
+        Administration.objects.create(
+            parent=None,
+            level=level_zero,
+            name=validated["root_unit_name"],
+            tenant=user.tenant,
+        )
+    return Response(
+        UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )
 
 
