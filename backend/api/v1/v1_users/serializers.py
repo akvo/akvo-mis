@@ -916,10 +916,11 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.Serializer):
+    # Phase 1 asks for the minimum that claims a workspace. The registrant's
+    # name belongs to the configuration form, which is the first point at
+    # which we know the email is real.
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
-    first_name = serializers.CharField(max_length=50)
-    last_name = serializers.CharField(max_length=50)
     # A valid DNS label, because the subdomain will one day be one:
     # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
     subdomain = serializers.RegexField(
@@ -939,12 +940,9 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         # Run Django's password validators with user context so the
-        # similarity validator can compare against email and names.
-        user = SystemUser(
-            email=attrs["email"],
-            first_name=attrs["first_name"],
-            last_name=attrs["last_name"],
-        )
+        # similarity validator can compare against the email. There are no
+        # names to compare against at this phase.
+        user = SystemUser(email=attrs["email"])
         try:
             validate_password(attrs["password"], user=user)
         except django_exceptions.ValidationError as error:

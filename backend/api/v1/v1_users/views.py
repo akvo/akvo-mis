@@ -69,6 +69,18 @@ from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 
 
+def send_activation_email(user):
+    # The signed pk is the whole token — no state to store and no row to
+    # clean up if the link is never followed. `activate` bounds its age.
+    send_email(
+        type=EmailTypes.user_activation,
+        context={
+            "send_to": [user.email],
+            "button_url": f"{WEBDOMAIN}/activate/{signing.dumps(user.pk)}",
+        },
+    )
+
+
 def send_email_to_user(type, user, request):
     url = f"{WEBDOMAIN}/login/{signing.dumps(user.pk)}"
     user = SystemUser.objects.get(pk=user.pk)
@@ -213,6 +225,30 @@ def login(request, version):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         return authenticated_response(user)
+    # authenticate() returns None for a wrong password AND for a correct
+    # password on an unverified account. Telling those apart is what lets the
+    # login page offer to resend the activation email instead of leaving the
+    # registrant staring at "invalid credentials". It does make login an
+    # account-existence oracle, but only for accounts that never activated,
+    # and /register already answers "this email is taken" by design.
+    unverified = SystemUser.objects.filter(
+        email=serializer.validated_data["email"],
+        is_active=False,
+        deleted_at=None,
+    ).first()
+    if unverified and unverified.check_password(
+        serializer.validated_data["password"]
+    ):
+        return Response(
+            {
+                "message": (
+                    "Please verify your email address to activate your "
+                    "account"
+                ),
+                "unverified": True,
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
     return Response(
         {"message": "Invalid login credentials"},
         status=status.HTTP_401_UNAUTHORIZED,
@@ -236,32 +272,21 @@ def register(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     validated = serializer.validated_data
-    # Free-tier sign-up: the registrant becomes a superadmin of their own
-    # tenant. Everything is one transaction so a partial tenant (user
-    # without hierarchy, tenant without user) is unreachable.
+    # Phase 1 of sign-up: create the tenant, which claims the subdomain
+    # immediately so nobody can take it during the email round-trip, and an
+    # inactive superadmin. No hierarchy — the configuration form creates a
+    # level 0 and root that are named from the start, which is what removes
+    # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
             tenant = Tenant.objects.create(subdomain=validated["subdomain"])
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
                 password=validated["password"],
-                first_name=validated["first_name"],
-                last_name=validated["last_name"],
+                first_name="",
+                last_name="",
                 tenant=tenant,
-            )
-            # A registrant needs a resolvable profile: superuser scoping
-            # substitutes the tenant's root administration. Every tenant
-            # gets its own level 0 and root unit — hierarchies are
-            # disjoint from birth, even though queries are not yet
-            # tenant-filtered.
-            level_zero = Levels.objects.create(
-                name="", level=0, tenant=tenant
-            )
-            Administration.objects.create(
-                parent=None,
-                level=level_zero,
-                name=validated["subdomain"],
-                tenant=tenant,
+                is_active=False,
             )
     except IntegrityError:
         # Uniqueness is enforced once, by the database. A pre-check in the
@@ -277,8 +302,13 @@ def register(request, version):
             {"message": f"{taken} is already registered"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    # Same payload as login, so the frontend reuses the login success path.
-    return authenticated_response(user)
+    send_activation_email(user)
+    # Deliberately no auth token: the account cannot authenticate until the
+    # link is followed, so handing one back would only mislead the client.
+    return Response(
+        {"message": "Check your email to activate your account"},
+        status=status.HTTP_200_OK,
+    )
 
 
 @extend_schema(
