@@ -23,6 +23,20 @@ services:
     environment:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
+  # Local mail sink. Deliberately NOT in mainnetwork's namespace: the worker
+  # sends mail too and is on the default network, so a service with its own
+  # name is reachable from both, the way db already is.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      # Web inbox. SMTP (1025) stays internal — nothing on the host sends.
+      - 8025:8025
+    environment:
+      - MP_MAX_MESSAGES=500
+      # A dev sink authenticates nobody; without these it rejects the
+      # unauthenticated, unencrypted send Django makes by default.
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
   worker:
     volumes:
       - ../akvo-config/k8s-secrets/test/$APP_SHORT_NAME:/credentials/:ro
@@ -33,7 +47,12 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/credentials/${APP_SHORT_NAME:-akvo-mis}-service-account.json
       - MAILJET_APIKEY=$MAILJET_APIKEY
       - MAILJET_SECRET=$MAILJET_SECRET
+      - EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+      - EMAIL_HOST=mailpit
+      - EMAIL_PORT=1025
       - WEBDOMAIN=http://localhost:3000
+    depends_on:
+      - mailpit
   backend:
     volumes:
       - ../akvo-config/k8s-secrets/test/$APP_SHORT_NAME:/credentials/:ro
@@ -46,8 +65,20 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/credentials/${APP_SHORT_NAME:-akvo-mis}-service-account.json
       - MAILJET_APIKEY=$MAILJET_APIKEY
       - MAILJET_SECRET=$MAILJET_SECRET
-      - WEBDOMAIN=$WEBDOMAIN
+      - EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+      - EMAIL_HOST=mailpit
+      - EMAIL_PORT=1025
+      # Activation and invite links are built from this, so it has to be the
+      # address the browser uses. env.example ships example.com, which made
+      # backend-sent links unclickable while worker-sent ones worked — the
+      # worker has always pinned localhost here.
+      - WEBDOMAIN=http://localhost:3000
+      # Unbuffered stdout: send_email swallows failures into a bare print(),
+      # which otherwise sits in the buffer and never reaches docker logs.
+      - PYTHONUNBUFFERED=1
     network_mode: service:mainnetwork
+    depends_on:
+      - mailpit
   pgadmin:
     image: dpage/pgadmin4:5.7
     environment:
