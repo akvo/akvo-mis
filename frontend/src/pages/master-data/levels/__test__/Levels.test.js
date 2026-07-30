@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import axios from "axios";
@@ -43,14 +43,33 @@ describe("Levels management", () => {
 
     expect(await screen.findByText("National")).toBeInTheDocument();
     expect(screen.getByText("Province")).toBeInTheDocument();
+    expect(screen.getByText("Level 0")).toBeInTheDocument();
 
-    const add = screen.getByRole("button", { name: /Add Level/i });
-    // Disabled until a name is typed, but not frozen.
-    expect(screen.getByPlaceholderText(/New level name/i)).toBeEnabled();
-    expect(add).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add Level/i })).toBeEnabled();
     expect(screen.queryByText(/can no longer be added/i)).toBeNull();
-    // Only the deepest tier offers a delete.
-    expect(screen.getAllByRole("button", { name: /Delete/i })).toHaveLength(1);
+    // Only the deepest tier offers a delete — level 0 never can, since the
+    // root unit sits on it.
+    const deletes = screen.getAllByRole("button", { name: /Delete/i });
+    expect(deletes).toHaveLength(2);
+    expect(deletes[0]).toBeDisabled();
+    expect(deletes[1]).toBeEnabled();
+  });
+
+  test("adding appends a draft row at the next depth", async () => {
+    mockLoad(1);
+    renderLevels();
+
+    await screen.findByText("National");
+    fireEvent.click(screen.getByRole("button", { name: /Add Level/i }));
+
+    // The draft sits in the table at the depth it will occupy, rather than
+    // in a separate form.
+    expect(screen.getByText("Level 2")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/Province, District, Ward/i)
+    ).toBeInTheDocument();
+    // Nothing to save until it is named.
+    expect(screen.getByRole("button", { name: /^Save$/i })).toBeDisabled();
   });
 
   test("treats a name of only spaces as no name at all", async () => {
@@ -58,18 +77,19 @@ describe("Levels management", () => {
     renderLevels();
 
     await screen.findByText("National");
-    const input = screen.getByPlaceholderText(/New level name/i);
-    const add = screen.getByRole("button", { name: /Add Level/i });
+    fireEvent.click(screen.getByRole("button", { name: /Add Level/i }));
 
-    expect(add).toBeDisabled();
+    const input = screen.getByPlaceholderText(/Province, District, Ward/i);
+    const save = screen.getByRole("button", { name: /^Save$/i });
+
     await userEvent.type(input, "   ");
     // Still disabled: the server trims and would answer 400, so letting the
-    // click through would spend a round-trip to say what is visible here.
-    expect(add).toBeDisabled();
+    // click through would spend a round-trip to say what is already visible.
+    expect(save).toBeDisabled();
 
     await userEvent.type(input, "Ward");
     await waitFor(() => {
-      expect(add).toBeEnabled();
+      expect(save).toBeEnabled();
     });
   });
 
@@ -79,10 +99,12 @@ describe("Levels management", () => {
 
     expect(await screen.findByText(/can no longer be added/i)).toBeVisible();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/New level name/i)).toBeDisabled();
+      expect(screen.getByRole("button", { name: /Add Level/i })).toBeDisabled();
     });
-    expect(screen.getByRole("button", { name: /Delete/i })).toBeDisabled();
+    screen.getAllByRole("button", { name: /Delete/i }).forEach((btn) => {
+      expect(btn).toBeDisabled();
+    });
     // Rename stays available on every tier.
-    expect(screen.getAllByRole("button", { name: /Edit/i })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /Rename/i })).toHaveLength(2);
   });
 });

@@ -1,10 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Col, Divider, Input, Modal, Row, Table } from "antd";
+import {
+  Alert,
+  Button,
+  Col,
+  Input,
+  Modal,
+  Row,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../../components";
 import { api, store, uiText } from "../../../lib";
 import { useNotification } from "../../../util/hooks";
 import { fetchLevels } from "../../../util/level";
+
+const { Text } = Typography;
 
 // A tenant's hierarchy depth is append-only: a tier can be renamed at any
 // time, but adding and removing are frozen once administrative units exist
@@ -15,8 +28,11 @@ const Levels = () => {
   const [dataset, setDataset] = useState([]);
   const [loading, setLoading] = useState(true);
   const [frozen, setFrozen] = useState(false);
-  const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
+  // Adding appends a draft row to the table rather than opening a separate
+  // form, so the new tier is seen in the position it will occupy.
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
   // Rename happens inline: the edited row's name cell becomes an input.
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
@@ -102,6 +118,7 @@ const Levels = () => {
     mutate(async () => {
       await api.post("levels-management", { name });
       setNewName("");
+      setAdding(false);
     });
   };
 
@@ -128,23 +145,61 @@ const Levels = () => {
   };
 
   const deepest = dataset[dataset.length - 1];
+  const nextLevel = dataset.length ? deepest.level + 1 : 0;
+  // The draft row is a table row like any other, distinguished by id: -1.
+  const rows = adding
+    ? [...dataset, { id: -1, level: nextLevel, name: "" }]
+    : dataset;
+
+  // Why delete is unavailable, in the same words the server would use.
+  const deleteReason = (record) => {
+    if (frozen) {
+      return "Frozen — units exist below root";
+    }
+    if (record.level === 0) {
+      return "The top level cannot be removed";
+    }
+    return "Only the deepest tier can be removed";
+  };
 
   const columns = [
     {
-      title: text.levelLabel,
+      title: "Depth",
       dataIndex: "level",
-      width: "10%",
+      width: "20%",
+      render: (level, record) => (
+        <>
+          <Tag color={level === 0 ? "blue" : "default"}>Level {level}</Tag>
+          {level === 0 && <Text type="secondary">top</Text>}
+          {record.id === -1 && <Text type="secondary">new</Text>}
+        </>
+      ),
     },
     {
-      title: text.nameLabel,
+      title: "Name",
       dataIndex: "name",
       render: (name, record) => {
+        if (record.id === -1) {
+          return (
+            <Input
+              autoFocus
+              value={newName}
+              placeholder="e.g. Province, District, Ward"
+              style={{ maxWidth: 280 }}
+              onChange={(e) => {
+                setNewName(e.target.value);
+              }}
+              onPressEnter={handleOnAdd}
+            />
+          );
+        }
         if (record.id !== editingId) {
-          return name;
+          return name || <Text type="secondary">(unnamed)</Text>;
         }
         return (
           <Input
             value={editingName}
+            style={{ maxWidth: 280 }}
             onChange={(e) => {
               setEditingName(e.target.value);
             }}
@@ -154,25 +209,49 @@ const Levels = () => {
       },
     },
     {
-      title: "Action",
+      title: "Actions",
       dataIndex: "id",
       width: "25%",
+      align: "right",
       render: (_, record) => {
+        if (record.id === -1) {
+          return (
+            <>
+              <Button
+                size="small"
+                type="primary"
+                loading={saving}
+                disabled={!newName.trim()}
+                onClick={handleOnAdd}
+              >
+                {text.saveButton}
+              </Button>{" "}
+              <Button
+                size="small"
+                onClick={() => {
+                  setAdding(false);
+                  setNewName("");
+                }}
+              >
+                {text.cancelButton}
+              </Button>
+            </>
+          );
+        }
         if (record.id === editingId) {
           return (
             <>
               <Button
-                shape="round"
+                size="small"
                 type="primary"
                 loading={saving}
                 disabled={!editingName.trim()}
                 onClick={() => handleOnRename(record)}
               >
                 {text.saveButton}
-              </Button>
+              </Button>{" "}
               <Button
-                shape="round"
-                type="link"
+                size="small"
                 onClick={() => {
                   setEditingId(null);
                 }}
@@ -182,29 +261,38 @@ const Levels = () => {
             </>
           );
         }
+        const canDelete =
+          record.id === deepest?.id && record.level !== 0 && !frozen;
         return (
           <>
             <Button
-              shape="round"
-              type="primary"
+              size="small"
               onClick={() => {
                 setEditingId(record.id);
                 setEditingName(record.name);
               }}
             >
-              {text.editButton}
-            </Button>
-            {record.id === deepest?.id && (
-              <Button
-                shape="round"
-                type="link"
-                danger
-                disabled={frozen}
-                onClick={() => handleOnDelete(record)}
-              >
-                {text.deleteText}
-              </Button>
-            )}
+              Rename
+            </Button>{" "}
+            {/* Tooltip rather than a title attribute: a title becomes the
+                button's accessible name, so screen readers would announce
+                the reason instead of "Delete". The span gives the tooltip
+                something to hang on, since a disabled button fires no
+                mouse events. */}
+            <Tooltip
+              title={canDelete ? "Remove this tier" : deleteReason(record)}
+            >
+              <span>
+                <Button
+                  size="small"
+                  danger
+                  disabled={!canDelete}
+                  onClick={() => handleOnDelete(record)}
+                >
+                  {text.deleteText}
+                </Button>
+              </span>
+            </Tooltip>
           </>
         );
       },
@@ -226,51 +314,64 @@ const Levels = () => {
       </div>
       <div className="table-section">
         <div className="table-wrapper">
+          <Row
+            justify="space-between"
+            align="middle"
+            style={{ marginBottom: "1rem" }}
+          >
+            <Col>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>
+                Administration levels
+              </div>
+              <Text type="secondary">
+                Define the tiers of your hierarchy, deepest last.
+              </Text>
+            </Col>
+            <Col>
+              <Tooltip
+                title={
+                  frozen ? "Frozen — units exist below root" : "Append a tier"
+                }
+              >
+                <span>
+                  <Button
+                    type="primary"
+                    shape="round"
+                    icon={<PlusOutlined />}
+                    disabled={frozen || adding}
+                    onClick={() => {
+                      setAdding(true);
+                    }}
+                  >
+                    {text.addLevel}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Col>
+          </Row>
           {frozen && (
             <Alert
-              type="info"
+              type="warning"
               showIcon
               message={text.levelFrozenHint}
               style={{ marginBottom: "1rem" }}
             />
           )}
-          <Row justify="space-between" align="middle" gutter={[16, 16]}>
-            <Col span={12}>
-              <Input
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value);
-                }}
-                onPressEnter={handleOnAdd}
-                placeholder={text.newLevelName}
-                disabled={frozen}
-                style={{ maxWidth: 260 }}
-              />
-            </Col>
-            <Col>
-              <Button
-                type="primary"
-                shape="round"
-                icon={<PlusOutlined />}
-                onClick={handleOnAdd}
-                loading={saving}
-                disabled={frozen || !newName.trim()}
-              >
-                {text.addLevel}
-              </Button>
-            </Col>
-          </Row>
-          <Divider />
           <div style={{ minHeight: "40vh" }}>
             <Table
               columns={columns}
-              dataSource={dataset}
+              dataSource={rows}
               loading={loading}
               rowClassName="editable-row"
               rowKey="id"
               pagination={false}
             />
           </div>
+          <Alert
+            type="info"
+            style={{ marginTop: "1rem" }}
+            message="Add always appends the next tier down · delete removes only the deepest tier · rename is allowed at any time · once administrative units exist below your root, add and delete are frozen."
+          />
         </div>
       </div>
     </div>

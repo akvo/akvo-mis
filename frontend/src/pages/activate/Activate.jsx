@@ -1,20 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
 import "../login/style.scss";
-import { Row, Col, Button, Form, Input, Result, Spin } from "antd";
+import { Row, Col, Button, Form, Input, Spin, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCookies } from "react-cookie";
 import { api, store } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { reloadData } from "../../util/form";
 
-// The landing page for the emailed activation link. It consumes the token,
-// adopts the session the backend hands back, and moves straight on to the
-// configuration form — the link is the only thing standing between sign-up
-// and a usable workspace, so there is nothing to confirm here.
+const { Title, Text } = Typography;
+
+// The landing page for the emailed activation link. It consumes the token and
+// adopts the session the backend hands back, then confirms before handing off
+// to configuration — the confirmation is the only moment the registrant is
+// told their address is verified, so it is worth a screen of its own.
 const Activate = () => {
   const { token } = useParams();
   const navigate = useNavigate();
   const [, setCookie] = useCookies(["expiration_time"]);
+  const [verified, setVerified] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
@@ -45,13 +48,13 @@ const Activate = () => {
           s.user = res.data;
         });
         reloadData(res.data);
-        navigate("/configure");
+        setVerified(true);
       },
       () => {
         setFailed(true);
       }
     );
-  }, [token, navigate, setCookie]);
+  }, [token, setCookie]);
 
   const onResend = (values) => {
     setResending(true);
@@ -68,15 +71,65 @@ const Activate = () => {
       });
   };
 
+  const frame = (children) => (
+    <div id="login">
+      <Row className="wrapper" align="middle">
+        <Col span={24} className="right-side">
+          <div className="login-form-container" style={{ textAlign: "center" }}>
+            {children}
+          </div>
+        </Col>
+      </Row>
+    </div>
+  );
+
+  if (verified) {
+    return frame(
+      <>
+        <div style={{ fontSize: 46, lineHeight: 1, color: "#52c41a" }}>✓</div>
+        <Title level={2}>Email verified</Title>
+        <Text type="secondary">
+          Your account is active. One quick step left — tell us about your
+          project.
+        </Text>
+        <Button
+          type="primary"
+          shape="round"
+          block
+          style={{ marginTop: 24 }}
+          onClick={() => {
+            navigate("/configure");
+          }}
+        >
+          Continue to setup →
+        </Button>
+      </>
+    );
+  }
+
   if (!failed) {
-    return (
-      <div id="login">
-        <Row className="wrapper" align="middle" justify="center">
-          <Col>
-            <Spin size="large" tip="Activating your account…" />
-          </Col>
-        </Row>
-      </div>
+    return frame(
+      <>
+        <Spin size="large" />
+        <Title level={2} style={{ marginTop: 16 }}>
+          Verifying your email…
+        </Title>
+      </>
+    );
+  }
+
+  if (resent) {
+    return frame(
+      <>
+        <div style={{ fontSize: 46, lineHeight: 1, color: "#52c41a" }}>✓</div>
+        <Title level={2}>Activation email sent</Title>
+        <Text type="secondary">Check your inbox for a fresh link.</Text>
+        <Link to="/login">
+          <Button type="primary" shape="round" block style={{ marginTop: 24 }}>
+            Back to login
+          </Button>
+        </Link>
+      </>
     );
   }
 
@@ -85,60 +138,56 @@ const Activate = () => {
       <Row className="wrapper" align="middle">
         <Col span={24} className="right-side">
           <div className="login-form-container">
-            {resent ? (
-              <Result
-                status="success"
-                title="Activation email sent"
-                subTitle="Check your inbox for a fresh link."
-                extra={
-                  <Link to="/login">
-                    <Button type="primary" shape="round">
-                      Back to login
-                    </Button>
-                  </Link>
-                }
-              />
-            ) : (
-              <>
-                <h1>This link has expired</h1>
-                <p>
-                  Activation links are valid for seven days. Enter your email
-                  address and we will send a new one.
-                </p>
-                <Form
-                  name="resend-activation-form"
-                  layout="vertical"
-                  onFinish={onResend}
+            <div
+              style={{
+                fontSize: 46,
+                lineHeight: 1,
+                color: "#faad14",
+                textAlign: "center",
+              }}
+            >
+              ⏱
+            </div>
+            <h1 style={{ textAlign: "center" }}>This link has expired</h1>
+            <p className="disclaimer">
+              Activation links are valid for 7 days. Request a fresh one and
+              we&apos;ll email it right away.
+            </p>
+            <Form
+              name="resend-activation-form"
+              layout="vertical"
+              onFinish={onResend}
+            >
+              {/* The address has to be asked for: an unreadable token yields
+                  no account to look it up from. */}
+              <Form.Item
+                name="email"
+                label="Email"
+                rules={[
+                  {
+                    required: true,
+                    type: "email",
+                    message: "Enter a valid email address.",
+                  },
+                ]}
+              >
+                <Input placeholder="you@organisation.org" />
+              </Form.Item>
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  shape="round"
+                  block
+                  loading={resending}
                 >
-                  <Form.Item
-                    name="email"
-                    label="Email Address"
-                    rules={[
-                      {
-                        required: true,
-                        type: "email",
-                        message: "A valid email is required",
-                      },
-                    ]}
-                  >
-                    <Input placeholder="Email" />
-                  </Form.Item>
-                  <Form.Item>
-                    <Button
-                      type="primary"
-                      htmlType="submit"
-                      shape="round"
-                      loading={resending}
-                    >
-                      Resend activation email
-                    </Button>
-                  </Form.Item>
-                </Form>
-                <p className="disclaimer">
-                  <Link to="/login">Back to login</Link>
-                </p>
-              </>
-            )}
+                  Resend activation email
+                </Button>
+              </Form.Item>
+              <p className="disclaimer">
+                <Link to="/login">Back to login</Link>
+              </p>
+            </Form>
           </div>
         </Col>
       </Row>

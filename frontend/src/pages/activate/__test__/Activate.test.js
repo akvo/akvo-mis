@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import axios from "axios";
 import Activate from "../Activate";
@@ -21,7 +21,7 @@ describe("Activate", () => {
     jest.clearAllMocks();
   });
 
-  test("a good token carries the user on to configuration", async () => {
+  test("a good token confirms, then carries the user on", async () => {
     // A whole profile, because adopting the session runs it through
     // reloadData, which reads the assignment fields.
     axios.mockResolvedValue({
@@ -37,7 +37,10 @@ describe("Activate", () => {
       },
     });
     renderAt("good-token");
-    // Nothing to confirm — the link itself is the confirmation.
+    // The confirmation is the only moment the registrant is told their
+    // address is verified, so it gets a screen before the hand-off.
+    expect(await screen.findByText(/Email verified/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Continue to setup/i }));
     expect(await screen.findByText(/configure reached/i)).toBeInTheDocument();
   });
 
