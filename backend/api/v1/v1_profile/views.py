@@ -3,7 +3,7 @@ from typing import cast
 from wsgiref.util import FileWrapper
 from django.contrib.admin.sites import site
 from django.core.handlers.wsgi import WSGIRequest
-from django.db.models import ProtectedError, Q
+from django.db.models import Max, ProtectedError, Q
 from django.contrib.admin.utils import get_deleted_objects
 from django.http.response import HttpResponse
 from django.conf import settings
@@ -30,6 +30,7 @@ from api.v1.v1_profile.serializers import (
     EntitySerializer,
     DownloadAdministrationRequestSerializer,
     DownloadEntityDataRequestSerializer,
+    LevelSerializer,
     ListEntityDataSerializer,
     RoleSerializer,
     RoleDetailSerializer,
@@ -500,6 +501,87 @@ def export_pre_entities_data_template(request: Request, version):
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+
+@extend_schema(tags=["Levels"])
+class LevelViewSet(ModelViewSet):
+    """Tenant-scoped hierarchy depth management.
+
+    A tenant's depth is set once during onboarding, so the shape of this
+    viewset is deliberately narrow: append a tier, rename any tier, remove
+    the deepest one. Arbitrary insertion or reordering would mean
+    re-pathing every administrative unit beneath, which the spec rejects as
+    disproportionate.
+    """
+
+    serializer_class = LevelSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    # A handful of tiers in strict depth order — paging them (the project
+    # default is LimitOffsetPagination) would only make the screen walk
+    # pages to render one table.
+    pagination_class = None
+
+    def get_queryset(self):
+        return Levels.objects.for_user(self.request.user).order_by("level")
+
+    def _deepest_level(self):
+        return Levels.objects.for_user(self.request.user).aggregate(
+            m=Max("level")
+        )["m"]
+
+    def _units_below_root(self):
+        """Has the tenant built units under its root yet?
+
+        Once it has, changing the depth would strand or re-path them, so
+        add and delete freeze. A count of exactly 1 is the root alone.
+        Rename ignores this gate — naming a tier moves nothing.
+        """
+        return Administration.objects.for_user(self.request.user).count() > 1
+
+    def _rejected(self, message):
+        return Response(
+            {"message": message}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    def create(self, request, *args, **kwargs):
+        if self._units_below_root():
+            return self._rejected(
+                "Levels cannot be added once administrative units exist"
+            )
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        # Append at the tenant's max + 1; a tenant with no levels starts at 0.
+        current_max = self._deepest_level()
+        serializer.save(
+            tenant=self.request.user.tenant,
+            level=0 if current_max is None else current_max + 1,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        # get_object() resolves through get_queryset, so another tenant's
+        # level is a 404 rather than a rejection that confirms it exists.
+        level = self.get_object()
+        if level.level != self._deepest_level():
+            return self._rejected("Only the deepest level can be removed")
+        if self._units_below_root():
+            return self._rejected(
+                "Levels cannot be removed once administrative units exist"
+            )
+        # With the two gates above passed, the only unit that can still sit
+        # at this level is the root at level 0 — this is what stops a tenant
+        # from deleting the last tier out from under its own root.
+        if Administration.objects.for_user(request.user).filter(
+            level=level
+        ).exists():
+            return self._rejected("This level still has administrative units")
+        # Role.administration_level cascades, so deleting the level would
+        # take the role, its access rows and every user assignment with it.
+        if Role.objects.filter(administration_level=level).exists():
+            return self._rejected(
+                "This level is in use by one or more roles; remove them first"
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 @extend_schema(tags=["Roles"])

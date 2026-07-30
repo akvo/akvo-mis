@@ -52,6 +52,16 @@ class AdministrationLevelsSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
+class LevelSerializer(serializers.ModelSerializer):
+    # A tier's depth is append-only, so `level` is derived server-side from
+    # the tenant's current maximum rather than bound from the payload; the
+    # tenant itself is stamped from the request user. Only `name` is input.
+    class Meta:
+        model = Levels
+        fields = ["id", "name", "level"]
+        read_only_fields = ["level"]
+
+
 class AdministrationAttributeSerializer(TenantStampedSerializerMixin,
                                         serializers.ModelSerializer):
     class Meta:

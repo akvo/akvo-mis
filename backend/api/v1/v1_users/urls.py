@@ -22,7 +22,10 @@ from api.v1.v1_users.views import (
 from api.v1.v1_profile.views import list_entity_data
 
 urlpatterns = [
-    re_path(r"^(?P<version>(v1))/levels", list_levels),
+    # Anchored: unanchored, this pattern also matches /levels-management
+    # and — because v1_users is included before v1_profile — would answer
+    # it with the read-only list.
+    re_path(r"^(?P<version>(v1))/levels$", list_levels),
     re_path(
         r"^(?P<version>(v1))/administration/(?P<administration_id>[0-9]+)",
         list_administration,
