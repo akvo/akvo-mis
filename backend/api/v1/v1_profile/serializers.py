@@ -471,7 +471,11 @@ class RoleSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="List of features and their access levels for this role",
     )
-    administration_level = CustomPrimaryKeyRelatedField(
+    # A role's tenant IS its level's tenant (TENANT_PATH is
+    # administration_level__tenant), so an unscoped candidate set here lets a
+    # caller hand its new role to another tenant — and that role then blocks
+    # the other tenant from removing its own level, invisibly.
+    administration_level = TenantScopedPrimaryKeyRelatedField(
         queryset=Levels.objects.all(),
     )
 

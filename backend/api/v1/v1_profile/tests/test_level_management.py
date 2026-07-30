@@ -2,6 +2,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.test import TestCase
 from django.test.utils import override_settings
 
+from api.v1.v1_profile.constants import DataAccessTypes
 from api.v1.v1_profile.models import Administration, Levels, Role
 from api.v1.v1_users.models import SystemUser, Tenant
 
@@ -141,6 +142,22 @@ class LevelManagementTestCase(TestCase):
             content_type="application/json", **self._auth(self.a["admin"]),
         )
         self.assertEqual(res.status_code, 404)
+
+    def test_role_cannot_bind_to_another_tenants_level(self):
+        # A role's tenant is its level's tenant, so binding across tenants
+        # both hands the role away and leaves the other tenant unable to
+        # remove its own level — with nothing in its UI explaining why.
+        res = self.client.post(
+            "/api/v1/roles",
+            {
+                "name": "Poacher",
+                "administration_level": self.b["level0"].id,
+                "role_access": [DataAccessTypes.read],
+            },
+            content_type="application/json", **self._auth(self.a["admin"]),
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(Role.objects.filter(name="Poacher").exists())
 
     def test_non_superadmin_forbidden(self):
         plain = SystemUser.objects.create_user(
