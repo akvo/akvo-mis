@@ -60,6 +60,7 @@ from api.v1.v1_users.serializers import (
     RoleOptionSerializer,
     UpdateProfileSerializer,
     RegisterSerializer,
+    ResendActivationSerializer,
 )
 from mis.settings import REST_FRAMEWORK, WEBDOMAIN
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
@@ -67,6 +68,11 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
+
+
+# A week is long enough to survive a weekend and a spam folder, short
+# enough that a leaked link in an old mailbox is not a standing key.
+ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
 
 
 def send_activation_email(user):
@@ -307,6 +313,64 @@ def register(request, version):
     # link is followed, so handing one back would only mislead the client.
     return Response(
         {"message": "Check your email to activate your account"},
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Activate an account from an emailed link",
+)
+@api_view(["POST"])
+def activate_account(request, version):
+    invalid = Response(
+        {"message": "Invalid or expired activation link"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+    token = request.data.get("token")
+    # An absent token is a malformed request, not a signature failure, so it
+    # is answered directly rather than routed through the except branch. The
+    # str() keeps any other JSON scalar on the BadSignature path.
+    if not token:
+        return invalid
+    try:
+        # SignatureExpired subclasses BadSignature, so an expired link and a
+        # tampered one land here together — the client is told the same thing
+        # either way and offered a resend.
+        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+    except BadSignature:
+        return invalid
+    user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
+    if not user:
+        return invalid
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+    # A full session, the same one login hands out, because the registrant's
+    # next step is the configuration form — which is authenticated. Following
+    # the link twice is therefore a harmless no-op.
+    return authenticated_response(user)
+
+
+@extend_schema(
+    request=ResendActivationSerializer,
+    responses={200: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Resend an activation email",
+)
+@api_view(["POST"])
+def resend_activation(request, version):
+    user = SystemUser.objects.filter(
+        email=request.data.get("email"), is_active=False, deleted_at=None
+    ).first()
+    if user:
+        send_activation_email(user)
+    # Always the same 200, whether or not anything was sent, so this cannot
+    # be used to work out which addresses are registered.
+    return Response(
+        {"message": "If that account needs activating, an email is on its "
+                    "way"},
         status=status.HTTP_200_OK,
     )
 

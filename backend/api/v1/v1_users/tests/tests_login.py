@@ -62,6 +62,10 @@ class LoginUserTestCase(TestCase):
                 "is_superuser",
                 "administration",
                 "id",
+                # Drives the frontend's routing gate: an unconfigured
+                # workspace goes to the configuration form, not the
+                # dashboard.
+                "configured",
                 "token",
                 "invite",
                 "expiration_time",

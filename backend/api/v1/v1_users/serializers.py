@@ -699,8 +699,33 @@ class UserRoleListSerializer(serializers.ModelSerializer):
         ]
 
 
+def tenant_is_configured(tenant):
+    """Has this tenant completed the configuration form?
+
+    Derived rather than stored: a configured tenant is one with a *named*
+    level 0 and a root unit, which is exactly what the form creates. The
+    same predicate the bulk-upload gate will reuse, so there is no column
+    to keep in step with reality.
+
+    A tenant-less user — createsuperuser, the test-only admin account —
+    reads as configured. There is nothing for them to configure, and
+    answering False would strand them on the configuration form and let
+    them create a tenant-less level 0 in the legacy global hierarchy.
+    """
+    if not tenant:
+        return True
+    has_named_level_zero = Levels.objects.filter(
+        tenant=tenant, level=0
+    ).exclude(name="").exists()
+    has_root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).exists()
+    return has_named_level_zero and has_root
+
+
 class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    configured = serializers.SerializerMethodField()
     administration = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     organisation = serializers.SerializerMethodField()
@@ -782,13 +807,17 @@ class UserSerializer(serializers.ModelSerializer):
             return passcode
         return None
 
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_configured(self, instance: SystemUser):
+        return tenant_is_configured(instance.tenant)
+
     class Meta:
         model = SystemUser
         fields = [
             'email', 'name', 'roles', 'trained',
             'phone_number', 'forms', 'organisation',
             'last_login', 'passcode', 'is_superuser',
-            'administration', 'id',
+            'administration', 'id', 'configured',
         ]
 
 
@@ -913,6 +942,12 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             "phone_number",
             "organisation"
         ]
+
+
+class ResendActivationSerializer(serializers.Serializer):
+    # Documents the payload for the schema; the view does not validate it,
+    # because an unparseable address must get the same 200 as an unknown one.
+    email = serializers.EmailField()
 
 
 class RegisterSerializer(serializers.Serializer):
