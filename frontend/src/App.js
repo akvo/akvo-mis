@@ -11,6 +11,8 @@ import {
   Home,
   Login,
   Register,
+  Activate,
+  Configure,
   ControlCenterLayout,
   Users,
   AddUser,
@@ -92,6 +94,12 @@ const Private = ({ element: Element, alias }) => {
 
   const { user: authUser } = store.useState((state) => state);
   if (authUser) {
+    // A workspace with no named level 0 and no root cannot render a
+    // dashboard — every administration-scoped screen would come up empty.
+    // The configuration form is the only reachable route until it is done.
+    if (!authUser.configured) {
+      return <Navigate to="/configure" />;
+    }
     return ability.can("manage", alias) ||
       ability.can("read", alias) ||
       ability.can("create", alias) ||
@@ -126,6 +134,12 @@ const RouteList = () => {
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
       <Route exact path="/register" element={<Register />} />
+      <Route exact path="/activate/:token" element={<Activate />} />
+      {/* Not wrapped in Private: Private sends every unconfigured user
+          here, so guarding this route the same way would loop. Configure
+          does its own redirects for the no-session and already-done
+          cases. */}
+      <Route exact path="/configure" element={<Configure />} />
       <Route exact path="/data" element={<Home />} />
       <Route exact path="/dashboard/:slug" element={<Dashboard />} />
       <Route

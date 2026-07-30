@@ -1,43 +1,60 @@
 import React, { useState } from "react";
 import "../login/style.scss";
-import { Row, Col, Form, Input, Button } from "antd";
-import { Link, useNavigate } from "react-router-dom";
-import { useCookies } from "react-cookie";
-import { api, store } from "../../lib";
+import { Row, Col, Form, Input, Button, Result } from "antd";
+import { Link } from "react-router-dom";
+import { api } from "../../lib";
 import { useNotification } from "../../util/hooks";
-import { reloadData } from "../../util/form";
 
+// Phase 1 of sign-up: just enough to claim a workspace. There is no login
+// here — the account is inactive until the emailed link is followed — so the
+// form ends on a confirmation state rather than a redirect.
 const Register = () => {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [, setCookie] = useCookies(["expiration_time"]);
+  const [sentTo, setSentTo] = useState(null);
   const { notify } = useNotification();
 
   const onFinish = (values) => {
     setLoading(true);
     api
       .post("register", values)
-      .then((res) => {
-        // Mirror the login success path: token, expiry cookie, store.
-        api.setToken(res.data.token);
-        setCookie("expiration_time", res.data?.expiration_time);
-        store.update((s) => {
-          s.isLoggedIn = true;
-          s.selectedForm = null;
-          s.user = res.data;
-        });
-        reloadData(res.data);
-        setLoading(false);
-        navigate("/control-center");
+      .then(() => {
+        setSentTo(values.email);
       })
       .catch((err) => {
-        setLoading(false);
         notify({
           type: "error",
           message: err.response?.data?.message || "Registration failed",
         });
+      })
+      .finally(() => {
+        setLoading(false);
       });
   };
+
+  if (sentTo) {
+    return (
+      <div id="login">
+        <Row className="wrapper" align="middle">
+          <Col span={24} className="right-side">
+            <div className="login-form-container">
+              <Result
+                status="success"
+                title="Check your email"
+                subTitle={`We sent an activation link to ${sentTo}. Follow it to finish setting up your workspace.`}
+                extra={
+                  <Link to="/login">
+                    <Button type="primary" shape="round">
+                      Back to login
+                    </Button>
+                  </Link>
+                }
+              />
+            </div>
+          </Col>
+        </Row>
+      </div>
+    );
+  }
 
   return (
     <div id="login">
@@ -47,22 +64,9 @@ const Register = () => {
             <h1>Create your workspace</h1>
             <Form name="register-form" layout="vertical" onFinish={onFinish}>
               <Form.Item
-                name="first_name"
-                label="First Name"
-                rules={[{ required: true, message: "First name is required" }]}
-              >
-                <Input placeholder="First Name" />
-              </Form.Item>
-              <Form.Item
-                name="last_name"
-                label="Last Name"
-                rules={[{ required: true, message: "Last name is required" }]}
-              >
-                <Input placeholder="Last Name" />
-              </Form.Item>
-              <Form.Item
                 name="email"
                 label="Email Address"
+                extra="We will send an activation link to this address"
                 rules={[
                   {
                     required: true,
