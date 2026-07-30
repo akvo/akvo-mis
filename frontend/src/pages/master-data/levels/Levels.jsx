@@ -40,13 +40,13 @@ const Levels = () => {
   ];
 
   const rejected = useCallback(
-    (error, fallback) => {
+    (error) => {
       notify({
         type: "error",
-        message: error?.response?.data?.message || fallback,
+        message: error?.response?.data?.message || text.errorSomething,
       });
     },
-    [notify]
+    [notify, text.errorSomething]
   );
 
   const fetchData = useCallback(async () => {
@@ -59,47 +59,47 @@ const Levels = () => {
       const { data: units } = await api.get("administrations?page=1");
       setFrozen(units?.total > 1);
     } catch (error) {
-      rejected(error, text.errorSomething);
+      rejected(error);
     } finally {
       setLoading(false);
     }
-  }, [rejected, text.errorSomething]);
+  }, [rejected]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Dependent screens read levels from the store, so a change to the shape
-  // of the hierarchy has to refresh it as well as this table.
-  const reload = async () => {
-    await fetchData();
-    await fetchLevels();
-  };
+  // Every mutation shares one shell: run it, then refresh both this table
+  // and the levels store — dependent screens read the hierarchy's shape
+  // from there — and surface whatever the server rejected.
+  const mutate = useCallback(
+    async (call) => {
+      setSaving(true);
+      try {
+        await call();
+        await fetchData();
+        await fetchLevels();
+      } catch (error) {
+        rejected(error);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [fetchData, rejected]
+  );
 
-  const handleOnAdd = async () => {
-    setSaving(true);
-    try {
+  const handleOnAdd = () => {
+    return mutate(async () => {
       await api.post("levels-management", { name: newName });
       setNewName("");
-      await reload();
-    } catch (error) {
-      rejected(error, text.errorSomething);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
-  const handleOnRename = async (record) => {
-    setSaving(true);
-    try {
+  const handleOnRename = (record) => {
+    return mutate(async () => {
       await api.put(`levels-management/${record.id}`, { name: editingName });
       setEditingId(null);
-      await reload();
-    } catch (error) {
-      rejected(error, text.errorSomething);
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const handleOnDelete = (record) => {
@@ -109,18 +109,11 @@ const Levels = () => {
       centered: true,
       okText: text.deleteText,
       cancelText: text.cancelButton,
-      onOk: async () => {
-        try {
-          await api.delete(`levels-management/${record.id}`);
-          await reload();
-        } catch (error) {
-          rejected(error, text.errorSomething);
-        }
-      },
+      onOk: () => mutate(() => api.delete(`levels-management/${record.id}`)),
     });
   };
 
-  const deepest = dataset.length ? dataset[dataset.length - 1] : null;
+  const deepest = dataset[dataset.length - 1];
 
   const columns = [
     {
@@ -253,10 +246,7 @@ const Levels = () => {
             </Col>
           </Row>
           <Divider />
-          <div
-            style={{ padding: 0, minHeight: "40vh" }}
-            bodystyle={{ padding: 0 }}
-          >
+          <div style={{ minHeight: "40vh" }}>
             <Table
               columns={columns}
               dataSource={dataset}

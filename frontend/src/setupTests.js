@@ -25,6 +25,15 @@ store.update((s) => {
   ];
 });
 
+// antd's responsive Row/Col subscribe to media queries on mount and jsdom
+// has no matchMedia. Every suite that renders a page needs this, so it
+// lives here rather than in each of them.
+window.matchMedia =
+  window.matchMedia ||
+  function () {
+    return { matches: false, addListener: () => {}, removeListener: () => {} };
+  };
+
 window.visualisation = [];
 
 window.dbadm = [

@@ -6,15 +6,6 @@ import "@testing-library/jest-dom";
 
 jest.mock("axios");
 
-// antd's responsive Row/Col subscribe to media queries on mount; jsdom has
-// no matchMedia. TestApp shims this for the full-app tests — this suite
-// renders the screen directly, so it needs its own.
-window.matchMedia =
-  window.matchMedia ||
-  function () {
-    return { matches: false, addListener: () => {}, removeListener: () => {} };
-  };
-
 // The screen renders the server's list as-is; its only local logic is the
 // freeze gate — derived from the administration count — and picking the
 // deepest row as the only deletable one. Those are what is asserted here.
