@@ -478,7 +478,9 @@ def export_pre_entities_data_template(request: Request, version):
     adm_id = request.query_params.get("adm_id")
     administration = None
     if adm_id:
-        administration = Administration.objects.get(pk=adm_id)
+        administration = Administration.objects.for_user(
+            request.user
+        ).filter(pk=adm_id).first()
     TESTING = settings.TEST_ENV
     filepath = generate_entities_data_excel(
         cast(SystemUser, request.user),

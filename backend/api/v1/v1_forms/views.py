@@ -655,7 +655,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         is_monitoring = req_type in (FormTypes.monitoring, "monitoring")
         if is_monitoring and parent_id:
             try:
-                parent = Forms.objects.get(id=parent_id)
+                parent = Forms.objects.for_user(request.user).get(
+                    id=parent_id
+                )
             except Forms.DoesNotExist:
                 return Response(
                     {"parent": "Parent form not found"},
@@ -1005,7 +1007,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         file_form_id = norm.get("form_id")
         match_info = {"exists": False, "form": None, "name_mismatch": False}
         if file_form_id is not None:
-            existing = Forms.objects.filter(id=file_form_id).first()
+            existing = Forms.objects.for_user(request.user).filter(
+                id=file_form_id
+            ).first()
             if existing:
                 submission_count = existing.form_data.count() if hasattr(
                     existing, "form_data"
@@ -1032,7 +1036,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         parent_hint = norm.get("parent_hint")
         resolved_parent = None
         if is_monitoring and parent_hint and parent_hint.get("id"):
-            p = Forms.objects.filter(id=parent_hint["id"]).first()
+            p = Forms.objects.for_user(request.user).filter(
+                id=parent_hint["id"]
+            ).first()
             if p:
                 resolved_parent = {"id": p.id, "name": p.name}
 
@@ -1131,7 +1137,8 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         if (
             mode == "create_or_update"
             and file_form_id is not None
-            and Forms.objects.filter(id=file_form_id).exists()
+            and Forms.objects.for_user(request.user)
+            .filter(id=file_form_id).exists()
         ):
             edit_perm = FormBuilderAccess(FeatureAccessTypes.form_edit)()
             if not edit_perm.has_permission(request, self):

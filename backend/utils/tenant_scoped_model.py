@@ -34,3 +34,22 @@ class TenantQuerySet(TenantScopedQuerySetMixin, models.QuerySet):
 # carries with_deleted/only_draft state a generated manager would drop —
 # so they delegate explicitly instead.
 TenantManager = models.Manager.from_queryset(TenantQuerySet)
+
+
+def acting_user(context):
+    # Serializers here are called with either context={"user": ...} or the
+    # DRF default context={"request": ...}. Support both so callers do not
+    # have to be normalised first.
+    return context.get("user") or getattr(
+        context.get("request"), "user", None
+    )
+
+
+class TenantStampedSerializerMixin:
+    # create() stamps the new row with the acting user's tenant. Tenant is
+    # never read from the payload — only from the authenticated user — so a
+    # caller cannot plant a row in someone else's tenant.
+    def create(self, validated_data):
+        user = acting_user(self.context)
+        validated_data["tenant"] = getattr(user, "tenant", None)
+        return super().create(validated_data)

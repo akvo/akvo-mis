@@ -30,6 +30,7 @@ from api.v1.v1_users.models import (
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_approval.models import DataBatch
 from utils.custom_serializer_fields import (
+    TenantScopedPrimaryKeyRelatedField,
     CustomEmailField,
     CustomCharField,
     CustomPrimaryKeyRelatedField,
@@ -39,6 +40,7 @@ from utils.custom_serializer_fields import (
 from api.v1.v1_profile.constants import FeatureAccessTypes
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
+from utils.tenant_scoped_model import TenantStampedSerializerMixin
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -96,7 +98,8 @@ class OrganisationListSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'attributes', 'users']
 
 
-class AddEditOrganisationSerializer(serializers.ModelSerializer):
+class AddEditOrganisationSerializer(TenantStampedSerializerMixin,
+                                    serializers.ModelSerializer):
     attributes = CustomMultipleChoiceField(choices=list(
         OrganisationTypes.FieldStr.keys()),
                                            required=True)
@@ -261,12 +264,12 @@ class ListAdministrationSerializer(serializers.ModelSerializer):
 
 
 class AddRolesSerializer(serializers.Serializer):
-    role = CustomPrimaryKeyRelatedField(
+    role = TenantScopedPrimaryKeyRelatedField(
         queryset=Role.objects.none(),
         required=True,
         help_text='Role to assign to user'
     )
-    administration = CustomPrimaryKeyRelatedField(
+    administration = TenantScopedPrimaryKeyRelatedField(
         queryset=Administration.objects.none(),
         required=True,
         help_text='Administration to assign role to user'
@@ -362,8 +365,9 @@ class AddRolesSerializer(serializers.Serializer):
         fields = ['role', 'administration']
 
 
-class AddEditUserSerializer(serializers.ModelSerializer):
-    organisation = CustomPrimaryKeyRelatedField(
+class AddEditUserSerializer(TenantStampedSerializerMixin,
+                            serializers.ModelSerializer):
+    organisation = TenantScopedPrimaryKeyRelatedField(
         queryset=Organisation.objects.none(), required=False)
     trained = CustomBooleanField(default=False)
     roles = AddRolesSerializer(many=True, required=False)

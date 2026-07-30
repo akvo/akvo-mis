@@ -1224,7 +1224,7 @@ def handle_administrations_bulk_upload(filename, user_id, upload_time):
             content_type="text/csv",
         )
         return
-    seed_administration_data(file_path)
+    seed_administration_data(file_path, tenant=user.tenant)
     generate_sqlite(Administration)
     send_email(context=email_context, type=EmailTypes.administration_upload)
 
@@ -1271,7 +1271,7 @@ def handle_entities_bulk_upload(filename, user_id, upload_time):
     user = SystemUser.objects.get(id=user_id)
     storage.download(f"upload/{filename}")
     file_path = f"./tmp/{filename}"
-    errors = validate_entity_file(file_path)
+    errors = validate_entity_file(file_path, tenant=user.tenant)
     email_context = {
         "send_to": [user.email],
         "listing": [
@@ -1288,7 +1288,7 @@ def handle_entities_bulk_upload(filename, user_id, upload_time):
     if len(errors):
         handle_entities_error_upload(errors, email_context, user, upload_time)
         return
-    errors = validate_entity_data(file_path)
+    errors = validate_entity_data(file_path, tenant=user.tenant)
     if len(errors):
         handle_entities_error_upload(errors, email_context, user, upload_time)
         return
