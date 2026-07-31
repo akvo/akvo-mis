@@ -1,3 +1,4 @@
+from django.db.utils import IntegrityError
 from django.test.utils import override_settings
 from django.urls import NoReverseMatch, reverse
 
@@ -29,6 +30,35 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
         labels = [r["label"] for r in res.json()]
         self.assertIn(self.a["role"].name, labels)
         self.assertNotIn(self.b["role"].name, labels)
+
+    def test_two_tenants_can_share_a_role_name(self):
+        # `name` was globally unique, so the second workspace to want a
+        # "Data Entry" role simply could not have one.
+        for fixture in (self.a, self.b):
+            Role.objects.create(
+                name="Data Entry",
+                administration_level=fixture["child_level"],
+            )
+        self.assertEqual(Role.objects.filter(name="Data Entry").count(), 2)
+
+    def test_one_tenant_cannot_repeat_a_role_name(self):
+        # Unique per tenant, not per level: the same name at a different
+        # tier of the same workspace is still the same role to a human.
+        Role.objects.create(
+            name="Data Entry", administration_level=self.a["level"]
+        )
+        with self.assertRaises(IntegrityError):
+            Role.objects.create(
+                name="Data Entry", administration_level=self.a["child_level"]
+            )
+
+    def test_a_role_carries_its_levels_tenant(self):
+        # The column is denormalised, so it is only trustworthy if it cannot
+        # be set to anything else.
+        role = Role.objects.create(
+            name="Derived", administration_level=self.b["child_level"]
+        )
+        self.assertEqual(role.tenant, self.b["tenant"])
 
     def test_role_options_require_a_session(self):
         # It carried no permission_classes, so DRF's AllowAny default made

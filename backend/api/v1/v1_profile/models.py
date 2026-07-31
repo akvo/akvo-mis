@@ -174,21 +174,38 @@ class EntityData(models.Model):
 
 
 class Role(models.Model):
-    TENANT_PATH = "administration_level__tenant"
+    TENANT_PATH = "tenant"
     objects = TenantManager()
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
     administration_level = models.ForeignKey(
         to=Levels,
         on_delete=models.CASCADE,
         related_name="role_administration_level",
     )
+    # Denormalised from administration_level.tenant, which is where a role's
+    # ownership actually comes from. It is stored rather than derived because
+    # names must be unique per tenant, and a unique constraint cannot span a
+    # join. `save` keeps the two in step so they cannot drift.
+    tenant = tenant_fk("roles")
+
+    def save(self, *args, **kwargs):
+        self.tenant = self.administration_level.tenant
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "role"
+        constraints = [
+            # A globally unique name meant the second workspace to want a
+            # "Data Entry" role could not have one.
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="unique_role_name_per_tenant",
+            )
+        ]
 
 
 class RoleAccess(models.Model):
