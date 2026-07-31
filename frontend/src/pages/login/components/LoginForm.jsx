@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, store, uiText } from "../../../lib";
 import { useNotification } from "../../../util/hooks";
 import { reloadData } from "../../../util/form";
-import { clearLegacySessionExpiry } from "../../../util/date";
 
 const LoginForm = () => {
   const navigate = useNavigate();
@@ -26,10 +25,9 @@ const LoginForm = () => {
         password: values.password,
       })
       .then((res) => {
-        api.setToken(res.data.token);
         // The server's AUTH_TOKEN cookie carries the expiry the browser
-        // enforces; nothing here needs to record it a second time.
-        clearLegacySessionExpiry();
+        // enforces; nothing here records it a second time.
+        api.setToken(res.data.token);
         if (res.data.forms.length === 0 && !res.data?.is_superuser) {
           notification.open({
             message: text.contactAdmin,

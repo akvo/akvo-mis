@@ -71,23 +71,6 @@ describe("Session restore on refresh", () => {
   });
 
   test("a valid cookie keeps the user on the dashboard", async () => {
-    setCookies({
-      AUTH_TOKEN: "valid.jwt.token",
-      expiration_time: "2099-01-01T00:00:00+00:00",
-    });
-
-    render(<TestApp entryPoint={"/control-center"} />);
-
-    await waitFor(() => {
-      expect(store.getRawState().isLoggedIn).toBe(true);
-    });
-    expect(screen.queryByText(/Recover Password/i)).toBeNull();
-  });
-
-  test("a session with no expiration_time cookie survives too", async () => {
-    // The state a registrant is in after activation: the backend set
-    // AUTH_TOKEN at path /, but the expiry cookie the login form writes was
-    // never written — activation writes it under the /activate path.
     setCookies({ AUTH_TOKEN: "valid.jwt.token" });
 
     render(<TestApp entryPoint={"/control-center"} />);

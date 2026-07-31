@@ -5,7 +5,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, store } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { reloadData } from "../../util/form";
-import { clearLegacySessionExpiry } from "../../util/date";
 
 const { Title, Text } = Typography;
 
@@ -39,7 +38,6 @@ const Activate = () => {
       (res) => {
         // Same session shape as login, so the app is fully signed in.
         api.setToken(res.data.token);
-        clearLegacySessionExpiry();
         store.update((s) => {
           s.isLoggedIn = true;
           s.selectedForm = null;

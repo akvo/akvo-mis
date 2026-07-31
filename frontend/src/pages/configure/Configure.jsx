@@ -27,9 +27,12 @@ const Configure = () => {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null);
   const justFinished = useRef(false);
-  // Mirrored into state purely to drive the preview, which is what makes the
-  // tier/unit distinction concrete before the names are committed.
-  const [preview, setPreview] = useState({ level0: "", root: "" });
+  // Watched rather than mirrored into state: the preview is what makes the
+  // tier/unit distinction concrete before the names are committed, and the
+  // form already holds those values.
+  const [form] = Form.useForm();
+  const level0Name = Form.useWatch("level_0_name", form);
+  const rootUnitName = Form.useWatch("root_unit_name", form);
   const { notify } = useNotification();
   const { user: authUser } = store.useState((s) => s);
 
@@ -139,7 +142,12 @@ const Configure = () => {
               This names your administrative hierarchy. You can add deeper tiers
               afterwards; these two top-level names are set once here.
             </p>
-            <Form name="configure-form" layout="vertical" onFinish={onFinish}>
+            <Form
+              form={form}
+              name="configure-form"
+              layout="vertical"
+              onFinish={onFinish}
+            >
               <Row gutter={14}>
                 <Col span={12}>
                   <Form.Item
@@ -168,16 +176,7 @@ const Configure = () => {
                   { required: true, message: "Give your top tier a name." },
                 ]}
               >
-                <Input
-                  placeholder="Country"
-                  onChange={(e) => {
-                    // Read the value before the updater runs: React 17 pools
-                    // synthetic events, so e.target is recycled by the time a
-                    // functional setState is applied.
-                    const { value } = e.target;
-                    setPreview((p) => ({ ...p, level0: value }));
-                  }}
-                />
+                <Input placeholder="Country" />
               </Form.Item>
               <Form.Item
                 name="root_unit_name"
@@ -185,13 +184,7 @@ const Configure = () => {
                 extra="Your single top unit at that tier — e.g. Kenya. Everything you upload later sits under it."
                 rules={[{ required: true, message: "Name your top unit." }]}
               >
-                <Input
-                  placeholder="Kenya"
-                  onChange={(e) => {
-                    const { value } = e.target;
-                    setPreview((p) => ({ ...p, root: value }));
-                  }}
-                />
+                <Input placeholder="Kenya" />
               </Form.Item>
 
               <Alert
@@ -210,13 +203,13 @@ const Configure = () => {
               >
                 <div>
                   <Tag>Level 0</Tag>
-                  <strong>{preview.level0 || "—"}</strong>
+                  <strong>{level0Name || "—"}</strong>
                 </div>
                 <div style={{ marginTop: 4 }}>
                   <Text type="secondary" style={{ marginRight: 8 }}>
                     └ top unit
                   </Text>
-                  <strong>{preview.root || "—"}</strong>
+                  <strong>{rootUnitName || "—"}</strong>
                 </div>
               </div>
 
