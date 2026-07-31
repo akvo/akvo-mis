@@ -1,6 +1,7 @@
 from django.test.utils import override_settings
 from django.urls import NoReverseMatch, reverse
 
+from api.v1.v1_profile.models import Role
 from api.v1.v1_users.models import Organisation
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -12,7 +13,28 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
         tenant["org"] = Organisation.objects.create(
             name=f"{sub}-org", tenant=tenant["tenant"]
         )
+        tenant["role"] = Role.objects.create(
+            name=f"{sub}-role", administration_level=tenant["level"]
+        )
         return tenant
+
+    def test_role_options_exclude_other_tenant(self):
+        # The role picker on the add-user screen. A role belongs to its
+        # level's tenant, so offering every role lets one workspace's admin
+        # see — and assign — another's.
+        res = self.client.get(
+            "/api/v1/user/roles", **self.auth(self.a["user"])
+        )
+        self.assertEqual(res.status_code, 200)
+        labels = [r["label"] for r in res.json()]
+        self.assertIn(self.a["role"].name, labels)
+        self.assertNotIn(self.b["role"].name, labels)
+
+    def test_role_options_require_a_session(self):
+        # It carried no permission_classes, so DRF's AllowAny default made
+        # every tenant's roles readable without a credential at all.
+        res = self.client.get("/api/v1/user/roles")
+        self.assertEqual(res.status_code, 401)
 
     def test_user_list_excludes_other_tenant(self):
         res = self.client.get("/api/v1/users", **self.auth(self.a["user"]))

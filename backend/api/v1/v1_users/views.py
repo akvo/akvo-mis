@@ -818,8 +818,14 @@ def list_users(request, version):
     summary="Get list of roles",
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_user_roles(request, version):
-    roles = Role.objects.order_by("administration_level__level").all()
+    # A role belongs to its level's tenant. Unscoped, this offered every
+    # workspace's roles — and without permission_classes DRF's AllowAny
+    # default served them to callers with no credential at all.
+    roles = Role.objects.for_user(request.user).order_by(
+        "administration_level__level"
+    )
     data = RoleOptionSerializer(
         instance=roles,
         many=True,
