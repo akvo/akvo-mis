@@ -1,12 +1,6 @@
 import "./App.scss";
-import React, { useCallback, useContext, useEffect, useState } from "react";
-import {
-  Route,
-  Routes,
-  Navigate,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import React, { useContext, useEffect, useState } from "react";
+import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   Home,
   Login,
@@ -69,28 +63,17 @@ import { reloadData, fetchPublishedForms } from "./util/form";
 import { fetchLevels } from "./util/level";
 import { ability, AbilityContext } from "./components/can";
 
+// Session validity is not decided here. Two authorities already settle it and
+// neither can be poisoned by client state: the browser drops AUTH_TOKEN of its
+// own accord when the expiry the server set passes, and the API answers 401 on
+// a token that is no longer good — which the bootstrap below turns into a
+// sign-out. This component used to consult a third, JS-written `expiration_time`
+// cookie, which was written with no path and so bound itself to whichever page
+// happened to write it. A copy under one path shadowed the value at "/" on
+// read, so a single expired session locked the account out permanently: every
+// later login wrote a fresh expiry that could never be seen.
 const Private = ({ element: Element, alias }) => {
-  const [cookies] = useCookies(["expiration_time"]);
   const ability = useContext(AbilityContext);
-
-  const navigate = useNavigate();
-
-  const checkExpires = useCallback(() => {
-    const now = new Date();
-    const end = new Date(cookies?.expiration_time);
-    if (now > end) {
-      eraseCookieFromAllPaths("AUTH_TOKEN");
-      store.update((s) => {
-        s.isLoggedIn = false;
-        s.user = null;
-      });
-      navigate("/login");
-    }
-  }, [navigate, cookies?.expiration_time]);
-
-  useEffect(() => {
-    checkExpires();
-  }, [checkExpires]);
 
   const { user: authUser } = store.useState((state) => state);
   if (authUser) {
@@ -432,8 +415,15 @@ const App = () => {
             console.error(err);
           });
       } else if (!cookies.AUTH_TOKEN) {
+        // Deliberately does not erase anything. `cookies` is react-cookie's
+        // cached snapshot, which refreshes only when a cookie is written
+        // through that instance — a cookie the *server* sets in a Set-Cookie
+        // header never updates it. So this branch runs right after login and
+        // activation, believing the token is missing while it is sitting in
+        // document.cookie, and an erase here deletes the session that was
+        // just established. Erasing a cookie you think is already absent can
+        // only be a no-op or a mistake.
         setLoading(false);
-        eraseCookieFromAllPaths("AUTH_TOKEN");
       }
     } else {
       setLoading(false);
@@ -441,12 +431,22 @@ const App = () => {
   }, [authUser, isLoggedIn, cookies, notify]);
 
   useEffect(() => {
-    if (isLoggedIn && !public_state) {
-      config.fn.administration(authUser.administration.id).then((res) => {
-        store.update((s) => {
-          s.administration = [res];
+    // A workspace that has been activated but not yet configured owns no root
+    // administration, so the profile carries an `administration` with no id.
+    // Reading `.id` blindly produced a GET /administration/undefined that
+    // 404'd and rejected with nobody listening.
+    const administrationId = authUser?.administration?.id;
+    if (isLoggedIn && !public_state && administrationId) {
+      config.fn
+        .administration(administrationId)
+        .then((res) => {
+          store.update((s) => {
+            s.administration = [res];
+          });
+        })
+        .catch((err) => {
+          console.error("Could not resolve the user's administration", err);
         });
-      });
     }
   }, [authUser, isLoggedIn, public_state]);
 

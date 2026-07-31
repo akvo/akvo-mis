@@ -5,7 +5,10 @@ import { UserOutlined } from "@ant-design/icons";
 import { FaChevronDown } from "react-icons/fa";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { config, store, uiText } from "../../lib";
-import { eraseCookieFromAllPaths } from "../../util/date";
+import {
+  eraseCookieFromAllPaths,
+  clearLegacySessionExpiry,
+} from "../../util/date";
 import { getForms } from "../../util/form";
 import { listVisualizations } from "../../config/visualizations";
 
@@ -29,6 +32,7 @@ const Header = ({ className = "header", ...props }) => {
 
   const signOut = useCallback(async () => {
     eraseCookieFromAllPaths("AUTH_TOKEN");
+    clearLegacySessionExpiry();
     store.update((s) => {
       s.isLoggedIn = false;
       s.user = null;

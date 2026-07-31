@@ -23,6 +23,31 @@ export const timeDiffHours = (last_activity) => {
   return duration.asHours();
 };
 
+// Clears the retired `expiration_time` cookie, including copies bound to paths
+// other than the current one — which `eraseCookieFromAllPaths` cannot reach,
+// since it only walks the path of the page it is called from. Nothing reads
+// the cookie any more, but a browser wedged by an old build keeps one until
+// something removes it, so sign-in sweeps the paths the app can produce.
+export const clearLegacySessionExpiry = () => {
+  const paths = [
+    "/",
+    "/login",
+    "/register",
+    "/activate",
+    "/configure",
+    "/control-center",
+    "/downloads",
+    "/settings",
+    "/reports",
+    "/profile",
+  ];
+  paths.forEach((path) => {
+    document.cookie = `expiration_time=; path=${path}; expires=Thu, 01-Jan-1970 00:00:01 GMT`;
+  });
+  // And the bare form, for a copy stored with no path attribute at all.
+  document.cookie = "expiration_time=; expires=Thu, 01-Jan-1970 00:00:01 GMT";
+};
+
 export const eraseCookieFromAllPaths = (name) => {
   var pathBits = location.pathname.split("/");
   var pathCurrent = " path=";

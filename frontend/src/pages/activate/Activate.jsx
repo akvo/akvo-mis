@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import "../login/style.scss";
 import { Row, Col, Button, Form, Input, Spin, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useCookies } from "react-cookie";
 import { api, store } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { reloadData } from "../../util/form";
+import { clearLegacySessionExpiry } from "../../util/date";
 
 const { Title, Text } = Typography;
 
@@ -16,17 +16,15 @@ const { Title, Text } = Typography;
 const Activate = () => {
   const { token } = useParams();
   const navigate = useNavigate();
-  const [, setCookie] = useCookies(["expiration_time"]);
   const [verified, setVerified] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const { notify } = useNotification();
 
-  // Fire exactly once. `setCookie` and `navigate` are not guaranteed to keep
-  // their identity between renders, so an effect that merely lists them as
-  // dependencies re-runs when this component sets its own state — which here
-  // would mean POSTing the activation again on every render.
+  // Fire exactly once. Listing dependencies is not enough on its own: an
+  // effect that re-runs when this component sets its own state would POST the
+  // activation again on every render.
   const started = useRef(false);
   useEffect(() => {
     if (started.current) {
@@ -41,7 +39,7 @@ const Activate = () => {
       (res) => {
         // Same session shape as login, so the app is fully signed in.
         api.setToken(res.data.token);
-        setCookie("expiration_time", res.data?.expiration_time);
+        clearLegacySessionExpiry();
         store.update((s) => {
           s.isLoggedIn = true;
           s.selectedForm = null;
@@ -54,7 +52,7 @@ const Activate = () => {
         setFailed(true);
       }
     );
-  }, [token, setCookie]);
+  }, [token]);
 
   const onResend = (values) => {
     setResending(true);
