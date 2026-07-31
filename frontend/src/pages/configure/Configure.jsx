@@ -82,7 +82,7 @@ const Configure = () => {
         <Row className="wrapper" align="middle">
           <Col span={24} className="right-side">
             <div
-              className="login-form-container"
+              className="login-form-container wide"
               style={{ textAlign: "center" }}
             >
               <div style={{ fontSize: 46, lineHeight: 1 }}>🎉</div>
@@ -116,10 +116,16 @@ const Configure = () => {
     <div id="login">
       <Row className="wrapper" align="middle">
         <Col span={24} className="right-side">
-          <div className="login-form-container">
+          <div className="login-form-container wide">
+            {/* Labels sit under their dots rather than beside them: four
+                steps beside their dots truncate ("Configu…") at any width
+                this card can reasonably take. `responsive` is off so the
+                indicator cannot flip to a full vertical stack mid-layout. */}
             <Steps
               size="small"
               current={2}
+              responsive={false}
+              labelPlacement="vertical"
               style={{ marginBottom: 28 }}
               items={[
                 { title: "Sign up" },
