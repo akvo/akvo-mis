@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import axios from "axios";
 import Levels from "../Levels";
@@ -50,6 +51,26 @@ describe("Levels management", () => {
     expect(screen.queryByText(/can no longer be added/i)).toBeNull();
     // Only the deepest tier offers a delete.
     expect(screen.getAllByRole("button", { name: /Delete/i })).toHaveLength(1);
+  });
+
+  test("treats a name of only spaces as no name at all", async () => {
+    mockLoad(1);
+    renderLevels();
+
+    await screen.findByText("National");
+    const input = screen.getByPlaceholderText(/New level name/i);
+    const add = screen.getByRole("button", { name: /Add Level/i });
+
+    expect(add).toBeDisabled();
+    await userEvent.type(input, "   ");
+    // Still disabled: the server trims and would answer 400, so letting the
+    // click through would spend a round-trip to say what is visible here.
+    expect(add).toBeDisabled();
+
+    await userEvent.type(input, "Ward");
+    await waitFor(() => {
+      expect(add).toBeEnabled();
+    });
   });
 
   test("freezes add and delete once units exist below root", async () => {

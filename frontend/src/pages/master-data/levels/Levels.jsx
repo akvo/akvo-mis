@@ -88,16 +88,30 @@ const Levels = () => {
     [fetchData, rejected]
   );
 
+  // Both handlers trim before sending and refuse a blank result. DRF trims
+  // too and would answer 400, so this is not the validation — it just keeps
+  // a name of spaces from costing a round-trip and a generic error toast.
+  // The `saving` guard is what the buttons already get for free from antd,
+  // which swallows clicks while `loading`; Enter has no such protection, and
+  // two of them in quick succession is a real double-submit.
   const handleOnAdd = () => {
-    return mutate(async () => {
-      await api.post("levels-management", { name: newName });
+    const name = newName.trim();
+    if (!name || saving) {
+      return;
+    }
+    mutate(async () => {
+      await api.post("levels-management", { name });
       setNewName("");
     });
   };
 
   const handleOnRename = (record) => {
-    return mutate(async () => {
-      await api.put(`levels-management/${record.id}`, { name: editingName });
+    const name = editingName.trim();
+    if (!name || saving) {
+      return;
+    }
+    mutate(async () => {
+      await api.put(`levels-management/${record.id}`, { name });
       setEditingId(null);
     });
   };
@@ -151,6 +165,7 @@ const Levels = () => {
                 shape="round"
                 type="primary"
                 loading={saving}
+                disabled={!editingName.trim()}
                 onClick={() => handleOnRename(record)}
               >
                 {text.saveButton}
@@ -239,7 +254,7 @@ const Levels = () => {
                 icon={<PlusOutlined />}
                 onClick={handleOnAdd}
                 loading={saving}
-                disabled={frozen || !newName}
+                disabled={frozen || !newName.trim()}
               >
                 {text.addLevel}
               </Button>

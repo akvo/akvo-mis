@@ -3,6 +3,7 @@ from typing import cast
 from wsgiref.util import FileWrapper
 from django.contrib.admin.sites import site
 from django.core.handlers.wsgi import WSGIRequest
+from django.db import IntegrityError, transaction
 from django.db.models import Max, ProtectedError, Q
 from django.contrib.admin.utils import get_deleted_objects
 from django.http.response import HttpResponse
@@ -548,7 +549,23 @@ class LevelViewSet(ModelViewSet):
             return self._rejected(
                 "Levels cannot be added once administrative units exist"
             )
-        return super().create(request, *args, **kwargs)
+        try:
+            # The savepoint is not optional: an IntegrityError caught
+            # without one leaves the connection unusable for the rest of
+            # the transaction, so the 400 below could not be built if a
+            # transaction were ever open around the request.
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            # perform_create reads the current maximum and writes max + 1
+            # without a lock, so two requests in flight together both pick
+            # the same depth and the loser trips unique_level_per_tenant.
+            # Locking the table for a screen a tenant uses once during
+            # onboarding would be the wrong trade; telling the caller to
+            # look again is enough.
+            return self._rejected(
+                "Another level was added at the same time; reload and retry"
+            )
 
     def perform_create(self, serializer):
         # Append at the tenant's max + 1; a tenant with no levels starts at 0.

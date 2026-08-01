@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.test import TestCase
 from django.test.utils import override_settings
 
 from api.v1.v1_profile.constants import DataAccessTypes
 from api.v1.v1_profile.models import Administration, Levels, Role
+from api.v1.v1_profile.views import LevelViewSet
 from api.v1.v1_users.models import SystemUser, Tenant
 
 URL = "/api/v1/levels-management"
@@ -77,6 +80,22 @@ class LevelManagementTestCase(TestCase):
         self.assertEqual(res.status_code, 200)
         self.a["level0"].refresh_from_db()
         self.assertEqual(self.a["level0"].name, "Country")
+
+    def test_add_losing_a_race_is_rejected_rather_than_a_server_error(self):
+        # Two adds in flight together both read the same maximum and both
+        # write max + 1; the loser hits unique_level_per_tenant. Freezing
+        # the read at a stale value reproduces the loser's view exactly,
+        # without needing a second connection to race against.
+        Levels.objects.create(
+            name="Province", level=1, tenant=self.a["tenant"]
+        )
+        with patch.object(LevelViewSet, "_deepest_level", return_value=0):
+            res = self.client.post(
+                URL, {"name": "District"}, content_type="application/json",
+                **self._auth(self.a["admin"]),
+            )
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(Levels.objects.filter(name="District").exists())
 
     def test_add_frozen_once_units_exist_below_root(self):
         self._unit_below_root(self.a)
