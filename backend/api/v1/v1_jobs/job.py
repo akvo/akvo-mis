@@ -1165,8 +1165,28 @@ def validate_excel_result(task):
         job.save()
 
 
-def handle_administrations_bulk_upload(filename, user_id, upload_time):
+def set_bulk_upload_job(job_id, job_status, result=None):
+    """Record the outcome on the Jobs row, if the caller made one.
+
+    Every exit from the upload handler goes through here. The row is
+    updated by queryset rather than loaded and saved so that a status
+    written by one path cannot be overwritten by a stale copy from
+    another. `job_id` is optional because the handler is also called
+    directly by tests and by the older path that had no job row.
+    """
+    if not job_id:
+        return
+    fields = {"status": job_status}
+    if result:
+        fields["result"] = result
+    Jobs.objects.filter(pk=job_id).update(**fields)
+
+
+def handle_administrations_bulk_upload(
+    filename, user_id, upload_time, job_id=None
+):
     user = SystemUser.objects.get(id=user_id)
+    set_bulk_upload_job(job_id, JobStatus.on_progress)
     storage.download(f"upload/{filename}")
     file_path = f"./tmp/{filename}"
     errors = validate_administrations_bulk_upload(
@@ -1195,6 +1215,7 @@ def handle_administrations_bulk_upload(filename, user_id, upload_time):
             },
             type=EmailTypes.upload_error,
         )
+        set_bulk_upload_job(job_id, JobStatus.failed)
         return
     df = pd.read_excel(file_path, sheet_name="data")
     email_context = {
@@ -1225,10 +1246,12 @@ def handle_administrations_bulk_upload(filename, user_id, upload_time):
             path=error_file,
             content_type="text/csv",
         )
+        set_bulk_upload_job(job_id, JobStatus.failed, result=error_file)
         return
     seed_administration_data(file_path, tenant=user.tenant)
     generate_sqlite(Administration)
     send_email(context=email_context, type=EmailTypes.administration_upload)
+    set_bulk_upload_job(job_id, JobStatus.done)
 
 
 def handle_master_data_bulk_upload_failure(task: Task):
