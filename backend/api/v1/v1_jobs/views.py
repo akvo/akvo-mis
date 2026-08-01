@@ -40,6 +40,10 @@ from api.v1.v1_jobs.serializers import (
 )
 from api.v1.v1_profile.models import Administration
 from utils import storage
+from utils.bulk_upload_gate import (
+    bulk_upload_ready,
+    bulk_upload_not_ready_response,
+)
 from utils.custom_serializer_fields import validate_serializers_message
 
 
@@ -350,6 +354,11 @@ def upload_excel(request, form_id, version):
 @parser_classes([MultiPartParser])
 @permission_classes([IsAuthenticated])
 def upload_bulk_administrators(request, version):
+    # Ahead of the file check: a file uploaded against an undefined
+    # hierarchy has nowhere to land, and refusing before the upload saves
+    # storing one.
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     serializer = UploadExcelSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(

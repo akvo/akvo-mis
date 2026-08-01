@@ -54,6 +54,10 @@ from utils.email_helper import send_email, EmailTypes
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.custom_generator import administration_csv_delete
 from utils.custom_permissions import IsSuperAdmin
+from utils.bulk_upload_gate import (
+    bulk_upload_ready,
+    bulk_upload_not_ready_response,
+)
 
 
 @extend_schema(
@@ -293,6 +297,8 @@ class EntityDataViewSet(ModelViewSet):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_administrations_template(request: Request, version):
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     attributes = clean_array_param(
         request.query_params.get("attributes", ""), maybe_int
     )
@@ -421,6 +427,11 @@ def export_entity_data(request: Request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_entities_data_template(request: Request, version):
+    # Before the payload check: the entities template carries the same
+    # level columns, so an undefined hierarchy makes it as empty as the
+    # administration one regardless of which entity types were asked for.
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     serializer = DownloadEntityDataRequestSerializer(data=request.GET)
     if not serializer.is_valid():
         return Response(
