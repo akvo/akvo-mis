@@ -34,9 +34,20 @@ def seed_administration_data(io_file, tenant=None):
         tenant,
     )
     records = df.to_dict('records')
+    # A tenant has exactly one root, created when it configured its
+    # project, so the level-0 column has only one correct value and the
+    # operator is not asked to repeat it on every row. A blank there
+    # means the root; the validator rejects any other name.
+    root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).first()
+    level_columns = list(level_map.items())
     for row in records:
         administration_data = []
-        for col, level in level_map.items():
+        for idx, (col, level) in enumerate(level_columns):
+            if idx == 0 and bool(pd.isnull(row[col])) and root:
+                administration_data.append((level, root.name, None))
+                continue
             if bool(pd.isnull(row[col])):
                 break
             administration_code = None
@@ -54,7 +65,11 @@ def seed_administration_data(io_file, tenant=None):
             administration_data, tenant=tenant
         )
         if not target_administration:
-            break
+            # Skip the row, do not abandon the file. This used to break,
+            # so one blank row silently dropped every row after it and
+            # the upload still reported success. Validation rejects such
+            # a file first; this is the backstop behind it.
+            continue
         attribute_data = []
         for col, attribute in attribute_map.items():
             if bool(pd.isnull(row[col])):
@@ -131,7 +146,7 @@ def map_column_model(columns, model: Type[Model], tenant=None):
 
 # [[ VALIDATOR ]]
 
-def validate_administrations_bulk_upload(io_file):
+def validate_administrations_bulk_upload(io_file, tenant=None):
     excel_file = pd.ExcelFile(io_file)
     if "data" not in excel_file.sheet_names:
         return [{
@@ -152,7 +167,10 @@ def validate_administrations_bulk_upload(io_file):
     # headers by `level`). A bare .all() relies on DB heap order, which is
     # unspecified and makes validate_level_headers compare mismatched
     # positions under --parallel/--shuffle (flaky spurious header errors).
-    levels = list(Levels.objects.order_by('level'))
+    # Scoped as well as ordered: level numbers repeat across tenants, so
+    # counting every tenant's levels splits the spreadsheet's columns at
+    # the wrong index and compares each header against the wrong level.
+    levels = list(Levels.objects.filter(tenant=tenant).order_by('level'))
     level_count = len(levels)
     excel_cols = list(itertools.islice(
         generate_excel_columns(),
@@ -164,8 +182,57 @@ def validate_administrations_bulk_upload(io_file):
     attribute_errors, attribute_results = validate_attribute_headers(
             attributes, headers[level_count:], excel_cols[level_count:])
     errors = errors + attribute_errors
-    return errors if errors \
-        else validate_administration_attribute_values(df, attribute_results)
+    if errors:
+        # Row checks read columns by position, so they are meaningless
+        # until the headers are known to line up.
+        return errors
+    return validate_administration_rows(
+        df, headers[:level_count], excel_cols[:level_count], tenant
+    ) + validate_administration_attribute_values(df, attribute_results)
+
+
+def validate_administration_rows(df, level_headers, excel_cols, tenant):
+    """Reject blank rows and rows that disagree about the root.
+
+    A tenant has exactly one root unit, created when it configured its
+    project, and the template pre-fills the level-0 column with that
+    name. A row naming something else would otherwise ask the seeder for
+    a second root, which the hierarchy does not allow.
+    """
+    root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).first()
+    root_name = root.name if root else None
+    errors = []
+    for idx, row in df.iterrows():
+        # +2: one for the header row, one because spreadsheets count
+        # from 1.
+        cell = f"{excel_cols[0]}{idx + 2}"
+        if all(pd.isnull(row[header]) for header in level_headers):
+            errors.append({
+                'error': ExcelError.value,
+                'error_message':
+                    ValidationText.administration_empty_row.value,
+                'cell': cell,
+            })
+            continue
+        # A blank level-0 cell is the root by convention, so only a cell
+        # that names something else is an error.
+        root_cell = row[level_headers[0]]
+        if (
+            root_name
+            and not pd.isnull(root_cell)
+            and str(root_cell).strip() != root_name
+        ):
+            errors.append({
+                'error': ExcelError.value,
+                'error_message':
+                    ValidationText.administration_root_mismatch.value.format(
+                        root_name
+                    ),
+                'cell': cell,
+            })
+    return errors
 
 
 def validate_administration_attribute_values(df, attribute_column_map):

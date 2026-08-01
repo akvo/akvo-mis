@@ -1169,7 +1169,9 @@ def handle_administrations_bulk_upload(filename, user_id, upload_time):
     user = SystemUser.objects.get(id=user_id)
     storage.download(f"upload/{filename}")
     file_path = f"./tmp/{filename}"
-    errors = validate_administrations_bulk_upload(file_path)
+    errors = validate_administrations_bulk_upload(
+        file_path, tenant=user.tenant
+    )
     xlsx = pd.ExcelFile(file_path)
     if "data" not in xlsx.sheet_names:
         logger.error(f"Sheet 'data' not found in {filename}")
