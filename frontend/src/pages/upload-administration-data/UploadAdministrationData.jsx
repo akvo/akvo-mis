@@ -36,8 +36,9 @@ const UploadAdministrationData = () => {
   const levels = store.useState((s) => s.levels);
   const [fileName, setFileName] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showFailure, setShowFailure] = useState(false);
+  // One of null / "done" / "failed" — the job's own vocabulary. Two
+  // booleans could encode a fourth state that means nothing.
+  const [outcome, setOutcome] = useState(null);
   const { notify } = useNotification();
   const navigate = useNavigate();
   const { active: activeLang } = store.useState((s) => s.language);
@@ -108,10 +109,8 @@ const UploadAdministrationData = () => {
           setUploading(false);
           if (jobStatus === "done") {
             notify({ type: "success", message: text.fileUploadSuccess });
-            setShowSuccess(true);
-            return;
           }
-          setShowFailure(true);
+          setOutcome(jobStatus);
         })
         .catch(() => {
           // A single failed poll says nothing about the import — the
@@ -145,7 +144,7 @@ const UploadAdministrationData = () => {
     formData.append("file", file);
     formData.append("is_update", false);
     setUploading(true);
-    setShowFailure(false);
+    setOutcome(null);
     api
       .post(`upload/bulk-administrations`, formData)
       .then((res) => {
@@ -187,7 +186,7 @@ const UploadAdministrationData = () => {
       </div>
       <div className="table-section">
         <div className="table-wrapper">
-          {showSuccess && (
+          {outcome === "done" && (
             <div
               style={{ padding: 0, minHeight: "40vh" }}
               bodystyle={{ padding: 0 }}
@@ -200,7 +199,7 @@ const UploadAdministrationData = () => {
                   <Button
                     type="primary"
                     key="back-button"
-                    onClick={() => setShowSuccess(false)}
+                    onClick={() => setOutcome(null)}
                     shape="round"
                   >
                     {text.uploadAnotherFileLabel}
@@ -218,7 +217,7 @@ const UploadAdministrationData = () => {
               />
             </div>
           )}
-          {showFailure && (
+          {outcome === "failed" && (
             <div style={{ padding: 0, minHeight: "40vh" }}>
               <Result
                 status="error"
@@ -229,7 +228,7 @@ const UploadAdministrationData = () => {
                   <Button
                     type="primary"
                     key="back-button"
-                    onClick={() => setShowFailure(false)}
+                    onClick={() => setOutcome(null)}
                     shape="round"
                   >
                     {text.uploadAnotherFileLabel}
@@ -238,7 +237,7 @@ const UploadAdministrationData = () => {
               />
             </div>
           )}
-          {!showSuccess && !showFailure && (
+          {!outcome && (
             <>
               {!uploadReady && (
                 <Alert
@@ -285,7 +284,7 @@ const UploadAdministrationData = () => {
                           {text.downloadHere}
                         </Link>
                       ) : (
-                        <span>{text.downloadHere}</span>
+                        text.downloadHere
                       )}
                     </p>
                   </Space>

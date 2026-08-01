@@ -195,9 +195,10 @@ def validate_administration_rows(df, level_headers, excel_cols, tenant):
     """Reject blank rows and rows that disagree about the root.
 
     A tenant has exactly one root unit, created when it configured its
-    project, and the template pre-fills the level-0 column with that
-    name. A row naming something else would otherwise ask the seeder for
-    a second root, which the hierarchy does not allow.
+    project. The template deliberately leaves the level-0 column empty,
+    so a blank cell there means that root and only a cell naming
+    something else is an error — it would otherwise ask the seeder for a
+    second root, which the hierarchy does not allow.
     """
     root = Administration.objects.filter(
         tenant=tenant, parent__isnull=True

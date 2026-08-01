@@ -1166,16 +1166,13 @@ def validate_excel_result(task):
 
 
 def set_bulk_upload_job(job_id, job_status, result=None):
-    """Record the outcome on the Jobs row, if the caller made one.
+    """Record the outcome on the Jobs row.
 
     Every exit from the upload handler goes through here. The row is
     updated by queryset rather than loaded and saved so that a status
     written by one path cannot be overwritten by a stale copy from
-    another. `job_id` is optional because the handler is also called
-    directly by tests and by the older path that had no job row.
+    another.
     """
-    if not job_id:
-        return
     fields = {"status": job_status}
     if result:
         fields["result"] = result
@@ -1183,7 +1180,7 @@ def set_bulk_upload_job(job_id, job_status, result=None):
 
 
 def handle_administrations_bulk_upload(
-    filename, user_id, upload_time, job_id=None
+    filename, user_id, upload_time, job_id
 ):
     user = SystemUser.objects.get(id=user_id)
     set_bulk_upload_job(job_id, JobStatus.on_progress)

@@ -2,8 +2,8 @@ import pandas as pd
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from api.v1.v1_profile.models import Administration, Entity, Levels
-from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_profile.models import Entity
+from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
 from utils.upload_administration import (
     generate_administration_excel,
     generate_entities_data_excel,
@@ -11,7 +11,7 @@ from utils.upload_administration import (
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class TemplateTenantScopingTestCase(TestCase):
+class TemplateTenantScopingTestCase(TestCase, TenantTestHelperMixin):
     """Two tenants whose hierarchies are named differently.
 
     Every level lookup in the generators read the whole table, so each
@@ -20,28 +20,13 @@ class TemplateTenantScopingTestCase(TestCase):
     """
 
     def setUp(self):
-        self.acme = self._tenant("acme", ["Country", "Province"], "Kenya")
-        self.beta = self._tenant("beta", ["State", "City"], "Uganda")
-
-    def _tenant(self, sub, level_names, root_name):
-        tenant = Tenant.objects.create(subdomain=sub)
-        levels = [
-            Levels.objects.create(name=name, level=idx, tenant=tenant)
-            for idx, name in enumerate(level_names)
-        ]
-        root = Administration.objects.create(
-            parent=None, level=levels[0], name=root_name, tenant=tenant
+        self.acme = self.create_tenant(
+            "acme", ["Country", "Province"], "Kenya"
         )
-        admin = SystemUser.objects.create_superuser(
-            email=f"a@{sub}.org", password="Secret#Pass123",
-            first_name="A", last_name="A", tenant=tenant,
-        )
-        return {
-            "tenant": tenant, "levels": levels, "root": root, "admin": admin,
-        }
+        self.beta = self.create_tenant("beta", ["State", "City"], "Uganda")
 
     def test_administration_template_carries_only_its_own_levels(self):
-        filepath = generate_administration_excel(self.acme["admin"])
+        filepath = generate_administration_excel(self.acme.admin)
         headers = list(pd.read_excel(filepath, sheet_name="data"))
 
         joined = " ".join(headers)
@@ -59,14 +44,14 @@ class TemplateTenantScopingTestCase(TestCase):
         # blank there — and a blank level-0 cell already means the root.
         # It would also put a NaN row under every attribute column,
         # turning integer attributes into "1.0" on upload.
-        filepath = generate_administration_excel(self.acme["admin"])
+        filepath = generate_administration_excel(self.acme.admin)
         df = pd.read_excel(filepath, sheet_name="data")
         self.assertEqual(df.shape[0], 0)
 
     def test_each_tenant_gets_its_own_template(self):
         beta_headers = list(
             pd.read_excel(
-                generate_administration_excel(self.beta["admin"]),
+                generate_administration_excel(self.beta.admin),
                 sheet_name="data",
             )
         )
@@ -76,7 +61,7 @@ class TemplateTenantScopingTestCase(TestCase):
 
     def test_entities_template_carries_only_its_own_levels(self):
         Entity.objects.create(name="School")
-        filepath = generate_entities_data_excel(self.acme["admin"])
+        filepath = generate_entities_data_excel(self.acme.admin)
         headers = list(pd.read_excel(filepath, sheet_name="School"))
 
         self.assertEqual(headers, ["Name", "Code", "Country", "Province"])

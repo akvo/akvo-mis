@@ -3,11 +3,6 @@ from rest_framework.response import Response
 
 from api.v1.v1_profile.models import Levels
 
-BULK_UPLOAD_NOT_READY = (
-    "Define your administrative levels first: name the top level and add "
-    "at least one level below it."
-)
-
 
 def bulk_upload_ready(user):
     """Is this tenant's hierarchy defined enough to upload units into?
@@ -27,6 +22,7 @@ def bulk_upload_ready(user):
 
 def bulk_upload_not_ready_response():
     return Response(
-        {"message": BULK_UPLOAD_NOT_READY},
+        {"message": "Define your administrative levels first: name the top "
+                    "level and add at least one level below it."},
         status=status.HTTP_400_BAD_REQUEST,
     )

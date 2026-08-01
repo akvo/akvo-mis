@@ -5,19 +5,21 @@ import pandas as pd
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_jobs.constants import JobStatus, JobTypes
 from api.v1.v1_jobs.job import handle_administrations_bulk_upload
 from api.v1.v1_jobs.models import Jobs
-from api.v1.v1_profile.models import Administration, Levels
-from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_profile.models import Administration
+from api.v1.v1_profile.tests.mixins import (
+    TenantTestHelperMixin,
+    write_administration_excel,
+)
 
 UPLOAD_URL = "/api/v1/upload/bulk-administrations"
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class BulkUploadJobTestCase(TestCase):
+class BulkUploadJobTestCase(TestCase, TenantTestHelperMixin):
     """The upload is asynchronous, so acceptance is not success.
 
     Before this, the only record of an import was an emailed CSV that
@@ -26,46 +28,25 @@ class BulkUploadJobTestCase(TestCase):
     """
 
     def setUp(self):
-        self.tenant = Tenant.objects.create(subdomain="acme")
-        self.levels = [
-            Levels.objects.create(name=name, level=idx, tenant=self.tenant)
-            for idx, name in enumerate(["Country", "Province"])
-        ]
-        self.root = Administration.objects.create(
-            parent=None, level=self.levels[0], name="Kenya",
-            tenant=self.tenant,
-        )
-        self.admin = SystemUser.objects.create_superuser(
-            email="a@acme.org", password="Secret#Pass123",
-            first_name="A", last_name="A", tenant=self.tenant,
+        self.acme = self.create_tenant(
+            "acme", ["Country", "Province"], "Kenya"
         )
 
     def _auth(self):
-        token = RefreshToken.for_user(self.admin).access_token
-        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+        return self.bearer(self.acme.admin)
 
     def _write_file(self, filename, rows):
-        columns = [
-            col
-            for lvl in self.levels
-            for col in [f"{lvl.id}|{lvl.name}", f"{lvl.id}|{lvl.name} Code"]
-        ]
-        named = [{columns[0]: root, columns[2]: child} for root, child in rows]
         os.makedirs("./tmp", exist_ok=True)
-        path = f"./tmp/{filename}"
-        writer = pd.ExcelWriter(path, engine="xlsxwriter")
-        pd.DataFrame(named, columns=columns).to_excel(
-            writer, sheet_name="data", index=False
+        return write_administration_excel(
+            self.acme.levels, rows, path=f"./tmp/{filename}"
         )
-        writer.save()
-        return path
 
     def _run_handler(self, filename, job):
         with patch("api.v1.v1_jobs.job.storage.download"), patch(
             "api.v1.v1_jobs.job.send_email"
         ), patch("api.v1.v1_jobs.job.generate_sqlite"):
             handle_administrations_bulk_upload(
-                filename, self.admin.id, timezone.now(), job_id=job.id
+                filename, self.acme.admin.id, timezone.now(), job.id
             )
         job.refresh_from_db()
         return job
@@ -73,7 +54,7 @@ class BulkUploadJobTestCase(TestCase):
     def _pending_job(self):
         return Jobs.objects.create(
             type=JobTypes.seed_administration_data,
-            user=self.admin,
+            user=self.acme.admin,
             status=JobStatus.pending,
             info={"file": "upload.xlsx"},
         )
@@ -91,7 +72,7 @@ class BulkUploadJobTestCase(TestCase):
 
         job = Jobs.objects.get(type=JobTypes.seed_administration_data)
         self.assertEqual(job.status, JobStatus.pending)
-        self.assertEqual(job.user, self.admin)
+        self.assertEqual(job.user, self.acme.admin)
         # The response already carried the task id, and the existing
         # status endpoint resolves a job by it — so that is the handle
         # the page polls with.
@@ -105,7 +86,7 @@ class BulkUploadJobTestCase(TestCase):
         self.assertEqual(job.status, JobStatus.done)
         self.assertTrue(
             Administration.objects.filter(
-                tenant=self.tenant, name="Nairobi"
+                tenant=self.acme.tenant, name="Nairobi"
             ).exists()
         )
 
@@ -119,7 +100,7 @@ class BulkUploadJobTestCase(TestCase):
         self.assertTrue(job.result)
         self.assertFalse(
             Administration.objects.filter(
-                tenant=self.tenant, name="Nairobi"
+                tenant=self.acme.tenant, name="Nairobi"
             ).exists()
         )
 
