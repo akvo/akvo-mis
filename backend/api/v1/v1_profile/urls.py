@@ -5,6 +5,7 @@ from api.v1.v1_profile.views import (
     AdministrationViewSet,
     EntityDataViewSet,
     EntityViewSet,
+    LevelViewSet,
     RoleViewSet,
     export_administrations_template,
     export_prefilled_administrations_template,
@@ -35,6 +36,18 @@ urlpatterns = [
             }
         ),
         name="role-detail",
+    ),
+    re_path(
+        r"^(?P<version>(v1))/levels-management$",
+        LevelViewSet.as_view({"get": "list", "post": "create"}),
+        name="level-management-list",
+    ),
+    re_path(
+        r"^(?P<version>(v1))/levels-management/(?P<pk>[0-9]+)$",
+        LevelViewSet.as_view(
+            {"get": "retrieve", "put": "update", "delete": "destroy"}
+        ),
+        name="level-management-detail",
     ),
     re_path(
         r"^(?P<version>(v1))/export/administrations-template",
