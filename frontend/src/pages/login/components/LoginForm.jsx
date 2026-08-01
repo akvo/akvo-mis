@@ -2,15 +2,15 @@ import React, { useState, useMemo } from "react";
 import { Form, Input, Button, notification, Alert } from "antd";
 import { Link, useNavigate } from "react-router-dom";
 import { api, store, uiText } from "../../../lib";
-import { useNotification } from "../../../util/hooks";
+import { useNotification, useResendActivation } from "../../../util/hooks";
 import { reloadData } from "../../../util/form";
 
 const LoginForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
-  const [resending, setResending] = useState(false);
   const { notify } = useNotification();
+  const { resend, resending } = useResendActivation();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => {
@@ -61,9 +61,7 @@ const LoginForm = () => {
   };
 
   const onResend = () => {
-    setResending(true);
-    api
-      .post("register/resend-activation", { email: unverifiedEmail })
+    resend(unverifiedEmail)
       .then(() => {
         setUnverifiedEmail(null);
         notify({
@@ -73,9 +71,6 @@ const LoginForm = () => {
       })
       .catch(() => {
         notify({ type: "error", message: "Could not send the email" });
-      })
-      .finally(() => {
-        setResending(false);
       });
   };
 

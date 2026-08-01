@@ -3,7 +3,7 @@ import "../login/style.scss";
 import { Row, Col, Button, Form, Input, Spin, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, store } from "../../lib";
-import { useNotification } from "../../util/hooks";
+import { useNotification, useResendActivation } from "../../util/hooks";
 import { reloadData } from "../../util/form";
 
 const { Title, Text } = Typography;
@@ -17,9 +17,9 @@ const Activate = () => {
   const navigate = useNavigate();
   const [verified, setVerified] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const { notify } = useNotification();
+  const { resend, resending } = useResendActivation();
 
   // Fire exactly once. Listing dependencies is not enough on its own: an
   // effect that re-runs when this component sets its own state would POST the
@@ -53,17 +53,12 @@ const Activate = () => {
   }, [token]);
 
   const onResend = (values) => {
-    setResending(true);
-    api
-      .post("register/resend-activation", { email: values.email })
+    resend(values.email)
       .then(() => {
         setResent(true);
       })
       .catch(() => {
         notify({ type: "error", message: "Could not send the email" });
-      })
-      .finally(() => {
-        setResending(false);
       });
   };
 

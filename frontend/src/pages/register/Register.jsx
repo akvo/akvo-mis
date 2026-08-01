@@ -3,7 +3,7 @@ import "../login/style.scss";
 import { Row, Col, Form, Input, Button, Typography } from "antd";
 import { Link } from "react-router-dom";
 import { api } from "../../lib";
-import { useNotification } from "../../util/hooks";
+import { useNotification, useResendActivation } from "../../util/hooks";
 
 const { Title, Text } = Typography;
 
@@ -17,9 +17,9 @@ const addressSuffix = `.${window.location.host}`;
 // form ends on a confirmation state rather than a redirect.
 const Register = () => {
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
   const [sentTo, setSentTo] = useState(null);
   const { notify } = useNotification();
+  const { resend, resending } = useResendActivation();
 
   const onFinish = (values) => {
     setLoading(true);
@@ -44,9 +44,7 @@ const Register = () => {
   };
 
   const onResend = () => {
-    setResending(true);
-    api
-      .post("register/resend-activation", { email: sentTo })
+    resend(sentTo)
       .then(() => {
         notify({
           type: "success",
@@ -55,9 +53,6 @@ const Register = () => {
       })
       .catch(() => {
         notify({ type: "error", message: "Could not send the email" });
-      })
-      .finally(() => {
-        setResending(false);
       });
   };
 

@@ -253,6 +253,8 @@ EMAIL_BACKEND = environ.get(
     "EMAIL_BACKEND", "django_mailjet.backends.MailjetBackend"
 )
 # Only consulted when EMAIL_BACKEND is an SMTP one; Mailjet ignores them.
+# The defaults are the local Mailpit container, so the compose override only
+# has to switch the backend.
 EMAIL_HOST = environ.get("EMAIL_HOST", "mailpit")
 EMAIL_PORT = int(environ.get("EMAIL_PORT", 1025))
 MAILJET_API_KEY = environ["MAILJET_APIKEY"]
