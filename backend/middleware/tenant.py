@@ -49,8 +49,19 @@ class TenantMiddleware:
             user = self._authenticated_user(request)
             if user is not None and user.tenant_id != request.tenant.id:
                 return JsonResponse(
-                    {"message": "This account belongs to a different "
-                                "workspace"},
+                    {
+                        "message": "This account belongs to a different "
+                                   "workspace",
+                        # We already know both sides of the mismatch, so
+                        # naming the right address turns the frontend's
+                        # dead end into a redirect. The session itself is
+                        # valid — it is only in the wrong place — and
+                        # subdomains are guessable anyway, so this
+                        # discloses nothing the URL bar does not.
+                        "subdomain": (
+                            user.tenant.subdomain if user.tenant_id else ""
+                        ),
+                    },
                     status=403,
                 )
         return self.get_response(request)

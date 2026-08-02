@@ -45,6 +45,15 @@ class TenantMiddlewareTestCase(TestCase, TenantTestHelperMixin):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_the_403_names_the_right_workspace(self):
+        # Without this the frontend knows only that it is in the wrong
+        # place, not where the right one is — the profile call that
+        # would have told it is the very call being refused.
+        response = self.client.get(
+            PROFILE, HTTP_HOST="beta.app.com", **self.bearer(self.acme.admin)
+        )
+        self.assertEqual(response.json()["subdomain"], "acme")
+
     def test_base_domain_is_not_enforced(self):
         # The signup context belongs to no tenant, so there is nothing to
         # mismatch against — a session reaching it is not a violation.
