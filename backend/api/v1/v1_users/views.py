@@ -70,6 +70,7 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
+from utils.tenant_host import tenant_web_url
 
 
 # A week is long enough to survive a weekend and a spam folder, short
@@ -80,11 +81,18 @@ ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
 def send_activation_email(user):
     # The signed pk is the whole token — no state to store and no row to
     # clean up if the link is never followed. `activate` bounds its age.
+    #
+    # The link points at the registrant's own workspace host, because
+    # everything past it is bound to that host: activation hands back a
+    # session, and that session is only valid there.
     send_email(
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
-            "button_url": f"{WEBDOMAIN}/activate/{signing.dumps(user.pk)}",
+            "button_url": (
+                f"{tenant_web_url(user.tenant)}"
+                f"/activate/{signing.dumps(user.pk)}"
+            ),
         },
     )
 

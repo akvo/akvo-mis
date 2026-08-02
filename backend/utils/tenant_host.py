@@ -9,6 +9,8 @@ With BASE_DOMAIN unset — the default, and what the test suite and any
 single-host deployment run with — every host is the base domain and no
 host resolves to a tenant, so host routing is inert.
 """
+from urllib.parse import urlparse
+
 from django.conf import settings
 
 from api.v1.v1_users.models import Tenant
@@ -48,3 +50,26 @@ def resolve_tenant_from_host(host):
     if not label or "." in label:
         return None
     return Tenant.objects.filter(subdomain=label).first()
+
+
+def tenant_web_url(tenant):
+    """Where this workspace's app lives — for links we send by email.
+
+    An activation link has to land on the workspace's own host, because
+    everything after it (the configuration form, then the app) is
+    enforced to that host. Sending it to the base domain would strand
+    the registrant one click from a login they cannot use.
+
+    `WEBDOMAIN` keeps supplying the scheme and port — which differ
+    between local development and production — while `BASE_DOMAIN`
+    supplies the host. With no base domain or no tenant there is only
+    one address, and it is `WEBDOMAIN` unchanged.
+    """
+    if not settings.BASE_DOMAIN or not tenant:
+        return settings.WEBDOMAIN
+    parsed = urlparse(settings.WEBDOMAIN)
+    port = f":{parsed.port}" if parsed.port else ""
+    return (
+        f"{parsed.scheme or 'https'}://"
+        f"{tenant.subdomain}.{settings.BASE_DOMAIN}{port}"
+    )

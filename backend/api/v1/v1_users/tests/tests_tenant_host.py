@@ -1,7 +1,11 @@
 from django.test import TestCase, override_settings
 
 from api.v1.v1_users.models import Tenant
-from utils.tenant_host import is_base_domain, resolve_tenant_from_host
+from utils.tenant_host import (
+    is_base_domain,
+    resolve_tenant_from_host,
+    tenant_web_url,
+)
 
 
 @override_settings(BASE_DOMAIN="app.com")
@@ -62,3 +66,34 @@ class IsBaseDomainTestCase(TestCase):
         # "testserver" — have exactly one context, and it is tenant-less.
         self.assertTrue(is_base_domain("testserver"))
         self.assertTrue(is_base_domain("anything.example.org"))
+
+
+class TenantWebUrlTestCase(TestCase):
+    """The address an emailed link should point at."""
+
+    def setUp(self):
+        self.acme = Tenant.objects.create(subdomain="acme")
+
+    @override_settings(BASE_DOMAIN="app.com", WEBDOMAIN="https://app.com")
+    def test_workspace_gets_its_own_host(self):
+        self.assertEqual(tenant_web_url(self.acme), "https://acme.app.com")
+
+    @override_settings(
+        BASE_DOMAIN="localapp.test", WEBDOMAIN="http://localhost:3000"
+    )
+    def test_scheme_and_port_come_from_webdomain(self):
+        # Local development runs on a port and on http; only the host
+        # part is the base domain's to decide.
+        self.assertEqual(
+            tenant_web_url(self.acme), "http://acme.localapp.test:3000"
+        )
+
+    @override_settings(BASE_DOMAIN="", WEBDOMAIN="https://mis.example.org")
+    def test_single_host_keeps_its_one_address(self):
+        self.assertEqual(
+            tenant_web_url(self.acme), "https://mis.example.org"
+        )
+
+    @override_settings(BASE_DOMAIN="app.com", WEBDOMAIN="https://app.com")
+    def test_no_tenant_falls_back_to_the_base_domain(self):
+        self.assertEqual(tenant_web_url(None), "https://app.com")

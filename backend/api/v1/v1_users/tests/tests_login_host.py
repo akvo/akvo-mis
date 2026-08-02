@@ -112,6 +112,33 @@ class SingleHostLoginTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(response.status_code, 200)
 
 
+class ProfileSubdomainTestCase(TestCase, TenantTestHelperMixin):
+    """The profile says which address the session belongs to.
+
+    The frontend compares it against the host it is served on; without
+    it, a user on the wrong workspace has nowhere to be redirected to.
+    """
+
+    def test_profile_carries_the_users_own_workspace(self):
+        acme = self.create_tenant("acme", ["Country", "Province"], "Kenya")
+        response = self.client.get(
+            "/api/v1/profile", **self.bearer(acme.admin)
+        )
+        self.assertEqual(response.json()["subdomain"], "acme")
+
+    def test_tenant_less_account_has_no_workspace(self):
+        operator = SystemUser.objects.create_superuser(
+            email="operator@akvo.org",
+            password=TENANT_PASSWORD,
+            first_name="Op",
+            last_name="Erator",
+        )
+        response = self.client.get(
+            "/api/v1/profile", **self.bearer(operator)
+        )
+        self.assertEqual(response.json()["subdomain"], "")
+
+
 @override_settings(BASE_DOMAIN="app.com", ALLOW_TENANT_HEADER=True)
 class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
     """What a visitor may know about a workspace before signing in."""

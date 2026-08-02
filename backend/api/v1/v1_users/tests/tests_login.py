@@ -66,6 +66,9 @@ class LoginUserTestCase(TestCase):
                 # workspace goes to the configuration form, not the
                 # dashboard.
                 "configured",
+                # The address this session belongs to, so the app can
+                # send a user who landed on the wrong host to their own.
+                "subdomain",
                 "token",
                 "invite",
                 "expiration_time",
