@@ -57,6 +57,18 @@ SECRET_KEY = environ["DJANGO_SECRET"]
 DEBUG = True if "DEBUG" in environ else False
 PROD = True if "PROD" in environ else False
 
+# Host-based tenant routing. Unset means single-host: every host is the
+# base domain, nothing resolves to a tenant, and the routing is inert —
+# which is how the test suite and any non-SaaS deployment run.
+BASE_DOMAIN = environ.get("BASE_DOMAIN", "")
+# Let an X-Tenant-Subdomain header stand in for the host. The Django test
+# client cannot vary /etc/hosts, so automated tests need this; nothing in
+# production should, and enabling it there would make the host boundary
+# spoofable by a request header.
+ALLOW_TENANT_HEADER = (
+    environ.get("ALLOW_TENANT_HEADER", "false").lower() == "true" or DEBUG
+)
+
 
 ALLOWED_HOSTS = ["*"]
 
