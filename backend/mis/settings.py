@@ -74,13 +74,6 @@ TESTING = sys.argv[1:2] == ["test"]
 # suite. The tests that exercise host routing opt back in with
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
-# Let an X-Tenant-Subdomain header stand in for the host. The Django test
-# client cannot vary /etc/hosts, so automated tests need this; nothing in
-# production should, and enabling it there would make the host boundary
-# spoofable by a request header.
-ALLOW_TENANT_HEADER = (
-    environ.get("ALLOW_TENANT_HEADER", "false").lower() == "true" or DEBUG
-)
 
 
 ALLOWED_HOSTS = ["*"]

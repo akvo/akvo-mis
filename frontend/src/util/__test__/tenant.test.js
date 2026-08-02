@@ -51,7 +51,7 @@ describe("tenant util", () => {
   test("fetchTenant stores the workspace this host serves", async () => {
     axios.mockResolvedValue({
       status: 200,
-      data: { subdomain: "acme", name: "Kenya", configured: true },
+      data: { subdomain: "acme", name: "Kenya" },
     });
     const tenant = await fetchTenant();
     expect(tenant.name).toBe("Kenya");

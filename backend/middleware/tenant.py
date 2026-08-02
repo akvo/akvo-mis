@@ -16,11 +16,9 @@ With `BASE_DOMAIN` unset the whole thing is inert — every host is the
 base domain, nothing resolves, nothing is enforced — which is how the
 test suite and any single-host deployment run.
 """
-from django.conf import settings
 from django.http import JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from api.v1.v1_users.models import Tenant
 from utils.tenant_host import is_base_domain, resolve_tenant_from_host
 
 
@@ -31,7 +29,7 @@ class TenantMiddleware:
 
     def __call__(self, request):
         host = request.get_host()
-        request.tenant = self._resolve(request, host)
+        request.tenant = resolve_tenant_from_host(host)
 
         # A host that is neither the signup domain nor a workspace names
         # nothing this deployment serves. Answering 404 before the view
@@ -65,12 +63,6 @@ class TenantMiddleware:
                     status=403,
                 )
         return self.get_response(request)
-
-    def _resolve(self, request, host):
-        header = request.headers.get("X-Tenant-Subdomain")
-        if settings.ALLOW_TENANT_HEADER and header:
-            return Tenant.objects.filter(subdomain=header.lower()).first()
-        return resolve_tenant_from_host(host)
 
     def _authenticated_user(self, request):
         # JWT authentication happens at the view layer in this stack, so

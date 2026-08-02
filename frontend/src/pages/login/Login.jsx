@@ -105,12 +105,7 @@ const Login = () => {
                             on a single-host deployment, where there is
                             only ever one. */}
                         {tenant?.name ? (
-                          <p
-                            className="workspace-name"
-                            data-testid="workspace-name"
-                          >
-                            {tenant.name}
-                          </p>
+                          <p data-testid="workspace-name">{tenant.name}</p>
                         ) : null}
                         <ContactUsText />
                       </div>

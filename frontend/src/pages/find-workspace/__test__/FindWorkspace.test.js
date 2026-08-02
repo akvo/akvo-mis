@@ -68,7 +68,7 @@ describe("base domain vs workspace address", () => {
   });
 
   test("a workspace address says whose workspace it is", async () => {
-    servedAs({ subdomain: "acme", name: "Kenya", configured: true });
+    servedAs({ subdomain: "acme", name: "Kenya" });
     render(<TestApp entryPoint={"/login"} />);
     expect(await screen.findByTestId("workspace-name")).toHaveTextContent(
       "Kenya"

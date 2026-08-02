@@ -10,7 +10,7 @@ LOGIN = "/api/v1/login"
 TENANT_INFO = "/api/v1/tenant-info"
 
 
-@override_settings(BASE_DOMAIN="app.com", ALLOW_TENANT_HEADER=True)
+@override_settings(BASE_DOMAIN="app.com")
 class LoginHostTestCase(TestCase, TenantTestHelperMixin):
     """Signing in happens at your own workspace's address.
 
@@ -32,13 +32,13 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
 
     def test_own_workspace_signs_in(self):
         response = self.client.post(
-            LOGIN, self.credentials, HTTP_X_TENANT_SUBDOMAIN="acme"
+            LOGIN, self.credentials, HTTP_HOST="acme.app.com"
         )
         self.assertEqual(response.status_code, 200)
 
     def test_other_workspace_is_refused(self):
         response = self.client.post(
-            LOGIN, self.credentials, HTTP_X_TENANT_SUBDOMAIN="beta"
+            LOGIN, self.credentials, HTTP_HOST="beta.app.com"
         )
         self.assertEqual(response.status_code, 401)
         self.assertIn("workspace", response.json()["message"])
@@ -61,7 +61,7 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
         response = self.client.post(
             LOGIN,
             {"email": operator.email, "password": TENANT_PASSWORD},
-            HTTP_X_TENANT_SUBDOMAIN="acme",
+            HTTP_HOST="acme.app.com",
         )
         self.assertEqual(response.status_code, 401)
 
@@ -77,7 +77,7 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
         response = self.client.post(
             LOGIN,
             {"email": user.email, "password": TENANT_PASSWORD},
-            HTTP_X_TENANT_SUBDOMAIN="acme",
+            HTTP_HOST="acme.app.com",
         )
         self.assertEqual(response.status_code, 401)
         self.assertTrue(response.json()["unverified"])
@@ -97,7 +97,7 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
         response = self.client.post(
             LOGIN,
             {"email": "new@acme.org", "password": TENANT_PASSWORD},
-            HTTP_X_TENANT_SUBDOMAIN="beta",
+            HTTP_HOST="beta.app.com",
         )
         self.assertEqual(response.status_code, 401)
         self.assertNotIn("unverified", response.json())
@@ -139,7 +139,7 @@ class ProfileSubdomainTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(response.json()["subdomain"], "")
 
 
-@override_settings(BASE_DOMAIN="app.com", ALLOW_TENANT_HEADER=True)
+@override_settings(BASE_DOMAIN="app.com")
 class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
     """What a visitor may know about a workspace before signing in."""
 
@@ -149,19 +149,18 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         )
 
     def test_workspace_host_returns_its_name(self):
-        response = self.client.get(TENANT_INFO, HTTP_X_TENANT_SUBDOMAIN="acme")
+        response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
-            {"subdomain": "acme", "name": "Kenya", "configured": True},
+            response.json(), {"subdomain": "acme", "name": "Kenya"}
         )
 
-    def test_nothing_beyond_those_three_fields_is_exposed(self):
+    def test_nothing_beyond_those_two_fields_is_exposed(self):
         # Anonymous and cacheable, so the field list is the whole of the
         # security review — assert it exhaustively rather than by sample.
-        response = self.client.get(TENANT_INFO, HTTP_X_TENANT_SUBDOMAIN="acme")
+        response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(
-            set(response.json().keys()), {"subdomain", "name", "configured"}
+            set(response.json().keys()), {"subdomain", "name"}
         )
 
     def test_base_domain_returns_nothing(self):
@@ -171,9 +170,6 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
     def test_unconfigured_workspace_has_no_name_yet(self):
         Tenant.objects.create(subdomain="fresh")
         response = self.client.get(
-            TENANT_INFO, HTTP_X_TENANT_SUBDOMAIN="fresh"
+            TENANT_INFO, HTTP_HOST="fresh.app.com"
         )
-        self.assertEqual(
-            response.json(),
-            {"subdomain": "fresh", "name": "", "configured": False},
-        )
+        self.assertEqual(response.json(), {"subdomain": "fresh", "name": ""})

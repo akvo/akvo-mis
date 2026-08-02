@@ -44,9 +44,9 @@ To work on it locally you must add an `/etc/hosts` line **per workspace** —
 it. Full workflow and the four things that commonly break it:
 `doc/notes/subdomain-local-dev.md`.
 
-Tests reach a workspace with an `X-Tenant-Subdomain` header instead (the Django
-test client cannot vary hosts); it is honoured only when `ALLOW_TENANT_HEADER`
-or `DEBUG` is set.
+Tests need no hosts entries: pass `HTTP_HOST="acme.app.com"` to the test client.
+`BASE_DOMAIN` is forced empty under `manage.py test`, so a test that wants host
+routing opts in with `override_settings`.
 
 ## Architecture
 

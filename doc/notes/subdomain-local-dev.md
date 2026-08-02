@@ -75,12 +75,15 @@ reaches nothing.
 
 ## Testing without hosts entries
 
-The Django test client cannot edit `/etc/hosts`, so tests send an
-`X-Tenant-Subdomain` header instead, which the middleware honours when
-`ALLOW_TENANT_HEADER` (or `DEBUG`) is set. It is a test affordance, not a
-development workflow — use real hosts locally, so that what you exercise
-is what production does. Production must never enable it: it would make
-the host boundary spoofable by a request header.
+Tests need no setup at all: the Django test client takes the host as an
+argument — `self.client.get(path, HTTP_HOST="acme.app.com")` — and
+`ALLOWED_HOSTS` is `["*"]`, so the request arrives exactly as a browser's
+would. `BASE_DOMAIN` is forced empty under `manage.py test`, so a test
+that wants host routing sets it with `override_settings`.
+
+The same trick works from a shell: `curl -H "Host: acme.localapp.test"`
+reaches a workspace without touching `/etc/hosts`. Only the browser
+needs the hosts entries, because only the browser resolves the name.
 
 ## What you should be able to see
 

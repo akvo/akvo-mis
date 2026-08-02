@@ -5,7 +5,7 @@ from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
 PROFILE = "/api/v1/profile"
 
 
-@override_settings(BASE_DOMAIN="app.com", ALLOW_TENANT_HEADER=True)
+@override_settings(BASE_DOMAIN="app.com")
 class TenantMiddlewareTestCase(TestCase, TenantTestHelperMixin):
     """The host decides which workspace a request is for, and a session
     is only valid on its own workspace's host."""
@@ -76,26 +76,6 @@ class TenantMiddlewareTestCase(TestCase, TenantTestHelperMixin):
             HTTP_AUTHORIZATION="Bearer not-a-token",
         )
         self.assertEqual(response.status_code, 401)
-
-    def test_header_stands_in_for_the_host(self):
-        # The test client cannot vary /etc/hosts, so the override is the
-        # only way a test reaches a subdomain without one.
-        response = self.client.get(
-            PROFILE, HTTP_X_TENANT_SUBDOMAIN="acme"
-        )
-        self.assertEqual(response.wsgi_request.tenant, self.acme.tenant)
-
-    def test_unknown_header_subdomain_is_404(self):
-        response = self.client.get(PROFILE, HTTP_X_TENANT_SUBDOMAIN="nope")
-        self.assertEqual(response.status_code, 404)
-
-    @override_settings(ALLOW_TENANT_HEADER=False)
-    def test_header_is_ignored_when_not_allowed(self):
-        # Production must not let a request header choose its workspace.
-        response = self.client.get(
-            PROFILE, HTTP_HOST="app.com", HTTP_X_TENANT_SUBDOMAIN="acme"
-        )
-        self.assertIsNone(response.wsgi_request.tenant)
 
 
 class SingleHostTestCase(TestCase, TenantTestHelperMixin):

@@ -36,7 +36,7 @@ def is_base_domain(host):
 
 def resolve_tenant_from_host(host):
     """The tenant this host belongs to, or None if it belongs to none."""
-    if not settings.BASE_DOMAIN or is_base_domain(host):
+    if is_base_domain(host):
         return None
     host = _normalize(host)
     suffix = f".{settings.BASE_DOMAIN.lower()}"
@@ -68,6 +68,5 @@ def tenant_web_url(tenant):
     parsed = urlparse(settings.WEBDOMAIN)
     port = f":{parsed.port}" if parsed.port else ""
     return (
-        f"{parsed.scheme or 'https'}://"
-        f"{tenant.subdomain}.{settings.BASE_DOMAIN}{port}"
+        f"{parsed.scheme}://{tenant.subdomain}.{settings.BASE_DOMAIN}{port}"
     )

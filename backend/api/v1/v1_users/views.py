@@ -308,7 +308,6 @@ def login(request, version):
             fields={
                 "subdomain": serializers.CharField(),
                 "name": serializers.CharField(),
-                "configured": serializers.BooleanField(),
             },
         ),
         204: OpenApiResponse(description="Not a workspace address"),
@@ -320,11 +319,12 @@ def login(request, version):
 def tenant_info(request, version):
     """Enough to brand the page before anyone has signed in.
 
-    Deliberately three fields and no more: this is anonymous, and the
-    host it answers for is guessable, so anything added here is
-    published to whoever tries the subdomain. `configured` is what lets
-    the frontend send a half-registered workspace to its configuration
-    form instead of a login it cannot complete.
+    Deliberately two fields and no more: this is anonymous, and the host
+    it answers for is guessable, so anything added here is published to
+    whoever tries the subdomain. Whether the workspace has finished
+    configuring itself is not among them — that decision belongs to the
+    signed-in user's own `configured` flag, and a visitor who has not
+    signed in cannot act on it.
     """
     tenant = getattr(request, "tenant", None)
     if not tenant:
@@ -341,7 +341,6 @@ def tenant_info(request, version):
             # The root unit is the workspace's name — the tenant row
             # itself only carries the subdomain.
             "name": root.name if root else "",
-            "configured": tenant_is_configured(tenant),
         },
         status=status.HTTP_200_OK,
     )
