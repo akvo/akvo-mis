@@ -18,8 +18,6 @@ from api.v1.v1_users.models import Tenant
 
 def _normalize(host):
     """Strip the port and case so `ACME.app.com:3000` compares equal."""
-    if not host:
-        return ""
     return host.split(":")[0].strip().lower()
 
 
