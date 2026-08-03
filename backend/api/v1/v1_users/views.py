@@ -60,6 +60,9 @@ from api.v1.v1_users.serializers import (
     RoleOptionSerializer,
     UpdateProfileSerializer,
     RegisterSerializer,
+    ResendActivationSerializer,
+    ConfigureSerializer,
+    tenant_is_configured,
 )
 from mis.settings import REST_FRAMEWORK, WEBDOMAIN
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
@@ -67,6 +70,23 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
+
+
+# A week is long enough to survive a weekend and a spam folder, short
+# enough that a leaked link in an old mailbox is not a standing key.
+ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
+
+
+def send_activation_email(user):
+    # The signed pk is the whole token — no state to store and no row to
+    # clean up if the link is never followed. `activate` bounds its age.
+    send_email(
+        type=EmailTypes.user_activation,
+        context={
+            "send_to": [user.email],
+            "button_url": f"{WEBDOMAIN}/activate/{signing.dumps(user.pk)}",
+        },
+    )
 
 
 def send_email_to_user(type, user, request):
@@ -213,6 +233,30 @@ def login(request, version):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
         return authenticated_response(user)
+    # authenticate() returns None for a wrong password AND for a correct
+    # password on an unverified account. Telling those apart is what lets the
+    # login page offer to resend the activation email instead of leaving the
+    # registrant staring at "invalid credentials". It does make login an
+    # account-existence oracle, but only for accounts that never activated,
+    # and /register already answers "this email is taken" by design.
+    unverified = SystemUser.objects.filter(
+        email=serializer.validated_data["email"],
+        is_active=False,
+        deleted_at=None,
+    ).first()
+    if unverified and unverified.check_password(
+        serializer.validated_data["password"]
+    ):
+        return Response(
+            {
+                "message": (
+                    "Please verify your email address to activate your "
+                    "account"
+                ),
+                "unverified": True,
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
     return Response(
         {"message": "Invalid login credentials"},
         status=status.HTTP_401_UNAUTHORIZED,
@@ -236,32 +280,21 @@ def register(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     validated = serializer.validated_data
-    # Free-tier sign-up: the registrant becomes a superadmin of their own
-    # tenant. Everything is one transaction so a partial tenant (user
-    # without hierarchy, tenant without user) is unreachable.
+    # Phase 1 of sign-up: create the tenant, which claims the subdomain
+    # immediately so nobody can take it during the email round-trip, and an
+    # inactive superadmin. No hierarchy — the configuration form creates a
+    # level 0 and root that are named from the start, which is what removes
+    # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
             tenant = Tenant.objects.create(subdomain=validated["subdomain"])
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
                 password=validated["password"],
-                first_name=validated["first_name"],
-                last_name=validated["last_name"],
+                first_name="",
+                last_name="",
                 tenant=tenant,
-            )
-            # A registrant needs a resolvable profile: superuser scoping
-            # substitutes the tenant's root administration. Every tenant
-            # gets its own level 0 and root unit — hierarchies are
-            # disjoint from birth, even though queries are not yet
-            # tenant-filtered.
-            level_zero = Levels.objects.create(
-                name="", level=0, tenant=tenant
-            )
-            Administration.objects.create(
-                parent=None,
-                level=level_zero,
-                name=validated["subdomain"],
-                tenant=tenant,
+                is_active=False,
             )
     except IntegrityError:
         # Uniqueness is enforced once, by the database. A pre-check in the
@@ -277,8 +310,119 @@ def register(request, version):
             {"message": f"{taken} is already registered"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    # Same payload as login, so the frontend reuses the login success path.
+    send_activation_email(user)
+    # Deliberately no auth token: the account cannot authenticate until the
+    # link is followed, so handing one back would only mislead the client.
+    return Response(
+        {"message": "Check your email to activate your account"},
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Activate an account from an emailed link",
+)
+@api_view(["POST"])
+def activate_account(request, version):
+    invalid = Response(
+        {"message": "Invalid or expired activation link"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+    token = request.data.get("token")
+    # An absent token is a malformed request, not a signature failure, so it
+    # is answered directly rather than routed through the except branch. The
+    # str() keeps any other JSON scalar on the BadSignature path.
+    if not token:
+        return invalid
+    try:
+        # SignatureExpired subclasses BadSignature, so an expired link and a
+        # tampered one land here together — the client is told the same thing
+        # either way and offered a resend.
+        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+    except BadSignature:
+        return invalid
+    user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
+    if not user:
+        return invalid
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+    # A full session, the same one login hands out, because the registrant's
+    # next step is the configuration form — which is authenticated. Following
+    # the link twice is therefore a harmless no-op.
     return authenticated_response(user)
+
+
+@extend_schema(
+    request=ResendActivationSerializer,
+    responses={200: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Resend an activation email",
+)
+@api_view(["POST"])
+def resend_activation(request, version):
+    user = SystemUser.objects.filter(
+        email=request.data.get("email"), is_active=False, deleted_at=None
+    ).first()
+    if user:
+        send_activation_email(user)
+    # Always the same 200, whether or not anything was sent, so this cannot
+    # be used to work out which addresses are registered.
+    return Response(
+        {"message": "If that account needs activating, an email is on its "
+                    "way"},
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    request=ConfigureSerializer,
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Name the workspace and create its hierarchy root",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def configure_project(request, version):
+    user = request.user
+    if tenant_is_configured(user.tenant):
+        # Also the answer for a tenant-less operator account, which has no
+        # workspace to configure.
+        return Response(
+            {"message": "This workspace is already configured"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    serializer = ConfigureSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {
+                "message": validate_serializers_message(serializer.errors),
+                "details": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    validated = serializer.validated_data
+    # One transaction: a half-configured workspace — named user but no root,
+    # or a level with no unit at it — would read as unconfigured forever and
+    # leave a stray level behind on the retry.
+    with transaction.atomic():
+        user.first_name = validated["first_name"]
+        user.last_name = validated["last_name"]
+        user.save(update_fields=["first_name", "last_name"])
+        level_zero = Levels.objects.create(
+            name=validated["level_0_name"], level=0, tenant=user.tenant
+        )
+        Administration.objects.create(
+            parent=None,
+            level=level_zero,
+            name=validated["root_unit_name"],
+            tenant=user.tenant,
+        )
+    return Response(
+        UserSerializer(instance=user).data, status=status.HTTP_200_OK
+    )
 
 
 @extend_schema(
@@ -674,8 +818,14 @@ def list_users(request, version):
     summary="Get list of roles",
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_user_roles(request, version):
-    roles = Role.objects.order_by("administration_level__level").all()
+    # A role belongs to its level's tenant. Unscoped, this offered every
+    # workspace's roles — and without permission_classes DRF's AllowAny
+    # default served them to callers with no credential at all.
+    roles = Role.objects.for_user(request.user).order_by(
+        "administration_level__level"
+    )
     data = RoleOptionSerializer(
         instance=roles,
         many=True,

@@ -1,6 +1,5 @@
 from unittest import mock
 
-from django.core.management import call_command
 from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -12,11 +11,16 @@ from api.v1.v1_users.models import SystemUser, Tenant
 
 @override_settings(USE_TZ=False)
 class RegisterEndpointTestCase(TestCase):
+    """Phase 1: claim the subdomain, prove nothing else yet.
+
+    Registration deliberately creates no hierarchy and hands back no auth
+    token. The names and the hierarchy belong to the configuration form,
+    and the account cannot be used until the activation link is followed.
+    """
+
     payload = {
         "email": "founder@acme.org",
         "password": "Secret#Pass123",
-        "first_name": "Ada",
-        "last_name": "Founder",
         "subdomain": "acme",
     }
 
@@ -32,45 +36,59 @@ class RegisterEndpointTestCase(TestCase):
         # tenants registration itself creates.
         return Tenant.objects.exclude(subdomain="default")
 
-    def test_register_on_empty_database_bootstraps_everything(self):
-        response = self.register()
+    def test_register_creates_an_inactive_superadmin_and_no_token(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register()
         self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertIn("token", body)
+        self.assertNotIn("token", response.json())
         user = SystemUser.objects.get(email="founder@acme.org")
+        self.assertFalse(user.is_active)
         self.assertTrue(user.is_superuser)
         self.assertEqual(user.tenant.subdomain, "acme")
-        self.assertTrue(Levels.objects.filter(level=0).exists())
-        root = Administration.objects.get(parent__isnull=True)
-        self.assertEqual(root.name, "acme")
-        self.assertEqual(root.tenant.subdomain, "acme")
-        self.assertEqual(Levels.objects.get(level=0).tenant.subdomain, "acme")
-        # The control center is only usable if the profile resolves a
-        # real administration for the fresh superuser.
-        profile = self.client.get(
-            "/api/v1/profile",
-            HTTP_AUTHORIZATION=f"Bearer {body['token']}",
+        # The hierarchy is phase 2's job, so the root is never a
+        # placeholder named after the subdomain.
+        self.assertFalse(Levels.objects.filter(tenant=user.tenant).exists())
+        self.assertFalse(
+            Administration.objects.filter(tenant=user.tenant).exists()
         )
-        self.assertEqual(profile.status_code, 200)
-        self.assertIsNotNone(profile.json()["administration"]["id"])
 
-    def test_second_registration_creates_its_own_hierarchy(self):
-        self.register()
-        response = self.register(email="owner@beta.org", subdomain="beta")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.registered_tenants().count(), 2)
-        # Per-tenant hierarchy: each tenant owns a level 0 and a root.
-        self.assertEqual(Levels.objects.filter(level=0).count(), 2)
-        roots = Administration.objects.filter(parent__isnull=True)
-        self.assertEqual(roots.count(), 2)
-        self.assertEqual(
-            set(roots.values_list("tenant__subdomain", flat=True)),
-            {"acme", "beta"},
+    def test_register_sends_an_activation_link(self):
+        with mock.patch("api.v1.v1_users.views.send_email") as send:
+            self.register()
+        self.assertEqual(send.call_count, 1)
+        context = send.call_args.kwargs["context"]
+        self.assertEqual(context["send_to"], ["founder@acme.org"])
+        self.assertIn("/activate/", context["button_url"])
+
+    def test_unverified_registrant_cannot_log_in(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            self.register()
+        res = self.client.post(
+            "/api/v1/login",
+            {"email": self.payload["email"],
+             "password": self.payload["password"]},
+            content_type="application/json",
         )
+        self.assertEqual(res.status_code, 401)
+        # Distinguishable from a wrong password, so the login page can
+        # offer to resend the activation email.
+        self.assertIn("verify", res.json()["message"].lower())
+
+    def test_wrong_password_does_not_mention_verification(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            self.register()
+        res = self.client.post(
+            "/api/v1/login",
+            {"email": self.payload["email"], "password": "Wrong#Pass123"},
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 401)
+        self.assertNotIn("verify", res.json()["message"].lower())
 
     def test_duplicate_subdomain_is_rejected_atomically(self):
-        self.register()
-        response = self.register(email="owner@beta.org")
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            self.register()
+            response = self.register(email="owner@beta.org")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json()["message"], "Subdomain is already registered"
@@ -80,8 +98,9 @@ class RegisterEndpointTestCase(TestCase):
         )
 
     def test_duplicate_email_is_rejected(self):
-        self.register()
-        response = self.register(subdomain="beta")
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            self.register()
+            response = self.register(subdomain="beta")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json()["message"], "Email is already registered"
@@ -111,33 +130,16 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.registered_tenants().count(), 0)
 
-    def test_registration_works_on_a_seeded_database(self):
-        # administration_seeder inserts levels with explicit ids, which
-        # leaves the id sequence behind. Registration now always creates
-        # a level of its own, so a desynced sequence makes the very first
-        # sign-up on an existing deployment fail with an integrity error.
-        call_command("administration_seeder", "--test")
-        response = self.register()
-        self.assertEqual(response.status_code, 200)
-
-    def test_each_superadmin_resolves_their_own_root(self):
-        first = self.register().json()
-        second = self.register(
-            email="owner@beta.org", subdomain="beta"
-        ).json()
-        for token, expected in ((first, "acme"), (second, "beta")):
-            profile = self.client.get(
-                "/api/v1/profile",
-                HTTP_AUTHORIZATION=f"Bearer {token['token']}",
-            )
-            self.assertEqual(profile.status_code, 200)
-            self.assertEqual(
-                profile.json()["administration"]["name"], expected
-            )
+    def test_no_email_is_sent_when_registration_fails(self):
+        with mock.patch("api.v1.v1_users.views.send_email") as send:
+            self.register(password="12345678")
+        send.assert_not_called()
 
     def test_tenantless_superuser_falls_back_to_unscoped_root(self):
         # Legacy path: seeders and createsuperuser make superusers with
         # no tenant; they must keep resolving a root administration.
+        from django.core.management import call_command
+
         call_command("administration_seeder", "--test")
         user = SystemUser.objects.create_superuser(
             email="legacy-admin@example.org",

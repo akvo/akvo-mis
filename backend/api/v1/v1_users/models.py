@@ -69,6 +69,14 @@ class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
     last_name = models.CharField(max_length=50)
     phone_number = models.CharField(max_length=15, default=None, null=True)
     trained = models.BooleanField(default=False)
+    # Email verification. AbstractBaseUser already defines `is_active = True`
+    # as a plain class attribute, so ModelBackend, simplejwt's get_user and
+    # IsMobileAssignment have all been consulting it and always getting True.
+    # Overriding it with a real column makes those three checks meaningful at
+    # once. The default keeps every existing row, the seeders, createsuperuser
+    # and invited users active; only registrants start inactive, until they
+    # follow the activation link.
+    is_active = models.BooleanField(default=True)
     updated = models.DateTimeField(default=None, null=True)
     organisation = models.ForeignKey(
         to=Organisation,

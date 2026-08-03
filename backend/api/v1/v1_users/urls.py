@@ -18,6 +18,9 @@ from api.v1.v1_users.views import (
     OrganisationEditDeleteView,
     update_profile,
     register,
+    activate_account,
+    resend_activation,
+    configure_project,
 )
 from api.v1.v1_profile.views import list_entity_data
 
@@ -32,6 +35,11 @@ urlpatterns = [
     ),
     re_path(r"^(?P<version>(v1))/profile", get_profile),
     re_path(r"^(?P<version>(v1))/login", login),
+    re_path(r"^(?P<version>(v1))/register/activate$", activate_account),
+    re_path(r"^(?P<version>(v1))/register/configure$", configure_project),
+    re_path(
+        r"^(?P<version>(v1))/register/resend-activation$", resend_activation
+    ),
     re_path(r"^(?P<version>(v1))/register$", register),
     re_path(r"^(?P<version>(v1))/users", list_users),
     re_path(

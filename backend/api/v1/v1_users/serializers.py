@@ -699,8 +699,33 @@ class UserRoleListSerializer(serializers.ModelSerializer):
         ]
 
 
+def tenant_is_configured(tenant):
+    """Has this tenant completed the configuration form?
+
+    Derived rather than stored: a configured tenant is one with a *named*
+    level 0 and a root unit, which is exactly what the form creates. The
+    same predicate the bulk-upload gate will reuse, so there is no column
+    to keep in step with reality.
+
+    A tenant-less user — createsuperuser, the test-only admin account —
+    reads as configured. There is nothing for them to configure, and
+    answering False would strand them on the configuration form and let
+    them create a tenant-less level 0 in the legacy global hierarchy.
+    """
+    if not tenant:
+        return True
+    has_named_level_zero = Levels.objects.filter(
+        tenant=tenant, level=0
+    ).exclude(name="").exists()
+    has_root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).exists()
+    return has_named_level_zero and has_root
+
+
 class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    configured = serializers.SerializerMethodField()
     administration = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     organisation = serializers.SerializerMethodField()
@@ -782,13 +807,17 @@ class UserSerializer(serializers.ModelSerializer):
             return passcode
         return None
 
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_configured(self, instance: SystemUser):
+        return tenant_is_configured(instance.tenant)
+
     class Meta:
         model = SystemUser
         fields = [
             'email', 'name', 'roles', 'trained',
             'phone_number', 'forms', 'organisation',
             'last_login', 'passcode', 'is_superuser',
-            'administration', 'id',
+            'administration', 'id', 'configured',
         ]
 
 
@@ -915,11 +944,30 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         ]
 
 
-class RegisterSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
+class ConfigureSerializer(serializers.Serializer):
+    # The registrant's name arrives here, not at sign-up: this is the first
+    # point at which the email is known to be real.
     first_name = serializers.CharField(max_length=50)
     last_name = serializers.CharField(max_length=50)
+    # The top tier's name ("National") and the unit that sits at it
+    # ("Kenya") — two different things that are easy to conflate, which is
+    # why the form carries examples.
+    level_0_name = serializers.CharField(max_length=50)
+    root_unit_name = serializers.CharField(max_length=255)
+
+
+class ResendActivationSerializer(serializers.Serializer):
+    # Documents the payload for the schema; the view does not validate it,
+    # because an unparseable address must get the same 200 as an unknown one.
+    email = serializers.EmailField()
+
+
+class RegisterSerializer(serializers.Serializer):
+    # Phase 1 asks for the minimum that claims a workspace. The registrant's
+    # name belongs to the configuration form, which is the first point at
+    # which we know the email is real.
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
     # A valid DNS label, because the subdomain will one day be one:
     # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
     subdomain = serializers.RegexField(
@@ -939,12 +987,9 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         # Run Django's password validators with user context so the
-        # similarity validator can compare against email and names.
-        user = SystemUser(
-            email=attrs["email"],
-            first_name=attrs["first_name"],
-            last_name=attrs["last_name"],
-        )
+        # similarity validator can compare against the email. There are no
+        # names to compare against at this phase.
+        user = SystemUser(email=attrs["email"])
         try:
             validate_password(attrs["password"], user=user)
         except django_exceptions.ValidationError as error:
