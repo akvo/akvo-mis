@@ -212,6 +212,35 @@ def _build_relevant_expression(
     return joiner.join(expr_parts)
 
 
+def _build_constraint(rule: Any) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Converts question rule dictionary into (constraint, constraint_message).
+    Example:
+    rule={"min": 1, "max": 7} ->
+        (". >= 1 and . <= 7", "Value must be between 1 and 7")
+    """
+    if not rule or not isinstance(rule, dict):
+        return None, None
+
+    has_min = "min" in rule and rule["min"] is not None
+    has_max = "max" in rule and rule["max"] is not None
+
+    if has_min and has_max:
+        min_val, max_val = rule["min"], rule["max"]
+        return (
+            f". >= {min_val} and . <= {max_val}",
+            f"Value must be between {min_val} and {max_val}",
+        )
+    elif has_min:
+        min_val = rule["min"]
+        return f". >= {min_val}", f"Value must be at least {min_val}"
+    elif has_max:
+        max_val = rule["max"]
+        return f". <= {max_val}", f"Value must be at most {max_val}"
+
+    return None, None
+
+
 def _build_survey_rows(
     form: Any, question_map: Dict[int, Dict[str, Any]], lang_cols: List[str]
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
@@ -250,6 +279,8 @@ def _build_survey_rows(
                 continue
 
             relevant_expr = _build_relevant_expression(q, question_map)
+            rule_obj = getattr(q, "rule", None)
+            constraint_expr, constraint_msg = _build_constraint(rule_obj)
 
             q_row = {
                 "type": xls_type,
@@ -259,6 +290,9 @@ def _build_survey_rows(
             }
             if relevant_expr:
                 q_row["relevant"] = relevant_expr
+            if constraint_expr:
+                q_row["constraint"] = constraint_expr
+                q_row["constraint_message"] = constraint_msg
             if appearance:
                 q_row["appearance"] = appearance
 

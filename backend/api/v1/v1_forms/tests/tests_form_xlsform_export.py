@@ -10,6 +10,7 @@ from api.v1.v1_forms.services.xlsform_export import (
     _build_choices_rows,
     _build_survey_rows,
     _build_relevant_expression,
+    _build_constraint,
     generate_xlsform,
 )
 
@@ -535,3 +536,100 @@ class XLSFormExportServiceTestCase(TestCase):
             _build_relevant_expression(q_range, qmap),
             "${age} >= 18 and ${age} <= 65",
         )
+
+    def test_build_constraint(self):
+        # 1. min and max
+        expr, msg = _build_constraint({"min": 1, "max": 7})
+        self.assertEqual(expr, ". >= 1 and . <= 7")
+        self.assertEqual(msg, "Value must be between 1 and 7")
+
+        # 2. min only
+        expr, msg = _build_constraint({"min": 5})
+        self.assertEqual(expr, ". >= 5")
+        self.assertEqual(msg, "Value must be at least 5")
+
+        # 3. max only
+        expr, msg = _build_constraint({"max": 10})
+        self.assertEqual(expr, ". <= 10")
+        self.assertEqual(msg, "Value must be at most 10")
+
+        # 4. Zero min value edge case
+        expr, msg = _build_constraint({"min": 0})
+        self.assertEqual(expr, ". >= 0")
+        self.assertEqual(msg, "Value must be at least 0")
+
+        # 5. empty / None / no min or max / None values
+        self.assertEqual(_build_constraint(None), (None, None))
+        self.assertEqual(_build_constraint({}), (None, None))
+        self.assertEqual(
+            _build_constraint({"min": None, "max": None}), (None, None)
+        )
+        self.assertEqual(
+            _build_constraint({"allowDecimal": True}), (None, None)
+        )
+
+    def test_survey_rows_t003_multilingual_addons_and_skipped_collection(
+        self,
+    ):
+        # 1. Question with addons (should be dropped) +
+        # tooltip + constraint + translations
+        q_num = DummyObject(
+            id=1,
+            name="price",
+            type=QuestionTypes.number,
+            label="Price",
+            required=True,
+            tooltip={"text": "Enter amount in USD"},
+            translations={
+                "fr": {
+                    "label": "Prix",
+                    "tooltip": {"text": "Entrez le montant en USD"},
+                },
+                "es": {"label": "Precio"},
+            },
+            rule={"min": 1, "max": 1000},
+            addon_before="$",
+            addon_after="USD",
+        )
+
+        # 2. All 3 skipped types
+        q_tree = DummyObject(id=2, name="tree_q", type=QuestionTypes.tree)
+        q_table = DummyObject(id=3, name="table_q", type=QuestionTypes.table)
+        q_auto = DummyObject(id=4, name="auto_q", type=QuestionTypes.autofield)
+
+        group = DummyObject(
+            id=10,
+            name="payment_group",
+            label="Payment Info",
+            repeatable=False,
+            translations={"fr": {"label": "Info Paiement"}},
+            question_group_question=MagicMock(
+                all=lambda: [q_num, q_tree, q_table, q_auto]
+            ),
+        )
+
+        form = DummyObject(form_question_group=MagicMock(all=lambda: [group]))
+
+        survey_rows, skipped = _build_survey_rows(
+            form, question_map={}, lang_cols=["fr", "es"]
+        )
+
+        # Verify all 3 unsupported types collected in skipped list
+        self.assertEqual(skipped, ["tree_q", "table_q", "auto_q"])
+
+        # Verify question row
+        q_row = [r for r in survey_rows if r.get("name") == "price"][0]
+        self.assertEqual(q_row["type"], "integer")
+        self.assertEqual(q_row["label"], "Price")
+        self.assertEqual(q_row["hint"], "Enter amount in USD")
+        self.assertEqual(q_row["constraint"], ". >= 1 and . <= 1000")
+        self.assertEqual(
+            q_row["constraint_message"], "Value must be between 1 and 1000"
+        )
+        self.assertEqual(q_row["label::fr"], "Prix")
+        self.assertEqual(q_row["hint::fr"], "Entrez le montant en USD")
+        self.assertEqual(q_row["label::es"], "Precio")
+
+        # Verify addon_before & addon_after are NOT present in output row
+        self.assertNotIn("addon_before", q_row)
+        self.assertNotIn("addon_after", q_row)
