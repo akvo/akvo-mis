@@ -726,6 +726,7 @@ def tenant_is_configured(tenant):
 class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     configured = serializers.SerializerMethodField()
+    subdomain = serializers.SerializerMethodField()
     administration = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     organisation = serializers.SerializerMethodField()
@@ -811,13 +812,23 @@ class UserSerializer(serializers.ModelSerializer):
     def get_configured(self, instance: SystemUser):
         return tenant_is_configured(instance.tenant)
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_subdomain(self, instance: SystemUser):
+        # The address this session belongs to. The frontend compares it
+        # against the host it is being served on, so that a user who
+        # lands on the wrong workspace — or on the tenant-less main
+        # site — is sent to their own rather than shown the 403.
+        # Empty for a tenant-less account, which has no address of its
+        # own and is therefore never redirected.
+        return instance.tenant.subdomain if instance.tenant_id else ""
+
     class Meta:
         model = SystemUser
         fields = [
             'email', 'name', 'roles', 'trained',
             'phone_number', 'forms', 'organisation',
             'last_login', 'passcode', 'is_superuser',
-            'administration', 'id', 'configured',
+            'administration', 'id', 'configured', 'subdomain',
         ]
 
 

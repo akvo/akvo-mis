@@ -53,6 +53,7 @@ import {
   FormBuilderList,
   FormBuilderCreate,
   FormBuilderEdit,
+  FindWorkspace,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -61,6 +62,7 @@ import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
 import { reloadData, fetchPublishedForms } from "./util/form";
 import { fetchLevels } from "./util/level";
+import { baseDomain, fetchTenant, workspaceUrl } from "./util/tenant";
 import { ability, AbilityContext } from "./components/can";
 
 // Session validity is not decided here. Two authorities already settle it and
@@ -97,7 +99,21 @@ const Private = ({ element: Element, alias }) => {
 };
 
 const RouteList = () => {
-  const { user: authUser } = store.useState((state) => state);
+  const {
+    user: authUser,
+    tenant,
+    tenantLoaded,
+  } = store.useState((state) => state);
+  // The main site of a SaaS deployment: it signs people up and points
+  // them at their workspace, but it belongs to none, so there is nothing
+  // to sign in to here — the backend refuses a login on it. A
+  // single-host deployment has no base domain and so never takes this
+  // branch, which is what keeps its /login working exactly as before.
+  //
+  // Held until the answer has actually arrived: redirecting to
+  // find-workspace changes the URL, and a tenant that resolves a moment
+  // later cannot undo it.
+  const onBaseDomain = Boolean(baseDomain()) && tenantLoaded && !tenant;
   return (
     <Routes>
       <Route
@@ -113,7 +129,12 @@ const RouteList = () => {
           )
         }
       />
-      <Route exact path="/login" element={<Login />} />
+      <Route
+        exact
+        path="/login"
+        element={onBaseDomain ? <Navigate to="/find-workspace" /> : <Login />}
+      />
+      <Route exact path="/find-workspace" element={<FindWorkspace />} />
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
       <Route exact path="/register" element={<Register />} />
@@ -342,7 +363,12 @@ const RouteList = () => {
 };
 
 const App = () => {
-  const { user: authUser, isLoggedIn } = store.useState((state) => state);
+  const {
+    user: authUser,
+    isLoggedIn,
+    tenant,
+    tenantLoaded,
+  } = store.useState((state) => state);
   const [cookies] = useCookies(["AUTH_TOKEN"]);
   const [loading, setLoading] = useState(true);
   const [formsLoading, setFormsLoading] = useState(true);
@@ -374,7 +400,11 @@ const App = () => {
     // the tenant-scoped request is in flight.
     setFormsLoading(true);
     fetchLevels();
-    fetchPublishedForms()
+    // Which workspace this host is, resolved under the same gate as the
+    // forms: no route decision may be made before the answer arrives, or
+    // the base domain renders /login for a moment before redirecting to
+    // find-workspace.
+    Promise.all([fetchTenant(), fetchPublishedForms()])
       .catch((err) => {
         console.error(err);
       })
@@ -400,7 +430,18 @@ const App = () => {
             setLoading(false);
           })
           .catch((err) => {
-            if (err.response.status === 401) {
+            // The host boundary refuses this session and names the
+            // workspace it does belong to. Nothing is wrong with the
+            // session — only with where it is being used — so the fix is
+            // to go there, not to sign out. This is also the only place
+            // the right address can come from: the profile call that
+            // would have carried it is the very call being refused.
+            const ownWorkspace = err.response?.data?.subdomain;
+            if (err.response?.status === 403 && ownWorkspace) {
+              window.location.replace(workspaceUrl(ownWorkspace));
+              return;
+            }
+            if (err.response?.status === 401) {
               notify({
                 type: "error",
                 message: "Your session has expired",
@@ -429,6 +470,21 @@ const App = () => {
       setLoading(false);
     }
   }, [authUser, isLoggedIn, cookies, notify]);
+
+  // A signed-in user on the main site is sent to their own workspace.
+  // The wrong-*workspace* case never reaches here — the profile call is
+  // refused there, so `authUser` stays empty and the 403 handler above
+  // does the redirecting. This branch covers only the tenant-less base
+  // domain, where the session loads fine but there is no app to show.
+  useEffect(() => {
+    const ownWorkspace = authUser?.subdomain;
+    if (!tenantLoaded || !baseDomain() || !ownWorkspace) {
+      return;
+    }
+    if (tenant?.subdomain !== ownWorkspace) {
+      window.location.replace(workspaceUrl(ownWorkspace));
+    }
+  }, [authUser, tenant, tenantLoaded]);
 
   useEffect(() => {
     // A workspace that has been activated but not yet configured owns no root

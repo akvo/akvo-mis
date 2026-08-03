@@ -7,6 +7,7 @@ from mis.settings import (
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
+    BASE_DOMAIN,
     SHOW_LANDING_PAGE,
 )
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
@@ -74,6 +75,12 @@ class Command(BaseCommand):
                         "shortName": APP_SHORT_NAME,
                         "apkName": APK_NAME,
                         "showLandingPage": SHOW_LANDING_PAGE,
+                        # Empty on a single-host deployment, which is how
+                        # the frontend knows not to split itself into
+                        # base-domain and workspace contexts at all.
+                        # tenant-info answers 204 in both cases, so the
+                        # app cannot tell them apart without this.
+                        "baseDomain": BASE_DOMAIN,
                     }),
                     ";",
                     "var roleFeatures=",
