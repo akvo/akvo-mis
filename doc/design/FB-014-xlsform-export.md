@@ -24,7 +24,7 @@ Currently:
 
 Goal:
 - Add GET /api/v1/manage/forms/{id}/export-xlsform → returns .xlsx
-- (Optional) GET /api/v1/manage/forms/administration-csv → cascade lookup CSV
+- (Optional) GET /api/v1/manage/forms/{id}/administration-csv → cascade lookup CSV (per-form, capped at max_level)
 - Add "Export XLSForm" button alongside the existing "Export" (JSON) button.
 - XLSForm must be loadable by ODK Collect / KoboToolbox validators.
 ```
@@ -169,7 +169,7 @@ Fragments joined by ` and ` (AND) or ` or ` (OR) per `dependency_rule`. Unresolv
 | Method | URL | Purpose | Auth |
 |--------|-----|---------|------|
 | `GET` | `/api/v1/manage/forms/{id}/export-xlsform` | Download `.xlsx` XLSForm | `IsAuthenticated` + `FormBuilderAccess(form_view)` |
-| `GET` | `/api/v1/manage/forms/administration-csv` | Download cascade lookup CSV | `IsAuthenticated` + `FormBuilderAccess(form_view)` |
+| `GET` | `/api/v1/manage/forms/{id}/administration-csv` | Download cascade lookup CSV (per-form, capped at cascade `api.max_level`) | `IsAuthenticated` + `FormBuilderAccess(form_view)` |
 
 **Response — export-xlsform (200)**:
 ```
@@ -198,7 +198,7 @@ administration,dist_1,District A1,prov_1
 
 - `backend/api/v1/v1_forms/views.py` — add two `@action` methods to `FormBuilderViewSet`:
   - `export_xlsform` (detail=True, GET, `url_path="export-xlsform"`)
-  - `export_administration_csv` (detail=False, GET, `url_path="administration-csv"`)
+  - `export_administration_csv` (detail=True, GET, `url_path="administration-csv"`)
 - `backend/api/v1/v1_forms/urls.py` — add two `re_path` entries.
 - `backend/api/v1/v1_forms/views.py` — add `"export_xlsform"` and `"export_administration_csv"` to `get_permissions()`.
 
