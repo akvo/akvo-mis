@@ -9,6 +9,7 @@ from api.v1.v1_forms.services.xlsform_export import (
     _build_settings_row,
     _build_choices_rows,
     _build_survey_rows,
+    _build_relevant_expression,
     generate_xlsform,
 )
 
@@ -401,4 +402,136 @@ class XLSFormExportServiceTestCase(TestCase):
         )
         self.assertEqual(
             settings_rows[1], ("Census Survey", "form_99", "3", "en")
+        )
+
+    def test_build_relevant_expression_single_and_multiple_options(self):
+        qmap = {
+            1: {"name": "cleaning_schedule", "type": QuestionTypes.option},
+            2: {"name": "days_cleaned", "type": QuestionTypes.multiple_option},
+        }
+
+        # Single option
+        q_single = DummyObject(
+            dependency=[{"id": 1, "options": ["yes"]}],
+            dependency_rule="AND",
+        )
+        self.assertEqual(
+            _build_relevant_expression(q_single, qmap),
+            "selected(${cleaning_schedule}, 'yes')",
+        )
+
+        # Multiple options (any-match OR)
+        q_multi = DummyObject(
+            dependency=[{"id": 2, "options": ["mon", "tue"]}],
+            dependency_rule="AND",
+        )
+        self.assertEqual(
+            _build_relevant_expression(q_multi, qmap),
+            "(selected(${days_cleaned}, 'mon') or selected(${days_cleaned}, 'tue'))",  # noqa
+        )
+
+    def test_build_relevant_expression_min_max_equal_notequal(self):
+        qmap = {
+            1: {"name": "staff_count", "type": QuestionTypes.number},
+            2: {"name": "status", "type": QuestionTypes.input},
+        }
+
+        q_min = DummyObject(dependency=[{"id": 1, "min": 4}])
+        self.assertEqual(
+            _build_relevant_expression(q_min, qmap), "${staff_count} >= 4"
+        )
+
+        q_max = DummyObject(dependency=[{"id": 1, "max": 6}])
+        self.assertEqual(
+            _build_relevant_expression(q_max, qmap), "${staff_count} <= 6"
+        )
+
+        q_equal = DummyObject(dependency=[{"id": 2, "equal": "active"}])
+        self.assertEqual(
+            _build_relevant_expression(q_equal, qmap), "${status} = 'active'"
+        )
+
+        q_notequal = DummyObject(dependency=[{"id": 2, "notEqual": "pending"}])
+        self.assertEqual(
+            _build_relevant_expression(q_notequal, qmap),
+            "${status} != 'pending' and string-length(${status}) > 0",
+        )
+
+    def test_build_relevant_expression_combinators_and_unresolvable_id(self):
+        qmap = {
+            10: {"name": "cleaning_schedule", "type": QuestionTypes.option},
+            20: {"name": "staff_count", "type": QuestionTypes.number},
+        }
+
+        # AND rule (default)
+        q_and = DummyObject(
+            dependency=[
+                {"id": 10, "options": ["yes"]},
+                {"id": 20, "max": 6},
+            ],
+            dependency_rule="AND",
+        )
+        self.assertEqual(
+            _build_relevant_expression(q_and, qmap),
+            "selected(${cleaning_schedule}, 'yes') and ${staff_count} <= 6",
+        )
+
+        # OR rule
+        q_or = DummyObject(
+            dependency=[
+                {"id": 10, "options": ["yes"]},
+                {"id": 20, "max": 6},
+            ],
+            dependency_rule="OR",
+        )
+        self.assertEqual(
+            _build_relevant_expression(q_or, qmap),
+            "selected(${cleaning_schedule}, 'yes') or ${staff_count} <= 6",
+        )
+
+        # Unresolvable ID skipped gracefully
+        q_unresolved = DummyObject(
+            dependency=[
+                {"id": 10, "options": ["yes"]},
+                {"id": 999, "options": ["deleted"]},
+            ],
+            dependency_rule="AND",
+        )
+        self.assertEqual(
+            _build_relevant_expression(q_unresolved, qmap),
+            "selected(${cleaning_schedule}, 'yes')",
+        )
+
+    def test_build_relevant_expression_edge_cases(self):
+        qmap = {1: {"name": "age", "type": QuestionTypes.number}}
+
+        # None / empty / invalid types
+        self.assertEqual(
+            _build_relevant_expression(DummyObject(dependency=None), qmap), ""
+        )
+        self.assertEqual(
+            _build_relevant_expression(
+                DummyObject(dependency="invalid"), qmap
+            ),
+            "",
+        )
+        self.assertEqual(
+            _build_relevant_expression(DummyObject(dependency=[]), qmap), ""
+        )
+        self.assertEqual(
+            _build_relevant_expression(
+                DummyObject(dependency=["not_a_dict"]), qmap
+            ),
+            "",
+        )
+
+        # Options with empty list
+        q_empty_opts = DummyObject(dependency=[{"id": 1, "options": []}])
+        self.assertEqual(_build_relevant_expression(q_empty_opts, qmap), "")
+
+        # Combined min and max in single dependency item
+        q_range = DummyObject(dependency=[{"id": 1, "min": 18, "max": 65}])
+        self.assertEqual(
+            _build_relevant_expression(q_range, qmap),
+            "${age} >= 18 and ${age} <= 65",
         )

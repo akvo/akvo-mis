@@ -140,6 +140,78 @@ def _build_choices_rows(
     return choices
 
 
+def _build_relevant_expression(
+    question: Any, question_map: Dict[int, Dict[str, Any]]
+) -> str:
+    """
+    Converts question.dependency JSON list into an
+    XLSForm XPath 'relevant' expression.
+    Supported dependency conditions:
+    - options (single or list) -> selected(${name}, 'val')
+    - min -> ${name} >= N
+    - max -> ${name} <= N
+    - equal -> ${name} = 'val'
+    - notEqual -> ${name} != 'val' and string-length(${name}) > 0
+    Combined by dependency_rule ('AND' or 'OR', default 'AND').
+    """
+    deps = getattr(question, "dependency", None)
+    if not deps or not isinstance(deps, list):
+        return ""
+
+    rule = (getattr(question, "dependency_rule", None) or "AND").upper()
+    joiner = " or " if rule == "OR" else " and "
+
+    expr_parts = []
+    for dep in deps:
+        if not isinstance(dep, dict):
+            continue
+
+        q_id = dep.get("id")
+        if q_id not in question_map:
+            continue
+
+        q_target = question_map[q_id]
+        target_name = q_target["name"]
+
+        # 1. options condition
+        if "options" in dep:
+            opts = dep["options"]
+            if isinstance(opts, list) and len(opts) > 0:
+                if len(opts) == 1:
+                    expr_parts.append(
+                        f"selected(${{{target_name}}}, '{opts[0]}')"
+                    )
+                else:
+                    sub = " or ".join(
+                        f"selected(${{{target_name}}}, '{v}')" for v in opts
+                    )
+                    expr_parts.append(f"({sub})")
+
+        # 2. min condition
+        if "min" in dep:
+            min_val = dep["min"]
+            expr_parts.append(f"${{{target_name}}} >= {min_val}")
+
+        # 3. max condition
+        if "max" in dep:
+            max_val = dep["max"]
+            expr_parts.append(f"${{{target_name}}} <= {max_val}")
+
+        # 4. equal condition
+        if "equal" in dep:
+            eq_val = dep["equal"]
+            expr_parts.append(f"${{{target_name}}} = '{eq_val}'")
+
+        # 5. notEqual condition
+        if "notEqual" in dep:
+            neq_val = dep["notEqual"]
+            expr_parts.append(
+                f"${{{target_name}}} != '{neq_val}' and string-length(${{{target_name}}}) > 0"  # noqa
+            )
+
+    return joiner.join(expr_parts)
+
+
 def _build_survey_rows(
     form: Any, question_map: Dict[int, Dict[str, Any]], lang_cols: List[str]
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
@@ -177,12 +249,16 @@ def _build_survey_rows(
                 skipped.append(q_name)
                 continue
 
+            relevant_expr = _build_relevant_expression(q, question_map)
+
             q_row = {
                 "type": xls_type,
                 "name": q_name,
                 "label": q.label or q_name,
                 "required": "yes" if q.required else "no",
             }
+            if relevant_expr:
+                q_row["relevant"] = relevant_expr
             if appearance:
                 q_row["appearance"] = appearance
 
