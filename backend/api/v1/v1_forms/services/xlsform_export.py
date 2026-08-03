@@ -1,3 +1,4 @@
+import csv
 import io
 import openpyxl
 from typing import Tuple, List, Dict, Any, Optional
@@ -395,3 +396,54 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
     output.seek(0)
 
     return output, skipped
+
+
+def generate_administration_csv(form: Any, user: Any) -> str:
+    """
+    Generates a lookup CSV stream for cascade questions in XLSForm format.
+    Columns: list_name, name, label, parent_key
+    - Filters by Administration.objects.for_user(user)
+    - If form has cascade questions with 'max_level' specified in question.api,
+      caps the exported levels to max(max_level).
+    """
+    max_level = None
+    for group in form.form_question_group.all():
+        for q in group.question_group_question.all():
+            if (
+                q.type == QuestionTypes.cascade
+                and q.api
+                and isinstance(q.api, dict)
+            ):
+                lvl = q.api.get("max_level")
+                if lvl is not None and isinstance(lvl, int):
+                    max_level = (
+                        max(max_level, lvl) if max_level is not None else lvl
+                    )
+
+    from api.v1.v1_profile.models import Administration
+
+    qs = Administration.objects.for_user(user).select_related(
+        "level", "parent"
+    )
+    if max_level is not None:
+        qs = qs.filter(level__level__lte=max_level)
+
+    qs = qs.order_by("level__level", "id")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["list_name", "name", "label", "parent_key"])
+
+    for adm in qs:
+        name_val = adm.code if adm.code else str(adm.id)
+        label_val = adm.name or ""
+        parent_key_val = ""
+        if adm.parent:
+            parent_key_val = (
+                adm.parent.code if adm.parent.code else str(adm.parent.id)
+            )
+        writer.writerow(
+            ["administration", name_val, label_val, parent_key_val]
+        )
+
+    return output.getvalue()

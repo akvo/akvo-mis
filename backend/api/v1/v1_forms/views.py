@@ -43,7 +43,10 @@ from api.v1.v1_forms.functions import (
     validate_form_definition,
     validate_form_payload,
 )
-from api.v1.v1_forms.services.xlsform_export import generate_xlsform
+from api.v1.v1_forms.services.xlsform_export import (
+    generate_xlsform,
+    generate_administration_csv,
+)
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.serializers import (
     FormPublishedVersionSerializer,
@@ -992,6 +995,20 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         if skipped:
             resp["X-XLSForm-Skipped"] = ", ".join(skipped)
+        return resp
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Export administration cascade lookup CSV for form (FB-014)",
+        responses={(200, "text/csv"): OpenApiTypes.BINARY},
+    )
+    @action(detail=True, methods=["get"], url_path="administration-csv")
+    def export_administration_csv(self, request, *args, **kwargs):
+        form = self.get_object()
+        csv_str = generate_administration_csv(form, request.user)
+        filename = f"administration-form-{form.id}.csv"
+        resp = HttpResponse(csv_str, content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
 
     @extend_schema(
