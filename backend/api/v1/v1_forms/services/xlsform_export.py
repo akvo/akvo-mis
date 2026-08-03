@@ -27,8 +27,11 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
     Returns (None, None) for skipped types (tree, table, autofield).
     """
     qtype = question.type
-    rule = question.rule or {}
-    q_name = question.name or f"q_{question.id}"
+    rule = getattr(question, "rule", None) or {}
+    q_name = (
+        getattr(question, "name", None)
+        or f"q_{getattr(question, 'id', 'unknown')}"
+    )
 
     if qtype in (QuestionTypes.text, QuestionTypes.input):
         return ("text", None)
@@ -117,7 +120,9 @@ def _build_choices_rows(
                 options = q.question_question_option.all()
                 for opt in options:
                     if opt.other:
-                        continue  # 'or_other' handles the 'other' choice automatically in XLSForm
+                        continue
+                        # 'or_other' handles the 'other'
+                        # choice automatically in XLSForm
                     row = {
                         "list_name": list_name,
                         "name": str(
@@ -139,7 +144,8 @@ def _build_survey_rows(
     form: Any, question_map: Dict[int, Dict[str, Any]], lang_cols: List[str]
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
-    Builds flat list of survey sheet row dicts (begin/end group/repeat + question rows).
+    Builds flat list of survey sheet row dicts
+    (begin/end group/repeat + question rows).
     Returns (survey_rows, skipped_question_names).
     """
     survey_rows = []
