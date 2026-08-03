@@ -70,6 +70,7 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
+from utils.tenant_host import tenant_web_url
 
 
 # A week is long enough to survive a weekend and a spam folder, short
@@ -80,11 +81,18 @@ ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
 def send_activation_email(user):
     # The signed pk is the whole token — no state to store and no row to
     # clean up if the link is never followed. `activate` bounds its age.
+    #
+    # The link points at the registrant's own workspace host, because
+    # everything past it is bound to that host: activation hands back a
+    # session, and that session is only valid there.
     send_email(
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
-            "button_url": f"{WEBDOMAIN}/activate/{signing.dumps(user.pk)}",
+            "button_url": (
+                f"{tenant_web_url(user.tenant)}"
+                f"/activate/{signing.dumps(user.pk)}"
+            ),
         },
     )
 
@@ -196,6 +204,18 @@ def authenticated_response(user):
     return response
 
 
+def signing_in_elsewhere(request, user):
+    """Is this account signing in at another workspace's address?
+
+    Only the middleware's `request.tenant` is consulted, so this is
+    inert on a single-host deployment and on the base domain. The
+    middleware itself cannot cover login: the request carries no token
+    yet, so there is no session for it to compare against the host.
+    """
+    tenant = getattr(request, "tenant", None)
+    return bool(tenant and user.tenant_id != tenant.id)
+
+
 # TODO: Remove temp user entry and invite key from the response.
 @extend_schema(
     request=LoginSerializer,
@@ -204,6 +224,15 @@ def authenticated_response(user):
 )
 @api_view(["POST"])
 def login(request, version):
+    # On a SaaS deployment the main site signs people up; signing in
+    # happens at the workspace's own address. Refusing here, before the
+    # serializer, means the credentials are never even evaluated.
+    if settings.BASE_DOMAIN and getattr(request, "tenant", None) is None:
+        return Response(
+            {"message": "Sign in at your workspace address, not the main "
+                        "site"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     serializer = LoginSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -232,6 +261,11 @@ def login(request, version):
                 {"message": "User has been deleted"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        if signing_in_elsewhere(request, user):
+            return Response(
+                {"message": "This account belongs to a different workspace"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         return authenticated_response(user)
     # authenticate() returns None for a wrong password AND for a correct
     # password on an unverified account. Telling those apart is what lets the
@@ -244,8 +278,12 @@ def login(request, version):
         is_active=False,
         deleted_at=None,
     ).first()
-    if unverified and unverified.check_password(
-        serializer.validated_data["password"]
+    if (
+        unverified
+        and unverified.check_password(serializer.validated_data["password"])
+        # …but only at that account's own workspace. Elsewhere the oracle
+        # would answer for a workspace the visitor has no business in.
+        and not signing_in_elsewhere(request, unverified)
     ):
         return Response(
             {
@@ -260,6 +298,51 @@ def login(request, version):
     return Response(
         {"message": "Invalid login credentials"},
         status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            "TenantInfo",
+            fields={
+                "subdomain": serializers.CharField(),
+                "name": serializers.CharField(),
+            },
+        ),
+        204: OpenApiResponse(description="Not a workspace address"),
+    },
+    tags=["Auth"],
+    summary="Identify the workspace this address belongs to",
+)
+@api_view(["GET"])
+def tenant_info(request, version):
+    """Enough to brand the page before anyone has signed in.
+
+    Deliberately two fields and no more: this is anonymous, and the host
+    it answers for is guessable, so anything added here is published to
+    whoever tries the subdomain. Whether the workspace has finished
+    configuring itself is not among them — that decision belongs to the
+    signed-in user's own `configured` flag, and a visitor who has not
+    signed in cannot act on it.
+    """
+    tenant = getattr(request, "tenant", None)
+    if not tenant:
+        # The base domain, or a single-host deployment. Either way the
+        # caller learns there is no workspace here, which is the answer
+        # that sends it to the signup page.
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).first()
+    return Response(
+        {
+            "subdomain": tenant.subdomain,
+            # The root unit is the workspace's name — the tenant row
+            # itself only carries the subdomain.
+            "name": root.name if root else "",
+        },
+        status=status.HTTP_200_OK,
     )
 
 

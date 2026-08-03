@@ -5,7 +5,12 @@ module.exports = function (app) {
     ["/api/**", "/static-files/**"],
     createProxyMiddleware({
       target: "http://127.0.0.1:8000",
-      changeOrigin: true,
+      // Deliberately false. changeOrigin rewrites the Host header to the
+      // proxy's target, which would make every request arrive at Django
+      // as "127.0.0.1:8000" — and the backend resolves the tenant from
+      // exactly that header. With it on, no amount of /etc/hosts setup
+      // can reach a workspace locally.
+      changeOrigin: false,
     })
   );
   app.use(

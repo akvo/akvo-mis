@@ -94,6 +94,8 @@ Object {
   "selectedFormData": null,
   "showAdvancedFilters": false,
   "showContactFormModal": false,
+  "tenant": null,
+  "tenantLoaded": false,
   "user": null,
 }
 `;

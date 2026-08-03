@@ -7,9 +7,10 @@ import { useNotification, useResendActivation } from "../../util/hooks";
 
 const { Title, Text } = Typography;
 
-// The workspace address suffix is the host the browser is already on, so it
-// reads correctly on a deployment and during local development alike. There
-// is no configured base domain to draw on — subdomain routing arrives later.
+// Registration lives on the base domain, so the host the browser is already
+// on *is* the base domain — port and all. Reading it from the address bar
+// rather than from appConfig keeps this correct during local development,
+// where the port is part of the workspace address.
 const addressSuffix = `.${window.location.host}`;
 
 // Phase 1 of sign-up: just enough to claim a workspace. There is no login

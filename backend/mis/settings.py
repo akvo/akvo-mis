@@ -56,6 +56,24 @@ SECRET_KEY = environ["DJANGO_SECRET"]
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True if "DEBUG" in environ else False
 PROD = True if "PROD" in environ else False
+# True only when running under `manage.py test`. Used to keep legacy
+# test-only conveniences (the admin@akvo.org auto-create on login) out of
+# production code paths, and — since this iteration — to hold host
+# routing off for the suite. Matched positionally, so a stray "test"
+# argument to some other command cannot switch it on. Defined up here
+# because BASE_DOMAIN below now depends on it.
+TESTING = sys.argv[1:2] == ["test"]
+
+# Host-based tenant routing. Unset means single-host: every host is the
+# base domain, nothing resolves to a tenant, and the routing is inert —
+# which is how the test suite and any non-SaaS deployment run.
+#
+# Forced off under `test` whatever the environment says. The Django test
+# client's host is "testserver", which is nobody's base domain, so a
+# BASE_DOMAIN inherited from a developer's .env would 404 the entire
+# suite. The tests that exercise host routing opt back in with
+# override_settings, which is how they read anyway.
+BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
 
 ALLOWED_HOSTS = ["*"]
@@ -104,6 +122,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "middleware.tenant.TenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "middleware.user_activity.UserActivity",
@@ -264,12 +283,6 @@ EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")
 COUNTRY_NAME = "fiji"
 
 TEST_ENV = False
-
-# True only when running under `manage.py test`. Used to keep legacy
-# test-only conveniences (the admin@akvo.org auto-create on login) out
-# of production code paths. Matched positionally, so a stray "test"
-# argument to some other command cannot switch it on.
-TESTING = sys.argv[1:2] == ["test"]
 
 Q_CLUSTER = {
     "name": "DjangORM",

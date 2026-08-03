@@ -25,6 +25,14 @@ const defaultUIState = {
   forms: [],
   // Populated at runtime from GET /api/v1/levels (tenant-owned).
   levels: [],
+  // The workspace this host belongs to, from GET /api/v1/tenant-info.
+  // Null on the base domain and on a single-host deployment.
+  tenant: null,
+  // Whether that answer has arrived. "No workspace" and "not asked yet"
+  // are both `null` but demand opposite behaviour: acting on the second
+  // sends a workspace's own users to the find-workspace page, and a
+  // redirect is not something a later answer can undo.
+  tenantLoaded: false,
   selectedForm: null,
   selectedFormData: null,
   loadingForm: false,
