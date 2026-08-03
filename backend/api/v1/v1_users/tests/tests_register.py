@@ -24,10 +24,15 @@ class RegisterEndpointTestCase(TestCase):
         "subdomain": "acme",
     }
 
-    def register(self, **overrides):
+    def register(self, host=None, **overrides):
         payload = {**self.payload, **overrides}
+        # Registration lives on the base domain. Only the tests that set
+        # BASE_DOMAIN need to say so — the rest run single-host, where
+        # every host is the base domain.
+        extra = {"HTTP_HOST": host} if host else {}
         return self.client.post(
-            "/api/v1/register", payload, content_type="application/json"
+            "/api/v1/register", payload,
+            content_type="application/json", **extra
         )
 
     def registered_tenants(self):
@@ -59,6 +64,16 @@ class RegisterEndpointTestCase(TestCase):
         context = send.call_args.kwargs["context"]
         self.assertEqual(context["send_to"], ["founder@acme.org"])
         self.assertIn("/activate/", context["button_url"])
+
+    @override_settings(BASE_DOMAIN="app.com", WEBDOMAIN="https://app.com")
+    def test_the_activation_link_lands_on_the_new_workspace(self):
+        # Registration happens on the main site, but activation hands
+        # back a session — and that session is only valid on the
+        # workspace's own host, so the link has to go there.
+        with mock.patch("api.v1.v1_users.views.send_email") as send:
+            self.register(host="app.com")
+        url = send.call_args.kwargs["context"]["button_url"]
+        self.assertTrue(url.startswith("https://acme.app.com/activate/"), url)
 
     def test_unverified_registrant_cannot_log_in(self):
         with mock.patch("api.v1.v1_users.views.send_email"):

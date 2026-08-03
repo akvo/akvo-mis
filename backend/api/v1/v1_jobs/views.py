@@ -40,6 +40,10 @@ from api.v1.v1_jobs.serializers import (
 )
 from api.v1.v1_profile.models import Administration
 from utils import storage
+from utils.bulk_upload_gate import (
+    bulk_upload_ready,
+    bulk_upload_not_ready_response,
+)
 from utils.custom_serializer_fields import validate_serializers_message
 
 
@@ -350,6 +354,11 @@ def upload_excel(request, form_id, version):
 @parser_classes([MultiPartParser])
 @permission_classes([IsAuthenticated])
 def upload_bulk_administrators(request, version):
+    # Ahead of the file check: a file uploaded against an undefined
+    # hierarchy has nowhere to land, and refusing before the upload saves
+    # storing one.
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     serializer = UploadExcelSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -365,14 +374,27 @@ def upload_bulk_administrators(request, version):
     uuid = "_".join(str(uuid4()).split("-")[:-1])
     filename = f"administration-bulk-upload-{request.user.id}-{uuid}.xlsx"
     storage.upload(file=file_path, filename=filename, folder="upload")
+    # Recorded before the task is queued, so there is no window in which
+    # the worker is running against a job row that does not exist yet.
+    job = Jobs.objects.create(
+        type=JobTypes.seed_administration_data,
+        user=request.user,
+        status=JobStatus.pending,
+        info={"file": filename},
+    )
     task_id = async_task(
         "api.v1.v1_jobs.job.handle_administrations_bulk_upload",
         filename,
         request.user.id,
         timezone.now(),
+        job_id=job.id,
         task_name="administrator_bulk_upload",
         hook=("api.v1.v1_jobs.job." "handle_master_data_bulk_upload_failure"),
     )
+    # An UPDATE of this one column rather than job.save(): the worker may
+    # already have set the status, and saving a model loaded before the
+    # task was queued would write that stale value back over it.
+    Jobs.objects.filter(pk=job.pk).update(task_id=task_id)
     return Response(
         {
             "task_id": task_id,
