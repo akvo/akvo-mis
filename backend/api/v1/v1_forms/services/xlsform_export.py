@@ -21,6 +21,16 @@ _XLSFORM_COLUMNS = [
 ]
 
 
+def _get_options_manager(question: Any) -> Optional[Any]:
+    opts = getattr(question, "options", None)
+    if opts is not None and hasattr(opts, "all"):
+        return opts
+    opts = getattr(question, "question_question_option", None)
+    if opts is not None and hasattr(opts, "all"):
+        return opts
+    return None
+
+
 def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
     """
     Maps Akvo MIS question type to (xlsform_type_str, appearance_or_None).
@@ -43,15 +53,15 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
         return ("date", None)
     elif qtype == QuestionTypes.option:
         has_other = False
-        opts_mgr = getattr(question, "question_question_option", None)
-        if opts_mgr and hasattr(opts_mgr, "all"):
+        opts_mgr = _get_options_manager(question)
+        if opts_mgr:
             has_other = any(opt.other for opt in opts_mgr.all())
         suffix = " or_other" if has_other else ""
         return (f"select_one option_{q_name}{suffix}", None)
     elif qtype == QuestionTypes.multiple_option:
         has_other = False
-        opts_mgr = getattr(question, "question_question_option", None)
-        if opts_mgr and hasattr(opts_mgr, "all"):
+        opts_mgr = _get_options_manager(question)
+        if opts_mgr:
             has_other = any(opt.other for opt in opts_mgr.all())
         suffix = " or_other" if has_other else ""
         return (f"select_multiple option_{q_name}{suffix}", None)
@@ -117,7 +127,8 @@ def _build_choices_rows(
         for q in group.question_group_question.all():
             if q.type in (QuestionTypes.option, QuestionTypes.multiple_option):
                 list_name = f"option_{q.name or f'q_{q.id}'}"
-                options = q.question_question_option.all()
+                opts_mgr = _get_options_manager(q)
+                options = opts_mgr.all() if opts_mgr else []
                 for opt in options:
                     if opt.other:
                         continue
