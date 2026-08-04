@@ -270,9 +270,7 @@ class XLSFormExportServiceTestCase(TestCase):
         q_row = rows[1]
         self.assertEqual(q_row["type"], "text")
         self.assertEqual(q_row["name"], "member_name")
-        self.assertEqual(q_row["label"], "Member Name")
         self.assertEqual(q_row["required"], "yes")
-        self.assertEqual(q_row["hint"], "Enter full name")
         self.assertEqual(q_row["label::es"], "Nombre")
         self.assertEqual(q_row["hint::es"], "Nombre completo")
 
@@ -319,7 +317,6 @@ class XLSFormExportServiceTestCase(TestCase):
         headers = [cell.value for cell in ws_survey[1]]
         self.assertIn("type", headers)
         self.assertIn("name", headers)
-        self.assertIn("label", headers)
         self.assertIn("label::en", headers)
 
         # Check settings values

@@ -297,9 +297,19 @@ def _build_survey_rows(
             q_row = {
                 "type": xls_type,
                 "name": q_name,
-                "label": q.label or q_name,
                 "required": "yes" if getattr(q, "required", False) else "no",
             }
+            main_label = q.label or q_name
+            if lang_cols:
+                # Set default language label as fallback for
+                # primary language column
+                d_lang = (
+                    getattr(form, "default_language", None) or lang_cols[0]
+                )
+                q_row[f"label::{d_lang}"] = main_label
+            else:
+                q_row["label"] = main_label
+
             if relevant_expr:
                 q_row["relevant"] = relevant_expr
             if constraint_expr:
@@ -314,7 +324,14 @@ def _build_survey_rows(
                 and isinstance(q.tooltip, dict)
                 and q.tooltip.get("text")
             ):
-                q_row["hint"] = q.tooltip["text"]
+                hint_text = q.tooltip["text"]
+                if lang_cols:
+                    d_lang = (
+                        getattr(form, "default_language", None) or lang_cols[0]
+                    )
+                    q_row[f"hint::{d_lang}"] = hint_text
+                else:
+                    q_row["hint"] = hint_text
 
             # Translations
             if q.translations and isinstance(q.translations, dict):
@@ -363,14 +380,30 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
     survey_rows, skipped = _build_survey_rows(form, question_map, lang_cols)
 
     # Build dynamic columns (base + multilingual label/hint)
-    cols = list(_XLSFORM_COLUMNS)
-    for code in lang_cols:
-        lbl_col = f"label::{code}"
-        hint_col = f"hint::{code}"
-        if lbl_col not in cols:
-            cols.append(lbl_col)
-        if hint_col not in cols:
-            cols.append(hint_col)
+    cols = []
+    for c in _XLSFORM_COLUMNS:
+        if c == "label":
+            if lang_cols:
+                for code in lang_cols:
+                    cols.append(f"label::{code}")
+            else:
+                cols.append("label")
+        elif c == "hint":
+            if lang_cols:
+                for code in lang_cols:
+                    cols.append(f"hint::{code}")
+            else:
+                cols.append("hint")
+        else:
+            cols.append(c)
+
+    seen = set()
+    final_cols = []
+    for c in cols:
+        if c not in seen:
+            seen.add(c)
+            final_cols.append(c)
+    cols = final_cols
 
     ws_survey.append(cols)
     for row in survey_rows:
@@ -378,11 +411,12 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
 
     # 3. Choices Sheet
     choices_rows = _build_choices_rows(form, lang_cols)
-    choice_cols = ["list_name", "name", "label"]
-    for code in lang_cols:
-        col = f"label::{code}"
-        if col not in choice_cols:
-            choice_cols.append(col)
+    if lang_cols:
+        choice_cols = ["list_name", "name"] + [
+            f"label::{code}" for code in lang_cols
+        ]
+    else:
+        choice_cols = ["list_name", "name", "label"]
 
     ws_choices.append(choice_cols)
     for row in choices_rows:

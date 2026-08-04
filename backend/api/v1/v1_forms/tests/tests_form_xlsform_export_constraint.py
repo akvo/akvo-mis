@@ -92,9 +92,61 @@ class XLSFormExportConstraintTestCase(TestCase):
         # Check valid question row
         q_row = next((r for r in rows if r.get("name") == "q_text"), None)
         self.assertIsNotNone(q_row)
-        self.assertEqual(q_row["label"], "English Label")
         self.assertEqual(q_row["label::es"], "Spanish Label")
 
         # Check addons are omitted from row fields
         self.assertNotIn("addon_before", q_row)
         self.assertNotIn("addon_after", q_row)
+
+    def test_multilingual_no_unnamed_translation_columns(self):
+        """
+        Verify that when form.languages is set, survey and choices sheets
+        use language-tagged columns (label::en, label::es) and
+        omit bare 'label' to prevent pyxform/KoboToolbox unnamed
+        translation errors.
+        """
+        from api.v1.v1_forms.services.xlsform_export import generate_xlsform
+
+        q = DummyObject(
+            id=1,
+            name="q1",
+            type=QuestionTypes.text,
+            label="Question 1",
+            tooltip={"text": "Hint 1"},
+            translations={"es": {"label": "Pregunta 1"}},
+        )
+        g = DummyObject(
+            name="g1", repeat=False, question_group_question=MagicMock()
+        )
+        g.question_group_question.all.return_value = [q]
+
+        f = DummyObject(
+            id=100,
+            name="MultiLang Form",
+            version=1,
+            default_language="en",
+            languages=["en", "es"],
+            form_question_group=MagicMock(),
+        )
+        f.form_question_group.all.return_value = [g]
+
+        stream, _ = generate_xlsform(f)
+        import openpyxl
+
+        wb = openpyxl.load_workbook(stream)
+
+        survey_headers = [cell.value for cell in wb["survey"][1]]
+        choices_headers = [cell.value for cell in wb["choices"][1]]
+
+        # Language-tagged columns MUST be present
+        self.assertIn("label::en", survey_headers)
+        self.assertIn("label::es", survey_headers)
+        self.assertIn("hint::en", survey_headers)
+        self.assertIn("hint::es", survey_headers)
+        self.assertIn("label::en", choices_headers)
+        self.assertIn("label::es", choices_headers)
+
+        # Bare 'label' and 'hint' MUST be omitted to prevent pyxform errors
+        self.assertNotIn("label", survey_headers)
+        self.assertNotIn("hint", survey_headers)
+        self.assertNotIn("label", choices_headers)
