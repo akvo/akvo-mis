@@ -235,6 +235,8 @@ const uiText = {
     formBuilderEmptyText: "No forms found",
     formBuilderExportButton: "Export",
     formBuilderExportError: "Failed to export form",
+    formBuilderExportXlsformButton: "Export XLSForm",
+    formBuilderExportXlsformError: "Failed to export XLSForm",
     formBuilderImportButton: "Import Form",
     formBuilderImportModalTitle: "Import Form",
     formBuilderImportDraggerText: "Click or drag a form export file here",

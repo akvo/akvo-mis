@@ -33,7 +33,13 @@ import {
 } from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { FormStatusTag, ImportFormModal } from "./components";
-import { api, store, uiText, REGISTRATION_FORM } from "../../lib";
+import {
+  api,
+  store,
+  uiText,
+  REGISTRATION_FORM,
+  MONITORING_FORM,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { fetchPublishedForms } from "../../util/form";
 import "./style.scss";
@@ -210,6 +216,37 @@ const FormBuilderList = () => {
       });
   };
 
+  const onExportXlsform = (id) => {
+    api
+      .get(`/manage/forms/${id}/export-xlsform`, { responseType: "blob" })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({
+            type: "error",
+            message: text.formBuilderExportXlsformError,
+          });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        notify({
+          type: "error",
+          message: text.formBuilderExportXlsformError,
+        });
+      });
+  };
+
   const formatDate = (value) => {
     if (!value) {
       return "—";
@@ -226,16 +263,26 @@ const FormBuilderList = () => {
   };
 
   const nameColumn = {
-    title: text.formBuilderNameCol,
+    title: text.formBuilderFormNameCol,
     dataIndex: "name",
     key: "name",
+    render: (val, record) => (
+      <span
+        className="form-name-link"
+        onClick={() => {
+          navigate(`/control-center/form-builder/${record.id}/edit`);
+        }}
+      >
+        {val}
+      </span>
+    ),
   };
 
   const typeColumn = {
     title: text.formBuilderTypeCol,
     key: "type",
     render: (_, record) =>
-      record.parent
+      record.type === MONITORING_FORM
         ? text.formBuilderMonitoringType
         : text.formBuilderRegistrationType,
   };
@@ -255,7 +302,10 @@ const FormBuilderList = () => {
   const renderActiveActions = (_, record) => {
     const canCreateMonitoring =
       record.status === "published" && record.type === REGISTRATION_FORM;
-    const menuItems = [{ key: "export", label: text.formBuilderExportButton }];
+    const menuItems = [
+      { key: "export", label: text.formBuilderExportButton },
+      { key: "exportXlsform", label: text.formBuilderExportXlsformButton },
+    ];
     if (record.status === "draft" && ability.can("publish", "form-builder")) {
       menuItems.push({ key: "publish", label: text.formBuilderPublishButton });
     }
@@ -287,6 +337,8 @@ const FormBuilderList = () => {
         onDuplicate(record.id);
       } else if (key === "export") {
         onExport(record.id);
+      } else if (key === "exportXlsform") {
+        onExportXlsform(record.id);
       } else if (key === "publish") {
         Modal.confirm({
           title: text.formBuilderPublishConfirmTitle,
