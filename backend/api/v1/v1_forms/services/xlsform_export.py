@@ -298,7 +298,7 @@ def _build_survey_rows(
                 "type": xls_type,
                 "name": q_name,
                 "label": q.label or q_name,
-                "required": "yes" if q.required else "no",
+                "required": "yes" if getattr(q, "required", False) else "no",
             }
             if relevant_expr:
                 q_row["relevant"] = relevant_expr
@@ -323,14 +323,12 @@ def _build_survey_rows(
                     if isinstance(trans, dict):
                         if "label" in trans:
                             q_row[f"label::{lang_code}"] = trans["label"]
-                        if (
-                            "tooltip" in trans
-                            and isinstance(trans["tooltip"], dict)
-                            and trans["tooltip"].get("text")
-                        ):
-                            q_row[f"hint::{lang_code}"] = trans["tooltip"][
-                                "text"
-                            ]
+                        if "tooltip" in trans and trans["tooltip"]:
+                            t_val = trans["tooltip"]
+                            if isinstance(t_val, str):
+                                q_row[f"hint::{lang_code}"] = t_val
+                            elif isinstance(t_val, dict) and t_val.get("text"):
+                                q_row[f"hint::{lang_code}"] = t_val["text"]
 
             survey_rows.append(q_row)
 
