@@ -343,3 +343,61 @@ class XLSFormExportServiceTestCase(TestCase):
         s_map = dict(zip(settings_headers, settings_values))
         self.assertEqual(s_map["form_title"], "Test Form")
         self.assertEqual(s_map["default_language"], "English (en)")
+
+    def test_generate_xlsform_dict_payload_with_indonesian_translations(self):
+        dict_payload = {
+            "id": 4,
+            "name": "Test Form 4",
+            "version": 1,
+            "languages": ["en", "id"],
+            "defaultLanguage": "en",
+            "translations": [
+                {"language": "id", "name": "Formulir Percobaan 4"}
+            ],
+            "question_group": [
+                {
+                    "id": 44,
+                    "name": "completeness_check",
+                    "label": "Completeness Check",
+                    "translations": [
+                        {"language": "id", "name": "Memastikan Komplit"}
+                    ],
+                    "question": [
+                        {
+                            "id": 442,
+                            "name": "name",
+                            "label": "Your full name",
+                            "type": "text",
+                            "required": True,
+                            "translations": [
+                                {"language": "id", "name": "Nama lengkap"}
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        stream, skipped = generate_xlsform(dict_payload)
+        self.assertEqual(skipped, [])
+
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+
+        headers = [cell.value for cell in ws_survey[1]]
+        self.assertIn("label::English (en)", headers)
+        self.assertIn("label::Indonesian (id)", headers)
+
+        # Check row 2 (group)
+        r2 = [cell.value for cell in ws_survey[2]]
+        r2_map = dict(zip(headers, r2))
+        self.assertEqual(r2_map["label::English (en)"], "Completeness Check")
+        self.assertEqual(
+            r2_map["label::Indonesian (id)"], "Memastikan Komplit"
+        )
+
+        # Check row 3 (question 'name')
+        r3 = [cell.value for cell in ws_survey[3]]
+        r3_map = dict(zip(headers, r3))
+        self.assertEqual(r3_map["label::English (en)"], "Your full name")
+        self.assertEqual(r3_map["label::Indonesian (id)"], "Nama lengkap")

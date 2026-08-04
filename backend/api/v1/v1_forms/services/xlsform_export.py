@@ -137,43 +137,143 @@ def _lang_display(code: str) -> str:
     return _LANG_NAMES.get(code, f"{code.capitalize()} ({code})")
 
 
+def _extract_iso(display_or_code: str) -> str:
+    """
+    Extracts ISO code from 'English (en)' -> 'en' or returns code directly.
+    """
+    import re as _re
+
+    m = _re.search(r"\(([^)]+)\)$", display_or_code)
+    return m.group(1) if m else display_or_code
+
+
+def _extract_translation(translations: Any, target_iso: str) -> Dict[str, str]:
+    """
+    Extracts translation dictionary for target ISO code.
+    Handles list-of-dicts format used in DB:
+    [{"language": "id", "name": "Judul", "label": "Judul", "tooltip": "Hint"}]
+    and dict format:
+        {"id": {"label": "Judul", "name": "Judul", "tooltip": "Hint"}}
+    Returns dict with optional 'label' and 'hint' keys.
+    """
+    if not translations:
+        return {}
+
+    label_val: Optional[str] = None
+    hint_val: Optional[str] = None
+
+    if isinstance(translations, list):
+        for item in translations:
+            if isinstance(item, dict):
+                lang = (
+                    item.get("language")
+                    or item.get("lang")
+                    or item.get("code")
+                )
+                if lang == target_iso:
+                    label_val = item.get("label") or item.get("name")
+                    hint_val = (
+                        item.get("tooltip")
+                        or item.get("hint")
+                        or item.get("text")
+                    )
+                    break
+    elif isinstance(translations, dict):
+        trans = translations.get(target_iso, {})
+        if isinstance(trans, dict):
+            label_val = trans.get("label") or trans.get("name")
+            hint_val = (
+                trans.get("tooltip") or trans.get("hint") or trans.get("text")
+            )
+            if isinstance(hint_val, dict):
+                hint_val = hint_val.get("text") or hint_val.get("tooltip")
+
+    res: Dict[str, str] = {}
+    if label_val and isinstance(label_val, str) and label_val.strip():
+        res["label"] = label_val.strip()
+    if hint_val and isinstance(hint_val, str) and hint_val.strip():
+        res["hint"] = hint_val.strip()
+    return res
+
+
 def _clean_lang_cols(
     raw_languages: Any,
     default_language: Optional[str] = None,
+    form_obj: Optional[Any] = None,
 ) -> List[str]:
     """
-    Returns list of XLSForm language display names (e.g. ['English (en)']).
-    Always returns at least one entry (defaults to 'English (en)').
-    Multiple languages -> multilingual export with label::{display} per lang.
-    Single / no languages -> single named language (avoids KoboToolbox
-    'unnamed translation' error that occurs with bare 'label' columns).
+    Returns list of XLSForm language display names
+    (e.g. ['English (en)', 'Indonesian (id)']).
+    Collects codes from raw_languages, default_language,
+    and any translations found in form/groups/questions.
     """
     codes: List[str] = []
+
+    # 1. Primary: default_language (if present)
+    if (
+        default_language
+        and isinstance(default_language, str)
+        and default_language.strip()
+    ):
+        codes.append(default_language.strip())
+
+    # 2. Languages array
     if raw_languages and isinstance(raw_languages, list):
         for item in raw_languages:
+            code = None
             if isinstance(item, str) and item.strip():
                 code = item.strip()
-                if code not in codes:
-                    codes.append(code)
             elif isinstance(item, dict):
                 code = item.get("code") or item.get("name") or item.get("id")
-                if code and isinstance(code, str) and code.strip():
-                    c_str = code.strip()
-                    if c_str not in codes:
-                        codes.append(c_str)
+            if code and isinstance(code, str) and code.strip():
+                c_str = code.strip()
+                if c_str not in codes:
+                    codes.append(c_str)
+
+    # 3. Scan form/group/question translations if form_obj provided
+    if form_obj:
+        # Form level
+        f_trans = getattr(form_obj, "translations", None)
+        if isinstance(f_trans, list):
+            for t in f_trans:
+                if isinstance(t, dict):
+                    lang = t.get("language") or t.get("lang") or t.get("code")
+                    if lang and lang not in codes:
+                        codes.append(lang)
+
+        # Groups and Questions level
+        groups = getattr(form_obj, "form_question_group", None)
+        if groups and hasattr(groups, "all"):
+            for g in groups.all():
+                g_trans = getattr(g, "translations", None)
+                if isinstance(g_trans, list):
+                    for t in g_trans:
+                        if isinstance(t, dict):
+                            lang = (
+                                t.get("language")
+                                or t.get("lang")
+                                or t.get("code")
+                            )
+                            if lang and lang not in codes:
+                                codes.append(lang)
+
+                qs = getattr(g, "question_group_question", None)
+                if qs and hasattr(qs, "all"):
+                    for q in qs.all():
+                        q_trans = getattr(q, "translations", None)
+                        if isinstance(q_trans, list):
+                            for t in q_trans:
+                                if isinstance(t, dict):
+                                    lang = (
+                                        t.get("language")
+                                        or t.get("lang")
+                                        or t.get("code")
+                                    )
+                                    if lang and lang not in codes:
+                                        codes.append(lang)
 
     if not codes:
-        # No explicit languages: fall back to default_language or 'en'
-        fallback = (
-            default_language.strip()
-            if (
-                default_language
-                and isinstance(default_language, str)
-                and default_language.strip()
-            )
-            else _DEFAULT_LANG_CODE
-        )
-        codes = [fallback]
+        codes = [_DEFAULT_LANG_CODE]
 
     return [_lang_display(c) for c in codes]
 
@@ -188,6 +288,7 @@ def _build_settings_row(form: Any) -> Dict[str, Any]:
     lang_cols = _clean_lang_cols(
         getattr(form, "languages", None),
         getattr(form, "default_language", None),
+        form_obj=form,
     )
     # lang_cols[0] is always the display name (e.g. 'English (en)')
     d_lang_display = lang_cols[0]
@@ -232,16 +333,14 @@ def _build_choices_rows(
                     }
 
                     # Handle translations: lang_cols[1:] are extra languages
-                    if opt.translations and isinstance(opt.translations, dict):
+                    if opt.translations:
                         for display in lang_cols[1:]:
-                            # Extract ISO code from 'English (en)' -> 'en'
-                            import re as _re
-
-                            m = _re.search(r"\(([^)]+)\)$", display)
-                            iso = m.group(1) if m else display
-                            trans = opt.translations.get(iso, {})
-                            if isinstance(trans, dict) and "label" in trans:
-                                row[f"label::{display}"] = trans["label"]
+                            iso = _extract_iso(display)
+                            trans_data = _extract_translation(
+                                opt.translations, iso
+                            )
+                            if "label" in trans_data:
+                                row[f"label::{display}"] = trans_data["label"]
                     choices.append(row)
     return choices
 
@@ -372,15 +471,12 @@ def _build_survey_rows(
             f"label::{d_lang_display}": g_label,
         }
 
-        if group.translations and isinstance(group.translations, dict):
-            import re as _re
-
+        if group.translations:
             for display in lang_cols[1:]:
-                m = _re.search(r"\(([^)]+)\)$", display)
-                iso = m.group(1) if m else display
-                trans = group.translations.get(iso, {})
-                if isinstance(trans, dict) and "label" in trans:
-                    begin_row[f"label::{display}"] = trans["label"]
+                iso = _extract_iso(display)
+                trans_data = _extract_translation(group.translations, iso)
+                if "label" in trans_data:
+                    begin_row[f"label::{display}"] = trans_data["label"]
         survey_rows.append(begin_row)
 
         for q in group.question_group_question.all():
@@ -419,22 +515,14 @@ def _build_survey_rows(
                 q_row[f"hint::{d_lang_display}"] = q.tooltip["text"]
 
             # Translations for extra languages
-            if q.translations and isinstance(q.translations, dict):
-                import re as _re
-
+            if q.translations:
                 for display in lang_cols[1:]:
-                    m = _re.search(r"\(([^)]+)\)$", display)
-                    iso = m.group(1) if m else display
-                    trans = q.translations.get(iso, {})
-                    if isinstance(trans, dict):
-                        if "label" in trans:
-                            q_row[f"label::{display}"] = trans["label"]
-                        if "tooltip" in trans and trans["tooltip"]:
-                            t_val = trans["tooltip"]
-                            if isinstance(t_val, str):
-                                q_row[f"hint::{display}"] = t_val
-                            elif isinstance(t_val, dict) and t_val.get("text"):
-                                q_row[f"hint::{display}"] = t_val["text"]
+                    iso = _extract_iso(display)
+                    trans_data = _extract_translation(q.translations, iso)
+                    if "label" in trans_data:
+                        q_row[f"label::{display}"] = trans_data["label"]
+                    if "hint" in trans_data:
+                        q_row[f"hint::{display}"] = trans_data["hint"]
 
             survey_rows.append(q_row)
 
@@ -445,16 +533,86 @@ def _build_survey_rows(
     return survey_rows, skipped
 
 
+class _DictObject:
+    def __init__(self, d: dict):
+        self._d = d
+        self.repeatable = False
+        self.label = None
+        self.tooltip = None
+        self.translations = None
+        self.rule = None
+        self.dependency = None
+        self.dependency_rule = None
+        self.required = False
+        for k, v in d.items():
+            setattr(self, k, v)
+        if "defaultLanguage" in d and not hasattr(self, "default_language"):
+            self.default_language = d["defaultLanguage"]
+        if "shortLabel" in d and not hasattr(self, "short_label"):
+            self.short_label = d["shortLabel"]
+        if "dependencyRule" in d:
+            self.dependency_rule = d["dependencyRule"]
+
+
+class _QuerySetAdapter:
+    def __init__(self, items: list):
+        self._items = items
+
+    def all(self):
+        return self._items
+
+
+def _adapt_form_dict(data: dict) -> Any:
+    """
+    Wraps a form payload dict (from published version snapshot or serializer)
+    into an object exposing the Django ORM model interface
+    expected by the generator.
+    """
+    groups = []
+    raw_groups = (
+        data.get("question_group") or data.get("question_groups") or []
+    )
+    for g_dict in raw_groups:
+        questions = []
+        raw_qs = g_dict.get("question") or g_dict.get("questions") or []
+        for q_dict in raw_qs:
+            opts = []
+            raw_opts = q_dict.get("option") or q_dict.get("options") or []
+            for opt_dict in raw_opts:
+                opts.append(_DictObject(opt_dict))
+            q_obj = _DictObject(q_dict)
+            q_obj.options = _QuerySetAdapter(opts)
+
+            # Map type string (e.g. 'text', 'cascade', 'attachment')
+            # to QuestionTypes integer
+            if isinstance(q_obj.type, str):
+                t_str = q_obj.type.lower()
+                if hasattr(QuestionTypes, t_str):
+                    q_obj.type = getattr(QuestionTypes, t_str)
+                elif t_str in ("input", "text"):
+                    q_obj.type = QuestionTypes.text
+                elif t_str == "administration":
+                    q_obj.type = QuestionTypes.cascade
+
+            questions.append(q_obj)
+        g_obj = _DictObject(g_dict)
+        g_obj.question_group_question = _QuerySetAdapter(questions)
+        groups.append(g_obj)
+
+    f_obj = _DictObject(data)
+    f_obj.form_question_group = _QuerySetAdapter(groups)
+    return f_obj
+
+
 def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
     """
     Public entrypoint: generates XLSForm workbook for a given form.
-    Returns (BytesIO_excel_stream, skipped_question_names).
-
-    Always exports with named language headers (e.g. 'label::English (en)')
-    so KoboToolbox can name translations and allow form editing without
-    the 'unnamed translation' error. Defaults to English (en) for
-    forms with no explicit language configuration.
+    Supports both Forms Django ORM model instances and dictionary
+    payloads (snapshots).
     """
+    if isinstance(form, dict):
+        form = _adapt_form_dict(form)
+
     wb = openpyxl.Workbook()
     ws_survey = wb.active
     ws_survey.title = "survey"

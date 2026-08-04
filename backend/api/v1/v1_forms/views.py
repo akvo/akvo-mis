@@ -985,7 +985,16 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="export-xlsform")
     def export_xlsform(self, request, *args, **kwargs):
         form = self.get_object()
-        stream, skipped = generate_xlsform(form)
+        target_form = form
+        if form.status == FormStatus.published:
+            pv = (
+                form.active_version
+                or form.published_versions.order_by("-version").first()
+            )
+            if pv:
+                target_form = _form_detail_from_snapshot(form, pv)
+
+        stream, skipped = generate_xlsform(target_form)
         slug = re.sub(r"[^a-z0-9]+", "-", form.name.lower()).strip("-")
         filename = f"form-{form.id}-{slug}.xlsx"
         resp = HttpResponse(
