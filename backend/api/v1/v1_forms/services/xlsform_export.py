@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import openpyxl
 from typing import Tuple, List, Dict, Any, Optional
 from api.v1.v1_forms.constants import QuestionTypes
@@ -141,9 +142,7 @@ def _extract_iso(display_or_code: str) -> str:
     """
     Extracts ISO code from 'English (en)' -> 'en' or returns code directly.
     """
-    import re as _re
-
-    m = _re.search(r"\(([^)]+)\)$", display_or_code)
+    m = re.search(r"\(([^)]+)\)$", display_or_code)
     return m.group(1) if m else display_or_code
 
 
@@ -196,6 +195,50 @@ def _extract_translation(translations: Any, target_iso: str) -> Dict[str, str]:
     return res
 
 
+def _collect_translation_languages(form_obj: Any, codes: List[str]) -> None:
+    """
+    Helper to discover language codes defined inside
+    form/group/question translations.
+    """
+
+    def _add_code(raw_code: Any) -> None:
+        if raw_code and isinstance(raw_code, str) and raw_code.strip():
+            c = raw_code.strip()
+            if c not in codes:
+                codes.append(c)
+
+    # Form level
+    f_trans = getattr(form_obj, "translations", None)
+    if isinstance(f_trans, list):
+        for t in f_trans:
+            if isinstance(t, dict):
+                _add_code(t.get("language") or t.get("lang") or t.get("code"))
+
+    # Groups & questions level
+    groups = getattr(form_obj, "form_question_group", None)
+    if groups and hasattr(groups, "all"):
+        for g in groups.all():
+            g_trans = getattr(g, "translations", None)
+            if isinstance(g_trans, list):
+                for t in g_trans:
+                    if isinstance(t, dict):
+                        _add_code(
+                            t.get("language") or t.get("lang") or t.get("code")
+                        )
+            qs = getattr(g, "question_group_question", None)
+            if qs and hasattr(qs, "all"):
+                for q in qs.all():
+                    q_trans = getattr(q, "translations", None)
+                    if isinstance(q_trans, list):
+                        for t in q_trans:
+                            if isinstance(t, dict):
+                                _add_code(
+                                    t.get("language")
+                                    or t.get("lang")
+                                    or t.get("code")
+                                )
+
+
 def _clean_lang_cols(
     raw_languages: Any,
     default_language: Optional[str] = None,
@@ -204,8 +247,8 @@ def _clean_lang_cols(
     """
     Returns list of XLSForm language display names
     (e.g. ['English (en)', 'Indonesian (id)']).
-    Collects codes from raw_languages, default_language,
-    and any translations found in form/groups/questions.
+    Collects codes from default_language, raw_languages, and any translations
+    found in form/groups/questions.
     """
     codes: List[str] = []
 
@@ -232,45 +275,7 @@ def _clean_lang_cols(
 
     # 3. Scan form/group/question translations if form_obj provided
     if form_obj:
-        # Form level
-        f_trans = getattr(form_obj, "translations", None)
-        if isinstance(f_trans, list):
-            for t in f_trans:
-                if isinstance(t, dict):
-                    lang = t.get("language") or t.get("lang") or t.get("code")
-                    if lang and lang not in codes:
-                        codes.append(lang)
-
-        # Groups and Questions level
-        groups = getattr(form_obj, "form_question_group", None)
-        if groups and hasattr(groups, "all"):
-            for g in groups.all():
-                g_trans = getattr(g, "translations", None)
-                if isinstance(g_trans, list):
-                    for t in g_trans:
-                        if isinstance(t, dict):
-                            lang = (
-                                t.get("language")
-                                or t.get("lang")
-                                or t.get("code")
-                            )
-                            if lang and lang not in codes:
-                                codes.append(lang)
-
-                qs = getattr(g, "question_group_question", None)
-                if qs and hasattr(qs, "all"):
-                    for q in qs.all():
-                        q_trans = getattr(q, "translations", None)
-                        if isinstance(q_trans, list):
-                            for t in q_trans:
-                                if isinstance(t, dict):
-                                    lang = (
-                                        t.get("language")
-                                        or t.get("lang")
-                                        or t.get("code")
-                                    )
-                                    if lang and lang not in codes:
-                                        codes.append(lang)
+        _collect_translation_languages(form_obj, codes)
 
     if not codes:
         codes = [_DEFAULT_LANG_CODE]
@@ -307,11 +312,11 @@ def _build_choices_rows(
     Builds list of choice dicts for select_one / select_multiple options.
     lang_cols contains display names like ['English (en)', 'French (fr)'].
     The first display name is used for the default language label.
-    Translations are looked up by extracting the ISO code from the
-    display name.
     """
     choices = []
-    d_lang_display = lang_cols[0]  # e.g. 'English (en)'
+    d_lang_display = lang_cols[0]
+    secondary_langs = [(disp, _extract_iso(disp)) for disp in lang_cols[1:]]
+
     for group in form.form_question_group.all():
         for q in group.question_group_question.all():
             if q.type in (QuestionTypes.option, QuestionTypes.multiple_option):
@@ -332,16 +337,14 @@ def _build_choices_rows(
                         f"label::{d_lang_display}": g_label,
                     }
 
-                    # Handle translations: lang_cols[1:] are extra languages
-                    for display in lang_cols[1:]:
-                        iso = _extract_iso(display)
+                    # Handle translations: secondary languages
+                    # with primary fallback
+                    for display, iso in secondary_langs:
                         trans_data = (
                             _extract_translation(opt.translations, iso)
                             if opt.translations
                             else {}
                         )
-                        # Fallback to primary option label
-                        # if translation missing
                         row[f"label::{display}"] = (
                             trans_data.get("label") or g_label
                         )
@@ -460,7 +463,8 @@ def _build_survey_rows(
     """
     survey_rows = []
     skipped = []
-    d_lang_display = lang_cols[0]  # primary language display name
+    d_lang_display = lang_cols[0]
+    secondary_langs = [(disp, _extract_iso(disp)) for disp in lang_cols[1:]]
 
     for group in form.form_question_group.all():
         g_name = group.name or f"group_{group.id}"
@@ -475,14 +479,12 @@ def _build_survey_rows(
             f"label::{d_lang_display}": g_label,
         }
 
-        for display in lang_cols[1:]:
-            iso = _extract_iso(display)
+        for display, iso in secondary_langs:
             trans_data = (
                 _extract_translation(group.translations, iso)
                 if group.translations
                 else {}
             )
-            # Fallback to primary group label if translation missing
             begin_row[f"label::{display}"] = trans_data.get("label") or g_label
         survey_rows.append(begin_row)
 
@@ -524,19 +526,15 @@ def _build_survey_rows(
             # Translations for extra languages with primary fallback
             primary_label = q.label or q_name
             primary_hint = q_row.get(f"hint::{d_lang_display}")
-            for display in lang_cols[1:]:
-                iso = _extract_iso(display)
+            for display, iso in secondary_langs:
                 trans_data = (
                     _extract_translation(q.translations, iso)
                     if q.translations
                     else {}
                 )
-                # Fallback to primary label if translation missing
                 q_row[f"label::{display}"] = (
                     trans_data.get("label") or primary_label
                 )
-                # Fallback to primary hint
-                # if primary hint exists and translation missing
                 if primary_hint:
                     q_row[f"hint::{display}"] = (
                         trans_data.get("hint") or primary_hint
