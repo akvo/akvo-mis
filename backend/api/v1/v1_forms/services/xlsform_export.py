@@ -700,6 +700,9 @@ def generate_administration_csv(form: Any, user: Any) -> str:
     - If form has cascade questions with 'max_level' specified in question.api,
       caps the exported levels to max(max_level).
     """
+    if isinstance(form, dict):
+        form = _adapt_form_dict(form)
+
     max_level = None
     for group in form.form_question_group.all():
         for q in group.question_group_question.all():

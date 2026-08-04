@@ -1014,8 +1014,17 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="administration-csv")
     def export_administration_csv(self, request, *args, **kwargs):
         form = self.get_object()
-        csv_str = generate_administration_csv(form, request.user)
-        filename = f"administration-form-{form.id}.csv"
+        target_form = form
+        if form.status == FormStatus.published:
+            pv = (
+                form.active_version
+                or form.published_versions.order_by("-version").first()
+            )
+            if pv:
+                target_form = _form_detail_from_snapshot(form, pv)
+
+        csv_str = generate_administration_csv(target_form, request.user)
+        filename = "administration.csv"
         resp = HttpResponse(csv_str, content_type="text/csv")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp

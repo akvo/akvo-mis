@@ -51,7 +51,7 @@ class FormAdministrationCSVExportEndpointTestCase(TestCase):
         self.assertIn("text/csv", res["Content-Type"])
         disposition = res.get("Content-Disposition", "")
         self.assertIn("attachment", disposition)
-        self.assertIn(f"administration-form-{self.form.id}.csv", disposition)
+        self.assertIn("administration.csv", disposition)
 
         # Check CSV content header and rows
         content = res.content.decode("utf-8")
