@@ -401,3 +401,39 @@ class XLSFormExportServiceTestCase(TestCase):
         r3_map = dict(zip(headers, r3))
         self.assertEqual(r3_map["label::English (en)"], "Your full name")
         self.assertEqual(r3_map["label::Indonesian (id)"], "Nama lengkap")
+
+    def test_missing_translation_falls_back_to_primary_label(self):
+        dict_payload = {
+            "id": 5,
+            "name": "Fallback Test Form",
+            "version": 1,
+            "languages": ["en", "id"],
+            "defaultLanguage": "en",
+            "question_group": [
+                {
+                    "id": 10,
+                    "name": "g1",
+                    "label": "Group One",
+                    "question": [
+                        {
+                            "id": 101,
+                            "name": "q_no_trans",
+                            "label": "Untranslated Question",
+                            "type": "text",
+                            "translations": None,
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(dict_payload)
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        row_q = dict(zip(headers, [cell.value for cell in ws_survey[3]]))
+
+        # Secondary lang (id) must fall back to primary label instead of empty
+        self.assertEqual(row_q["label::English (en)"], "Untranslated Question")
+        self.assertEqual(
+            row_q["label::Indonesian (id)"], "Untranslated Question"
+        )

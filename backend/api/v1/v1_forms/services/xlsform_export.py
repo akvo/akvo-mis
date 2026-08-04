@@ -333,14 +333,18 @@ def _build_choices_rows(
                     }
 
                     # Handle translations: lang_cols[1:] are extra languages
-                    if opt.translations:
-                        for display in lang_cols[1:]:
-                            iso = _extract_iso(display)
-                            trans_data = _extract_translation(
-                                opt.translations, iso
-                            )
-                            if "label" in trans_data:
-                                row[f"label::{display}"] = trans_data["label"]
+                    for display in lang_cols[1:]:
+                        iso = _extract_iso(display)
+                        trans_data = (
+                            _extract_translation(opt.translations, iso)
+                            if opt.translations
+                            else {}
+                        )
+                        # Fallback to primary option label
+                        # if translation missing
+                        row[f"label::{display}"] = (
+                            trans_data.get("label") or g_label
+                        )
                     choices.append(row)
     return choices
 
@@ -471,12 +475,15 @@ def _build_survey_rows(
             f"label::{d_lang_display}": g_label,
         }
 
-        if group.translations:
-            for display in lang_cols[1:]:
-                iso = _extract_iso(display)
-                trans_data = _extract_translation(group.translations, iso)
-                if "label" in trans_data:
-                    begin_row[f"label::{display}"] = trans_data["label"]
+        for display in lang_cols[1:]:
+            iso = _extract_iso(display)
+            trans_data = (
+                _extract_translation(group.translations, iso)
+                if group.translations
+                else {}
+            )
+            # Fallback to primary group label if translation missing
+            begin_row[f"label::{display}"] = trans_data.get("label") or g_label
         survey_rows.append(begin_row)
 
         for q in group.question_group_question.all():
@@ -514,15 +521,28 @@ def _build_survey_rows(
             ):
                 q_row[f"hint::{d_lang_display}"] = q.tooltip["text"]
 
-            # Translations for extra languages
-            if q.translations:
-                for display in lang_cols[1:]:
-                    iso = _extract_iso(display)
-                    trans_data = _extract_translation(q.translations, iso)
-                    if "label" in trans_data:
-                        q_row[f"label::{display}"] = trans_data["label"]
-                    if "hint" in trans_data:
-                        q_row[f"hint::{display}"] = trans_data["hint"]
+            # Translations for extra languages with primary fallback
+            primary_label = q.label or q_name
+            primary_hint = q_row.get(f"hint::{d_lang_display}")
+            for display in lang_cols[1:]:
+                iso = _extract_iso(display)
+                trans_data = (
+                    _extract_translation(q.translations, iso)
+                    if q.translations
+                    else {}
+                )
+                # Fallback to primary label if translation missing
+                q_row[f"label::{display}"] = (
+                    trans_data.get("label") or primary_label
+                )
+                # Fallback to primary hint
+                # if primary hint exists and translation missing
+                if primary_hint:
+                    q_row[f"hint::{display}"] = (
+                        trans_data.get("hint") or primary_hint
+                    )
+                elif "hint" in trans_data:
+                    q_row[f"hint::{display}"] = trans_data["hint"]
 
             survey_rows.append(q_row)
 
