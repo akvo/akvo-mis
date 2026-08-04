@@ -4,6 +4,28 @@ import openpyxl
 from typing import Tuple, List, Dict, Any, Optional
 from api.v1.v1_forms.constants import QuestionTypes
 
+# XLSForm standard language names understood by KoboToolbox / pyxform.
+# Maps ISO 639-1 codes to the 'Name (code)' format pyxform expects.
+# KoboToolbox requires this format; bare codes (e.g. 'en') cause the
+# 'unnamed translation' error in the form builder.
+_LANG_NAMES: Dict[str, str] = {
+    "en": "English (en)",
+    "fr": "French (fr)",
+    "es": "Spanish (es)",
+    "ar": "Arabic (ar)",
+    "pt": "Portuguese (pt)",
+    "id": "Indonesian (id)",
+    "de": "German (de)",
+    "nl": "Dutch (nl)",
+    "sw": "Swahili (sw)",
+    "zh": "Chinese (zh)",
+    "hi": "Hindi (hi)",
+    "vi": "Vietnamese (vi)",
+}
+
+_DEFAULT_LANG_CODE = "en"
+_DEFAULT_LANG_DISPLAY = _LANG_NAMES[_DEFAULT_LANG_CODE]
+
 _XLSFORM_COLUMNS = [
     "type",
     "name",
@@ -105,15 +127,75 @@ def _build_question_map(form: Any) -> Dict[int, Dict[str, Any]]:
     return question_map
 
 
+def _lang_display(code: str) -> str:
+    """
+    Returns the full XLSForm language display name for a given ISO code.
+    e.g. 'en' -> 'English (en)', 'fr' -> 'French (fr)'.
+    Unknown codes get 'Code (code)' to ensure they are always named.
+    KoboToolbox requires this format; bare codes cause 'unnamed translation'.
+    """
+    return _LANG_NAMES.get(code, f"{code.capitalize()} ({code})")
+
+
+def _clean_lang_cols(
+    raw_languages: Any,
+    default_language: Optional[str] = None,
+) -> List[str]:
+    """
+    Returns list of XLSForm language display names (e.g. ['English (en)']).
+    Always returns at least one entry (defaults to 'English (en)').
+    Multiple languages -> multilingual export with label::{display} per lang.
+    Single / no languages -> single named language (avoids KoboToolbox
+    'unnamed translation' error that occurs with bare 'label' columns).
+    """
+    codes: List[str] = []
+    if raw_languages and isinstance(raw_languages, list):
+        for item in raw_languages:
+            if isinstance(item, str) and item.strip():
+                code = item.strip()
+                if code not in codes:
+                    codes.append(code)
+            elif isinstance(item, dict):
+                code = item.get("code") or item.get("name") or item.get("id")
+                if code and isinstance(code, str) and code.strip():
+                    c_str = code.strip()
+                    if c_str not in codes:
+                        codes.append(c_str)
+
+    if not codes:
+        # No explicit languages: fall back to default_language or 'en'
+        fallback = (
+            default_language.strip()
+            if (
+                default_language
+                and isinstance(default_language, str)
+                and default_language.strip()
+            )
+            else _DEFAULT_LANG_CODE
+        )
+        codes = [fallback]
+
+    return [_lang_display(c) for c in codes]
+
+
 def _build_settings_row(form: Any) -> Dict[str, Any]:
     """
     Builds the form metadata for the settings sheet.
+    Always includes default_language in the named language display format
+    (e.g. 'English (en)') so KoboToolbox can name the translation properly.
     """
+    f_name = getattr(form, "name", None) or f"Form {getattr(form, 'id', '')}"
+    lang_cols = _clean_lang_cols(
+        getattr(form, "languages", None),
+        getattr(form, "default_language", None),
+    )
+    # lang_cols[0] is always the display name (e.g. 'English (en)')
+    d_lang_display = lang_cols[0]
     return {
-        "form_title": form.name or f"Form {form.id}",
-        "form_id": f"form_{form.id}",
-        "version": str(form.version or 1),
-        "default_language": form.default_language or "en",
+        "form_title": f_name,
+        "form_id": f"form_{getattr(form, 'id', '')}",
+        "version": str(getattr(form, "version", 1) or 1),
+        "default_language": d_lang_display,
     }
 
 
@@ -122,8 +204,13 @@ def _build_choices_rows(
 ) -> List[Dict[str, Any]]:
     """
     Builds list of choice dicts for select_one / select_multiple options.
+    lang_cols contains display names like ['English (en)', 'French (fr)'].
+    The first display name is used for the default language label.
+    Translations are looked up by extracting the ISO code from the
+    display name.
     """
     choices = []
+    d_lang_display = lang_cols[0]  # e.g. 'English (en)'
     for group in form.form_question_group.all():
         for q in group.question_group_question.all():
             if q.type in (QuestionTypes.option, QuestionTypes.multiple_option):
@@ -135,19 +222,26 @@ def _build_choices_rows(
                         continue
                         # 'or_other' handles the 'other'
                         # choice automatically in XLSForm
+                    g_label = getattr(opt, "label", None) or str(opt.value)
                     row = {
                         "list_name": list_name,
                         "name": str(
                             opt.value if opt.value is not None else opt.id
                         ),
-                        "label": opt.label or str(opt.value),
+                        f"label::{d_lang_display}": g_label,
                     }
-                    # Handle translations for options if present
+
+                    # Handle translations: lang_cols[1:] are extra languages
                     if opt.translations and isinstance(opt.translations, dict):
-                        for lang_code in lang_cols:
-                            trans = opt.translations.get(lang_code, {})
+                        for display in lang_cols[1:]:
+                            # Extract ISO code from 'English (en)' -> 'en'
+                            import re as _re
+
+                            m = _re.search(r"\(([^)]+)\)$", display)
+                            iso = m.group(1) if m else display
+                            trans = opt.translations.get(iso, {})
                             if isinstance(trans, dict) and "label" in trans:
-                                row[f"label::{lang_code}"] = trans["label"]
+                                row[f"label::{display}"] = trans["label"]
                     choices.append(row)
     return choices
 
@@ -257,12 +351,13 @@ def _build_survey_rows(
     form: Any, question_map: Dict[int, Dict[str, Any]], lang_cols: List[str]
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
-    Builds flat list of survey sheet row dicts
-    (begin/end group/repeat + question rows).
+    Builds flat list of survey sheet row dicts.
+    lang_cols contains display names like ['English (en)', 'French (fr)'].
     Returns (survey_rows, skipped_question_names).
     """
     survey_rows = []
     skipped = []
+    d_lang_display = lang_cols[0]  # primary language display name
 
     for group in form.form_question_group.all():
         g_name = group.name or f"group_{group.id}"
@@ -270,16 +365,22 @@ def _build_survey_rows(
 
         # Emit begin_repeat / begin_group
         begin_type = "begin_repeat" if g_is_repeat else "begin_group"
+        g_label = getattr(group, "label", None) or g_name
         begin_row = {
             "type": begin_type,
             "name": g_name,
-            "label": group.label or g_name,
+            f"label::{d_lang_display}": g_label,
         }
+
         if group.translations and isinstance(group.translations, dict):
-            for lang_code in lang_cols:
-                trans = group.translations.get(lang_code, {})
+            import re as _re
+
+            for display in lang_cols[1:]:
+                m = _re.search(r"\(([^)]+)\)$", display)
+                iso = m.group(1) if m else display
+                trans = group.translations.get(iso, {})
                 if isinstance(trans, dict) and "label" in trans:
-                    begin_row[f"label::{lang_code}"] = trans["label"]
+                    begin_row[f"label::{display}"] = trans["label"]
         survey_rows.append(begin_row)
 
         for q in group.question_group_question.all():
@@ -298,17 +399,8 @@ def _build_survey_rows(
                 "type": xls_type,
                 "name": q_name,
                 "required": "yes" if getattr(q, "required", False) else "no",
+                f"label::{d_lang_display}": q.label or q_name,
             }
-            main_label = q.label or q_name
-            if lang_cols:
-                # Set default language label as fallback for
-                # primary language column
-                d_lang = (
-                    getattr(form, "default_language", None) or lang_cols[0]
-                )
-                q_row[f"label::{d_lang}"] = main_label
-            else:
-                q_row["label"] = main_label
 
             if relevant_expr:
                 q_row["relevant"] = relevant_expr
@@ -324,28 +416,25 @@ def _build_survey_rows(
                 and isinstance(q.tooltip, dict)
                 and q.tooltip.get("text")
             ):
-                hint_text = q.tooltip["text"]
-                if lang_cols:
-                    d_lang = (
-                        getattr(form, "default_language", None) or lang_cols[0]
-                    )
-                    q_row[f"hint::{d_lang}"] = hint_text
-                else:
-                    q_row["hint"] = hint_text
+                q_row[f"hint::{d_lang_display}"] = q.tooltip["text"]
 
-            # Translations
+            # Translations for extra languages
             if q.translations and isinstance(q.translations, dict):
-                for lang_code in lang_cols:
-                    trans = q.translations.get(lang_code, {})
+                import re as _re
+
+                for display in lang_cols[1:]:
+                    m = _re.search(r"\(([^)]+)\)$", display)
+                    iso = m.group(1) if m else display
+                    trans = q.translations.get(iso, {})
                     if isinstance(trans, dict):
                         if "label" in trans:
-                            q_row[f"label::{lang_code}"] = trans["label"]
+                            q_row[f"label::{display}"] = trans["label"]
                         if "tooltip" in trans and trans["tooltip"]:
                             t_val = trans["tooltip"]
                             if isinstance(t_val, str):
-                                q_row[f"hint::{lang_code}"] = t_val
+                                q_row[f"hint::{display}"] = t_val
                             elif isinstance(t_val, dict) and t_val.get("text"):
-                                q_row[f"hint::{lang_code}"] = t_val["text"]
+                                q_row[f"hint::{display}"] = t_val["text"]
 
             survey_rows.append(q_row)
 
@@ -360,15 +449,22 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
     """
     Public entrypoint: generates XLSForm workbook for a given form.
     Returns (BytesIO_excel_stream, skipped_question_names).
+
+    Always exports with named language headers (e.g. 'label::English (en)')
+    so KoboToolbox can name translations and allow form editing without
+    the 'unnamed translation' error. Defaults to English (en) for
+    forms with no explicit language configuration.
     """
     wb = openpyxl.Workbook()
-    # default sheet
     ws_survey = wb.active
     ws_survey.title = "survey"
     ws_choices = wb.create_sheet(title="choices")
     ws_settings = wb.create_sheet(title="settings")
 
-    lang_cols = form.languages or []
+    lang_cols = _clean_lang_cols(
+        getattr(form, "languages", None),
+        getattr(form, "default_language", None),
+    )
     question_map = _build_question_map(form)
 
     # 1. Settings Sheet
@@ -379,26 +475,20 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
     # 2. Survey Sheet
     survey_rows, skipped = _build_survey_rows(form, question_map, lang_cols)
 
-    # Build dynamic columns (base + multilingual label/hint)
+    # Build header columns — always language-tagged
     cols = []
     for c in _XLSFORM_COLUMNS:
         if c == "label":
-            if lang_cols:
-                for code in lang_cols:
-                    cols.append(f"label::{code}")
-            else:
-                cols.append("label")
+            for display in lang_cols:
+                cols.append(f"label::{display}")
         elif c == "hint":
-            if lang_cols:
-                for code in lang_cols:
-                    cols.append(f"hint::{code}")
-            else:
-                cols.append("hint")
+            for display in lang_cols:
+                cols.append(f"hint::{display}")
         else:
             cols.append(c)
 
-    seen = set()
-    final_cols = []
+    seen: set = set()
+    final_cols: List[str] = []
     for c in cols:
         if c not in seen:
             seen.add(c)
@@ -409,15 +499,11 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
     for row in survey_rows:
         ws_survey.append([row.get(col, "") for col in cols])
 
-    # 3. Choices Sheet
+    # 3. Choices Sheet — always language-tagged
     choices_rows = _build_choices_rows(form, lang_cols)
-    if lang_cols:
-        choice_cols = ["list_name", "name"] + [
-            f"label::{code}" for code in lang_cols
-        ]
-    else:
-        choice_cols = ["list_name", "name", "label"]
-
+    choice_cols = ["list_name", "name"] + [
+        f"label::{display}" for display in lang_cols
+    ]
     ws_choices.append(choice_cols)
     for row in choices_rows:
         ws_choices.append([row.get(col, "") for col in choice_cols])

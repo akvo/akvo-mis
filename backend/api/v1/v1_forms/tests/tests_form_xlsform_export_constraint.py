@@ -84,7 +84,9 @@ class XLSFormExportConstraintTestCase(TestCase):
             2: {"name": "q_tree", "type": QuestionTypes.tree},
         }
 
-        rows, skipped = _build_survey_rows(f, qmap, ["es"])
+        rows, skipped = _build_survey_rows(
+            f, qmap, ["English (en)", "Spanish (es)"]
+        )
 
         # Unsupported type collected in skipped list
         self.assertEqual(skipped, ["q_tree"])
@@ -92,7 +94,10 @@ class XLSFormExportConstraintTestCase(TestCase):
         # Check valid question row
         q_row = next((r for r in rows if r.get("name") == "q_text"), None)
         self.assertIsNotNone(q_row)
-        self.assertEqual(q_row["label::es"], "Spanish Label")
+        # Default lang (English) gets q.label directly
+        self.assertEqual(q_row["label::English (en)"], "English Label")
+        # Secondary lang (Spanish) gets from translations["es"]
+        self.assertEqual(q_row["label::Spanish (es)"], "Spanish Label")
 
         # Check addons are omitted from row fields
         self.assertNotIn("addon_before", q_row)
@@ -138,15 +143,17 @@ class XLSFormExportConstraintTestCase(TestCase):
         survey_headers = [cell.value for cell in wb["survey"][1]]
         choices_headers = [cell.value for cell in wb["choices"][1]]
 
-        # Language-tagged columns MUST be present
-        self.assertIn("label::en", survey_headers)
-        self.assertIn("label::es", survey_headers)
-        self.assertIn("hint::en", survey_headers)
-        self.assertIn("hint::es", survey_headers)
-        self.assertIn("label::en", choices_headers)
-        self.assertIn("label::es", choices_headers)
+        # Language-tagged columns MUST be present (named format)
+        self.assertIn("label::English (en)", survey_headers)
+        self.assertIn("label::Spanish (es)", survey_headers)
+        self.assertIn("hint::English (en)", survey_headers)
+        self.assertIn("hint::Spanish (es)", survey_headers)
+        self.assertIn("label::English (en)", choices_headers)
+        self.assertIn("label::Spanish (es)", choices_headers)
 
-        # Bare 'label' and 'hint' MUST be omitted to prevent pyxform errors
+        # Bare 'label', 'hint', and bare code columns MUST be omitted
         self.assertNotIn("label", survey_headers)
         self.assertNotIn("hint", survey_headers)
         self.assertNotIn("label", choices_headers)
+        self.assertNotIn("label::en", survey_headers)
+        self.assertNotIn("label::es", survey_headers)

@@ -178,7 +178,11 @@ class XLSFormExportServiceTestCase(TestCase):
 
     def test_build_settings_row(self):
         f = DummyObject(
-            id=42, name="Test Form", version=2, default_language="fr"
+            id=42,
+            name="Test Form",
+            version=2,
+            default_language="fr",
+            languages=["fr", "en"],
         )
         settings = _build_settings_row(f)
         self.assertEqual(
@@ -187,7 +191,7 @@ class XLSFormExportServiceTestCase(TestCase):
                 "form_title": "Test Form",
                 "form_id": "form_42",
                 "version": "2",
-                "default_language": "fr",
+                "default_language": "French (fr)",
             },
         )
 
@@ -197,7 +201,7 @@ class XLSFormExportServiceTestCase(TestCase):
             value="yes",
             label="Yes",
             other=False,
-            translations={"fr": {"label": "Oui"}},
+            translations={"en": {"label": "Yes (EN)"}},
         )
         opt2 = DummyObject(
             id=11,
@@ -221,15 +225,16 @@ class XLSFormExportServiceTestCase(TestCase):
         f = DummyObject(form_question_group=MagicMock())
         f.form_question_group.all.return_value = [g]
 
-        choices = _build_choices_rows(f, ["fr"])
+        # Two languages: primary French (fr), secondary English (en)
+        choices = _build_choices_rows(f, ["French (fr)", "English (en)"])
         self.assertEqual(len(choices), 1)
         self.assertEqual(
             choices[0],
             {
                 "list_name": "option_consent",
                 "name": "yes",
-                "label": "Yes",
-                "label::fr": "Oui",
+                "label::French (fr)": "Yes",  # opt.label (default)
+                "label::English (en)": "Yes (EN)",  # from translations
             },
         )
 
@@ -242,7 +247,7 @@ class XLSFormExportServiceTestCase(TestCase):
             tooltip={"text": "Enter full name"},
             rule={"required": True},
             translations={
-                "es": {"label": "Nombre", "tooltip": "Nombre completo"}
+                "en": {"label": "Member Name EN", "tooltip": "Full name EN"}
             },
         )
 
@@ -257,7 +262,10 @@ class XLSFormExportServiceTestCase(TestCase):
         f.form_question_group.all.return_value = [g_repeat]
 
         q_map = {1: {"name": "member_name", "type": QuestionTypes.text}}
-        rows, skipped = _build_survey_rows(f, q_map, ["es"])
+        # Two display-name langs: primary Spanish, secondary English
+        rows, skipped = _build_survey_rows(
+            f, q_map, ["Spanish (es)", "English (en)"]
+        )
 
         self.assertEqual(len(skipped), 0)
         self.assertEqual(len(rows), 3)  # begin_repeat, question, end_repeat
@@ -265,14 +273,21 @@ class XLSFormExportServiceTestCase(TestCase):
         # 1. begin_repeat row
         self.assertEqual(rows[0]["type"], "begin_repeat")
         self.assertEqual(rows[0]["name"], "household_members")
+        # Group has no label field — falls back to name
+        self.assertIn("label::Spanish (es)", rows[0])
 
         # 2. question row
         q_row = rows[1]
         self.assertEqual(q_row["type"], "text")
         self.assertEqual(q_row["name"], "member_name")
         self.assertEqual(q_row["required"], "yes")
-        self.assertEqual(q_row["label::es"], "Nombre")
-        self.assertEqual(q_row["hint::es"], "Nombre completo")
+        # Default lang label
+        self.assertEqual(q_row["label::Spanish (es)"], "Member Name")
+        # Hint for default lang (from tooltip)
+        self.assertEqual(q_row["hint::Spanish (es)"], "Enter full name")
+        # Translation for English (en) ISO code 'en'
+        self.assertEqual(q_row["label::English (en)"], "Member Name EN")
+        self.assertEqual(q_row["hint::English (en)"], "Full name EN")
 
         # 3. end_repeat row
         self.assertEqual(rows[2]["type"], "end_repeat")
@@ -293,12 +308,13 @@ class XLSFormExportServiceTestCase(TestCase):
         )
         g.question_group_question.all.return_value = [q1]
 
+        # No explicit languages — should default to English (en)
         f = DummyObject(
             id=10,
             name="Test Form",
             version=1,
-            default_language="en",
-            languages=["en"],
+            default_language=None,
+            languages=None,
             form_question_group=MagicMock(),
         )
         f.form_question_group.all.return_value = [g]
@@ -313,12 +329,17 @@ class XLSFormExportServiceTestCase(TestCase):
         ws_survey = wb["survey"]
         ws_settings = wb["settings"]
 
-        # Check headers of survey sheet
+        # Check headers of survey sheet — must use named language format
         headers = [cell.value for cell in ws_survey[1]]
         self.assertIn("type", headers)
         self.assertIn("name", headers)
-        self.assertIn("label::en", headers)
+        self.assertIn("label::English (en)", headers)
+        self.assertNotIn("label", headers)  # bare label must not appear
+        self.assertNotIn("label::en", headers)  # bare code must not appear
 
-        # Check settings values
-        settings_title = ws_settings.cell(row=2, column=1).value
-        self.assertEqual(settings_title, "Test Form")
+        # Check settings — default_language must be in display format
+        settings_headers = [cell.value for cell in ws_settings[1]]
+        settings_values = [cell.value for cell in ws_settings[2]]
+        s_map = dict(zip(settings_headers, settings_values))
+        self.assertEqual(s_map["form_title"], "Test Form")
+        self.assertEqual(s_map["default_language"], "English (en)")
