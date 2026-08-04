@@ -247,6 +247,37 @@ const FormBuilderList = () => {
       });
   };
 
+  const onExportAdministrationCsv = (id) => {
+    api
+      .get(`/manage/forms/${id}/administration-csv`, { responseType: "blob" })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({
+            type: "error",
+            message: text.formBuilderExportCascadeCsvError,
+          });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        notify({
+          type: "error",
+          message: text.formBuilderExportCascadeCsvError,
+        });
+      });
+  };
+
   const formatDate = (value) => {
     if (!value) {
       return "—";
@@ -305,6 +336,10 @@ const FormBuilderList = () => {
     const menuItems = [
       { key: "export", label: text.formBuilderExportButton },
       { key: "exportXlsform", label: text.formBuilderExportXlsformButton },
+      {
+        key: "exportCascadeCsv",
+        label: text.formBuilderExportCascadeCsvButton,
+      },
     ];
     if (record.status === "draft" && ability.can("publish", "form-builder")) {
       menuItems.push({ key: "publish", label: text.formBuilderPublishButton });
@@ -339,6 +374,8 @@ const FormBuilderList = () => {
         onExport(record.id);
       } else if (key === "exportXlsform") {
         onExportXlsform(record.id);
+      } else if (key === "exportCascadeCsv") {
+        onExportAdministrationCsv(record.id);
       } else if (key === "publish") {
         Modal.confirm({
           title: text.formBuilderPublishConfirmTitle,
