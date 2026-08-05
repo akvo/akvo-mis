@@ -78,6 +78,51 @@ class TenantMiddlewareTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(response.status_code, 401)
 
 
+@override_settings(BASE_DOMAIN="app.com")
+class HealthCheckHostTestCase(TestCase, TenantTestHelperMixin):
+    """Infrastructure reaches the pod directly, with no workspace host.
+
+    A kubelet probe connects to the pod IP, so the request arrives with
+    `Host: <pod-ip>:8000` — neither the base domain nor a workspace. The
+    404 that is right for a typo'd subdomain is wrong here: it fails the
+    readiness probe, which holds the rollout, so enabling BASE_DOMAIN
+    would make every deploy time out.
+    """
+
+    HEALTH = "/api/v1/health/check"
+
+    def setUp(self):
+        self.acme = self.create_tenant(
+            "acme", ["Country", "Province"], "Kenya"
+        )
+
+    def test_a_pod_ip_host_can_reach_the_health_check(self):
+        response = self.client.get(self.HEALTH, HTTP_HOST="10.4.2.15:8000")
+        self.assertEqual(response.status_code, 200)
+
+    def test_a_cluster_dns_host_can_reach_the_health_check(self):
+        # Service-to-service inside the cluster, and `kubectl
+        # port-forward` during an incident, look the same way.
+        response = self.client.get(
+            self.HEALTH, HTTP_HOST="backend-service.akvo-mis-namespace.svc"
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_the_base_domain_still_reaches_the_health_check(self):
+        response = self.client.get(self.HEALTH, HTTP_HOST="app.com")
+        self.assertEqual(response.status_code, 200)
+
+    def test_a_workspace_host_still_reaches_the_health_check(self):
+        response = self.client.get(self.HEALTH, HTTP_HOST="acme.app.com")
+        self.assertEqual(response.status_code, 200)
+
+    def test_the_exemption_does_not_leak_to_other_paths(self):
+        # Only liveness is exempt. An unrecognised host reaching anything
+        # else is still nothing this deployment serves.
+        response = self.client.get(PROFILE, HTTP_HOST="10.4.2.15:8000")
+        self.assertEqual(response.status_code, 404)
+
+
 class SingleHostTestCase(TestCase, TenantTestHelperMixin):
     """With BASE_DOMAIN unset the middleware must do nothing at all.
 
