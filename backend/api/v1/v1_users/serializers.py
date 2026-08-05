@@ -116,7 +116,8 @@ class AddEditOrganisationSerializer(TenantStampedSerializerMixin,
             data={
                 'id': instance.id,
                 'name': instance.name,
-            }
+            },
+            tenant=instance.tenant,
         )
         return instance
 
@@ -137,6 +138,7 @@ class AddEditOrganisationSerializer(TenantStampedSerializerMixin,
         update_sqlite(
             model=Organisation,
             data={'name': instance.name},
+            tenant=instance.tenant,
             id=instance.id
         )
         return instance
