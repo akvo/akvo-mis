@@ -3,9 +3,10 @@ from api.v1.v1_users.models import SystemUser
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_forms.models import Forms
 from utils.custom_helper import generate_random_string, CustomPasscode
+from utils.tenant_scoped_model import TenantManager
 
 
-class MobileAssignmentManager(models.Manager):
+class MobileAssignmentManager(TenantManager):
     def create_assignment(self, user, name, passcode=None):
         if not passcode:
             passcode = generate_random_string(8)
@@ -18,6 +19,7 @@ class MobileAssignmentManager(models.Manager):
 
 
 class MobileAssignment(models.Model):
+    TENANT_PATH = "user__tenant"
     name = models.CharField(max_length=255, null=True, blank=True)
     passcode = models.CharField(max_length=256)
     user = models.ForeignKey(

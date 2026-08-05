@@ -1,0 +1,66 @@
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import axios from "axios";
+import TestApp from "../../../TestApp";
+import "@testing-library/jest-dom";
+
+jest.mock("axios");
+
+describe("Register", () => {
+  beforeEach(() => {
+    // App bootstrap fetches GET /forms/published on mount; give every
+    // api call a resolvable default so the unmocked fetch doesn't reject.
+    axios.mockResolvedValue({ status: 200, data: [] });
+  });
+
+  const fill = ({
+    password = "Secret#Pass123",
+    confirm = "Secret#Pass123",
+  }) => {
+    fireEvent.change(screen.getByPlaceholderText("you@organisation.org"), {
+      target: { value: "founder@acme.org" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("At least 8 characters"), {
+      target: { value: password },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Repeat your password"), {
+      target: { value: confirm },
+    });
+    fireEvent.change(screen.getByPlaceholderText("acme"), {
+      target: { value: "acme" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Create workspace/i }));
+  };
+
+  test("asks only for what claims a workspace", () => {
+    render(<TestApp entryPoint={"/register"} />);
+    expect(screen.getByText(/Create your workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace address/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Create workspace/i })
+    ).toBeInTheDocument();
+    // The registrant's name moved to the configuration form, which is the
+    // first point at which the email is known to be real.
+    expect(screen.queryByText(/First name/i)).toBeNull();
+    expect(screen.queryByText(/Last name/i)).toBeNull();
+  });
+
+  test("ends on a check-your-email state rather than signing in", async () => {
+    render(<TestApp entryPoint={"/register"} />);
+    fill({});
+    expect(await screen.findByText(/Check your email/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/founder@acme.org/)).toBeInTheDocument();
+    });
+  });
+
+  test("a mistyped confirmation never reaches the server", async () => {
+    render(<TestApp entryPoint={"/register"} />);
+    fill({ confirm: "Secret#Pass124" });
+    expect(
+      await screen.findByText(/The two passwords do not match/i)
+    ).toBeInTheDocument();
+    // A typo caught after the account exists would need a password reset to
+    // recover from, so the request must not go out at all.
+    expect(screen.queryByText(/Check your email/i)).toBeNull();
+  });
+});

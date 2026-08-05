@@ -274,10 +274,10 @@ def _to_editor_format(data):
 )
 @api_view(["GET"])
 def list_form(request, version):
-    instance = Forms.objects.filter(
+    instance = Forms.objects.for_user(request.user).filter(
         parent__isnull=True,
         status=FormStatus.published,
-    ).all()
+    )
     return Response(
         ListFormSerializer(instance=instance, many=True).data,
         status=status.HTTP_200_OK,
@@ -298,7 +298,7 @@ def list_form(request, version):
 @permission_classes([AllowAny])
 def list_published_forms(request, version):
     response = Response(
-        get_published_forms_payload(),
+        get_published_forms_payload(request.user),
         status=status.HTTP_200_OK,
     )
     response["Cache-Control"] = "no-cache"
@@ -313,7 +313,7 @@ def list_published_forms(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def web_form_details(request, version, form_id):
-    administration = Administration.objects.filter(
+    administration = Administration.objects.for_user(request.user).filter(
         parent__isnull=True,
     ).first()
     if not request.user.is_superuser:
@@ -322,7 +322,9 @@ def web_form_details(request, version, form_id):
         ).first()
         if user_role:
             administration = user_role.administration
-    instance = get_object_or_404(Forms, pk=form_id)
+    instance = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     # Include form.version in the cache key so that publishing, activating,
     # or editing a published form (which bumps the version) automatically
     # bypasses the stale cache entry without an explicit cache clear.
@@ -346,7 +348,9 @@ def web_form_details(request, version, form_id):
 )
 @api_view(["GET"])
 def form_data(request, version, form_id):
-    instance = get_object_or_404(Forms, pk=form_id)
+    instance = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     cache_name = f"form-{form_id}-v{instance.version}"
     cache_data = get_cache(cache_name)
     if cache_data:
@@ -419,7 +423,9 @@ def form_approver(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def check_form_approver(request, form_id, version):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     # Super admins bypass approver check
     if request.user.is_superuser:
         return Response({"count": 1}, status=status.HTTP_200_OK)
@@ -488,8 +494,8 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         # archive/restore/destroy operate on archived (soft-deleted) rows,
         # which the default manager cannot see (D-9, D-10).
         if self.action in ("archive", "restore", "destroy"):
-            return Forms.objects_with_deleted.all()
-        return Forms.objects.all()
+            return Forms.objects_with_deleted.for_user(self.request.user)
+        return Forms.objects.for_user(self.request.user)
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -518,7 +524,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         status_param = params.get("status")
 
         base = Forms.objects_deleted if archived else Forms.objects
-        qs = base.all()
+        qs = base.for_user(request.user)
         if status_param in self._STATUS_MAP:
             qs = qs.filter(status=self._STATUS_MAP[status_param])
 
@@ -649,7 +655,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         is_monitoring = req_type in (FormTypes.monitoring, "monitoring")
         if is_monitoring and parent_id:
             try:
-                parent = Forms.objects.get(id=parent_id)
+                parent = Forms.objects.for_user(request.user).get(
+                    id=parent_id
+                )
             except Forms.DoesNotExist:
                 return Response(
                     {"parent": "Parent form not found"},
@@ -999,7 +1007,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         file_form_id = norm.get("form_id")
         match_info = {"exists": False, "form": None, "name_mismatch": False}
         if file_form_id is not None:
-            existing = Forms.objects.filter(id=file_form_id).first()
+            existing = Forms.objects.for_user(request.user).filter(
+                id=file_form_id
+            ).first()
             if existing:
                 submission_count = existing.form_data.count() if hasattr(
                     existing, "form_data"
@@ -1026,7 +1036,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         parent_hint = norm.get("parent_hint")
         resolved_parent = None
         if is_monitoring and parent_hint and parent_hint.get("id"):
-            p = Forms.objects.filter(id=parent_hint["id"]).first()
+            p = Forms.objects.for_user(request.user).filter(
+                id=parent_hint["id"]
+            ).first()
             if p:
                 resolved_parent = {"id": p.id, "name": p.name}
 
@@ -1125,7 +1137,8 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         if (
             mode == "create_or_update"
             and file_form_id is not None
-            and Forms.objects.filter(id=file_form_id).exists()
+            and Forms.objects.for_user(request.user)
+            .filter(id=file_form_id).exists()
         ):
             edit_perm = FormBuilderAccess(FeatureAccessTypes.form_edit)()
             if not edit_perm.has_permission(request, self):

@@ -30,15 +30,22 @@ from api.v1.v1_data.functions import get_cache, create_cache
 from api.v1.v1_forms.serializers import FormDataSerializer
 
 
-def get_published_forms_payload():
-    """Return all published forms with full content for the web frontend.
+def get_published_forms_payload(user):
+    """Return the user's tenant's published forms with full content.
 
     Shape matches what generate_config used to bake into window.forms:
     [{"id", "name", "version", "content": FormDataSerializer(...)}].
     Cached via the shared date-prefixed cache (bypassed under TEST_ENV);
     invalidated by the form-mutation signal cache.clear() and clear_cache.
+
+    The cache key carries the tenant id. The payload used to be identical
+    for everyone, so one global key was right; now that it is scoped, a
+    shared key would hand the first caller's forms to every other tenant
+    — a worse leak than the unscoped list it replaces.
     """
-    cached = get_cache(PUBLISHED_FORMS_CACHE)
+    tenant = getattr(user, "tenant", None)
+    cache_name = f"{PUBLISHED_FORMS_CACHE}-{tenant.id if tenant else 'none'}"
+    cached = get_cache(cache_name)
     if cached is not None:
         return cached
     payload = [
@@ -48,9 +55,11 @@ def get_published_forms_payload():
             "version": form.version,
             "content": FormDataSerializer(instance=form).data,
         }
-        for form in Forms.objects.filter(status=FormStatus.published).all()
+        for form in Forms.objects.for_user(user).filter(
+            status=FormStatus.published
+        )
     ]
-    create_cache(PUBLISHED_FORMS_CACHE, payload)
+    create_cache(cache_name, payload)
     return payload
 
 
@@ -233,6 +242,7 @@ def save_form(data, instance=None, user=None):
             default_language=data.get("default_language"),
             translations=data.get("translations"),
             created_by=user,
+            tenant=getattr(user, "tenant", None),
         )
         form_id = data.get("id")
         if form_id:
@@ -380,6 +390,7 @@ def duplicate_form(original_form, user=None):
         languages=original_form.languages,
         default_language=original_form.default_language,
         translations=original_form.translations,
+        tenant=getattr(user, "tenant", None) or original_form.tenant,
         created_by=user,
     )
     for group in original_form.form_question_group.all().order_by("order"):
@@ -1396,6 +1407,7 @@ def _apply_import_create_path(norm, user, parent_form, force_new_id):
         approval_instructions=norm.get("approval_instructions"),
         created_by=user,
         updated_by=user,
+        tenant=getattr(user, "tenant", None),
     )
     if use_file_form_id:
         create_kwargs["id"] = file_form_id

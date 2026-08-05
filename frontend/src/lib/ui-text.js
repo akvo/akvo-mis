@@ -15,6 +15,7 @@ const uiText = {
     menuManageRoles: "Manage Roles",
     menuMasterData: "Master Data",
     menuAdministrativeList: "Administrative List",
+    menuLevels: "Levels",
     menuAttributes: "Attributes",
     menuEntities: "Entities",
     menuEntityTypes: "Entity Types",
@@ -377,6 +378,18 @@ const uiText = {
     manageAttributes: "Manage Attributes",
     editAttributes: "Edit Attribute",
     addAttributes: "Add Attribute",
+    manageLevels: "Manage Levels",
+    manageLevelText:
+      "Define the tiers of your administrative hierarchy, from the top " +
+      "level down. Tiers can be renamed at any time, but they can only " +
+      "be added or removed while no administrative units exist below " +
+      "your top level.",
+    addLevel: "Add Level",
+    newLevelName: "New level name",
+    levelFrozenHint:
+      "Levels can no longer be added or removed because administrative " +
+      "units already exist. Renaming is still available.",
+    levelDeleteTitle: "Remove the deepest level?",
     manageEntities: "Manage Entities",
     manageEntityTypes: "Manage Entity Types",
     addEntities: "Add Entities",
@@ -503,6 +516,11 @@ const uiText = {
     formSuccessTitle: "Thank you for the submission",
     administrationUploadSuccessTitle:
       "Administration Data has been Successfully Uploaded",
+    administrationUploadFailedTitle: "Your file could not be imported",
+    administrationUploadFailedHint:
+      "Nothing was changed. We have emailed you a file listing the rows that need fixing.",
+    uploadNotReadyHint:
+      "Define your administrative levels first: name the top level and add at least one level below it. You can do that under Master Data → Levels.",
     entitiesUploadSuccessTitle: "Entities Data has been Successfully Uploaded",
     formSuccessSubTitle:
       "Do note that this data has NOT been sent for approval. If you are ready to send the submissions for approval, please create a batch and send to the approver",

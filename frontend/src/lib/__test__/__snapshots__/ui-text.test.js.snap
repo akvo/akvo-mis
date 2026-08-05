@@ -43,6 +43,7 @@ Object {
        
       platform.
     </React.Fragment>,
+    "addLevel": "Add Level",
     "addNew": "Add New",
     "addNewButton": "Add New",
     "addNewUser": "Add new user",
@@ -95,6 +96,8 @@ Object {
     "admTabTitle": "Administrative List",
     "administrationField": "Administration",
     "administrationLabel": "Administration",
+    "administrationUploadFailedHint": "Nothing was changed. We have emailed you a file listing the rows that need fixing.",
+    "administrationUploadFailedTitle": "Your file could not be imported",
     "administrationUploadSuccessTitle": "Administration Data has been Successfully Uploaded",
     "allData": "All Data",
     "allEntities": "All Entities",
@@ -329,6 +332,7 @@ Object {
     "errorFileList": "Could not fetch File list",
     "errorFileUpload": "Could not upload file",
     "errorMandatoryFields": "Please answer all the mandatory questions",
+    "errorMonitoringRequiresRegistration": [Function],
     "errorPageNA": "Oops, this page is not available",
     "errorSomething": "Something went wrong",
     "errorURL": <React.Fragment>
@@ -646,8 +650,10 @@ Object {
     "lastUpdatedCol": "Last Updated",
     "latestData": "Latest Data",
     "latestUpdateText": "Latest Updates",
+    "levelDeleteTitle": "Remove the deepest level?",
     "levelField": "Level",
     "levelFieldRequired": "Level is required",
+    "levelFrozenHint": "Levels can no longer be added or removed because administrative units already exist. Renaming is still available.",
     "levelLabel": "Level",
     "loadMoreLable": "Load More",
     "loadingText": "Loading...",
@@ -746,6 +752,8 @@ Object {
         </li>
       </ul>
     </React.Fragment>,
+    "manageLevelText": "Define the tiers of your administrative hierarchy, from the top level down. Tiers can be renamed at any time, but they can only be added or removed while no administrative units exist below your top level.",
+    "manageLevels": "Manage Levels",
     "manageOrganisations": "Manage Organizations",
     "manageRoleText": <React.Fragment>
       This is where you manage roles based on their fields. You can :
@@ -807,6 +815,7 @@ Object {
     "menuEntities": "Entities",
     "menuEntityTypes": "Entity Types",
     "menuFormBuilder": "Form Builder",
+    "menuLevels": "Levels",
     "menuManageData": "Manage Data",
     "menuManageDraft": "Manage Drafts",
     "menuManageMobileUsers": "Manage Mobile Users",
@@ -883,6 +892,7 @@ Object {
     "nameField": "Name",
     "nameFieldRequired": "Name is required",
     "nameLabel": "Name",
+    "newLevelName": "New level name",
     "newSubmissionBtn": "Add New Submission",
     "newsEvents": "News & Events",
     "next": "Next",
@@ -1060,6 +1070,7 @@ Object {
     "uploadAttachmentsSuccess": "Attachments uploaded successfully",
     "uploadDataLabel": "Upload your data",
     "uploadMasterDataLabel": "Upload your data",
+    "uploadNotReadyHint": "Define your administrative levels first: name the top level and add at least one level below it. You can do that under Master Data → Levels.",
     "uploadTab1": "Data Summary",
     "uploadTab2": "Raw Data",
     "uploadText": "Upload",

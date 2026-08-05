@@ -168,7 +168,9 @@ class FormDataAddListView(APIView):
         summary="To get list of form data",
     )
     def get(self, request, form_id, version):
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         serializer = ListFormDataRequestSerializer(
             data=request.GET, context={"form_id": form_id}
         )
@@ -255,8 +257,10 @@ class FormDataAddListView(APIView):
             filter_descendants.append(filter_administration.id)
             filter_data["administration_id__in"] = filter_descendants
         else:
-            # Filter data by user administration path
-            adm = Administration.objects.filter(
+            # Filter data by user administration path. The root is looked
+            # up within the tenant: an unscoped first() could pick another
+            # tenant's root and scope the whole list to it.
+            adm = Administration.objects.for_user(request.user).filter(
                 parent__isnull=True,
             ).first()
             if not request.user.is_superuser:
@@ -342,7 +346,9 @@ class FormDataAddListView(APIView):
         summary="Submit form data",
     )
     def post(self, request, form_id, version):
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         serializer = SubmitFormSerializer(
             data=request.data, context={"user": request.user, "form": form}
         )
@@ -375,7 +381,9 @@ class FormDataAddListView(APIView):
     def put(self, request, form_id, version):
         data_id = request.GET["data_id"]
         user = request.user
-        data = get_object_or_404(FormData, pk=data_id)
+        data = get_object_or_404(
+            FormData.objects.for_user(request.user), pk=data_id
+        )
         serializer = SubmitFormDataAnswerSerializer(
             data=request.data, many=True
         )
@@ -466,7 +474,9 @@ class DataAnswerDetailDeleteView(APIView):
         summary="To get answers for form data",
     )
     def get(self, request, data_id, version):
-        data = get_object_or_404(FormData, pk=data_id)
+        data = get_object_or_404(
+            FormData.objects.for_user(request.user), pk=data_id
+        )
         return Response(
             ListDataAnswerSerializer(
                 instance=data.data_answer.all(), many=True
@@ -482,7 +492,9 @@ class DataAnswerDetailDeleteView(APIView):
         summary="Delete datapoint include answer & history",
     )
     def delete(self, request, data_id, version):
-        instance = get_object_or_404(FormData, pk=data_id)
+        instance = get_object_or_404(
+            FormData.objects.for_user(request.user), pk=data_id
+        )
         answers = Answers.objects.filter(data_id=data_id)
         answers.delete()
         history = AnswerHistory.objects.filter(data_id=data_id)
@@ -501,7 +513,11 @@ class PendingDataDetailDeleteView(APIView):
         summary="To get list of answers for pending data",
     )
     def get(self, request, pending_data_id, version):
-        data = get_object_or_404(FormData, pk=pending_data_id, is_pending=True)
+        data = get_object_or_404(
+            FormData.objects.for_user(request.user),
+            pk=pending_data_id,
+            is_pending=True,
+        )
         # Get the last data from the last children
         last_data = data.parent.children.filter(is_pending=False).last() if \
             data.parent else None
@@ -528,9 +544,9 @@ class PendingDataDetailDeleteView(APIView):
     )
     def delete(self, request, pending_data_id, version):
         instance = get_object_or_404(
-            FormData,
+            FormData.objects.for_user(request.user),
             pk=pending_data_id,
-            is_pending=True
+            is_pending=True,
         )
         if instance.created_by_id != request.user.id:
             return Response(
@@ -550,7 +566,11 @@ class DataDetailDeleteView(APIView):
         summary="To get data by ID",
     )
     def get(self, request, data_id, version):
-        data = get_object_or_404(FormData, pk=data_id, is_pending=False)
+        data = get_object_or_404(
+            FormData.objects.for_user(request.user),
+            pk=data_id,
+            is_pending=False,
+        )
         return Response(
             FormDataSerializer(instance=data).data,
             status=status.HTTP_200_OK,
@@ -564,7 +584,11 @@ class DataDetailDeleteView(APIView):
         summary="To delete data",
     )
     def delete(self, request, data_id, version):
-        instance = get_object_or_404(FormData, pk=data_id, is_pending=False)
+        instance = get_object_or_404(
+            FormData.objects.for_user(request.user),
+            pk=data_id,
+            is_pending=False,
+        )
         if not request.user.is_superuser or request.user.user_role.filter(
             role__role_role_access__data_access=DataAccessTypes.delete
         ).exists():
@@ -580,7 +604,9 @@ class DataDetailDeleteView(APIView):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_form_data(request, version, form_id):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
     form_name = form.name
     filename = f"{form.id}-{form_name}"
     directory = "tmp"
@@ -612,7 +638,9 @@ class PendingFormDataView(APIView):
         summary="Submit pending form data",
     )
     def post(self, request, form_id, version):
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         serializer = SubmitPendingFormSerializer(
             data=request.data, context={"user": request.user, "form": form}
         )
@@ -681,7 +709,9 @@ class PendingFormDataView(APIView):
         summary="To get list of pending form data",
     )
     def get(self, request, form_id, version):
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         serializer = ListPendingFormDataRequestSerializer(data=request.GET)
         if not serializer.is_valid():
             return Response(
@@ -769,13 +799,15 @@ class PendingFormDataView(APIView):
         summary="Edit pending form data",
     )
     def put(self, request, form_id, version):
-        get_object_or_404(Forms, pk=form_id)
+        get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         pending_data_id = request.GET["pending_data_id"]
         user = request.user
         pending_data = get_object_or_404(
-            FormData,
+            FormData.objects.for_user(request.user),
             pk=pending_data_id,
-            is_pending=True
+            is_pending=True,
         )
         serializer = SubmitFormDataAnswerSerializer(
             data=request.data, many=True
@@ -898,7 +930,9 @@ class DraftFormDataListView(APIView):
         summary="To get list of draft form data",
     )
     def get(self, request, form_id, version):
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         page_size = REST_FRAMEWORK.get("PAGE_SIZE")
 
         serializer = FilterDraftFormDataSerializer(
@@ -958,7 +992,9 @@ class DraftFormDataListView(APIView):
         summary="Submit draft form data",
     )
     def post(self, request, form_id, version):
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         serializer = SubmitPendingFormSerializer(
             data=request.data,
             context={
@@ -993,7 +1029,9 @@ class DraftFormDataDetailView(APIView):
     )
     def get(self, request, data_id, version):
         draft_data = get_object_or_404(
-            FormData, pk=data_id, is_draft=True
+            FormData.objects.for_user(request.user),
+            pk=data_id,
+            is_draft=True,
         )
         if draft_data.created_by_id != request.user.id:
             return Response(
@@ -1016,7 +1054,9 @@ class DraftFormDataDetailView(APIView):
     )
     def put(self, request, data_id, version):
         draft_data = get_object_or_404(
-            FormData, pk=data_id, is_draft=True
+            FormData.objects.for_user(request.user),
+            pk=data_id,
+            is_draft=True,
         )
         if draft_data.created_by_id != request.user.id:
             return Response(
@@ -1053,7 +1093,9 @@ class DraftFormDataDetailView(APIView):
     )
     def delete(self, request, data_id, version):
         draft_data = get_object_or_404(
-            FormData, pk=data_id, is_draft=True
+            FormData.objects.for_user(request.user),
+            pk=data_id,
+            is_draft=True,
         )
         if draft_data.created_by_id != request.user.id:
             return Response(
@@ -1080,7 +1122,9 @@ class PublishDraftFormDataView(APIView):
     )
     def post(self, request, data_id, version):
         draft_data = get_object_or_404(
-            FormData, pk=data_id, is_draft=True
+            FormData.objects.for_user(request.user),
+            pk=data_id,
+            is_draft=True,
         )
         if draft_data.created_by_id != request.user.id:
             return Response(

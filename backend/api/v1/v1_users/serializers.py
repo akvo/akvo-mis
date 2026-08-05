@@ -1,3 +1,5 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core import exceptions as django_exceptions
 from django.core import signing
 from django.core.signing import BadSignature
 from django.utils import timezone
@@ -20,11 +22,15 @@ from api.v1.v1_profile.models import (
     Role,
     UserRole,
 )
-from api.v1.v1_users.models import SystemUser, \
-        Organisation, OrganisationAttribute
+from api.v1.v1_users.models import (
+    SystemUser,
+    Organisation,
+    OrganisationAttribute,
+)
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_approval.models import DataBatch
 from utils.custom_serializer_fields import (
+    TenantScopedPrimaryKeyRelatedField,
     CustomEmailField,
     CustomCharField,
     CustomPrimaryKeyRelatedField,
@@ -34,6 +40,7 @@ from utils.custom_serializer_fields import (
 from api.v1.v1_profile.constants import FeatureAccessTypes
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
+from utils.tenant_scoped_model import TenantStampedSerializerMixin
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -91,7 +98,8 @@ class OrganisationListSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'attributes', 'users']
 
 
-class AddEditOrganisationSerializer(serializers.ModelSerializer):
+class AddEditOrganisationSerializer(TenantStampedSerializerMixin,
+                                    serializers.ModelSerializer):
     attributes = CustomMultipleChoiceField(choices=list(
         OrganisationTypes.FieldStr.keys()),
                                            required=True)
@@ -108,7 +116,8 @@ class AddEditOrganisationSerializer(serializers.ModelSerializer):
             data={
                 'id': instance.id,
                 'name': instance.name,
-            }
+            },
+            tenant=instance.tenant,
         )
         return instance
 
@@ -129,6 +138,7 @@ class AddEditOrganisationSerializer(serializers.ModelSerializer):
         update_sqlite(
             model=Organisation,
             data={'name': instance.name},
+            tenant=instance.tenant,
             id=instance.id
         )
         return instance
@@ -256,12 +266,12 @@ class ListAdministrationSerializer(serializers.ModelSerializer):
 
 
 class AddRolesSerializer(serializers.Serializer):
-    role = CustomPrimaryKeyRelatedField(
+    role = TenantScopedPrimaryKeyRelatedField(
         queryset=Role.objects.none(),
         required=True,
         help_text='Role to assign to user'
     )
-    administration = CustomPrimaryKeyRelatedField(
+    administration = TenantScopedPrimaryKeyRelatedField(
         queryset=Administration.objects.none(),
         required=True,
         help_text='Administration to assign role to user'
@@ -357,8 +367,9 @@ class AddRolesSerializer(serializers.Serializer):
         fields = ['role', 'administration']
 
 
-class AddEditUserSerializer(serializers.ModelSerializer):
-    organisation = CustomPrimaryKeyRelatedField(
+class AddEditUserSerializer(TenantStampedSerializerMixin,
+                            serializers.ModelSerializer):
+    organisation = TenantScopedPrimaryKeyRelatedField(
         queryset=Organisation.objects.none(), required=False)
     trained = CustomBooleanField(default=False)
     roles = AddRolesSerializer(many=True, required=False)
@@ -690,8 +701,34 @@ class UserRoleListSerializer(serializers.ModelSerializer):
         ]
 
 
+def tenant_is_configured(tenant):
+    """Has this tenant completed the configuration form?
+
+    Derived rather than stored: a configured tenant is one with a *named*
+    level 0 and a root unit, which is exactly what the form creates. The
+    same predicate the bulk-upload gate will reuse, so there is no column
+    to keep in step with reality.
+
+    A tenant-less user — createsuperuser, the test-only admin account —
+    reads as configured. There is nothing for them to configure, and
+    answering False would strand them on the configuration form and let
+    them create a tenant-less level 0 in the legacy global hierarchy.
+    """
+    if not tenant:
+        return True
+    has_named_level_zero = Levels.objects.filter(
+        tenant=tenant, level=0
+    ).exclude(name="").exists()
+    has_root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).exists()
+    return has_named_level_zero and has_root
+
+
 class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    configured = serializers.SerializerMethodField()
+    subdomain = serializers.SerializerMethodField()
     administration = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     organisation = serializers.SerializerMethodField()
@@ -703,10 +740,14 @@ class UserSerializer(serializers.ModelSerializer):
     @extend_schema_field(UserAdministrationSerializer)
     def get_administration(self, instance: SystemUser):
         if instance.is_superuser:
-            adm = Administration.objects.filter(
-                parent__isnull=True,
-                level__level=0
-            ).first()
+            # A tenant superadmin is scoped to their own root. Tenant-less
+            # superusers (seeders, createsuperuser, legacy deployments)
+            # fall back to the old unscoped lookup.
+            roots = Administration.objects.filter(parent__isnull=True)
+            if instance.tenant_id:
+                adm = roots.filter(tenant_id=instance.tenant_id).first()
+            else:
+                adm = roots.filter(level__level=0).first()
             return UserAdministrationSerializer(instance=adm).data
         # Check if there are multiple user roles at the minimum level
         min_level = instance.user_user_role.aggregate(
@@ -769,13 +810,27 @@ class UserSerializer(serializers.ModelSerializer):
             return passcode
         return None
 
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_configured(self, instance: SystemUser):
+        return tenant_is_configured(instance.tenant)
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_subdomain(self, instance: SystemUser):
+        # The address this session belongs to. The frontend compares it
+        # against the host it is being served on, so that a user who
+        # lands on the wrong workspace — or on the tenant-less main
+        # site — is sent to their own rather than shown the 403.
+        # Empty for a tenant-less account, which has no address of its
+        # own and is therefore never redirected.
+        return instance.tenant.subdomain if instance.tenant_id else ""
+
     class Meta:
         model = SystemUser
         fields = [
             'email', 'name', 'roles', 'trained',
             'phone_number', 'forms', 'organisation',
             'last_login', 'passcode', 'is_superuser',
-            'administration', 'id',
+            'administration', 'id', 'configured', 'subdomain',
         ]
 
 
@@ -900,3 +955,56 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             "phone_number",
             "organisation"
         ]
+
+
+class ConfigureSerializer(serializers.Serializer):
+    # The registrant's name arrives here, not at sign-up: this is the first
+    # point at which the email is known to be real.
+    first_name = serializers.CharField(max_length=50)
+    last_name = serializers.CharField(max_length=50)
+    # The top tier's name ("National") and the unit that sits at it
+    # ("Kenya") — two different things that are easy to conflate, which is
+    # why the form carries examples.
+    level_0_name = serializers.CharField(max_length=50)
+    root_unit_name = serializers.CharField(max_length=255)
+
+
+class ResendActivationSerializer(serializers.Serializer):
+    # Documents the payload for the schema; the view does not validate it,
+    # because an unparseable address must get the same 200 as an unknown one.
+    email = serializers.EmailField()
+
+
+class RegisterSerializer(serializers.Serializer):
+    # Phase 1 asks for the minimum that claims a workspace. The registrant's
+    # name belongs to the configuration form, which is the first point at
+    # which we know the email is real.
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    # A valid DNS label, because the subdomain will one day be one:
+    # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
+    subdomain = serializers.RegexField(
+        regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        max_length=63,
+        error_messages={
+            "invalid": (
+                "Subdomain may only contain lowercase letters, digits "
+                "and hyphens, and cannot start or end with a hyphen"
+            )
+        },
+    )
+
+    # Uniqueness of email and subdomain is left to the database
+    # constraints, which the register view turns into a 400 — a
+    # pre-check here could not close the race anyway.
+
+    def validate(self, attrs):
+        # Run Django's password validators with user context so the
+        # similarity validator can compare against the email. There are no
+        # names to compare against at this phase.
+        user = SystemUser(email=attrs["email"])
+        try:
+            validate_password(attrs["password"], user=user)
+        except django_exceptions.ValidationError as error:
+            raise ValidationError({"password": list(error.messages)})
+        return attrs
