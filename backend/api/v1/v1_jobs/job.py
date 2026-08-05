@@ -1271,7 +1271,9 @@ def handle_administrations_bulk_upload(
         set_bulk_upload_job(job_id, JobStatus.failed, result=error_file)
         return
     seed_administration_data(file_path, tenant=user.tenant)
-    generate_sqlite(Administration)
+    # The uploader's tenant, not the root file: that is the one its devices
+    # download, so regenerating anything else leaves them stale.
+    generate_sqlite(Administration, tenant=user.tenant)
     send_email(context=email_context, type=EmailTypes.administration_upload)
     set_bulk_upload_job(job_id, JobStatus.done)
 
@@ -1339,4 +1341,4 @@ def handle_entities_bulk_upload(filename, user_id, upload_time):
     if len(errors):
         handle_entities_error_upload(errors, email_context, user, upload_time)
         return
-    generate_sqlite(EntityData)
+    generate_sqlite(EntityData, tenant=user.tenant)

@@ -1,4 +1,6 @@
 import os
+import shutil
+import sqlite3
 from unittest.mock import patch
 
 import pandas as pd
@@ -10,6 +12,8 @@ from api.v1.v1_jobs.constants import JobStatus, JobTypes
 from api.v1.v1_jobs.job import handle_administrations_bulk_upload
 from api.v1.v1_jobs.models import Jobs
 from api.v1.v1_profile.models import Administration
+from mis.settings import MASTER_DATA
+from utils.custom_generator import sqlite_path
 from api.v1.v1_profile.tests.mixins import (
     TenantTestHelperMixin,
     write_administration_excel,
@@ -89,6 +93,35 @@ class BulkUploadJobTestCase(TestCase, TenantTestHelperMixin):
                 tenant=self.acme.tenant, name="Nairobi"
             ).exists()
         )
+
+    def test_a_good_file_refreshes_the_tenants_sqlite(self):
+        # Devices download their own tenant's master-data file, so
+        # regenerating the tenant-less root one would leave every device
+        # holding the hierarchy from before the upload.
+        self._write_file("sync.xlsx", [(None, "Nairobi")])
+        job = self._pending_job()
+        self.addCleanup(
+            shutil.rmtree, f"{MASTER_DATA}/acme", ignore_errors=True
+        )
+        with patch("api.v1.v1_jobs.job.storage.download"), patch(
+            "api.v1.v1_jobs.job.send_email"
+        ):
+            handle_administrations_bulk_upload(
+                "sync.xlsx", self.acme.admin.id, timezone.now(), job.id
+            )
+
+        path = sqlite_path(
+            Administration, tenant=self.acme.tenant, test=True
+        )
+        self.assertTrue(os.path.exists(path), f"missing {path}")
+        conn = sqlite3.connect(path)
+        try:
+            names = list(
+                pd.read_sql_query("SELECT * FROM nodes", conn)["name"]
+            )
+        finally:
+            conn.close()
+        self.assertIn("Nairobi", names)
 
     def test_a_rejected_file_fails_the_job_and_keeps_the_error_file(self):
         self._write_file("bad.xlsx", [("Wrongland", "Nairobi")])
