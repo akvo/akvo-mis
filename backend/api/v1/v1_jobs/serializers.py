@@ -9,16 +9,16 @@ from api.v1.v1_jobs.models import Jobs
 from api.v1.v1_profile.models import Administration, AdministrationAttribute
 from api.v1.v1_data.models import FormData
 from utils.custom_serializer_fields import (
-    CustomPrimaryKeyRelatedField,
     CustomFileField,
     CustomChoiceField,
     CustomListField,
+    TenantScopedPrimaryKeyRelatedField,
 )
 
 
 class DownloadDataRequestSerializer(serializers.Serializer):
-    form_id = CustomPrimaryKeyRelatedField(queryset=Forms.objects.none())
-    administration_id = CustomPrimaryKeyRelatedField(
+    form_id = TenantScopedPrimaryKeyRelatedField(queryset=Forms.objects.none())
+    administration_id = TenantScopedPrimaryKeyRelatedField(
         queryset=Administration.objects.none(), required=False
     )
     type = CustomChoiceField(
@@ -29,7 +29,7 @@ class DownloadDataRequestSerializer(serializers.Serializer):
     )
     use_label = serializers.BooleanField(required=False)
     child_form_ids = CustomListField(
-        child=CustomPrimaryKeyRelatedField(
+        child=TenantScopedPrimaryKeyRelatedField(
             queryset=Forms.objects.none()
         ),
         required=False,
@@ -37,7 +37,7 @@ class DownloadDataRequestSerializer(serializers.Serializer):
     date_from = serializers.DateField(required=False, allow_null=True)
     date_to = serializers.DateField(required=False, allow_null=True)
     selection_ids = CustomListField(
-        child=CustomPrimaryKeyRelatedField(
+        child=TenantScopedPrimaryKeyRelatedField(
             queryset=FormData.objects.none()
         ),
         required=False,
@@ -205,15 +205,15 @@ class UploadExcelSerializer(serializers.Serializer):
 
 
 class FormDataReportSerializer(serializers.Serializer):
-    form_id = CustomPrimaryKeyRelatedField(queryset=Forms.objects.none())
+    form_id = TenantScopedPrimaryKeyRelatedField(queryset=Forms.objects.none())
     child_form_ids = CustomListField(
-        child=CustomPrimaryKeyRelatedField(
+        child=TenantScopedPrimaryKeyRelatedField(
             queryset=Forms.objects.none()
         ),
         required=False,
     )
     selection_ids = CustomListField(
-        child=CustomPrimaryKeyRelatedField(
+        child=TenantScopedPrimaryKeyRelatedField(
             queryset=FormData.objects.none()
         ),
         required=False,

@@ -115,7 +115,9 @@ from utils.custom_serializer_fields import validate_serializers_message
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_generate(request, version):
-    serializer = DownloadDataRequestSerializer(data=request.GET)
+    serializer = DownloadDataRequestSerializer(
+        data=request.GET, context={"user": request.user}
+    )
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},
@@ -177,7 +179,9 @@ def download_generate(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_status(request, version, task_id):
-    job = get_object_or_404(Jobs, task_id=task_id)
+    job = get_object_or_404(
+        Jobs.objects.filter(user=request.user), task_id=task_id
+    )
     return Response(
         {"status": JobStatus.FieldStr.get(job.status)},
         status=status.HTTP_200_OK,
@@ -200,7 +204,9 @@ def download_status(request, version, task_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_file(request, version, file_name):
-    job = get_object_or_404(Jobs, result=file_name)
+    job = get_object_or_404(
+        Jobs.objects.filter(user=request.user), result=file_name
+    )
     type = request.GET.get("type") if request.GET.get("type") else "download"
     url = f"{type}/{job.result}"
     filepath = storage.download(url)
@@ -284,7 +290,9 @@ def download_list(request, version):
 @parser_classes([MultiPartParser])
 @permission_classes([IsAuthenticated])
 def upload_excel(request, form_id, version):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     serializer = UploadExcelSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -490,7 +498,9 @@ def upload_bulk_entities(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_data_report(request, version):
-    serializer = FormDataReportSerializer(data=request.GET)
+    serializer = FormDataReportSerializer(
+        data=request.GET, context={"user": request.user}
+    )
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},
