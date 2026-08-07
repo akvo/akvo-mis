@@ -79,14 +79,18 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
         has_other = False
         opts_mgr = _get_options_manager(question)
         if opts_mgr:
-            has_other = any(opt.other for opt in opts_mgr.all())
+            has_other = any(
+                bool(getattr(opt, "other", False)) for opt in opts_mgr.all()
+            )
         suffix = " or_other" if has_other else ""
         return (f"select_one option_{q_name}{suffix}", None)
     elif qtype == QuestionTypes.multiple_option:
         has_other = False
         opts_mgr = _get_options_manager(question)
         if opts_mgr:
-            has_other = any(opt.other for opt in opts_mgr.all())
+            has_other = any(
+                bool(getattr(opt, "other", False)) for opt in opts_mgr.all()
+            )
         suffix = " or_other" if has_other else ""
         return (f"select_multiple option_{q_name}{suffix}", None)
     elif qtype == QuestionTypes.geo:
@@ -562,6 +566,7 @@ class _DictObject:
         self.dependency = None
         self.dependency_rule = None
         self.required = False
+        self.other = False
         for k, v in d.items():
             setattr(self, k, v)
         if "defaultLanguage" in d and not hasattr(self, "default_language"):

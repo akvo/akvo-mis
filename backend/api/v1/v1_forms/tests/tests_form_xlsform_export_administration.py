@@ -192,3 +192,40 @@ class FormAdministrationCSVExportEndpointTestCase(TestCase):
         self.assertEqual(
             sub_row[3], str(top_adm.id)
         )  # Parent key uses parent ID
+
+    def test_dict_object_option_other_attribute_handling(self):
+        from api.v1.v1_forms.services.xlsform_export import generate_xlsform
+
+        dict_payload = {
+            "id": 999,
+            "name": "Published Form",
+            "languages": ["en"],
+            "default_language": "en",
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "g1",
+                    "label": "Group 1",
+                    "question": [
+                        {
+                            "id": 101,
+                            "name": "choice_q",
+                            "label": "Choice Question",
+                            "type": "option",
+                            "options": [
+                                {"id": 1, "value": "a", "label": "Option A"},
+                                {
+                                    "id": 2,
+                                    "value": "b",
+                                    "label": "Option B",
+                                    "other": True,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        output, skipped = generate_xlsform(dict_payload)
+        self.assertIsNotNone(output)
+        self.assertEqual(skipped, [])
