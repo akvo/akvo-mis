@@ -1002,6 +1002,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # noqa
         )
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Access-Control-Expose-Headers"] = (
+            "Content-Disposition, X-XLSForm-Skipped"
+        )
         if skipped:
             resp["X-XLSForm-Skipped"] = ", ".join(skipped)
         return resp

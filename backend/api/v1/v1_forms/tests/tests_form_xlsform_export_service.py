@@ -622,3 +622,42 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(
             row_begin_repeat["repeat_count"], "count-selected(${num_members})"
         )
+
+    def test_group_and_question_name_collision(self):
+        payload_collision = {
+            "id": 55,
+            "name": "Collision Form",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "signature",
+                    "label": "Signature Group",
+                    "question": [
+                        {
+                            "id": 10,
+                            "name": "signature",
+                            "label": "Signature Question",
+                            "type": "signature",
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, skipped = generate_xlsform(payload_collision)
+        self.assertIn(
+            "group:signature->group_signature (renamed group to avoid collision with child question)",  # noqa
+            skipped,
+        )
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        row_group = dict(zip(headers, [cell.value for cell in ws_survey[2]]))
+        row_q = dict(zip(headers, [cell.value for cell in ws_survey[3]]))
+
+        # Group name prefixed to 'group_signature',
+        # Question name remains 'signature'
+        self.assertEqual(row_group["type"], "begin_group")
+        self.assertEqual(row_group["name"], "group_signature")
+        self.assertEqual(row_q["type"], "image")
+        self.assertEqual(row_q["name"], "signature")

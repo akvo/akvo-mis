@@ -496,7 +496,19 @@ def _build_survey_rows(
     secondary_langs = [(disp, _extract_iso(disp)) for disp in lang_cols[1:]]
 
     for group in form.form_question_group.all():
-        g_name = group.name or f"group_{group.id}"
+        raw_g_name = group.name or f"group_{getattr(group, 'id', '1')}"
+        child_names = [
+            getattr(q, "name", None)
+            for q in group.question_group_question.all()
+            if getattr(q, "name", None)
+        ]
+        if raw_g_name in child_names:
+            g_name = f"group_{raw_g_name}"
+            skipped.append(
+                f"group:{raw_g_name}->{g_name} (renamed group to avoid collision with child question)"  # noqa
+            )
+        else:
+            g_name = raw_g_name
         g_is_repeat = bool(group.repeatable)
 
         # Emit begin_repeat / begin_group

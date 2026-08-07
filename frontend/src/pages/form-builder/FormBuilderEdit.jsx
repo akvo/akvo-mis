@@ -274,6 +274,14 @@ const FormBuilderEdit = () => {
         link.click();
         link.remove();
         window.URL.revokeObjectURL(url);
+
+        const skippedHeader = res.headers["x-xlsform-skipped"];
+        if (skippedHeader) {
+          notify({
+            type: "warning",
+            message: `${text.formBuilderExportXlsformWarningTitle}: ${skippedHeader}`,
+          });
+        }
       })
       .catch(() => {
         notify({ type: "error", message: text.formBuilderExportXlsformError });

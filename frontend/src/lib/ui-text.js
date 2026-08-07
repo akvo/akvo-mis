@@ -237,6 +237,7 @@ const uiText = {
     formBuilderExportError: "Failed to export form",
     formBuilderExportXlsformButton: "Export XLSForm",
     formBuilderExportXlsformError: "Failed to export XLSForm",
+    formBuilderExportXlsformWarningTitle: "XLSForm Export Warnings",
     formBuilderExportCascadeCsvButton: "Export Cascade CSV",
     formBuilderExportCascadeCsvError: "Failed to export Cascade CSV",
     formBuilderImportButton: "Import Form",
