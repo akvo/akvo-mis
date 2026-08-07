@@ -437,3 +437,188 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(
             row_q["label::Indonesian (id)"], "Untranslated Question"
         )
+
+    def test_lang_display_edge_cases(self):
+        from api.v1.v1_forms.services.xlsform_export import (
+            _lang_display,
+            _extract_iso,
+        )
+
+        # 1. Standard mapped codes
+        self.assertEqual(_lang_display("en"), "English (en)")
+        self.assertEqual(_lang_display("id"), "Indonesian (id)")
+        self.assertEqual(_lang_display("fr"), "French (fr)")
+
+        # 2. ISO 639 codes resolved via Django get_language_info
+        self.assertEqual(_lang_display("tet"), "Tetum (tet)")
+        self.assertEqual(_lang_display("ja"), "Japanese (ja)")
+        self.assertEqual(_lang_display("am"), "Amharic (am)")
+
+        # 3. Custom / unmapped ISO code fallback
+        self.assertEqual(_lang_display("xyz"), "Xyz (xyz)")
+
+        # 4. Whitespace and uppercase handling
+        self.assertEqual(_lang_display("  ID  "), "Indonesian (id)")
+        self.assertEqual(_lang_display("TET"), "Tetum (tet)")
+
+        # 5. Empty / None fallback
+        self.assertEqual(_lang_display(""), "English (en)")
+        self.assertEqual(_lang_display(None), "English (en)")
+
+        # 6. Extract ISO matching
+        self.assertEqual(_extract_iso("Indonesian (id)"), "id")
+        self.assertEqual(_extract_iso("Tetum (tet)"), "tet")
+        self.assertEqual(_extract_iso("Xyz (xyz)"), "xyz")
+        self.assertEqual(_extract_iso("raw_code"), "raw_code")
+
+    def test_export_form_with_unmapped_language_code(self):
+        dict_payload = {
+            "id": 88,
+            "name": "Unmapped Language Form",
+            "version": 1,
+            "languages": ["ko", "xyz"],
+            "defaultLanguage": "ko",
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "g1",
+                    "label": "Korean Group",
+                    "question": [
+                        {
+                            "id": 10,
+                            "name": "q1",
+                            "label": "Korean Question",
+                            "type": "text",
+                            "translations": [
+                                {
+                                    "language": "xyz",
+                                    "label": "Custom Lang Question",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(dict_payload)
+        wb = openpyxl.load_workbook(stream)
+
+        ws_settings = wb["settings"]
+        self.assertEqual(
+            ws_settings.cell(row=2, column=4).value, "Korean (ko)"
+        )
+
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        self.assertIn("label::Korean (ko)", headers)
+        self.assertIn("label::Xyz (xyz)", headers)
+
+        row_q = dict(zip(headers, [cell.value for cell in ws_survey[3]]))
+        self.assertEqual(row_q["label::Korean (ko)"], "Korean Question")
+        self.assertEqual(row_q["label::Xyz (xyz)"], "Custom Lang Question")
+
+    def test_empty_form_export(self):
+        empty_payload = {
+            "id": 99,
+            "name": "Empty Form",
+            "version": 1,
+            "question_group": [],
+        }
+        stream, skipped = generate_xlsform(empty_payload)
+        self.assertIsNotNone(stream)
+        self.assertEqual(skipped, [])
+        wb = openpyxl.load_workbook(stream)
+        self.assertIn("survey", wb.sheetnames)
+        self.assertIn("choices", wb.sheetnames)
+        self.assertIn("settings", wb.sheetnames)
+
+    def test_dangling_dependency_reference(self):
+        from api.v1.v1_forms.services.xlsform_export import (
+            _build_relevant_expression,
+        )
+
+        q_with_deleted_dep = DummyObject(
+            name="q2",
+            dependency=[
+                {"id": 99999, "options": ["yes"]},  # Question 99999 deleted
+                {"id": 100, "min": 5},
+            ],
+            dependency_rule="AND",
+        )
+        q_map = {100: {"name": "existing_q", "type": QuestionTypes.number}}
+        expr = _build_relevant_expression(q_with_deleted_dep, q_map)
+        # Dangling ID 99999 is skipped cleanly; only valid ID 100 is emitted
+        self.assertEqual(expr, "${existing_q} >= 5")
+
+    def test_skipped_question_types_warning_header(self):
+        payload_with_skipped = {
+            "id": 77,
+            "name": "Form With Webform Types",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "g1",
+                    "label": "Group 1",
+                    "question": [
+                        {
+                            "id": 10,
+                            "name": "tree_q",
+                            "label": "Tree Q",
+                            "type": "tree",
+                        },
+                        {
+                            "id": 11,
+                            "name": "table_q",
+                            "label": "Table Q",
+                            "type": "table",
+                        },
+                        {
+                            "id": 12,
+                            "name": "auto_q",
+                            "label": "Auto Q",
+                            "type": "autofield",
+                        },
+                    ],
+                }
+            ],
+        }
+        stream, skipped = generate_xlsform(payload_with_skipped)
+        self.assertIn("tree_q", skipped)
+        self.assertIn("table_q", skipped)
+        self.assertIn("auto_q", skipped)
+
+    def test_repeat_group_leading_question(self):
+        payload_repeat_leading = {
+            "id": 55,
+            "name": "Repeat Leading Form",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "household_members",
+                    "label": "Household Members",
+                    "repeatable": True,
+                    "leading_question": "num_members",
+                    "question": [
+                        {
+                            "id": 10,
+                            "name": "member_name",
+                            "label": "Member Name",
+                            "type": "text",
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_repeat_leading)
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        row_begin_repeat = dict(
+            zip(headers, [cell.value for cell in ws_survey[2]])
+        )
+        self.assertEqual(row_begin_repeat["type"], "begin_repeat")
+        self.assertEqual(
+            row_begin_repeat["repeat_count"], "count-selected(${num_members})"
+        )

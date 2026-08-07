@@ -22,6 +22,10 @@ _LANG_NAMES: Dict[str, str] = {
     "zh": "Chinese (zh)",
     "hi": "Hindi (hi)",
     "vi": "Vietnamese (vi)",
+    "tet": "Tetum (tet)",
+    "my": "Burmese (my)",
+    "am": "Amharic (am)",
+    "ja": "Japanese (ja)",
 }
 
 _DEFAULT_LANG_CODE = "en"
@@ -134,12 +138,33 @@ def _build_question_map(form: Any) -> Dict[int, Dict[str, Any]]:
 
 def _lang_display(code: str) -> str:
     """
-    Returns the full XLSForm language display name for a given ISO code.
-    e.g. 'en' -> 'English (en)', 'fr' -> 'French (fr)'.
-    Unknown codes get 'Code (code)' to ensure they are always named.
+    Returns the full XLSForm language display name for a given ISO code
+    using Django's built-in get_language_info (e.g. 'id' -> 'Indonesian (id)').
+    Unknown codes get 'Code (code)' as fallback
+    to ensure they are always named.
     KoboToolbox requires this format; bare codes cause 'unnamed translation'.
     """
-    return _LANG_NAMES.get(code, f"{code.capitalize()} ({code})")
+    clean_code = (code or "").strip().lower()
+    if not clean_code:
+        return f"English ({_DEFAULT_LANG_CODE})"
+
+    # Check manual overrides first if specified
+    if clean_code in _LANG_NAMES:
+        return _LANG_NAMES[clean_code]
+
+    try:
+        from django.utils.translation import get_language_info
+
+        info = get_language_info(clean_code)
+        name = (
+            info.get("name")
+            or info.get("name_local")
+            or clean_code.capitalize()
+        )
+    except Exception:
+        name = clean_code.capitalize()
+
+    return f"{name} ({clean_code})"
 
 
 def _extract_iso(display_or_code: str) -> str:
@@ -482,6 +507,12 @@ def _build_survey_rows(
             "name": g_name,
             f"label::{d_lang_display}": g_label,
         }
+        if g_is_repeat:
+            l_q = getattr(group, "leading_question", None) or getattr(
+                group, "leadingQuestion", None
+            )
+            if l_q:
+                begin_row["repeat_count"] = f"count-selected(${{{l_q}}})"
 
         for display, iso in secondary_langs:
             trans_data = (
