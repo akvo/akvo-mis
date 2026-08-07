@@ -230,6 +230,7 @@ class AdministrationSerializer(TenantStampedSerializerMixin,
                 "level": instance.level.id,
                 "path": instance.path,
             },
+            tenant=instance.tenant,
         )
         administration_csv_add(data=instance)
         for attribute in attributes:
@@ -283,6 +284,7 @@ class AdministrationSerializer(TenantStampedSerializerMixin,
                 "level": instance.level.id,
                 "path": instance.path,
             },
+            tenant=instance.tenant,
             id=instance.id,
         )
         administration_csv_update(data=instance)
@@ -352,6 +354,7 @@ class EntityDataSerializer(serializers.ModelSerializer):
                 "administration": instance.administration.id,
                 "parent": instance.administration.id,
             },
+            tenant=instance.entity.tenant,
         )
         return instance
 
@@ -366,6 +369,7 @@ class EntityDataSerializer(serializers.ModelSerializer):
                 "administration": instance.administration.id,
                 "parent": instance.administration.id,
             },
+            tenant=instance.entity.tenant,
             id=instance.id,
         )
         return instance

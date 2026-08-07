@@ -21,6 +21,20 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from utils.tenant_host import is_base_domain, resolve_tenant_from_host
 
+# Infrastructure reaches the pod directly — a kubelet probe connects to the
+# pod IP, so the request carries `Host: <pod-ip>:8000`, which names no
+# workspace. The 404 that is right for a typo'd subdomain is wrong here: it
+# fails the readiness probe, which holds the rollout, so setting
+# BASE_DOMAIN would make every deploy time out. Cluster DNS and
+# `kubectl port-forward` arrive the same way.
+#
+# This is one path, not the start of an exemption list. The distinction the
+# class docstring draws — public *API* endpoints are exempted by being
+# anonymous, never by being listed — still holds. Liveness is not an API
+# endpoint; it answers "is this process up", it has no tenant by
+# construction, and it will not grow siblings.
+HEALTH_CHECK_PATH = "/api/v1/health/check"
+
 
 class TenantMiddleware:
     def __init__(self, get_response):
@@ -30,6 +44,12 @@ class TenantMiddleware:
     def __call__(self, request):
         host = request.get_host()
         request.tenant = resolve_tenant_from_host(host)
+
+        # Resolved first, so a probe arriving on a real workspace host
+        # still reports that tenant, then exempted from both the 404 and
+        # enforcement below.
+        if request.path.startswith(HEALTH_CHECK_PATH):
+            return self.get_response(request)
 
         # A host that is neither the signup domain nor a workspace names
         # nothing this deployment serves. Answering 404 before the view
