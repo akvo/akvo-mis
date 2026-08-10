@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import axios from "axios";
 import TestApp from "../../../TestApp";
+import { store } from "../../../lib";
 import "@testing-library/jest-dom";
 
 jest.mock("axios");
@@ -62,5 +63,25 @@ describe("Register", () => {
     // A typo caught after the account exists would need a password reset to
     // recover from, so the request must not go out at all.
     expect(screen.queryByText(/Check your email/i)).toBeNull();
+  });
+
+  test("redirects to root when accessed from a tenant subdomain", async () => {
+    window.appConfig = { baseDomain: "app.com" };
+    store.update((s) => {
+      s.tenant = { id: 1, subdomain: "acme" };
+      s.tenantLoaded = true;
+    });
+
+    render(<TestApp entryPoint={"/register"} />);
+
+    // The "Create your workspace" heading should not be visible
+    expect(screen.queryByText(/Create your workspace/i)).toBeNull();
+
+    // Cleanup
+    window.appConfig = undefined;
+    store.update((s) => {
+      s.tenant = null;
+      s.tenantLoaded = false;
+    });
   });
 });
