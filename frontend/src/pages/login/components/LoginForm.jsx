@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, store, uiText } from "../../../lib";
 import { useNotification, useResendActivation } from "../../../util/hooks";
 import { reloadData } from "../../../util/form";
-import { baseDomain } from "../../../util/tenant";
+import { onBaseDomainHost } from "../../../util/tenant";
 
 const LoginForm = () => {
   const navigate = useNavigate();
@@ -12,9 +12,14 @@ const LoginForm = () => {
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const { notify } = useNotification();
   const { resend, resending } = useResendActivation();
-  const { language, tenant } = store.useState((s) => s);
+  const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
-  const showRegister = !baseDomain() || !tenant;
+  // Sign-up belongs to the main site — a workspace already exists, and
+  // its login page has nothing to offer someone without an account. Read
+  // from the host rather than from the tenant in the store, which is
+  // null both before the lookup answers (so the link appeared and then
+  // vanished on every load) and on a workspace that does not exist.
+  const showRegister = onBaseDomainHost();
   const text = useMemo(() => {
     return uiText[activeLang];
   }, [activeLang]);

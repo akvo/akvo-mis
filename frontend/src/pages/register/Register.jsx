@@ -1,17 +1,12 @@
 import React, { useState } from "react";
 import "../login/style.scss";
 import { Row, Col, Form, Input, Button, Typography } from "antd";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
+import { baseDomainHost } from "../../util/tenant";
 
 const { Title, Text } = Typography;
-
-// Registration lives on the base domain, so the host the browser is already
-// on *is* the base domain — port and all. Reading it from the address bar
-// rather than from appConfig keeps this correct during local development,
-// where the port is part of the workspace address.
-const addressSuffix = `.${window.location.host}`;
 
 // Phase 1 of sign-up: just enough to claim a workspace. There is no login
 // here — the account is inactive until the emailed link is followed — so the
@@ -21,6 +16,17 @@ const Register = () => {
   const [sentTo, setSentTo] = useState(null);
   const { notify } = useNotification();
   const { resend, resending } = useResendActivation();
+  const [searchParams] = useSearchParams();
+  // Registration belongs on the main site, so the suffix is the main
+  // site's host — taken from the configuration rather than from the
+  // address bar, which was reading back whatever host the browser had
+  // wandered onto and offering `<name>.sleman.app.com`. The port still
+  // comes from the address bar: local development runs on one and
+  // production does not.
+  const addressSuffix = `.${baseDomainHost()}`;
+  // Arriving from a workspace address that turned out not to exist, the
+  // name already typed there is the one being claimed here.
+  const suggestedSubdomain = searchParams.get("subdomain") || "";
 
   const onFinish = (values) => {
     setLoading(true);
@@ -113,7 +119,12 @@ const Register = () => {
             <p className="disclaimer">
               Free tier · no credit card. You&apos;ll verify your email next.
             </p>
-            <Form name="register-form" layout="vertical" onFinish={onFinish}>
+            <Form
+              name="register-form"
+              layout="vertical"
+              onFinish={onFinish}
+              initialValues={{ subdomain: suggestedSubdomain }}
+            >
               <Form.Item
                 name="email"
                 label="Email"

@@ -33,6 +33,10 @@ const defaultUIState = {
   // sends a workspace's own users to the find-workspace page, and a
   // redirect is not something a later answer can undo.
   tenantLoaded: false,
+  // The server said this host serves no workspace at all — a 404 from
+  // tenant-info, not merely an absent one. Nothing on such a host can
+  // work, because every other call is refused the same way.
+  tenantMissing: false,
   selectedForm: null,
   selectedFormData: null,
   loadingForm: false,

@@ -6,6 +6,19 @@ import "@testing-library/jest-dom";
 
 jest.mock("axios");
 
+// The sign-up form is host-aware, and jsdom is always on "localhost"
+// unless told otherwise.
+const withHostname = async (hostname, run) => {
+  const original = window.location;
+  delete window.location;
+  window.location = { ...original, hostname, host: hostname };
+  try {
+    await run();
+  } finally {
+    window.location = original;
+  }
+};
+
 describe("Register", () => {
   beforeEach(() => {
     // App bootstrap fetches GET /forms/published on mount; give every
@@ -72,10 +85,12 @@ describe("Register", () => {
       s.tenantLoaded = true;
     });
 
-    render(<TestApp entryPoint={"/register"} />);
-
-    // The "Create your workspace" heading should not be visible
-    expect(screen.queryByText(/Create your workspace/i)).toBeNull();
+    await withHostname("acme.app.com", async () => {
+      render(<TestApp entryPoint={"/register"} />);
+      await waitFor(() => {
+        expect(screen.queryByText(/Create your workspace/i)).toBeNull();
+      });
+    });
 
     // Cleanup
     delete window.appConfig;
@@ -83,5 +98,44 @@ describe("Register", () => {
       s.tenant = null;
       s.tenantLoaded = false;
     });
+  });
+
+  test("redirects to root from a workspace that does not exist", async () => {
+    // The guard used to be "the lookup found no tenant", which is also
+    // the answer on a subdomain nobody owns — so the form rendered there
+    // and offered addresses under it.
+    window.appConfig = { baseDomain: "app.com" };
+    store.update((s) => {
+      s.tenant = null;
+      s.tenantLoaded = true;
+    });
+
+    await withHostname("sleman.app.com", async () => {
+      render(<TestApp entryPoint={"/register"} />);
+      await waitFor(() => {
+        expect(screen.queryByText(/Create your workspace/i)).toBeNull();
+      });
+    });
+
+    delete window.appConfig;
+    store.update((s) => {
+      s.tenantLoaded = false;
+    });
+  });
+
+  test("offers addresses under the main site, not under the current host", async () => {
+    window.appConfig = { baseDomain: "app.com" };
+
+    await withHostname("app.com", async () => {
+      render(<TestApp entryPoint={"/register"} />);
+      expect(await screen.findByText(".app.com")).toBeInTheDocument();
+    });
+
+    delete window.appConfig;
+  });
+
+  test("prefills the address someone arrived here trying to reach", async () => {
+    render(<TestApp entryPoint={"/register?subdomain=sleman"} />);
+    expect(await screen.findByPlaceholderText("acme")).toHaveValue("sleman");
   });
 });

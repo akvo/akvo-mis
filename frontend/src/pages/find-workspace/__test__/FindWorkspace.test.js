@@ -38,8 +38,16 @@ describe("base domain vs workspace address", () => {
     window.location = realLocation;
   });
 
+  // Which of the two contexts the app is in is read off the address bar,
+  // so a test that cares has to say where the browser is.
+  const browsingAt = (hostname) => {
+    delete window.location;
+    window.location = { ...realLocation, hostname, host: hostname };
+  };
+
   test("the main site offers to find a workspace, not to sign in", async () => {
     servedAs(null);
+    browsingAt("app.com");
     render(<TestApp entryPoint={"/login"} />);
     expect(
       await screen.findByText(/Go to your workspace/i)
@@ -69,6 +77,7 @@ describe("base domain vs workspace address", () => {
 
   test("a workspace address says whose workspace it is", async () => {
     servedAs({ subdomain: "acme", name: "Kenya" });
+    browsingAt("acme.app.com");
     render(<TestApp entryPoint={"/login"} />);
     expect(await screen.findByTestId("workspace-name")).toHaveTextContent(
       "Kenya"

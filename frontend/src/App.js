@@ -54,6 +54,7 @@ import {
   FormBuilderCreate,
   FormBuilderEdit,
   FindWorkspace,
+  WorkspaceNotFound,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -62,7 +63,12 @@ import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
 import { reloadData, fetchPublishedForms } from "./util/form";
 import { fetchLevels } from "./util/level";
-import { baseDomain, fetchTenant, workspaceUrl } from "./util/tenant";
+import {
+  baseDomain,
+  fetchTenant,
+  onBaseDomainHost,
+  workspaceUrl,
+} from "./util/tenant";
 import { ability, AbilityContext } from "./components/can";
 
 // Session validity is not decided here. Two authorities already settle it and
@@ -99,21 +105,25 @@ const Private = ({ element: Element, alias }) => {
 };
 
 const RouteList = () => {
-  const {
-    user: authUser,
-    tenant,
-    tenantLoaded,
-  } = store.useState((state) => state);
+  const { user: authUser, tenantMissing } = store.useState((state) => state);
   // The main site of a SaaS deployment: it signs people up and points
   // them at their workspace, but it belongs to none, so there is nothing
   // to sign in to here — the backend refuses a login on it. A
   // single-host deployment has no base domain and so never takes this
   // branch, which is what keeps its /login working exactly as before.
   //
-  // Held until the answer has actually arrived: redirecting to
-  // find-workspace changes the URL, and a tenant that resolves a moment
-  // later cannot undo it.
-  const onBaseDomain = Boolean(baseDomain()) && tenantLoaded && !tenant;
+  // Decided by the host, not by the tenant lookup. This used to wait for
+  // the lookup and read "no tenant" as "the main site", which is also
+  // what an address like `sleman.app.com` that belongs to nobody answers
+  // — so the sign-up form rendered there and offered to create
+  // `<name>.sleman.app.com`.
+  const onBaseDomain = Boolean(baseDomain()) && onBaseDomainHost();
+
+  // Not a route: on a host the deployment does not serve, every call the
+  // app would make is refused, so there is no page here to be on.
+  if (tenantMissing) {
+    return <WorkspaceNotFound />;
+  }
   return (
     <Routes>
       <Route
@@ -140,9 +150,7 @@ const RouteList = () => {
       <Route
         exact
         path="/register"
-        element={
-          !baseDomain() || onBaseDomain ? <Register /> : <Navigate to="/" />
-        }
+        element={onBaseDomainHost() ? <Register /> : <Navigate to="/" />}
       />
       <Route exact path="/activate/:token" element={<Activate />} />
       {/* Not wrapped in Private: Private sends every unconfigured user
