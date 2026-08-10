@@ -75,13 +75,12 @@ describe("base domain vs workspace address", () => {
     expect(window.location.href).toBe("http://acme.app.com");
   });
 
-  test("a workspace address says whose workspace it is", async () => {
-    servedAs({ subdomain: "acme", name: "Kenya" });
+  test("a workspace address signs in rather than asking which workspace", async () => {
+    servedAs({ subdomain: "acme" });
     browsingAt("acme.app.com");
     render(<TestApp entryPoint={"/login"} />);
-    expect(await screen.findByTestId("workspace-name")).toHaveTextContent(
-      "Kenya"
-    );
+    expect(await screen.findByText(/Welcome back/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Go to your workspace/i)).toBeNull();
   });
 
   test("a single-host deployment signs in at /login as before", async () => {

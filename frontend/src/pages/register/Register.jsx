@@ -116,9 +116,7 @@ const Register = () => {
         <Col span={24} className="right-side">
           <div className="login-form-container">
             <h1>Create your workspace</h1>
-            <p className="disclaimer">
-              Free tier · no credit card. You&apos;ll verify your email next.
-            </p>
+            <p className="disclaimer">You&apos;ll verify your email next.</p>
             <Form
               name="register-form"
               layout="vertical"

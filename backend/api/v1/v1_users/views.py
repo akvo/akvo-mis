@@ -304,10 +304,7 @@ def login(request, version):
     responses={
         200: inline_serializer(
             "TenantInfo",
-            fields={
-                "subdomain": serializers.CharField(),
-                "name": serializers.CharField(),
-            },
+            fields={"subdomain": serializers.CharField()},
         ),
         204: OpenApiResponse(description="Not a workspace address"),
     },
@@ -316,12 +313,21 @@ def login(request, version):
 )
 @api_view(["GET"])
 def tenant_info(request, version):
-    """Enough to brand the page before anyone has signed in.
+    """Which workspace, if any, this address belongs to.
 
-    Deliberately two fields and no more: this is anonymous, and the host
+    What the answer is *for* is the distinction between a workspace, the
+    signup domain (204) and a host this deployment does not serve (404
+    from the middleware) — three cases the frontend has to tell apart
+    before anyone has signed in.
+
+    Deliberately one field and no more: this is anonymous, and the host
     it answers for is guessable, so anything added here is published to
-    whoever tries the subdomain. Whether the workspace has finished
-    configuring itself is not among them — that decision belongs to the
+    whoever tries the subdomain. It used to also return the workspace's
+    name, taken from its root administration unit, to caption the login
+    page — dropped along with that caption, because an account belongs
+    to exactly one workspace and so nobody needed telling which one they
+    were signing in to. Whether the workspace has finished configuring
+    itself was never among the fields either: that belongs to the
     signed-in user's own `configured` flag, and a visitor who has not
     signed in cannot act on it.
     """
@@ -331,16 +337,8 @@ def tenant_info(request, version):
         # caller learns there is no workspace here, which is the answer
         # that sends it to the signup page.
         return Response(status=status.HTTP_204_NO_CONTENT)
-    root = Administration.objects.filter(
-        tenant=tenant, parent__isnull=True
-    ).first()
     return Response(
-        {
-            "subdomain": tenant.subdomain,
-            # The root unit is the workspace's name — the tenant row
-            # itself only carries the subdomain.
-            "name": root.name if root else "",
-        },
+        {"subdomain": tenant.subdomain},
         status=status.HTTP_200_OK,
     )
 

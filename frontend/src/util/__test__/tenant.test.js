@@ -117,16 +117,16 @@ describe("tenant util", () => {
   test("fetchTenant stores the workspace this host serves", async () => {
     axios.mockResolvedValue({
       status: 200,
-      data: { subdomain: "acme", name: "Kenya" },
+      data: { subdomain: "acme" },
     });
     const tenant = await fetchTenant();
-    expect(tenant.name).toBe("Kenya");
+    expect(tenant.subdomain).toBe("acme");
     expect(store.getRawState().tenant.subdomain).toBe("acme");
   });
 
   test("a 204 means there is no workspace here", async () => {
     // axios gives an empty body as "", which must not be mistaken for a
-    // workspace with a blank name.
+    // workspace whose subdomain happens to be blank.
     axios.mockResolvedValue({ status: 204, data: "" });
     expect(await fetchTenant()).toBeNull();
     expect(store.getRawState().tenant).toBeNull();
