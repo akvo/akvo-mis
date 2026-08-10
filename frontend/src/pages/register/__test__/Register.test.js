@@ -78,7 +78,7 @@ describe("Register", () => {
     expect(screen.queryByText(/Create your workspace/i)).toBeNull();
 
     // Cleanup
-    window.appConfig = undefined;
+    delete window.appConfig;
     store.update((s) => {
       s.tenant = null;
       s.tenantLoaded = false;
