@@ -142,6 +142,11 @@ const LoginForm = () => {
         </Form.Item>
       )}
       <Form.Item>
+        <Link className="login-form-forgot" to="/register">
+          Create an account
+        </Link>
+      </Form.Item>
+      <Form.Item>
         <Button
           type="primary"
           htmlType="submit"
