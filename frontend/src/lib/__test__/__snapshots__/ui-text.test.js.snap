@@ -13,8 +13,7 @@ Object {
     "accountDisclaimer": "The user is accountable for his/her account and in case there are any changes (Transfers, retirement, any kind of leave, resignation etc) this should be communicated to the County Administrator or National Super Admin who might be able to assign the roles to the new officer.",
     "actionColumn": "Action",
     "addAdmDesc": <React.Fragment>
-      This page allows you to add administration to the
-       
+      This page allows you to add administration to the 
       Test App
        platform.
     </React.Fragment>,
@@ -24,8 +23,7 @@ Object {
     "addAttributeDesc": <React.Fragment>
       This page allows you to add attribute to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "addAttributes": "Add Attribute",
     "addEntities": "Add Entities",
@@ -34,14 +32,12 @@ Object {
     "addEntityDesc": <React.Fragment>
       This page allows you to add entity to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "addEntityTypeDesc": <React.Fragment>
       This page allows you to add entity type to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "addLevel": "Add Level",
     "addNew": "Add New",
@@ -51,8 +47,7 @@ Object {
     "addOrgDesc": <React.Fragment>
       This page allows you to add organisations to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "addOrganisation": "Add Organization",
     "addRole": "Add Role",
@@ -61,8 +56,7 @@ Object {
     "addUserDescription": <React.Fragment>
       This page allows you to add users to the 
       Test App
-       
-      platform. You will only be able to add users for regions under your jurisdisction.
+       platform. You will only be able to add users for regions under your jurisdisction.
       <br />
       Once you have added the user, the user will be notified by email to set their password and access the platform
     </React.Fragment>,
@@ -231,20 +225,21 @@ Object {
     "deleteUserDesc": <React.Fragment>
       The User will no longer be able to access the 
       Test App
-       
-      platform as an Enumrator/Admin etc
+       platform as an Enumrator/Admin etc
     </React.Fragment>,
     "deleteUserHint": "Deleting this user will not delete the data association(s)",
     "deleteUserTitle": "You are about to delete the user",
     "download": "Download",
     "downloadAppText": <React.Fragment>
       Download 
+      Test App
        App
     </React.Fragment>,
     "downloadAppsLinkText": "or download using the links below:",
     "downloadAppsQRText": <React.Fragment>
       Download the 
       <b>
+        Test App
          App
       </b>
        using the QR codes below
@@ -266,8 +261,7 @@ Object {
     "draftFormSaveSuccess": "Draft saved successfully",
     "dropFile": "Drop your file here",
     "editAdmDesc": <React.Fragment>
-      This page allows you to edit administration to the
-       
+      This page allows you to edit administration to the 
       Test App
        platform.
     </React.Fragment>,
@@ -278,8 +272,7 @@ Object {
     "editAttributeDesc": <React.Fragment>
       This page allows you to edit attribute to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "editAttributes": "Edit Attribute",
     "editButton": "Edit",
@@ -289,18 +282,15 @@ Object {
     "editEntityDesc": <React.Fragment>
       This page allows you to edit entity to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "editEntityTypeDesc": <React.Fragment>
       This page allows you to edit entity type to the 
       Test App
-       
-      platform.
+       platform.
     </React.Fragment>,
     "editOrgDesc": <React.Fragment>
-      This page allows you to edit organisations to the
-       
+      This page allows you to edit organisations to the 
       Test App
        platform.
     </React.Fragment>,
@@ -336,10 +326,10 @@ Object {
     "errorPageNA": "Oops, this page is not available",
     "errorSomething": "Something went wrong",
     "errorURL": <React.Fragment>
-      Please check the URL again or let us take you back to the
-       
+      Please check the URL again or let us take you back to the 
       Test App
-       homepage
+       
+      homepage
     </React.Fragment>,
     "errorUnknown": "An unknown error occurred",
     "errorUserLoad": "Failed to load user data",
@@ -617,6 +607,7 @@ Object {
         "isPage": false,
         "text": <React.Fragment>
           Download 
+          Test App
            App
         </React.Fragment>,
       },
@@ -842,17 +833,17 @@ Object {
     "mobileLevelRequired": "Level is required",
     "mobileNameRequired": "Name is required",
     "mobilePanelAddDesc": <React.Fragment>
-      This page allows you to add mobile data collectors to the
-       
+      This page allows you to add mobile data collectors to the 
       Test App
-       platform.
+       
+      platform.
     </React.Fragment>,
     "mobilePanelButton": "Manage Data Collectors",
     "mobilePanelEditDesc": <React.Fragment>
-      This page allows you to edit mobile data collectors to the
-       
+      This page allows you to edit mobile data collectors to the 
       Test App
-       platform.
+       
+      platform.
     </React.Fragment>,
     "mobilePanelText": <React.Fragment>
       This is where you :

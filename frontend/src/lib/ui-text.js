@@ -1,8 +1,14 @@
 import React, { Fragment } from "react";
 
-const downloadAppText = (
-  <Fragment>Download {window.appConfig.apkName} App</Fragment>
-);
+// window.appConfig comes from the /config.js bootstrap script, and this
+// module reads it while the bundle is still evaluating — before any
+// component renders and before any error boundary exists. Dereferencing
+// it directly means a config.js that fails to arrive takes the entire
+// app down with a TypeError rather than degrading to a default name.
+const appName = window?.appConfig?.name || "Akvo MIS";
+const apkName = window?.appConfig?.apkName || appName;
+
+const downloadAppText = <Fragment>Download {apkName} App</Fragment>;
 
 const uiText = {
   en: {
@@ -44,8 +50,8 @@ const uiText = {
     errorUnknown: "An unknown error occurred",
     errorURL: (
       <Fragment>
-        Please check the URL again or let us take you back to the{" "}
-        {window.appConfig.name} homepage
+        Please check the URL again or let us take you back to the {appName}{" "}
+        homepage
       </Fragment>
     ),
     errorVerifyCreds:
@@ -537,7 +543,7 @@ const uiText = {
     // Reset Password
     welcomeShort: (
       <Fragment>
-        Welcome to the <b>{window.appConfig.name}</b> platform
+        Welcome to the <b>{appName}</b> platform
       </Fragment>
     ),
     resetHint: (
@@ -605,8 +611,8 @@ const uiText = {
     deleteUserTitle: "You are about to delete the user",
     deleteUserDesc: (
       <Fragment>
-        The User will no longer be able to access the {window.appConfig.name}{" "}
-        platform as an Enumrator/Admin etc
+        The User will no longer be able to access the {appName} platform as an
+        Enumrator/Admin etc
       </Fragment>
     ),
     userAssociations: "This user has following data association(s)",
@@ -672,14 +678,14 @@ const uiText = {
     mobileConfirmDeletion: "Are you sure?",
     mobilePanelAddDesc: (
       <Fragment>
-        This page allows you to add mobile data collectors to the{" "}
-        {window.appConfig.name} platform.
+        This page allows you to add mobile data collectors to the {appName}{" "}
+        platform.
       </Fragment>
     ),
     mobilePanelEditDesc: (
       <Fragment>
-        This page allows you to edit mobile data collectors to the{" "}
-        {window.appConfig.name} platform.
+        This page allows you to edit mobile data collectors to the {appName}{" "}
+        platform.
       </Fragment>
     ),
     mobileErrDelete: "Unable to delete assingment",
@@ -750,62 +756,52 @@ const uiText = {
     searchEntity: "Enter name...",
     addOrgDesc: (
       <Fragment>
-        This page allows you to add organisations to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to add organisations to the {appName} platform.
       </Fragment>
     ),
     addEntityDesc: (
       <Fragment>
-        This page allows you to add entity to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to add entity to the {appName} platform.
       </Fragment>
     ),
     addEntityTypeDesc: (
       <Fragment>
-        This page allows you to add entity type to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to add entity type to the {appName} platform.
       </Fragment>
     ),
     addAttributeDesc: (
       <Fragment>
-        This page allows you to add attribute to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to add attribute to the {appName} platform.
       </Fragment>
     ),
     addAdmDesc: (
       <Fragment>
-        This page allows you to add administration to the{" "}
-        {window.appConfig.name} platform.
+        This page allows you to add administration to the {appName} platform.
       </Fragment>
     ),
     editOrgDesc: (
       <Fragment>
-        This page allows you to edit organisations to the{" "}
-        {window.appConfig.name} platform.
+        This page allows you to edit organisations to the {appName} platform.
       </Fragment>
     ),
     editEntityDesc: (
       <Fragment>
-        This page allows you to edit entity to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to edit entity to the {appName} platform.
       </Fragment>
     ),
     editEntityTypeDesc: (
       <Fragment>
-        This page allows you to edit entity type to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to edit entity type to the {appName} platform.
       </Fragment>
     ),
     editAttributeDesc: (
       <Fragment>
-        This page allows you to edit attribute to the {window.appConfig.name}{" "}
-        platform.
+        This page allows you to edit attribute to the {appName} platform.
       </Fragment>
     ),
     editAdmDesc: (
       <Fragment>
-        This page allows you to edit administration to the{" "}
-        {window.appConfig.name} platform.
+        This page allows you to edit administration to the {appName} platform.
       </Fragment>
     ),
     successAddedOrg: "Organisation added",
@@ -906,9 +902,8 @@ const uiText = {
     // User Management
     addUserDescription: (
       <Fragment>
-        This page allows you to add users to the {window.appConfig.name}{" "}
-        platform. You will only be able to add users for regions under your
-        jurisdisction.
+        This page allows you to add users to the {appName} platform. You will
+        only be able to add users for regions under your jurisdisction.
         <br />
         Once you have added the user, the user will be notified by email to set
         their password and access the platform
@@ -925,7 +920,7 @@ const uiText = {
         isPage: false,
       },
     ],
-    homeJumbotronTitle: <Fragment>{window.appConfig.name}</Fragment>,
+    homeJumbotronTitle: <Fragment>{appName}</Fragment>,
     homeJumbotronSubtitle: (
       <Fragment>
         A comprehensive platform designed to support data collection,
@@ -970,12 +965,12 @@ const uiText = {
     homeVideoTitle: "Watch & Learn",
     homeVideoHeadline: (
       <Fragment>
-        See <span className="accent">{window.appConfig.name}</span> in action.
+        See <span className="accent">{appName}</span> in action.
       </Fragment>
     ),
     homeVideoText:
       "A short walkthrough of how the platform supports data collection, monitoring, and decision-making for your organisation.",
-    homeVideoIframeTitle: `${window.appConfig.name} introduction video"`,
+    homeVideoIframeTitle: `${appName} introduction video"`,
     homeKeyRolesTitle: "Key Roles and Responsibilities",
     homeKeyRolesHeadline: (
       <Fragment>
@@ -1023,13 +1018,13 @@ const uiText = {
     homeFooterContactDetails: ["<Your Organisation>", "<Your Department>"],
     homeFooterContactAddress: ["<Your Address>"],
     homeFooterContactPhone: "<Your Phone Number>",
-    homeFooterAboutTitle: <Fragment>About {window.appConfig.name}</Fragment>,
+    homeFooterAboutTitle: <Fragment>About {appName}</Fragment>,
     homeFooterAboutText: (
       <Fragment>
-        {window.appConfig.name} is a comprehensive platform designed to support
-        data collection, monitoring, and decision-making for your organisation.
-        It serves as a centralised hub for evidence-based reporting and
-        efficient resource allocation.
+        {appName} is a comprehensive platform designed to support data
+        collection, monitoring, and decision-making for your organisation. It
+        serves as a centralised hub for evidence-based reporting and efficient
+        resource allocation.
       </Fragment>
     ),
     homeFooterCopyrightText: "© 2025 <Your Organisation>",
@@ -1082,8 +1077,8 @@ const uiText = {
     roleConfirmDelete: "Are you sure you want to delete {roleName}?",
     addRoleDescription: (id) => (
       <Fragment>
-        This page allows you to {id ? "edit" : "add"} roles to the{" "}
-        {window.appConfig.name} platform.
+        This page allows you to {id ? "edit" : "add"} roles to the {appName}{" "}
+        platform.
       </Fragment>
     ),
     selectRole: "Select role...",
@@ -1172,8 +1167,7 @@ const uiText = {
     totalMonitoring: "Total Monitoring",
     downloadAppsQRText: (
       <Fragment>
-        Download the <b>{window.appConfig.apkName} App</b> using the QR codes
-        below
+        Download the <b>{apkName} App</b> using the QR codes below
       </Fragment>
     ),
     downloadAppsLinkText: "or download using the links below:",

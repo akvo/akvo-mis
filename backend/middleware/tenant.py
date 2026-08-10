@@ -21,19 +21,32 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from utils.tenant_host import is_base_domain, resolve_tenant_from_host
 
-# Infrastructure reaches the pod directly — a kubelet probe connects to the
-# pod IP, so the request carries `Host: <pod-ip>:8000`, which names no
-# workspace. The 404 that is right for a typo'd subdomain is wrong here: it
-# fails the readiness probe, which holds the rollout, so setting
-# BASE_DOMAIN would make every deploy time out. Cluster DNS and
+# The two requests that must be answered on whatever host they arrive on.
+#
+# `health/check`: infrastructure reaches the pod directly — a kubelet probe
+# connects to the pod IP, so the request carries `Host: <pod-ip>:8000`,
+# which names no workspace. The 404 that is right for a typo'd subdomain is
+# wrong here: it fails the readiness probe, which holds the rollout, so
+# setting BASE_DOMAIN would make every deploy time out. Cluster DNS and
 # `kubectl port-forward` arrive the same way.
 #
-# This is one path, not the start of an exemption list. The distinction the
-# class docstring draws — public *API* endpoints are exempted by being
-# anonymous, never by being listed — still holds. Liveness is not an API
-# endpoint; it answers "is this process up", it has no tenant by
-# construction, and it will not grow siblings.
-HEALTH_CHECK_PATH = "/api/v1/health/check"
+# `config.js`: the bootstrap script `index.html` loads before any React
+# code runs. What it carries — app name, base domain, role features — is
+# deployment-wide, with nothing tenant-specific in it, so there is no
+# workspace here to be wrong about. Refusing it does not produce a "no such
+# workspace" page, it produces a blank one: the frontend reads
+# `window.appConfig` at module load and throws without it, so the very page
+# that would explain the 404 is the one the 404 prevents. Worse, the nginx
+# cache in front of this path is keyed without the host, so one refusal —
+# a probe, a typo'd subdomain — is then served to every host until it
+# expires.
+#
+# Still not the start of an exemption list. The distinction the class
+# docstring draws — public *API* endpoints are exempted by being anonymous,
+# never by being listed — holds for both: neither is an API endpoint.
+# Liveness answers "is this process up"; config.js is a static asset that
+# happens to be served by Django. Both have no tenant by construction.
+EXEMPT_PATHS = ("/api/v1/health/check", "/api/v1/config.js")
 
 
 class TenantMiddleware:
@@ -48,7 +61,7 @@ class TenantMiddleware:
         # Resolved first, so a probe arriving on a real workspace host
         # still reports that tenant, then exempted from both the 404 and
         # enforcement below.
-        if request.path.startswith(HEALTH_CHECK_PATH):
+        if request.path.startswith(EXEMPT_PATHS):
             return self.get_response(request)
 
         # A host that is neither the signup domain nor a workspace names
