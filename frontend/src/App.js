@@ -137,7 +137,13 @@ const RouteList = () => {
       <Route exact path="/find-workspace" element={<FindWorkspace />} />
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
-      <Route exact path="/register" element={<Register />} />
+      <Route
+        exact
+        path="/register"
+        element={
+          !baseDomain() || onBaseDomain ? <Register /> : <Navigate to="/" />
+        }
+      />
       <Route exact path="/activate/:token" element={<Activate />} />
       {/* Not wrapped in Private: Private sends every unconfigured user
           here, so guarding this route the same way would loop. Configure

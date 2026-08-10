@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, store, uiText } from "../../../lib";
 import { useNotification, useResendActivation } from "../../../util/hooks";
 import { reloadData } from "../../../util/form";
+import { baseDomain } from "../../../util/tenant";
 
 const LoginForm = () => {
   const navigate = useNavigate();
@@ -11,8 +12,9 @@ const LoginForm = () => {
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
   const { notify } = useNotification();
   const { resend, resending } = useResendActivation();
-  const { language } = store.useState((s) => s);
+  const { language, tenant } = store.useState((s) => s);
   const { active: activeLang } = language;
+  const showRegister = !baseDomain() || !tenant;
   const text = useMemo(() => {
     return uiText[activeLang];
   }, [activeLang]);
@@ -132,6 +134,13 @@ const LoginForm = () => {
           Recover Password
         </Link>
       </Form.Item>
+      {showRegister && (
+        <Form.Item>
+          <Link className="login-form-forgot" to="/register">
+            Create an account
+          </Link>
+        </Form.Item>
+      )}
       <Form.Item>
         <Link className="login-form-forgot" to="/register">
           Create an account
