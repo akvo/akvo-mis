@@ -29,6 +29,7 @@ export { default as MasterData } from "./master-data/MasterData";
 export { default as Activate } from "./activate/Activate";
 export { default as Configure } from "./configure/Configure";
 export { default as FindWorkspace } from "./find-workspace/FindWorkspace";
+export { default as WorkspaceNotFound } from "./workspace-not-found/WorkspaceNotFound";
 export { default as Levels } from "./master-data/levels/Levels";
 export { default as MasterDataAttributes } from "./master-data-attributes/MasterDataAttributes";
 export { default as ManageEntityTypes } from "./master-data-entities/ManageEntityTypes";

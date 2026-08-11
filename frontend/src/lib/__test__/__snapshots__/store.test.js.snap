@@ -96,6 +96,7 @@ Object {
   "showContactFormModal": false,
   "tenant": null,
   "tenantLoaded": false,
+  "tenantMissing": false,
   "user": null,
 }
 `;

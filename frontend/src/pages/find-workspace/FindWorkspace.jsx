@@ -11,8 +11,9 @@ import { baseDomain, workspaceUrl } from "../../util/tenant";
 // No lookup call: asking the server "does this workspace exist?" would
 // hand an anonymous visitor a way to enumerate every customer. Sending
 // the browser there instead costs nothing and lets the workspace's own
-// host answer, which for a wrong guess is a 404 that reveals only what
-// the guesser already typed.
+// host answer, which for a wrong guess is the WorkspaceNotFound page —
+// it reveals only what the guesser already typed, and offers the way
+// back here as well as the way on to sign-up.
 const FindWorkspace = () => {
   const onFinish = ({ subdomain }) => {
     window.location.href = workspaceUrl(subdomain.trim().toLowerCase());

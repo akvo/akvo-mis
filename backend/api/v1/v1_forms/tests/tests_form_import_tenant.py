@@ -48,3 +48,28 @@ class FormImportTenantTestCase(TenantIsolationTestCase):
             norm, user=self.a["user"], mode="create"
         )
         self.assertEqual(form.tenant, self.a["tenant"])
+
+    def test_import_foreign_form_id_creates_new_form_in_current_tenant(
+        self,
+    ):
+        foreign_form = self.b["form"]
+        original_foreign_name = foreign_form.name
+
+        norm = normalize_form_definition(
+            _make_export_payload(
+                name="Tenant A New Form",
+                form_id=foreign_form.id,
+            )
+        )
+        new_form, action = import_form_definition(
+            norm, user=self.a["user"], mode="create_or_update"
+        )
+
+        self.assertEqual(action, "created")
+        self.assertEqual(new_form.tenant, self.a["tenant"])
+        self.assertNotEqual(new_form.id, foreign_form.id)
+
+        # Verify foreign form was not modified
+        foreign_form.refresh_from_db()
+        self.assertEqual(foreign_form.name, original_foreign_name)
+        self.assertEqual(foreign_form.tenant, self.b["tenant"])

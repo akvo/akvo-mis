@@ -98,11 +98,9 @@ def send_activation_email(user):
 
 
 def send_email_to_user(type, user, request):
-    url = f"{WEBDOMAIN}/login/{signing.dumps(user.pk)}"
+    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
     user = SystemUser.objects.get(pk=user.pk)
-    user_forms = [
-        uf.form for uf in user.user_form.all()
-    ]
+    user_forms = [uf.form for uf in user.user_form.all()]
     listing = [
         info
         for role in user.user_user_role.all()
@@ -163,8 +161,7 @@ def get_config_file(request, version):
     ],
     responses={
         200: OpenApiResponse(
-            description="HTML email template",
-            response=OpenApiTypes.STR
+            description="HTML email template", response=OpenApiTypes.STR
         )
     },
     summary="To show email template by type",
@@ -229,8 +226,10 @@ def login(request, version):
     # serializer, means the credentials are never even evaluated.
     if settings.BASE_DOMAIN and getattr(request, "tenant", None) is None:
         return Response(
-            {"message": "Sign in at your workspace address, not the main "
-                        "site"},
+            {
+                "message": "Sign in at your workspace address, not the main "
+                "site"
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     serializer = LoginSerializer(data=request.data)
@@ -305,10 +304,7 @@ def login(request, version):
     responses={
         200: inline_serializer(
             "TenantInfo",
-            fields={
-                "subdomain": serializers.CharField(),
-                "name": serializers.CharField(),
-            },
+            fields={"subdomain": serializers.CharField()},
         ),
         204: OpenApiResponse(description="Not a workspace address"),
     },
@@ -317,12 +313,21 @@ def login(request, version):
 )
 @api_view(["GET"])
 def tenant_info(request, version):
-    """Enough to brand the page before anyone has signed in.
+    """Which workspace, if any, this address belongs to.
 
-    Deliberately two fields and no more: this is anonymous, and the host
+    What the answer is *for* is the distinction between a workspace, the
+    signup domain (204) and a host this deployment does not serve (404
+    from the middleware) — three cases the frontend has to tell apart
+    before anyone has signed in.
+
+    Deliberately one field and no more: this is anonymous, and the host
     it answers for is guessable, so anything added here is published to
-    whoever tries the subdomain. Whether the workspace has finished
-    configuring itself is not among them — that decision belongs to the
+    whoever tries the subdomain. It used to also return the workspace's
+    name, taken from its root administration unit, to caption the login
+    page — dropped along with that caption, because an account belongs
+    to exactly one workspace and so nobody needed telling which one they
+    were signing in to. Whether the workspace has finished configuring
+    itself was never among the fields either: that belongs to the
     signed-in user's own `configured` flag, and a visitor who has not
     signed in cannot act on it.
     """
@@ -332,16 +337,8 @@ def tenant_info(request, version):
         # caller learns there is no workspace here, which is the answer
         # that sends it to the signup page.
         return Response(status=status.HTTP_204_NO_CONTENT)
-    root = Administration.objects.filter(
-        tenant=tenant, parent__isnull=True
-    ).first()
     return Response(
-        {
-            "subdomain": tenant.subdomain,
-            # The root unit is the workspace's name — the tenant row
-            # itself only carries the subdomain.
-            "name": root.name if root else "",
-        },
+        {"subdomain": tenant.subdomain},
         status=status.HTTP_200_OK,
     )
 
@@ -454,8 +451,10 @@ def resend_activation(request, version):
     # Always the same 200, whether or not anything was sent, so this cannot
     # be used to work out which addresses are registered.
     return Response(
-        {"message": "If that account needs activating, an email is on its "
-                    "way"},
+        {
+            "message": "If that account needs activating, an email is on its "
+            "way"
+        },
         status=status.HTTP_200_OK,
     )
 
@@ -685,7 +684,7 @@ def add_user(request, version):
     except Exception as e:
         # Handle unexpected validation errors
         error_message = str(e)
-        if hasattr(e, 'detail'):
+        if hasattr(e, "detail"):
             return Response(
                 {
                     "message": validate_serializers_message(e.detail),
@@ -694,10 +693,7 @@ def add_user(request, version):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(
-            {
-                "message": error_message,
-                "details": {"error": error_message}
-            },
+            {"message": error_message, "details": {"error": error_message}},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -796,9 +792,7 @@ def list_users(request, version):
             role__role_role_feature_access__access=(
                 FeatureAccessTypes.invite_user
             ),
-        ).order_by(
-            "administration__level__level"
-        )
+        ).order_by("administration__level__level")
         if not filter_adm and user_adm_queryset.exists():
             # Handle multiple user roles - collect accessible administrations
             all_accessible_adm_ids = set()
@@ -807,9 +801,11 @@ def list_users(request, version):
                 # Add the administration itself
                 all_accessible_adm_ids.add(adm.id)
                 # Add all descendants of this administration
-                filter_path = "{0}{1}.".format(
-                    adm.path, adm.id
-                ) if adm.path else f"{adm.id}."
+                filter_path = (
+                    "{0}{1}.".format(adm.path, adm.id)
+                    if adm.path
+                    else f"{adm.id}."
+                )
                 descendants = Administration.objects.filter(
                     path__startswith=filter_path
                 ).values_list("id", flat=True)
@@ -821,9 +817,11 @@ def list_users(request, version):
             )
         elif filter_adm:
             # Handle single administration filter (when explicitly specified)
-            filter_path = "{0}{1}.".format(
-                filter_adm.path, filter_adm.id
-            ) if filter_adm.path else f"{filter_adm.id}."
+            filter_path = (
+                "{0}{1}.".format(filter_adm.path, filter_adm.id)
+                if filter_adm.path
+                else f"{filter_adm.id}."
+            )
             filter_descendants = list(
                 Administration.objects.filter(
                     path__startswith=filter_path
@@ -874,9 +872,11 @@ def list_users(request, version):
         )
     # First get unique IDs to avoid duplicates from joins
     # But make sure to include current user's ID
-    user_ids = list(queryset.exclude(**exclude_data)
-                    .values_list('id', flat=True)
-                    .distinct())
+    user_ids = list(
+        queryset.exclude(**exclude_data)
+        .values_list("id", flat=True)
+        .distinct()
+    )
 
     # Then query again with the distinct IDs
     queryset = (
@@ -933,8 +933,7 @@ class UserEditDeleteView(APIView):
         )
         return Response(
             UserDetailSerializer(
-                instance=instance,
-                context={"user": request.user}
+                instance=instance, context={"user": request.user}
             ).data,
             status=status.HTTP_200_OK,
         )
@@ -1051,9 +1050,12 @@ def list_organisations(request, version):
     attributes = request.GET.get("attributes")
     search = request.GET.get("search")
 
-    instance = Organisation.objects.for_user(request.user).prefetch_related(
-        'organisation_organisation_attribute'
-    ).annotate(user_count=Count('user_organisation')).all()
+    instance = (
+        Organisation.objects.for_user(request.user)
+        .prefetch_related("organisation_organisation_attribute")
+        .annotate(user_count=Count("user_organisation"))
+        .all()
+    )
 
     if id:
         instance = instance.filter(pk=id)
@@ -1061,9 +1063,7 @@ def list_organisations(request, version):
         ids = OrganisationAttribute.objects.filter(type=attributes).distinct(
             "organisation_id"
         )
-        instance = instance.filter(
-            pk__in=[o.organisation_id for o in ids]
-        )
+        instance = instance.filter(pk__in=[o.organisation_id for o in ids])
     if search and not id:
         instance = instance.filter(name__icontains=search)
 
@@ -1113,9 +1113,9 @@ class OrganisationEditDeleteView(APIView):
     def get(self, request, organisation_id, version):
         instance = get_object_or_404(
             Organisation.objects.for_user(request.user).annotate(
-                user_count=Count('user_organisation')
+                user_count=Count("user_organisation")
             ),
-            pk=organisation_id
+            pk=organisation_id,
         )
         return Response(
             OrganisationListSerializer(instance=instance).data,
@@ -1227,6 +1227,5 @@ def update_profile(request, version):
         )
     user = serializer.save()
     return Response(
-        UserSerializer(instance=user).data,
-        status=status.HTTP_200_OK
+        UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )

@@ -22,9 +22,7 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
         self.acme = self.create_tenant(
             "acme", ["Country", "Province"], "Kenya"
         )
-        self.beta = self.create_tenant(
-            "beta", ["Country", "Region"], "Uganda"
-        )
+        self.beta = self.create_tenant("beta", ["Country", "Region"], "Uganda")
         self.credentials = {
             "email": self.acme.admin.email,
             "password": TENANT_PASSWORD,
@@ -133,9 +131,7 @@ class ProfileSubdomainTestCase(TestCase, TenantTestHelperMixin):
             first_name="Op",
             last_name="Erator",
         )
-        response = self.client.get(
-            "/api/v1/profile", **self.bearer(operator)
-        )
+        response = self.client.get("/api/v1/profile", **self.bearer(operator))
         self.assertEqual(response.json()["subdomain"], "")
 
 
@@ -148,28 +144,27 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
             "acme", ["Country", "Province"], "Kenya"
         )
 
-    def test_workspace_host_returns_its_name(self):
+    def test_workspace_host_names_its_workspace(self):
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(), {"subdomain": "acme", "name": "Kenya"}
-        )
+        self.assertEqual(response.json(), {"subdomain": "acme"})
 
-    def test_nothing_beyond_those_two_fields_is_exposed(self):
+    def test_nothing_beyond_that_one_field_is_exposed(self):
         # Anonymous and cacheable, so the field list is the whole of the
         # security review — assert it exhaustively rather than by sample.
+        # The workspace's name used to be here too, for a login-page
+        # caption that no longer exists.
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
-        self.assertEqual(
-            set(response.json().keys()), {"subdomain", "name"}
-        )
+        self.assertEqual(set(response.json().keys()), {"subdomain"})
 
     def test_base_domain_returns_nothing(self):
         response = self.client.get(TENANT_INFO, HTTP_HOST="app.com")
         self.assertEqual(response.status_code, 204)
 
-    def test_unconfigured_workspace_has_no_name_yet(self):
+    def test_a_workspace_answers_before_it_is_configured(self):
+        # No hierarchy exists between activation and the configure form,
+        # and the answer must not depend on one: the frontend needs to
+        # know this host is a workspace in order to show its login page.
         Tenant.objects.create(subdomain="fresh")
-        response = self.client.get(
-            TENANT_INFO, HTTP_HOST="fresh.app.com"
-        )
-        self.assertEqual(response.json(), {"subdomain": "fresh", "name": ""})
+        response = self.client.get(TENANT_INFO, HTTP_HOST="fresh.app.com")
+        self.assertEqual(response.json(), {"subdomain": "fresh"})

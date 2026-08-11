@@ -99,14 +99,12 @@ const Login = () => {
                       <img src="./logo-square.svg" alt="login-logo" />
                       <div className="login-content">
                         <h1>{text.loginTitle}</h1>
-                        {/* Which workspace this address is, so a user
-                            with access to more than one can see at a
-                            glance which they are signing in to. Absent
-                            on a single-host deployment, where there is
-                            only ever one. */}
-                        {tenant?.name ? (
-                          <p data-testid="workspace-name">{tenant.name}</p>
-                        ) : null}
+                        {/* No workspace name here. It was added so that
+                            someone with access to more than one could
+                            tell them apart, but an account belongs to
+                            exactly one workspace, so that reader never
+                            existed — and the address bar already says
+                            which workspace this is. */}
                         <ContactUsText />
                       </div>
                       <LoginForm />

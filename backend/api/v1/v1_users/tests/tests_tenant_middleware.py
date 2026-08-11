@@ -79,17 +79,23 @@ class TenantMiddlewareTestCase(TestCase, TenantTestHelperMixin):
 
 
 @override_settings(BASE_DOMAIN="app.com")
-class HealthCheckHostTestCase(TestCase, TenantTestHelperMixin):
-    """Infrastructure reaches the pod directly, with no workspace host.
+class HostExemptPathTestCase(TestCase, TenantTestHelperMixin):
+    """Two paths must answer on whatever host they arrive on.
 
-    A kubelet probe connects to the pod IP, so the request arrives with
+    The health check, because infrastructure reaches the pod directly: a
+    kubelet probe connects to the pod IP, so the request arrives with
     `Host: <pod-ip>:8000` — neither the base domain nor a workspace. The
     404 that is right for a typo'd subdomain is wrong here: it fails the
     readiness probe, which holds the rollout, so enabling BASE_DOMAIN
     would make every deploy time out.
+    And config.js, because it is the bootstrap script every page loads
+    before any React code runs. It carries nothing tenant-specific, and
+    without it the frontend throws at module load — so a 404 here is a
+    blank page, not a "no such workspace" one.
     """
 
     HEALTH = "/api/v1/health/check"
+    CONFIG = "/api/v1/config.js"
 
     def setUp(self):
         self.acme = self.create_tenant(
@@ -116,9 +122,29 @@ class HealthCheckHostTestCase(TestCase, TenantTestHelperMixin):
         response = self.client.get(self.HEALTH, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
 
+    def test_an_unrecognised_host_can_still_load_the_config(self):
+        # The nginx cache in front of this path is not keyed by host, so
+        # a single 404 here — from a probe, or a typo'd subdomain — is
+        # replayed to every host until it expires, and every one of them
+        # boots with no window.appConfig.
+        response = self.client.get(self.CONFIG, HTTP_HOST="10.4.2.15:8000")
+        self.assertEqual(response.status_code, 200)
+
+    def test_an_unknown_subdomain_can_still_load_the_config(self):
+        # A typo'd workspace should reach the app and be told so, which
+        # it cannot do if the script that boots the app is refused.
+        response = self.client.get(self.CONFIG, HTTP_HOST="nope.app.com")
+        self.assertEqual(response.status_code, 200)
+
+    def test_the_base_and_workspace_hosts_still_load_the_config(self):
+        for host in ("app.com", "acme.app.com"):
+            with self.subTest(host=host):
+                response = self.client.get(self.CONFIG, HTTP_HOST=host)
+                self.assertEqual(response.status_code, 200)
+
     def test_the_exemption_does_not_leak_to_other_paths(self):
-        # Only liveness is exempt. An unrecognised host reaching anything
-        # else is still nothing this deployment serves.
+        # Only these two. An unrecognised host reaching anything else is
+        # still nothing this deployment serves.
         response = self.client.get(PROFILE, HTTP_HOST="10.4.2.15:8000")
         self.assertEqual(response.status_code, 404)
 
