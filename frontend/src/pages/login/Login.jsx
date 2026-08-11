@@ -29,7 +29,7 @@ const Login = () => {
   const [invitedUser, setInvitedUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { language, tenant } = store.useState((s) => s);
+  const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => {
     return uiText[activeLang];
