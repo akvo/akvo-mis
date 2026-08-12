@@ -168,8 +168,8 @@ const AddUser = () => {
             inform_user: !id
               ? true
               : authUser?.email === res.data?.email
-                ? false
-                : true,
+              ? false
+              : true,
           });
           setLoading(false);
           fetchData(res.data.administration?.id, []);
@@ -409,8 +409,8 @@ const AddUser = () => {
                             !id
                               ? true
                               : authUser?.email === form.getFieldValue("email")
-                                ? true
-                                : false
+                              ? true
+                              : false
                           }
                         >
                           {text.informUser}
