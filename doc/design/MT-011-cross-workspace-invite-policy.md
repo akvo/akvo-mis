@@ -441,17 +441,51 @@ line 76):
 ./dc.sh exec backend flake8
 ```
 
-### Manual Verification Steps
+### Manual Verification Scenarios
 
-1. Log in as Workspace B admin → *Control Center → Users → Add User*
-2. Enter email of an **active** Workspace A user → submit
-   → expect inline email error + error toast; no new user in Workspace B list
-3. Repeat with a **soft-deleted** Workspace A email → same outcome
-4. Repeat with an **`is_active=False`** Workspace A email → same outcome
-5. Enter a **fresh** email → expect 201 success
-6. Enter a **Workspace B** duplicate email → expect "already in your workspace"
-   inline error + toast
-7. Re-invite a **soft-deleted Workspace B** email → expect 201 and user restored
+#### Scenario 1: Cross-Workspace Invite (New Policy Error)
+
+1. Identify an email address registered in **Workspace A** (e.g., `user_a@acme.org`).
+2. Log in as an Administrator in **Workspace B**.
+3. Navigate to **Control Center → Users → Add User** (`/control-center/users/add`).
+4. Fill in the form:
+   - **First Name**: Test
+   - **Last Name**: CrossTenant
+   - **Email**: `user_a@acme.org` (email belonging to Workspace A)
+5. Click **Add User**.
+6. **Expected Outcome**:
+   - **Inline Error**: Red text appears below the Email field:
+     > *"This email address is already registered to another workspace. An account can only belong to one workspace — ask them to use a different address, or contact support."*
+   - **Toast Notification**: Error toast appears with the same policy message.
+   - **Data Integrity**: No user is created in Workspace B's list.
+
+#### Scenario 2: Same-Workspace Duplicate Invite
+
+1. While logged in as **Workspace B** Admin, attempt to invite an email address that **already exists in Workspace B** (e.g., `user_b@beta.org`).
+2. Click **Add User**.
+3. **Expected Outcome**:
+   - **Inline Error**: Red text appears below the Email field:
+     > *"This email is already in your workspace. To make changes, edit the existing user."*
+   - **Toast Notification**: Error toast with the same message.
+
+#### Scenario 3: Same-Workspace Soft-Deleted User (Restore Flow)
+
+1. Soft-delete a user in **Workspace B** (from *Control Center → Users → Delete*).
+2. Re-invite that **exact same email address** in Workspace B (*Add User* form).
+3. Click **Add User**.
+4. **Expected Outcome**:
+   - Success toast: *"User added"*
+   - The soft-deleted user in Workspace B is successfully restored and updated.
+
+#### Scenario 4: Cross-Workspace Soft-Deleted User (Prevent Leak)
+
+1. Soft-delete a user in **Workspace A**.
+2. Log in as **Workspace B** Admin.
+3. Try to invite the email address of Workspace A's soft-deleted user.
+4. Click **Add User**.
+5. **Expected Outcome**:
+   - **Rejection**: 400 Bad Request with policy message (*"This email address is already registered to another workspace..."*).
+   - **Security**: Workspace A's soft-deleted user is **NOT** restored or transferred into Workspace B.
 
 ---
 
