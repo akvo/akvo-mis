@@ -365,6 +365,86 @@ react-markdown   # render bot responses as Markdown
 
 ---
 
+## User Acceptance Criteria (UAC)
+
+> [!IMPORTANT]
+> These criteria define what the feature must achieve from the **user's perspective** to be accepted. All UAC must pass before the feature is considered shippable.
+
+### UAC-1 — Chatbot Accessibility
+- [ ] A floating chat button (FAB) is visible on every authenticated page of the platform.
+- [ ] Clicking the FAB opens a chat panel without navigating away from the current page.
+- [ ] The chat panel can be closed and re-opened without losing the current conversation.
+
+### UAC-2 — Contextual Awareness
+- [ ] The chat panel displays a context chip showing the current page/feature (e.g. `📍 Form Builder`).
+- [ ] When asking a feature-specific question, the bot answers in the context of the page the user is on.
+- [ ] When asking about a *different* feature while on another page, the bot still answers correctly without losing thread continuity.
+
+### UAC-3 — Knowledge Base Quality
+- [ ] The bot can correctly answer at least 80% of questions derived from the existing `docs/source/*.rst` documentation.
+- [ ] The bot references steps, screenshots, or examples consistent with the actual platform UI.
+- [ ] The bot does not fabricate features or steps that do not exist in the MIS platform.
+
+### UAC-4 — Conversation Continuity
+- [ ] Follow-up questions within the same session retain context from earlier messages.
+- [ ] The conversation thread persists as the user navigates between pages within a session.
+- [ ] Starting a new browser session starts a fresh conversation (no stale thread confusion).
+
+### UAC-5 — Tenant Brand Consistency
+- [ ] The chatbot widget accent colours match the active tenant's primary brand colour.
+- [ ] The bot persona name (e.g. *Mira*) is displayed consistently in the panel header.
+
+### UAC-6 — Security & Access
+- [ ] The chatbot is only accessible to authenticated (logged-in) users.
+- [ ] Unauthenticated access to the chat API returns a `401 Unauthorized` error.
+- [ ] One tenant's users cannot access another tenant's conversation history.
+
+---
+
+## Technical Acceptance Criteria (TAC)
+
+> [!IMPORTANT]
+> These criteria define what must be true from a **technical/engineering perspective** before the feature is merged.
+
+### TAC-1 — Backend API
+- [ ] `POST /api/v1/chatbot/message/` requires a valid JWT and returns `401` without one.
+- [ ] The endpoint validates required fields (`message`, `page_url`); returns `400` for missing/empty `message`.
+- [ ] The URL context map covers all 10 platform page prefixes defined in the spec.
+- [ ] OpenAI thread IDs are correctly created on first message and reused on subsequent messages in the same session.
+
+### TAC-2 — Knowledge Base Ingestion
+- [ ] `scripts/ingest_kb.py` successfully converts all 15 RST source files to Markdown under `docs/md/`.
+- [ ] All `.md` files are uploaded to OpenAI Files API and attached to the named Vector Store (`akvo-mis-kb`).
+- [ ] `OPENAI_VECTOR_STORE_ID` is written to `.env` after successful ingestion.
+- [ ] Django management command `python manage.py ingest_kb` triggers the same pipeline without error.
+
+### TAC-3 — Streaming / Response
+- [ ] If streaming (SSE) is chosen: the Django backend returns a `StreamingHttpResponse` with `Content-Type: text/event-stream`.
+- [ ] If polling is chosen: the endpoint returns a JSON response within 10 seconds under normal load.
+- [ ] No unhandled exceptions are raised when the OpenAI API returns an error; the client receives a user-friendly error message.
+
+### TAC-4 — Frontend Widget
+- [ ] `<ChatbotWidget />` is mounted globally in `App.js` and only renders when the user is authenticated.
+- [ ] The context chip updates in real-time when the user navigates between routes (no page reload required).
+- [ ] `thread_id` is stored in `sessionStorage` and cleared on browser/tab close.
+- [ ] Bot responses are rendered as Markdown (bold, lists, code blocks display correctly).
+- [ ] The widget is fully keyboard-accessible (Tab to focus FAB, Enter to open/close, Enter to send message).
+
+### TAC-5 — Code Quality
+- [ ] All new backend code passes existing `flake8` linting rules.
+- [ ] At minimum 3 unit tests are present for the `v1_chatbot` module:
+  - `test_chatbot_requires_auth`
+  - `test_chatbot_url_context_map`
+  - `test_chatbot_serializer_validation`
+- [ ] No new environment variables are hard-coded in source code; all use `environ.get(...)`.
+
+### TAC-6 — Environment & Infrastructure
+- [ ] `OPENAI_API_KEY`, `OPENAI_ASSISTANT_ID`, `OPENAI_VECTOR_STORE_ID` are documented in `env.example`.
+- [ ] `docker-compose.override.yml` passes all three new env vars to the `backend` service.
+- [ ] The `openai>=1.30.0` package is added to `backend/requirements.txt`.
+
+---
+
 ## Files to Create / Modify
 
 ### New Files
