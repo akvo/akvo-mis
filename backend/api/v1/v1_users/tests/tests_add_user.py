@@ -403,7 +403,11 @@ class AddUserTestCase(TestCase):
         data = response.json()["details"]
         self.assertIn("email", data)
         self.assertEqual(
-            data["email"], ["system user with this email already exists."]
+            data["email"],
+            [
+                "This email is already in your workspace. "
+                "To make changes, edit the existing user."
+            ],
         )
 
     def test_add_user_with_missing_fields(self):

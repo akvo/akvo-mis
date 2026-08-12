@@ -2,8 +2,9 @@ from django.db.utils import IntegrityError
 from django.test.utils import override_settings
 from django.urls import NoReverseMatch, reverse
 
-from api.v1.v1_profile.models import Role
-from api.v1.v1_users.models import Organisation
+from api.v1.v1_profile.models import Role, UserRole
+from api.v1.v1_forms.models import UserForms
+from api.v1.v1_users.models import Organisation, SystemUser
 from utils.tenant_test_case import TenantIsolationTestCase
 
 
@@ -111,3 +112,136 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
             reverse("public-administrations-list")
         res = self.client.get("/api/v1/public/administrations")
         self.assertEqual(res.status_code, 404)
+
+    def test_invite_active_user_from_other_workspace_returns_policy_error(
+        self,
+    ):
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "Test",
+                "last_name": "User",
+                "email": self.b["user"].email,
+                "forms": [],
+                "trained": False,
+            },
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 400)
+        data = res.json()["details"]
+        self.assertIn("email", data)
+        self.assertIn("another workspace", data["email"][0])
+
+    def test_invite_soft_deleted_user_from_other_workspace_not_restored(self):
+        self.b["user"].soft_delete()
+
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "Test",
+                "last_name": "User",
+                "email": self.b["user"].email,
+                "forms": [],
+                "trained": False,
+            },
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 400)
+        data = res.json()["details"]
+        self.assertIn("email", data)
+        self.assertIn("another workspace", data["email"][0])
+
+        # Assert target user remains deleted and tenant_id is unchanged
+        user_b = SystemUser.objects_with_deleted.get(pk=self.b["user"].pk)
+        self.assertEqual(user_b.tenant_id, self.b["tenant"].id)
+        self.assertIsNotNone(user_b.deleted_at)
+        self.assertFalse(
+            UserRole.objects.filter(
+                user=user_b, administration=self.a["root"]
+            ).exists()
+        )
+        self.assertFalse(
+            UserForms.objects.filter(user=user_b, form=self.a["form"]).exists()
+        )
+
+    def test_invite_pending_user_from_other_workspace_returns_policy_error(
+        self,
+    ):
+        pending_user = SystemUser.objects.create_user(
+            email="pending@beta.org",
+            password="Secret#Pass123",
+            first_name="Pending",
+            last_name="User",
+            tenant=self.b["tenant"],
+            is_active=False,
+        )
+
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "Test",
+                "last_name": "User",
+                "email": pending_user.email,
+                "forms": [],
+                "trained": False,
+            },
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 400)
+        data = res.json()["details"]
+        self.assertIn("email", data)
+        self.assertIn("another workspace", data["email"][0])
+
+    def test_invite_duplicate_in_same_workspace_returns_same_workspace_error(
+        self,
+    ):
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "Test",
+                "last_name": "User",
+                "email": self.a["user"].email,
+                "forms": [],
+                "trained": False,
+            },
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 400)
+        data = res.json()["details"]
+        self.assertIn("email", data)
+        self.assertIn("already in your workspace", data["email"][0])
+
+    def test_reinvite_soft_deleted_user_in_same_workspace_restores(self):
+        # Create a second superuser in workspace A
+        # so they can perform the invite
+        admin_a2 = SystemUser.objects.create_superuser(
+            email="admin2@acme.org",
+            password="Secret#Pass123",
+            first_name="A2",
+            last_name="A2",
+            tenant=self.a["tenant"],
+        )
+
+        self.a["user"].soft_delete()
+
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "Restored",
+                "last_name": "User",
+                "email": self.a["user"].email,
+                "forms": [],
+                "trained": False,
+            },
+            content_type="application/json",
+            **self.auth(admin_a2),
+        )
+        self.assertIn(res.status_code, (200, 201))
+
+        user_a = SystemUser.objects_with_deleted.get(pk=self.a["user"].pk)
+        self.assertIsNone(user_a.deleted_at)
+        self.assertEqual(user_a.first_name, "Restored")
