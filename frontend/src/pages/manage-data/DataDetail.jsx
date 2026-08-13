@@ -45,9 +45,14 @@ const DataDetail = ({
   const { notify } = useNotification();
   const {
     language,
-    forms: allForms,
+    allForms: rawAllForms,
+    forms: rawForms,
     user: authUser,
   } = store.useState((s) => s);
+  const allForms = useMemo(
+    () => rawAllForms || rawForms || [],
+    [rawAllForms, rawForms]
+  );
   const { active: activeLang } = language;
   const text = useMemo(() => {
     return uiText[activeLang];
@@ -58,8 +63,14 @@ const DataDetail = ({
 
   const questionGroups = useMemo(() => {
     const formList = allForms || [];
-    return formList?.find((f) => f.id === record?.form)?.content
-      ?.question_group;
+    const targetFormId = record?.form?.id || record?.form;
+    const numericFormId =
+      typeof targetFormId === "number"
+        ? targetFormId
+        : parseInt(targetFormId, 10);
+    return formList?.find(
+      (f) => f.id === targetFormId || f.id === numericFormId
+    )?.content?.question_group;
   }, [record?.form, allForms]);
 
   const updateCell = (key, parentId, value) => {
@@ -287,7 +298,7 @@ const DataDetail = ({
     }
 
     // Show all questions from form definition, merging with existing answers
-    if (!questionGroups?.length || !dataset.length) {
+    if (!questionGroups?.length) {
       return dataset;
     }
 
