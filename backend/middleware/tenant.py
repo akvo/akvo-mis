@@ -16,6 +16,7 @@ With `BASE_DOMAIN` unset the whole thing is inert — every host is the
 base domain, nothing resolves, nothing is enforced — which is how the
 test suite and any single-host deployment run.
 """
+
 from django.http import JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -82,7 +83,7 @@ class TenantMiddleware:
                 return JsonResponse(
                     {
                         "message": "This account belongs to a different "
-                                   "workspace",
+                        "workspace",
                         # We already know both sides of the mismatch, so
                         # naming the right address turns the frontend's
                         # dead end into a redirect. The session itself is

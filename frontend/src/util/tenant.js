@@ -34,7 +34,6 @@ export const baseDomainHost = () => {
   const port = window.location.port ? `:${window.location.port}` : "";
   return baseDomain() ? `${baseDomain()}${port}` : window.location.host;
 };
-
 // Where a workspace's app lives. The port comes from the address the
 // browser is already on, so a local development port survives the
 // redirect and production — which has none — is unaffected.

@@ -22,9 +22,7 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
         self.acme = self.create_tenant(
             "acme", ["Country", "Province"], "Kenya"
         )
-        self.beta = self.create_tenant(
-            "beta", ["Country", "Region"], "Uganda"
-        )
+        self.beta = self.create_tenant("beta", ["Country", "Region"], "Uganda")
         self.credentials = {
             "email": self.acme.admin.email,
             "password": TENANT_PASSWORD,
@@ -133,9 +131,7 @@ class ProfileSubdomainTestCase(TestCase, TenantTestHelperMixin):
             first_name="Op",
             last_name="Erator",
         )
-        response = self.client.get(
-            "/api/v1/profile", **self.bearer(operator)
-        )
+        response = self.client.get("/api/v1/profile", **self.bearer(operator))
         self.assertEqual(response.json()["subdomain"], "")
 
 

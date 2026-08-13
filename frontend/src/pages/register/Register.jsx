@@ -7,7 +7,6 @@ import { useNotification, useResendActivation } from "../../util/hooks";
 import { baseDomainHost } from "../../util/tenant";
 
 const { Title, Text } = Typography;
-
 // Phase 1 of sign-up: just enough to claim a workspace. There is no login
 // here — the account is inactive until the emailed link is followed — so the
 // form ends on a confirmation state rather than a redirect.
