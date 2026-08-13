@@ -6,7 +6,11 @@ import React, {
   useState,
 } from "react";
 import { Table, Button, Space, Spin, Alert, Row, Col, Switch } from "antd";
-import { LoadingOutlined, HistoryOutlined } from "@ant-design/icons";
+import {
+  LoadingOutlined,
+  HistoryOutlined,
+  LinkOutlined,
+} from "@ant-design/icons";
 import { EditableCell } from "../../components";
 import {
   api,
@@ -30,6 +34,7 @@ const DataDetail = ({
   setEditedRecord,
   isPublic = false,
   isFullScreen = false,
+  goToParentContext = null,
 }) => {
   const [dataset, setDataset] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -469,6 +474,15 @@ const DataDetail = ({
         <Row type="flex" justify="space-between" align="middle" gutter={16}>
           <Col>
             <Space>
+              {goToParentContext && (
+                <Button
+                  type="link"
+                  icon={<LinkOutlined />}
+                  onClick={goToParentContext}
+                >
+                  {text.viewFullContext}
+                </Button>
+              )}
               <Switch
                 checked={isAllQuestions}
                 onChange={(checked) => setIsAllQuestions(checked)}
