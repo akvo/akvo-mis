@@ -217,7 +217,13 @@ class FormDataAddListView(APIView):
                 )
             )
             if search:
-                queryset = queryset.filter(name__icontains=search)
+                queryset = queryset.filter(
+                    Q(name__icontains=search)
+                    | Q(parent__name__icontains=search)
+                    | Q(created_by__first_name__icontains=search)
+                    | Q(created_by__last_name__icontains=search)
+                    | Q(created_by__email__icontains=search)
+                )
             if date_from:
                 start_datetime = datetime.combine(date_from, time.min)
                 if settings.USE_TZ:
@@ -323,7 +329,13 @@ class FormDataAddListView(APIView):
             )
         )
         if search:
-            queryset = queryset.filter(name__icontains=search)
+            queryset = queryset.filter(
+                Q(name__icontains=search)
+                | Q(parent__name__icontains=search)
+                | Q(created_by__first_name__icontains=search)
+                | Q(created_by__last_name__icontains=search)
+                | Q(created_by__email__icontains=search)
+            )
         # When sorting by latest_activity, filter on that annotation so
         # registrations with recent monitoring children are not excluded.
         date_filter_field = (

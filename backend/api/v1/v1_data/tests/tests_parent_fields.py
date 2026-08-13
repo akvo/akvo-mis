@@ -20,9 +20,13 @@ class ParentFieldsTestCase(TestCase, ProfileTestHelperMixin):
 
         self.form = Forms.objects.get(pk=1)
         self.child_form = self.form.children.first()
-        self.administration = Administration.objects.filter(
-            parent__isnull=False
-        ).first()
+        root_adm = Administration.objects.filter(parent__isnull=True).first()
+        self.administration = (
+            Administration.objects.filter(
+                parent__isnull=False, path__startswith=f"{root_adm.id}."
+            ).first()
+            or root_adm
+        )
 
         self.user = self.create_user(
             email="super@akvo.org",
@@ -44,6 +48,8 @@ class ParentFieldsTestCase(TestCase, ProfileTestHelperMixin):
             is_draft=False,
         )
         add_fake_answers(self.parent_data)
+        self.parent_data.name = "Test Parent Registration Data"
+        self.parent_data.save()
 
         # Create child monitoring data
         self.child_data = self.child_form.form_form_data.create(
@@ -94,3 +100,20 @@ class ParentFieldsTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIsNone(parent_item.get("parent_name"))
         self.assertIsNone(parent_item.get("parent_id"))
         self.assertIsNone(parent_item.get("parent_form_id"))
+
+    def test_monitoring_data_search_by_parent_name(self):
+        """Test searching monitoring data by parent registration name."""
+        response = self.client.get(
+            f"/api/v1/form-data/{self.child_form.id}",
+            {"search": "Test Parent Registration Data"},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertTrue(len(data) > 0)
+
+        child_item = next(
+            (item for item in data if item["id"] == self.child_data.id), None
+        )
+        self.assertIsNotNone(child_item)
+        self.assertEqual(child_item["parent_name"], self.parent_data.name)
