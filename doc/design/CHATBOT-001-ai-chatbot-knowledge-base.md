@@ -68,6 +68,7 @@ A simple dict in the backend translates `pathname` prefixes to friendly context 
 ## Phase 1 — Knowledge Base Ingestion Pipeline (RST ➔ Markdown ➔ Vector Store)
 
 **Goal**: Convert all `docs/source/*.rst` files into clean `.md` Markdown files, then ingest into an OpenAI Vector Store.
+> [!NOTE] The current RST files do not contain details about the form editor. Suggest creating additional AI assisted md file creation based on the codebase including akvo-react-form-editor
 
 ### 1. Intermediate Markdown Generation (`docs/md/`)
 
