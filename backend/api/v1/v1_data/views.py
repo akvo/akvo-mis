@@ -46,9 +46,7 @@ from api.v1.v1_data.serializers import (
     FormDataSerializer,
     FilterDraftFormDataSerializer,
 )
-from api.v1.v1_forms.constants import (
-    QuestionTypes
-)
+from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.constants import DataAccessTypes
@@ -126,8 +124,11 @@ class FormDataAddListView(APIView):
                     "total_children, latest_activity)"
                 ),
                 enum=[
-                    "created", "updated", "name",
-                    "total_children", "latest_activity"
+                    "created",
+                    "updated",
+                    "name",
+                    "total_children",
+                    "latest_activity",
                 ],
             ),
             OpenApiParameter(
@@ -198,16 +199,31 @@ class FormDataAddListView(APIView):
 
         if parent:
             # Only get the children data
-            queryset = form.form_form_data.filter(
-                uuid=parent,
-                is_pending=False,
-                is_draft=False,
-            ).annotate(total_children=Count(
-                'children',
-                filter=Q(children__is_pending=False, children__is_draft=False)
-            ))
+            queryset = (
+                form.form_form_data.select_related("parent__form")
+                .filter(
+                    uuid=parent,
+                    is_pending=False,
+                    is_draft=False,
+                )
+                .annotate(
+                    total_children=Count(
+                        "children",
+                        filter=Q(
+                            children__is_pending=False,
+                            children__is_draft=False,
+                        ),
+                    )
+                )
+            )
             if search:
-                queryset = queryset.filter(name__icontains=search)
+                queryset = queryset.filter(
+                    Q(name__icontains=search)
+                    | Q(parent__name__icontains=search)
+                    | Q(created_by__first_name__icontains=search)
+                    | Q(created_by__last_name__icontains=search)
+                    | Q(created_by__email__icontains=search)
+                )
             if date_from:
                 start_datetime = datetime.combine(date_from, time.min)
                 if settings.USE_TZ:
@@ -260,9 +276,13 @@ class FormDataAddListView(APIView):
             # Filter data by user administration path. The root is looked
             # up within the tenant: an unscoped first() could pick another
             # tenant's root and scope the whole list to it.
-            adm = Administration.objects.for_user(request.user).filter(
-                parent__isnull=True,
-            ).first()
+            adm = (
+                Administration.objects.for_user(request.user)
+                .filter(
+                    parent__isnull=True,
+                )
+                .first()
+            )
             if not request.user.is_superuser:
                 user_role = request.user.user_user_role.first()
                 if user_role:
@@ -273,33 +293,49 @@ class FormDataAddListView(APIView):
         # Subquery to get the form name of the child with latest activity.
         # Order by Coalesce(updated, created) so NULL updated records are
         # ranked by created instead of being sorted first by PostgreSQL.
-        latest_child_form_subquery = FormData.objects.filter(
-            parent=OuterRef('pk'),
-            is_pending=False,
-            is_draft=False
-        ).annotate(
-            child_activity=Coalesce('updated', 'created')
-        ).order_by('-child_activity').values('form__name')[:1]
+        latest_child_form_subquery = (
+            FormData.objects.filter(
+                parent=OuterRef("pk"), is_pending=False, is_draft=False
+            )
+            .annotate(child_activity=Coalesce("updated", "created"))
+            .order_by("-child_activity")
+            .values("form__name")[:1]
+        )
 
-        queryset = form.form_form_data.filter(**filter_data).annotate(
-            total_children=Count(
-                'children',
-                filter=Q(children__is_pending=False, children__is_draft=False)
-            ),
-            # Use Coalesce so flow-imported children with NULL updated
-            # fall back to their created date for activity calculation.
-            latest_child_activity=Max(
-                Coalesce('children__updated', 'children__created'),
-                filter=Q(children__is_pending=False, children__is_draft=False)
-            ),
-            latest_activity_source=Subquery(latest_child_form_subquery),
-        ).annotate(
-            latest_activity=Coalesce(
-                'latest_child_activity', 'updated', 'created'
+        queryset = (
+            form.form_form_data.select_related("parent__form")
+            .filter(**filter_data)
+            .annotate(
+                total_children=Count(
+                    "children",
+                    filter=Q(
+                        children__is_pending=False, children__is_draft=False
+                    ),
+                ),
+                # Use Coalesce so flow-imported children with NULL updated
+                # fall back to their created date for activity calculation.
+                latest_child_activity=Max(
+                    Coalesce("children__updated", "children__created"),
+                    filter=Q(
+                        children__is_pending=False, children__is_draft=False
+                    ),
+                ),
+                latest_activity_source=Subquery(latest_child_form_subquery),
+            )
+            .annotate(
+                latest_activity=Coalesce(
+                    "latest_child_activity", "updated", "created"
+                )
             )
         )
         if search:
-            queryset = queryset.filter(name__icontains=search)
+            queryset = queryset.filter(
+                Q(name__icontains=search)
+                | Q(parent__name__icontains=search)
+                | Q(created_by__first_name__icontains=search)
+                | Q(created_by__last_name__icontains=search)
+                | Q(created_by__email__icontains=search)
+            )
         # When sorting by latest_activity, filter on that annotation so
         # registrations with recent monitoring children are not excluded.
         date_filter_field = (
@@ -403,9 +439,7 @@ class FormDataAddListView(APIView):
         for answer in answers:
             index = answer.get("index", 0)
             form_answer = Answers.objects.filter(
-                data=data,
-                index=index,
-                question=answer.get("question")
+                data=data, index=index, question=answer.get("question")
             ).first()
             if form_answer:
                 AnswerHistory.objects.create(
@@ -519,8 +553,11 @@ class PendingDataDetailDeleteView(APIView):
             is_pending=True,
         )
         # Get the last data from the last children
-        last_data = data.parent.children.filter(is_pending=False).last() if \
-            data.parent else None
+        last_data = (
+            data.parent.children.filter(is_pending=False).last()
+            if data.parent
+            else None
+        )
         # Find the original FormData if this is an update
         if not last_data:
             last_data = FormData.objects.filter(
@@ -589,9 +626,12 @@ class DataDetailDeleteView(APIView):
             pk=data_id,
             is_pending=False,
         )
-        if not request.user.is_superuser or request.user.user_role.filter(
-            role__role_role_access__data_access=DataAccessTypes.delete
-        ).exists():
+        if (
+            not request.user.is_superuser
+            or request.user.user_role.filter(
+                role__role_role_access__data_access=DataAccessTypes.delete
+            ).exists()
+        ):
             return Response(
                 {"message": "You are not allowed to perform this action"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -604,9 +644,7 @@ class DataDetailDeleteView(APIView):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_form_data(request, version, form_id):
-    form = get_object_or_404(
-            Forms.objects.for_user(request.user), pk=form_id
-        )
+    form = get_object_or_404(Forms.objects.for_user(request.user), pk=form_id)
     form_name = form.name
     filename = f"{form.id}-{form_name}"
     directory = "tmp"
@@ -728,7 +766,7 @@ class PendingFormDataView(APIView):
         # Get all child form IDs including the parent form
         form_ids = [form.id]
         if form.children.exists():
-            child_form_ids = form.children.values_list('id', flat=True)
+            child_form_ids = form.children.values_list("id", flat=True)
             form_ids.extend(list(child_form_ids))
         # Query for pending form data across parent and child forms
         queryset = FormData.objects.filter(
@@ -761,14 +799,12 @@ class PendingFormDataView(APIView):
         selection_ids = request.GET.getlist("selection_ids")
         if selection_ids:
             # Return without pagination if selection_ids are provided
-            queryset = queryset.filter(
-                id__in=selection_ids
-            )
+            queryset = queryset.filter(id__in=selection_ids)
             return Response(
                 ListPendingFormDataSerializer(
                     instance=queryset, many=True
                 ).data,
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         paginator = PageNumberPagination()
@@ -799,9 +835,7 @@ class PendingFormDataView(APIView):
         summary="Edit pending form data",
     )
     def put(self, request, form_id, version):
-        get_object_or_404(
-            Forms.objects.for_user(request.user), pk=form_id
-        )
+        get_object_or_404(Forms.objects.for_user(request.user), pk=form_id)
         pending_data_id = request.GET["pending_data_id"]
         user = request.user
         pending_data = get_object_or_404(
@@ -871,8 +905,10 @@ class PendingFormDataView(APIView):
         pending_data.updated = timezone.now()
         pending_data.updated_by = user
         pending_data.save()
-        if hasattr(pending_data, "data_batch_list") and \
-                not pending_data.data_batch_list.batch.approved:
+        if (
+            hasattr(pending_data, "data_batch_list")
+            and not pending_data.data_batch_list.batch.approved
+        ):
             # If this pending data is part of a batch,
             # update the batch approval status as pending
             approvals = pending_data.data_batch_list.batch.batch_approval.all()
@@ -949,13 +985,18 @@ class DraftFormDataListView(APIView):
         page = serializer.validated_data.get("page", 1)
 
         # Filter draft data for this form and user
-        queryset = FormData.objects_draft.filter(
-            form=form,
-            created_by=request.user
-        ).annotate(total_children=Count(
-            'children',
-            filter=Q(children__is_pending=False, children__is_draft=False)
-        )).order_by("-created")
+        queryset = (
+            FormData.objects_draft.filter(form=form, created_by=request.user)
+            .annotate(
+                total_children=Count(
+                    "children",
+                    filter=Q(
+                        children__is_pending=False, children__is_draft=False
+                    ),
+                )
+            )
+            .order_by("-created")
+        )
 
         # Apply search filter if provided
         search = serializer.validated_data.get("search", None)
@@ -968,8 +1009,8 @@ class DraftFormDataListView(APIView):
             adm = serializer.validated_data.get("administration")
             adm_path = adm.path if adm.path else f"{adm.pk}."
             queryset = queryset.filter(
-                Q(administration__path__startswith=adm_path) |
-                Q(administration=adm)
+                Q(administration__path__startswith=adm_path)
+                | Q(administration=adm)
             )
 
         paginator = PageNumberPagination()
@@ -979,9 +1020,7 @@ class DraftFormDataListView(APIView):
             "current": int(page),
             "total": queryset.count(),
             "total_page": ceil(queryset.count() / page_size),
-            "data": ListFormDataSerializer(
-                instance=instance, many=True
-            ).data,
+            "data": ListFormDataSerializer(instance=instance, many=True).data,
         }
         return Response(data, status=status.HTTP_200_OK)
 
@@ -1000,8 +1039,8 @@ class DraftFormDataListView(APIView):
             context={
                 "user": request.user,
                 "form": form,
-                "is_draft": True  # Indicate this is a draft submission
-            }
+                "is_draft": True,  # Indicate this is a draft submission
+            },
         )
         if not serializer.is_valid():
             return Response(
@@ -1015,7 +1054,7 @@ class DraftFormDataListView(APIView):
         serializer.save()
         return Response(
             {"message": "Draft created successfully"},
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
 
 
@@ -1040,10 +1079,9 @@ class DraftFormDataDetailView(APIView):
             )
         return Response(
             FormDataSerializer(
-                instance=draft_data,
-                context={"webform": True}
+                instance=draft_data, context={"webform": True}
             ).data,
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
     @extend_schema(
@@ -1067,7 +1105,7 @@ class DraftFormDataDetailView(APIView):
         serializer = SubmitUpdateDraftFormSerializer(
             instance=draft_data,
             data=request.data,
-            context={"user": request.user, "form": draft_data.form}
+            context={"user": request.user, "form": draft_data.form},
         )
         if not serializer.is_valid():
             return Response(
@@ -1081,7 +1119,7 @@ class DraftFormDataDetailView(APIView):
         serializer.save()
         return Response(
             {"message": "Draft updated successfully"},
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
 
     @extend_schema(
@@ -1099,7 +1137,9 @@ class DraftFormDataDetailView(APIView):
         )
         if draft_data.created_by_id != request.user.id:
             return Response(
-                {"detail": "You do not have permission to perform this action."},  # noqa: E501
+                {
+                    "detail": "You do not have permission to perform this action."  # noqa: E501
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1112,10 +1152,7 @@ class PublishDraftFormDataView(APIView):
     permission_classes = [IsAuthenticated, IsSubmitter]
 
     @extend_schema(
-        request=inline_serializer(
-            "PublishDraftRequestSerializer",
-            fields={}
-        ),
+        request=inline_serializer("PublishDraftRequestSerializer", fields={}),
         responses={200: DefaultResponseSerializer},
         tags=["Draft Data"],
         summary="Publish draft form data",
@@ -1128,7 +1165,9 @@ class PublishDraftFormDataView(APIView):
         )
         if draft_data.created_by_id != request.user.id:
             return Response(
-                {"detail": "You do not have permission to perform this action."},  # noqa: E501
+                {
+                    "detail": "You do not have permission to perform this action."  # noqa: E501
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1149,5 +1188,5 @@ class PublishDraftFormDataView(APIView):
 
         return Response(
             {"message": "Draft published successfully"},
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )

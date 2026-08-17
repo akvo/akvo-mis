@@ -1048,6 +1048,11 @@ const uiText = {
     regionCol: "Region",
     mobileAppText: "Mobile App",
     webformText: "Webform",
+    registrationView: "Registration",
+    selectViewMode: "Select View",
+    submissionDateCol: "Submission Date",
+    datapointCol: "Datapoint",
+    viewFullContext: "View Full Context",
     manageRoles: "Manage Roles",
     manageRoleText: (
       <Fragment>
