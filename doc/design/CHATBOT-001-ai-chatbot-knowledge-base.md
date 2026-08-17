@@ -18,11 +18,11 @@ Build an in-app AI chatbot widget powered by **OpenAI Assistants API + Vector St
 | Dimension | Detail |
 |-----------|--------|
 | **Who** | Authenticated end-users of any Akvo MIS tenant (all roles) |
-| **What** | Floating chat widget, backend proxy, RST-to-MD converter & vector ingestion pipeline |
+| **What** | Floating chat widget, backend proxy, one-shot PDF ingestion script |
 | **Where** | Frontend: global overlay component with dynamic tenant branding. Backend: new Django app `api.v1.v1_chatbot` |
-| **When** | Triggered by user clicking the chat FAB; KB converted to `.md` & indexed once at deploy + re-indexed on doc change |
+| **When** | Triggered by user clicking the chat FAB; KB PDF built once at deploy and re-uploaded when docs are updated |
 | **Why** | Lower support friction during onboarding; users struggle to find relevant docs while inside complex pages (Form Builder, Approvals, etc.) |
-| **How** | 1) `docs/source/*.rst` → `.md` files → OpenAI Vector Store. 2) Chat messages + current URL → backend proxy → OpenAI Assistants thread → response |
+| **How** | 1) Sphinx builds a single PDF from all RST docs. 2) Script uploads PDF to OpenAI Vector Store. 3) Chat message + `page_url` → backend injects page context into prompt → OpenAI Assistants thread → response |
 
 ---
 
@@ -65,38 +65,106 @@ A simple dict in the backend translates `pathname` prefixes to friendly context 
 
 ---
 
-## Phase 1 — Knowledge Base Ingestion Pipeline (RST + Supplementary MD ➔ Vector Store)
+## Phase 1 — Knowledge Base: PDF-Based Ingestion
 
-**Goal**: Convert all Sphinx RST documentation plus comprehensive supplementary Markdown guides (incorporating `akvo-react-form-editor` and `akvo-react-form`) into an OpenAI Vector Store.
+**Goal**: Build and upload a single, consolidated PDF of the full Akvo MIS documentation to an OpenAI Vector Store.
 
-### 1. Form Editor & Runtime Documentation Gap Resolution
+### Format Decision: PDF vs Markdown Files
 
-The base Sphinx RST docs in `docs/source/` only cover high-level overviews. To ensure the AI chatbot can accurately answer granular "how-to" questions in the Form Builder (`/form-builder`) and Data Entry (`/forms`), we supplement the RST conversion with dedicated, comprehensive Markdown guides generated from `akvo-react-form-editor`, `akvo-react-form`, and Akvo MIS design specifications.
+> [!IMPORTANT]
+> **Decision: Use PDF.** Analysis below.
 
-#### Supplementary Form Knowledge Documents (`docs/md/`)
+| Criterion | PDF (Sphinx `latexpdf` / WeasyPrint) | Multiple `.md` files |
+|-----------|--------------------------------------|----------------------|
+| **Source of truth** | Sphinx already generates a single structured document from all RST files — it is the canonical output. | Requires writing a custom RST parser to extract and clean content from 17+ individual files. |
+| **Maintenance overhead** | Zero — regenerate PDF after any doc update with one command. No custom pipeline to maintain. | High — every RST directive, image ref, and role needs stripping; brittle against RST syntax changes. |
+| **Upload complexity** | Single file upload to OpenAI Files API. | N files × upload + chunk management; file limits must be tracked. |
+| **OpenAI Vector Store support** | ✅ PDF is a natively supported file type for file-search. Parsed automatically. | ✅ `.md` is also supported, but requires our own chunking and cleaning logic first. |
+| **Coverage** | Complete — the PDF includes the table of contents, cross-references, and all pages in reading order. | Risk of missing content if RST conversion is incomplete or a file is skipped. |
+| **Supplementary docs** | Additional PDFs (e.g. `akvo-react-form-editor` guide generated from RTD) can be uploaded alongside. | Additional `.md` files can also be added, but the same stripping problem applies. |
+| **When to reconsider MD** | Only if chunking strategy or per-section metadata becomes critical (future, with admin panel). | — |
 
-| File | Topic & Scope | Source Basis |
-|------|---------------|--------------|
-| `akvo_react_form_editor_guide.md` | • **Editor Layout & Tabs**: Edit Form, Translations, Preview, JSON view.<br>• **Question Groups**: Creating, ordering, configuring repeatable groups.<br>• **Question Settings**: Label, variable name, tooltip, required flag, double entry validation, min/max bounds, prefixes/suffixes.<br>• **Skip Logic & Dependencies**: Single and multi-question condition rules (equals, not equals, greater/less, in list).<br>• **Cascade Setup**: Hierarchical cascade URL integration with tenant root administration. | `akvo-react-form-editor` (GitHub repo & RTD), `FormBuilderCreate.jsx`, `FormBuilderEdit.jsx` |
-| `akvo_react_form_runtime_guide.md` | • **Webform Runtime**: Form filling lifecycle, progress tracking, section navigation.<br>• **All 16 Field Types**: Input, number, text, date, option, multiple_option, cascade, tree, table, autofield (computed logic), geo (point/trace/shape), entity, signature, attachment.<br>• **Validation & Drafts**: Required field checks (`onCompleteFailed`), draft autosaving (`saveDatapoint`), submission format. | `akvo-react-form` (GitHub repo & README), `Forms.jsx`, `ManageDraftForm.jsx` |
-| `akvo_mis_form_lifecycle_guide.md` | • **Registration vs Monitoring**: Linking monitoring forms to registration parents (`parent_id`).<br>• **Form Versioning**: Draft staging, publish snapshot activation, historical submission immutability.<br>• **Permissions**: View, Create, Edit, Publish, Delete capabilities by role.<br>• **Import / Export**: JSON structure, tenant isolation rules during import. | Akvo MIS `FB-001` through `FB-015` specs, `docs/source/formBuilder.rst` |
+**Conclusion**: Use PDF for the initial implementation. It requires zero custom parsing, one upload step, and Sphinx already builds it. A future admin panel can revisit fine-grained chunk strategies if needed.
 
-### 2. Intermediate Markdown Generation (`docs/md/`)
+### Supplementary PDFs
 
-The ingestion pipeline generates and consolidates clean Markdown files in `docs/md/`:
-- **Sphinx RST Conversion**: 15 standard system docs (`start`, `install`, `administration`, `approval`, `dataManagement`, `MasterDataManagement`, `mobileApp`, etc.) converted to `.md` with Sphinx directives stripped.
-- **Supplementary Guides**: Form Editor guide, Webform Runtime guide, and Form Lifecycle guide added to the knowledge set.
+To cover the Form Editor gap (noted in previous review), two supplementary PDFs are included:
 
-### 3. Ingestion Pipeline: `scripts/ingest_kb.py`
+| PDF | Content | Source |
+|-----|---------|--------|
+| `akvo-mis-docs.pdf` | Full platform documentation (all RST pages) | `make latexpdf` in `docs/` |
+| `akvo-react-form-editor-docs.pdf` | Form Editor usage: question groups, question settings, skip logic, cascade setup, translations, preview | `akvo-react-form-editor` ReadTheDocs (`readthedocs.io/en/latest/`) — downloadable as PDF via RTD |
 
+#### Why Two PDFs? — Form Editor & Runtime Knowledge Scope
+
+> [!NOTE]
+> The Akvo MIS Sphinx docs (`docs/source/*.rst`) cover the platform at a high level but **do not include** the detailed `akvo-react-form-editor` usage (the Form Builder UI component) or `akvo-react-form` runtime behaviour. The supplementary PDF closes this gap.
+
+The Form Editor PDF should cover the following scope so the chatbot can answer granular Form Builder questions:
+
+| Topic | What it covers |
+|-------|---------------|
+| **Editor Layout & Tabs** | Edit Form tab, Translations tab, Preview tab (rendered with `akvo-react-form`), JSON tab |
+| **Question Groups** | Creating a new group, inserting via **INSERT GROUP**, ordering/reordering, configuring **repeatable groups** |
+| **Question Settings** | Label, variable name, tooltip, required flag, double entry validation, min/max value bounds, field prefix/suffix |
+| **Skip Logic & Dependencies** | Single and multi-question conditions (equals, not equals, greater/less than, in list); dependency chain behaviour |
+| **Question Types (all 16)** | `input`, `number`, `text`, `date`, `option`, `multiple_option`, `cascade`, `tree`, `table`, `autofield` (computed formulas), `geo`, `geotrace`, `geoshape`, `entity`, `signature`, `attachment` |
+| **Cascade Setup** | How cascade dropdowns wire to tenant root administration endpoints (`settingCascadeURL`) |
+| **Translations** | Adding languages, translating question labels, group headers, and option choices |
+| **Form Lifecycle (Akvo MIS context)** | Registration vs Monitoring form distinction (`parent_id`), publish/unpublish versioning snapshots, role-based permissions (View, Create, Edit, Publish, Delete) |
+| **Validation & Drafts** | Required field checks, draft autosave (`saveDatapoint`), submission format and export |
+
+**Source references for this scope:**
+- `akvo-react-form-editor` — [GitHub repo](https://github.com/akvo/akvo-react-form-editor) & [ReadTheDocs](https://akvo-react-form-editor.readthedocs.io/en/latest/)
+- `akvo-react-form` — [GitHub repo](https://github.com/akvo/akvo-react-form)
+- Akvo MIS frontend: `FormBuilderCreate.jsx`, `FormBuilderEdit.jsx`, `Forms.jsx`, `ManageDraftForm.jsx`
+
+
+
+### Ingestion Script: `scripts/upload_kb.py`
+
+Simple, dependency-light Python script (no Django required):
+
+```python
+# scripts/upload_kb.py
+import os
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+PDF_FILES = [
+    "docs/build/latex/akvo-mis-docs.pdf",
+    "docs/assets/akvo-react-form-editor-docs.pdf",
+]
+
+def upload_kb():
+    # Create or retrieve vector store
+    vs = client.vector_stores.create(name="akvo-mis-kb")
+    print(f"Vector Store ID: {vs.id}")
+
+    # Upload PDFs and attach to vector store
+    file_streams = [open(p, "rb") for p in PDF_FILES]
+    batch = client.vector_stores.file_batches.upload_and_poll(
+        vector_store_id=vs.id,
+        files=file_streams
+    )
+    print(f"Status: {batch.status} | Files: {batch.file_counts}")
+    print(f"\nAdd to .env: OPENAI_VECTOR_STORE_ID={vs.id}")
+
+if __name__ == "__main__":
+    upload_kb()
 ```
-1. Convert all *.rst from docs/source/ to docs/md/
-2. Bundle with supplementary guides (akvo_react_form_editor_guide.md, akvo_react_form_runtime_guide.md, etc.)
-3. Split all Markdown files into semantic chunks (~500 tokens each with header breadcrumbs)
-4. Upload .md files to OpenAI Files API
-5. Create or update named Vector Store ("akvo-mis-kb") with file-search configuration
-6. Output vector_store_id → persist to .env as OPENAI_VECTOR_STORE_ID
+
+**To run:**
+```bash
+# Step 1 — Build the PDF (requires latexpdf / pdflatex)
+cd docs && make latexpdf
+
+# Step 2 — Upload to vector store
+OPENAI_API_KEY=sk-... python scripts/upload_kb.py
 ```
+
+> **Note**: If `latexpdf` is not available in the current environment, `sphinx-build -b rinoh` (via `rinohtype`) or exporting from ReadTheDocs as PDF are valid alternatives requiring no local LaTeX install.
 
 ---
 
@@ -144,10 +212,69 @@ data: {"thread_id": "thread_abc123", "done": true}
 1. Validate JWT → `request.user` (tenant-scoped via existing middleware)
 2. Map `page_url` → context label via `URL_CONTEXT_MAP`
 3. Create or reuse OpenAI thread (`thread_id` from request)
-4. Add user message with injected system context:
-   > `"User is currently viewing: {context_label}. Answer based on the Akvo MIS documentation."`
+4. **Inject page context into the user message** (see full explanation below)
 5. Run the Assistant with `vector_store_id` file-search tool attached
-6. Stream response chunks via `StreamingHttpResponse` + `text/event-stream`
+6. Return JSON response (or SSE stream depending on chosen approach)
+
+### How Page/Endpoint Context Is Passed
+
+> [!IMPORTANT]
+> This is the core mechanism that makes the chatbot context-aware. It requires no changes to OpenAI's API — the page context is prepended to the user's message on the **backend** before it is sent to the thread.
+
+#### Mechanism: Message Augmentation (Backend)
+
+When the frontend sends `{ "message": "What is the Add button?", "page_url": "/control-center/form-builder/123/edit" }`, the backend:
+
+1. Maps `/control-center/form-builder/*` → `"Form Builder — Edit Form"`
+2. **Prepends** this context label to the user's message before adding it to the OpenAI thread:
+
+```python
+# views.py
+URL_CONTEXT_MAP = {
+    "/form-builder": "Form Builder",
+    "/manage-data":  "Data Management",
+    "/approvals":    "Approval Workflow",
+    "/master-data":  "Master Data Management",
+    "/users":        "User Management",
+    "/add-user":     "User Management",
+    "/roles":        "Roles & Permissions",
+    "/add-role":     "Roles & Permissions",
+    "/dashboard":    "Dashboard",
+    "/mobile-assignment": "Mobile Assignment",
+    "/downloads":    "Downloads & Exports",
+    "/settings":     "Settings",
+}
+
+def get_page_context(page_url: str) -> str:
+    for prefix, label in URL_CONTEXT_MAP.items():
+        if prefix in page_url:
+            return label
+    return "General Platform"
+
+# In the view:
+context_label = get_page_context(page_url)
+augmented_message = (
+    f"[Context: User is on the '{context_label}' page]\n\n"
+    f"{user_message}"
+)
+# This augmented_message is what gets added to the OpenAI thread.
+```
+
+3. The OpenAI Assistant, with the PDF vector store attached, uses the context label to **bias its file-search retrieval** toward the relevant documentation section, and to **anchor its answer** to the correct feature.
+
+#### Example End-to-End
+
+| Step | Value |
+|------|-------|
+| User is on | `/control-center/form-builder/42/edit` |
+| User types | `"What is the Add button?"` |
+| Frontend sends | `{ "message": "What is the Add button?", "page_url": "/control-center/form-builder/42/edit", "thread_id": "thread_xyz" }` |
+| Backend maps | `/form-builder` → `"Form Builder"` |
+| Backend augments | `"[Context: User is on the 'Form Builder' page]\n\nWhat is the Add button?"` |
+| OpenAI retrieves | Relevant sections from the Form Builder chapter of the PDF |
+| Bot answers | *"In the Form Builder, the **Add New Question** button appears inside each question group. Click it to add a question, then configure its type, label, and settings in the panel that opens."* |
+
+> **Why this works even for cross-feature questions**: If a user on the Form Builder page asks *"How do I invite a user?"*, the context label is still prepended, but the OpenAI file-search simply retrieves the most relevant content from the PDF — which is the Administration / User Management chapter. The context label helps for ambiguous questions but does not block answers about other features.
 
 ### New Environment Variables
 
@@ -471,22 +598,31 @@ react-markdown   # render bot responses as Markdown
 
 ---
 
-## Estimation (Vibe Coding + Manual Test)
+## Estimation (AI-Assisted / Vibe Coding)
 
-| # | Task | Min | Max | Confidence |
-|---|------|-----|-----|-----------|
-| 1 | RST-to-MD converter + `scripts/ingest_kb.py` | 2h | 3h | High |
-| 2 | Run ingestion, verify Vector Store in OpenAI dashboard | 1h | 1.5h | High |
-| 3 | Django app `v1_chatbot` + management command | 1h | 1.5h | High |
-| 4 | `ChatMessageView` — validation + URL context map | 1h | 2h | High |
-| 5 | OpenAI Assistants thread + SSE/JSON response handler | 2.5h | 4h | Medium |
-| 6 | Backend unit tests (auth, context map, serializer) | 1h | 2h | High |
-| 7 | `ChatbotWidget.jsx` with tenant brand binding | 1.5h | 2.5h | High |
-| 8 | `ChatbotMessages.jsx` + `ChatbotInput.jsx` + Markdown | 1.5h | 2.5h | High |
-| 9 | URL context chip + session-based thread management | 1h | 1.5h | High |
-| 10 | `chatbot.scss` with tenant CSS variable overrides | 1h | 1.5h | High |
-| 11 | End-to-end manual vibe test (7 scenarios) | 1h | 2h | High |
-| 12 | `.env.example` + docker-compose env updates | 0.5h | 1h | High |
-| **Total** | | **15h** | **25h** | |
+> [!NOTE]
+> Estimates reflect **AI-pair-coding sessions** (Claude / Antigravity generating the implementation with developer review and direction), not solo manual development. Each task is a human-guided AI coding session, not hand-writing code from scratch.
 
-> **Development complexity: Medium** — No custom ML training. Main risk is SSE streaming wiring (tasks 5 & 9 are the uncertainty band).
+| # | Task | Est. Time | Notes |
+|---|------|-----------|-------|
+| **KB Ingestion** | | | |
+| 1 | Build PDF (`make latexpdf`) + download editor RTD PDF | 0.5h | One-time setup |
+| 2 | `scripts/upload_kb.py` — upload PDFs, capture vector store ID | 0.5h | ~30 lines, AI generates it |
+| 3 | Run script, verify in OpenAI dashboard, add env vars | 0.5h | Manual verification only |
+| **Backend** | | | |
+| 4 | Create Django app `v1_chatbot`, wire settings + urls | 0.5h | Boilerplate, AI scaffolds |
+| 5 | `ChatMessageView`: JWT auth, URL context map, message augmentation | 1h | Core logic, AI generates |
+| 6 | OpenAI thread + JSON response (polling, no SSE for now) | 1h | Simpler than SSE; fast to ship |
+| 7 | Backend tests: auth, context map, serializer | 0.5h | AI writes tests from spec |
+| **Frontend** | | | |
+| 8 | `ChatbotWidget.jsx` — FAB + collapsible panel with tenant brand | 1h | AI generates styled component |
+| 9 | `ChatbotMessages.jsx` + `ChatbotInput.jsx` + Markdown render | 1h | AI generates |
+| 10 | URL context chip + `sessionStorage` thread persistence | 0.5h | Simple React hook |
+| 11 | `chatbot.scss` with CSS variable tenant overrides | 0.5h | AI styles from description |
+| 12 | Mount `<ChatbotWidget />` in `App.js` (auth guard only) | 0.25h | One-line change |
+| **Ship** | | | |
+| 13 | End-to-end manual test (5 UAC scenarios) | 1h | Human-driven vibe test |
+| 14 | `.env.example` + docker-compose updates | 0.25h | Copy-paste + verify |
+| **Total** | | **~8h (1 day)** | |
+
+> **Development complexity: Low-Medium.** Using AI pair coding, most boilerplate (Django app scaffold, React widget shell, test stubs) is generated in minutes. The main human effort is reviewing AI output, wiring components together, and manual testing. Upgrade to SSE streaming can be done in a follow-up sprint if needed.
