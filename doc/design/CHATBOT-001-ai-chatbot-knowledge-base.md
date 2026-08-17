@@ -65,46 +65,37 @@ A simple dict in the backend translates `pathname` prefixes to friendly context 
 
 ---
 
-## Phase 1 — Knowledge Base Ingestion Pipeline (RST ➔ Markdown ➔ Vector Store)
+## Phase 1 — Knowledge Base Ingestion Pipeline (RST + Supplementary MD ➔ Vector Store)
 
-**Goal**: Convert all `docs/source/*.rst` files into clean `.md` Markdown files, then ingest into an OpenAI Vector Store.
-> [!NOTE] The current RST files do not contain details about the form editor. Suggest creating additional AI assisted md file creation based on the codebase including akvo-react-form-editor
+**Goal**: Convert all Sphinx RST documentation plus comprehensive supplementary Markdown guides (incorporating `akvo-react-form-editor` and `akvo-react-form`) into an OpenAI Vector Store.
 
-### 1. Intermediate Markdown Generation (`docs/md/`)
+### 1. Form Editor & Runtime Documentation Gap Resolution
 
-A converter step transforms Sphinx/RST documents into readable markdown files (`docs/md/*.md`). Benefits:
-- Manual auditing of the compiled knowledge base before indexing.
-- Clean chunking for vector embeddings (stripping Sphinx directives like `:bolditalic:`, `.. image::`, etc.).
+The base Sphinx RST docs in `docs/source/` only cover high-level overviews. To ensure the AI chatbot can accurately answer granular "how-to" questions in the Form Builder (`/form-builder`) and Data Entry (`/forms`), we supplement the RST conversion with dedicated, comprehensive Markdown guides generated from `akvo-react-form-editor`, `akvo-react-form`, and Akvo MIS design specifications.
 
-**Doc sources** (17 files ready for conversion):
+#### Supplementary Form Knowledge Documents (`docs/md/`)
 
-| RST File | Topic |
-|----------|-------|
-| `formBuilder.rst` | Form Builder lifecycle |
-| `questionTypes.rst` | Question types reference |
-| `dependencies.rst` | Skip logic / dependencies |
-| `formBuilderBestPractices.rst` | Form design best practices |
-| `start.rst` | Get started / roles & permissions |
-| `install.rst` | Installation |
-| `administration.rst` | User & admin management |
-| `approval.rst` | Approval workflow |
-| `dataManagement.rst` | Data management |
-| `MasterDataManagement.rst` | Master data / administration levels |
-| `mobileApp.rst` | Mobile app guide |
-| `inputChannel.rst` | Input channels |
-| `outputs.rst` | Outputs & visualisations |
-| `download.rst` | PDF downloads |
-| `deployment.rst` | Deployment |
+| File | Topic & Scope | Source Basis |
+|------|---------------|--------------|
+| `akvo_react_form_editor_guide.md` | • **Editor Layout & Tabs**: Edit Form, Translations, Preview, JSON view.<br>• **Question Groups**: Creating, ordering, configuring repeatable groups.<br>• **Question Settings**: Label, variable name, tooltip, required flag, double entry validation, min/max bounds, prefixes/suffixes.<br>• **Skip Logic & Dependencies**: Single and multi-question condition rules (equals, not equals, greater/less, in list).<br>• **Cascade Setup**: Hierarchical cascade URL integration with tenant root administration. | `akvo-react-form-editor` (GitHub repo & RTD), `FormBuilderCreate.jsx`, `FormBuilderEdit.jsx` |
+| `akvo_react_form_runtime_guide.md` | • **Webform Runtime**: Form filling lifecycle, progress tracking, section navigation.<br>• **All 16 Field Types**: Input, number, text, date, option, multiple_option, cascade, tree, table, autofield (computed logic), geo (point/trace/shape), entity, signature, attachment.<br>• **Validation & Drafts**: Required field checks (`onCompleteFailed`), draft autosaving (`saveDatapoint`), submission format. | `akvo-react-form` (GitHub repo & README), `Forms.jsx`, `ManageDraftForm.jsx` |
+| `akvo_mis_form_lifecycle_guide.md` | • **Registration vs Monitoring**: Linking monitoring forms to registration parents (`parent_id`).<br>• **Form Versioning**: Draft staging, publish snapshot activation, historical submission immutability.<br>• **Permissions**: View, Create, Edit, Publish, Delete capabilities by role.<br>• **Import / Export**: JSON structure, tenant isolation rules during import. | Akvo MIS `FB-001` through `FB-015` specs, `docs/source/formBuilder.rst` |
 
-### 2. Script: `scripts/ingest_kb.py`
+### 2. Intermediate Markdown Generation (`docs/md/`)
+
+The ingestion pipeline generates and consolidates clean Markdown files in `docs/md/`:
+- **Sphinx RST Conversion**: 15 standard system docs (`start`, `install`, `administration`, `approval`, `dataManagement`, `MasterDataManagement`, `mobileApp`, etc.) converted to `.md` with Sphinx directives stripped.
+- **Supplementary Guides**: Form Editor guide, Webform Runtime guide, and Form Lifecycle guide added to the knowledge set.
+
+### 3. Ingestion Pipeline: `scripts/ingest_kb.py`
 
 ```
-1. Read all *.rst from docs/source/
-2. Parse & write converted .md files to docs/md/
-3. Split Markdown into context blocks (~500 tokens each)
+1. Convert all *.rst from docs/source/ to docs/md/
+2. Bundle with supplementary guides (akvo_react_form_editor_guide.md, akvo_react_form_runtime_guide.md, etc.)
+3. Split all Markdown files into semantic chunks (~500 tokens each with header breadcrumbs)
 4. Upload .md files to OpenAI Files API
-5. Create/update named Vector Store ("akvo-mis-kb")
-6. Output vector_store_id → save to .env as OPENAI_VECTOR_STORE_ID
+5. Create or update named Vector Store ("akvo-mis-kb") with file-search configuration
+6. Output vector_store_id → persist to .env as OPENAI_VECTOR_STORE_ID
 ```
 
 ---
