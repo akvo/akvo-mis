@@ -18,7 +18,6 @@ const withHostname = async (hostname, run) => {
     window.location = original;
   }
 };
-
 describe("Register", () => {
   beforeEach(() => {
     // App bootstrap fetches GET /forms/published on mount; give every
@@ -77,7 +76,6 @@ describe("Register", () => {
     // recover from, so the request must not go out at all.
     expect(screen.queryByText(/Check your email/i)).toBeNull();
   });
-
   test("redirects to root when accessed from a tenant subdomain", async () => {
     window.appConfig = { baseDomain: "app.com" };
     store.update((s) => {

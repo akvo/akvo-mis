@@ -137,12 +137,10 @@ describe("tenant util", () => {
     expect(await fetchTenant()).toBeNull();
     expect(store.getRawState().tenantMissing).toBe(true);
   });
-
   test("a failed request leaves no workspace rather than throwing", async () => {
     axios.mockRejectedValue(new Error("network"));
     expect(await fetchTenant()).toBeNull();
   });
-
   test("being unable to ask is not the same as being told there is none", async () => {
     // Offline, or a 5xx, leaves the question open. Answering it with the
     // dead-workspace page would tell a workspace's own users that their

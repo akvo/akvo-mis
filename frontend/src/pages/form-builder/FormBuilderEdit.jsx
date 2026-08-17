@@ -252,6 +252,75 @@ const FormBuilderEdit = () => {
       });
   };
 
+  const onExportXlsform = () => {
+    api
+      .get(`/manage/forms/${formId}/export-xlsform`, { responseType: "blob" })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({
+            type: "error",
+            message: text.formBuilderExportXlsformError,
+          });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        const skippedHeader = res.headers["x-xlsform-skipped"];
+        if (skippedHeader) {
+          notify({
+            type: "warning",
+            message: `${text.formBuilderExportXlsformWarningTitle}: ${skippedHeader}`,
+          });
+        }
+      })
+      .catch(() => {
+        notify({ type: "error", message: text.formBuilderExportXlsformError });
+      });
+  };
+
+  const onExportAdministrationCsv = () => {
+    api
+      .get(`/manage/forms/${formId}/administration-csv`, {
+        responseType: "blob",
+      })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({
+            type: "error",
+            message: text.formBuilderExportCascadeCsvError,
+          });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        notify({
+          type: "error",
+          message: text.formBuilderExportCascadeCsvError,
+        });
+      });
+  };
+
   const infoBannerText = useMemo(() => {
     if (formStatus !== "published") {
       return null;
@@ -289,6 +358,22 @@ const FormBuilderEdit = () => {
                 disabled={saving || publishing || unpublishing}
               >
                 {text.formBuilderExportButton}
+              </Button>
+
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={onExportXlsform}
+                disabled={saving || publishing || unpublishing}
+              >
+                {text.formBuilderExportXlsformButton}
+              </Button>
+
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={onExportAdministrationCsv}
+                disabled={saving || publishing || unpublishing}
+              >
+                {text.formBuilderExportCascadeCsvButton}
               </Button>
 
               {hasVersionHistory && (

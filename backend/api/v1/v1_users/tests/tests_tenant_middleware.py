@@ -88,7 +88,6 @@ class HostExemptPathTestCase(TestCase, TenantTestHelperMixin):
     404 that is right for a typo'd subdomain is wrong here: it fails the
     readiness probe, which holds the rollout, so enabling BASE_DOMAIN
     would make every deploy time out.
-
     And config.js, because it is the bootstrap script every page loads
     before any React code runs. It carries nothing tenant-specific, and
     without it the frontend throws at module load — so a 404 here is a
