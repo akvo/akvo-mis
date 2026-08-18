@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, store, uiText } from "../../../lib";
 import { useNotification, useResendActivation } from "../../../util/hooks";
 import { reloadData } from "../../../util/form";
-import { onBaseDomainHost } from "../../../util/tenant";
+import { onBaseDomainHost, registrationAllowed } from "../../../util/tenant";
 
 const LoginForm = () => {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ const LoginForm = () => {
   // from the host rather than from the tenant in the store, which is
   // null both before the lookup answers (so the link appeared and then
   // vanished on every load) and on a workspace that does not exist.
-  const showRegister = onBaseDomainHost();
+  const showRegister = onBaseDomainHost() && registrationAllowed();
   const text = useMemo(() => {
     return uiText[activeLang];
   }, [activeLang]);
@@ -146,11 +146,6 @@ const LoginForm = () => {
           </Link>
         </Form.Item>
       )}
-      <Form.Item>
-        <Link className="login-form-forgot" to="/register">
-          Create an account
-        </Link>
-      </Form.Item>
       <Form.Item>
         <Button
           type="primary"

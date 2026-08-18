@@ -67,6 +67,7 @@ import {
   baseDomain,
   fetchTenant,
   onBaseDomainHost,
+  registrationAllowed,
   workspaceUrl,
 } from "./util/tenant";
 import { ability, AbilityContext } from "./components/can";
@@ -150,7 +151,13 @@ const RouteList = () => {
       <Route
         exact
         path="/register"
-        element={onBaseDomainHost() ? <Register /> : <Navigate to="/" />}
+        element={
+          onBaseDomainHost() && registrationAllowed() ? (
+            <Register />
+          ) : (
+            <Navigate to="/" />
+          )
+        }
       />
       <Route exact path="/activate/:token" element={<Activate />} />
       {/* Not wrapped in Private: Private sends every unconfigured user

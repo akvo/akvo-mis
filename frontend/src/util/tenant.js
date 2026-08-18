@@ -9,6 +9,11 @@ import { api, store } from "../lib";
 // two need opposite behaviour from the login route.
 export const baseDomain = () => window?.appConfig?.baseDomain || "";
 
+// Self-service signup, switched off per deployment. Absent means on, so a
+// config.js generated before this flag existed keeps the SaaS behaviour.
+export const registrationAllowed = () =>
+  window?.appConfig?.allowRegistration !== false;
+
 // Is the browser on the main site itself, rather than on a workspace?
 //
 // Read off the address bar, and deliberately not off the tenant lookup:
