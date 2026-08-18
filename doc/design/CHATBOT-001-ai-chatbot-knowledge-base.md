@@ -171,12 +171,13 @@ OPENAI_API_KEY=sk-... python scripts/upload_kb.py
 backend/api/v1/v1_chatbot/
 ├── __init__.py
 ├── apps.py
+├── utils.py            # get_page_context() — dynamic URL context derivation
 ├── views.py            # ChatMessageView with SSE streaming / JSON
 ├── serializers.py      # ChatRequestSerializer
 ├── urls.py             # path("chatbot/", ...)
 ├── management/
 │   └── commands/
-│       └── ingest_kb.py   # Django management command
+│       └── upload_kb.py   # Django management command
 └── tests/
     └── test_chatbot.py
 ```
@@ -438,9 +439,9 @@ react-markdown   # render bot responses as Markdown
 
 #### KB Storage Cost
 
-| Item | Estimated Size | Monthly Cost |
-|------|---------------|-------------|
-| 17 RST docs as `.md` files | ~200 KB | < **$0.05 / month** |
+| Item                                                       | Estimated Size | Monthly Cost        |
+|------------------------------------------------------------|----------------|---------------------|
+| Documentation PDFs (`akvo-mis-docs.pdf` + form editor PDF) | ~2–5 MB        | < **$0.05 / month** |
 
 #### Per-Message Token Estimate
 
@@ -469,8 +470,8 @@ react-markdown   # render bot responses as Markdown
 > [!IMPORTANT]
 > Decision needed: Who triggers re-indexing when docs are updated?
 
-- **Option A — CI/CD Automated**: Re-run `ingest_kb` automatically whenever `docs/` files change on `main` push.
-- **Option B — Manual Admin Command**: `python manage.py ingest_kb` during deployment releases.
+- **Option A — CI/CD Automated**: Re-run `upload_kb` automatically whenever `docs/` files change on `main` push.
+- **Option B — Manual Admin Command**: `python manage.py upload_kb` during deployment releases.
 
 ---
 
@@ -489,7 +490,7 @@ react-markdown   # render bot responses as Markdown
 
 | # | Test Scenario | Expected Result |
 |---|--------------|----------------|
-| 1 | Run ingestion script → inspect `docs/md/` | Clean Markdown files, no RST directives |
+| 1 | Run `scripts/upload_kb.py` | Vector store created with both PDFs attached; `OPENAI_VECTOR_STORE_ID` generated |
 | 2 | Switch tenant in frontend | FAB & widget accent colors update to tenant theme |
 | 3 | On `/form-builder`, ask "How do I add a repeatable group?" | Response mentions gear icon + repeatable checkbox |
 | 4 | On `/manage-data`, ask "How do I invite a new user?" | Correct answer, context from User Management docs |
@@ -547,10 +548,10 @@ react-markdown   # render bot responses as Markdown
 - [ ] OpenAI thread IDs are correctly created on first message and reused on subsequent messages in the same session.
 
 ### TAC-2 — Knowledge Base Ingestion
-- [ ] `scripts/ingest_kb.py` successfully converts all 15 RST source files to Markdown under `docs/md/`.
-- [ ] All `.md` files are uploaded to OpenAI Files API and attached to the named Vector Store (`akvo-mis-kb`).
+- [ ] `docs/build/latex/akvo-mis-docs.pdf` builds cleanly from Sphinx via `make latexpdf`.
+- [ ] `scripts/upload_kb.py` uploads both PDFs to OpenAI Files API and attaches them to the named Vector Store (`akvo-mis-kb`).
 - [ ] `OPENAI_VECTOR_STORE_ID` is written to `.env` after successful ingestion.
-- [ ] Django management command `python manage.py ingest_kb` triggers the same pipeline without error.
+- [ ] Django management command `python manage.py upload_kb` triggers the same pipeline without error.
 
 ### TAC-3 — Streaming / Response
 - [ ] If streaming (SSE) is chosen: the Django backend returns a `StreamingHttpResponse` with `Content-Type: text/event-stream`.
@@ -586,15 +587,14 @@ react-markdown   # render bot responses as Markdown
 
 | File | Description |
 |------|-------------|
-| `scripts/ingest_kb.py` | RST → MD converter + OpenAI Vector Store ingestion |
-| `docs/md/` | Generated Markdown KB files (gitignored or committed) |
+| `scripts/upload_kb.py` | One-shot PDF upload to OpenAI Vector Store |
 | `backend/api/v1/v1_chatbot/__init__.py` | App init |
 | `backend/api/v1/v1_chatbot/apps.py` | AppConfig |
 | `backend/api/v1/v1_chatbot/utils.py` | `get_page_context()` — dynamic URL-segment context derivation |
 | `backend/api/v1/v1_chatbot/views.py` | `ChatMessageView` with SSE streaming |
 | `backend/api/v1/v1_chatbot/serializers.py` | `ChatRequestSerializer` |
 | `backend/api/v1/v1_chatbot/urls.py` | URL patterns |
-| `backend/api/v1/v1_chatbot/management/commands/ingest_kb.py` | Management command |
+| `backend/api/v1/v1_chatbot/management/commands/upload_kb.py` | Management command |
 | `backend/api/v1/v1_chatbot/tests/test_chatbot.py` | Unit tests |
 | `frontend/src/components/chatbot/ChatbotWidget.jsx` | FAB + panel shell |
 | `frontend/src/components/chatbot/ChatbotMessages.jsx` | Message list |
