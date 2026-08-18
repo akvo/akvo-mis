@@ -61,6 +61,9 @@ def download_master_data(job_id: int, job_type: JobTypes):
                 file_path=job.result,
                 attributes=job_info['attributes'],
                 adm_id=job_info['administration'],
+                # The job runs in a worker with no request, so the tenant
+                # comes from the user who queued it.
+                user=job.user,
             )
         if job_type == JobTypes.download_entities:
             entity_ids = [e["id"] for e in job_info["entities"]]

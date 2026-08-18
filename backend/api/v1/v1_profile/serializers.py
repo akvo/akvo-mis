@@ -3,10 +3,12 @@ import string
 from typing import Any, Dict, cast
 from rest_framework import serializers
 from utils.custom_serializer_fields import (
+    TenantScopedPrimaryKeyRelatedField,
     CustomPrimaryKeyRelatedField,
     CustomListField,
 )
 from utils.custom_generator import update_sqlite
+from utils.tenant_scoped_model import TenantStampedSerializerMixin
 from utils.custom_generator import (
     administration_csv_add,
     administration_csv_update,
@@ -31,7 +33,7 @@ from api.v1.v1_profile.constants import (
 )
 
 
-class RelatedAdministrationField(serializers.PrimaryKeyRelatedField):
+class RelatedAdministrationField(TenantScopedPrimaryKeyRelatedField):
     def use_pk_only_optimization(self):
         return False
 
@@ -50,7 +52,18 @@ class AdministrationLevelsSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
-class AdministrationAttributeSerializer(serializers.ModelSerializer):
+class LevelSerializer(serializers.ModelSerializer):
+    # A tier's depth is append-only, so `level` is derived server-side from
+    # the tenant's current maximum rather than bound from the payload; the
+    # tenant itself is stamped from the request user. Only `name` is input.
+    class Meta:
+        model = Levels
+        fields = ["id", "name", "level"]
+        read_only_fields = ["level"]
+
+
+class AdministrationAttributeSerializer(TenantStampedSerializerMixin,
+                                        serializers.ModelSerializer):
     class Meta:
         model = AdministrationAttribute
         fields = ["id", "name", "type", "options"]
@@ -156,14 +169,19 @@ class AdministrationAttributeValueSerializer(serializers.ModelSerializer):
 
 
 def validate_parent(obj: Administration):
+    # Scope by the parent's own tenant: level numbers are unique per
+    # tenant, not globally, so an unscoped get() matches one row per
+    # tenant and raises MultipleObjectsReturned as soon as a second
+    # tenant exists.
     sub_level = obj.level.level + 1
-    try:
-        Levels.objects.get(level=sub_level)
-    except Levels.DoesNotExist:
+    if not Levels.objects.filter(
+        level=sub_level, tenant=obj.tenant
+    ).exists():
         raise serializers.ValidationError("Invalid parent level")
 
 
-class AdministrationSerializer(serializers.ModelSerializer):
+class AdministrationSerializer(TenantStampedSerializerMixin,
+                               serializers.ModelSerializer):
     parent = RelatedAdministrationField(
         queryset=Administration.objects.all(), validators=[validate_parent]
     )  # type: ignore
@@ -212,6 +230,7 @@ class AdministrationSerializer(serializers.ModelSerializer):
                 "level": instance.level.id,
                 "path": instance.path,
             },
+            tenant=instance.tenant,
         )
         administration_csv_add(data=instance)
         for attribute in attributes:
@@ -265,6 +284,7 @@ class AdministrationSerializer(serializers.ModelSerializer):
                 "level": instance.level.id,
                 "path": instance.path,
             },
+            tenant=instance.tenant,
             id=instance.id,
         )
         administration_csv_update(data=instance)
@@ -282,15 +302,20 @@ class AdministrationSerializer(serializers.ModelSerializer):
         validated_data.update({"code": code})
 
     def _assign_level(self, validated_data):
-        parent_level = validated_data.get("parent").level.level
-        try:
-            sublevel = Levels.objects.get(level=parent_level + 1)
-        except Levels.DoesNotExist as e:
-            raise ValueError() from e
+        # Resolve the child tier within the parent's tenant: level numbers
+        # repeat across tenants, so an unscoped get() raises
+        # MultipleObjectsReturned once a second tenant exists.
+        parent = validated_data.get("parent")
+        sublevel = Levels.objects.filter(
+            level=parent.level.level + 1, tenant=parent.tenant
+        ).first()
+        if sublevel is None:
+            raise ValueError()
         validated_data.update({"level": sublevel})
 
 
-class EntitySerializer(serializers.ModelSerializer):
+class EntitySerializer(TenantStampedSerializerMixin,
+                       serializers.ModelSerializer):
     class Meta:
         model = Entity
         fields = ["id", "name"]
@@ -329,6 +354,7 @@ class EntityDataSerializer(serializers.ModelSerializer):
                 "administration": instance.administration.id,
                 "parent": instance.administration.id,
             },
+            tenant=instance.entity.tenant,
         )
         return instance
 
@@ -343,6 +369,7 @@ class EntityDataSerializer(serializers.ModelSerializer):
                 "administration": instance.administration.id,
                 "parent": instance.administration.id,
             },
+            tenant=instance.entity.tenant,
             id=instance.id,
         )
         return instance
@@ -448,7 +475,11 @@ class RoleSerializer(serializers.ModelSerializer):
         read_only=True,
         help_text="List of features and their access levels for this role",
     )
-    administration_level = CustomPrimaryKeyRelatedField(
+    # A role's tenant IS its level's tenant (TENANT_PATH is
+    # administration_level__tenant), so an unscoped candidate set here lets a
+    # caller hand its new role to another tenant — and that role then blocks
+    # the other tenant from removing its own level, invisibly.
+    administration_level = TenantScopedPrimaryKeyRelatedField(
         queryset=Levels.objects.all(),
     )
 

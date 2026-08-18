@@ -11,11 +11,13 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_users.models import SystemUser
 from utils.soft_deletes_model import SoftDeletes
+from utils.tenant_scoped_model import TenantManager
 from utils.draft_model import Draft, DraftSoftDeletesManager
 from utils import storage
 
 
 class FormData(SoftDeletes, Draft):
+    TENANT_PATH = "form__tenant"
     parent = models.ForeignKey(
         "self",
         on_delete=models.CASCADE,
@@ -178,6 +180,8 @@ class FormData(SoftDeletes, Draft):
 
 
 class Answers(models.Model):
+    TENANT_PATH = "data__form__tenant"
+    objects = TenantManager()
     data = models.ForeignKey(
         to=FormData, on_delete=models.CASCADE, related_name="data_answer"
     )

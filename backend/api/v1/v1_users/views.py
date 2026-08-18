@@ -3,10 +3,12 @@ import datetime
 from math import ceil
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core import signing
 from django.core.management import call_command
 from django.core.signing import BadSignature
+from django.db import IntegrityError, transaction
 from django.db.models import Value, Q, Count
 from django.db.models.functions import Coalesce, Concat
 from django.http import HttpResponse
@@ -38,6 +40,7 @@ from api.v1.v1_users.models import (
     SystemUser,
     Organisation,
     OrganisationAttribute,
+    Tenant,
 )
 from api.v1.v1_users.serializers import (
     LoginSerializer,
@@ -56,6 +59,10 @@ from api.v1.v1_users.serializers import (
     OrganisationAttributeChildrenSerializer,
     RoleOptionSerializer,
     UpdateProfileSerializer,
+    RegisterSerializer,
+    ResendActivationSerializer,
+    ConfigureSerializer,
+    tenant_is_configured,
 )
 from mis.settings import REST_FRAMEWORK, WEBDOMAIN
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
@@ -63,14 +70,37 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
+from utils.tenant_host import tenant_web_url
+
+
+# A week is long enough to survive a weekend and a spam folder, short
+# enough that a leaked link in an old mailbox is not a standing key.
+ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
+
+
+def send_activation_email(user):
+    # The signed pk is the whole token — no state to store and no row to
+    # clean up if the link is never followed. `activate` bounds its age.
+    #
+    # The link points at the registrant's own workspace host, because
+    # everything past it is bound to that host: activation hands back a
+    # session, and that session is only valid there.
+    send_email(
+        type=EmailTypes.user_activation,
+        context={
+            "send_to": [user.email],
+            "button_url": (
+                f"{tenant_web_url(user.tenant)}"
+                f"/activate/{signing.dumps(user.pk)}"
+            ),
+        },
+    )
 
 
 def send_email_to_user(type, user, request):
-    url = f"{WEBDOMAIN}/login/{signing.dumps(user.pk)}"
+    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
     user = SystemUser.objects.get(pk=user.pk)
-    user_forms = [
-        uf.form for uf in user.user_form.all()
-    ]
+    user_forms = [uf.form for uf in user.user_form.all()]
     listing = [
         info
         for role in user.user_user_role.all()
@@ -131,8 +161,7 @@ def get_config_file(request, version):
     ],
     responses={
         200: OpenApiResponse(
-            description="HTML email template",
-            response=OpenApiTypes.STR
+            description="HTML email template", response=OpenApiTypes.STR
         )
     },
     summary="To show email template by type",
@@ -151,6 +180,39 @@ def email_template(request, version):
     return HttpResponse(email)
 
 
+def authenticated_response(user):
+    # Signing in and signing up hand back the same thing: a fresh access
+    # token, the serialized user, and the cookie the SPA reads. Kept in
+    # one place so the two entry points cannot drift apart.
+    user.last_login = timezone.now()
+    user.save()
+    refresh = RefreshToken.for_user(user)
+    expiration_time = timezone.make_aware(
+        datetime.datetime.fromtimestamp(refresh.access_token["exp"])
+    )
+    data = UserSerializer(instance=user).data
+    data["token"] = str(refresh.access_token)
+    data["invite"] = signing.dumps(user.pk)
+    data["expiration_time"] = expiration_time
+    response = Response(data, status=status.HTTP_200_OK)
+    response.set_cookie(
+        "AUTH_TOKEN", str(refresh.access_token), expires=expiration_time
+    )
+    return response
+
+
+def signing_in_elsewhere(request, user):
+    """Is this account signing in at another workspace's address?
+
+    Only the middleware's `request.tenant` is consulted, so this is
+    inert on a single-host deployment and on the base domain. The
+    middleware itself cannot cover login: the request carries no token
+    yet, so there is no session for it to compare against the host.
+    """
+    tenant = getattr(request, "tenant", None)
+    return bool(tenant and user.tenant_id != tenant.id)
+
+
 # TODO: Remove temp user entry and invite key from the response.
 @extend_schema(
     request=LoginSerializer,
@@ -159,14 +221,27 @@ def email_template(request, version):
 )
 @api_view(["POST"])
 def login(request, version):
+    # On a SaaS deployment the main site signs people up; signing in
+    # happens at the workspace's own address. Refusing here, before the
+    # serializer, means the credentials are never even evaluated.
+    if settings.BASE_DOMAIN and getattr(request, "tenant", None) is None:
+        return Response(
+            {
+                "message": "Sign in at your workspace address, not the main "
+                "site"
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     serializer = LoginSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    # Add temp user for development purpose
-    if not SystemUser.objects.all().count():
+    # Legacy convenience account, now test-only: dozens of test modules
+    # log in as admin@akvo.org without seeding it first. Production
+    # never auto-creates credentials — registration is the way in.
+    if settings.TESTING and not SystemUser.objects.all().count():
         SystemUser.objects.create_superuser(
             email="admin@akvo.org",
             password="Test105*",
@@ -185,30 +260,250 @@ def login(request, version):
                 {"message": "User has been deleted"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-        user.last_login = timezone.now()
-        user.save()
-        refresh = RefreshToken.for_user(user)
-        # Get the expiration time of the new token
-        expiration_time = datetime.datetime.fromtimestamp(
-            refresh.access_token["exp"]
+        if signing_in_elsewhere(request, user):
+            return Response(
+                {"message": "This account belongs to a different workspace"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        return authenticated_response(user)
+    # authenticate() returns None for a wrong password AND for a correct
+    # password on an unverified account. Telling those apart is what lets the
+    # login page offer to resend the activation email instead of leaving the
+    # registrant staring at "invalid credentials". It does make login an
+    # account-existence oracle, but only for accounts that never activated,
+    # and /register already answers "this email is taken" by design.
+    unverified = SystemUser.objects.filter(
+        email=serializer.validated_data["email"],
+        is_active=False,
+        deleted_at=None,
+    ).first()
+    if (
+        unverified
+        and unverified.check_password(serializer.validated_data["password"])
+        # …but only at that account's own workspace. Elsewhere the oracle
+        # would answer for a workspace the visitor has no business in.
+        and not signing_in_elsewhere(request, unverified)
+    ):
+        return Response(
+            {
+                "message": (
+                    "Please verify your email address to activate your "
+                    "account"
+                ),
+                "unverified": True,
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
         )
-        expiration_time = timezone.make_aware(expiration_time)
-
-        data = UserSerializer(instance=user).data
-        data["token"] = str(refresh.access_token)
-        data["invite"] = signing.dumps(user.pk)
-        data["expiration_time"] = expiration_time
-        response = Response(
-            data,
-            status=status.HTTP_200_OK,
-        )
-        response.set_cookie(
-            "AUTH_TOKEN", str(refresh.access_token), expires=expiration_time
-        )
-        return response
     return Response(
         {"message": "Invalid login credentials"},
         status=status.HTTP_401_UNAUTHORIZED,
+    )
+
+
+@extend_schema(
+    responses={
+        200: inline_serializer(
+            "TenantInfo",
+            fields={"subdomain": serializers.CharField()},
+        ),
+        204: OpenApiResponse(description="Not a workspace address"),
+    },
+    tags=["Auth"],
+    summary="Identify the workspace this address belongs to",
+)
+@api_view(["GET"])
+def tenant_info(request, version):
+    """Which workspace, if any, this address belongs to.
+
+    What the answer is *for* is the distinction between a workspace, the
+    signup domain (204) and a host this deployment does not serve (404
+    from the middleware) — three cases the frontend has to tell apart
+    before anyone has signed in.
+
+    Deliberately one field and no more: this is anonymous, and the host
+    it answers for is guessable, so anything added here is published to
+    whoever tries the subdomain. It used to also return the workspace's
+    name, taken from its root administration unit, to caption the login
+    page — dropped along with that caption, because an account belongs
+    to exactly one workspace and so nobody needed telling which one they
+    were signing in to. Whether the workspace has finished configuring
+    itself was never among the fields either: that belongs to the
+    signed-in user's own `configured` flag, and a visitor who has not
+    signed in cannot act on it.
+    """
+    tenant = getattr(request, "tenant", None)
+    if not tenant:
+        # The base domain, or a single-host deployment. Either way the
+        # caller learns there is no workspace here, which is the answer
+        # that sends it to the signup page.
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response(
+        {"subdomain": tenant.subdomain},
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    request=RegisterSerializer,
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+)
+@api_view(["POST"])
+def register(request, version):
+    serializer = RegisterSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {
+                "message": validate_serializers_message(serializer.errors),
+                "details": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    validated = serializer.validated_data
+    # Phase 1 of sign-up: create the tenant, which claims the subdomain
+    # immediately so nobody can take it during the email round-trip, and an
+    # inactive superadmin. No hierarchy — the configuration form creates a
+    # level 0 and root that are named from the start, which is what removes
+    # the placeholder root the bulk-upload template had to reconcile with.
+    try:
+        with transaction.atomic():
+            tenant = Tenant.objects.create(subdomain=validated["subdomain"])
+            user = SystemUser.objects.create_superuser(
+                email=validated["email"],
+                password=validated["password"],
+                first_name="",
+                last_name="",
+                tenant=tenant,
+                is_active=False,
+            )
+    except IntegrityError:
+        # Uniqueness is enforced once, by the database. A pre-check in the
+        # serializer would only be a read before a write — two concurrent
+        # sign-ups would both pass it and one would still lose here. The
+        # rolled-back transaction lets us name the field that lost.
+        taken = (
+            "Email"
+            if SystemUser.objects.filter(email=validated["email"]).exists()
+            else "Subdomain"
+        )
+        return Response(
+            {"message": f"{taken} is already registered"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    send_activation_email(user)
+    # Deliberately no auth token: the account cannot authenticate until the
+    # link is followed, so handing one back would only mislead the client.
+    return Response(
+        {"message": "Check your email to activate your account"},
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Activate an account from an emailed link",
+)
+@api_view(["POST"])
+def activate_account(request, version):
+    invalid = Response(
+        {"message": "Invalid or expired activation link"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+    token = request.data.get("token")
+    # An absent token is a malformed request, not a signature failure, so it
+    # is answered directly rather than routed through the except branch. The
+    # str() keeps any other JSON scalar on the BadSignature path.
+    if not token:
+        return invalid
+    try:
+        # SignatureExpired subclasses BadSignature, so an expired link and a
+        # tampered one land here together — the client is told the same thing
+        # either way and offered a resend.
+        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+    except BadSignature:
+        return invalid
+    user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
+    if not user:
+        return invalid
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+    # A full session, the same one login hands out, because the registrant's
+    # next step is the configuration form — which is authenticated. Following
+    # the link twice is therefore a harmless no-op.
+    return authenticated_response(user)
+
+
+@extend_schema(
+    request=ResendActivationSerializer,
+    responses={200: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Resend an activation email",
+)
+@api_view(["POST"])
+def resend_activation(request, version):
+    user = SystemUser.objects.filter(
+        email=request.data.get("email"), is_active=False, deleted_at=None
+    ).first()
+    if user:
+        send_activation_email(user)
+    # Always the same 200, whether or not anything was sent, so this cannot
+    # be used to work out which addresses are registered.
+    return Response(
+        {
+            "message": "If that account needs activating, an email is on its "
+            "way"
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(
+    request=ConfigureSerializer,
+    responses={200: UserSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Name the workspace and create its hierarchy root",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def configure_project(request, version):
+    user = request.user
+    if tenant_is_configured(user.tenant):
+        # Also the answer for a tenant-less operator account, which has no
+        # workspace to configure.
+        return Response(
+            {"message": "This workspace is already configured"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    serializer = ConfigureSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {
+                "message": validate_serializers_message(serializer.errors),
+                "details": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    validated = serializer.validated_data
+    # One transaction: a half-configured workspace — named user but no root,
+    # or a level with no unit at it — would read as unconfigured forever and
+    # leave a stray level behind on the retry.
+    with transaction.atomic():
+        user.first_name = validated["first_name"]
+        user.last_name = validated["last_name"]
+        user.save(update_fields=["first_name", "last_name"])
+        level_zero = Levels.objects.create(
+            name=validated["level_0_name"], level=0, tenant=user.tenant
+        )
+        Administration.objects.create(
+            parent=None,
+            level=level_zero,
+            name=validated["root_unit_name"],
+            tenant=user.tenant,
+        )
+    return Response(
+        UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )
 
 
@@ -326,7 +621,9 @@ def set_user_password(request, version):
 )
 @api_view(["GET"])
 def list_administration(request, version, administration_id):
-    instance = get_object_or_404(Administration, pk=administration_id)
+    instance = get_object_or_404(
+        Administration.objects.for_user(request.user), pk=administration_id
+    )
     filter = request.GET.get("filter")
     max_level = request.GET.get("max_level")
     filter_children = request.GET.getlist("filter_children")
@@ -350,10 +647,16 @@ def list_administration(request, version, administration_id):
 )
 @api_view(["GET"])
 def list_levels(request, version):
-    return Response(
-        ListLevelSerializer(instance=Levels.objects.all(), many=True).data,
+    response = Response(
+        ListLevelSerializer(
+            instance=Levels.objects.for_user(request.user), many=True
+        ).data,
         status=status.HTTP_200_OK,
     )
+    # Levels are per-tenant and fetched at runtime now, so a cached copy
+    # would follow one tenant's tiers into another's session.
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 @extend_schema(
@@ -381,7 +684,7 @@ def add_user(request, version):
     except Exception as e:
         # Handle unexpected validation errors
         error_message = str(e)
-        if hasattr(e, 'detail'):
+        if hasattr(e, "detail"):
             return Response(
                 {
                     "message": validate_serializers_message(e.detail),
@@ -390,10 +693,7 @@ def add_user(request, version):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(
-            {
-                "message": error_message,
-                "details": {"error": error_message}
-            },
+            {"message": error_message, "details": {"error": error_message}},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -492,9 +792,7 @@ def list_users(request, version):
             role__role_role_feature_access__access=(
                 FeatureAccessTypes.invite_user
             ),
-        ).order_by(
-            "administration__level__level"
-        )
+        ).order_by("administration__level__level")
         if not filter_adm and user_adm_queryset.exists():
             # Handle multiple user roles - collect accessible administrations
             all_accessible_adm_ids = set()
@@ -503,9 +801,11 @@ def list_users(request, version):
                 # Add the administration itself
                 all_accessible_adm_ids.add(adm.id)
                 # Add all descendants of this administration
-                filter_path = "{0}{1}.".format(
-                    adm.path, adm.id
-                ) if adm.path else f"{adm.id}."
+                filter_path = (
+                    "{0}{1}.".format(adm.path, adm.id)
+                    if adm.path
+                    else f"{adm.id}."
+                )
                 descendants = Administration.objects.filter(
                     path__startswith=filter_path
                 ).values_list("id", flat=True)
@@ -517,9 +817,11 @@ def list_users(request, version):
             )
         elif filter_adm:
             # Handle single administration filter (when explicitly specified)
-            filter_path = "{0}{1}.".format(
-                filter_adm.path, filter_adm.id
-            ) if filter_adm.path else f"{filter_adm.id}."
+            filter_path = (
+                "{0}{1}.".format(filter_adm.path, filter_adm.id)
+                if filter_adm.path
+                else f"{filter_adm.id}."
+            )
             filter_descendants = list(
                 Administration.objects.filter(
                     path__startswith=filter_path
@@ -556,7 +858,9 @@ def list_users(request, version):
     page_size = REST_FRAMEWORK.get("PAGE_SIZE")
     the_past = timezone.now() - datetime.timedelta(days=10 * 365)
     # also filter soft deletes
-    queryset = SystemUser.objects.filter(deleted_at=None, **filter_data)
+    queryset = SystemUser.objects.for_user(request.user).filter(
+        deleted_at=None, **filter_data
+    )
     # filter by email or fullname
     if serializer.validated_data.get("search"):
         search = serializer.validated_data.get("search")
@@ -568,9 +872,11 @@ def list_users(request, version):
         )
     # First get unique IDs to avoid duplicates from joins
     # But make sure to include current user's ID
-    user_ids = list(queryset.exclude(**exclude_data)
-                    .values_list('id', flat=True)
-                    .distinct())
+    user_ids = list(
+        queryset.exclude(**exclude_data)
+        .values_list("id", flat=True)
+        .distinct()
+    )
 
     # Then query again with the distinct IDs
     queryset = (
@@ -595,8 +901,14 @@ def list_users(request, version):
     summary="Get list of roles",
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_user_roles(request, version):
-    roles = Role.objects.order_by("administration_level__level").all()
+    # A role belongs to its level's tenant. Unscoped, this offered every
+    # workspace's roles — and without permission_classes DRF's AllowAny
+    # default served them to callers with no credential at all.
+    roles = Role.objects.for_user(request.user).order_by(
+        "administration_level__level"
+    )
     data = RoleOptionSerializer(
         instance=roles,
         many=True,
@@ -614,11 +926,14 @@ class UserEditDeleteView(APIView):
         summary="To get user details",
     )
     def get(self, request, user_id, version):
-        instance = get_object_or_404(SystemUser, pk=user_id, deleted_at=None)
+        instance = get_object_or_404(
+            SystemUser.objects.for_user(request.user),
+            pk=user_id,
+            deleted_at=None,
+        )
         return Response(
             UserDetailSerializer(
-                instance=instance,
-                context={"user": request.user}
+                instance=instance, context={"user": request.user}
             ).data,
             status=status.HTTP_200_OK,
         )
@@ -632,7 +947,9 @@ class UserEditDeleteView(APIView):
     )
     def delete(self, request, user_id, version):
         login_user = SystemUser.objects.get(email=request.user)
-        instance = get_object_or_404(SystemUser, pk=user_id)
+        instance = get_object_or_404(
+            SystemUser.objects.for_user(request.user), pk=user_id
+        )
         # prevent self deletion
         if login_user.id == instance.id:
             return Response(
@@ -650,7 +967,11 @@ class UserEditDeleteView(APIView):
         summary="To update user",
     )
     def put(self, request, user_id, version):
-        instance = get_object_or_404(SystemUser, pk=user_id, deleted_at=None)
+        instance = get_object_or_404(
+            SystemUser.objects.for_user(request.user),
+            pk=user_id,
+            deleted_at=None,
+        )
         serializer = AddEditUserSerializer(
             data=request.data,
             context={"user": request.user},
@@ -729,9 +1050,12 @@ def list_organisations(request, version):
     attributes = request.GET.get("attributes")
     search = request.GET.get("search")
 
-    instance = Organisation.objects.prefetch_related(
-        'organisation_organisation_attribute'
-    ).annotate(user_count=Count('user_organisation')).all()
+    instance = (
+        Organisation.objects.for_user(request.user)
+        .prefetch_related("organisation_organisation_attribute")
+        .annotate(user_count=Count("user_organisation"))
+        .all()
+    )
 
     if id:
         instance = instance.filter(pk=id)
@@ -739,9 +1063,7 @@ def list_organisations(request, version):
         ids = OrganisationAttribute.objects.filter(type=attributes).distinct(
             "organisation_id"
         )
-        instance = instance.filter(
-            pk__in=[o.organisation_id for o in ids]
-        )
+        instance = instance.filter(pk__in=[o.organisation_id for o in ids])
     if search and not id:
         instance = instance.filter(name__icontains=search)
 
@@ -763,7 +1085,10 @@ def list_organisations(request, version):
 def add_organisation(request, version):
     serializer = AddEditOrganisationSerializer(
         data=request.data,
-        context={"attributes": request.data.get("attributes")},
+        context={
+            "attributes": request.data.get("attributes"),
+            "user": request.user,
+        },
     )
     if not serializer.is_valid():
         return Response(
@@ -787,10 +1112,10 @@ class OrganisationEditDeleteView(APIView):
     )
     def get(self, request, organisation_id, version):
         instance = get_object_or_404(
-            Organisation.objects.annotate(
-                user_count=Count('user_organisation')
+            Organisation.objects.for_user(request.user).annotate(
+                user_count=Count("user_organisation")
             ),
-            pk=organisation_id
+            pk=organisation_id,
         )
         return Response(
             OrganisationListSerializer(instance=instance).data,
@@ -805,7 +1130,9 @@ class OrganisationEditDeleteView(APIView):
         summary="To delete organisation",
     )
     def delete(self, request, organisation_id, version):
-        instance = get_object_or_404(Organisation, pk=organisation_id)
+        instance = get_object_or_404(
+            Organisation.objects.for_user(request.user), pk=organisation_id
+        )
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -820,10 +1147,15 @@ class OrganisationEditDeleteView(APIView):
         summary="To update organisation",
     )
     def put(self, request, organisation_id, version):
-        instance = get_object_or_404(Organisation, pk=organisation_id)
+        instance = get_object_or_404(
+            Organisation.objects.for_user(request.user), pk=organisation_id
+        )
         serializer = AddEditOrganisationSerializer(
             data=request.data,
-            context={"attributes": request.data.get("attributes")},
+            context={
+                "attributes": request.data.get("attributes"),
+                "user": request.user,
+            },
             instance=instance,
         )
         if not serializer.is_valid():
@@ -895,6 +1227,5 @@ def update_profile(request, version):
         )
     user = serializer.save()
     return Response(
-        UserSerializer(instance=user).data,
-        status=status.HTTP_200_OK
+        UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )

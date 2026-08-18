@@ -55,7 +55,28 @@ Object {
       "en": "English",
     },
   },
-  "levels": undefined,
+  "levels": Array [
+    Object {
+      "id": 1,
+      "level": 0,
+      "name": "National",
+    },
+    Object {
+      "id": 2,
+      "level": 1,
+      "name": "County",
+    },
+    Object {
+      "id": 3,
+      "level": 2,
+      "name": "Sub-County",
+    },
+    Object {
+      "id": 4,
+      "level": 3,
+      "name": "Ward",
+    },
+  ],
   "loadingForm": false,
   "loadingMap": false,
   "masterData": Object {
@@ -73,6 +94,9 @@ Object {
   "selectedFormData": null,
   "showAdvancedFilters": false,
   "showContactFormModal": false,
+  "tenant": null,
+  "tenantLoaded": false,
+  "tenantMissing": false,
   "user": null,
 }
 `;

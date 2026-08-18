@@ -3,7 +3,8 @@ from typing import cast
 from wsgiref.util import FileWrapper
 from django.contrib.admin.sites import site
 from django.core.handlers.wsgi import WSGIRequest
-from django.db.models import ProtectedError, Q
+from django.db import IntegrityError, transaction
+from django.db.models import Max, ProtectedError, Q
 from django.contrib.admin.utils import get_deleted_objects
 from django.http.response import HttpResponse
 from django.conf import settings
@@ -14,7 +15,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 from rest_framework.request import Request
-from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
+from rest_framework.viewsets import ModelViewSet
 from api.v1.v1_profile.models import (
     Administration,
     AdministrationAttribute,
@@ -30,6 +31,7 @@ from api.v1.v1_profile.serializers import (
     EntitySerializer,
     DownloadAdministrationRequestSerializer,
     DownloadEntityDataRequestSerializer,
+    LevelSerializer,
     ListEntityDataSerializer,
     RoleSerializer,
     RoleDetailSerializer,
@@ -47,11 +49,15 @@ from utils.custom_pagination import Pagination
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework import serializers, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from utils.email_helper import send_email, EmailTypes
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.custom_generator import administration_csv_delete
 from utils.custom_permissions import IsSuperAdmin
+from utils.bulk_upload_gate import (
+    bulk_upload_ready,
+    bulk_upload_not_ready_response,
+)
 
 
 @extend_schema(
@@ -95,7 +101,7 @@ def send_feedback(request, version):
 )
 @api_view(["GET"])
 def list_entity_data(request, version, entity_id, administration_id):
-    instance = EntityData.objects.filter(
+    instance = EntityData.objects.for_user(request.user).filter(
         entity__id=entity_id, administration__id=administration_id
     ).all()
     return Response(
@@ -111,7 +117,9 @@ class AdministrationViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = Administration.objects.select_related(
+        queryset = Administration.objects.for_user(
+            self.request.user
+        ).select_related(
             'level'
         ).prefetch_related(
             'parent_administration',
@@ -187,37 +195,16 @@ class AdministrationViewSet(ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(tags=["Public"])
-class PublicAdministrationViewSet(ReadOnlyModelViewSet):
-    serializer_class = AdministrationSerializer
-    permission_classes = [AllowAny]
-    pagination_class = None
-
-    def get_queryset(self):
-        queryset = Administration.objects.select_related(
-            'level'
-        ).prefetch_related(
-            'parent_administration',
-        ).all()
-
-        parent_id = self.request.query_params.get("parent")
-        if parent_id:
-            queryset = queryset.filter(parent_id=parent_id)
-
-        return queryset.order_by("id")
-
-    def get_serializer(self, *args, **kwargs):
-        if self.action == "list":
-            kwargs.update({"compact": True})
-        return super().get_serializer(*args, **kwargs)
-
-
 @extend_schema(tags=["Administration"])
 class AdministrationAttributeViewSet(ModelViewSet):
-    queryset = AdministrationAttribute.objects.order_by("id").all()
     serializer_class = AdministrationAttributeSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = None
+
+    def get_queryset(self):
+        return AdministrationAttribute.objects.for_user(
+            self.request.user
+        ).order_by("id")
 
 
 @extend_schema(tags=["Entities"])
@@ -227,7 +214,7 @@ class EntityViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = Entity.objects.all()
+        queryset = Entity.objects.for_user(self.request.user)
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(name__icontains=search)
@@ -241,7 +228,9 @@ class EntityDataViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = EntityData.objects.select_related(
+        queryset = EntityData.objects.for_user(
+            self.request.user
+        ).select_related(
             "administration", "entity"
         ).all()
         search = self.request.query_params.get("search")
@@ -308,6 +297,8 @@ class EntityDataViewSet(ModelViewSet):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_administrations_template(request: Request, version):
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     attributes = clean_array_param(
         request.query_params.get("attributes", ""), maybe_int
     )
@@ -436,6 +427,11 @@ def export_entity_data(request: Request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_entities_data_template(request: Request, version):
+    # Before the payload check: the entities template carries the same
+    # level columns, so an undefined hierarchy makes it as empty as the
+    # administration one regardless of which entity types were asked for.
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     serializer = DownloadEntityDataRequestSerializer(data=request.GET)
     if not serializer.is_valid():
         return Response(
@@ -495,7 +491,9 @@ def export_pre_entities_data_template(request: Request, version):
     adm_id = request.query_params.get("adm_id")
     administration = None
     if adm_id:
-        administration = Administration.objects.get(pk=adm_id)
+        administration = Administration.objects.for_user(
+            request.user
+        ).filter(pk=adm_id).first()
     TESTING = settings.TEST_ENV
     filepath = generate_entities_data_excel(
         cast(SystemUser, request.user),
@@ -517,6 +515,103 @@ def export_pre_entities_data_template(request: Request, version):
         return response
 
 
+@extend_schema(tags=["Levels"])
+class LevelViewSet(ModelViewSet):
+    """Tenant-scoped hierarchy depth management.
+
+    A tenant's depth is set once during onboarding, so the shape of this
+    viewset is deliberately narrow: append a tier, rename any tier, remove
+    the deepest one. Arbitrary insertion or reordering would mean
+    re-pathing every administrative unit beneath, which the spec rejects as
+    disproportionate.
+    """
+
+    serializer_class = LevelSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    # A handful of tiers in strict depth order — paging them (the project
+    # default is LimitOffsetPagination) would only make the screen walk
+    # pages to render one table.
+    pagination_class = None
+
+    def get_queryset(self):
+        return Levels.objects.for_user(self.request.user).order_by("level")
+
+    def _deepest_level(self):
+        return Levels.objects.for_user(self.request.user).aggregate(
+            m=Max("level")
+        )["m"]
+
+    def _units_below_root(self):
+        """Has the tenant built units under its root yet?
+
+        Once it has, changing the depth would strand or re-path them, so
+        add and delete freeze. A count of exactly 1 is the root alone.
+        Rename ignores this gate — naming a tier moves nothing.
+        """
+        return Administration.objects.for_user(self.request.user).count() > 1
+
+    def _rejected(self, message):
+        return Response(
+            {"message": message}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    def create(self, request, *args, **kwargs):
+        if self._units_below_root():
+            return self._rejected(
+                "Levels cannot be added once administrative units exist"
+            )
+        try:
+            # The savepoint is not optional: an IntegrityError caught
+            # without one leaves the connection unusable for the rest of
+            # the transaction, so the 400 below could not be built if a
+            # transaction were ever open around the request.
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            # perform_create reads the current maximum and writes max + 1
+            # without a lock, so two requests in flight together both pick
+            # the same depth and the loser trips unique_level_per_tenant.
+            # Locking the table for a screen a tenant uses once during
+            # onboarding would be the wrong trade; telling the caller to
+            # look again is enough.
+            return self._rejected(
+                "Another level was added at the same time; reload and retry"
+            )
+
+    def perform_create(self, serializer):
+        # Append at the tenant's max + 1; a tenant with no levels starts at 0.
+        current_max = self._deepest_level()
+        serializer.save(
+            tenant=self.request.user.tenant,
+            level=0 if current_max is None else current_max + 1,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        # get_object() resolves through get_queryset, so another tenant's
+        # level is a 404 rather than a rejection that confirms it exists.
+        level = self.get_object()
+        if level.level != self._deepest_level():
+            return self._rejected("Only the deepest level can be removed")
+        if self._units_below_root():
+            return self._rejected(
+                "Levels cannot be removed once administrative units exist"
+            )
+        # With the two gates above passed, the only unit that can still sit
+        # at this level is the root at level 0 — this is what stops a tenant
+        # from deleting the last tier out from under its own root.
+        if Administration.objects.for_user(request.user).filter(
+            level=level
+        ).exists():
+            return self._rejected("This level still has administrative units")
+        # Role.administration_level cascades, so deleting the level would
+        # take the role, its access rows and every user assignment with it.
+        if Role.objects.filter(administration_level=level).exists():
+            return self._rejected(
+                "This level is in use by one or more roles; remove them first"
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
 @extend_schema(tags=["Roles"])
 class RoleViewSet(ModelViewSet):
     serializer_class = RoleSerializer
@@ -524,7 +619,9 @@ class RoleViewSet(ModelViewSet):
     pagination_class = Pagination
 
     def get_queryset(self):
-        queryset = Role.objects.order_by("administration_level__level")
+        queryset = Role.objects.for_user(self.request.user).order_by(
+            "administration_level__level"
+        )
         search = self.request.query_params.get("search")
         if search:
             queryset = queryset.filter(name__icontains=search)
