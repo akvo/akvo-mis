@@ -78,11 +78,15 @@ BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 # Self-service signup. On by default, because that is what the SaaS
 # deployment needs and what the registration test suite assumes; a
 # dedicated single-customer deployment turns it off by environment, the
-# same way it leaves BASE_DOMAIN unset. Defaulting off instead would fail
-# the inherited tests on any branch that carries them, and fixing that
-# would mean editing an upstream test file — divergence in a file main
-# keeps touching.
-ALLOW_REGISTRATION = environ.get(
+# same way it leaves BASE_DOMAIN unset.
+#
+# Forced on under `test` whatever the environment says, for the same
+# reason BASE_DOMAIN is forced off there: a developer working on a
+# deployment that disables registration has ALLOW_REGISTRATION=false in
+# their .env, and without this the whole registration suite would 403 on
+# their machine and pass in CI. The one suite that wants it off asks for
+# that with override_settings, which is how these tests read anyway.
+ALLOW_REGISTRATION = True if TESTING else environ.get(
     "ALLOW_REGISTRATION", "true"
 ).lower() == "true"
 
