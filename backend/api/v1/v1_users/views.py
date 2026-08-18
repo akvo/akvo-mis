@@ -350,6 +350,14 @@ def tenant_info(request, version):
 )
 @api_view(["POST"])
 def register(request, version):
+    if not settings.ALLOW_REGISTRATION:
+        # 403 rather than 404: "not allowed here" is true, while "no such
+        # endpoint" would be a lie the frontend cannot tell apart from a
+        # routing bug.
+        return Response(
+            {"message": "Registration is not available on this deployment"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     serializer = RegisterSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
