@@ -75,6 +75,17 @@ TESTING = sys.argv[1:2] == ["test"]
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
+# Self-service signup. On by default, because that is what the SaaS
+# deployment needs and what the registration test suite assumes; a
+# dedicated single-customer deployment turns it off by environment, the
+# same way it leaves BASE_DOMAIN unset. Defaulting off instead would fail
+# the inherited tests on any branch that carries them, and fixing that
+# would mean editing an upstream test file — divergence in a file main
+# keeps touching.
+ALLOW_REGISTRATION = environ.get(
+    "ALLOW_REGISTRATION", "true"
+).lower() == "true"
+
 
 ALLOWED_HOSTS = ["*"]
 
