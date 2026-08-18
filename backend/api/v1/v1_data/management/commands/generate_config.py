@@ -4,6 +4,7 @@ from django.core.management import BaseCommand
 from jsmin import jsmin
 
 from mis.settings import (
+    ALLOW_REGISTRATION,
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
@@ -81,6 +82,10 @@ class Command(BaseCommand):
                         # tenant-info answers 204 in both cases, so the
                         # app cannot tell them apart without this.
                         "baseDomain": BASE_DOMAIN,
+                        # Off on a dedicated single-customer deployment,
+                        # which is how the login page knows not to offer a
+                        # sign-up its backend would refuse anyway.
+                        "allowRegistration": ALLOW_REGISTRATION,
                     }),
                     ";",
                     "var roleFeatures=",
