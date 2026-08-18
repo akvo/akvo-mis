@@ -23,6 +23,7 @@ services:
       - STORAGE_PATH
       - SENTRY_DSN
       - BASE_DOMAIN
+      - ALLOW_REGISTRATION
     depends_on:
       - db
   worker:
