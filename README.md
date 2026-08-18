@@ -231,6 +231,43 @@ docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d
 
 Network config: [nginx](https://github.com/akvo/akvo-mis/blob/main/frontend/nginx/conf.d/default.conf)
 
+### Dedicated Tenant Deployment (UNICEF FSM)
+
+This branch deploys one customer at `https://unicef-fsm.akvotest.org`, while
+the multi-tenant SaaS build of `main` runs separately at
+`https://mis.akvotest.org`. Three things follow, and the third is the one
+that bites.
+
+**Run single-host: leave `BASE_DOMAIN` unset.** With no base domain,
+`is_base_domain()` answers true for every host, so `TenantMiddleware`
+resolves no tenant, never returns its "workspace not found" 404, and never
+enforces the host/session match. The `Host` header stops mattering, and
+activation and invite links keep pointing at `WEBDOMAIN` unchanged. No DNS
+change is needed to run the multi-tenant code this way.
+
+**Set `ALLOW_REGISTRATION=false`.** It defaults to on, which is right for
+the SaaS install and wrong here: a dedicated deployment's one workspace
+already exists, so an open `/register` only lets strangers create tenants
+and accounts in this customer's database. The deployment runs on GKE via
+`ci/deploy.sh` into `unicef-fsm-namespace`, so `deploy/app.env.template`
+covers the self-hosted Compose path only and does *not* reach the cluster —
+the variable has to be added to the backend Deployment manifest.
+
+> **Confirm the manifest location.** The `akvo-config` checkout used while
+> preparing this branch was from 2026-06-29 and contained no `unicef-fsm`
+> directory (it did contain `mohhs-mis`). That is either staleness or a
+> deployment that does not exist yet. Check against a current checkout
+> before assuming where this variable belongs.
+
+**Never set `BASE_DOMAIN` on this deployment.** `unicef-fsm.akvotest.org`
+is a *sibling* of `mis.akvotest.org` under `akvotest.org`, not a subdomain
+of it. Copying `BASE_DOMAIN=mis.akvotest.org` across from the SaaS config
+means the host no longer ends in `.mis.akvotest.org`, so
+`resolve_tenant_from_host` returns `None` while `is_base_domain` returns
+`False` — and the middleware 404s every request except `health/check` and
+`config.js`. The site goes dark while the readiness probe stays green,
+which is the worst possible way to fail.
+
 
 ## Dashboard Visualizations
 
