@@ -45,23 +45,18 @@ sequenceDiagram
     FE->>U: Render markdown response with primary brand accents
 ```
 
-### URL → Feature Context Map (Backend)
+### URL → Feature Context (Backend)
 
-A simple dict in the backend translates `pathname` prefixes to friendly context strings injected into the system prompt:
+The backend **derives** a human-readable context label directly from the URL path segments — no hardcoded map needed. New pages are automatically covered as long as their route follows the standard kebab-case naming convention already used in [App.js](/frontend/src/App.js).
 
-| URL prefix | Context label |
-|------------|--------------|
-| `/form-builder` | "Form Builder" |
-| `/manage-data` | "Data Management" |
-| `/approvals` | "Approval Workflow" |
-| `/master-data` | "Master Data Management" |
-| `/users` or `/add-user` | "User Management" |
-| `/roles` or `/add-role` | "Roles & Permissions" |
-| `/dashboard` | "Dashboard" |
-| `/mobile-assignment` | "Mobile Assignment" |
-| `/downloads` | "Downloads & Exports" |
-| `/settings` | "Settings" |
-| *(anything else)* | "General Platform" |
+| URL example | Derived context label |
+|-------------|----------------------|
+| `/control-center/form-builder/42/edit` | `Form Builder — Edit` |
+| `/control-center/master-data/administration` | `Master Data — Administration` |
+| `/control-center/approvals` | `Approvals` |
+| `/control-center/users/add` | `Users — Add` |
+| `/control-center/mobile-assignment` | `Mobile Assignment` |
+| `/data` | `General Platform` |
 
 ---
 
@@ -210,7 +205,7 @@ data: {"thread_id": "thread_abc123", "done": true}
 ### Backend Logic Flow
 
 1. Validate JWT → `request.user` (tenant-scoped via existing middleware)
-2. Map `page_url` → context label via `URL_CONTEXT_MAP`
+2. Derive `context_label` from `page_url` via `get_page_context()` (no hardcoded map)
 3. Create or reuse OpenAI thread (`thread_id` from request)
 4. **Inject page context into the user message** (see full explanation below)
 5. Run the Assistant with `vector_store_id` file-search tool attached
@@ -221,37 +216,57 @@ data: {"thread_id": "thread_abc123", "done": true}
 > [!IMPORTANT]
 > This is the core mechanism that makes the chatbot context-aware. It requires no changes to OpenAI's API — the page context is prepended to the user's message on the **backend** before it is sent to the thread.
 
-#### Mechanism: Message Augmentation (Backend)
+#### Mechanism: Dynamic URL Derivation
+
+Instead of a hardcoded `URL_CONTEXT_MAP` dict (which would need manual updates every time a new page is added to [App.js](/frontend/src/App.js)), the backend **derives** the context label from the URL path segments themselves.
+
+The function lives in a dedicated utility module `backend/api/v1/v1_chatbot/utils.py`:
+
+```python
+# backend/api/v1/v1_chatbot/utils.py
+import re
+
+
+def get_page_context(page_url: str) -> str:
+    """
+    Derive a human-readable page label from a URL path.
+    No hardcoded map — new routes are covered automatically.
+
+    Examples:
+        '/control-center/form-builder/42/edit' → 'Form Builder — Edit'
+        '/control-center/master-data/administration' → 'Master Data — Administration'
+        '/control-center/approvals' → 'Approvals'
+        '/data' → 'General Platform'
+    """
+    # Strip query string and trailing slash
+    path = page_url.split("?")[0].rstrip("/")
+
+    # Drop known container prefix segments
+    path = re.sub(r"^/(control-center|data)", "", path).lstrip("/")
+
+    # Drop dynamic path parameter segments (pure integers or UUID-shaped strings)
+    segments = [
+        s for s in path.split("/")
+        if s
+        and not re.match(r"^\d+$", s)
+        and not re.match(r"^[0-9a-f-]{36}$", s)
+    ]
+
+    # Titlecase each segment (kebab-case → Title Words)
+    label_parts = [s.replace("-", " ").title() for s in segments]
+
+    return " — ".join(label_parts) if label_parts else "General Platform"
+```
 
 When the frontend sends `{ "message": "What is the Add button?", "page_url": "/control-center/form-builder/123/edit" }`, the backend:
 
-1. Maps `/control-center/form-builder/*` → `"Form Builder — Edit Form"`
+1. Calls `get_page_context("/control-center/form-builder/123/edit")` → `"Form Builder — Edit"`
 2. **Prepends** this context label to the user's message before adding it to the OpenAI thread:
 
 ```python
-# views.py
-URL_CONTEXT_MAP = {
-    "/form-builder": "Form Builder",
-    "/manage-data":  "Data Management",
-    "/approvals":    "Approval Workflow",
-    "/master-data":  "Master Data Management",
-    "/users":        "User Management",
-    "/add-user":     "User Management",
-    "/roles":        "Roles & Permissions",
-    "/add-role":     "Roles & Permissions",
-    "/dashboard":    "Dashboard",
-    "/mobile-assignment": "Mobile Assignment",
-    "/downloads":    "Downloads & Exports",
-    "/settings":     "Settings",
-}
+# In the view (views.py):
+from .utils import get_page_context
 
-def get_page_context(page_url: str) -> str:
-    for prefix, label in URL_CONTEXT_MAP.items():
-        if prefix in page_url:
-            return label
-    return "General Platform"
-
-# In the view:
 context_label = get_page_context(page_url)
 augmented_message = (
     f"[Context: User is on the '{context_label}' page]\n\n"
@@ -528,7 +543,7 @@ react-markdown   # render bot responses as Markdown
 ### TAC-1 — Backend API
 - [ ] `POST /api/v1/chatbot/message/` requires a valid JWT and returns `401` without one.
 - [ ] The endpoint validates required fields (`message`, `page_url`); returns `400` for missing/empty `message`.
-- [ ] The URL context map covers all 10 platform page prefixes defined in the spec.
+- [ ] `get_page_context()` correctly derives labels from representative URLs (see TAC-5 tests).
 - [ ] OpenAI thread IDs are correctly created on first message and reused on subsequent messages in the same session.
 
 ### TAC-2 — Knowledge Base Ingestion
@@ -551,9 +566,10 @@ react-markdown   # render bot responses as Markdown
 
 ### TAC-5 — Code Quality
 - [ ] All new backend code passes existing `flake8` linting rules.
-- [ ] At minimum 3 unit tests are present for the `v1_chatbot` module:
+- [ ] At minimum 4 unit tests are present for the `v1_chatbot` module:
   - `test_chatbot_requires_auth`
-  - `test_chatbot_url_context_map`
+  - `test_chatbot_get_page_context_segments` — assert dynamic derivation for known URL shapes
+  - `test_chatbot_get_page_context_fallback` — assert `"General Platform"` for unrecognised paths
   - `test_chatbot_serializer_validation`
 - [ ] No new environment variables are hard-coded in source code; all use `environ.get(...)`.
 
@@ -574,6 +590,7 @@ react-markdown   # render bot responses as Markdown
 | `docs/md/` | Generated Markdown KB files (gitignored or committed) |
 | `backend/api/v1/v1_chatbot/__init__.py` | App init |
 | `backend/api/v1/v1_chatbot/apps.py` | AppConfig |
+| `backend/api/v1/v1_chatbot/utils.py` | `get_page_context()` — dynamic URL-segment context derivation |
 | `backend/api/v1/v1_chatbot/views.py` | `ChatMessageView` with SSE streaming |
 | `backend/api/v1/v1_chatbot/serializers.py` | `ChatRequestSerializer` |
 | `backend/api/v1/v1_chatbot/urls.py` | URL patterns |
@@ -611,18 +628,19 @@ react-markdown   # render bot responses as Markdown
 | 3 | Run script, verify in OpenAI dashboard, add env vars | 0.5h | Manual verification only |
 | **Backend** | | | |
 | 4 | Create Django app `v1_chatbot`, wire settings + urls | 0.5h | Boilerplate, AI scaffolds |
-| 5 | `ChatMessageView`: JWT auth, URL context map, message augmentation | 1h | Core logic, AI generates |
-| 6 | OpenAI thread + JSON response (polling, no SSE for now) | 1h | Simpler than SSE; fast to ship |
-| 7 | Backend tests: auth, context map, serializer | 0.5h | AI writes tests from spec |
+| 5 | `utils.py`: `get_page_context()` + unit tests (4 cases) | 0.5h | Pure function, AI generates + verifies |
+| 6 | `ChatMessageView`: JWT auth, `get_page_context`, message augmentation | 0.75h | Core logic, AI generates |
+| 7 | OpenAI thread + JSON response (polling, no SSE for now) | 1h | Simpler than SSE; fast to ship |
+| 8 | Backend tests: auth, serializer validation | 0.25h | AI writes tests from spec |
 | **Frontend** | | | |
-| 8 | `ChatbotWidget.jsx` — FAB + collapsible panel with tenant brand | 1h | AI generates styled component |
-| 9 | `ChatbotMessages.jsx` + `ChatbotInput.jsx` + Markdown render | 1h | AI generates |
-| 10 | URL context chip + `sessionStorage` thread persistence | 0.5h | Simple React hook |
-| 11 | `chatbot.scss` with CSS variable tenant overrides | 0.5h | AI styles from description |
-| 12 | Mount `<ChatbotWidget />` in `App.js` (auth guard only) | 0.25h | One-line change |
+| 9 | `ChatbotWidget.jsx` — FAB + collapsible panel with tenant brand | 1h | AI generates styled component |
+| 10 | `ChatbotMessages.jsx` + `ChatbotInput.jsx` + Markdown render | 1h | AI generates |
+| 11 | URL context chip + `sessionStorage` thread persistence | 0.5h | Simple React hook |
+| 12 | `chatbot.scss` with CSS variable tenant overrides | 0.5h | AI styles from description |
+| 13 | Mount `<ChatbotWidget />` in `App.js` (auth guard only) | 0.25h | One-line change |
 | **Ship** | | | |
-| 13 | End-to-end manual test (5 UAC scenarios) | 1h | Human-driven vibe test |
-| 14 | `.env.example` + docker-compose updates | 0.25h | Copy-paste + verify |
-| **Total** | | **~8h (1 day)** | |
+| 14 | End-to-end manual test (5 UAC scenarios) | 1h | Human-driven vibe test |
+| 15 | `.env.example` + docker-compose updates | 0.25h | Copy-paste + verify |
+| **Total** | | **~9h (1 day)** | |
 
 > **Development complexity: Low-Medium.** Using AI pair coding, most boilerplate (Django app scaffold, React widget shell, test stubs) is generated in minutes. The main human effort is reviewing AI output, wiring components together, and manual testing. Upgrade to SSE streaming can be done in a follow-up sprint if needed.
