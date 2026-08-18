@@ -268,6 +268,38 @@ docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d
 
 Network config: [nginx](https://github.com/akvo/akvo-mis/blob/main/frontend/nginx/conf.d/default.conf)
 
+### Dedicated Tenant Deployment (MoHHS / RMI)
+
+This branch deploys one customer at `https://mohhs-mis.akvotest.org`, while
+the multi-tenant SaaS build of `main` runs separately at
+`https://mis.akvotest.org`. Three things follow, and the third is the one
+that bites.
+
+**Run single-host: leave `BASE_DOMAIN` unset.** With no base domain,
+`is_base_domain()` answers true for every host, so `TenantMiddleware`
+resolves no tenant, never returns its "workspace not found" 404, and never
+enforces the host/session match. The `Host` header stops mattering, and
+activation and invite links keep pointing at `WEBDOMAIN` unchanged. No DNS
+change is needed to run the multi-tenant code this way.
+
+**Set `ALLOW_REGISTRATION=false`.** It defaults to on, which is right for
+the SaaS install and wrong here: a dedicated deployment's one workspace
+already exists, so an open `/register` only lets strangers create tenants
+and accounts in this customer's database. The deployment runs on GKE via
+`ci/deploy.sh`, so the variable belongs in `8-deployment-backend.yml` in
+the `akvo-config` repo, beside `PROD`. Adding it to
+`deploy/app.env.template` covers the self-hosted Compose path but does
+*not* reach the live cluster.
+
+**Never set `BASE_DOMAIN` on this deployment.** `mohhs-mis.akvotest.org`
+is a *sibling* of `mis.akvotest.org` under `akvotest.org`, not a subdomain
+of it. Copying `BASE_DOMAIN=mis.akvotest.org` across from the SaaS config
+means the host no longer ends in `.mis.akvotest.org`, so
+`resolve_tenant_from_host` returns `None` while `is_base_domain` returns
+`False` — and the middleware 404s every request except `health/check` and
+`config.js`. The site goes dark while the readiness probe stays green,
+which is the worst possible way to fail.
+
 
 ## Dashboard Visualizations
 
