@@ -43,6 +43,10 @@ from api.v1.v1_forms.functions import (
     validate_form_definition,
     validate_form_payload,
 )
+from api.v1.v1_forms.services.xlsform_export import (
+    generate_xlsform,
+    generate_administration_csv,
+)
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.serializers import (
     FormPublishedVersionSerializer,
@@ -89,7 +93,8 @@ def _form_detail_from_snapshot(form, pv):
             .values_list("question_id", flat=True)
             .distinct()
         )
-        if all_q_ids else set()
+        if all_q_ids
+        else set()
     )
     latest_pv = form.published_versions.order_by("-version").first()
 
@@ -128,25 +133,25 @@ def _form_detail_from_snapshot(form, pv):
             questions.append(
                 {k: v for k, v in q_dict.items() if v is not None}
             )
-        question_groups.append({
-            "id": g["id"],
-            "name": g.get("name"),
-            "label": g.get("label"),
-            "order": g.get("order"),
-            "repeatable": g.get("repeatable", False),
-            "repeat_text": g.get("repeat_text"),
-            "translations": g.get("translations"),
-            "question": questions,
-        })
+        question_groups.append(
+            {
+                "id": g["id"],
+                "name": g.get("name"),
+                "label": g.get("label"),
+                "order": g.get("order"),
+                "repeatable": g.get("repeatable", False),
+                "repeat_text": g.get("repeat_text"),
+                "translations": g.get("translations"),
+                "question": questions,
+            }
+        )
 
     return {
         "id": form.id,
         "name": schema.get("name", form.name),
         "description": schema.get("description"),
         "version": form.version,
-        "latest_version": (
-            latest_pv.version if latest_pv else form.version
-        ),
+        "latest_version": (latest_pv.version if latest_pv else form.version),
         "status": FormStatus.FieldStr.get(form.status, "draft"),
         "published_at": (
             form.published_at.isoformat() if form.published_at else None
@@ -274,10 +279,10 @@ def _to_editor_format(data):
 )
 @api_view(["GET"])
 def list_form(request, version):
-    instance = Forms.objects.filter(
+    instance = Forms.objects.for_user(request.user).filter(
         parent__isnull=True,
         status=FormStatus.published,
-    ).all()
+    )
     return Response(
         ListFormSerializer(instance=instance, many=True).data,
         status=status.HTTP_200_OK,
@@ -298,7 +303,7 @@ def list_form(request, version):
 @permission_classes([AllowAny])
 def list_published_forms(request, version):
     response = Response(
-        get_published_forms_payload(),
+        get_published_forms_payload(request.user),
         status=status.HTTP_200_OK,
     )
     response["Cache-Control"] = "no-cache"
@@ -313,22 +318,26 @@ def list_published_forms(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def web_form_details(request, version, form_id):
-    administration = Administration.objects.filter(
-        parent__isnull=True,
-    ).first()
+    administration = (
+        Administration.objects.for_user(request.user)
+        .filter(
+            parent__isnull=True,
+        )
+        .first()
+    )
     if not request.user.is_superuser:
         user_role = request.user.user_user_role.filter(
             role__role_role_access__data_access=DataAccessTypes.submit
         ).first()
         if user_role:
             administration = user_role.administration
-    instance = get_object_or_404(Forms, pk=form_id)
+    instance = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     # Include form.version in the cache key so that publishing, activating,
     # or editing a published form (which bumps the version) automatically
     # bypasses the stale cache entry without an explicit cache clear.
-    cache_name = (
-        f"webform-{form_id}-{administration.id}-v{instance.version}"
-    )
+    cache_name = f"webform-{form_id}-{administration.id}-v{instance.version}"
     cache_data = get_cache(cache_name)
     if cache_data:
         return Response(cache_data, content_type="application/json;")
@@ -346,7 +355,9 @@ def web_form_details(request, version, form_id):
 )
 @api_view(["GET"])
 def form_data(request, version, form_id):
-    instance = get_object_or_404(Forms, pk=form_id)
+    instance = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     cache_name = f"form-{form_id}-v{instance.version}"
     cache_data = get_cache(cache_name)
     if cache_data:
@@ -391,9 +402,11 @@ def form_approver(request, version):
         path__startswith=path,
     )
     ancestors = list(adm.ancestors.all()) if adm.ancestors else []
-    instance = ancestors + [
-        serializer.validated_data.get("administration_id")
-    ] + list(instance)
+    instance = (
+        ancestors
+        + [serializer.validated_data.get("administration_id")]
+        + list(instance)
+    )
     return Response(
         FormApproverResponseSerializer(
             instance=instance,
@@ -419,7 +432,7 @@ def form_approver(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def check_form_approver(request, form_id, version):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(Forms.objects.for_user(request.user), pk=form_id)
     # Super admins bypass approver check
     if request.user.is_superuser:
         return Response({"count": 1}, status=status.HTTP_200_OK)
@@ -471,7 +484,7 @@ def check_form_approver(request, form_id, version):
                     "When true, questions/groups removed from the payload are "
                     "soft-deleted (deleted_at set) instead of returning 400. "
                     "Required when answered questions need to be removed."
-                )
+                ),
             ),
         ],
         request=FormUpdateRequestSerializer,
@@ -488,8 +501,8 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         # archive/restore/destroy operate on archived (soft-deleted) rows,
         # which the default manager cannot see (D-9, D-10).
         if self.action in ("archive", "restore", "destroy"):
-            return Forms.objects_with_deleted.all()
-        return Forms.objects.all()
+            return Forms.objects_with_deleted.for_user(self.request.user)
+        return Forms.objects.for_user(self.request.user)
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -518,7 +531,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         status_param = params.get("status")
 
         base = Forms.objects_deleted if archived else Forms.objects
-        qs = base.all()
+        qs = base.for_user(request.user)
         if status_param in self._STATUS_MAP:
             qs = qs.filter(status=self._STATUS_MAP[status_param])
 
@@ -621,6 +634,14 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_view),
             ],
+            "export_xlsform": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_view),
+            ],
+            "export_administration_csv": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_view),
+            ],
             "import_preflight": [
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_create),
@@ -649,7 +670,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         is_monitoring = req_type in (FormTypes.monitoring, "monitoring")
         if is_monitoring and parent_id:
             try:
-                parent = Forms.objects.get(id=parent_id)
+                parent = Forms.objects.for_user(request.user).get(id=parent_id)
             except Forms.DoesNotExist:
                 return Response(
                     {"parent": "Parent form not found"},
@@ -793,15 +814,12 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         form.deleted_at = None
         form.status = FormStatus.draft
         form.save(update_fields=["deleted_at", "status"])
-        return Response(
-            {"id": form.id, "status": "draft", "deleted_at": None}
-        )
+        return Response({"id": form.id, "status": "draft", "deleted_at": None})
 
     @extend_schema(
         tags=["Manage Forms"],
         summary=(
-            "Publish / re-publish form — "
-            "make available for data collection"
+            "Publish / re-publish form — " "make available for data collection"
         ),
         request=None,
         description=(
@@ -839,8 +857,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Manage Forms"],
         summary=(
-            "Unpublish form — "
-            "hide from data collection, allow corrections"
+            "Unpublish form — " "hide from data collection, allow corrections"
         ),
         request=None,
         description=(
@@ -947,10 +964,71 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         payload = export_form_definition(form)
         slug = re.sub(r"[^a-z0-9]+", "-", form.name.lower()).strip("-")
         from django.utils import timezone as tz
+
         date_str = tz.now().strftime("%Y%m%d")
         filename = f"form-{form.id}-{slug}-{date_str}.json"
         body = json.dumps(payload, ensure_ascii=False, indent=2)
         resp = HttpResponse(body, content_type="application/json")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Export form definition as XLSForm Excel workbook (FB-14)",
+        responses={
+            (
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # noqa
+            ): OpenApiTypes.BINARY
+        },
+    )
+    @action(detail=True, methods=["get"], url_path="export-xlsform")
+    def export_xlsform(self, request, *args, **kwargs):
+        form = self.get_object()
+        target_form = form
+        if form.status == FormStatus.published:
+            pv = (
+                form.active_version
+                or form.published_versions.order_by("-version").first()
+            )
+            if pv:
+                target_form = _form_detail_from_snapshot(form, pv)
+
+        stream, skipped = generate_xlsform(target_form)
+        slug = re.sub(r"[^a-z0-9]+", "-", form.name.lower()).strip("-")
+        filename = f"form-{form.id}-{slug}.xlsx"
+        resp = HttpResponse(
+            stream.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # noqa
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Access-Control-Expose-Headers"] = (
+            "Content-Disposition, X-XLSForm-Skipped"
+        )
+        if skipped:
+            resp["X-XLSForm-Skipped"] = ", ".join(skipped)
+        return resp
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Export administration cascade lookup CSV for form (FB-014)",
+        responses={(200, "text/csv"): OpenApiTypes.BINARY},
+    )
+    @action(detail=True, methods=["get"], url_path="administration-csv")
+    def export_administration_csv(self, request, *args, **kwargs):
+        form = self.get_object()
+        target_form = form
+        if form.status == FormStatus.published:
+            pv = (
+                form.active_version
+                or form.published_versions.order_by("-version").first()
+            )
+            if pv:
+                target_form = _form_detail_from_snapshot(form, pv)
+
+        csv_str = generate_administration_csv(target_form, request.user)
+        filename = "administration.csv"
+        resp = HttpResponse(csv_str, content_type="text/csv")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
 
@@ -999,11 +1077,17 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         file_form_id = norm.get("form_id")
         match_info = {"exists": False, "form": None, "name_mismatch": False}
         if file_form_id is not None:
-            existing = Forms.objects.filter(id=file_form_id).first()
+            existing = (
+                Forms.objects.for_user(request.user)
+                .filter(id=file_form_id)
+                .first()
+            )
             if existing:
-                submission_count = existing.form_data.count() if hasattr(
-                    existing, "form_data"
-                ) else 0
+                submission_count = (
+                    existing.form_data.count()
+                    if hasattr(existing, "form_data")
+                    else 0
+                )
                 match_info = {
                     "exists": True,
                     "form": {
@@ -1013,12 +1097,11 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                         "submission_count": submission_count,
                         "updated": (
                             existing.updated.isoformat()
-                            if existing.updated else None
+                            if existing.updated
+                            else None
                         ),
                     },
-                    "name_mismatch": (
-                        existing.name != norm.get("name")
-                    ),
+                    "name_mismatch": (existing.name != norm.get("name")),
                 }
 
         # Parent resolution info
@@ -1026,7 +1109,11 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         parent_hint = norm.get("parent_hint")
         resolved_parent = None
         if is_monitoring and parent_hint and parent_hint.get("id"):
-            p = Forms.objects.filter(id=parent_hint["id"]).first()
+            p = (
+                Forms.objects.for_user(request.user)
+                .filter(id=parent_hint["id"])
+                .first()
+            )
             if p:
                 resolved_parent = {"id": p.id, "name": p.name}
 
@@ -1051,9 +1138,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 "parent": parent_info,
             },
             status=(
-                status.HTTP_200_OK
-                if is_valid
-                else status.HTTP_400_BAD_REQUEST
+                status.HTTP_200_OK if is_valid else status.HTTP_400_BAD_REQUEST
             ),
         )
 
@@ -1125,7 +1210,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         if (
             mode == "create_or_update"
             and file_form_id is not None
-            and Forms.objects.filter(id=file_form_id).exists()
+            and Forms.objects.for_user(request.user)
+            .filter(id=file_form_id)
+            .exists()
         ):
             edit_perm = FormBuilderAccess(FeatureAccessTypes.form_edit)()
             if not edit_perm.has_permission(request, self):

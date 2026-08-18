@@ -64,7 +64,9 @@ from api.v1.v1_files.serializers import (
     AttachmentsSerializer,
 )
 from api.v1.v1_profile.constants import DataAccessTypes
-from api.v1.v1_profile.models import Administration
+from api.v1.v1_profile.models import Administration, Entity, EntityData
+from api.v1.v1_users.models import Organisation
+from utils.custom_generator import generate_sqlite, sqlite_path
 from api.v1.v1_files.functions import handle_upload
 from utils.custom_helper import CustomPasscode
 from utils.default_serializers import DefaultResponseSerializer
@@ -137,8 +139,10 @@ def get_mobile_forms(request, version):
 @api_view(["GET"])
 @permission_classes([IsMobileAssignment])
 def get_mobile_form_details(request: Request, version, form_id):
-    instance = get_object_or_404(Forms, pk=form_id)
     assignment = cast(MobileAssignmentToken, request.auth).assignment
+    instance = get_object_or_404(
+        Forms.objects.for_user(assignment.user), pk=form_id
+    )
     data = WebFormDetailSerializer(
         instance=instance,
         context={
@@ -190,8 +194,11 @@ def sync_pending_form_data(request, version):
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
-    form = get_object_or_404(Forms, pk=request.data.get("formId"))
     assignment = cast(MobileAssignmentToken, request.auth).assignment
+    form = get_object_or_404(
+        Forms.objects.for_user(assignment.user),
+        pk=request.data.get("formId"),
+    )
     user = assignment.user
     administration = assignment.administrations.order_by(
         "level__level"
@@ -307,25 +314,41 @@ def sync_pending_form_data(request, version):
     )
 
 
+# The device asks for a logical table name; the tenant it resolves to comes
+# from its own token, never from the URL. Mapping the name to a model rather
+# than joining it onto a path also retires the traversal that the old raw
+# os.path.join(file_name) allowed.
+MASTER_DATA_MODELS = {
+    "administrator": Administration,
+    "organisation": Organisation,
+    "entities": Entity,
+    "entity_data": EntityData,
+}
+
+
 @extend_schema(tags=["Mobile Device Form"], summary="Get SQLITE File")
 @api_view(["GET"])
+@permission_classes([IsMobileAssignment])
 def download_sqlite_file(request, version, file_name):
-    file_path = os.path.join(BASE_DIR, MASTER_DATA, f"{file_name}")
-
-    # Make sure the file exists and is accessible
-    if not os.path.exists(file_path):
-        return HttpResponse(
+    model = MASTER_DATA_MODELS.get(file_name[: -len(".sqlite")])
+    if not file_name.endswith(".sqlite") or model is None:
+        return Response(
             {"message": "File not found."}, status=status.HTTP_404_NOT_FOUND
         )
 
-    # Get the file's content type
-    content_type, _ = mimetypes.guess_type(file_path)
+    assignment = cast(MobileAssignmentToken, request.auth).assignment
+    tenant = assignment.user.tenant
+    file_path = sqlite_path(model, tenant=tenant)
+    # Generated lazily: a tenant that registered after the last run of the
+    # generate_sqlite command has no file yet, and a device asking for it is
+    # exactly the moment we know it is needed.
+    if not os.path.exists(file_path):
+        generate_sqlite(model, tenant=tenant)
 
-    # Read the file content into a variable
+    content_type, _ = mimetypes.guess_type(file_path)
     with open(file_path, "rb") as file:
         file_content = file.read()
 
-    # Create the response and set the appropriate headers
     response = HttpResponse(file_content, content_type=content_type)
     response["Content-Length"] = os.path.getsize(file_path)
     response["Content-Disposition"] = "attachment; filename=%s" % file_name
@@ -567,12 +590,12 @@ class MobileAssignmentViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         search = getattr(self, "_validated_search", None)
-        mobile_users = MobileAssignment.objects.prefetch_related(
-            "administrations", "forms"
-        ).filter(user=user)
+        mobile_users = MobileAssignment.objects.for_user(
+            user
+        ).prefetch_related("administrations", "forms").filter(user=user)
         adm_q = Q()
         if user.is_superuser:
-            adm = Administration.objects.filter(
+            adm = Administration.objects.for_user(user).filter(
                 parent__isnull=True
             ).first()
             adm_q = Q(
@@ -586,7 +609,9 @@ class MobileAssignmentViewSet(ModelViewSet):
                 if adm.path else f"{adm.id}."
             adm_q |= Q(administrations__path__startswith=path)
         if adm_q:
-            descendant_users = MobileAssignment.objects.prefetch_related(
+            descendant_users = MobileAssignment.objects.for_user(
+                user
+            ).prefetch_related(
                 "administrations", "forms"
             ).filter(adm_q)
             mobile_users |= descendant_users
@@ -633,13 +658,16 @@ class MobileAssignmentViewSet(ModelViewSet):
 @permission_classes([IsAuthenticated])
 def get_forms_tree(request, version):
     """Returns published forms in tree structure for assignment UI."""
-    registration_forms = Forms.objects.filter(
+    # Both the outer query and the children prefetch go through for_user:
+    # scoping only the parents would still surface another tenant's
+    # monitoring forms under a same-named registration form.
+    registration_forms = Forms.objects.for_user(request.user).filter(
         parent__isnull=True,
         status=FormStatus.published
     ).prefetch_related(
         Prefetch(
             "children",
-            queryset=Forms.objects.filter(
+            queryset=Forms.objects.for_user(request.user).filter(
                 status=FormStatus.published
             ).order_by("name")
         )
@@ -722,7 +750,7 @@ def get_datapoint_download_list(request, version):
             administration__path__startswith=admin["path"]
         )
     # Combine both queries with the form filter
-    queryset = FormData.objects.filter(
+    queryset = FormData.objects.for_user(assignment.user).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
     )
     if assignment.last_synced_at:
@@ -779,6 +807,6 @@ class DraftFormDataViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.auth.assignment.user
-        return FormData.objects_draft.filter(
+        return FormData.objects_draft.for_user(user).filter(
             created_by=user
         ).order_by("-created")

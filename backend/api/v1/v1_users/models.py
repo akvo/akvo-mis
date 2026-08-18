@@ -5,19 +5,30 @@ from django.core import signing
 from django.db import models
 from django.utils import timezone
 from utils.soft_deletes_model import SoftDeletes
+from utils.tenant_scoped_model import TenantManager
+from utils.tenant_model import tenant_fk
 
 # Create your models here.
 from utils.custom_manager import UserManager
 
 
 class Organisation(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
+    name = models.CharField(max_length=255)
+    tenant = tenant_fk("organisations")
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "organisation"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="unique_organisation_name_per_tenant",
+            )
+        ]
 
 
 class OrganisationAttribute(models.Model):
@@ -36,18 +47,50 @@ class OrganisationAttribute(models.Model):
         db_table = "organisation_attribute"
 
 
+class Tenant(models.Model):
+    # Free-tier registration creates one Tenant per sign-up. Only the
+    # subdomain is stored for now; tenant scoping of data and subdomain
+    # routing are future work — this table is the anchor they hang off.
+    subdomain = models.CharField(max_length=63, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.subdomain
+
+    class Meta:
+        db_table = "tenant"
+
+
 class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
+    TENANT_PATH = "tenant"
     email = models.EmailField(max_length=254, unique=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
     phone_number = models.CharField(max_length=15, default=None, null=True)
     trained = models.BooleanField(default=False)
+    # Email verification. AbstractBaseUser already defines `is_active = True`
+    # as a plain class attribute, so ModelBackend, simplejwt's get_user and
+    # IsMobileAssignment have all been consulting it and always getting True.
+    # Overriding it with a real column makes those three checks meaningful at
+    # once. The default keeps every existing row, the seeders, createsuperuser
+    # and invited users active; only registrants start inactive, until they
+    # follow the activation link.
+    is_active = models.BooleanField(default=True)
     updated = models.DateTimeField(default=None, null=True)
     organisation = models.ForeignKey(
         to=Organisation,
         on_delete=models.SET_NULL,
         related_name="user_organisation",
+        default=None,
+        null=True,
+    )
+    tenant = models.ForeignKey(
+        to=Tenant,
+        # PROTECT: deleting a tenant that still owns users must be an
+        # explicit future decision, not a silent cascade.
+        on_delete=models.PROTECT,
+        related_name="users",
         default=None,
         null=True,
     )

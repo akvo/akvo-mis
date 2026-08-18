@@ -62,6 +62,13 @@ class LoginUserTestCase(TestCase):
                 "is_superuser",
                 "administration",
                 "id",
+                # Drives the frontend's routing gate: an unconfigured
+                # workspace goes to the configuration form, not the
+                # dashboard.
+                "configured",
+                # The address this session belongs to, so the app can
+                # send a user who landed on the wrong host to their own.
+                "subdomain",
                 "token",
                 "invite",
                 "expiration_time",
@@ -125,3 +132,18 @@ class LoginUserTestCase(TestCase):
             user_response.json()["message"],
             "Invalid login credentials"
         )
+
+
+@override_settings(USE_TZ=False, TESTING=False)
+class LoginAutoCreateDisabledTestCase(TestCase):
+    def test_login_on_empty_database_creates_no_user(self):
+        # Outside test runs (TESTING=False) a fresh instance must not
+        # conjure the legacy admin@akvo.org account — registration is
+        # the only way accounts come into being.
+        response = self.client.post(
+            "/api/v1/login",
+            {"email": "admin@akvo.org", "password": "Test105*"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(SystemUser.objects.count(), 0)

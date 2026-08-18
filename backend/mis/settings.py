@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
+import sys
 from datetime import timedelta
 from os import environ
 from pathlib import Path
@@ -55,6 +56,24 @@ SECRET_KEY = environ["DJANGO_SECRET"]
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True if "DEBUG" in environ else False
 PROD = True if "PROD" in environ else False
+# True only when running under `manage.py test`. Used to keep legacy
+# test-only conveniences (the admin@akvo.org auto-create on login) out of
+# production code paths, and — since this iteration — to hold host
+# routing off for the suite. Matched positionally, so a stray "test"
+# argument to some other command cannot switch it on. Defined up here
+# because BASE_DOMAIN below now depends on it.
+TESTING = sys.argv[1:2] == ["test"]
+
+# Host-based tenant routing. Unset means single-host: every host is the
+# base domain, nothing resolves to a tenant, and the routing is inert —
+# which is how the test suite and any non-SaaS deployment run.
+#
+# Forced off under `test` whatever the environment says. The Django test
+# client's host is "testserver", which is nobody's base domain, so a
+# BASE_DOMAIN inherited from a developer's .env would 404 the entire
+# suite. The tests that exercise host routing opt back in with
+# override_settings, which is how they read anyway.
+BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
 
 ALLOWED_HOSTS = ["*"]
@@ -103,6 +122,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "middleware.tenant.TenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "middleware.user_activity.UserActivity",
@@ -245,7 +265,19 @@ FORM_IMPORT_MAX_FILE_SIZE = int(
 BUCKET_NAME = "mis"
 FAKE_STORAGE = False
 
-EMAIL_BACKEND = "django_mailjet.backends.MailjetBackend"
+# Mailjet everywhere by default; local development overrides EMAIL_BACKEND to
+# Django's SMTP backend and points it at the Mailpit container, which accepts
+# any message and shows it in a web inbox. Registration is the reason this
+# matters: the activation link is the only way to finish signing up, so a
+# developer with no mail provider could not exercise the flow at all.
+EMAIL_BACKEND = environ.get(
+    "EMAIL_BACKEND", "django_mailjet.backends.MailjetBackend"
+)
+# Only consulted when EMAIL_BACKEND is an SMTP one; Mailjet ignores them.
+# The defaults are the local Mailpit container, so the compose override only
+# has to switch the backend.
+EMAIL_HOST = environ.get("EMAIL_HOST", "mailpit")
+EMAIL_PORT = int(environ.get("EMAIL_PORT", 1025))
 MAILJET_API_KEY = environ["MAILJET_APIKEY"]
 MAILJET_API_SECRET = environ["MAILJET_SECRET"]
 EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")

@@ -17,6 +17,7 @@ class JobTypes:
     download_entities = 6
     download_datapoint_report = 7
     import_form = 8
+    seed_administration_data = 9
 
     FieldStr = {
         send_email: "send_email",
@@ -27,6 +28,7 @@ class JobTypes:
         download_entities: "download_entities",
         download_datapoint_report: "download_datapoint_report",
         import_form: "import_form",
+        seed_administration_data: "seed_administration_data",
     }
 
 

@@ -104,12 +104,30 @@ const AddUser = () => {
           setIsModalVisible(true);
           setModalContent(err?.response?.data?.message);
         } else {
-          notify({
-            type: "error",
-            message:
-              err?.response?.data?.message ||
-              `User could not be ${id ? "updated" : "added"}`,
-          });
+          const details = err?.response?.data?.details || {};
+          if (details.email) {
+            form.setFields([
+              {
+                name: "email",
+                errors: Array.isArray(details.email)
+                  ? details.email
+                  : [details.email],
+              },
+            ]);
+            notify({
+              type: "error",
+              message:
+                err?.response?.data?.message ||
+                `User could not be ${id ? "updated" : "added"}`,
+            });
+          } else {
+            notify({
+              type: "error",
+              message:
+                err?.response?.data?.message ||
+                `User could not be ${id ? "updated" : "added"}`,
+            });
+          }
         }
         setSubmitting(false);
       });
