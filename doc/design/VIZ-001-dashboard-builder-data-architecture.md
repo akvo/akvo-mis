@@ -89,6 +89,8 @@ the same change that removes the Fiji code.
       defaulting to the former
 - [ ] They can set dashboard-level default filters (monitoring period,
       administration) that apply to every widget
+- [ ] Every widget on a dashboard draws from the same form family — the
+      chosen registration form and its monitoring children, and nothing else
 - [ ] They can preview a draft, publish it, and unpublish it
 - [ ] Other users in the same tenant see published dashboards only
 - [ ] No dashboard from another tenant is ever visible or reachable
@@ -103,6 +105,10 @@ the same change that removes the Fiji code.
       is scoped to the caller's tenant
 - [ ] Widget config validates against form/question membership and the four
       aggregatable question types before save
+- [ ] A widget naming a form outside the dashboard's family is rejected, and
+      `root_form` cannot be changed after create (D-3)
+- [ ] Every chart is an `akvo-charts` component; no direct `echarts` import
+      remains under `components/dashboard/` (D-10)
 - [ ] A widget whose question was soft-deleted degrades to a visible broken
       state; it never fails the whole dashboard
 - [ ] The form builder warns before soft-deleting a question referenced by a
@@ -316,6 +322,19 @@ fact. Here it is a first-class checkbox — *"include sites with no data yet"*.
 
 ### 4.3 Per-type `config`
 
+Every chart is rendered by an `akvo-charts` component (D-10). The mapping is
+fixed, and no widget type may reach for anything else:
+
+| Widget | `akvo-charts` component | Notes |
+|---|---|---|
+| `kpi` | *(none)* | A styled number; no chart involved |
+| `bar` | `Bar`, or `StackBar` when `stack_by` is set | `config.horizontal` for `orientation` |
+| `line` | `Line`, or `StackLine` when `stack_by` is set | |
+| `pie` | `Pie`, or `Doughnut` when `variant: doughnut` | |
+| `map` | `MapCluster` | Leaflet-based, in the same package |
+| `table` | *(none)* | Ant Design `Table` — `akvo-charts` has no table |
+| `section_title` | *(none)* | |
+
 **`kpi`** → `GET /visualization/values`
 
 ```jsonc
@@ -411,7 +430,8 @@ Enforced on save, so an invalid dashboard cannot be persisted:
 | Rule | Error |
 |---|---|
 | `root_form.type == registration` and `root_form.parent is None` | 400 |
-| `widget.form` is `root_form` or has `parent == root_form` | 400 |
+| `root_form` is immutable after create (D-3) | 400 |
+| `widget.form` is `root_form` or has `parent == root_form` — no form outside the family, ever (D-3) | 400 |
 | `widget.question.form == widget.form` | 400 |
 | `widget.question.type ∈ {number, option, multiple_option, date}` | 400 |
 | `measure == current_state` only when `widget.form` is a monitoring form | 400 |
@@ -655,22 +675,30 @@ the field to a table is additive.
 
 ---
 
-### D-3: One registration form family per dashboard
+### D-3: One form family per dashboard — cross-form is not allowed
 
-**Options**: (1) Bound to one root registration form. (2) Any form per
-widget. (3) Bound now, schema shaped for cross-form later.
+**Options**: (1) Bound to one root registration form and its monitoring
+children. (2) Any form per widget.
 
-**Decision**: Option 1, with `form` living on the widget row (so option 3
-comes free — lifting the restriction is a validation change in §4.5, not a
-migration).
+**Decision**: Option 1. **A dashboard's data universe is exactly one form
+family: one registration form plus the monitoring forms whose `parent` is
+that form. A widget may not reference a form outside its dashboard's family,
+and this is a permanent restriction, not a deferral.**
 
 **Rationale**: Dashboard-level date and administration filters are only
-coherent when widgets share a data universe. `sum_by=parent_id` and
-`monitoring=latest` only mean something relative to a known registration
-form. Both legacy configs are bound this way in practice.
+coherent when every widget shares a data universe. `sum_by=parent_id` and
+`monitoring=latest` mean nothing except relative to a known registration
+form — `parent_id` *is* the registration datapoint. A widget pointing at an
+unrelated form would silently break both, and the numbers it produced would
+look fine. The family boundary is what makes every other guarantee in this
+design hold.
 
-**Impact**: A tenant wanting a cross-programme overview builds two
-dashboards.
+**Impact**: A tenant wanting a cross-programme overview builds one dashboard
+per family. `widget.form` still lives on the widget row because a family has
+more than one form in it — not as a hook for lifting the restriction later.
+`Dashboard.root_form` is the family key and is immutable after creation:
+changing it would orphan every widget. Re-pointing a dashboard at a
+different family means building a new one.
 
 ---
 
@@ -758,6 +786,33 @@ exceptional.
 
 ---
 
+### D-10: akvo-charts is the only charting library
+
+**Decision**: Every chart a dashboard renders comes from `akvo-charts`
+(`npm install --save akvo-charts`, already a dependency at `^1.3.4`). No
+direct `echarts` / `echarts-for-react` import, and no new chart component
+written in this repo.
+
+**Rationale**: `akvo-charts` is Akvo's own ECharts wrapper, maintained
+alongside the platform, and it already covers every widget type in §4.3 that
+is a chart. Demo and full component reference:
+<https://akvo.github.io/akvo-charts>. The legacy dashboard drifted the other
+way — `DotStripChart` and `DotsChart` are bespoke ECharts components, and
+`ChartRenderer` reaches past the wrapper to `setOption` for tooltips, pie
+label hiding and half-doughnut angles. Tenant-authored dashboards multiply
+that surface by the number of tenants, so it is capped now: anything a widget
+needs that the wrapper cannot express is a `rawConfig` prop or an upstream
+`akvo-charts` change, not a local escape hatch.
+
+**Impact**: `pie` uses `Pie`; `pie` with `variant: doughnut` uses `Doughnut`;
+`bar` uses `Bar`, or `StackBar` when `stack_by` is set; `line` uses `Line`,
+or `StackLine` when `stack_by` is set; `map` uses `MapCluster`. `akvo-charts`
+has **no table primitive**, so the `table` widget stays on Ant Design's
+`Table` — that is the one chart-shaped widget the library does not own, and
+it is not a chart.
+
+---
+
 ## 8. Scope: keep, delete, defer
 
 | Area | Disposition |
@@ -769,7 +824,8 @@ exceptional.
 | `/visualization/progress` + `progress_functions.py` | **Defer** (D-6) |
 | `frontend/src/config/visualizations/` | **Delete** — replaced by DB rows |
 | `DashboardRenderer`, `ChartRenderer`, widget components | **Keep**, re-pointed at the new schema |
-| `DotStripChart`, compliance / water-quality thresholds | **Delete** — Fiji domain logic |
+| `DotStripChart`, `DotsChart`, compliance / water-quality thresholds | **Delete** — Fiji domain logic, and bespoke ECharts components (D-10) |
+| Direct `echarts` / `echarts-for-react` imports under `components/dashboard/` | **Delete** — every chart comes from `akvo-charts` (D-10) |
 | `formula.py` | **Keep** — a generic, Django-free bucket evaluator that classifies a datapoint by conditions; it is what the `map` widget's status colouring should be built on |
 | `compute:` modes (`cross_tab`, `kpi_stack`, `accessibility_bucket`) | **Delete** |
 | `custom_component` + `individual-overview/` | **Delete** |
@@ -800,9 +856,6 @@ Neither is expressible against a JSON blob without a JSONB scan.
       tenant — a sequential `form_id` in a payload must not cross tenants
 - [ ] `/visualization/*` endpoints validate `form_id` against the caller's
       tenant, closing the `/progress/1`, `/2`, `/3` enumeration
-- [ ] AI suggestion (§12) is off by default per workspace and sends form
-      definitions only — no `Answers`, no `FormData`, no administration names,
-      no user identities. What was sent is logged by reference, not by value
 - [ ] Five granular `FeatureAccessTypes`, mirroring FB-001 D-8:
 
 | Action | Permission |
@@ -837,262 +890,54 @@ pass untouched apart from the added auth.
 
 ## 11. Implementation Slices
 
-| Slice | Content |
-|---|---|
-| VIZ-002 | Models, migrations, constants, permissions |
-| VIZ-003 | `/manage/dashboards` CRUD + validation + `/sources` |
-| VIZ-004 | Auth + tenant scoping on `/visualization/*`; delete the Fiji layer |
-| VIZ-005 | Builder UI — list, canvas, palette, inspector |
-| VIZ-006 | Viewer — renderer re-pointed at `published_config`, filter bar |
-| VIZ-007 | AI-assisted suggestion (§12) — additive, after the builder ships |
+Four phases. Within a phase the backend and frontend tasks run **in
+parallel** against the contract frozen in §6; phases are the only
+synchronisation points. Full task breakdown, acceptance criteria and the
+mockup mapping: one design doc per task, `doc/design/VIZ-002-*.md` …
+`doc/design/VIZ-009-*.md`.
+
+| Phase | Backend | Frontend |
+|---|---|---|
+| 1. Foundation | `VIZ-002-dashboard-data-model`<br/>`VIZ-003-visualization-endpoint-hardening` | `VIZ-004-dashboard-list-and-create` |
+| 2. Authoring | `VIZ-005-dashboard-crud-api` | `VIZ-006-dashboard-builder-ui` |
+| 3. Publish & render | `VIZ-007-dashboard-publish-and-read-api` | `VIZ-008-dashboard-viewer` |
+| 4. Cleanup | `VIZ-009-legacy-dashboard-removal` (full-stack) | |
+
+**VIZ-003 is gated on nothing** and closes the CLEANUP-001 vulnerability, so it
+merges first. **VIZ-009 comes last** so the legacy dashboard keeps working
+until its replacement has shipped.
+
+**The epic ends at VIZ-009**, with a working tenant-authored dashboard
+builder. AI-assisted dashboard generation is a separate, unscheduled epic —
+`doc/design/VIZ-AI-001-ai-dashboard-suggestion.md` — designed against this
+document's §4 schema but depended on by nothing in VIZ-002 … VIZ-009.
 
 ---
 
-## 12. AI-Assisted Dashboard Generation
-
-An additive capability, not part of the core builder: send a form's definition
-to Claude and get back a proposed widget array, which the tenant then reviews
-and edits in the builder. Sequenced last (VIZ-007) because it produces §4
-config objects and therefore cannot be designed before that schema is settled.
-
-### 12.1 Why it earns its place
-
-The builder has a cold-start problem. A tenant who has just published their
-first form opens an empty canvas and a vocabulary they have never seen —
-`measure`, `group_by`, `stack_by`, `include_unmonitored`. The blank page is
-the hard part; editing a draft someone else roughed out is easy.
-
-It also **solves the template portability problem** (§13.1). A copied template
-can't bind to another tenant's questions, because question IDs are
-tenant-local. A suggestion generated *from this tenant's own form definition*
-binds to their real question IDs by construction. This is a better answer to
-"start from a template" than templates are.
-
-### 12.2 What is sent, and what is not
-
-**Sent** — a compacted definition of the form family, nothing else:
-
-```jsonc
-{
-  "root_form": {
-    "id": 1749623934933, "name": "Water Points", "type": "registration",
-    "questions": [
-      {"id": 1749623934940, "label": "Water source type", "type": "option",
-       "options": ["borehole", "spring", "piped"]}
-    ]
-  },
-  "monitoring_forms": [
-    {
-      "id": 1749631041125, "name": "WP Monitoring",
-      "questions": [
-        {"id": 1749631041155, "label": "Operational status", "type": "option",
-         "options": ["operational", "issue", "not_functional"]},
-        {"id": 1749631041160, "label": "Date of visit", "type": "date"},
-        {"id": 1749631041170, "label": "Litres per minute", "type": "number",
-         "repeatable": true}
-      ]
-    }
-  ]
-}
-```
-
-**Not sent** — any `Answers` row, any `FormData`, any administration name, any
-user or submitter identity. The request carries form *structure*, not tenant
-*data*.
-
-**On sending values.** A dashboard's design depends on the *shape* of the
-data, not its content — which question is the status question, which numeric
-field is worth trending — and all of that is in the definition. Where values
-would genuinely help is narrower: knowing that only two of five options are
-ever used, or that a numeric field ranges 0–3 rather than 0–3000, would let
-the model pick better chart types and thresholds.
-
-That is an **aggregate profile**, not rows: per option question, the counts
-already returned by `/values?group_by=option`; per numeric question, min /
-median / max. It is derivable from the query engine we already have, contains
-no PII, and is still a data-egress decision an NGO customer must make
-deliberately. **Deferred out of v1**, behind the same per-workspace opt-in as
-§12.6. Raw answer rows are not sent at any tier.
-
-### 12.3 API
-
-| Method | URL | Purpose | Permission |
-|---|---|---|---|
-| POST | `/api/v1/manage/dashboards/suggest` | Propose a widget array for a form family | `dashboard_create` |
-
-```jsonc
-// Request
-{
-  "root_form": 1749623934933,
-  "intent": "Focus on which water points are currently broken and where."  // optional
-}
-
-// Response — nothing persisted
-{
-  "name": "Water Points Overview",
-  "description": "Current operational status across all registered sites",
-  "widgets": [ /* §4.1 shape, plus a per-widget `rationale` */ ],
-  "notes": ["Dropped 1 suggested widget: question 9912 is not on this form."]
-}
-```
-
-**The response is not persisted.** `suggest` is a pure function of its inputs
-— safe to call repeatedly, nothing to clean up if the tenant dislikes the
-result. The frontend drops the widgets onto the canvas as unsaved state; the
-tenant edits and saves through the normal `PUT`. A suggestion can therefore
-never reach a published dashboard without a human pressing publish.
-
-Each widget carries a one-line `rationale` ("counts sites whose latest visit
-reported a breakage") rendered beside it in the builder. The tenant is being
-asked to review, so the reasoning has to be visible.
-
-### 12.4 Getting valid JSON — and why that is not enough
-
-Use **structured outputs**: `output_config.format` with the widget-array JSON
-schema, which constrains generation so the response is guaranteed to parse and
-match the schema.
-
-```python
-from pydantic import BaseModel, ConfigDict
-from typing import Literal
-
-class KpiConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")   # → additionalProperties: false
-    measure: Literal["current_state", "all_submissions"]
-    option_value: str | None = None
-    value_type: Literal["number", "percentage"] = "number"
-    include_unmonitored: bool = False
-
-class SuggestedWidget(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    type: Literal["kpi", "bar", "line", "pie", "table", "map", "section_title"]
-    title: str
-    col_span: int
-    form: int | None = None
-    question: int | None = None
-    config: KpiConfig | BarConfig | PieConfig | TableConfig | MapConfig | TextConfig
-    rationale: str
-
-class SuggestedDashboard(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    name: str
-    description: str
-    widgets: list[SuggestedWidget]
-
-
-response = client.messages.parse(
-    model="claude-opus-5",
-    max_tokens=16000,
-    system=[{
-        "type": "text",
-        "text": DASHBOARD_DESIGN_GUIDE,           # stable across every request
-        "cache_control": {"type": "ephemeral"},
-    }],
-    messages=[{"role": "user", "content": [
-        {"type": "text", "text": form_definition_json,
-         "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": intent or "Suggest a general overview."},
-    ]}],
-    output_format=SuggestedDashboard,
-)
-
-if response.stop_reason == "refusal":
-    raise SuggestionUnavailable(response.stop_details)
-if response.stop_reason == "max_tokens":
-    raise SuggestionTruncated()          # retry with a larger budget
-suggestion = response.parsed_output      # a validated SuggestedDashboard
-```
-
-Three schema constraints shape the Pydantic models above:
-
-- **Every object needs `additionalProperties: false`** — hence
-  `extra="forbid"` on each model. Since widget `config` is heterogeneous per
-  type (§4.3), it is modelled as a union of closed per-type objects.
-- **Numeric bounds are not supported in-schema.** `col_span` cannot be
-  constrained to 1–24 by the schema; the Python SDK strips such constraints
-  and validates them client-side. Our own validators are the real gate.
-- **Keep the schema static.** A new schema pays a one-time compilation cost
-  and is then cached for 24 hours — so build it once at import, never
-  per-request from the tenant's form.
-
-**The schema guarantees shape, not truth. This is the important part.** A
-structurally perfect widget can still reference a question that does not
-exist, bind a `group_by: option` chart to a `number` question, or set
-`measure: current_state` on a registration form. Nothing in the JSON schema
-can catch any of that.
-
-So the suggestion output is fed through **exactly the same §4.5 validators as
-a hand-built dashboard** — same code path, no exemption. Widgets that fail are
-dropped and reported in `notes`; they are never silently accepted, and never
-half-repaired. The model proposes; the validators decide.
-
-### 12.5 Prompt caching
-
-The design guide — widget vocabulary, the `measure` semantics from §4.2, which
-question types suit which chart — is identical for every tenant and every
-request. Put it in `system` with a cache breakpoint; the form definition gets
-a second breakpoint so repeat suggestions on the same form read both.
-
-Rendering order is `tools` → `system` → `messages`, so the volatile part
-(`intent`) must come *after* the form definition in the user turn — otherwise
-it invalidates the cached prefix on every call.
-
-Two things that silently break this and are easy to do by accident:
-
-- Interpolating a timestamp, request ID, or tenant name into the system
-  prompt. The prefix then differs every request and nothing ever caches.
-- Serializing the form definition non-deterministically. Sort questions by id
-  and use `json.dumps(..., sort_keys=True)`, or two identical forms produce
-  two different byte strings.
-
-Claude Opus 5's minimum cacheable prefix is **512 tokens** (half of Opus 4.8's
-1024), so even a modest design guide qualifies. Verify with
-`usage.cache_read_input_tokens` — if it stays zero across repeated calls, one
-of the two invalidators above is present.
-
-### 12.6 Model, cost, and governance
-
-- **Model:** `claude-opus-5`. Thinking is on by default, and `max_tokens` caps
-  thinking *plus* output together — hence the generous 16000 above.
-- **Effort:** leave at the default `high` and sweep down. This is schema-bound
-  generation, not long-horizon agentic work, and Opus 5 is unusually strong at
-  `low`/`medium`; measure before paying for more.
-- **Credentials are platform-level.** Akvo's API key, not the tenant's. Cost
-  is a platform cost, so the endpoint needs a per-tenant rate limit.
-- **Per-workspace toggle, default off.** Question labels are tenant content
-  and can describe a programme, a population, or a location. Sending them to a
-  third-party API is a data-processing decision the customer makes, not one we
-  make on their behalf. Off by default; a workspace setting turns it on.
-- **Log the reference, not the payload.** Record form id and the question-id
-  list that was sent — enough to audit what left, without duplicating it.
-
----
-
-## 13. Open Questions
+## 12. Open Questions
 
 1. **Templates across tenants.** The mockup's "start from a template" flow
    cannot copy JSON between tenants, because `question_id`s are tenant-local.
    A template would need to describe widgets by question *role* and bind them
-   at instantiation. Out of v1 scope; noted so the schema is not assumed
-   portable. **§12 is the better answer** — a suggestion generated from the
-   tenant's own form definition binds to their real question IDs by
-   construction, so the portability problem never arises.
+   at instantiation. Out of scope, and so is the cold-start problem it was
+   reaching for: this epic ships a blank canvas. Noted so the schema is not
+   assumed portable. `VIZ-AI-001` is the better answer when it is built — a
+   suggestion generated from the tenant's own form definition binds to their
+   real question IDs by construction, so the portability problem never
+   arises.
 2. **Latest by answer date.** D-8 keeps submission date. A tenant doing
    retrospective data entry will eventually want "latest by the visit-date
    question". That is a change to `latest_monitoring_subquery`, not to this
    schema.
-3. **Cross-form dashboards.** D-3 defers this. `form` already lives on the
-   widget row, so lifting it is a validation change plus a decision about
-   what the global filters then mean.
-4. **Fiji migration.** The EPS and RWS dashboards are not migrated. Whether
+3. **Fiji migration.** The EPS and RWS dashboards are not migrated. Whether
    they are rebuilt in the builder, kept alive on a pinned deploy, or dropped
    is a product decision, not a technical one.
-5. **Export / embed.** Not in v1. Any future public-sharing feature must
+4. **Export / embed.** Not in v1. Any future public-sharing feature must
    carry its own token model rather than reopening anonymous access (D-7).
 
 ---
 
-## 14. References
+## 13. References
 
 - `doc/design/FB-001-form-builder-data-architecture.md` — the precedent this
   design follows
@@ -1104,3 +949,8 @@ of the two invalidators above is present.
   `get_base_monitoring_qs`, the latest-monitoring logic being preserved
 - `backend/api/v1/v1_visualization/constants.py` — `SUPPORTED_QUESTION_TYPES`
   and the valid `group_by` / `stack_by` / `repeat_agg` sets
+- `doc/design/VIZ-AI-001-ai-dashboard-suggestion.md` — AI-assisted dashboard
+  generation, a separate epic built on this document's §4 schema
+- <https://akvo.github.io/akvo-charts> — component demo, and
+  `frontend/node_modules/akvo-charts/README.md` for the full prop reference
+- `doc/design/VIZ-Example/index.html` — the interactive builder mockup
