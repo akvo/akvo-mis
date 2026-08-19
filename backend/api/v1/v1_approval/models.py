@@ -10,9 +10,15 @@ from api.v1.v1_profile.models import (
     DataAccessTypes,
 )
 from api.v1.v1_users.models import SystemUser
+from utils.tenant_scoped_model import TenantManager
 
 
 class DataBatch(models.Model):
+    # A batch belongs to the tenant that owns its form. Every endpoint here
+    # takes a batch id straight from the URL, so without this the ids are
+    # sequential and guessable across workspaces.
+    TENANT_PATH = "form__tenant"
+    objects = TenantManager()
     form = models.ForeignKey(
         to=Forms, on_delete=models.CASCADE, related_name="form_batch_data"
     )

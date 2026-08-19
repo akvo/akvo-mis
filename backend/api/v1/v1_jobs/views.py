@@ -40,6 +40,10 @@ from api.v1.v1_jobs.serializers import (
 )
 from api.v1.v1_profile.models import Administration
 from utils import storage
+from utils.bulk_upload_gate import (
+    bulk_upload_ready,
+    bulk_upload_not_ready_response,
+)
 from utils.custom_serializer_fields import validate_serializers_message
 
 
@@ -111,7 +115,9 @@ from utils.custom_serializer_fields import validate_serializers_message
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_generate(request, version):
-    serializer = DownloadDataRequestSerializer(data=request.GET)
+    serializer = DownloadDataRequestSerializer(
+        data=request.GET, context={"user": request.user}
+    )
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},
@@ -173,7 +179,9 @@ def download_generate(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_status(request, version, task_id):
-    job = get_object_or_404(Jobs, task_id=task_id)
+    job = get_object_or_404(
+        Jobs.objects.filter(user=request.user), task_id=task_id
+    )
     return Response(
         {"status": JobStatus.FieldStr.get(job.status)},
         status=status.HTTP_200_OK,
@@ -196,7 +204,9 @@ def download_status(request, version, task_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_file(request, version, file_name):
-    job = get_object_or_404(Jobs, result=file_name)
+    job = get_object_or_404(
+        Jobs.objects.filter(user=request.user), result=file_name
+    )
     type = request.GET.get("type") if request.GET.get("type") else "download"
     url = f"{type}/{job.result}"
     filepath = storage.download(url)
@@ -280,7 +290,9 @@ def download_list(request, version):
 @parser_classes([MultiPartParser])
 @permission_classes([IsAuthenticated])
 def upload_excel(request, form_id, version):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     serializer = UploadExcelSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -302,7 +314,7 @@ def upload_excel(request, form_id, version):
     form_name = re.sub(r"[\W_]+", "_", form.name)
     filename = f"{form_name}-{user_name}-{uuid}.xlsx"
     storage.upload(file=file_path, filename=filename, folder="upload")
-    adm = Administration.objects.filter(
+    adm = Administration.objects.for_user(request.user).filter(
         parent__isnull=True
     ).first()
     if (
@@ -350,6 +362,11 @@ def upload_excel(request, form_id, version):
 @parser_classes([MultiPartParser])
 @permission_classes([IsAuthenticated])
 def upload_bulk_administrators(request, version):
+    # Ahead of the file check: a file uploaded against an undefined
+    # hierarchy has nowhere to land, and refusing before the upload saves
+    # storing one.
+    if not bulk_upload_ready(request.user):
+        return bulk_upload_not_ready_response()
     serializer = UploadExcelSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -365,14 +382,27 @@ def upload_bulk_administrators(request, version):
     uuid = "_".join(str(uuid4()).split("-")[:-1])
     filename = f"administration-bulk-upload-{request.user.id}-{uuid}.xlsx"
     storage.upload(file=file_path, filename=filename, folder="upload")
+    # Recorded before the task is queued, so there is no window in which
+    # the worker is running against a job row that does not exist yet.
+    job = Jobs.objects.create(
+        type=JobTypes.seed_administration_data,
+        user=request.user,
+        status=JobStatus.pending,
+        info={"file": filename},
+    )
     task_id = async_task(
         "api.v1.v1_jobs.job.handle_administrations_bulk_upload",
         filename,
         request.user.id,
         timezone.now(),
+        job_id=job.id,
         task_name="administrator_bulk_upload",
         hook=("api.v1.v1_jobs.job." "handle_master_data_bulk_upload_failure"),
     )
+    # An UPDATE of this one column rather than job.save(): the worker may
+    # already have set the status, and saving a model loaded before the
+    # task was queued would write that stale value back over it.
+    Jobs.objects.filter(pk=job.pk).update(task_id=task_id)
     return Response(
         {
             "task_id": task_id,
@@ -468,7 +498,9 @@ def upload_bulk_entities(request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_data_report(request, version):
-    serializer = FormDataReportSerializer(data=request.GET)
+    serializer = FormDataReportSerializer(
+        data=request.GET, context={"user": request.user}
+    )
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},

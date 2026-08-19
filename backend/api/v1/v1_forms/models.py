@@ -11,11 +11,15 @@ from api.v1.v1_forms.constants import (
 )
 from api.v1.v1_users.models import SystemUser
 from utils.soft_deletes_model import SoftDeletes
+from utils.tenant_scoped_model import TenantManager
+from utils.tenant_model import tenant_fk
 
 
 class Forms(SoftDeletes):
+    TENANT_PATH = "tenant"
     name = models.TextField()
     description = models.TextField(default=None, null=True)
+    tenant = tenant_fk("forms")
     version = models.IntegerField(default=1)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     approval_instructions = models.JSONField(default=None, null=True)
@@ -81,6 +85,7 @@ class Forms(SoftDeletes):
 
 
 class QuestionGroup(SoftDeletes):
+    TENANT_PATH = "form__tenant"
     form = models.ForeignKey(
         to=Forms, on_delete=models.CASCADE, related_name="form_question_group"
     )
@@ -111,6 +116,7 @@ class QuestionGroup(SoftDeletes):
 
 
 class Questions(SoftDeletes):
+    TENANT_PATH = "form__tenant"
     form = models.ForeignKey(
         to=Forms, on_delete=models.CASCADE, related_name="form_questions"
     )
@@ -222,6 +228,8 @@ class QuestionOptions(models.Model):
 
 
 class UserForms(models.Model):
+    TENANT_PATH = "user__tenant"
+    objects = TenantManager()
     user = models.ForeignKey(
         to=SystemUser, on_delete=models.CASCADE, related_name="user_form"
     )

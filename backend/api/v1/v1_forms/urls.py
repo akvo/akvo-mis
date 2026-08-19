@@ -13,9 +13,7 @@ from api.v1.v1_forms.views import (
 
 urlpatterns = [
     # Existing read-only (unchanged)
-    re_path(
-        r"^(?P<version>(v1))/forms/published$", list_published_forms
-    ),
+    re_path(r"^(?P<version>(v1))/forms/published$", list_published_forms),
     re_path(r"^(?P<version>(v1))/forms$", list_form),
     re_path(r"^(?P<version>(v1))/form/(?P<form_id>[0-9]+)", form_data),
     re_path(
@@ -26,7 +24,6 @@ urlpatterns = [
         r"^(?P<version>(v1))/form/check-approver/(?P<form_id>[0-9]+)",
         check_form_approver,
     ),
-
     # Form Builder CRUD (sub-resource routes before generic)
     re_path(
         r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/publish$",
@@ -72,11 +69,18 @@ urlpatterns = [
         r"^(?P<version>(v1))/manage/forms$",
         FormBuilderViewSet.as_view({"get": "list", "post": "create"}),
     ),
-
-    # FB-007: Form Import/Export
+    # FB-007 & FB-014: Form Import/Export
     re_path(
         r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/export$",
         FormBuilderViewSet.as_view({"get": "export_definition"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/export-xlsform$",
+        FormBuilderViewSet.as_view({"get": "export_xlsform"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/administration-csv$",
+        FormBuilderViewSet.as_view({"get": "export_administration_csv"}),
     ),
     re_path(
         r"^(?P<version>(v1))/manage/forms/import/preflight$",

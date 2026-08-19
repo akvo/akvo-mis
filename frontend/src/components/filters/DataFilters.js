@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import "./style.scss";
 import {
   Row,
@@ -12,6 +12,7 @@ import {
   Radio,
   Input,
   DatePicker,
+  Select,
 } from "antd";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import AdministrationDropdown from "./AdministrationDropdown";
@@ -42,6 +43,8 @@ const DataFilters = ({
   selectedRowKeys = [],
   search = "",
   onSearchChange = () => {},
+  viewMode = "registration",
+  onViewModeChange = () => {},
 }) => {
   const authUser = store.useState((s) => s.user);
   const selectedForm = store.useState((s) => s.selectedForm);
@@ -70,6 +73,28 @@ const DataFilters = ({
   const childForms = useMemo(() => {
     return allForms?.filter((f) => f?.content?.parent === selectedForm);
   }, [selectedForm, allForms]);
+
+  const viewModeOptions = useMemo(() => {
+    const options = [
+      {
+        value: "registration",
+        label: text.registrationView || "Registration",
+      },
+    ];
+    (childForms || []).forEach((f) => {
+      options.push({
+        value: f.id,
+        label: f.name || f.content?.name || `${f.id}`,
+      });
+    });
+    return options;
+  }, [childForms, text.registrationView]);
+
+  useEffect(() => {
+    if (viewMode !== "registration") {
+      onViewModeChange("registration");
+    }
+  }, [selectedForm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedAdm = takeRight(administration, 1)[0];
 
@@ -341,6 +366,15 @@ const DataFilters = ({
               width="100%"
               style={{ minWidth: 300 }}
             />
+            {childForms?.length > 0 && (
+              <Select
+                value={viewMode}
+                onChange={onViewModeChange}
+                options={viewModeOptions}
+                style={{ minWidth: 200 }}
+                placeholder={text.selectViewMode || "Select View"}
+              />
+            )}
             {/* <AdvancedFiltersButton /> */}
           </Space>
         </Col>

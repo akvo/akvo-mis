@@ -51,6 +51,18 @@ from utils.default_serializers import DefaultResponseSerializer
 period_length = 60 * 15
 
 
+def batch_for(request, batch_id):
+    """The batch behind a URL id, or 404 if it is not the caller's.
+
+    Every batch endpoint takes an id straight from the URL and those ids are
+    sequential, so the ownership question has to be asked in one place rather
+    than remembered at five call sites.
+    """
+    return get_object_or_404(
+        DataBatch.objects.for_user(request.user), pk=batch_id
+    )
+
+
 @extend_schema(
     responses={
         (200, "application/json"): inline_serializer(
@@ -209,7 +221,7 @@ def list_pending_batch(request, version):
     [IsAuthenticated, IsSuperAdmin | IsSubmitter | IsApprover]
 )
 def list_data_batch(request, version, batch_id):
-    batch = get_object_or_404(DataBatch, pk=batch_id)
+    batch = batch_for(request, batch_id)
     batch_list = batch.batch_data_list.order_by("-created")
     data = [
         d.data for d in batch_list
@@ -340,7 +352,7 @@ class BatchSummaryView(APIView):
         summary="To get batch summary",
     )
     def get(self, request, batch_id, version):
-        batch = get_object_or_404(DataBatch, pk=batch_id)
+        batch = batch_for(request, batch_id)
         # Get form IDs from data in this batch
         batch_form_ids = FormData.objects.filter(
             data_batch_list__batch=batch
@@ -375,7 +387,7 @@ class BatchCommentView(APIView):
         summary="To get batch comment",
     )
     def get(self, request, batch_id, version):
-        batch = get_object_or_404(DataBatch, pk=batch_id)
+        batch = batch_for(request, batch_id)
         instance = batch.batch_batch_comment.all().order_by("-id")
         return Response(
             ListBatchCommentSerializer(instance=instance, many=True).data,
@@ -392,7 +404,7 @@ class BatchAttachmentsView(APIView):
         summary="To get batch attachments",
     )
     def get(self, request, batch_id, version):
-        batch = get_object_or_404(DataBatch, pk=batch_id)
+        batch = batch_for(request, batch_id)
         instance = batch.batch_batch_attachment.all().order_by("-id")
         return Response(
             BatchAttachmentsSerializer(instance=instance, many=True).data,
@@ -406,7 +418,7 @@ class BatchAttachmentsView(APIView):
         summary="To create batch attachments",
     )
     def post(self, request, batch_id, version):
-        batch = get_object_or_404(DataBatch, pk=batch_id)
+        batch = batch_for(request, batch_id)
         serializer = BatchAttachmentsSerializer(
             data=request.data, context={"user": request.user, "batch": batch}
         )

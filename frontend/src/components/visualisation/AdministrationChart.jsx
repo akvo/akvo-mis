@@ -8,6 +8,7 @@ import { Chart } from "../../components";
 import PropTypes from "prop-types";
 import { Color } from "../../components/chart/options/common";
 import { generateAdvanceFilterURL } from "../../util/filter";
+import { getLevels } from "../../util/level";
 
 const getOptionColor = (name, index) => {
   return (
@@ -66,7 +67,7 @@ const AdministrationChart = ({ current, index }) => {
 
   const { next, wait } = queue.useState((q) => q);
   const runCall = index === next && !wait;
-  const loading = next <= index && administration.length < window.levels.length;
+  const loading = next <= index && administration.length < getLevels().length;
 
   const { id, title, stack, options, type, horizontal = true } = current;
   const selectedAdministration = takeRight(administration, 1)[0] || null;
@@ -82,7 +83,7 @@ const AdministrationChart = ({ current, index }) => {
       s.next = null;
     });
     const adminRes = (
-      selectedAdministration?.levelName === takeRight(window.levels, 1)[0]?.name
+      selectedAdministration?.levelName === takeRight(getLevels(), 1)[0]?.name
         ? takeRight(administration, 2)[0]
         : takeRight(administration, 1)[0]
     ).children?.find((c) => c.name.toLowerCase() === e.toLowerCase());
@@ -90,7 +91,7 @@ const AdministrationChart = ({ current, index }) => {
       store.update((s) => {
         if (
           selectedAdministration?.levelName ===
-          takeRight(window.levels, 1)[0]?.name
+          takeRight(getLevels(), 1)[0]?.name
         ) {
           s.administration.length = s.administration.length - 1;
         }
@@ -107,7 +108,7 @@ const AdministrationChart = ({ current, index }) => {
     if (
       administration.length === 1 ||
       (takeRight(administration, 1)[0]?.levelName !==
-        takeRight(window.levels, 1)[0]?.name &&
+        takeRight(getLevels(), 1)[0]?.name &&
         (parent === null ||
           (!!parent && !!takeRight(administration, 1)[0]?.parent)))
     ) {
@@ -194,7 +195,7 @@ const AdministrationChart = ({ current, index }) => {
 
   const highlighted = useMemo(() => {
     return selectedAdministration?.levelName ===
-      takeRight(window.levels, 1)[0]?.name
+      takeRight(getLevels(), 1)[0]?.name
       ? selectedAdministration.name
       : null;
   }, [selectedAdministration]);
