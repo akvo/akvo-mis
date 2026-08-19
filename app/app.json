@@ -61,6 +61,14 @@
       "expo-document-picker",
       "expo-asset",
       "expo-background-task",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Akvo MIS saves a copy of each photo you take to your gallery, so it can be recovered if the app loses it.",
+          "savePhotosPermission": "Akvo MIS saves a copy of each photo you take to your gallery.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "androidNavigationBar": {

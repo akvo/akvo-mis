@@ -31,6 +31,7 @@ const SettingsForm = ({ route }) => {
     gpsAccuracyLevel,
     geoLocationTimeout,
     imageQuality,
+    saveToGallery,
   } = BuildParamsState.useState((s) => s);
   const { password, authenticationCode, useAuthenticationCode } = AuthState.useState((s) => s);
   const { lang, isDarkMode, fontSize } = UIState.useState((s) => s);
@@ -59,6 +60,7 @@ const SettingsForm = ({ route }) => {
     gpsAccuracyLevel,
     geoLocationTimeout,
     imageQuality,
+    saveToGallery,
   });
 
   const nonEnglish = lang !== 'en';
@@ -97,6 +99,7 @@ const SettingsForm = ({ route }) => {
       'gpsAccuracyLevel',
       'geoLocationTimeout',
       'imageQuality',
+      'saveToGallery',
     ];
     if (configFields.includes(field)) {
       await crudConfig.updateConfig(db, { [field]: value });

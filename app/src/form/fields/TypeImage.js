@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { View, PermissionsAndroid, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sentry from '@sentry/react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import { FieldLabel } from '../support';
@@ -22,13 +24,53 @@ const TypeImage = ({
 }) => {
   const activeLang = FormState.useState((s) => s.lang);
   const imageQuality = BuildParamsState.useState((s) => s.imageQuality);
+  const saveToGallery = BuildParamsState.useState((s) => s.saveToGallery);
+  // Album name follows the build's app name rather than a literal, so a
+  // rebranded APK groups its photos under its own name
+  const apkName = BuildParamsState.useState((s) => s.apkName);
   const trans = i18n.text(activeLang);
   const requiredValue = required ? requiredSign : null;
 
   const [isCompressing, setIsCompressing] = useState(false);
   const [fileSize, setFileSize] = useState(null);
+  // Remember which uri failed rather than a boolean: picking a new photo changes
+  // `value`, so the comparison below goes false on its own — no reset needed.
+  const [failedUri, setFailedUri] = useState(null);
 
-  const handleOnChange = async (dataResult) => {
+  /**
+   * Best-effort mirror of a capture into the device gallery, so a photo the app
+   * later loses (cache purge, data clear, restore) can still be recovered by the
+   * enumerator through the "From Gallery" repair flow.
+   *
+   * Never throws into the caller: an answer attached to a form is worth more than
+   * its gallery copy, so a denied permission or a failed write is reported and
+   * swallowed.
+   */
+  const copyToGallery = async (uri) => {
+    try {
+      // Full access, not write-only: grouping into an album needs to *read*
+      // MediaStore to find whether the album already exists. With write-only the
+      // asset lands in the default camera bucket and getAlbumAsync fails.
+      const { granted } = await MediaLibrary.requestPermissionsAsync();
+      if (!granted) {
+        return;
+      }
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      const album = await MediaLibrary.getAlbumAsync(apkName);
+      // `false` means move rather than copy — copying would leave a duplicate in
+      // the camera bucket and double the storage this feature costs.
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await MediaLibrary.createAlbumAsync(apkName, asset, false);
+      }
+    } catch (error) {
+      Sentry.captureMessage(`[TypeImage] gallery copy failed for ${uri}`);
+      Sentry.captureException(error);
+    }
+  };
+
+  const handleOnChange = async (dataResult, fromCamera = false) => {
     const { uri: imageUri } = dataResult.assets[0];
     /**
      * Property fileName is only available for iOS
@@ -36,13 +78,23 @@ const TypeImage = ({
      */
     setIsCompressing(true);
     try {
-      const result = await compressImage(imageUri, imageQuality);
-      setFileSize(result.size);
-      onChange(id, await persistImage(result.uri));
-    } catch (error) {
-      console.error('[TypeImage] Compression error:', error);
-      setFileSize(null);
-      onChange(id, await persistImage(imageUri));
+      let persisted;
+      try {
+        const result = await compressImage(imageUri, imageQuality);
+        setFileSize(result.size);
+        persisted = await persistImage(result.uri);
+      } catch (error) {
+        console.error('[TypeImage] Compression error:', error);
+        setFileSize(null);
+        persisted = await persistImage(imageUri);
+      }
+      // Set the answer first so the preview appears without waiting on the
+      // gallery write. A photo picked from the library is already there, so
+      // only camera captures are mirrored.
+      onChange(id, persisted);
+      if (fromCamera && saveToGallery) {
+        await copyToGallery(persisted);
+      }
     } finally {
       setIsCompressing(false);
     }
@@ -84,7 +136,7 @@ const TypeImage = ({
         base64: true,
       });
       if (!result?.canceled) {
-        await handleOnChange(result);
+        await handleOnChange(result, true);
       }
     }
   };
@@ -126,12 +178,19 @@ const TypeImage = ({
         )}
         {value && typeof value === 'string' && !isCompressing && (
           <View>
-            <Image
-              source={{ uri: value }}
-              style={styles.imagePreview}
-              PlaceholderContent={<ActivityIndicator />}
-              testID="image-preview"
-            />
+            {failedUri === value ? (
+              <Text style={styles.missingText} testID="image-missing">
+                {trans.photoMissingText}
+              </Text>
+            ) : (
+              <Image
+                source={{ uri: value }}
+                style={styles.imagePreview}
+                PlaceholderContent={<ActivityIndicator />}
+                testID="image-preview"
+                onError={() => setFailedUri(value)}
+              />
+            )}
             {fileSize !== null && (
               <Text style={styles.fileSizeText}>{formatFileSize(fileSize)}</Text>
             )}
@@ -180,5 +239,10 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 12,
     marginTop: 4,
+  },
+  missingText: {
+    color: '#b91c1c',
+    textAlign: 'center',
+    paddingVertical: 12,
   },
 });

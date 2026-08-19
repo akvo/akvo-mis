@@ -136,11 +136,30 @@ const handleOnUploadFiles = async (
   }, []);
 
   if (!allFiles.length) {
-    return { uploadedFiles: [], failedDataIDs: new Set() };
+    return { uploadedFiles: [], failedDataIDs: new Set(), missingFileDataIDs: new Set() };
+  }
+
+  // A file that is verifiably gone can never upload, so attempting it just burns
+  // a request on every sync run, forever. Ask the filesystem once and drop those
+  // datapoints from this batch instead of counting them as failures.
+  const fileExists = await Promise.all(
+    allFiles.map((f) =>
+      FileSystem.getInfoAsync(f.value)
+        .then(({ exists }) => exists)
+        .catch(() => false),
+    ),
+  );
+  const missingFileDataIDs = new Set(
+    allFiles.filter((_, i) => !fileExists[i]).map((f) => f.dataID),
+  );
+  const presentFiles = allFiles.filter((_, i) => fileExists[i]);
+
+  if (!presentFiles.length) {
+    return { uploadedFiles: [], failedDataIDs: new Set(), missingFileDataIDs };
   }
 
   // Prepare lazy upload functions (not executed yet)
-  const uploadFns = allFiles.map((f) => () => {
+  const uploadFns = presentFiles.map((f) => () => {
     const extension = f.value.split('.').pop()?.toLowerCase();
     const fileType = MIME_TYPES[extension] || 'application/octet-stream';
     const formData = new FormData();
@@ -173,12 +192,12 @@ const handleOnUploadFiles = async (
   const failedDataIDs = new Set();
   results.forEach((result, i) => {
     if (result.status === 'fulfilled') {
-      uploadedFiles.push({ ...allFiles[i], ...result.value.data });
+      uploadedFiles.push({ ...presentFiles[i], ...result.value.data });
     } else {
-      failedDataIDs.add(allFiles[i].dataID);
+      failedDataIDs.add(presentFiles[i].dataID);
     }
   });
-  return { uploadedFiles, failedDataIDs };
+  return { uploadedFiles, failedDataIDs, missingFileDataIDs };
 };
 
 // The backend's /draft-list serializes cascade answers as display names
@@ -223,26 +242,49 @@ export const repairCascadeAnswers = async (answerValues, jsonForm) => {
 
 // Recursive batch processor: fetches BATCH_SIZE items, processes them,
 // then recurses if more remain. Stops on empty result or failures.
-const processBatch = async (db, activeJob, session, counts = { success: 0, failed: 0 }) => {
+const processBatch = async (
+  db,
+  activeJob,
+  session,
+  counts = { success: 0, failed: 0, skipped: 0 },
+) => {
   const data = await crudDataPoints.selectSubmissionToSync(db, BATCH_SIZE);
   if (!data?.length) {
     return counts;
   }
+  // Baseline for the recursion guard below
+  const successBefore = counts.success;
 
   // Upload files for THIS BATCH only
   // Defensive defaults: under OOM conditions, Hermes can produce incomplete return objects
   // from handleOnUploadFiles. The `|| {}` + default values prevent TypeError on spread.
-  const { uploadedFiles: photos = [], failedDataIDs: failedPhotos = new Set() } =
-    (await handleOnUploadFiles(data, '/images', [QUESTION_TYPES.image])) || {};
-  const { uploadedFiles: attachments = [], failedDataIDs: failedAttachments = new Set() } =
-    (await handleOnUploadFiles(data, '/attachments', [QUESTION_TYPES.attachment])) || {};
+  const {
+    uploadedFiles: photos = [],
+    failedDataIDs: failedPhotos = new Set(),
+    missingFileDataIDs: missingPhotos = new Set(),
+  } = (await handleOnUploadFiles(data, '/images', [QUESTION_TYPES.image])) || {};
+  const {
+    uploadedFiles: attachments = [],
+    failedDataIDs: failedAttachments = new Set(),
+    missingFileDataIDs: missingAttachments = new Set(),
+  } = (await handleOnUploadFiles(data, '/attachments', [QUESTION_TYPES.attachment])) || {};
 
   const failedUploadIDs = new Set([...failedPhotos, ...failedAttachments]);
+  const missingFileIDs = new Set([...missingPhotos, ...missingAttachments]);
 
   // Process each datapoint sequentially
   await data.reduce(async (previousPromise, d) => {
     await previousPromise;
     if (d?.syncedAt) {
+      return;
+    }
+
+    // A missing local file is permanent, not transient: retrying can never make
+    // the upload succeed. Skip without counting a failure so transient errors
+    // keep their retry behaviour, and leave the row pending — Submission.js
+    // already badges it as "File missing" and the detail screen can repair it.
+    if (missingFileIDs.has(d.id)) {
+      counts.skipped += 1;
       return;
     }
 
@@ -331,7 +373,10 @@ const processBatch = async (db, activeJob, session, counts = { success: 0, faile
   }, Promise.resolve());
 
   // If batch was full and no failures, fetch next batch
-  if (data.length >= BATCH_SIZE && counts.failed === 0) {
+  // Recurse only if this batch actually cleared rows. selectSubmissionToSync
+  // always re-reads the oldest unsynced rows, so a batch made entirely of
+  // skipped (missing-file) datapoints would otherwise fetch the same 20 forever.
+  if (data.length >= BATCH_SIZE && counts.failed === 0 && counts.success > successBefore) {
     return processBatch(db, activeJob, session, counts);
   }
   return counts;
