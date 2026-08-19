@@ -10,6 +10,9 @@ from api.v1.v1_forms.services.xlsform_export import (
     _build_settings_row,
     _build_choices_rows,
     _build_survey_rows,
+    _build_relevant_expression,
+    _lang_display,
+    _extract_iso,
     generate_xlsform,
 )
 
@@ -439,11 +442,6 @@ class XLSFormExportServiceTestCase(TestCase):
         )
 
     def test_lang_display_edge_cases(self):
-        from api.v1.v1_forms.services.xlsform_export import (
-            _lang_display,
-            _extract_iso,
-        )
-
         # 1. Standard mapped codes
         self.assertEqual(_lang_display("en"), "English (en)")
         self.assertEqual(_lang_display("id"), "Indonesian (id)")
@@ -533,10 +531,6 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertIn("settings", wb.sheetnames)
 
     def test_dangling_dependency_reference(self):
-        from api.v1.v1_forms.services.xlsform_export import (
-            _build_relevant_expression,
-        )
-
         q_with_deleted_dep = DummyObject(
             name="q2",
             dependency=[

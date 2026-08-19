@@ -1,9 +1,12 @@
 import csv
 import io
 import re
-import openpyxl
 from typing import Tuple, List, Dict, Any, Optional
+from django.utils.translation import get_language_info
+import openpyxl
 from api.v1.v1_forms.constants import QuestionTypes
+from api.v1.v1_profile.constants import DEFAULT_ADMINISTRATION_LEVELS
+from api.v1.v1_profile.models import Administration, Levels
 
 # XLSForm standard language names understood by KoboToolbox / pyxform.
 # Maps ISO 639-1 codes to the 'Name (code)' format pyxform expects.
@@ -121,16 +124,79 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
     return ("text", None)
 
 
+def _get_levels_map(form: Any = None) -> Dict[int, str]:
+    """
+    Returns a mapping of {level_int: level_name}
+    (e.g. {0: 'National', 1: 'Province', 2: 'District'}).
+    Queries Levels model scoped to tenant if available,
+    falling back to DEFAULT_ADMINISTRATION_LEVELS.
+    """
+    levels_map = {}
+    try:
+        tenant = getattr(form, "tenant", None)
+        if tenant:
+            qs = Levels.objects.filter(tenant=tenant).order_by("level")
+        else:
+            qs = Levels.objects.all().order_by("level")
+        for lvl in qs:
+            if lvl.level is not None and lvl.name:
+                levels_map[lvl.level] = lvl.name
+    except Exception:
+        pass
+
+    if not levels_map:
+        try:
+            for item in DEFAULT_ADMINISTRATION_LEVELS:
+                lvl_idx = item.get("level")
+                lvl_name = item.get("alias") or item.get("name")
+                if lvl_idx is not None and lvl_name:
+                    levels_map[lvl_idx] = lvl_name
+        except Exception:
+            pass
+
+    return levels_map
+
+
+def _get_cascade_levels(q: Any, levels_map: Dict[int, str]) -> List[int]:
+    """
+    Determines the list of level integers [min_level, ..., max_level]
+    configured for a cascade question.
+    """
+    min_level = 0
+    max_level = None
+    if q.api and isinstance(q.api, dict):
+        if "min_level" in q.api and isinstance(q.api["min_level"], int):
+            min_level = q.api["min_level"]
+        if "max_level" in q.api and isinstance(q.api["max_level"], int):
+            max_level = q.api["max_level"]
+
+    if max_level is None:
+        max_level = max(levels_map.keys()) if levels_map else 2
+
+    if max_level < min_level:
+        max_level = min_level
+
+    return list(range(min_level, max_level + 1))
+
+
 def _build_question_map(form: Any) -> Dict[int, Dict[str, Any]]:
     """
     Pre-pass building a map of {question_id: {"name": name, "type": type}}
     for dependency ID -> question name resolution.
+    For multi-level cascade questions, maps to the deepest level question name.
     """
+    levels_map = _get_levels_map(form)
     question_map = {}
     for group in form.form_question_group.all():
         for q in group.question_group_question.all():
+            q_name = q.name or f"q_{q.id}"
+            if q.type == QuestionTypes.cascade:
+                levels = _get_cascade_levels(q, levels_map)
+                if len(levels) > 1:
+                    deepest_lvl = levels[-1]
+                    q_name = f"{q_name}_level_{deepest_lvl}"
             question_map[q.id] = {
-                "name": q.name or f"q_{q.id}",
+                "name": q_name,
                 "type": q.type,
             }
     return question_map
@@ -153,8 +219,6 @@ def _lang_display(code: str) -> str:
         return _LANG_NAMES[clean_code]
 
     try:
-        from django.utils.translation import get_language_info
-
         info = get_language_info(clean_code)
         name = (
             info.get("name")
@@ -490,6 +554,7 @@ def _build_survey_rows(
     lang_cols contains display names like ['English (en)', 'French (fr)'].
     Returns (survey_rows, skipped_question_names).
     """
+    levels_map = _get_levels_map(form)
     survey_rows = []
     skipped = []
     d_lang_display = lang_cols[0]
@@ -547,13 +612,86 @@ def _build_survey_rows(
             rule_obj = getattr(q, "rule", None)
             constraint_expr, constraint_msg = _build_constraint(rule_obj)
 
+            hint_text = (
+                q.tooltip.get("text")
+                if (q.tooltip and isinstance(q.tooltip, dict))
+                else None
+            )
+            primary_label = q.label or q_name
+
+            if q.type == QuestionTypes.cascade:
+                levels = _get_cascade_levels(q, levels_map)
+                if len(levels) > 1:
+                    for lvl_idx, lvl in enumerate(levels):
+                        level_name = levels_map.get(lvl, f"Level {lvl}")
+                        level_q_name = f"{q_name}_level_{lvl}"
+                        level_primary_label = f"{primary_label} - {level_name}"
+
+                        if lvl_idx == 0:
+                            choice_filter = f"level = {lvl}"
+                        else:
+                            prev_level_q_name = (
+                                f"{q_name}_level_{levels[lvl_idx - 1]}"
+                            )
+                            choice_filter = (
+                                f"parent_key = ${{{prev_level_q_name}}}"
+                            )
+
+                        level_row = {
+                            "type": "select_one_from_file administration.csv",
+                            "name": level_q_name,
+                            "required": (
+                                "yes"
+                                if getattr(q, "required", False)
+                                else "no"
+                            ),
+                            f"label::{d_lang_display}": level_primary_label,
+                            "choice_filter": choice_filter,
+                        }
+                        if relevant_expr:
+                            level_row["relevant"] = relevant_expr
+                        if hint_text:
+                            level_row[f"hint::{d_lang_display}"] = hint_text
+
+                        for display, iso in secondary_langs:
+                            trans_data = (
+                                _extract_translation(q.translations, iso)
+                                if q.translations
+                                else {}
+                            )
+                            trans_base_label = (
+                                trans_data.get("label") or primary_label
+                            )
+                            level_row[f"label::{display}"] = (
+                                f"{trans_base_label} - {level_name}"
+                            )
+                            if hint_text:
+                                level_row[f"hint::{display}"] = (
+                                    trans_data.get("hint") or hint_text
+                                )
+                            elif "hint" in trans_data:
+                                level_row[f"hint::{display}"] = trans_data[
+                                    "hint"
+                                ]
+
+                        survey_rows.append(level_row)
+                    continue
+                else:
+                    # Single level cascade
+                    lvl = levels[0]
+                    single_choice_filter = f"level = {lvl}"
+            else:
+                single_choice_filter = None
+
             q_row = {
                 "type": xls_type,
                 "name": q_name,
                 "required": "yes" if getattr(q, "required", False) else "no",
-                f"label::{d_lang_display}": q.label or q_name,
+                f"label::{d_lang_display}": primary_label,
             }
 
+            if single_choice_filter:
+                q_row["choice_filter"] = single_choice_filter
             if relevant_expr:
                 q_row["relevant"] = relevant_expr
             if constraint_expr:
@@ -562,16 +700,9 @@ def _build_survey_rows(
             if appearance:
                 q_row["appearance"] = appearance
 
-            # Tooltip -> hint
-            if (
-                q.tooltip
-                and isinstance(q.tooltip, dict)
-                and q.tooltip.get("text")
-            ):
-                q_row[f"hint::{d_lang_display}"] = q.tooltip["text"]
+            if hint_text:
+                q_row[f"hint::{d_lang_display}"] = hint_text
 
-            # Translations for extra languages with primary fallback
-            primary_label = q.label or q_name
             primary_hint = q_row.get(f"hint::{d_lang_display}")
             for display, iso in secondary_langs:
                 trans_data = (
@@ -640,34 +771,60 @@ def _adapt_form_dict(data: dict) -> Any:
     )
     for g_dict in raw_groups:
         questions = []
-        raw_qs = g_dict.get("question") or g_dict.get("questions") or []
-        for q_dict in raw_qs:
-            opts = []
-            raw_opts = q_dict.get("option") or q_dict.get("options") or []
-            for opt_dict in raw_opts:
-                opts.append(_DictObject(opt_dict))
+        raw_questions = g_dict.get("question") or g_dict.get("questions") or []
+        for q_dict in raw_questions:
             q_obj = _DictObject(q_dict)
-            q_obj.options = _QuerySetAdapter(opts)
+            if "repeat" in q_dict:
+                q_obj.repeatable = bool(q_dict["repeat"])
+            if "rule" in q_dict and isinstance(q_dict["rule"], dict):
+                q_obj.required = bool(q_dict["rule"].get("required", False))
 
             # Map type string (e.g. 'text', 'cascade', 'attachment')
-            # to QuestionTypes integer
+            # to QuestionTypes constant int if necessary
             if isinstance(q_obj.type, str):
-                t_str = q_obj.type.lower()
-                if hasattr(QuestionTypes, t_str):
-                    q_obj.type = getattr(QuestionTypes, t_str)
-                elif t_str in ("input", "text"):
-                    q_obj.type = QuestionTypes.text
-                elif t_str == "administration":
+                type_name = q_obj.type.lower()
+                if hasattr(QuestionTypes, type_name):
+                    q_obj.type = getattr(QuestionTypes, type_name)
+                elif type_name == "input":
+                    q_obj.type = QuestionTypes.input
+                elif type_name == "multiple_option":
+                    q_obj.type = QuestionTypes.multiple_option
+                elif type_name == "cascade":
                     q_obj.type = QuestionTypes.cascade
+                elif type_name == "attachment":
+                    q_obj.type = QuestionTypes.attachment
+                elif type_name == "signature":
+                    q_obj.type = QuestionTypes.signature
+                elif type_name == "geoshape":
+                    q_obj.type = QuestionTypes.geoshape
+                elif type_name == "geotrace":
+                    q_obj.type = QuestionTypes.geotrace
+                elif type_name == "autofield":
+                    q_obj.type = QuestionTypes.autofield
+                elif type_name == "tree":
+                    q_obj.type = QuestionTypes.tree
+                elif type_name == "table":
+                    q_obj.type = QuestionTypes.table
+                else:
+                    q_obj.type = QuestionTypes.text
+
+            # Wrap options
+            raw_options = q_dict.get("options") or []
+            q_obj.options = _QuerySetAdapter(
+                [_DictObject(o) for o in raw_options]
+            )
 
             questions.append(q_obj)
+
         g_obj = _DictObject(g_dict)
+        if "repeat" in g_dict:
+            g_obj.repeatable = bool(g_dict["repeat"])
         g_obj.question_group_question = _QuerySetAdapter(questions)
         groups.append(g_obj)
 
-    f_obj = _DictObject(data)
-    f_obj.form_question_group = _QuerySetAdapter(groups)
-    return f_obj
+    form_obj = _DictObject(data)
+    form_obj.form_question_group = _QuerySetAdapter(groups)
+    return form_obj
 
 
 def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
@@ -743,7 +900,7 @@ def generate_xlsform(form: Any) -> Tuple[io.BytesIO, List[str]]:
 def generate_administration_csv(form: Any, user: Any) -> str:
     """
     Generates a lookup CSV stream for cascade questions in XLSForm format.
-    Columns: list_name, name, label, parent_key
+    Columns: list_name, name, label, parent_key, level
     - Filters by Administration.objects.for_user(user)
     - If form has cascade questions with 'max_level' specified in question.api,
       caps the exported levels to max(max_level).
@@ -765,8 +922,6 @@ def generate_administration_csv(form: Any, user: Any) -> str:
                         max(max_level, lvl) if max_level is not None else lvl
                     )
 
-    from api.v1.v1_profile.models import Administration
-
     qs = Administration.objects.for_user(user).select_related(
         "level", "parent"
     )
@@ -777,7 +932,7 @@ def generate_administration_csv(form: Any, user: Any) -> str:
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["list_name", "name", "label", "parent_key"])
+    writer.writerow(["list_name", "name", "label", "parent_key", "level"])
 
     for adm in qs:
         name_val = adm.code if adm.code else str(adm.id)
@@ -787,8 +942,13 @@ def generate_administration_csv(form: Any, user: Any) -> str:
             parent_key_val = (
                 adm.parent.code if adm.parent.code else str(adm.parent.id)
             )
+        lvl_val = (
+            str(adm.level.level)
+            if adm.level and adm.level.level is not None
+            else "0"
+        )
         writer.writerow(
-            ["administration", name_val, label_val, parent_key_val]
+            ["administration", name_val, label_val, parent_key_val, lvl_val]
         )
 
     return output.getvalue()
