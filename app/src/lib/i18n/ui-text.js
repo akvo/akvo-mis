@@ -86,6 +86,8 @@ const uiText = {
     buttonReattachFile: 'Re-attach file',
     photoMissingText: 'File missing',
     fileMissingText: 'Photo file is missing on this device. Retake it to allow syncing.',
+    photoLoadFailedText: 'Photo could not be loaded. Check your connection and try again.',
+    buttonTryAgain: 'Try again',
     attachmentMissingText:
       'Attached file is missing on this device. Re-attach it to allow syncing.',
     retakeSuccess: 'Photo updated. It will be uploaded on the next sync.',
@@ -239,6 +241,8 @@ const uiText = {
     photoMissingText: 'Fichier manquant',
     fileMissingText:
       'Le fichier photo est manquant sur cet appareil. Reprenez-la pour permettre la synchronisation.',
+    photoLoadFailedText: 'Impossible de charger la photo. Vérifiez votre connexion et réessayez.',
+    buttonTryAgain: 'Réessayer',
     attachmentMissingText:
       'Le fichier joint est manquant sur cet appareil. Joignez-le à nouveau pour permettre la synchronisation.',
     retakeSuccess: 'Photo mise à jour. Elle sera envoyée lors de la prochaine synchronisation.',

@@ -30,7 +30,7 @@ import {
 } from './src/lib/constants';
 import { tables, openDatabase } from './src/database';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -123,6 +123,7 @@ const App = () => {
   const gpsAccuracyLevel = BuildParamsState.useState((s) => s.gpsAccuracyLevel);
   const geoLocationTimeout = BuildParamsState.useState((s) => s.geoLocationTimeout);
   const imageQuality = BuildParamsState.useState((s) => s.imageQuality);
+  const saveToGallery = BuildParamsState.useState((s) => s.saveToGallery);
   const appVersion = BuildParamsState.useState((s) => s.appVersion);
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
 
@@ -139,6 +140,7 @@ const App = () => {
         gpsAccuracyLevel,
         geoLocationTimeout,
         imageQuality,
+        saveToGallery,
       });
     }
     if (serverURL) {
@@ -157,6 +159,7 @@ const App = () => {
         s.gpsAccuracyLevel = configExist.gpsAccuracyLevel;
         s.geoLocationTimeout = configExist.geoLocationTimeout;
         s.imageQuality = configExist.imageQuality || 'low';
+        s.saveToGallery = configExist.saveToGallery || 0;
       });
 
       UserState.update((s) => {
@@ -265,6 +268,13 @@ const App = () => {
         await txDb.execAsync('PRAGMA user_version = 8');
       });
       currentDbVersion = 8;
+    }
+    if (currentDbVersion === 8) {
+      await sql.withTransaction(db, async (txDb) => {
+        await m09.up(txDb);
+        await txDb.execAsync('PRAGMA user_version = 9');
+      });
+      currentDbVersion = 9;
     }
   };
 

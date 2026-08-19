@@ -240,6 +240,29 @@ export const config = [
         ],
         options: imageQualityOptions,
       },
+      {
+        id: 52,
+        type: 'switch',
+        name: 'saveToGallery',
+        label: 'Save photos to gallery',
+        description: {
+          name: 'Keep a copy in the device gallery so a lost photo can be recovered',
+          translations: [
+            {
+              language: 'fr',
+              name: "Conserver une copie dans la galerie de l'appareil pour pouvoir récupérer une photo perdue",
+            },
+          ],
+        },
+        key: 'BuildParamsState.saveToGallery',
+        editable: true,
+        translations: [
+          {
+            language: 'fr',
+            name: 'Enregistrer les photos dans la galerie',
+          },
+        ],
+      },
     ],
   },
 ];
