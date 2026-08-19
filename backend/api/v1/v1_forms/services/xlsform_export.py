@@ -53,12 +53,18 @@ _XLSFORM_COLUMNS = [
 
 
 def _get_options_manager(question: Any) -> Optional[Any]:
-    opts = getattr(question, "options", None)
-    if opts is not None and hasattr(opts, "all"):
-        return opts
-    opts = getattr(question, "question_question_option", None)
-    if opts is not None and hasattr(opts, "all"):
-        return opts
+    for attr in ("options", "option", "question_question_option"):
+        opts = getattr(question, attr, None)
+        if opts is not None:
+            if hasattr(opts, "all"):
+                return opts
+            elif isinstance(opts, (list, tuple)):
+                return _QuerySetAdapter(
+                    [
+                        _DictObject(o) if isinstance(o, dict) else o
+                        for o in opts
+                    ]
+                )
     return None
 
 
@@ -809,9 +815,12 @@ def _adapt_form_dict(data: dict) -> Any:
                     q_obj.type = QuestionTypes.text
 
             # Wrap options
-            raw_options = q_dict.get("options") or []
+            raw_options = q_dict.get("options") or q_dict.get("option") or []
             q_obj.options = _QuerySetAdapter(
-                [_DictObject(o) for o in raw_options]
+                [
+                    _DictObject(o) if isinstance(o, dict) else o
+                    for o in raw_options
+                ]
             )
 
             questions.append(q_obj)

@@ -655,3 +655,37 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(row_group["name"], "group_signature")
         self.assertEqual(row_q["type"], "image")
         self.assertEqual(row_q["name"], "signature")
+
+    def test_snapshot_dict_with_option_key_generates_choices_sheet(self):
+        payload_snapshot = {
+            "id": 6001,
+            "name": "Visualization Test Registration",
+            "version": 2,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "registration_info",
+                    "label": "Registration Info",
+                    "question": [
+                        {
+                            "id": 101,
+                            "name": "site_type",
+                            "label": "Site Type",
+                            "type": "option",
+                            "option": [
+                                {"id": 1, "value": "urban", "label": "Urban"},
+                                {"id": 2, "value": "rural", "label": "Rural"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_snapshot)
+        wb = openpyxl.load_workbook(stream)
+        ws_choices = wb["choices"]
+        rows = list(ws_choices.iter_rows(values_only=True))
+        self.assertGreaterEqual(len(rows), 3)  # header + 2 options
+        self.assertEqual(rows[0], ("list_name", "name", "label::English (en)"))
+        self.assertEqual(rows[1], ("option_site_type", "urban", "Urban"))
+        self.assertEqual(rows[2], ("option_site_type", "rural", "Rural"))
