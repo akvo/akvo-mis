@@ -23,6 +23,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Q
 from django.http import HttpResponse
+from django.utils import timezone as tz
 from django_q.tasks import async_task
 
 from api.v1.v1_data.models import Answers, FormData
@@ -963,8 +964,6 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         form = self.get_object()
         payload = export_form_definition(form)
         slug = re.sub(r"[^a-z0-9]+", "-", form.name.lower()).strip("-")
-        from django.utils import timezone as tz
-
         date_str = tz.now().strftime("%Y%m%d")
         filename = f"form-{form.id}-{slug}-{date_str}.json"
         body = json.dumps(payload, ensure_ascii=False, indent=2)

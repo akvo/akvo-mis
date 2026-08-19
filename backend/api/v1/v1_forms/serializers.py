@@ -32,8 +32,7 @@ from utils.default_serializers import CommonDataSerializer, GeoFormatSerializer
 
 
 def _question_type_str(instance: Questions) -> str:
-    """Return the semantic type string for a question.
-    """
+    """Return the semantic type string for a question."""
     return QuestionTypes.FieldStr.get(instance.type, "").lower()
 
 
@@ -97,34 +96,50 @@ class ListQuestionSerializer(serializers.ModelSerializer):
                 return instance.api
             # Administration cascade: generate dynamic user-scoped endpoint.
             user = self.context.get("user")
-            administration = Administration.objects.filter(
-                parent__isnull=True
-            ).first()
-            user_role = user.user_user_role.filter(
-                administration__parent__isnull=False
-            ).order_by("administration__level__level").first()
-            if user_role:
-                administration = user_role.administration
-            max_level = instance.api.get("max_level") \
-                if instance.api else None
+            administration = None
+            if user:
+                administration = (
+                    Administration.objects.for_user(user)
+                    .filter(parent__isnull=True)
+                    .first()
+                )
+            if not administration:
+                administration = Administration.objects.filter(
+                    parent__isnull=True
+                ).first()
+
+            if user and hasattr(user, "user_user_role"):
+                user_role = (
+                    user.user_user_role.filter(
+                        administration__parent__isnull=False
+                    )
+                    .order_by("administration__level__level")
+                    .first()
+                )
+                if user_role:
+                    administration = user_role.administration
+
+            max_level = instance.api.get("max_level") if instance.api else None
             extra_objects = {}
             if max_level:
                 extra_objects = {
                     "query_params": f"?max_level={max_level}",
                 }
-            if not user.is_superuser:
+            if user and not getattr(user, "is_superuser", False):
                 if max_level:
                     extra_objects = {
                         "query_params": f"&max_level={max_level}",
                     }
-                initial = administration.id
-                if administration.parent:
-                    filter_children = "&".join([
-                        f"filter_children={ur.administration.id}"
-                        for ur in user.user_user_role.filter(
-                            administration__parent=administration.parent
-                        ).all()
-                    ])
+                initial = administration.id if administration else 1
+                if administration and administration.parent:
+                    filter_children = "&".join(
+                        [
+                            f"filter_children={ur.administration.id}"
+                            for ur in user.user_user_role.filter(
+                                administration__parent=administration.parent
+                            ).all()
+                        ]
+                    )
                     initial = f"{administration.parent.id}?{filter_children}"
                 return {
                     "endpoint": "/api/v1/administration",
@@ -135,7 +150,7 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             return {
                 "endpoint": "/api/v1/administration",
                 "list": "children",
-                "initial": administration.id,
+                "initial": administration.id if administration else 1,
                 **extra_objects,
             }
         if instance.type == QuestionTypes.attachment:
@@ -232,9 +247,7 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             extra_type = (instance.extra or {}).get("type")
             if extra_type == "entity":
                 cascade_name = (instance.extra or {}).get("name")
-                entity_type = Entity.objects.filter(
-                    name=cascade_name
-                ).first()
+                entity_type = Entity.objects.filter(name=cascade_name).first()
                 entity_id = entity_type.id if entity_type else None
                 return {
                     "file": "entity_data.sqlite",
@@ -244,12 +257,14 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             # Administration cascade (extra.type="administration" or null).
             return {
                 "file": "administrator.sqlite",
-                "parent_id": [a.id for a in assignment.administrations.all()]
-                if assignment
-                else [
-                    ur.administration.id
-                    for ur in user.user_user_role.all()
-                ],
+                "parent_id": (
+                    [a.id for a in assignment.administrations.all()]
+                    if assignment
+                    else [
+                        ur.administration.id
+                        for ur in user.user_user_role.all()
+                    ]
+                ),
             }
         return None
 
@@ -520,7 +535,12 @@ class FormDataQuestionGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionGroup
         fields = [
-            "id", "label", "name", "question", "repeatable", "repeat_text"
+            "id",
+            "label",
+            "name",
+            "question",
+            "repeatable",
+            "repeat_text",
         ]
 
 
@@ -556,9 +576,9 @@ class FormApproverRequestSerializer(serializers.Serializer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.fields.get("form_id").queryset = Forms.objects.all()
-        self.fields.get(
-            "administration_id"
-        ).queryset = Administration.objects.all()
+        self.fields.get("administration_id").queryset = (
+            Administration.objects.all()
+        )
 
 
 class FormApproverUserSerializer(serializers.ModelSerializer):
@@ -577,12 +597,8 @@ class FormApproverResponseSerializer(serializers.ModelSerializer):
             role__role_role_access__data_access=DataAccessTypes.approve,
             user__user_form__form=self.context.get("form"),
         ).select_related("user")
-        approvers = [
-            approver.user for approver in approvers
-        ]
-        return FormApproverUserSerializer(
-            instance=approvers, many=True
-        ).data
+        approvers = [approver.user for approver in approvers]
+        return FormApproverUserSerializer(instance=approvers, many=True).data
 
     @extend_schema_field(CommonDataSerializer)
     def get_administration(self, instance: Administration):
@@ -601,6 +617,7 @@ class FormDetailQuestionSerializer(serializers.ModelSerializer):
 
     Returns all editor-relevant fields including disable_delete.
     """
+
     type = serializers.SerializerMethodField()
     option = serializers.SerializerMethodField()
     disable_delete = serializers.SerializerMethodField()
@@ -676,13 +693,20 @@ class FormDetailQuestionGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionGroup
         fields = [
-            "id", "name", "label", "order",
-            "repeatable", "repeat_text", "translations", "question",
+            "id",
+            "name",
+            "label",
+            "order",
+            "repeatable",
+            "repeat_text",
+            "translations",
+            "question",
         ]
 
 
 class FormDetailSerializer(serializers.ModelSerializer):
     """Extended form serializer for form builder endpoints."""
+
     status = serializers.SerializerMethodField()
     question_group = serializers.SerializerMethodField()
     latest_version = serializers.SerializerMethodField()
@@ -737,6 +761,7 @@ class FormDetailSerializer(serializers.ModelSerializer):
 
 class FormPublishedVersionSerializer(serializers.ModelSerializer):
     """Serializer for the published versions list endpoint."""
+
     published_by = serializers.SerializerMethodField()
     is_active = serializers.SerializerMethodField()
 
