@@ -1,277 +1,30 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Alert,
   SectionList,
   ToastAndroid,
   PermissionsAndroid,
-  ActivityIndicator,
 } from 'react-native';
-import { Image, Button } from '@rneui/themed';
-import moment from 'moment';
-import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import { FormState, UIState, BuildParamsState } from '../../store';
-import { api, cascades, helpers, i18n } from '../../lib';
+import { helpers, i18n } from '../../lib';
 import { compressImage, persistImage } from '../../lib/image-compressor';
 import { crudDataPoints } from '../../database/crud';
-import { BaseLayout } from '../../components';
+import {
+  BaseLayout,
+  ImageView,
+  AttachmentView,
+  SubtitleContent,
+  formDataDetailsStyles as sharedStyles,
+} from '../../components';
 import FormDataNavigation from './FormDataNavigation';
 import { QUESTION_TYPES } from '../../lib/constants';
 import MIME_TYPES from '../../lib/mime_types';
-
-const ImageView = ({
-  label,
-  uri,
-  textTestID,
-  imageTestID,
-  onRetake = null,
-  missingText = '',
-  retakeLabel = '',
-  isRetaking = false,
-  processingLabel = '',
-}) => {
-  // No upfront file check: the Image load itself reports a dead file:// path
-  // via onError, so missing files cost no extra I/O.
-  const [fileMissing, setFileMissing] = useState(false);
-  // get base path from http://example.com/api/v2/any/ to http://example.com
-  const baseURL = api.getConfig().baseURL?.replace(/\/api\/v\d+\/.*$/, '');
-  const imageURL =
-    !uri?.includes('file://') && !uri?.startsWith('http') && !uri.startsWith('data:image')
-      ? `${baseURL}${uri}`
-      : uri;
-  // Retake only makes sense for local files pending upload, not remote images
-  const showRetake = !!onRetake && !!uri?.startsWith('file://');
-
-  let content = (
-    <Image
-      source={{ uri: imageURL }}
-      testID={imageTestID}
-      style={styles.image}
-      onError={() => setFileMissing(true)}
-    />
-  );
-  if (fileMissing) {
-    content = (
-      <View>
-        <Text style={styles.missingText} testID={`${imageTestID}-missing`}>
-          {missingText}
-        </Text>
-        {showRetake && (
-          <Button title={retakeLabel} onPress={onRetake} testID={`${imageTestID}-retake`} />
-        )}
-      </View>
-    );
-  }
-  if (isRetaking) {
-    content = (
-      <View style={styles.processingContainer} testID={`${imageTestID}-processing`}>
-        <ActivityIndicator size="small" color="dodgerblue" />
-        <Text style={styles.processingText}>{processingLabel}</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.containerImage}>
-      <Text style={styles.title} testID={textTestID}>
-        {label}
-      </Text>
-      {content}
-    </View>
-  );
-};
-
-const AttachmentView = ({
-  label,
-  uri,
-  index,
-  onReattach = null,
-  missingText = '',
-  reattachLabel = '',
-  openLabel = '',
-  isReattaching = false,
-  processingLabel = '',
-}) => {
-  // Non-image files render no Image, so there is no onError signal — an
-  // explicit existence check is the only way (one call per attachment).
-  const [fileMissing, setFileMissing] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    if (uri?.startsWith('file://')) {
-      FileSystem.getInfoAsync(uri)
-        .then(({ exists }) => {
-          if (active) {
-            setFileMissing(!exists);
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setFileMissing(true);
-          }
-        });
-    } else {
-      setFileMissing(false);
-    }
-    return () => {
-      active = false;
-    };
-  }, [uri]);
-
-  const openFileManager = async () => {
-    const supported = await Linking.canOpenURL(uri);
-    if (supported) {
-      await Linking.openURL(uri);
-    } else {
-      Alert.alert("Don't know how to open this URL:", uri);
-    }
-  };
-
-  let content = (
-    <View style={{ width: '100%' }}>
-      <Text
-        testID={`text-answer-${index}`}
-        style={{ color: 'blue', textDecorationLine: 'underline' }}
-      >
-        {uri.split('/').pop()}
-      </Text>
-      <Button
-        title={openLabel}
-        onPress={openFileManager}
-        testID={`open-file-button-${index}`}
-        buttonStyle={{ width: '100%', backgroundColor: '#1E90FF', marginTop: 8 }}
-      />
-    </View>
-  );
-  if (fileMissing) {
-    content = (
-      <View>
-        <Text style={styles.missingText} testID={`attachment-missing-${index}`}>
-          {missingText}
-        </Text>
-        {!!onReattach && !!uri?.startsWith('file://') && (
-          <Button
-            title={reattachLabel}
-            onPress={onReattach}
-            testID={`attachment-reattach-${index}`}
-          />
-        )}
-      </View>
-    );
-  }
-  if (isReattaching) {
-    content = (
-      <View style={styles.processingContainer} testID={`attachment-processing-${index}`}>
-        <ActivityIndicator size="small" color="dodgerblue" />
-        <Text style={styles.processingText}>{processingLabel}</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.listItem}>
-      <View style={styles.listItemContent}>
-        <Text style={styles.listItemTitle} testID={`text-question-${index}`}>
-          {label}
-        </Text>
-        {content}
-      </View>
-    </View>
-  );
-};
-
-const SubtitleContent = ({ index, answer, type, source = null, option = [] }) => {
-  const activeLang = UIState.useState((s) => s.lang);
-  const trans = i18n.text(activeLang);
-  const [cascadeValue, setCascadeValue] = useState(null);
-
-  const openFileManager = async (uri) => {
-    const supported = await Linking.canOpenURL(uri);
-    if (supported) {
-      await Linking.openURL(uri);
-    } else {
-      Alert.alert("Don't know how to open this URL:", uri);
-    }
-  };
-
-  const fetchCascade = useCallback(async () => {
-    const cascadeID = parseInt(answer, 10);
-    if (!cascadeID) {
-      return;
-    }
-    if (source?.file) {
-      const csValue = await cascades.loadDataSource(source, cascadeID);
-      setCascadeValue(csValue);
-    }
-  }, [answer, source]);
-
-  useEffect(() => {
-    fetchCascade();
-  }, [fetchCascade]);
-
-  switch (type) {
-    case QUESTION_TYPES.geo:
-      return (
-        <View testID={`text-type-geo-${index}`}>
-          <Text>
-            {trans.latitude}: {answer?.[0]}
-          </Text>
-          <Text>
-            {trans.longitude}: {answer?.[1]}
-          </Text>
-        </View>
-      );
-    case QUESTION_TYPES.cascade:
-      return <Text testID={`text-answer-${index}`}>{cascadeValue?.full_path_name || answer}</Text>;
-    case QUESTION_TYPES.date:
-      return (
-        <Text testID={`text-answer-${index}`}>
-          {answer ? moment(answer).format('YYYY-MM-DD') : '-'}
-        </Text>
-      );
-    case QUESTION_TYPES.option:
-    case QUESTION_TYPES.multiple_option:
-      return (
-        <Text testID={`text-answer-${index}`}>
-          {answer
-            ?.map((a) => {
-              const findOption = option?.find((o) => o?.value === a);
-              return findOption?.label;
-            })
-            ?.join(', ')}
-        </Text>
-      );
-    case QUESTION_TYPES.attachment:
-      if (!answer) {
-        return <Text testID={`text-type-attachment-${index}`}>-</Text>;
-      }
-      return (
-        <View testID={`text-type-attachment-${index}`} style={{ width: '100%' }}>
-          <Text
-            testID={`text-answer-${index}`}
-            style={{ color: 'blue', textDecorationLine: 'underline' }}
-          >
-            {answer.split('/').pop()}
-          </Text>
-          <Button
-            title={trans.openFileButton}
-            onPress={() => openFileManager(answer)}
-            testID={`open-file-button-${index}`}
-            buttonStyle={{ width: '100%', backgroundColor: '#1E90FF', marginTop: 8 }}
-          />
-        </View>
-      );
-    default:
-      return <Text testID={`text-answer-${index}`}>{answer || answer === 0 ? answer : '-'}</Text>;
-  }
-};
 
 const FormDataDetails = ({ navigation, route }) => {
   const selectedForm = FormState.useState((s) => s.form);
@@ -302,18 +55,11 @@ const FormDataDetails = ({ navigation, route }) => {
     return askPermission === PermissionsAndroid.RESULTS.GRANTED;
   };
 
-  const handleRetake = async (questionKey) => {
-    const allowed = await ensureCameraPermission();
-    if (!allowed) {
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ base64: true });
-    if (result?.canceled) {
-      return;
-    }
+  // Shared tail for both repair paths — camera and gallery differ only in the
+  // picker call that produces imageUri.
+  const savePhoto = async (questionKey, imageUri) => {
     setRetakingKey(questionKey);
     try {
-      const { uri: imageUri } = result.assets[0];
       let newUri = imageUri;
       try {
         const compressed = await compressImage(imageUri, imageQuality);
@@ -329,10 +75,40 @@ const FormDataDetails = ({ navigation, route }) => {
         s.currentValues = updatedValues;
       });
       await crudDataPoints.updateJson(db, datapointId, updatedValues);
+      // The Submission list caches its rows and only refetches on mount or on
+      // refreshPage. Without this it keeps showing the File missing badge, and
+      // re-opening this screen reseeds currentValues from the stale row.
+      UIState.update((s) => {
+        s.refreshPage = true;
+      });
       ToastAndroid.show(trans.retakeSuccess, ToastAndroid.LONG);
     } finally {
       setRetakingKey(null);
     }
+  };
+
+  const handleRetake = async (questionKey) => {
+    const allowed = await ensureCameraPermission();
+    if (!allowed) {
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ base64: true });
+    if (result?.canceled) {
+      return;
+    }
+    await savePhoto(questionKey, result.assets[0].uri);
+  };
+
+  /**
+   * No permission request is necessary for launching the image library.
+   * docs: https://docs.expo.dev/versions/latest/sdk/imagepicker/#usage
+   */
+  const handlePickFromGallery = async (questionKey) => {
+    const result = await ImagePicker.launchImageLibraryAsync({ base64: true });
+    if (result?.canceled) {
+      return;
+    }
+    await savePhoto(questionKey, result.assets[0].uri);
   };
 
   const handleReattach = async (questionKey, rule = null) => {
@@ -357,6 +133,9 @@ const FormDataDetails = ({ navigation, route }) => {
         s.currentValues = updatedValues;
       });
       await crudDataPoints.updateJson(db, datapointId, updatedValues);
+      UIState.update((s) => {
+        s.refreshPage = true;
+      });
       ToastAndroid.show(trans.reattachSuccess, ToastAndroid.LONG);
     } finally {
       setRetakingKey(null);
@@ -409,14 +188,19 @@ const FormDataDetails = ({ navigation, route }) => {
       const fileExtension = fileName.split('.').pop();
       if (helpers.isImageFile(fileExtension)) {
         return (
+          // Keyed on the question alone: ImageView derives its error state from
+          // the uri, so a replacement file updates it in place instead of
+          // remounting and re-running the load from scratch.
           <ImageView
-            key={`${q.id}-${answer}`}
+            key={q.id}
             label={q.label}
             uri={answer}
             textTestID={`text-question-${qIndex}`}
             imageTestID={`image-question-${qIndex}`}
             missingText={trans.attachmentMissingText}
             retakeLabel={trans.buttonReattachFile}
+            loadFailedText={trans.photoLoadFailedText}
+            tryAgainLabel={trans.buttonTryAgain}
             onRetake={canRetake ? () => handleReattach(q.id, q.rule) : null}
             isRetaking={retakingKey === q.id}
             processingLabel={trans.compressingImage}
@@ -425,7 +209,7 @@ const FormDataDetails = ({ navigation, route }) => {
       }
       return (
         <AttachmentView
-          key={`${q.id}-${answer}`}
+          key={q.id}
           label={q.label}
           uri={answer}
           index={qIndex}
@@ -439,25 +223,32 @@ const FormDataDetails = ({ navigation, route }) => {
       );
     }
     if ([QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(q.type) && answer) {
+      // Signatures are excluded from both repair paths: replacing one with an
+      // arbitrary picked image would weaken what it attests to.
+      const isPhoto = canRetake && q.type === QUESTION_TYPES.image;
       return (
         <ImageView
-          key={`${q.id}-${answer}`}
+          key={q.id}
           label={q.label}
           uri={answer}
           textTestID={`text-question-${qIndex}`}
           imageTestID={`image-question-${qIndex}`}
           missingText={trans.fileMissingText}
           retakeLabel={trans.buttonRetakePhoto}
-          onRetake={canRetake && q.type === QUESTION_TYPES.photo ? () => handleRetake(q.id) : null}
+          galleryLabel={trans.buttonFromGallery}
+          loadFailedText={trans.photoLoadFailedText}
+          tryAgainLabel={trans.buttonTryAgain}
+          onRetake={isPhoto ? () => handleRetake(q.id) : null}
+          onPickGallery={isPhoto ? () => handlePickFromGallery(q.id) : null}
           isRetaking={retakingKey === q.id}
           processingLabel={trans.compressingImage}
         />
       );
     }
     return (
-      <View key={q.keyform} style={styles.listItem}>
-        <View style={styles.listItemContent}>
-          <Text style={styles.listItemTitle} testID={`text-question-${qIndex}`}>
+      <View key={q.keyform} style={sharedStyles.listItem}>
+        <View style={sharedStyles.listItemContent}>
+          <Text style={sharedStyles.listItemTitle} testID={`text-question-${qIndex}`}>
             {label}
           </Text>
           <SubtitleContent
@@ -513,11 +304,6 @@ const FormDataDetails = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  title: {
-    fontWeight: '700',
-    fontSize: 14,
-    marginBottom: 4,
-  },
   sectionTitle: {
     fontWeight: '700',
     fontSize: 14,
@@ -531,53 +317,6 @@ const styles = StyleSheet.create({
   },
   sectionList: {
     flexGrow: 1,
-  },
-  containerImage: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    padding: 16,
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderTopColor: 'transparent',
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: 'silver',
-  },
-  image: {
-    width: '100%',
-    height: 200,
-    aspectRatio: 1,
-  },
-  missingText: {
-    color: '#b91c1c',
-    marginBottom: 8,
-  },
-  processingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 8,
-  },
-  processingText: {
-    color: 'dodgerblue',
-    fontSize: 14,
-  },
-  listItem: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  listItemContent: {
-    flex: 1,
-  },
-  listItemTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
   },
 });
 
