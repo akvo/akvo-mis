@@ -2,8 +2,9 @@ import React from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { PermissionsAndroid } from 'react-native';
 import { renderHook, render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import * as MediaLibrary from 'expo-media-library';
 import TypeImage from '../TypeImage';
-import { FormState } from '../../../store';
+import { FormState, BuildParamsState } from '../../../store';
 
 jest.mock('react-native/Libraries/PermissionsAndroid/PermissionsAndroid', () => ({
   PERMISSIONS: {
@@ -28,6 +29,14 @@ jest.mock('expo-image-picker', () => ({
 }));
 jest.mock('expo-font');
 jest.mock('expo-asset');
+
+jest.mock('expo-media-library', () => ({
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ granted: true })),
+  createAssetAsync: jest.fn(() => Promise.resolve({ id: 'asset-1' })),
+  getAlbumAsync: jest.fn(() => Promise.resolve(null)),
+  createAlbumAsync: jest.fn(() => Promise.resolve({ id: 'album-1' })),
+  addAssetsToAlbumAsync: jest.fn(() => Promise.resolve(true)),
+}));
 
 describe('TypeImage component', () => {
   beforeAll(() => {
@@ -430,5 +439,139 @@ describe('TypeImage component', () => {
 
     const requiredIcon = getByText('**');
     expect(requiredIcon).toBeTruthy();
+  });
+
+  describe('save to gallery', () => {
+    const fieldID = 'imageField';
+
+    const renderField = (onChange = jest.fn()) =>
+      render(
+        <TypeImage onChange={onChange} keyform={1} value={null} id={fieldID} label="Site photo" />,
+      );
+
+    const capturePhoto = async (getByTestId) => {
+      fireEvent.press(getByTestId('btn-use-camera'));
+      await waitFor(() => {
+        expect(ImagePicker.launchCameraAsync).toHaveBeenCalled();
+      });
+    };
+
+    // T26 — the setting is off by default, so the library is never touched
+    it('never calls the media library when saveToGallery is off', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.saveToGallery = 0;
+        });
+      });
+      const { getByTestId } = renderField();
+
+      await capturePhoto(getByTestId);
+
+      expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
+      expect(MediaLibrary.createAssetAsync).not.toHaveBeenCalled();
+    });
+
+    it('requests write-only permission and files the asset under the apkName album', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.saveToGallery = 1;
+          s.apkName = 'Akvo MIS';
+        });
+      });
+      const { getByTestId } = renderField();
+
+      await capturePhoto(getByTestId);
+
+      await waitFor(() => {
+        expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(true);
+        expect(MediaLibrary.createAlbumAsync).toHaveBeenCalledWith(
+          'Akvo MIS',
+          expect.anything(),
+          false,
+        );
+      });
+    });
+
+    it('adds to the existing album rather than creating a duplicate', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.saveToGallery = 1;
+        });
+      });
+      MediaLibrary.getAlbumAsync.mockResolvedValueOnce({ id: 'album-1' });
+      const { getByTestId } = renderField();
+
+      await capturePhoto(getByTestId);
+
+      await waitFor(() => {
+        expect(MediaLibrary.addAssetsToAlbumAsync).toHaveBeenCalled();
+      });
+      expect(MediaLibrary.createAlbumAsync).not.toHaveBeenCalled();
+    });
+
+    // T27 — a denied permission must not cost the enumerator their answer
+    it('still sets the answer when permission is denied', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.saveToGallery = 1;
+        });
+      });
+      MediaLibrary.requestPermissionsAsync.mockResolvedValueOnce({ granted: false });
+      const mockOnChange = jest.fn();
+      const { getByTestId } = renderField(mockOnChange);
+
+      await capturePhoto(getByTestId);
+
+      await waitFor(() => {
+        expect(mockOnChange).toHaveBeenCalled();
+      });
+      expect(MediaLibrary.createAssetAsync).not.toHaveBeenCalled();
+    });
+
+    it('still sets the answer when the gallery write throws', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.saveToGallery = 1;
+        });
+      });
+      MediaLibrary.createAssetAsync.mockRejectedValueOnce(new Error('no space'));
+      const mockOnChange = jest.fn();
+      const { getByTestId } = renderField(mockOnChange);
+
+      await capturePhoto(getByTestId);
+
+      // The throw is swallowed and reported to Sentry; asserting the report needs
+      // a spy, and the shared mock in setup-test-env.js is a plain function.
+      // What matters here is that the answer survives the failure.
+      await waitFor(() => {
+        expect(mockOnChange).toHaveBeenCalled();
+      });
+    });
+
+    // T28 — a picked photo is already in the gallery
+    it('does not copy back a photo picked from the gallery', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.saveToGallery = 1;
+        });
+      });
+      const { getByTestId } = render(
+        <TypeImage
+          onChange={jest.fn()}
+          keyform={1}
+          value={null}
+          id={fieldID}
+          label="Site photo"
+          useGallery
+        />,
+      );
+
+      fireEvent.press(getByTestId('btn-from-gallery'));
+
+      await waitFor(() => {
+        expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
+      });
+      expect(MediaLibrary.createAssetAsync).not.toHaveBeenCalled();
+    });
   });
 });

@@ -79,8 +79,10 @@ module.exports = {
     // "mjs",
     // "cjs",
     'jsx',
-    // "ts",
-    // "tsx",
+    // ts/tsx are needed to resolve expo-modules-core's TypeScript sources, which
+    // jest-expo 53's preset/setup.js imports (expo-modules-core/src/Refs).
+    'ts',
+    'tsx',
     'json',
     'node',
   ],
