@@ -61,12 +61,12 @@ class DashboardModelTestCase(TestCase):
             slug=slug,
         )
 
-    def make_widget(self, dashboard, order=0, question=None):
+    def make_widget(self, dashboard, order=0, question=None, form=None):
         return DashboardWidget.objects.create(
             dashboard=dashboard,
             order=order,
             type=WidgetTypes.kpi,
-            form=dashboard.root_form,
+            form=form or dashboard.root_form,
             question=question,
         )
 
@@ -177,6 +177,26 @@ class DashboardModelTestCase(TestCase):
         with self.assertRaises(ProtectedError):
             with transaction.atomic():
                 self.acme_form.hard_delete()
+
+    def test_widget_form_is_protected_against_hard_delete(self):
+        # The widget's form must be a *different* Forms row from the
+        # dashboard's root_form: Dashboard.root_form is itself PROTECT,
+        # and Django's deletion Collector raises ProtectedError as soon
+        # as it finds any protected relation, regardless of which one.
+        # Pointing the widget at root_form would let root_form's PROTECT
+        # mask DashboardWidget.form's own, making the test pass even if
+        # the widget's PROTECT were loosened. Use a monitoring form
+        # (parent=root_form) instead, so only the widget's FK is tripped.
+        monitoring_form = Forms.objects.create(
+            name="Water Points Monitoring",
+            type=FormTypes.monitoring,
+            parent=self.acme_form,
+            tenant=self.acme,
+        )
+        self.make_widget(self.make_dashboard(), form=monitoring_form)
+        with self.assertRaises(ProtectedError):
+            with transaction.atomic():
+                monitoring_form.hard_delete()
 
     def test_question_is_protected_against_hard_delete(self):
         self.make_widget(self.make_dashboard(), question=self.question)
