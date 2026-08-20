@@ -17,7 +17,7 @@
 
 ## 1. Context & Problem Statement
 
-```
+```text
 Currently:
 - Forms can be exported as JSON (FB-007) and submission data as Excel.
 - No XLSForm export exists; there is no offline collection path via ODK Collect / KoboToolbox.
@@ -60,8 +60,9 @@ sequenceDiagram
 ## 3. Requirements
 
 ### User Acceptance Criteria
+
 - [ ] Clicking "Export XLSForm" in the Form Builder downloads a `.xlsx` file.
-- [ ] The file is accepted by https://getodk.org/xlsform/ without validation errors.
+- [ ] The file is accepted by `https://getodk.org/xlsform/` without validation errors.
 - [ ] Repeat groups render as `begin_repeat`/`end_repeat`; plain groups as `begin_group`/`end_group`.
 - [ ] Dependency questions produce correct `relevant` XPath (options, min, max, equal, notEqual, AND/OR rules).
 - [ ] Skip-logic involving `select_one` / `select_multiple` uses the correct XPath (`selected()`).
@@ -70,6 +71,7 @@ sequenceDiagram
 - [ ] Cascade questions export as `select_one_from_file administration.csv` with `choice_filter`.
 
 ### Technical Acceptance Criteria
+
 - [ ] New service module: `backend/api/v1/v1_forms/services/xlsform_export.py`.
 - [ ] New endpoint: `GET /api/v1/manage/forms/{id}/export-xlsform` (same auth as JSON export).
 - [ ] `openpyxl` (already in `requirements.txt`) is the only new library dependency.
@@ -87,6 +89,7 @@ sequenceDiagram
 ### Service: `backend/api/v1/v1_forms/services/xlsform_export.py`
 
 **Public API:**
+
 ```python
 def generate_xlsform(form: Forms) -> tuple[io.BytesIO, list[str]]:
     """Return (xlsx_bytes, skipped_question_names)."""
@@ -129,7 +132,7 @@ def _build_settings_row(form) -> dict:
 3. **Dependency → `relevant`** (§5.2 of issue):
 
 | Entry | XPath fragment |
-|---|---|
+| --- | --- |
 | `{"id": N, "options": ["a"]}` | `selected(${name}, 'a')` |
 | `{"id": N, "options": ["a","b"]}` | `(selected(${name}, 'a') or selected(${name}, 'b'))` |
 | `{"id": N, "min": 4}` | `${name} >= 4` |
@@ -141,51 +144,58 @@ Fragments joined by ` and ` (AND) or ` or ` (OR) per `dependency_rule`. Unresolv
 
 4. **Constraint**: `rule.min` and `rule.max` → `. >= min and . <= max`. Message: `"Value must be between {min} and {max}"`.
 
-5. **Type mapping**:
+5. **Type mapping & Scope**:
 
-| Akvo MIS type | XLSForm type | appearance |
-|---|---|---|
-| `text` (3), `input` (13) | `text` | — |
-| `number` (4), `allowDecimal=true` | `decimal` | — |
-| `number` (4), `allowDecimal` absent/false | `integer` | — |
-| `date` (9) | `date` | — |
-| `option` (5) | `select_one option_{q.name}` [+ ` or_other` if any option has `other=True`] | — |
-| `multiple_option` (6) | `select_multiple option_{q.name}` [+ ` or_other`] | — |
-| `geo` (1) | `geopoint` | — |
-| `geoshape` (14) | `geoshape` | — |
-| `geotrace` (15) | `geotrace` | — |
-| `image` (8) | `image` | — |
-| `attachment` (11) | `file` | — |
-| `signature` (12) | `image` | `signature` |
-| `cascade` (7) | `select_one_from_file administration.csv` | — |
-| `autofield` (10), `tree` (16), `table` (17) | *skip* | — |
+The standard question types (`QUESTION_TYPES` in `frontend/src/lib/constants.js`) map to XLSForm as follows:
 
-6. **Cascade questions**: Emit `select_one_from_file administration.csv` with a `choice_filter` column (e.g., `parent_key = ${parent_cascade_name}`). A separate endpoint returns the administration CSV.
+| Akvo MIS type | XLSForm type | appearance | Notes |
+| --- | --- | --- | --- |
+| `input` (13), `text` (3) | `text` | — | Single-line / multiline text input |
+| `number` (4), `allowDecimal=true` | `decimal` | — | Decimal numbers |
+| `number` (4), `allowDecimal` absent/false | `integer` | — | Whole integers |
+| `date` (9) | `date` | — | Date picker |
+| `option` (5) | `select_one option_{q.name}` [+ ` or_other`] | — | Single choice option |
+| `multiple_option` (6) | `select_multiple option_{q.name}` [+ ` or_other`] | — | Multiple choice options |
+| `geo` (1) | `geopoint` | — | GPS coordinate point |
+| `image` (8) | `image` | — | Photo capture |
+| `attachment` (11) | `file` | — | `body::accept` mapped from `rule.allowedFileTypes` (e.g. `image/*,.png,.jpg,.jpeg` or `.pdf,.doc,.docx`) |
+| `signature` (12) | `image` | `signature` | Touch/stylus signature drawing pad |
+| `cascade` (7), `entity` | `select_one_from_file administration.csv` | — | Hierarchical cascade / entity selection |
+| `autofield` (10) | *skip* | — | Server-generated identifier; skipped from manual survey inputs |
 
-7. **`tooltip`** → mapped to XLSForm `hint` column. `addon_before/after` dropped silently.
+6. **Cascade questions**: Multi-level cascade questions expand into sequential `select_one_from_file administration.csv` questions across the configured selectable level range (starting at Level 1 by default, since Level 0 is the fixed National root):
+   - **Level 1 (Top Selectable)**: Named `${q_name}_level_1`, labeled `${label} - ${level_name}`, with `choice_filter = "level = 1"`.
+   - **Level N (Children)**: Named `${q_name}_level_${lvl}`, labeled `${label} - ${level_name}`, with `choice_filter = "parent_key = ${${prev_level_q_name}}"`, and dynamic relevance `relevant = "${prev_level_q_name} != ''"` (so child levels only appear once the parent level is selected).
+   - **Single-level**: If only one level is configured, outputs single question `${q_name}` with `choice_filter = "level = ${min_level}"`.
+
+7. **Attachment file types**: For `attachment` questions, `rule.allowedFileTypes` is mapped to the standard XLSForm `body::accept` column. Image-only extensions include `image/*` so mobile camera/gallery pickers open directly.
+
+8. **`tooltip`** → mapped to XLSForm `hint` column. `addon_before/after` dropped silently.
 
 ### API Contract
 
 | Method | URL | Purpose | Auth |
-|--------|-----|---------|------|
+|---|---|---|---|
 | `GET` | `/api/v1/manage/forms/{id}/export-xlsform` | Download `.xlsx` XLSForm | `IsAuthenticated` + `FormBuilderAccess(form_view)` |
 | `GET` | `/api/v1/manage/forms/{id}/administration-csv` | Download cascade lookup CSV (per-form, capped at cascade `api.max_level`) | `IsAuthenticated` + `FormBuilderAccess(form_view)` |
 
 **Response — export-xlsform (200)**:
-```
+
+```text
 Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 Content-Disposition: attachment; filename="form-{id}-{slug}.xlsx"
 X-XLSForm-Skipped: autofield_q1,tree_q2   (omitted if empty)
 ```
 
 **Response — administration-csv (200)**:
-```
+
+```text
 Content-Type: text/csv
 Content-Disposition: attachment; filename="administration.csv"
 
-list_name,name,label,parent_key
-administration,prov_1,Province A,
-administration,dist_1,District A1,prov_1
+list_name,name,label,parent_key,level
+administration,prov_1,Province A,,0
+administration,dist_1,District A1,prov_1,1
 ...
 ```
 
@@ -240,7 +250,7 @@ formBuilderExportXlsformError: "Failed to export XLSForm",
 ## 6. Type/Constant Mappings
 
 | Akvo MIS `QuestionTypes` constant | DB int | XLSForm type |
-|---|---|---|
+| --- | --- | --- |
 | `geo` | 1 | `geopoint` |
 | `text` | 3 | `text` |
 | `number` | 4 | `integer` or `decimal` |
@@ -263,20 +273,23 @@ formBuilderExportXlsformError: "Failed to export XLSForm",
 ## 7. Compatibility & Migration
 
 ### Backward Compatibility
+
 - [x] Existing JSON export endpoint (`/export`) unchanged.
 - [x] No model changes — zero migration risk.
 - [x] All existing API consumers unaffected.
 
 ### Mobile App Impact
+
 - [x] No mobile sync endpoint changes.
 - [x] No SQLite schema changes.
 
 ### Cascade / Administration CSV
 
-The cascade endpoint queries the `administration` tree (likely from `api/v1/v1_profile/models.py` — to be verified in `/1-research`). The CSV format must match ODK's `select_one_from_file` expectations:
-```
-list_name,name,label,parent_key
-administration,<code>,<label>,<parent_code or blank>
+The cascade endpoint queries the `administration` tree. The CSV format must match ODK's `select_one_from_file` expectations:
+
+```text
+list_name,name,label,parent_key,level
+administration,<code>,<label>,<parent_code or blank>,<level>
 ```
 
 ---
@@ -299,7 +312,7 @@ administration,<code>,<label>,<parent_code or blank>
 Test cases (seeding `example-3.json` and `example-4.json`):
 
 | # | Scenario | Expected |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Endpoint returns 200 with xlsx content type | ✓ |
 | 2 | `Content-Disposition` contains `.xlsx` | ✓ |
 | 3 | Workbook has sheets: `survey`, `choices`, `settings` | ✓ |
@@ -326,6 +339,7 @@ Test cases (seeding `example-3.json` and `example-4.json`):
 | 24 | `generate_xlsform()` unit test on pure function | ✓ |
 
 **Run command (inside Docker):**
+
 ```bash
 ./dc.sh exec backend python manage.py test \
     api.v1.v1_forms.tests.tests_form_xlsform_export --verbosity=2
@@ -338,7 +352,7 @@ Test cases (seeding `example-3.json` and `example-4.json`):
    - `survey` sheet has correct type/name/label/relevant/constraint columns.
    - `choices` sheet lists all option rows.
    - `settings` sheet has the form title.
-3. Upload to https://getodk.org/xlsform/ — must pass without errors.
+3. Upload to `https://getodk.org/xlsform/` — must pass without errors.
 4. (Optional) Load in ODK Collect: verify skip logic fires on `classrooms_cleaned = yes AND cleaning_staff <= 6`, and `testimonials` group shows "Add another".
 
 ---
