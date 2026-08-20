@@ -3,7 +3,7 @@
     "newArchEnabled": true,
     "name": "Akvo MIS",
     "slug": "akvo-mis-mobile",
-    "version": "4.1.30",
+    "version": "4.1.31",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.akvo.akvo_mis",
-      "versionCode": 4130
+      "versionCode": 4131
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -61,6 +61,14 @@
       "expo-document-picker",
       "expo-asset",
       "expo-background-task",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Akvo MIS saves a copy of each photo you take to your gallery, so it can be recovered if the app loses it.",
+          "savePhotosPermission": "Akvo MIS saves a copy of each photo you take to your gallery.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "androidNavigationBar": {

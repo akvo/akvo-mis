@@ -5275,7 +5275,7 @@ expo-image-loader@~5.1.0:
 
 expo-image-manipulator@~13.1.7:
   version "13.1.7"
-  resolved "https://registry.yarnpkg.com/expo-image-manipulator/-/expo-image-manipulator-13.1.7.tgz#e891ce9b49d75962eafdf5b7d670116583379e76"
+  resolved "https://registry.npmjs.org/expo-image-manipulator/-/expo-image-manipulator-13.1.7.tgz"
   integrity sha512-DBy/Xdd0E/yFind14x36XmwfWuUxOHI/oH97/giKjjPaRc2dlyjQ3tuW3x699hX6gAs9Sixj5WEJ1qNf3c8sag==
   dependencies:
     expo-image-loader "~5.1.0"
@@ -5317,6 +5317,11 @@ expo-manifests@~0.16.6:
   dependencies:
     "@expo/config" "~11.0.12"
     expo-json-utils "~0.15.0"
+
+expo-media-library@~17.1.7:
+  version "17.1.7"
+  resolved "https://registry.npmjs.org/expo-media-library/-/expo-media-library-17.1.7.tgz"
+  integrity sha512-hLCoMvlhjtt+iYxPe71P1F6t06mYGysuNOfjQzDbbf64PCkglCZJYmywPyUSV1V5Hu9DhRj//gEg+Ki+7VWXog==
 
 expo-modules-autolinking@2.1.15:
   version "2.1.15"

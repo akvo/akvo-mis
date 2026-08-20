@@ -25,6 +25,7 @@ const tables = [
       geoLocationTimeout: 'INTEGER NULL',
       imageQuality: "VARCHAR(20) DEFAULT 'low'",
       updateSkippedUntil: 'DATETIME',
+      saveToGallery: 'TINYINT DEFAULT 0',
     },
   },
   {
