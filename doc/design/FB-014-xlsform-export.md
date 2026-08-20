@@ -144,24 +144,24 @@ Fragments joined by ` and ` (AND) or ` or ` (OR) per `dependency_rule`. Unresolv
 
 4. **Constraint**: `rule.min` and `rule.max` → `. >= min and . <= max`. Message: `"Value must be between {min} and {max}"`.
 
-5. **Type mapping**:
+5. **Type mapping & Scope**:
 
-| Akvo MIS type | XLSForm type | appearance |
-| --- | --- | --- |
-| `text` (3), `input` (13) | `text` | — |
-| `number` (4), `allowDecimal=true` | `decimal` | — |
-| `number` (4), `allowDecimal` absent/false | `integer` | — |
-| `date` (9) | `date` | — |
-| `option` (5) | `select_one option_{q.name}` [+ ` or_other` if any option has `other=True`] | — |
-| `multiple_option` (6) | `select_multiple option_{q.name}` [+ ` or_other`] | — |
-| `geo` (1) | `geopoint` | — |
-| `geoshape` (14) | `geoshape` | — |
-| `geotrace` (15) | `geotrace` | — |
-| `image` (8) | `image` | — |
-| `attachment` (11) | `file` | `body::accept` mapped from `rule.allowedFileTypes` (e.g. `image/*,.png,.jpg,.jpeg` or `.pdf,.doc,.docx`) |
-| `signature` (12) | `image` | `signature` |
-| `cascade` (7) | `select_one_from_file administration.csv` | — |
-| `autofield` (10), `tree` (16), `table` (17) | *skip* | — |
+The standard question types (`QUESTION_TYPES` in `frontend/src/lib/constants.js`) map to XLSForm as follows:
+
+| Akvo MIS type | XLSForm type | appearance | Notes |
+| --- | --- | --- | --- |
+| `input` (13), `text` (3) | `text` | — | Single-line / multiline text input |
+| `number` (4), `allowDecimal=true` | `decimal` | — | Decimal numbers |
+| `number` (4), `allowDecimal` absent/false | `integer` | — | Whole integers |
+| `date` (9) | `date` | — | Date picker |
+| `option` (5) | `select_one option_{q.name}` [+ ` or_other`] | — | Single choice option |
+| `multiple_option` (6) | `select_multiple option_{q.name}` [+ ` or_other`] | — | Multiple choice options |
+| `geo` (1) | `geopoint` | — | GPS coordinate point |
+| `image` (8) | `image` | — | Photo capture |
+| `attachment` (11) | `file` | — | `body::accept` mapped from `rule.allowedFileTypes` (e.g. `image/*,.png,.jpg,.jpeg` or `.pdf,.doc,.docx`) |
+| `signature` (12) | `image` | `signature` | Touch/stylus signature drawing pad |
+| `cascade` (7), `entity` | `select_one_from_file administration.csv` | — | Hierarchical cascade / entity selection |
+| `autofield` (10) | *skip* | — | Server-generated identifier; skipped from manual survey inputs |
 
 6. **Cascade questions**: Multi-level cascade questions expand into sequential `select_one_from_file administration.csv` questions across the configured selectable level range (starting at Level 1 by default, since Level 0 is the fixed National root):
    - **Level 1 (Top Selectable)**: Named `${q_name}_level_1`, labeled `${label} - ${level_name}`, with `choice_filter = "level = 1"`.

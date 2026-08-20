@@ -66,52 +66,6 @@ _IMAGE_EXTENSIONS = {
     "ico",
 }
 
-_MIME_TYPES = {
-    "pdf": "application/pdf",
-    "doc": "application/msword",
-    "docx": (
-        "application/vnd.openxmlformats-officedocument."
-        "wordprocessingml.document"
-    ),
-    "xls": "application/vnd.ms-excel",
-    "xlsx": (
-        "application/vnd.openxmlformats-officedocument."
-        "spreadsheetml.sheet"
-    ),
-    "ppt": "application/vnd.ms-powerpoint",
-    "pptx": (
-        "application/vnd.openxmlformats-officedocument."
-        "presentationml.presentation"
-    ),
-    "csv": "text/csv",
-    "zip": "application/zip",
-    "rar": "application/x-rar-compressed",
-    "tar": "application/x-tar",
-    "gz": "application/gzip",
-    "json": "application/json",
-    "txt": "text/plain",
-    "mp3": "audio/mpeg",
-    "wav": "audio/wav",
-    "mp4": "video/mp4",
-    "avi": "video/x-msvideo",
-    "mov": "video/quicktime",
-    "mkv": "video/x-matroska",
-    "flv": "video/x-flv",
-    "webm": "video/webm",
-    "ogg": "audio/ogg",
-    "svg": "image/svg+xml",
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "png": "image/png",
-    "gif": "image/gif",
-    "bmp": "image/bmp",
-    "tiff": "image/tiff",
-    "webp": "image/webp",
-    "ico": "image/vnd.microsoft.icon",
-    "heic": "image/heic",
-    "heif": "image/heif",
-}
-
 
 def _get_allowed_file_types(q: Any) -> List[str]:
     """
@@ -121,9 +75,8 @@ def _get_allowed_file_types(q: Any) -> List[str]:
 
     def _extract_from(container: Any):
         if isinstance(container, dict):
-            raw = (
-                container.get("allowedFileTypes")
-                or container.get("allowed_file_types")
+            raw = container.get("allowedFileTypes") or container.get(
+                "allowed_file_types"
             )
             if isinstance(raw, list):
                 for item in raw:
@@ -214,10 +167,6 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
         return (f"select_multiple option_{q_name}{suffix}", None)
     elif qtype == QuestionTypes.geo:
         return ("geopoint", None)
-    elif qtype == QuestionTypes.geoshape:
-        return ("geoshape", None)
-    elif qtype == QuestionTypes.geotrace:
-        return ("geotrace", None)
     elif qtype == QuestionTypes.image:
         return ("image", None)
     elif qtype == QuestionTypes.attachment:
@@ -919,28 +868,10 @@ def _adapt_form_dict(data: dict) -> Any:
             # to QuestionTypes constant int if necessary
             if isinstance(q_obj.type, str):
                 type_name = q_obj.type.lower()
-                if hasattr(QuestionTypes, type_name):
-                    q_obj.type = getattr(QuestionTypes, type_name)
-                elif type_name == "input":
-                    q_obj.type = QuestionTypes.input
-                elif type_name == "multiple_option":
-                    q_obj.type = QuestionTypes.multiple_option
-                elif type_name == "cascade":
+                if type_name in ("cascade", "entity"):
                     q_obj.type = QuestionTypes.cascade
-                elif type_name == "attachment":
-                    q_obj.type = QuestionTypes.attachment
-                elif type_name == "signature":
-                    q_obj.type = QuestionTypes.signature
-                elif type_name == "geoshape":
-                    q_obj.type = QuestionTypes.geoshape
-                elif type_name == "geotrace":
-                    q_obj.type = QuestionTypes.geotrace
-                elif type_name == "autofield":
-                    q_obj.type = QuestionTypes.autofield
-                elif type_name == "tree":
-                    q_obj.type = QuestionTypes.tree
-                elif type_name == "table":
-                    q_obj.type = QuestionTypes.table
+                elif hasattr(QuestionTypes, type_name):
+                    q_obj.type = getattr(QuestionTypes, type_name)
                 else:
                     q_obj.type = QuestionTypes.text
 

@@ -115,17 +115,9 @@ class XLSFormExportServiceTestCase(TestCase):
             ("select_multiple option_amenities or_other", None),
         )
 
-        # 5. Geo types
+        # 5. Geo type
         self.assertEqual(
             _map_type(DummyObject(type=QuestionTypes.geo)), ("geopoint", None)
-        )
-        self.assertEqual(
-            _map_type(DummyObject(type=QuestionTypes.geoshape)),
-            ("geoshape", None),
-        )
-        self.assertEqual(
-            _map_type(DummyObject(type=QuestionTypes.geotrace)),
-            ("geotrace", None),
         )
 
         # 6. Media & File
