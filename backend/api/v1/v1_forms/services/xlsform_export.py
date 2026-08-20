@@ -167,14 +167,24 @@ def _get_cascade_levels(q: Any, levels_map: Dict[int, str]) -> List[int]:
     """
     Determines the list of level integers [min_level, ..., max_level]
     configured for a cascade question.
+    By default, Level 0 (Country / National root) is omitted from survey
+    questions so cascade selection begins at Level 1 (e.g. Region/Division),
+    unless the hierarchy only has Level 0 or a positive min_level is set.
     """
-    min_level = 0
+    has_levels = bool(levels_map)
+    default_min = (
+        1 if (has_levels and 0 in levels_map and len(levels_map) > 1) else 0
+    )
+    min_level = default_min
     max_level = None
-    if q.api and isinstance(q.api, dict):
-        if "min_level" in q.api and isinstance(q.api["min_level"], int):
-            min_level = q.api["min_level"]
-        if "max_level" in q.api and isinstance(q.api["max_level"], int):
-            max_level = q.api["max_level"]
+
+    q_api = getattr(q, "api", None)
+    if q_api and isinstance(q_api, dict):
+        if "min_level" in q_api and isinstance(q_api["min_level"], int):
+            if q_api["min_level"] > 0:
+                min_level = q_api["min_level"]
+        if "max_level" in q_api and isinstance(q_api["max_level"], int):
+            max_level = q_api["max_level"]
 
     if max_level is None:
         max_level = max(levels_map.keys()) if levels_map else 2
@@ -635,6 +645,7 @@ def _build_survey_rows(
 
                         if lvl_idx == 0:
                             choice_filter = f"level = {lvl}"
+                            level_relevant = relevant_expr
                         else:
                             prev_level_q_name = (
                                 f"{q_name}_level_{levels[lvl_idx - 1]}"
@@ -642,6 +653,13 @@ def _build_survey_rows(
                             choice_filter = (
                                 f"parent_key = ${{{prev_level_q_name}}}"
                             )
+                            parent_dep = f"${{{prev_level_q_name}}} != ''"
+                            if relevant_expr:
+                                level_relevant = (
+                                    f"({relevant_expr}) and ({parent_dep})"
+                                )
+                            else:
+                                level_relevant = parent_dep
 
                         level_row = {
                             "type": "select_one_from_file administration.csv",
@@ -654,8 +672,8 @@ def _build_survey_rows(
                             f"label::{d_lang_display}": level_primary_label,
                             "choice_filter": choice_filter,
                         }
-                        if relevant_expr:
-                            level_row["relevant"] = relevant_expr
+                        if level_relevant:
+                            level_row["relevant"] = level_relevant
                         if hint_text:
                             level_row[f"hint::{d_lang_display}"] = hint_text
 
@@ -747,6 +765,7 @@ class _DictObject:
         self.dependency_rule = None
         self.required = False
         self.other = False
+        self.api = None
         for k, v in d.items():
             setattr(self, k, v)
         if "defaultLanguage" in d and not hasattr(self, "default_language"):

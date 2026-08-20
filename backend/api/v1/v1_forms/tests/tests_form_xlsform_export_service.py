@@ -689,3 +689,74 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(rows[0], ("list_name", "name", "label::English (en)"))
         self.assertEqual(rows[1], ("option_site_type", "urban", "Urban"))
         self.assertEqual(rows[2], ("option_site_type", "rural", "Rural"))
+
+    def test_cascade_expansion_omits_level_zero_and_adds_progressive_relevance(  # noqa
+        self,
+    ):
+        payload_cascade = {
+            "id": 9001,
+            "name": "Cascade Relevance Form",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "location_group",
+                    "label": "Location Group",
+                    "question": [
+                        {
+                            "id": 501,
+                            "name": "location",
+                            "label": "Farm Location",
+                            "type": "cascade",
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_cascade)
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        name_idx = headers.index("name")
+        type_idx = headers.index("type")
+        filter_idx = headers.index("choice_filter")
+        relevant_idx = headers.index("relevant")
+        label_idx = headers.index("label::English (en)")
+
+        rows = list(ws_survey.iter_rows(values_only=True))[1:]  # skip header
+        # Row 0: begin_group
+        # Row 1: location_level_1 (Region/Province)
+        # Row 2: location_level_2 (District)
+        # Row 3: location_level_3 (Subdistrict)
+        # Row 4: location_level_4 (Village)
+        # Row 5: end_group
+        cascade_rows = [
+            r
+            for r in rows
+            if r[type_idx] == "select_one_from_file administration.csv"
+        ]  # noqa
+        self.assertEqual(len(cascade_rows), 4)
+
+        # Level 1
+        self.assertEqual(cascade_rows[0][name_idx], "location_level_1")
+        self.assertEqual(cascade_rows[0][filter_idx], "level = 1")
+        self.assertIsNone(cascade_rows[0][relevant_idx])
+        self.assertIn("Farm Location - ", cascade_rows[0][label_idx])
+
+        # Level 2
+        self.assertEqual(cascade_rows[1][name_idx], "location_level_2")
+        self.assertEqual(
+            cascade_rows[1][filter_idx], "parent_key = ${location_level_1}"
+        )
+        self.assertEqual(
+            cascade_rows[1][relevant_idx], "${location_level_1} != ''"
+        )
+
+        # Level 3
+        self.assertEqual(cascade_rows[2][name_idx], "location_level_3")
+        self.assertEqual(
+            cascade_rows[2][filter_idx], "parent_key = ${location_level_2}"
+        )
+        self.assertEqual(
+            cascade_rows[2][relevant_idx], "${location_level_2} != ''"
+        )

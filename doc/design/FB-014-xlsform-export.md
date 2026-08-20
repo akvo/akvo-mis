@@ -163,9 +163,9 @@ Fragments joined by ` and ` (AND) or ` or ` (OR) per `dependency_rule`. Unresolv
 | `cascade` (7) | `select_one_from_file administration.csv` | — |
 | `autofield` (10), `tree` (16), `table` (17) | *skip* | — |
 
-6. **Cascade questions**: Multi-level cascade questions expand into sequential `select_one_from_file administration.csv` questions across the configured level range (from `min_level` to `max_level`):
-   - **Level 0 (Root)**: Named `${q_name}_level_0`, labeled `${label} - ${level_name}`, with `choice_filter = "level = 0"`.
-   - **Level N (Children)**: Named `${q_name}_level_${lvl}`, labeled `${label} - ${level_name}`, with `choice_filter = "parent_key = ${${prev_level_q_name}}"`.
+6. **Cascade questions**: Multi-level cascade questions expand into sequential `select_one_from_file administration.csv` questions across the configured selectable level range (starting at Level 1 by default, since Level 0 is the fixed National root):
+   - **Level 1 (Top Selectable)**: Named `${q_name}_level_1`, labeled `${label} - ${level_name}`, with `choice_filter = "level = 1"`.
+   - **Level N (Children)**: Named `${q_name}_level_${lvl}`, labeled `${label} - ${level_name}`, with `choice_filter = "parent_key = ${${prev_level_q_name}}"`, and dynamic relevance `relevant = "${prev_level_q_name} != ''"` (so child levels only appear once the parent level is selected).
    - **Single-level**: If only one level is configured, outputs single question `${q_name}` with `choice_filter = "level = ${min_level}"`.
 
 7. **`tooltip`** → mapped to XLSForm `hint` column. `addon_before/after` dropped silently.

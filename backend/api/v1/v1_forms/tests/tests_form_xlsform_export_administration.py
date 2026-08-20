@@ -278,42 +278,40 @@ class FormAdministrationCSVExportEndpointTestCase(TestCase):
         name_idx = headers.index("name") + 1
         type_idx = headers.index("type") + 1
         filter_idx = headers.index("choice_filter") + 1
+        relevant_idx = headers.index("relevant") + 1
         label_en_idx = headers.index("label::English (en)") + 1
         label_id_idx = headers.index("label::Indonesian (id)") + 1
 
-        # Check expanded level rows
+        # Check expanded level rows (Level 0 is omitted, begins at Level 1)
         # Row 2 is begin_group
-        # Row 3 is Level 0
+        # Row 3 is Level 1 (Province)
         r3_type = ws.cell(row=3, column=type_idx).value
         r3_name = ws.cell(row=3, column=name_idx).value
         r3_filter = ws.cell(row=3, column=filter_idx).value
+        r3_relevant = ws.cell(row=3, column=relevant_idx).value
         r3_label_en = ws.cell(row=3, column=label_en_idx).value
         r3_label_id = ws.cell(row=3, column=label_id_idx).value
 
         self.assertEqual(r3_type, "select_one_from_file administration.csv")
-        self.assertEqual(r3_name, "location_level_0")
-        self.assertEqual(r3_filter, "level = 0")
-        self.assertIn("National", r3_label_en)
-        self.assertIn("National", r3_label_id)
+        self.assertEqual(r3_name, "location_level_1")
+        self.assertEqual(r3_filter, "level = 1")
+        self.assertIsNone(r3_relevant)
+        self.assertIn("Province", r3_label_en)
+        self.assertIn("Province", r3_label_id)
 
-        # Row 4 is Level 1
+        # Row 4 is Level 2 (District)
         r4_type = ws.cell(row=4, column=type_idx).value
         r4_name = ws.cell(row=4, column=name_idx).value
         r4_filter = ws.cell(row=4, column=filter_idx).value
+        r4_relevant = ws.cell(row=4, column=relevant_idx).value
         r4_label_en = ws.cell(row=4, column=label_en_idx).value
 
         self.assertEqual(r4_type, "select_one_from_file administration.csv")
-        self.assertEqual(r4_name, "location_level_1")
-        self.assertEqual(r4_filter, "parent_key = ${location_level_0}")
-        self.assertIn("Province", r4_label_en)
+        self.assertEqual(r4_name, "location_level_2")
+        self.assertEqual(r4_filter, "parent_key = ${location_level_1}")
+        self.assertEqual(r4_relevant, "${location_level_1} != ''")
+        self.assertIn("District", r4_label_en)
 
-        # Row 5 is Level 2
+        # Row 5 is end_group
         r5_type = ws.cell(row=5, column=type_idx).value
-        r5_name = ws.cell(row=5, column=name_idx).value
-        r5_filter = ws.cell(row=5, column=filter_idx).value
-        r5_label_en = ws.cell(row=5, column=label_en_idx).value
-
-        self.assertEqual(r5_type, "select_one_from_file administration.csv")
-        self.assertEqual(r5_name, "location_level_2")
-        self.assertEqual(r5_filter, "parent_key = ${location_level_1}")
-        self.assertIn("District", r5_label_en)
+        self.assertEqual(r5_type, "end_group")
