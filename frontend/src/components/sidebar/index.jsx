@@ -12,6 +12,7 @@ import {
   BookOutlined,
   FormOutlined,
   AndroidOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { AbilityContext } from "../can";
 
@@ -288,6 +289,18 @@ const Sidebar = () => {
               data-url="/control-center/form-builder"
             >
               {text.menuFormBuilder}
+            </Menu.Item>
+          )}
+
+          {/* Dashboards */}
+          {(ability.can("manage", "dashboard") ||
+            ability.can("read", "dashboard")) && (
+            <Menu.Item
+              key="menu-dashboards"
+              icon={<BarChartOutlined />}
+              data-url="/dashboards"
+            >
+              {text.menuDashboards}
             </Menu.Item>
           )}
 

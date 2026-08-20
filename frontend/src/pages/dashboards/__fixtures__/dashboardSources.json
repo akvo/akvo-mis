@@ -1,0 +1,64 @@
+{
+  "forms": [
+    {
+      "id": 101,
+      "name": "EPS Registration",
+      "type": "registration",
+      "questions": [
+        {
+          "id": 1001,
+          "label": "Water source type",
+          "type": "option",
+          "options": [
+            { "value": "borehole", "label": "Borehole" },
+            { "value": "spring", "label": "Protected spring" },
+            { "value": "piped", "label": "Piped supply" }
+          ]
+        },
+        {
+          "id": 1002,
+          "label": "Implementing agency",
+          "type": "option",
+          "options": [
+            { "value": "district", "label": "District Water Dept" },
+            { "value": "ngo", "label": "NGO Partner" },
+            { "value": "private", "label": "Private Operator" }
+          ]
+        },
+        {
+          "id": 1003,
+          "label": "Village name",
+          "type": "text"
+        },
+        {
+          "id": 1004,
+          "label": "Number of households served",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "id": 201,
+      "name": "EPS Monitoring",
+      "type": "monitoring",
+      "parent": 101,
+      "questions": [
+        {
+          "id": 2001,
+          "label": "Operational status",
+          "type": "option",
+          "options": [
+            { "value": "operational", "label": "Operational" },
+            { "value": "needs_repair", "label": "Needs repair" },
+            { "value": "non_functional", "label": "Non-functional" }
+          ]
+        },
+        {
+          "id": 2002,
+          "label": "Water quality score",
+          "type": "number"
+        }
+      ]
+    }
+  ]
+}

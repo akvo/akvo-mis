@@ -1,0 +1,14 @@
+[
+  {
+    "id": 101,
+    "name": "EPS Registration",
+    "version": 1,
+    "published": true
+  },
+  {
+    "id": 102,
+    "name": "RWS Registration",
+    "version": 1,
+    "published": true
+  }
+]

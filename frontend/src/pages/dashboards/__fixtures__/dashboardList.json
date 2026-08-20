@@ -1,0 +1,57 @@
+[
+  {
+    "id": 1,
+    "name": "Water Points Overview",
+    "slug": "water-points-overview",
+    "description": "Operational status across all registered water points in the programme area.",
+    "status": "published",
+    "root_form": { "id": 101, "name": "EPS Registration" },
+    "created": "2026-06-10T08:30:00Z",
+    "updated": "2026-08-15T14:22:00Z",
+    "created_by": { "id": 1, "name": "Admin User" },
+    "widgets": [
+      { "type": "kpi", "col_span": 6 },
+      { "type": "kpi", "col_span": 6 },
+      { "type": "kpi", "col_span": 6 },
+      { "type": "kpi", "col_span": 6 },
+      { "type": "bar", "col_span": 12 },
+      { "type": "map", "col_span": 12 },
+      { "type": "table", "col_span": 24 }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Monthly Monitoring Summary",
+    "slug": "monthly-monitoring-summary",
+    "description": "Tracks monitoring form submissions over time with breakdowns by region.",
+    "status": "draft",
+    "root_form": { "id": 101, "name": "EPS Registration" },
+    "created": "2026-07-20T10:00:00Z",
+    "updated": "2026-08-18T09:45:00Z",
+    "created_by": { "id": 1, "name": "Admin User" },
+    "widgets": [
+      { "type": "section_title", "col_span": 24 },
+      { "type": "line", "col_span": 16 },
+      { "type": "pie", "col_span": 8 },
+      { "type": "table", "col_span": 24 }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Regional Comparison",
+    "slug": "regional-comparison",
+    "description": "Side-by-side comparison of key indicators across administrative regions.",
+    "status": "published",
+    "root_form": { "id": 101, "name": "EPS Registration" },
+    "created": "2026-08-01T12:15:00Z",
+    "updated": "2026-08-19T16:30:00Z",
+    "created_by": { "id": 2, "name": "Data Manager" },
+    "widgets": [
+      { "type": "bar", "col_span": 12 },
+      { "type": "bar", "col_span": 12 },
+      { "type": "kpi", "col_span": 8 },
+      { "type": "kpi", "col_span": 8 },
+      { "type": "kpi", "col_span": 8 }
+    ]
+  }
+]
