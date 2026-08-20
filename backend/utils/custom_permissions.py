@@ -87,6 +87,20 @@ def FormBuilderAccess(required_access):
     return _Permission
 
 
+def DashboardAccess(required_access):
+    """Return a permission class for the given granular access type."""
+    class _Permission(BasePermission):
+        def has_permission(self, request, view):
+            if request.user.is_superuser:
+                return True
+            dashboard = FeatureTypes.dashboard_builder
+            return request.user.user_user_role.filter(
+                role__role_role_feature_access__type=dashboard,
+                role__role_role_feature_access__access=required_access,
+            ).exists()
+    return _Permission
+
+
 class PublicGet(BasePermission):
     def has_permission(self, request, view):
         if request.method == "GET":
