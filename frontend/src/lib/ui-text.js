@@ -35,6 +35,34 @@ const uiText = {
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
     menuFormBuilder: "Form Builder",
+    menuDashboards: "Dashboards",
+    // Dashboards
+    dashboardListTitle: "My dashboards",
+    dashboardListSubtitle: "Build and manage your custom data dashboards.",
+    dashboardNew: "New dashboard",
+    dashboardEmptyTitle: "No dashboards yet",
+    dashboardEmptyDesc:
+      "Create your first custom dashboard to visualise data from your forms.",
+    dashboardCreateTitle: "Create a dashboard",
+    dashboardCreateHint:
+      "Name it, then pick the registration form whose data this dashboard will show.",
+    dashboardCreateBtn: "Create dashboard",
+    dashboardNameLabel: "Dashboard name",
+    dashboardNameRequired: "Please enter a dashboard name",
+    dashboardFormLabel: "Data source",
+    dashboardFormExtra:
+      "This dashboard will show data from this form and its monitoring forms. This cannot be changed later.",
+    dashboardFormRequired: "Please select a registration form",
+    dashboardFormPlaceholder: "Select a registration form",
+    dashboardNoForms: "No published registration forms available.",
+    dashboardGoFormBuilder: "Go to Form Builder to create and publish a form.",
+    dashboardForbidden: "You no longer have permission to perform this action.",
+    dashboardCreated: "Dashboard created",
+    dashboardDeleted: "Dashboard deleted",
+    dashboardDuplicated: "Dashboard duplicated",
+    dashboardDeleteConfirm: "Delete this dashboard?",
+    dashboardSlugConflict:
+      "A dashboard with a similar name already exists. Please choose a different name.",
     // Login
     loginLoadingTex: (
       <Fragment>

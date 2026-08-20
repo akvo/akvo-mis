@@ -1,0 +1,86 @@
+{
+  "id": 1,
+  "name": "Water Points Overview",
+  "slug": "water-points-overview",
+  "description": "Operational status across all registered water points in the programme area.",
+  "status": "published",
+  "root_form": { "id": 101, "name": "EPS Registration" },
+  "default_filters": {
+    "date": { "enabled": true, "default_range": "last_12_months" },
+    "administration": { "enabled": true }
+  },
+  "created": "2026-06-10T08:30:00Z",
+  "updated": "2026-08-15T14:22:00Z",
+  "published_at": "2026-08-15T14:22:00Z",
+  "created_by": { "id": 1, "name": "Admin User" },
+  "widgets": [
+    {
+      "id": 44,
+      "order": 1,
+      "type": "section_title",
+      "col_span": 24,
+      "title": "Current status",
+      "color": null,
+      "form": null,
+      "question": null,
+      "config": { "text": "Current status" }
+    },
+    {
+      "id": 45,
+      "order": 2,
+      "type": "kpi",
+      "col_span": 6,
+      "title": "Operational",
+      "color": "#64A73B",
+      "form": 101,
+      "question": 1001,
+      "config": {
+        "measure": "current_state",
+        "option_value": "operational",
+        "value_type": "number",
+        "include_unmonitored": false
+      }
+    },
+    {
+      "id": 46,
+      "order": 3,
+      "type": "kpi",
+      "col_span": 6,
+      "title": "Needs repair",
+      "color": "#F5A623",
+      "form": 101,
+      "question": 1001,
+      "config": {
+        "measure": "current_state",
+        "option_value": "needs_repair",
+        "value_type": "number",
+        "include_unmonitored": false
+      }
+    },
+    {
+      "id": 47,
+      "order": 4,
+      "type": "bar",
+      "col_span": 12,
+      "title": "Status by region",
+      "color": "#1890ff",
+      "form": 101,
+      "question": 1001,
+      "config": {
+        "measure": "current_state",
+        "group_by": "administration"
+      }
+    },
+    {
+      "id": 48,
+      "order": 5,
+      "type": "map",
+      "col_span": 12,
+      "title": "Site locations",
+      "color": null,
+      "form": 101,
+      "question": null,
+      "config": {}
+    }
+  ]
+}
