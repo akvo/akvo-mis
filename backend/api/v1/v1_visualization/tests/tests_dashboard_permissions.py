@@ -164,6 +164,41 @@ class DashboardAccessPermissionTestCase(TestCase):
             self.check(self.user, FeatureAccessTypes.dashboard_view)
         )
 
+    def test_each_can_dashboard_method_maps_to_its_own_access(self):
+        # UserRole carries five near-identical can_dashboard_* methods,
+        # which the web client reads off each role to build its CASL
+        # ability (VIZ-004), so a copy-paste slip between two of them is
+        # a silent privilege bug. Granting exactly one access at a time
+        # and asserting the other four stay False catches that.
+        methods = {
+            "can_dashboard_view": FeatureAccessTypes.dashboard_view,
+            "can_dashboard_create": FeatureAccessTypes.dashboard_create,
+            "can_dashboard_edit": FeatureAccessTypes.dashboard_edit,
+            "can_dashboard_publish": FeatureAccessTypes.dashboard_publish,
+            "can_dashboard_delete": FeatureAccessTypes.dashboard_delete,
+        }
+        for granted, access in methods.items():
+            role = Role.objects.create(
+                name=f"Only {granted}",
+                administration_level=self.level,
+            )
+            RoleFeatureAccess.objects.create(
+                role=role,
+                type=FeatureTypes.dashboard_builder,
+                access=access,
+            )
+            user_role = UserRole.objects.create(
+                user=self.user,
+                role=role,
+                administration=self.administration,
+            )
+            for name in methods:
+                self.assertEqual(
+                    getattr(user_role, name)(),
+                    name == granted,
+                    f"{name} when only {granted} is granted",
+                )
+
     def test_superuser_bypasses_the_check(self):
         superuser = SystemUser.objects.create_superuser(
             email="root@akvo.org",
