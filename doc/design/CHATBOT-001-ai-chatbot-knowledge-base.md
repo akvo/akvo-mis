@@ -1,8 +1,8 @@
 # AI Chatbot Knowledge Base — Feature Specification
 
 **Feature ID**: CHATBOT-001
-**Branch**: `feat/ai-chatbot-planning`
-**Status**: Draft — Pending Manager Review
+**Branch**: `feat/ai-chatbot-planning` | `[feature/319-implement-mis-ai-support]`
+**Status**: Approved
 **Estimation Mode**: Vibe coding + manual test
 
 ---
