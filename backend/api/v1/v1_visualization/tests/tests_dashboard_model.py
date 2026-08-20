@@ -178,6 +178,14 @@ class DashboardModelTestCase(TestCase):
             with transaction.atomic():
                 self.acme_form.hard_delete()
 
+    def test_question_is_protected_against_hard_delete(self):
+        self.make_widget(self.make_dashboard(), question=self.question)
+        # Same reasoning as test_root_form_is_protected_against_hard_delete:
+        # only a hard delete reaches the database's referential check.
+        with self.assertRaises(ProtectedError):
+            with transaction.atomic():
+                self.question.hard_delete()
+
     def test_soft_deleting_a_question_leaves_the_widget_intact(self):
         widget = self.make_widget(
             self.make_dashboard(), question=self.question

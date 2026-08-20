@@ -148,6 +148,43 @@ class DashboardAccessPermissionTestCase(TestCase):
             self.check(self.user, FeatureAccessTypes.dashboard_view)
         )
 
+    def test_denied_when_the_two_halves_come_from_different_rows(self):
+        # DashboardAccess matches type and access inside a single
+        # .filter(role__role_role_feature_access__type=...,
+        # access=...) call, so both conditions must be satisfied by the
+        # same role_feature_access row. This test fails if that filter
+        # is ever split into two chained .filter() calls: Django then
+        # joins role_role_feature_access twice (once per call), and a
+        # role holding "the right type" on one access row and "the
+        # right access" on another row of its own would wrongly pass,
+        # even though no single row has both.
+        #
+        # Note this needs the two halves on one role's two access rows,
+        # not two different roles/UserRole rows: a per-role .filter()
+        # is scoped to that role's own role_role_feature_access set
+        # either way, so splitting the filter across separate roles
+        # does not, by itself, reproduce the cross-row leak.
+        role = Role.objects.create(
+            name="Half type, half access",
+            administration_level=self.level,
+        )
+        RoleFeatureAccess.objects.create(
+            role=role,
+            type=FeatureTypes.form_builder,
+            access=FeatureAccessTypes.dashboard_view,
+        )
+        RoleFeatureAccess.objects.create(
+            role=role,
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.form_view,
+        )
+        UserRole.objects.create(
+            user=self.user, role=role, administration=self.administration
+        )
+        self.assertFalse(
+            self.check(self.user, FeatureAccessTypes.dashboard_view)
+        )
+
     def test_superuser_bypasses_the_check(self):
         superuser = SystemUser.objects.create_superuser(
             email="root@akvo.org",
