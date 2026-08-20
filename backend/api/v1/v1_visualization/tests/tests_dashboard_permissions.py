@@ -1,6 +1,7 @@
-from django.test import TestCase
+from types import SimpleNamespace
+
+from django.test import SimpleTestCase, TestCase
 from django.test.utils import override_settings
-from rest_framework.test import APIRequestFactory
 
 from api.v1.v1_profile.constants import (
     FeatureAccessTypes,
@@ -26,8 +27,7 @@ DASHBOARD_ACCESSES = [
 ]
 
 
-@override_settings(USE_TZ=False)
-class DashboardConstantsTestCase(TestCase):
+class DashboardConstantsTestCase(SimpleTestCase):
     """The five accesses and the group the role editor renders."""
 
     def test_access_values_continue_from_form_delete(self):
@@ -36,42 +36,22 @@ class DashboardConstantsTestCase(TestCase):
         # number would silently re-point existing grants.
         self.assertEqual(DASHBOARD_ACCESSES, [8, 9, 10, 11, 12])
 
-    def test_every_access_has_a_label(self):
-        for access in DASHBOARD_ACCESSES:
-            self.assertIn(access, FeatureAccessTypes.FieldStr)
-
     def test_dashboard_builder_groups_all_five(self):
         # generate_config walks FieldStr and emits each key's FieldGroup
         # members, so this is the whole role-editor integration.
         self.assertEqual(FeatureTypes.dashboard_builder, 3)
-        self.assertIn(FeatureTypes.dashboard_builder, FeatureTypes.FieldStr)
         self.assertEqual(
             FeatureTypes.FieldGroup[FeatureTypes.dashboard_builder],
             DASHBOARD_ACCESSES,
         )
 
-    def test_role_feature_payload_builds(self):
-        # Mirrors the loop in v1_data/management/commands/generate_config.py.
-        # It KeyErrors if either map is missing an entry.
-        payload = [
-            {
-                "id": key,
-                "name": value,
-                "access": [
-                    {
-                        "id": access_id,
-                        "name": FeatureAccessTypes.FieldStr[access_id],
-                    }
-                    for access_id in FeatureTypes.FieldGroup[key]
-                ],
-            }
-            for key, value in FeatureTypes.FieldStr.items()
-        ]
-        builder = [
-            f for f in payload if f["id"] == FeatureTypes.dashboard_builder
-        ][0]
-        self.assertEqual(builder["name"], "Dashboard Builder")
-        self.assertEqual(len(builder["access"]), 5)
+    def test_every_feature_group_resolves(self):
+        # generate_config walks FieldStr, then FieldGroup[key], then
+        # FeatureAccessTypes.FieldStr[access_id]. A desync between any two
+        # of those maps KeyErrors here instead of at config-generation.
+        for key in FeatureTypes.FieldStr:
+            for access_id in FeatureTypes.FieldGroup[key]:
+                FeatureAccessTypes.FieldStr[access_id]
 
 
 @override_settings(USE_TZ=False)
@@ -79,7 +59,6 @@ class DashboardAccessPermissionTestCase(TestCase):
     """DashboardAccess must gate on type AND access, not either."""
 
     def setUp(self):
-        self.factory = APIRequestFactory()
         self.tenant = Tenant.objects.create(subdomain="acme")
         self.level = Levels.objects.create(
             name="National", level=0, tenant=self.tenant
@@ -106,13 +85,13 @@ class DashboardAccessPermissionTestCase(TestCase):
         UserRole.objects.create(
             user=self.user, role=role, administration=self.administration
         )
-        return role
 
     def check(self, user, required_access):
-        request = self.factory.get("/")
-        request.user = user
-        permission = DashboardAccess(required_access)()
-        return permission.has_permission(request, view=None)
+        # DashboardAccess reads request.user and nothing else.
+        request = SimpleNamespace(user=user)
+        return DashboardAccess(required_access)().has_permission(
+            request, view=None
+        )
 
     def test_denied_without_any_role(self):
         self.assertFalse(

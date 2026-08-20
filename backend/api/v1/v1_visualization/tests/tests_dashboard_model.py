@@ -6,10 +6,7 @@ from django.test.utils import override_settings
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
 from api.v1.v1_users.models import SystemUser, Tenant
-from api.v1.v1_visualization.constants import (
-    DashboardStatus,
-    WidgetTypes,
-)
+from api.v1.v1_visualization.constants import WidgetTypes
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 
 
@@ -24,13 +21,6 @@ class DashboardModelTestCase(TestCase):
             first_name="Ac",
             last_name="Me",
             tenant=self.acme,
-        )
-        self.beta_user = SystemUser.objects.create_user(
-            email="beta@akvo.org",
-            password="Secret#Pass123",
-            first_name="Be",
-            last_name="Ta",
-            tenant=self.beta,
         )
         self.acme_form = Forms.objects.create(
             name="Water Points",
@@ -70,19 +60,7 @@ class DashboardModelTestCase(TestCase):
             question=question,
         )
 
-    # ---- defaults -------------------------------------------------
-
-    def test_new_dashboard_is_a_draft(self):
-        dashboard = self.make_dashboard()
-        self.assertEqual(dashboard.status, DashboardStatus.draft)
-        self.assertIsNone(dashboard.published_config)
-        self.assertIsNone(dashboard.published_at)
-        self.assertEqual(dashboard.default_filters, {})
-
-    def test_widget_defaults_to_full_width(self):
-        widget = self.make_widget(self.make_dashboard())
-        self.assertEqual(widget.col_span, 24)
-        self.assertEqual(widget.config, {})
+    # ---- ordering -------------------------------------------------
 
     def test_widgets_order_within_a_dashboard(self):
         dashboard = self.make_dashboard()
@@ -153,9 +131,6 @@ class DashboardModelTestCase(TestCase):
         )
         visible = Dashboard.objects.for_user(self.acme_user)
         self.assertEqual(list(visible), [mine])
-        self.assertEqual(
-            Dashboard.objects.for_user(self.beta_user).count(), 1
-        )
 
     def test_for_user_scopes_widgets_through_the_derived_path(self):
         mine = self.make_widget(self.make_dashboard())

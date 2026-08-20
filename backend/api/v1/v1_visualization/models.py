@@ -141,9 +141,6 @@ class DashboardWidget(models.Model):
     )
     config = models.JSONField(default=dict)
 
-    def __str__(self):
-        return f"{self.dashboard.name} - {WidgetTypes.FieldStr[self.type]}"
-
     class Meta:
         ordering = ["dashboard", "order"]
         db_table = "dashboard_widget"
