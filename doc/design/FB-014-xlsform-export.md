@@ -158,7 +158,7 @@ Fragments joined by ` and ` (AND) or ` or ` (OR) per `dependency_rule`. Unresolv
 | `geoshape` (14) | `geoshape` | — |
 | `geotrace` (15) | `geotrace` | — |
 | `image` (8) | `image` | — |
-| `attachment` (11) | `file` | — |
+| `attachment` (11) | `file` | `body::accept` mapped from `rule.allowedFileTypes` (e.g. `image/*,.png,.jpg,.jpeg` or `.pdf,.doc,.docx`) |
 | `signature` (12) | `image` | `signature` |
 | `cascade` (7) | `select_one_from_file administration.csv` | — |
 | `autofield` (10), `tree` (16), `table` (17) | *skip* | — |
@@ -168,7 +168,9 @@ Fragments joined by ` and ` (AND) or ` or ` (OR) per `dependency_rule`. Unresolv
    - **Level N (Children)**: Named `${q_name}_level_${lvl}`, labeled `${label} - ${level_name}`, with `choice_filter = "parent_key = ${${prev_level_q_name}}"`, and dynamic relevance `relevant = "${prev_level_q_name} != ''"` (so child levels only appear once the parent level is selected).
    - **Single-level**: If only one level is configured, outputs single question `${q_name}` with `choice_filter = "level = ${min_level}"`.
 
-7. **`tooltip`** → mapped to XLSForm `hint` column. `addon_before/after` dropped silently.
+7. **Attachment file types**: For `attachment` questions, `rule.allowedFileTypes` is mapped to the standard XLSForm `body::accept` column. Image-only extensions include `image/*` so mobile camera/gallery pickers open directly.
+
+8. **`tooltip`** → mapped to XLSForm `hint` column. `addon_before/after` dropped silently.
 
 ### API Contract
 

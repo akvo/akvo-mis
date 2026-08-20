@@ -49,7 +49,113 @@ _XLSFORM_COLUMNS = [
     "calculation",
     "default",
     "repeat_count",
+    "body::accept",
 ]
+
+_IMAGE_EXTENSIONS = {
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    "bmp",
+    "tiff",
+    "webp",
+    "heif",
+    "heic",
+    "svg",
+    "ico",
+}
+
+_MIME_TYPES = {
+    "pdf": "application/pdf",
+    "doc": "application/msword",
+    "docx": (
+        "application/vnd.openxmlformats-officedocument."
+        "wordprocessingml.document"
+    ),
+    "xls": "application/vnd.ms-excel",
+    "xlsx": (
+        "application/vnd.openxmlformats-officedocument."
+        "spreadsheetml.sheet"
+    ),
+    "ppt": "application/vnd.ms-powerpoint",
+    "pptx": (
+        "application/vnd.openxmlformats-officedocument."
+        "presentationml.presentation"
+    ),
+    "csv": "text/csv",
+    "zip": "application/zip",
+    "rar": "application/x-rar-compressed",
+    "tar": "application/x-tar",
+    "gz": "application/gzip",
+    "json": "application/json",
+    "txt": "text/plain",
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "mp4": "video/mp4",
+    "avi": "video/x-msvideo",
+    "mov": "video/quicktime",
+    "mkv": "video/x-matroska",
+    "flv": "video/x-flv",
+    "webm": "video/webm",
+    "ogg": "audio/ogg",
+    "svg": "image/svg+xml",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "bmp": "image/bmp",
+    "tiff": "image/tiff",
+    "webp": "image/webp",
+    "ico": "image/vnd.microsoft.icon",
+    "heic": "image/heic",
+    "heif": "image/heif",
+}
+
+
+def _get_allowed_file_types(q: Any) -> List[str]:
+    """
+    Extracts configured allowed file types from question rule/api/extra.
+    """
+    types: List[str] = []
+
+    def _extract_from(container: Any):
+        if isinstance(container, dict):
+            raw = (
+                container.get("allowedFileTypes")
+                or container.get("allowed_file_types")
+            )
+            if isinstance(raw, list):
+                for item in raw:
+                    if item:
+                        cleaned = str(item).strip().lower().lstrip(".")
+                        if cleaned and cleaned not in types:
+                            types.append(cleaned)
+
+    _extract_from(getattr(q, "rule", None))
+    _extract_from(getattr(q, "api", None))
+    _extract_from(getattr(q, "extra", None))
+    return types
+
+
+def _format_body_accept(allowed_types: List[str]) -> Optional[str]:
+    """
+    Formats the XLSForm body::accept string for file questions.
+    For image-only configurations, includes 'image/*' and dotted extensions.
+    """
+    if not allowed_types:
+        return None
+
+    tokens: List[str] = []
+    if all(ext in _IMAGE_EXTENSIONS for ext in allowed_types):
+        tokens.append("image/*")
+
+    for ext in allowed_types:
+        dot_ext = f".{ext}"
+        if dot_ext not in tokens:
+            tokens.append(dot_ext)
+
+    return ",".join(tokens)
 
 
 def _get_options_manager(question: Any) -> Optional[Any]:
@@ -723,6 +829,11 @@ def _build_survey_rows(
                 q_row["constraint_message"] = constraint_msg
             if appearance:
                 q_row["appearance"] = appearance
+
+            allowed_types = _get_allowed_file_types(q)
+            body_accept = _format_body_accept(allowed_types)
+            if body_accept:
+                q_row["body::accept"] = body_accept
 
             if hint_text:
                 q_row[f"hint::{d_lang_display}"] = hint_text

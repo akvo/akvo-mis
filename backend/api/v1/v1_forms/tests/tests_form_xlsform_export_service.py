@@ -760,3 +760,65 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(
             cascade_rows[2][relevant_idx], "${location_level_2} != ''"
         )
+
+    def test_attachment_allowed_file_types_body_accept(self):
+        payload_attachment = {
+            "id": 8001,
+            "name": "Attachment Constraint Form",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "media_group",
+                    "label": "Media Group",
+                    "question": [
+                        {
+                            "id": 1,
+                            "name": "id_card_photo",
+                            "label": "ID Card Photo",
+                            "type": "attachment",
+                            "rule": {
+                                "allowedFileTypes": ["png", "jpg", "jpeg"]
+                            },
+                        },
+                        {
+                            "id": 2,
+                            "name": "supporting_doc",
+                            "label": "Supporting Document",
+                            "type": "attachment",
+                            "rule": {
+                                "allowedFileTypes": ["pdf", "docx", "doc"]
+                            },
+                        },
+                        {
+                            "id": 3,
+                            "name": "other_file",
+                            "label": "Other File",
+                            "type": "attachment",
+                            "rule": {"allowedFileTypes": []},
+                        },
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_attachment)
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        self.assertIn("body::accept", headers)
+        accept_idx = headers.index("body::accept")
+        name_idx = headers.index("name")
+
+        rows = list(ws_survey.iter_rows(values_only=True))[1:]
+        q_map = {r[name_idx]: r for r in rows if r[name_idx]}
+
+        # Photo proof has image/*,.png,.jpg,.jpeg
+        self.assertEqual(
+            q_map["id_card_photo"][accept_idx], "image/*,.png,.jpg,.jpeg"
+        )
+        # Supporting doc has .pdf,.docx,.doc
+        self.assertEqual(
+            q_map["supporting_doc"][accept_idx], ".pdf,.docx,.doc"
+        )
+        # Unconstrained file has None
+        self.assertIsNone(q_map["other_file"][accept_idx])
