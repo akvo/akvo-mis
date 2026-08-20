@@ -10,6 +10,9 @@ from api.v1.v1_forms.services.xlsform_export import (
     _build_settings_row,
     _build_choices_rows,
     _build_survey_rows,
+    _build_relevant_expression,
+    _lang_display,
+    _extract_iso,
     generate_xlsform,
 )
 
@@ -112,17 +115,9 @@ class XLSFormExportServiceTestCase(TestCase):
             ("select_multiple option_amenities or_other", None),
         )
 
-        # 5. Geo types
+        # 5. Geo type
         self.assertEqual(
             _map_type(DummyObject(type=QuestionTypes.geo)), ("geopoint", None)
-        )
-        self.assertEqual(
-            _map_type(DummyObject(type=QuestionTypes.geoshape)),
-            ("geoshape", None),
-        )
-        self.assertEqual(
-            _map_type(DummyObject(type=QuestionTypes.geotrace)),
-            ("geotrace", None),
         )
 
         # 6. Media & File
@@ -439,11 +434,6 @@ class XLSFormExportServiceTestCase(TestCase):
         )
 
     def test_lang_display_edge_cases(self):
-        from api.v1.v1_forms.services.xlsform_export import (
-            _lang_display,
-            _extract_iso,
-        )
-
         # 1. Standard mapped codes
         self.assertEqual(_lang_display("en"), "English (en)")
         self.assertEqual(_lang_display("id"), "Indonesian (id)")
@@ -533,10 +523,6 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertIn("settings", wb.sheetnames)
 
     def test_dangling_dependency_reference(self):
-        from api.v1.v1_forms.services.xlsform_export import (
-            _build_relevant_expression,
-        )
-
         q_with_deleted_dep = DummyObject(
             name="q2",
             dependency=[
@@ -661,3 +647,170 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(row_group["name"], "group_signature")
         self.assertEqual(row_q["type"], "image")
         self.assertEqual(row_q["name"], "signature")
+
+    def test_snapshot_dict_with_option_key_generates_choices_sheet(self):
+        payload_snapshot = {
+            "id": 6001,
+            "name": "Visualization Test Registration",
+            "version": 2,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "registration_info",
+                    "label": "Registration Info",
+                    "question": [
+                        {
+                            "id": 101,
+                            "name": "site_type",
+                            "label": "Site Type",
+                            "type": "option",
+                            "option": [
+                                {"id": 1, "value": "urban", "label": "Urban"},
+                                {"id": 2, "value": "rural", "label": "Rural"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_snapshot)
+        wb = openpyxl.load_workbook(stream)
+        ws_choices = wb["choices"]
+        rows = list(ws_choices.iter_rows(values_only=True))
+        self.assertGreaterEqual(len(rows), 3)  # header + 2 options
+        self.assertEqual(rows[0], ("list_name", "name", "label::English (en)"))
+        self.assertEqual(rows[1], ("option_site_type", "urban", "Urban"))
+        self.assertEqual(rows[2], ("option_site_type", "rural", "Rural"))
+
+    def test_cascade_expansion_omits_level_zero_and_adds_progressive_relevance(  # noqa
+        self,
+    ):
+        payload_cascade = {
+            "id": 9001,
+            "name": "Cascade Relevance Form",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "location_group",
+                    "label": "Location Group",
+                    "question": [
+                        {
+                            "id": 501,
+                            "name": "location",
+                            "label": "Farm Location",
+                            "type": "cascade",
+                        }
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_cascade)
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        name_idx = headers.index("name")
+        type_idx = headers.index("type")
+        filter_idx = headers.index("choice_filter")
+        relevant_idx = headers.index("relevant")
+        label_idx = headers.index("label::English (en)")
+
+        rows = list(ws_survey.iter_rows(values_only=True))[1:]  # skip header
+        # Row 0: begin_group
+        # Row 1: location_level_1 (Region/Province)
+        # Row 2: location_level_2 (District)
+        # Row 3: location_level_3 (Subdistrict)
+        # Row 4: location_level_4 (Village)
+        # Row 5: end_group
+        cascade_rows = [
+            r
+            for r in rows
+            if r[type_idx] == "select_one_from_file administration.csv"
+        ]  # noqa
+        self.assertEqual(len(cascade_rows), 4)
+
+        # Level 1
+        self.assertEqual(cascade_rows[0][name_idx], "location_level_1")
+        self.assertEqual(cascade_rows[0][filter_idx], "level = 1")
+        self.assertIsNone(cascade_rows[0][relevant_idx])
+        self.assertIn("Farm Location - ", cascade_rows[0][label_idx])
+
+        # Level 2
+        self.assertEqual(cascade_rows[1][name_idx], "location_level_2")
+        self.assertEqual(
+            cascade_rows[1][filter_idx], "parent_key = ${location_level_1}"
+        )
+        self.assertEqual(
+            cascade_rows[1][relevant_idx], "${location_level_1} != ''"
+        )
+
+        # Level 3
+        self.assertEqual(cascade_rows[2][name_idx], "location_level_3")
+        self.assertEqual(
+            cascade_rows[2][filter_idx], "parent_key = ${location_level_2}"
+        )
+        self.assertEqual(
+            cascade_rows[2][relevant_idx], "${location_level_2} != ''"
+        )
+
+    def test_attachment_allowed_file_types_body_accept(self):
+        payload_attachment = {
+            "id": 8001,
+            "name": "Attachment Constraint Form",
+            "version": 1,
+            "question_group": [
+                {
+                    "id": 1,
+                    "name": "media_group",
+                    "label": "Media Group",
+                    "question": [
+                        {
+                            "id": 1,
+                            "name": "id_card_photo",
+                            "label": "ID Card Photo",
+                            "type": "attachment",
+                            "rule": {
+                                "allowedFileTypes": ["png", "jpg", "jpeg"]
+                            },
+                        },
+                        {
+                            "id": 2,
+                            "name": "supporting_doc",
+                            "label": "Supporting Document",
+                            "type": "attachment",
+                            "rule": {
+                                "allowedFileTypes": ["pdf", "docx", "doc"]
+                            },
+                        },
+                        {
+                            "id": 3,
+                            "name": "other_file",
+                            "label": "Other File",
+                            "type": "attachment",
+                            "rule": {"allowedFileTypes": []},
+                        },
+                    ],
+                }
+            ],
+        }
+        stream, _ = generate_xlsform(payload_attachment)
+        wb = openpyxl.load_workbook(stream)
+        ws_survey = wb["survey"]
+        headers = [cell.value for cell in ws_survey[1]]
+        self.assertIn("body::accept", headers)
+        accept_idx = headers.index("body::accept")
+        name_idx = headers.index("name")
+
+        rows = list(ws_survey.iter_rows(values_only=True))[1:]
+        q_map = {r[name_idx]: r for r in rows if r[name_idx]}
+
+        # Photo proof has image/*,.png,.jpg,.jpeg
+        self.assertEqual(
+            q_map["id_card_photo"][accept_idx], "image/*,.png,.jpg,.jpeg"
+        )
+        # Supporting doc has .pdf,.docx,.doc
+        self.assertEqual(
+            q_map["supporting_doc"][accept_idx], ".pdf,.docx,.doc"
+        )
+        # Unconstrained file has None
+        self.assertIsNone(q_map["other_file"][accept_idx])

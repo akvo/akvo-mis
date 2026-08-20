@@ -1,5 +1,6 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
+import * as Sentry from '@sentry/react-native';
 
 /**
  * Image quality presets for compression
@@ -96,7 +97,12 @@ export const persistImage = async (uri, subDir = 'images') => {
     await FileSystem.moveAsync({ from: uri, to });
     return to;
   } catch (error) {
+    // The caller keeps a cacheDirectory uri, which Android may purge before the
+    // submission syncs — loud enough to diagnose, not fatal enough to lose the
+    // answer the user just captured.
     console.error('[ImageCompressor] Persist failed, keeping cache uri:', error);
+    Sentry.captureMessage(`[persistImage] fallback to cache uri: ${uri}`);
+    Sentry.captureException(error);
     return uri;
   }
 };

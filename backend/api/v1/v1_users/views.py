@@ -621,9 +621,13 @@ def set_user_password(request, version):
 )
 @api_view(["GET"])
 def list_administration(request, version, administration_id):
-    instance = get_object_or_404(
-        Administration.objects.for_user(request.user), pk=administration_id
-    )
+    if request.user.is_authenticated:
+        qs = Administration.objects.for_user(request.user)
+    elif getattr(request, "tenant", None) is not None:
+        qs = Administration.objects.filter(tenant=request.tenant)
+    else:
+        qs = Administration.objects.all()
+    instance = get_object_or_404(qs, pk=administration_id)
     filter = request.GET.get("filter")
     max_level = request.GET.get("max_level")
     filter_children = request.GET.getlist("filter_children")
