@@ -77,7 +77,9 @@ const ChatbotWidget = () => {
 
   const handleSendMessage = useCallback(
     async (customText = null) => {
-      const textToSend = customText || input.trim();
+      const textToSend = (
+        typeof customText === "string" ? customText : input
+      ).trim();
       if (!textToSend || loading) {
         return;
       }
@@ -200,6 +202,7 @@ const ChatbotWidget = () => {
             messages={messages}
             loading={loading}
             pageLabel={currentPageLabel}
+            onSelectSuggestion={(q) => handleSendMessage(q)}
           />
 
           {/* Input Area */}

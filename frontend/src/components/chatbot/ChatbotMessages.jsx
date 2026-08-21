@@ -2,8 +2,44 @@ import React, { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { RobotOutlined, UserOutlined } from "@ant-design/icons";
 
-const ChatbotMessages = ({ messages, loading, pageLabel }) => {
+const getSuggestions = (pageLabel) => {
+  const lower = (pageLabel || "").toLowerCase();
+  if (lower.includes("form")) {
+    return [
+      "What can I do on this page?",
+      "How do I add a repeatable question group?",
+      "How do I configure skip logic and conditions?",
+    ];
+  }
+  if (lower.includes("data") || lower.includes("submission")) {
+    return [
+      "What can I do on this page?",
+      "How do I filter and export data?",
+      "How do data approvals work?",
+    ];
+  }
+  if (lower.includes("approval") || lower.includes("control center")) {
+    return [
+      "What can I do on this page?",
+      "How do I configure approval rules?",
+      "How do administrative levels work?",
+    ];
+  }
+  return [
+    "What can I do on this page?",
+    "How do I create a form?",
+    "What question types are available in Akvo MIS?",
+  ];
+};
+
+const ChatbotMessages = ({
+  messages,
+  loading,
+  pageLabel,
+  onSelectSuggestion,
+}) => {
   const bottomRef = useRef(null);
+  const suggestions = getSuggestions(pageLabel);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -24,8 +60,17 @@ const ChatbotMessages = ({ messages, loading, pageLabel }) => {
           <div className="chatbot-suggestions">
             <div className="suggestion-title">Suggested questions:</div>
             <div className="suggestion-chips">
-              <span className="chip">What can I do on this page?</span>
-              <span className="chip">How do I create a form?</span>
+              {suggestions.map((question) => (
+                <button
+                  type="button"
+                  key={question}
+                  className="chip"
+                  onClick={() => onSelectSuggestion?.(question)}
+                  disabled={loading}
+                >
+                  {question}
+                </button>
+              ))}
             </div>
           </div>
         </div>
