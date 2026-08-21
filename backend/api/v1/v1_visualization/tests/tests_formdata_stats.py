@@ -3,6 +3,7 @@ from django.test.utils import override_settings
 from rest_framework.test import APITestCase
 from django.utils.timezone import make_aware
 from datetime import datetime
+from rest_framework_simplejwt.tokens import RefreshToken
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_forms.models import (
     Forms,
@@ -174,6 +175,12 @@ class FormDataStatsAPITestCases(APITestCase, ProfileTestHelperMixin):
         )
         # Refresh the materialized view
         refresh_materialized_data()
+
+        # Every endpoint in this app now requires authentication
+        # (VIZ-003). This module doesn't use VisualizationValuesTestMixin,
+        # so it needs its own credential.
+        token = RefreshToken.for_user(self.user).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
     def test_form_data_stats_with_option_type_question(self):
         response = self.client.get(

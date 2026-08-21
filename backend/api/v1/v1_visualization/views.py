@@ -1,5 +1,5 @@
 import json
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from datetime import datetime
@@ -29,7 +29,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
-# from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from utils.custom_serializer_fields import validate_serializers_message
 
 
@@ -51,6 +51,7 @@ from utils.custom_serializer_fields import validate_serializers_message
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def formdata_stats(request, form_id, version):
     form = get_object_or_404(
         Forms.objects.for_user(request.user), pk=form_id
@@ -202,6 +203,7 @@ def formdata_stats(request, form_id, version):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def monitoring_stats(request, version):
     parent_id = request.query_params.get("parent_id")
     question_id = request.query_params.get("question_id")
@@ -256,7 +258,7 @@ def monitoring_stats(request, version):
 
 
 class GeolocationListView(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         responses=GeoLocationListSerializer,
@@ -407,8 +409,7 @@ class GeolocationListView(APIView):
 
 
 class DatapointDetailView(APIView):
-    # permission_classes = [IsAuthenticated]
-    # public, same as GeolocationListView
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         responses=DatapointDetailSerializer,
@@ -488,6 +489,7 @@ class DatapointDetailView(APIView):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_values_formula(request, version):
     """Evaluate a formula per datapoint.
 

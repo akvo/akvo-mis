@@ -1,6 +1,7 @@
 from django.core.management import call_command
 from django.utils.timezone import make_aware
 from datetime import datetime
+from rest_framework_simplejwt.tokens import RefreshToken
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_data.models import FormData, Answers
@@ -52,6 +53,26 @@ class VisualizationValuesTestMixin(ProfileTestHelperMixin):
         self.user = self.create_user(
             email="viz_test@akvo.org",
             role_level=self.IS_SUPER_ADMIN,
+        )
+
+        # Every endpoint in this app now requires authentication
+        # (VIZ-003). Setting the credential once here keeps the 17 test
+        # modules that use this mixin unchanged, so their assertions
+        # remain the regression gate they were written to be.
+        #
+        # ProfileTestHelperMixin.get_auth_token() posts a dict body to
+        # /api/v1/login with an explicit content_type. Every existing
+        # caller of that helper is a plain TestCase, whose Django test
+        # Client JSON-encodes a dict body when the content_type is
+        # explicit. DRF's APIClient (used here, and required for
+        # self.client.credentials()) does not: with an explicit
+        # content_type it treats the body as already-encoded and just
+        # stringifies the dict, so the login view receives invalid
+        # JSON. Minting the token directly avoids that mismatch without
+        # editing a helper shared by 60+ unrelated test modules.
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self.token}"
         )
 
         # Load seeded forms

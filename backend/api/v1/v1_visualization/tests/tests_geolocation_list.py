@@ -140,7 +140,7 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
         response = self.client.get(
             f"/api/v1/maps/geolocation/{self.form.id}",
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 401)
 
     def test_performance_geolocation_list(self):
         """

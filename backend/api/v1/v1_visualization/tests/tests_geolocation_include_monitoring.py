@@ -154,8 +154,8 @@ class DatapointDetailTestCases(VisualizationValuesTestMixin, APITestCase):
         response = self.client.get(f"{self.BASE_URL}/{self.reg1.id}")
         self.assertEqual(response.status_code, 404)
 
-    def test_public_access(self):
-        """Unauthenticated requests return 200."""
+    def test_anonymous_access_is_rejected(self):
+        """Unauthenticated requests are rejected with 401 (VIZ-003)."""
         self.client.logout()
         response = self.client.get(f"{self.BASE_URL}/{self.reg1.id}")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 401)

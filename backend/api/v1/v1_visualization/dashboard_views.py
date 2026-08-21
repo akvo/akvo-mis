@@ -1,4 +1,5 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import (
@@ -150,6 +151,7 @@ from utils.custom_serializer_fields import (
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_values(request, version):
     """Generic visualization values endpoint.
 
@@ -310,6 +312,7 @@ def visualization_values(request, version):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_escalation(request, form_id, version):
     """Escalation table with query-param-driven criteria."""
     parent_form = get_object_or_404(Forms, pk=form_id)
@@ -436,6 +439,7 @@ def visualization_escalation(request, form_id, version):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_progress(request, form_id, version):
     """Progress computation endpoint."""
     parent_form = get_object_or_404(Forms, pk=form_id)
