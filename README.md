@@ -304,3 +304,40 @@ The Akvo Flow Data Seeder enables you to migrate data from Akvo Flow to Akvo MIS
    - `--revert=True` - Revert previously seeded data
 
 For comprehensive documentation covering environment setup, detailed command explanations, output expectations, and troubleshooting, see the [Akvo Flow Data Seeder Guide](./scripts/akvo-flow/README.md).
+
+## AI Assistant & Knowledge Base (Mira)
+
+Akvo MIS includes **Mira**, an in-app AI assistant powered by OpenAI Assistants API and Vector Stores (`file_search`). Mira provides contextual, grounded guidance across form design, data management, and system administration.
+
+### Environment Variables
+
+Add the following to your `.env`:
+
+```bash
+OPENAI_API_KEY=sk-...
+OPENAI_ASSISTANT_ID=asst_...
+OPENAI_VECTOR_STORE_ID=vs_...
+```
+
+### Managing the Knowledge Base with `kb.sh`
+
+A helper script [`kb.sh`](./kb.sh) is provided at the repository root to compile documentation PDFs and upload them to the OpenAI Vector Store.
+
+```bash
+# 1. First-time setup: build PDFs, create Vector Store, and provision Assistant
+./kb.sh sync --create-assistant
+
+# 2. Re-compile documentation PDFs only (from Sphinx RST and Form Editor docs)
+./kb.sh build
+
+# 3. Upload / Re-index PDFs into existing Vector Store (after docs update)
+./kb.sh upload
+
+# 4. Dry run (validate PDF generation without calling OpenAI)
+./kb.sh upload --dry-run
+```
+
+Generated PDFs are stored in `docs/build/`:
+
+- `docs/build/akvo-mis-docs.pdf` — Compiled Sphinx user & administration documentation
+- `docs/build/akvo-react-form-editor-docs.pdf` — Form Editor question types & condition syntax reference

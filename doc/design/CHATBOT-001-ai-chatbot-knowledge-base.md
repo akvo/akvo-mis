@@ -587,19 +587,20 @@ react-markdown   # render bot responses as Markdown
 
 | File | Description |
 |------|-------------|
-| `scripts/upload_kb.py` | One-shot PDF upload to OpenAI Vector Store |
+| `kb.sh` | Root CLI helper for building and uploading Knowledge Base |
+| `scripts/build_kb_pdf.py` | Compiles Sphinx RST & Form Editor docs into PDFs |
+| `scripts/upload_kb.py` | Uploads documentation PDFs to OpenAI Vector Store |
 | `backend/api/v1/v1_chatbot/__init__.py` | App init |
 | `backend/api/v1/v1_chatbot/apps.py` | AppConfig |
 | `backend/api/v1/v1_chatbot/utils.py` | `get_page_context()` — dynamic URL-segment context derivation |
-| `backend/api/v1/v1_chatbot/views.py` | `ChatMessageView` with SSE streaming |
-| `backend/api/v1/v1_chatbot/serializers.py` | `ChatRequestSerializer` |
-| `backend/api/v1/v1_chatbot/urls.py` | URL patterns |
-| `backend/api/v1/v1_chatbot/management/commands/upload_kb.py` | Management command |
+| `backend/api/v1/v1_chatbot/views.py` | `ChatMessageView` with OpenAI thread integration |
+| `backend/api/v1/v1_chatbot/serializers.py` | `ChatRequestSerializer`, `ChatResponseSerializer` |
+| `backend/api/v1/v1_chatbot/urls.py` | URL patterns (`POST /api/v1/chatbot/message`) |
 | `backend/api/v1/v1_chatbot/tests/test_chatbot.py` | Unit tests |
-| `frontend/src/components/chatbot/ChatbotWidget.jsx` | FAB + panel shell |
-| `frontend/src/components/chatbot/ChatbotMessages.jsx` | Message list |
+| `frontend/src/components/chatbot/ChatbotWidget.jsx` | FAB + panel shell with live context chip |
+| `frontend/src/components/chatbot/ChatbotMessages.jsx` | Message list with Markdown support |
 | `frontend/src/components/chatbot/ChatbotInput.jsx` | Input component |
-| `frontend/src/components/chatbot/chatbot.scss` | Widget styles |
+| `frontend/src/components/chatbot/chatbot.scss` | Widget styles with tenant brand variables |
 
 ### Modified Files
 
