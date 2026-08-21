@@ -5,7 +5,7 @@ from rest_framework import status
 from datetime import datetime
 from django.db.models import Q
 from api.v1.v1_data.models import FormData, Answers
-from api.v1.v1_forms.models import Forms, QuestionTypes
+from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
 from api.v1.v1_visualization.serializers import (
     MonitoringStatSerializer,
     GeoLocationListSerializer,
@@ -215,13 +215,38 @@ def monitoring_stats(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Resolve the parent datapoint through a tenant-scoped queryset before
+    # doing anything else with it, otherwise an authenticated caller from
+    # any tenant can enumerate other tenants' datapoints by id.
+    parent = get_object_or_404(
+        FormData.objects.for_user(request.user), pk=parent_id
+    )
+    # The question must belong to the parent's form family, otherwise a
+    # foreign question id rides in on an otherwise valid request. The
+    # family is the parent's own form plus its monitoring forms (Forms
+    # rows whose `parent` points back at it) — parent_id here is the
+    # registration datapoint, but the question being charted lives on
+    # the monitoring form that was submitted against it. Scoped through
+    # for_user() rather than trusting the child inherits its parent's
+    # tenant: FormViewSet.update() can repoint a draft form's `parent`
+    # FK across tenants with no tenant check (functions.py), so the
+    # Q(parent_id=...) branch alone could pull in another tenant's form.
+    question_forms = Forms.objects.for_user(request.user).filter(
+        Q(pk=parent.form_id) | Q(parent_id=parent.form_id)
+    )
+    question = get_object_or_404(
+        Questions.objects.filter(form__in=question_forms), pk=question_id
+    )
+
     try:
-        formdata_qs = FormData.objects.filter(parent_id=parent_id)
+        formdata_qs = FormData.objects.for_user(request.user).filter(
+            parent_id=parent.id
+        )
         stats = []
 
         for formdata in formdata_qs:
             answer = Answers.objects.filter(
-                data=formdata, question_id=question_id
+                data=formdata, question_id=question.id
             ).first()
             if not answer:
                 continue
