@@ -132,3 +132,38 @@ class VisualizationTenantIsolationTestCase(APITestCase):
             f"?parent_id={foreign_datapoint.id}&question_id={question.id}"
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_aggregation_is_scoped_without_the_view(self):
+        # Defense in depth. The id check in the view is bypassed
+        # entirely: the function is called directly with another
+        # tenant's form. It must still produce no rows, so that a future
+        # caller that forgets the id check cannot leak.
+        from api.v1.v1_data.models import FormData
+        from api.v1.v1_visualization.functions import (
+            get_base_monitoring_qs,
+        )
+
+        # Without a beta-owned row for the query to find, the assertion
+        # below passes on an empty table whether or not the scope is
+        # applied. This row is what makes the test discriminate, and the
+        # guard after it keeps a future fixture change from quietly
+        # turning the whole test back into a tautology.
+        FormData.objects.create(
+            name="Beta datapoint",
+            form=self.foreign_form,
+            administration=Administration.objects.first(),
+            created_by=self.user,
+        )
+        self.assertEqual(
+            FormData.objects.filter(form=self.foreign_form).count(),
+            1,
+            "fixture missing: the scope assertion would be vacuous",
+        )
+
+        qs, _, _ = get_base_monitoring_qs(
+            self.foreign_form,
+            self.foreign_form.id,
+            {"monitoring": "all"},
+            self.user,
+        )
+        self.assertEqual(qs.count(), 0)

@@ -209,20 +209,20 @@ def visualization_values(request, version):
 
     # Route to handler
     if not question:
-        result = handle_count_mode(form, params)
+        result = handle_count_mode(form, params, request.user)
     elif question.type == QuestionTypes.number:
         result = handle_number_question(
-            form, question, params
+            form, question, params, request.user
         )
     elif question.type in [
         QuestionTypes.option,
         QuestionTypes.multiple_option,
     ]:
         result = handle_option_question(
-            form, question, params
+            form, question, params, request.user
         )
     else:
-        result = handle_count_mode(form, params)
+        result = handle_count_mode(form, params, request.user)
 
     # Format response
     if isinstance(result, dict):
@@ -354,6 +354,7 @@ def visualization_escalation(request, form_id, version):
                 for v in values
             ],
         },
+        user=request.user,
     )
     return Response(result, status=status.HTTP_200_OK)
 
@@ -490,5 +491,6 @@ def visualization_progress(request, form_id, version):
             "criteria": mon_criteria,
             "parent_criteria": parent_criteria,
         },
+        user=request.user,
     )
     return Response(result, status=status.HTTP_200_OK)

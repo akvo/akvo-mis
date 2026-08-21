@@ -320,7 +320,7 @@ def split_criteria_by_form(criteria, form_id, parent_form_id):
     return same or None, parent or None
 
 
-def get_base_monitoring_qs(form, monitoring_form_id, params):
+def get_base_monitoring_qs(form, monitoring_form_id, params, user):
     """Build base queryset for monitoring data.
 
     Returns:
@@ -340,7 +340,7 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
     )
 
     if is_monitoring and monitoring == "latest":
-        qs = FormData.objects.filter(
+        qs = FormData.objects.for_user(user).filter(
             form=parent_form,
             parent__isnull=True,
             is_pending=False,
@@ -364,7 +364,7 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
         )
         return qs, True, date_filters
 
-    qs = FormData.objects.filter(
+    qs = FormData.objects.for_user(user).filter(
         form_id=monitoring_form_id,
         is_pending=False,
         is_draft=False,

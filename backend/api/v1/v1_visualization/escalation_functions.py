@@ -14,13 +14,15 @@ from api.v1.v1_visualization.functions import (
 )
 
 
-def build_escalation_criteria_filter(criteria, latest_ids):
+def build_escalation_criteria_filter(criteria, latest_ids, user):
     """Build OR query from parsed escalation criteria.
 
     Args:
         criteria: List of parsed criteria dicts with
             'type' and 'parts' keys.
         latest_ids: List of latest monitoring data IDs.
+        user: Acting user, used to tenant-scope the answer
+            lookups independently of the caller's own checks.
 
     Returns:
         Q object combining all criteria with OR logic.
@@ -33,7 +35,7 @@ def build_escalation_criteria_filter(criteria, latest_ids):
         if ctype == "option_equals":
             qid = int(parts[0])
             value = parts[1]
-            matching = Answers.objects.filter(
+            matching = Answers.objects.for_user(user).filter(
                 data_id__in=latest_ids,
                 question_id=qid,
                 options__contains=[value],
@@ -43,7 +45,7 @@ def build_escalation_criteria_filter(criteria, latest_ids):
         elif ctype == "threshold_gt":
             qid = int(parts[0])
             threshold = float(parts[1])
-            matching = Answers.objects.filter(
+            matching = Answers.objects.for_user(user).filter(
                 data_id__in=latest_ids,
                 question_id=qid,
                 value__gt=threshold,
@@ -53,7 +55,7 @@ def build_escalation_criteria_filter(criteria, latest_ids):
         elif ctype == "threshold_lt":
             qid = int(parts[0])
             threshold = float(parts[1])
-            matching = Answers.objects.filter(
+            matching = Answers.objects.for_user(user).filter(
                 data_id__in=latest_ids,
                 question_id=qid,
                 value__lt=threshold,
@@ -64,12 +66,12 @@ def build_escalation_criteria_filter(criteria, latest_ids):
             from datetime import date
             completion_qid = int(parts[0])
             deadline_qid = int(parts[1])
-            incomplete = set(Answers.objects.filter(
+            incomplete = set(Answers.objects.for_user(user).filter(
                 data_id__in=latest_ids,
                 question_id=completion_qid,
                 options__contains=["no"],
             ).values_list("data_id", flat=True))
-            overdue = set(Answers.objects.filter(
+            overdue = set(Answers.objects.for_user(user).filter(
                 data_id__in=latest_ids,
                 question_id=deadline_qid,
                 name__lt=date.today().isoformat(),
@@ -92,7 +94,7 @@ def _answer_cell_value(answer):
     return answer.get("name")
 
 
-def build_column_caches(paginated, columns):
+def build_column_caches(paginated, columns, user):
     """Pre-fetch answers and FormData needed for rendering one page.
 
     Reduces the per-row work in extract_column_value from O(columns)
@@ -121,7 +123,7 @@ def build_column_caches(paginated, columns):
 
     answer_map = {}
     if answer_qids or latest_date_qids:
-        rows = Answers.objects.filter(
+        rows = Answers.objects.for_user(user).filter(
             data_id__in=latest_ids,
             question_id__in=answer_qids | latest_date_qids,
         ).values(
@@ -133,7 +135,7 @@ def build_column_caches(paginated, columns):
 
     parent_answer_map = {}
     if parent_answer_qids:
-        rows = Answers.objects.filter(
+        rows = Answers.objects.for_user(user).filter(
             data_id__in=parent_ids,
             question_id__in=parent_answer_qids,
         ).values(
@@ -145,7 +147,7 @@ def build_column_caches(paginated, columns):
 
     created_map = {}
     if need_created_fallback:
-        fd_rows = FormData.objects.filter(
+        fd_rows = FormData.objects.for_user(user).filter(
             id__in=latest_ids,
         ).values("id", "created")
         created_map = {r["id"]: r["created"] for r in fd_rows}
@@ -206,7 +208,7 @@ def extract_column_value(parent, latest_id, col, caches):
 
 def handle_escalation(
     parent_form, monitoring_form_id,
-    criteria, columns, params,
+    criteria, columns, params, user,
 ):
     """Handle escalation query.
 
@@ -217,6 +219,9 @@ def handle_escalation(
         columns: Parsed columns list.
         params: Dict with page, page_size,
             administration_id, from_date, to_date.
+        user: Acting user. Kept out of `params` on purpose:
+            `params` is the attacker-controlled query grammar,
+            so the security principal travels separately.
 
     Returns:
         Dict with count, next, previous, results.
@@ -227,7 +232,7 @@ def handle_escalation(
 
     date_filters = build_date_filters(params)
 
-    parents = FormData.objects.filter(
+    parents = FormData.objects.for_user(user).filter(
         form=parent_form,
         parent__isnull=True,
         is_pending=False,
@@ -265,7 +270,7 @@ def handle_escalation(
     )
 
     or_condition = build_escalation_criteria_filter(
-        criteria, latest_ids
+        criteria, latest_ids, user
     )
     matching = parents.filter(or_condition).order_by("id")
 
@@ -276,7 +281,7 @@ def handle_escalation(
         matching[start:end].select_related("administration")
     )
 
-    caches = build_column_caches(paginated, columns)
+    caches = build_column_caches(paginated, columns, user)
 
     results = []
     for parent in paginated:
