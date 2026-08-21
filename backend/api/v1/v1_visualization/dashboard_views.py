@@ -159,7 +159,8 @@ def visualization_values(request, version):
     All configuration via query parameters.
     """
     serializer = ValuesFilterSerializer(
-        data=request.query_params
+        data=request.query_params,
+        context={"user": request.user},
     )
     if not serializer.is_valid():
         return Response(
@@ -320,7 +321,8 @@ def visualization_escalation(request, form_id, version):
     )
 
     serializer = EscalationFilterSerializer(
-        data=request.query_params
+        data=request.query_params,
+        context={"parent_form": parent_form},
     )
     if not serializer.is_valid():
         return Response(
@@ -450,7 +452,8 @@ def visualization_progress(request, form_id, version):
     )
 
     serializer = ProgressFilterSerializer(
-        data=request.query_params
+        data=request.query_params,
+        context={"parent_form": parent_form},
     )
     if not serializer.is_valid():
         return Response(

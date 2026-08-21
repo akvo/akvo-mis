@@ -3,8 +3,8 @@ from django.test.utils import override_settings
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from api.v1.v1_forms.constants import FormTypes
-from api.v1.v1_forms.models import Forms
+from api.v1.v1_forms.constants import FormTypes, QuestionTypes
+from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.models import SystemUser, Tenant
 
@@ -32,6 +32,21 @@ class VisualizationTenantIsolationTestCase(APITestCase):
             name="Beta Sites",
             type=FormTypes.registration,
             tenant=self.beta,
+        )
+
+    def make_question(self, form, name, qtype=QuestionTypes.option):
+        """A real question on `form`, so a rejection can only come from
+        the id being outside the caller's form family — never from the
+        id matching no row at all."""
+        group = QuestionGroup.objects.create(
+            form=form, name=f"{name}_group"
+        )
+        return Questions.objects.create(
+            form=form,
+            question_group=group,
+            name=name,
+            label=name,
+            type=qtype,
         )
 
     def foreign_urls(self):
@@ -167,3 +182,271 @@ class VisualizationTenantIsolationTestCase(APITestCase):
             self.user,
         )
         self.assertEqual(qs.count(), 0)
+
+    # -- /escalation: ids parsed out of criteria and columns ---------
+
+    def test_escalation_rejects_a_foreign_question(self):
+        # A question id belonging to another tenant must not ride in on
+        # a request whose form_id is legitimate. Everything else here is
+        # valid — the monitoring form is a real child of the caller's
+        # own form — so a 400 can only come from the question check.
+        own_form = Forms.objects.create(
+            name="Acme Sites",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        own_monitoring = Forms.objects.create(
+            name="Acme Monitoring",
+            type=FormTypes.monitoring,
+            parent=own_form,
+            tenant=self.acme,
+        )
+        foreign_question = self.make_question(self.foreign_form, "beta_q")
+        response = self.client.get(
+            f"/api/v1/visualization/escalation/{own_form.id}"
+            f"?monitoring_form_id={own_monitoring.id}"
+            f"&criteria=option_equals:{foreign_question.id}:yes"
+            f"&columns=site:parent_name"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_escalation_rejects_a_foreign_overdue_deadline(self):
+        # "overdue" carries TWO question ids
+        # (completion_qid:deadline_qid). Checking only the first leaves
+        # the deadline id unvalidated, so the completion id here is a
+        # legitimate one of the caller's own and only the deadline is
+        # foreign.
+        own_form = Forms.objects.create(
+            name="Acme Sites Overdue",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        own_monitoring = Forms.objects.create(
+            name="Acme Monitoring Overdue",
+            type=FormTypes.monitoring,
+            parent=own_form,
+            tenant=self.acme,
+        )
+        own_question = self.make_question(
+            own_monitoring, "done_at", QuestionTypes.date
+        )
+        foreign_deadline = self.make_question(
+            self.foreign_form, "beta_deadline", QuestionTypes.date
+        )
+        response = self.client.get(
+            f"/api/v1/visualization/escalation/{own_form.id}"
+            f"?monitoring_form_id={own_monitoring.id}"
+            f"&criteria=overdue:{own_question.id}:{foreign_deadline.id}"
+            f"&columns=site:parent_name"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_escalation_rejects_a_foreign_column_question(self):
+        # Column question ids come from a different parser than
+        # criteria, so they need their own guard.
+        own_form = Forms.objects.create(
+            name="Acme Sites Columns",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        own_monitoring = Forms.objects.create(
+            name="Acme Monitoring Columns",
+            type=FormTypes.monitoring,
+            parent=own_form,
+            tenant=self.acme,
+        )
+        own_question = self.make_question(own_monitoring, "status")
+        foreign_question = self.make_question(
+            self.foreign_form, "beta_col_q"
+        )
+        response = self.client.get(
+            f"/api/v1/visualization/escalation/{own_form.id}"
+            f"?monitoring_form_id={own_monitoring.id}"
+            f"&criteria=option_equals:{own_question.id}:yes"
+            f"&columns=leak:answer:{foreign_question.id}"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_escalation_rejects_a_foreign_monitoring_form(self):
+        # The criteria question is a legitimate one of the caller's own,
+        # so the only thing left to reject is monitoring_form_id.
+        own_form = Forms.objects.create(
+            name="Acme Sites 2",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        own_question = self.make_question(own_form, "acme_q")
+        response = self.client.get(
+            f"/api/v1/visualization/escalation/{own_form.id}"
+            f"?monitoring_form_id={self.foreign_form.id}"
+            f"&criteria=option_equals:{own_question.id}:yes"
+            f"&columns=site:parent_name"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    # -- /values: the question_id existence oracle ---------------------
+
+    def test_values_question_id_does_not_leak_form_existence(self):
+        # ValuesFilterSerializer validates question_id against form_id
+        # before the view's tenant-scoped form lookup runs. Unscoped,
+        # that check PASSES for a foreign form's own question (the view
+        # then 404s) but always FAILS for a form that exists nowhere
+        # (400), because no question can sit on a form with no rows.
+        # That 400-vs-404 split says "this form exists somewhere" —
+        # the same oracle Task 2 closed for the bare form_id, merely
+        # costlier to walk. Both shapes must answer alike.
+        foreign_question = self.make_question(
+            self.foreign_form, "beta_values_q"
+        )
+        nonexistent = 99999999
+        self.assertFalse(Forms.objects.filter(pk=nonexistent).exists())
+        foreign = self.client.get(
+            "/api/v1/visualization/values"
+            f"?form_id={self.foreign_form.id}"
+            f"&question_id={foreign_question.id}"
+        )
+        missing = self.client.get(
+            "/api/v1/visualization/values"
+            f"?form_id={nonexistent}"
+            f"&question_id={foreign_question.id}"
+        )
+        self.assertEqual(
+            foreign.status_code,
+            missing.status_code,
+            "/values leaks existence via question_id: foreign "
+            f"{foreign.status_code} vs missing {missing.status_code}",
+        )
+        self.assertEqual(foreign.status_code, 400)
+
+    def test_values_criteria_does_not_leak_form_existence(self):
+        # criteria carries question ids through a second, separate
+        # lookup in the same serializer, so it needs the same scope or
+        # the oracle simply moves one query parameter across.
+        foreign_question = self.make_question(
+            self.foreign_form, "beta_criteria_q"
+        )
+        nonexistent = 99999999
+        self.assertFalse(Forms.objects.filter(pk=nonexistent).exists())
+        criteria = f"option_equals:{foreign_question.id}:yes"
+        foreign = self.client.get(
+            "/api/v1/visualization/values"
+            f"?form_id={self.foreign_form.id}&criteria={criteria}"
+        )
+        missing = self.client.get(
+            "/api/v1/visualization/values"
+            f"?form_id={nonexistent}&criteria={criteria}"
+        )
+        self.assertEqual(
+            foreign.status_code,
+            missing.status_code,
+            "/values leaks existence via criteria: foreign "
+            f"{foreign.status_code} vs missing {missing.status_code}",
+        )
+        self.assertEqual(foreign.status_code, 400)
+
+    # -- /progress: the same monitoring_form_id hole -------------------
+
+    def test_progress_rejects_a_foreign_monitoring_form(self):
+        # /progress takes monitoring_form_id from the query string the
+        # same way /escalation did, and the spec requires it validated
+        # on both. The component question ids are the spec's deliberate
+        # residual and are not checked here, so a 400 can only come
+        # from the monitoring_form_id family check.
+        own_form = Forms.objects.create(
+            name="Acme Sites Progress",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        response = self.client.get(
+            f"/api/v1/visualization/progress/{own_form.id}"
+            f"?monitoring_form_id={self.foreign_form.id}"
+            f"&components=base:any_yes:1"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_escalation_rejects_a_foreign_child_of_my_own_form(self):
+        # Forms.tenant is an independent column, not something a child
+        # inherits through `parent`, and FormViewSet.update() repoints a
+        # form's parent FK from request data with no tenant check
+        # (v1_forms/functions.py). So another tenant's form can sit
+        # inside the caller's form family, and deriving the family from
+        # parent_form.children alone accepts it. The family has to be
+        # both a child of the resolved parent AND of its tenant.
+        own_form = Forms.objects.create(
+            name="Acme Sites Reparented",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        foreign_child = Forms.objects.create(
+            name="Beta Monitoring Reparented",
+            type=FormTypes.monitoring,
+            parent=own_form,
+            tenant=self.beta,
+        )
+        own_question = self.make_question(own_form, "acme_reparent_q")
+        response = self.client.get(
+            f"/api/v1/visualization/escalation/{own_form.id}"
+            f"?monitoring_form_id={foreign_child.id}"
+            f"&criteria=option_equals:{own_question.id}:yes"
+            f"&columns=site:parent_name"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_escalation_rejects_a_foreign_date_question(self):
+        # date_question_id carries a question id like criteria and
+        # columns do, and reaches the same queries. It is not in the
+        # design's documented residual list, so it gets the same check.
+        own_form = Forms.objects.create(
+            name="Acme Sites Dates",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        own_monitoring = Forms.objects.create(
+            name="Acme Monitoring Dates",
+            type=FormTypes.monitoring,
+            parent=own_form,
+            tenant=self.acme,
+        )
+        own_question = self.make_question(own_monitoring, "acme_date_q")
+        foreign_date = self.make_question(
+            self.foreign_form, "beta_date_q", QuestionTypes.date
+        )
+        response = self.client.get(
+            f"/api/v1/visualization/escalation/{own_form.id}"
+            f"?monitoring_form_id={own_monitoring.id}"
+            f"&criteria=option_equals:{own_question.id}:yes"
+            f"&columns=site:parent_name"
+            f"&date_question_id={foreign_date.id}"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_escalation_blames_the_parameter_that_failed(self):
+        # A columns failure used to be reported under the "criteria"
+        # key. validate_serializers_message drops the key from the HTTP
+        # body, so this asserts on serializer.errors directly — the one
+        # place the attribution is observable, and the place it starts
+        # mattering as soon as anything surfaces field names.
+        from api.v1.v1_visualization.dashboard_serializers import (
+            EscalationFilterSerializer,
+        )
+
+        own_form = Forms.objects.create(
+            name="Acme Sites Blame",
+            type=FormTypes.registration,
+            tenant=self.acme,
+        )
+        own_question = self.make_question(own_form, "acme_blame_q")
+        foreign_question = self.make_question(
+            self.foreign_form, "beta_blame_q"
+        )
+        serializer = EscalationFilterSerializer(
+            data={
+                "monitoring_form_id": own_form.id,
+                "criteria": f"option_equals:{own_question.id}:yes",
+                "columns": f"leak:answer:{foreign_question.id}",
+            },
+            context={"parent_form": own_form},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("columns", serializer.errors)
+        self.assertNotIn("criteria", serializer.errors)

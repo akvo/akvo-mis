@@ -222,13 +222,24 @@ class EscalationTestCases(VisualizationValuesTestMixin, APITestCase):
         self.assertIsNone(result["mon_admin"])
 
     def test_columns_parent_answer_missing_qid(self):
-        """parent_answer with a QID that has no answer → None."""
+        """parent_answer with a QID that has no answer → None.
+
+        Uses site_type, a real registration question the fixture
+        never answers. It used to use 99999999, an id belonging to no
+        form at all; ids outside the form family are now rejected up
+        front (VIZ-003), and they have to be — tolerating an unknown
+        id while rejecting another tenant's would answer differently
+        for "exists elsewhere" than for "exists nowhere", which is the
+        existence oracle this slice closes. The assertion below is
+        unchanged and still measures what it always did: an
+        unanswered question column reads back as None.
+        """
         response = self.client.get(
             f"{self.BASE_ESC_URL}/{self.registration.id}"
             f"?monitoring_form_id={self.monitoring.id}"
             f"&criteria=option_equals:{self.Q_OPTION_ID}:active"
             f"&columns=name:parent_name"
-            f",missing:parent_answer:99999999"
+            f",missing:parent_answer:{self.Q_REG_OPTION_ID}"
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
