@@ -70,13 +70,6 @@ class ValuesFilterSerializer(serializers.Serializer):
         except ValueError as e:
             raise serializers.ValidationError(str(e))
 
-    def validate_form_id(self, value):
-        if not Forms.objects.filter(pk=value).exists():
-            raise serializers.ValidationError(
-                f"Form {value} not found."
-            )
-        return value
-
     def validate(self, data):
         form_id = data.get("form_id")
         question_id = data.get("question_id")

@@ -17,11 +17,12 @@ class ValuesErrorTestCases(VisualizationValuesTestMixin, APITestCase):
         self.assertIn("message", data)
 
     def test_invalid_form_id(self):
-        """Non-existent form_id — returns 400."""
+        """Non-existent form_id — 404, indistinguishable from
+        another tenant's."""
         response = self.client.get(
             f"{self.BASE_URL}?form_id=99999"
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
 
     def test_invalid_question_id(self):
         """Non-existent question_id — returns 400."""

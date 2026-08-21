@@ -171,7 +171,7 @@ def visualization_values(request, version):
 
     validated = serializer.validated_data
     form = get_object_or_404(
-        Forms, pk=validated["form_id"]
+        Forms.objects.for_user(request.user), pk=validated["form_id"]
     )
     question = validated.get("question")
 
@@ -315,7 +315,9 @@ def visualization_values(request, version):
 @permission_classes([IsAuthenticated])
 def visualization_escalation(request, form_id, version):
     """Escalation table with query-param-driven criteria."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
+    parent_form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
 
     serializer = EscalationFilterSerializer(
         data=request.query_params
@@ -442,7 +444,9 @@ def visualization_escalation(request, form_id, version):
 @permission_classes([IsAuthenticated])
 def visualization_progress(request, form_id, version):
     """Progress computation endpoint."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
+    parent_form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
 
     serializer = ProgressFilterSerializer(
         data=request.query_params
