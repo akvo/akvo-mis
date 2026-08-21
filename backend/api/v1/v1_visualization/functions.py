@@ -90,7 +90,21 @@ def _to_date_upper_bound(value):
 
 
 def latest_monitoring_subquery(form_id, date_filters=None):
-    """Subquery: latest monitoring FormData ID per parent."""
+    """Subquery: latest monitoring FormData ID per parent.
+
+    Deliberately unscoped by tenant. Scoping `qs` here would let a
+    monitoring row from another tenant be excluded from the
+    `ORDER BY -created` pick, which could change *which* row this
+    subquery calls "latest" for a legitimate, same-tenant parent —
+    and preserving that selection exactly as it behaved before this
+    hardening slice is the milestone's regression gate (see the spec's
+    "Documented residual" and regression-gate notes). So the ids this
+    subquery returns carry the tenancy of the *parent* FormData row
+    the subquery is correlated against, not a tenancy of their own.
+    Callers that key further lookups off those ids (`latest_id`) must
+    scope those lookups themselves rather than assume the id is
+    already trustworthy — see `get_base_monitoring_qs` below.
+    """
     qs = FormData.objects.filter(
         parent=OuterRef("pk"),
         form_id=form_id,
@@ -325,6 +339,23 @@ def get_base_monitoring_qs(form, monitoring_form_id, params, user):
 
     Returns:
         Tuple of (queryset, is_monitoring_form, date_filters)
+
+    Scope note (latest mode): `for_user(user)` below scopes the outer
+    `FormData` queryset — the parent/registration rows — but not the
+    `latest_monitoring_subquery` annotated onto it, which is
+    deliberately unscoped (see that function's docstring). So a
+    `latest_id` produced here is trustworthy only because it is
+    reached by way of an already-scoped parent; the id itself carries
+    the parent's tenancy, not its own. `values_functions.py` relies on
+    that transitively instead of re-scoping every `Answers` lookup it
+    keys on `latest_id`, which is safe only as long as every caller of
+    `handle_count_mode` / `handle_option_question` /
+    `handle_number_question` reaches this queryset first — i.e. barrier
+    one (the view's `Forms.objects.for_user()` id check) stays intact.
+    `escalation_functions.py` and `progress_functions.py` do not make
+    that assumption: they re-scope every downstream lookup keyed on
+    `latest_ids` independently, which is why the two-barrier
+    independence claim holds for them but not for `values_functions.py`.
     """
     monitoring = params.get("monitoring", "latest")
     from_date = params.get("from_date")

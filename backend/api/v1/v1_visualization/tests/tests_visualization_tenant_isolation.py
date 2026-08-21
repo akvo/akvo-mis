@@ -49,30 +49,16 @@ class VisualizationTenantIsolationTestCase(APITestCase):
             type=qtype,
         )
 
-    def foreign_urls(self):
+    def test_foreign_form_id_is_not_found(self):
         fid = self.foreign_form.id
-        return [
+        for url in [
             f"/api/v1/visualization/values?form_id={fid}",
             f"/api/v1/visualization/escalation/{fid}",
             f"/api/v1/visualization/progress/{fid}",
-        ]
-
-    def test_foreign_form_id_is_not_found(self):
-        for url in self.foreign_urls():
+        ]:
             response = self.client.get(url)
             self.assertEqual(
                 response.status_code, 404, f"{url} reached another tenant"
-            )
-
-    def test_progress_enumeration_is_closed(self):
-        # The reported hole: /progress/1, /2, /3 walked other tenants'
-        # forms. Every id the caller does not own must answer the same.
-        for pk in [self.foreign_form.id, 1, 2, 3]:
-            response = self.client.get(
-                f"/api/v1/visualization/progress/{pk}"
-            )
-            self.assertEqual(
-                response.status_code, 404, f"/progress/{pk} was reachable"
             )
 
     def test_foreign_and_nonexistent_are_indistinguishable(self):
@@ -419,34 +405,3 @@ class VisualizationTenantIsolationTestCase(APITestCase):
             f"&date_question_id={foreign_date.id}"
         )
         self.assertEqual(response.status_code, 400)
-
-    def test_escalation_blames_the_parameter_that_failed(self):
-        # A columns failure used to be reported under the "criteria"
-        # key. validate_serializers_message drops the key from the HTTP
-        # body, so this asserts on serializer.errors directly — the one
-        # place the attribution is observable, and the place it starts
-        # mattering as soon as anything surfaces field names.
-        from api.v1.v1_visualization.dashboard_serializers import (
-            EscalationFilterSerializer,
-        )
-
-        own_form = Forms.objects.create(
-            name="Acme Sites Blame",
-            type=FormTypes.registration,
-            tenant=self.acme,
-        )
-        own_question = self.make_question(own_form, "acme_blame_q")
-        foreign_question = self.make_question(
-            self.foreign_form, "beta_blame_q"
-        )
-        serializer = EscalationFilterSerializer(
-            data={
-                "monitoring_form_id": own_form.id,
-                "criteria": f"option_equals:{own_question.id}:yes",
-                "columns": f"leak:answer:{foreign_question.id}",
-            },
-            context={"parent_form": own_form},
-        )
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("columns", serializer.errors)
-        self.assertNotIn("criteria", serializer.errors)

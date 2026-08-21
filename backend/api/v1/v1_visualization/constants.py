@@ -49,6 +49,16 @@ VALID_CRITERIA_TYPES = {
 # with escalation; `overdue` is excluded because it is table-specific,
 # and `option_contains` / `option_in` are added for multiple_option
 # filtering. Criteria combine with AND semantics.
+#
+# The `overdue` exclusion is load-bearing, not incidental. The
+# criteria-splitting in dashboard_serializers.py (`qids = {c["parts"]
+# [0] for c in criteria}`) takes only the first question id from each
+# criterion, which is safe only because every type in this set carries
+# exactly one qid. `overdue` carries two, `[completion_qid,
+# deadline_qid]` — EscalationFilterSerializer knows this and reads
+# `parts[:2]` instead. Adding `overdue` here without also fixing that
+# splitting logic would leave the deadline question id unvalidated
+# against any form.
 VALID_VALUES_CRITERIA_TYPES = {
     "option_equals",
     "option_contains",

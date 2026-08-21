@@ -13,7 +13,6 @@ from api.v1.v1_visualization.constants import (
 )
 from api.v1.v1_visualization.functions import parse_criteria_string
 from api.v1.v1_forms.models import Forms, Questions
-from utils.tenant_scoped_model import acting_user
 
 
 # =========================================================
@@ -131,7 +130,13 @@ class ValuesFilterSerializer(serializers.Serializer):
         # nowhere could never match one (400). That 400-vs-404 split is
         # an existence oracle over other tenants' forms. Scoping the
         # questions makes both shapes answer 400.
-        caller = acting_user(self.context)
+        #
+        # Subscripted, not .get(): a missing context must fail loudly,
+        # because for_user(None) would silently scope every lookup to
+        # `tenant IS NULL` and return a plausible empty result. Same
+        # reason the two serializers below read context["parent_form"]
+        # with no fallback.
+        caller = self.context["user"]
 
         # Validate question belongs to form and is supported type
         if question_id:
@@ -166,6 +171,10 @@ class ValuesFilterSerializer(serializers.Serializer):
                 ).values_list("pk", flat=True)
             )
             remaining = qids - on_form
+            # Unscoped on purpose: the for_user() lookup below that
+            # consumes `parent_form` is scoped, so a foreign parent id
+            # and a nonexistent one both end in the same 400 — no
+            # oracle, despite this running before the view's own check.
             parent_form = Forms.objects.filter(
                 pk=form_id,
             ).values_list("parent_id", flat=True).first()
@@ -340,55 +349,46 @@ class EscalationFilterSerializer(serializers.Serializer):
 
         # Group the question ids by the parameter that carried them, so
         # a rejection names the half that actually failed.
-        by_field = {}
-
-        # validate_criteria normalises each item to {"type", "parts"}.
-        # option_equals and the two thresholds put their only question
-        # id in parts[0], but "overdue" carries two — completion and
-        # deadline — and a foreign deadline id rides through if only
-        # the first is checked.
-        criteria_ids = set()
+        # Every question id the query string can carry, in one set.
+        # Which parameter carried a rejected id is not reported:
+        # validate_serializers_message drops the error key unless the
+        # message contains "field_title", so the distinction never
+        # reaches the client and only the id list is diagnostic.
+        #
+        # "overdue" is the reason for the [:2] — it carries a
+        # completion AND a deadline question id, where the other three
+        # criteria types put their only id in parts[0]. Columns attach
+        # question_id for the answer, parent_answer and latest_date
+        # sources; tested against None because id 0 is falsy but real.
+        question_ids = set()
         for criterion in data["criteria"]:
             if criterion["type"] == "overdue":
-                criteria_ids.update(criterion["parts"][:2])
+                question_ids.update(criterion["parts"][:2])
             else:
-                criteria_ids.add(criterion["parts"][0])
-        by_field["criteria"] = criteria_ids
-
-        # validate_columns attaches question_id only for the answer,
-        # parent_answer and latest_date sources. Tested against None
-        # rather than truthiness: id 0 is falsy but still an id, and
-        # skipping it would skip the check rather than the column.
-        by_field["columns"] = {
+                question_ids.add(criterion["parts"][0])
+        question_ids.update(
             col["question_id"]
             for col in data["columns"]
             if col.get("question_id") is not None
-        }
+        )
+        if data.get("date_question_id") is not None:
+            question_ids.add(data["date_question_id"])
 
-        # date_question_id names a question too, and it reaches the
-        # same queries the others do.
-        date_question_id = data.get("date_question_id")
-        if date_question_id is not None:
-            by_field["date_question_id"] = {date_question_id}
-
-        question_ids = set().union(*by_field.values())
         found = set(
             Questions.objects.filter(
                 pk__in=question_ids,
                 form_id__in=family_ids,
             ).values_list("pk", flat=True)
         )
-        errors = {}
-        for field, ids in by_field.items():
-            missing = ids - found
-            if missing:
-                errors[field] = (
+        missing = question_ids - found
+        if missing:
+            raise serializers.ValidationError({
+                "criteria": (
                     "question_id(s) not on form"
                     f" {parent_form.id} or its monitoring forms:"
                     f" {sorted(missing)}"
-                )
-        if errors:
-            raise serializers.ValidationError(errors)
+                ),
+            })
         return data
 
 
