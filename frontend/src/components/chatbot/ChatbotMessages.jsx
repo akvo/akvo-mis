@@ -89,7 +89,9 @@ const ChatbotMessages = ({
           <div className="chatbot-bubble">
             {msg.role === "assistant" ? (
               <div className="chatbot-markdown-body">
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                <ReactMarkdown>
+                  {(msg.content || "").replace(/【.*?】/g, "").trim()}
+                </ReactMarkdown>
               </div>
             ) : (
               <div className="chatbot-user-text">{msg.content}</div>

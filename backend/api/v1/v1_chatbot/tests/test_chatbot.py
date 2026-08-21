@@ -6,7 +6,10 @@ from api.v1.v1_chatbot.serializers import (
     ChatRequestSerializer,
     ChatResponseSerializer,
 )
-from api.v1.v1_chatbot.utils import get_page_context
+from api.v1.v1_chatbot.utils import (
+    clean_citation_sources,
+    get_page_context,
+)
 from api.v1.v1_users.models import SystemUser
 
 
@@ -123,3 +126,19 @@ class ChatbotTestCase(TestCase):
         # Validate response matches serializer contract
         resp_serializer = ChatResponseSerializer(data=data)
         self.assertTrue(resp_serializer.is_valid())
+
+    def test_clean_citation_sources(self):
+        """Assert OpenAI citation annotations are cleanly removed."""
+        sample_text = (
+            "You can approve or decline datasets and provide feedback【4:0†source】.\n"  # noqa
+            "Edit according to feedback【4:1†source】【4:2†source】.\n"
+            "View notifications【4:6†source】."
+        )
+        expected = (
+            "You can approve or decline datasets and provide feedback.\n"
+            "Edit according to feedback.\n"
+            "View notifications."
+        )
+        self.assertEqual(clean_citation_sources(sample_text), expected)
+        self.assertEqual(clean_citation_sources(""), "")
+        self.assertEqual(clean_citation_sources(None), "")

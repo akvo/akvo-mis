@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import ChatRequestSerializer, ChatResponseSerializer
-from .utils import get_page_context
+from .utils import clean_citation_sources, get_page_context
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +105,11 @@ class ChatMessageView(APIView):
                                 assistant_reply += block.text.value
                         break
 
+                cleaned_reply = clean_citation_sources(assistant_reply)
                 return Response(
                     {
                         "response": (
-                            assistant_reply
+                            cleaned_reply
                             or "I'm sorry, I couldn't find an answer to that."
                         ),
                         "thread_id": thread_id,

@@ -44,3 +44,17 @@ def get_page_context(page_url: str) -> str:
     label_parts = [s.replace("-", " ").title() for s in segments]
 
     return " — ".join(label_parts) if label_parts else "General Platform"
+
+
+def clean_citation_sources(text: str) -> str:
+    """
+    Remove OpenAI file search citation tags like 【4:0†source】 from
+    response text.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    # Strip OpenAI citation tags like 【4:0†source】 or 【12:3†...】
+    cleaned = re.sub(r"【\d+:\d+†[^】]+】", "", text)
+    # Strip any general unicode citation brackets if present
+    cleaned = re.sub(r"【[^】]*】", "", cleaned)
+    return cleaned.strip()
