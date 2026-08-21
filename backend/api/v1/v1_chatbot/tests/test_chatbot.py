@@ -25,6 +25,14 @@ class ChatbotTestCase(TestCase):
         """Assert dynamic URL context derivation for various route shapes."""
         test_cases = [
             (
+                "/control-center",
+                "Control Center",
+            ),
+            (
+                "/data",
+                "Data Management",
+            ),
+            (
                 "/control-center/form-builder/42/edit",
                 "Form Builder — Edit",
             ),
@@ -59,7 +67,7 @@ class ChatbotTestCase(TestCase):
 
     def test_chatbot_get_page_context_fallback(self):
         """Assert fallback context for unrecognised, empty, or root URLs."""
-        fallbacks = ["", None, "/", "/data", "/control-center"]
+        fallbacks = ["", None, "/"]
         for url in fallbacks:
             with self.subTest(url=url):
                 self.assertEqual(get_page_context(url), "General Platform")

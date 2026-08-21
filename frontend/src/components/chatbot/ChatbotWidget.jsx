@@ -16,14 +16,19 @@ const STORAGE_MESSAGES_KEY = "akvo_mis_chat_messages";
 
 // Derive human-readable page context on frontend for live context chip
 const derivePageLabel = (pathname) => {
-  if (!pathname || pathname === "/" || pathname === "/data") {
+  if (!pathname || pathname === "/") {
     return "General Platform";
   }
-  const cleanPath = pathname
-    .split("?")[0]
-    .replace(/^\/(control-center|data)/, "")
-    .replace(/^\//, "")
-    .replace(/\/$/, "");
+  const clean = pathname.split("?")[0].replace(/^\//, "").replace(/\/$/, "");
+
+  if (clean === "data") {
+    return "Data Management";
+  }
+  if (clean === "control-center") {
+    return "Control Center";
+  }
+
+  const cleanPath = clean.replace(/^(control-center|data)\/?/, "");
 
   const segments = cleanPath
     .split("/")
