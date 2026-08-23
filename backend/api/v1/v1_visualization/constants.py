@@ -73,3 +73,33 @@ VALID_PROGRESS_FORMULAS = {
     "ratio",
     "multi_select_proportion",
 }
+
+
+class DashboardStatus:
+    draft = 1
+    published = 2
+
+    FieldStr = {
+        draft: "draft",
+        published: "published",
+    }
+
+
+class WidgetTypes:
+    kpi = 1
+    bar = 2
+    line = 3
+    pie = 4
+    table = 5
+    map = 6
+    section_title = 7
+
+    FieldStr = {
+        kpi: "kpi",
+        bar: "bar",
+        line: "line",
+        pie: "pie",
+        table: "table",
+        map: "map",
+        section_title: "section_title",
+    }

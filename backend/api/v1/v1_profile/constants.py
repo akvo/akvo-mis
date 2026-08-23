@@ -48,6 +48,14 @@ class FeatureAccessTypes:
     form_edit = 5
     form_publish = 6
     form_delete = 7
+    # Continue from 7 rather than filling the gap at 2: these values are
+    # persisted in role_feature_access rows, so a reused number would
+    # silently re-point existing grants.
+    dashboard_view = 8
+    dashboard_create = 9
+    dashboard_edit = 10
+    dashboard_publish = 11
+    dashboard_delete = 12
 
     FieldStr = {
         invite_user: "Invite User",
@@ -56,15 +64,22 @@ class FeatureAccessTypes:
         form_edit: "Form Edit",
         form_publish: "Form Publish",
         form_delete: "Form Delete",
+        dashboard_view: "Dashboard View",
+        dashboard_create: "Dashboard Create",
+        dashboard_edit: "Dashboard Edit",
+        dashboard_publish: "Dashboard Publish",
+        dashboard_delete: "Dashboard Delete",
     }
 
 
 class FeatureTypes:
     user_access = 1
     form_builder = 2
+    dashboard_builder = 3
     FieldStr = {
         user_access: "User Access",
         form_builder: "Form Builder",
+        dashboard_builder: "Dashboard Builder",
     }
     FieldGroup = {
         user_access: [
@@ -76,6 +91,15 @@ class FeatureTypes:
             FeatureAccessTypes.form_edit,
             FeatureAccessTypes.form_publish,
             FeatureAccessTypes.form_delete,
+        ],
+        # One entry is the whole role-editor integration: generate_config
+        # walks FieldStr and emits each key's FieldGroup members.
+        dashboard_builder: [
+            FeatureAccessTypes.dashboard_view,
+            FeatureAccessTypes.dashboard_create,
+            FeatureAccessTypes.dashboard_edit,
+            FeatureAccessTypes.dashboard_publish,
+            FeatureAccessTypes.dashboard_delete,
         ],
     }
 
