@@ -1,4 +1,5 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import (
@@ -150,6 +151,7 @@ from utils.custom_serializer_fields import (
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_values(request, version):
     """Generic visualization values endpoint.
 
@@ -157,7 +159,8 @@ def visualization_values(request, version):
     All configuration via query parameters.
     """
     serializer = ValuesFilterSerializer(
-        data=request.query_params
+        data=request.query_params,
+        context={"user": request.user},
     )
     if not serializer.is_valid():
         return Response(
@@ -169,7 +172,7 @@ def visualization_values(request, version):
 
     validated = serializer.validated_data
     form = get_object_or_404(
-        Forms, pk=validated["form_id"]
+        Forms.objects.for_user(request.user), pk=validated["form_id"]
     )
     question = validated.get("question")
 
@@ -207,20 +210,20 @@ def visualization_values(request, version):
 
     # Route to handler
     if not question:
-        result = handle_count_mode(form, params)
+        result = handle_count_mode(form, params, request.user)
     elif question.type == QuestionTypes.number:
         result = handle_number_question(
-            form, question, params
+            form, question, params, request.user
         )
     elif question.type in [
         QuestionTypes.option,
         QuestionTypes.multiple_option,
     ]:
         result = handle_option_question(
-            form, question, params
+            form, question, params, request.user
         )
     else:
-        result = handle_count_mode(form, params)
+        result = handle_count_mode(form, params, request.user)
 
     # Format response
     if isinstance(result, dict):
@@ -310,12 +313,16 @@ def visualization_values(request, version):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_escalation(request, form_id, version):
     """Escalation table with query-param-driven criteria."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
+    parent_form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
 
     serializer = EscalationFilterSerializer(
-        data=request.query_params
+        data=request.query_params,
+        context={"parent_form": parent_form},
     )
     if not serializer.is_valid():
         return Response(
@@ -349,6 +356,7 @@ def visualization_escalation(request, form_id, version):
                 for v in values
             ],
         },
+        user=request.user,
     )
     return Response(result, status=status.HTTP_200_OK)
 
@@ -436,12 +444,16 @@ def visualization_escalation(request, form_id, version):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_progress(request, form_id, version):
     """Progress computation endpoint."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
+    parent_form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
 
     serializer = ProgressFilterSerializer(
-        data=request.query_params
+        data=request.query_params,
+        context={"parent_form": parent_form},
     )
     if not serializer.is_valid():
         return Response(
@@ -482,5 +494,6 @@ def visualization_progress(request, form_id, version):
             "criteria": mon_criteria,
             "parent_criteria": parent_criteria,
         },
+        user=request.user,
     )
     return Response(result, status=status.HTTP_200_OK)

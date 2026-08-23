@@ -3,6 +3,9 @@ from rest_framework.test import APITestCase
 from api.v1.v1_visualization.tests.mixins import (
     VisualizationValuesTestMixin,
 )
+from api.v1.v1_visualization.dashboard_serializers import (
+    ValuesFilterSerializer,
+)
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
@@ -17,11 +20,12 @@ class ValuesErrorTestCases(VisualizationValuesTestMixin, APITestCase):
         self.assertIn("message", data)
 
     def test_invalid_form_id(self):
-        """Non-existent form_id — returns 400."""
+        """Non-existent form_id — 404, indistinguishable from
+        another tenant's."""
         response = self.client.get(
             f"{self.BASE_URL}?form_id=99999"
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
 
     def test_invalid_question_id(self):
         """Non-existent question_id — returns 400."""
@@ -84,3 +88,18 @@ class ValuesErrorTestCases(VisualizationValuesTestMixin, APITestCase):
             "&value_type=invalid_value"
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_serializer_without_user_context_fails_loudly(self):
+        """Constructing ValuesFilterSerializer with no context must
+        raise instead of silently validating against `tenant IS
+        NULL`. The view (dashboard_views.visualization_values) always
+        passes context={"user": request.user}, so this exercises a
+        caller that skips that — not reachable over HTTP, but worth
+        pinning so the lookup cannot regress to a .get() that
+        returns None unnoticed.
+        """
+        serializer = ValuesFilterSerializer(
+            data={"form_id": self.monitoring.id},
+        )
+        with self.assertRaises(KeyError):
+            serializer.is_valid()

@@ -9,6 +9,7 @@ from api.v1.v1_users.models import SystemUser
 from django.core.management import call_command
 from datetime import datetime
 from django.utils.timezone import make_aware
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
@@ -87,6 +88,9 @@ class MonitoringStatsAPITest(APITestCase):
             question=self.date_question,
             created_by=self.user,
         )
+
+        token = RefreshToken.for_user(self.user).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
     def test_stats_without_question_date(self):
         url = (

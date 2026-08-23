@@ -1,11 +1,11 @@
 import json
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from datetime import datetime
 from django.db.models import Q
 from api.v1.v1_data.models import FormData, Answers
-from api.v1.v1_forms.models import Forms, QuestionTypes
+from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
 from api.v1.v1_visualization.serializers import (
     MonitoringStatSerializer,
     GeoLocationListSerializer,
@@ -29,7 +29,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
-# from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from utils.custom_serializer_fields import validate_serializers_message
 
 
@@ -51,6 +51,7 @@ from utils.custom_serializer_fields import validate_serializers_message
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def formdata_stats(request, form_id, version):
     form = get_object_or_404(
         Forms.objects.for_user(request.user), pk=form_id
@@ -202,6 +203,7 @@ def formdata_stats(request, form_id, version):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def monitoring_stats(request, version):
     parent_id = request.query_params.get("parent_id")
     question_id = request.query_params.get("question_id")
@@ -213,13 +215,38 @@ def monitoring_stats(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Resolve the parent datapoint through a tenant-scoped queryset before
+    # doing anything else with it, otherwise an authenticated caller from
+    # any tenant can enumerate other tenants' datapoints by id.
+    parent = get_object_or_404(
+        FormData.objects.for_user(request.user), pk=parent_id
+    )
+    # The question must belong to the parent's form family, otherwise a
+    # foreign question id rides in on an otherwise valid request. The
+    # family is the parent's own form plus its monitoring forms (Forms
+    # rows whose `parent` points back at it) — parent_id here is the
+    # registration datapoint, but the question being charted lives on
+    # the monitoring form that was submitted against it. Scoped through
+    # for_user() rather than trusting the child inherits its parent's
+    # tenant: FormViewSet.update() can repoint a draft form's `parent`
+    # FK across tenants with no tenant check (functions.py), so the
+    # Q(parent_id=...) branch alone could pull in another tenant's form.
+    question_forms = Forms.objects.for_user(request.user).filter(
+        Q(pk=parent.form_id) | Q(parent_id=parent.form_id)
+    )
+    question = get_object_or_404(
+        Questions.objects.filter(form__in=question_forms), pk=question_id
+    )
+
     try:
-        formdata_qs = FormData.objects.filter(parent_id=parent_id)
+        formdata_qs = FormData.objects.for_user(request.user).filter(
+            parent_id=parent.id
+        )
         stats = []
 
         for formdata in formdata_qs:
             answer = Answers.objects.filter(
-                data=formdata, question_id=question_id
+                data=formdata, question_id=question.id
             ).first()
             if not answer:
                 continue
@@ -256,7 +283,7 @@ def monitoring_stats(request, version):
 
 
 class GeolocationListView(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         responses=GeoLocationListSerializer,
@@ -407,8 +434,7 @@ class GeolocationListView(APIView):
 
 
 class DatapointDetailView(APIView):
-    # permission_classes = [IsAuthenticated]
-    # public, same as GeolocationListView
+    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         responses=DatapointDetailSerializer,
@@ -488,6 +514,7 @@ class DatapointDetailView(APIView):
     ],
 )
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def visualization_values_formula(request, version):
     """Evaluate a formula per datapoint.
 

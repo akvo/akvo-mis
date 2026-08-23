@@ -119,7 +119,7 @@ def compute_component_scores(
     return scores
 
 
-def build_progress_answers_map(latest_ids, components):
+def build_progress_answers_map(latest_ids, components, user):
     """Bulk-fetch answers needed to score all components for all parents.
 
     Returns dict keyed by (data_id, question_id) carrying the fields
@@ -130,7 +130,7 @@ def build_progress_answers_map(latest_ids, components):
     }
     if not qids or not latest_ids:
         return {}
-    rows = Answers.objects.filter(
+    rows = Answers.objects.for_user(user).filter(
         data_id__in=latest_ids,
         question_id__in=qids,
     ).values("data_id", "question_id", "options", "value")
@@ -165,7 +165,7 @@ def build_histogram(eps_results):
 
 def handle_progress(
     parent_form, monitoring_form_id,
-    components, params,
+    components, params, user,
 ):
     """Handle progress query.
 
@@ -177,6 +177,9 @@ def handle_progress(
         params: Dict with filter_question_id,
             filter_option_value, administration_id,
             from_date, to_date, date_question_id.
+        user: Acting user. Kept out of `params` on purpose:
+            `params` is the attacker-controlled query grammar,
+            so the security principal travels separately.
 
     Returns:
         Dict with histogram and details.
@@ -187,7 +190,7 @@ def handle_progress(
 
     date_filters = build_date_filters(params)
 
-    parents = FormData.objects.filter(
+    parents = FormData.objects.for_user(user).filter(
         form=parent_form,
         parent__isnull=True,
         is_pending=False,
@@ -216,7 +219,7 @@ def handle_progress(
         latest_ids = parents.values_list(
             "latest_id", flat=True
         )
-        matching_ids = Answers.objects.filter(
+        matching_ids = Answers.objects.for_user(user).filter(
             data_id__in=latest_ids,
             question_id=filter_qid,
             options__contains=[filter_value],
@@ -230,13 +233,13 @@ def handle_progress(
     parents = list(parents.only("id", "name"))
     latest_ids = [p.latest_id for p in parents]
     answers_map = build_progress_answers_map(
-        latest_ids, components
+        latest_ids, components, user
     )
 
     # Build scope lookup: latest_id -> scope option value
     scope_map = {}
     if scope_qid:
-        scope_rows = Answers.objects.filter(
+        scope_rows = Answers.objects.for_user(user).filter(
             data_id__in=latest_ids,
             question_id=scope_qid,
         ).values("data_id", "options")

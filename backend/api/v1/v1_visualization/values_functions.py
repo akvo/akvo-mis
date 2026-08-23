@@ -26,10 +26,10 @@ def _should_fill_gaps(params):
     )
 
 
-def _total_parents_in_scope(form, params):
+def _total_parents_in_scope(form, params, user):
     """Count all parent registrations in scope, respecting filters."""
     scope_form = form.parent if form.parent else form
-    qs = FormData.objects.filter(
+    qs = FormData.objects.for_user(user).filter(
         form=scope_form,
         parent__isnull=True,
         is_pending=False,
@@ -44,7 +44,7 @@ def _total_parents_in_scope(form, params):
     return qs.count()
 
 
-def _count_no_info_parents(form, params, qualifying_ids):
+def _count_no_info_parents(form, params, qualifying_ids, user):
     """Count datapoints in scope with no qualifying answer.
 
     For monitoring forms: counts parent registrations without any
@@ -55,13 +55,13 @@ def _count_no_info_parents(form, params, qualifying_ids):
     Respects administration_id and parent_criteria so the count
     reconciles with option counts under filtering (FR-3).
     """
-    total = _total_parents_in_scope(form, params)
+    total = _total_parents_in_scope(form, params, user)
     return max(0, total - len(qualifying_ids))
 
 
 # -- Count mode handler --
 
-def handle_count_mode(form, params):
+def handle_count_mode(form, params, user):
     """Handle count mode (no question_id)."""
     form_id = form.id
     monitoring = params.get("monitoring", "latest")
@@ -73,11 +73,11 @@ def handle_count_mode(form, params):
     if is_monitoring and monitoring == "latest" \
             and sum_by == "parent_id":
         qs, is_latest, _ = get_base_monitoring_qs(
-            form, form_id, params
+            form, form_id, params, user
         )
         count = qs.count()
         if value_type == "percentage":
-            total = FormData.objects.filter(
+            total = FormData.objects.for_user(user).filter(
                 form=form.parent,
                 parent__isnull=True,
                 is_pending=False,
@@ -94,13 +94,13 @@ def handle_count_mode(form, params):
         )
 
     qs, is_latest, _ = get_base_monitoring_qs(
-        form, form_id, params
+        form, form_id, params, user
     )
 
     if not group_by:
         count = qs.count()
         if value_type == "percentage" and is_monitoring:
-            total = FormData.objects.filter(
+            total = FormData.objects.for_user(user).filter(
                 form=form.parent,
                 parent__isnull=True,
                 is_pending=False,
@@ -324,7 +324,7 @@ def _count_group_by_date(qs, is_latest, params):
 
 # -- Option question handler --
 
-def handle_option_question(form, question, params):
+def handle_option_question(form, question, params, user):
     """Handle option/multiple_option questions."""
     form_id = form.id
     group_by = params.get("group_by")
@@ -334,7 +334,7 @@ def handle_option_question(form, question, params):
     stack_by = params.get("stack_by")
 
     qs, is_latest, _ = get_base_monitoring_qs(
-        form, form_id, params
+        form, form_id, params, user
     )
     data_ids = get_monitoring_data_ids(qs, is_latest)
 
@@ -350,7 +350,7 @@ def handle_option_question(form, question, params):
     if option_value:
         return _option_value_filter(
             question, data_ids, qs, is_latest,
-            option_value, sum_by, value_type,
+            option_value, sum_by, value_type, user,
             include_unanswered=params.get(
                 "include_unanswered", False
             ),
@@ -362,7 +362,7 @@ def handle_option_question(form, question, params):
     if stack_by == "option" and group_by:
         return handle_stack_by_option(
             question, options, data_ids,
-            qs, is_latest, params
+            qs, is_latest, params, user
         )
 
     if group_by == "option":
@@ -371,7 +371,7 @@ def handle_option_question(form, question, params):
         )
         return _option_group_by_option(
             question, options, data_ids, qs,
-            is_latest, value_type, restricted,
+            is_latest, value_type, user, restricted,
             include_unanswered=params.get(
                 "include_unanswered", False
             ),
@@ -384,7 +384,7 @@ def handle_option_question(form, question, params):
 
 def _option_value_filter(
     question, data_ids, qs, is_latest,
-    option_value, sum_by, value_type,
+    option_value, sum_by, value_type, user,
     include_unanswered=False, form=None, params=None,
     include_empty=False,
 ):
@@ -398,7 +398,7 @@ def _option_value_filter(
     include_unanswered when both are set, as the coverage-gap count
     already subsumes the answer-gap count.
     """
-    count = Answers.objects.filter(
+    count = Answers.objects.for_user(user).filter(
         data_id__in=data_ids,
         question_id=question.id,
         options__contains=[option_value],
@@ -415,28 +415,31 @@ def _option_value_filter(
 
     if include_empty and is_monitoring:
         monitored_parent_ids = set(
-            FormData.objects.filter(id__in=data_ids)
+            FormData.objects.for_user(user)
+            .filter(id__in=data_ids)
             .values_list("parent_id", flat=True)
             .distinct()
         )
         extra = _count_no_info_parents(
-            form, params or {}, monitored_parent_ids
+            form, params or {}, monitored_parent_ids, user
         )
     elif include_unanswered and is_monitoring:
         all_answered_ids = set(
-            Answers.objects.filter(
+            Answers.objects.for_user(user).filter(
                 data_id__in=data_ids,
                 question_id=question.id,
                 options__isnull=False,
             ).values_list("data__parent_id", flat=True).distinct()
         )
         extra = _count_no_info_parents(
-            form, params or {}, all_answered_ids
+            form, params or {}, all_answered_ids, user
         )
 
     if value_type == "percentage":
         if (include_empty or include_unanswered) and is_monitoring:
-            total = _total_parents_in_scope(form, params or {})
+            total = _total_parents_in_scope(
+                form, params or {}, user
+            )
             numerator = count + extra
         else:
             total = qs.count() if is_latest else len(data_ids)
@@ -559,7 +562,7 @@ def _extract_criteria_option_values(params, question_id):
 
 def _option_group_by_option(
     question, options, data_ids, qs,
-    is_latest, value_type, restricted_values=None,
+    is_latest, value_type, user, restricted_values=None,
     include_unanswered=False, form=None, params=None,
 ):
     """Group by option values (donut chart).
@@ -591,7 +594,7 @@ def _option_group_by_option(
     tracking_field = (
         "data_id" if is_registration else "data__parent_id"
     )
-    for tracking_id, opts in Answers.objects.filter(
+    for tracking_id, opts in Answers.objects.for_user(user).filter(
         data_id__in=data_ids,
         question_id=question.id,
         options__isnull=False,
@@ -607,7 +610,9 @@ def _option_group_by_option(
     counts = [tallies.get(opt.value, 0) for opt in options]
 
     bucket_count = (
-        _count_no_info_parents(form, params, qualifying_parents)
+        _count_no_info_parents(
+            form, params, qualifying_parents, user
+        )
         if include_unanswered else 0
     )
 
@@ -650,7 +655,7 @@ def _option_group_by_option(
 
 # -- Number question handler --
 
-def handle_number_question(form, question, params):
+def handle_number_question(form, question, params, user):
     """Handle number questions."""
     form_id = form.id
     group_by = params.get("group_by")
@@ -659,7 +664,7 @@ def handle_number_question(form, question, params):
     stack_by = params.get("stack_by")
 
     qs, is_latest, _ = get_base_monitoring_qs(
-        form, form_id, params
+        form, form_id, params, user
     )
     data_ids = get_monitoring_data_ids(qs, is_latest)
     agg_func = AGG_FUNCS.get(repeat_agg, Avg)
@@ -667,7 +672,7 @@ def handle_number_question(form, question, params):
     if stack_by == "parent_id":
         return handle_stack_by_parent(
             question, qs, is_latest,
-            data_ids, params
+            data_ids, params, user
         )
 
     if group_by == "parent_id":
@@ -869,7 +874,7 @@ def _number_group_by_month(
 
 def handle_stack_by_option(
     question, options, data_ids,
-    qs, is_latest, params
+    qs, is_latest, params, user
 ):
     """Handle stack_by=option: stacked bar charts."""
     group_by = params.get("group_by")
@@ -887,7 +892,7 @@ def handle_stack_by_option(
     if group_by == "parent_id":
         return _stack_option_by_parent(
             question, options, data_ids,
-            qs, is_latest, opt_labels, opt_colors
+            qs, is_latest, opt_labels, opt_colors, user
         )
 
     return {
@@ -971,7 +976,7 @@ def _stack_option_by_month(
 
 def _stack_option_by_parent(
     question, options, data_ids,
-    qs, is_latest, opt_labels, opt_colors
+    qs, is_latest, opt_labels, opt_colors, user
 ):
     """Stack by option, grouped by parent_id.
 
@@ -987,6 +992,15 @@ def _stack_option_by_parent(
         Parents = qs directly; p_data_ids = [parent.id].
     """
     # Distinguish monitoring vs registration by probing for a parent_id.
+    #
+    # The registration-vs-monitoring decision reads `parent_ids`, the
+    # raw FK traversal, deliberately *before* the tenant scope is
+    # applied. A monitoring query whose parents all belong to another
+    # tenant must stay on the monitoring path and return nothing; if
+    # the branch tested the scoped rows instead, that same query would
+    # be silently reclassified as a registration query and start
+    # charting its own children as though they were registrations.
+    # Scoping the fetch and not the branch keeps the shape honest.
     is_registration_form = False
     if is_latest:
         parents = qs
@@ -996,7 +1010,9 @@ def _stack_option_by_parent(
             parent__isnull=False,
         ).values_list("parent_id", flat=True).distinct())
         if parent_ids:
-            parents = FormData.objects.filter(id__in=parent_ids)
+            parents = FormData.objects.for_user(user).filter(
+                id__in=parent_ids,
+            )
         else:
             # Registration-form path: qs IS the list of registrations.
             parents = qs
@@ -1037,7 +1053,7 @@ def _stack_option_by_parent(
 
 
 def handle_stack_by_parent(
-    question, qs, is_latest, data_ids, params
+    question, qs, is_latest, data_ids, params, user
 ):
     """Handle stack_by=parent_id: multi-line charts."""
     group_by = params.get("group_by")
@@ -1055,7 +1071,10 @@ def handle_stack_by_parent(
         ).values_list(
             "parent_id", flat=True
         ).distinct()
-        parent_data = FormData.objects.filter(
+        # parent_ids comes off the `parent` FK, and a row's tenant
+        # hangs off its own form, never its parent's -- so this list
+        # is not a tenant-scoped set and needs its own scope.
+        parent_data = FormData.objects.for_user(user).filter(
             id__in=parent_ids,
         ).values("id", "name")
         parents = [
