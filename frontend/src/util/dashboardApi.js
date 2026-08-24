@@ -69,12 +69,47 @@ const dashboardApi = {
     api.get(`${MANAGE}/${id}`).catch((err) => {
       if (isBackendAbsent(err)) {
         const found = getSessionList().find((d) => d.id === id);
-        return { data: found || fixtureDetail };
+        if (found) {
+          const widgets = Array.isArray(found.widgets) ? found.widgets : [];
+          const hasFullWidgets =
+            widgets.length > 0 &&
+            widgets[0].id !== null &&
+            typeof widgets[0].id !== "undefined";
+          // List fixture widgets are stubs (no id) — use detail fixture
+          // widgets but keep the dashboard metadata from the session list.
+          return {
+            data: {
+              ...found,
+              widgets: hasFullWidgets ? widgets : fixtureDetail.widgets,
+              default_filters:
+                found.default_filters || fixtureDetail.default_filters,
+            },
+          };
+        }
+        return { data: fixtureDetail };
       }
       throw err;
     }),
 
-  update: (id, payload) => api.put(`${MANAGE}/${id}`, payload),
+  update: (id, payload) =>
+    api.put(`${MANAGE}/${id}`, payload).catch((err) => {
+      if (isBackendAbsent(err)) {
+        const list = getSessionList();
+        const idx = list.findIndex((d) => d.id === id);
+        if (idx !== -1) {
+          list[idx] = {
+            ...list[idx],
+            name: payload.name || list[idx].name,
+            description: payload.description || list[idx].description,
+            default_filters: payload.default_filters,
+            widgets: payload.widgets || list[idx].widgets,
+            updated: new Date().toISOString(),
+          };
+          return { data: list[idx] };
+        }
+      }
+      throw err;
+    }),
 
   destroy: (id) =>
     api.delete(`${MANAGE}/${id}`).catch((err) => {

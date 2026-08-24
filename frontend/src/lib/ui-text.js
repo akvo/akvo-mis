@@ -63,6 +63,12 @@ const uiText = {
     dashboardDeleteConfirm: "Delete this dashboard?",
     dashboardSlugConflict:
       "A dashboard with a similar name already exists. Please choose a different name.",
+    dashboardSaved: "Dashboard saved",
+    dashboardPublished: "Dashboard published",
+    preview: "Preview",
+    publish: "Publish",
+    published: "Published",
+    draft: "Draft",
     // Login
     loginLoadingTex: (
       <Fragment>
