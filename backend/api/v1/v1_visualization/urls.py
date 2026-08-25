@@ -11,6 +11,9 @@ from api.v1.v1_visualization.dashboard_views import (
     visualization_escalation,
     visualization_progress,
 )
+from api.v1.v1_visualization.dashboard_builder_views import (
+    DashboardBuilderViewSet,
+)
 
 urlpatterns = [
     re_path(
@@ -44,5 +47,22 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/visualization/progress/(?P<form_id>[0-9]+)",
         visualization_progress,
+    ),
+    # Dashboard builder CRUD (sub-resource routes before generic)
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/sources$",
+        DashboardBuilderViewSet.as_view({"get": "sources"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)$",
+        DashboardBuilderViewSet.as_view(
+            {"get": "retrieve", "put": "update", "delete": "destroy"}
+        ),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards$",
+        DashboardBuilderViewSet.as_view(
+            {"get": "list", "post": "create"}
+        ),
     ),
 ]
