@@ -21,6 +21,7 @@ from api.v1.v1_profile.constants import FeatureAccessTypes
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardDetailSerializer,
     DashboardListSerializer,
+    serialize_sources,
 )
 from api.v1.v1_visualization.dashboard_functions import (
     SLUG_PATTERN,
@@ -155,3 +156,9 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
         )
+
+    def sources(self, request, *args, **kwargs):
+        # This endpoint IS the family boundary as the UI sees it: if a
+        # form is not here the builder cannot offer it, and if it
+        # somehow does, validate_dashboard_payload rejects it on save.
+        return Response(serialize_sources(self.get_object()))

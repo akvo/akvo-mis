@@ -339,6 +339,12 @@ class DashboardPermissionTestCase(TestCase):
         self.grant(FeatureAccessTypes.dashboard_edit)
         self.assertEqual(self.call("put", url, body).status_code, 200)
 
+    def test_sources_needs_dashboard_view(self):
+        url = "{0}/{1}/sources".format(BASE_URL, self.dashboard.id)
+        self.assertEqual(self.call("get", url).status_code, 403)
+        self.grant(FeatureAccessTypes.dashboard_view)
+        self.assertEqual(self.call("get", url).status_code, 200)
+
 
 @override_settings(USE_TZ=False)
 class DashboardUpdateTestCase(TestCase, ProfileTestHelperMixin):
