@@ -22,6 +22,7 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_visualization import urls as visualization_urls
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.dashboard_builder_views import (
     DashboardBuilderViewSet,
@@ -671,17 +672,24 @@ class DashboardActionMapTestCase(TestCase):
         )
 
     def test_every_routed_action_is_mapped(self):
-        self.assertEqual(
-            sorted(DashboardBuilderViewSet.ACCESS_PER_ACTION),
-            [
-                "create",
-                "destroy",
-                "duplicate",
-                "list",
-                "publish",
-                "retrieve",
-                "sources",
-                "unpublish",
-                "update",
-            ],
+        # A hardcoded list of names here can never fail for the reason
+        # this test exists: a route added without its ACCESS_PER_ACTION
+        # entry leaves both the map and the literal untouched, so the
+        # two would keep matching each other while the real world
+        # drifted from both. Walking the URLconf and reading the action
+        # each route actually dispatches to is the only version of this
+        # check that can catch a forgotten map entry, because it is the
+        # one input that changes when a route is added.
+        routed = set()
+        for pattern in visualization_urls.urlpatterns:
+            callback = pattern.callback
+            if getattr(callback, "cls", None) is DashboardBuilderViewSet:
+                routed.update(callback.actions.values())
+        # A false pass here would be the same bug in a new costume:
+        # assertLessEqual(routed, ...) holds vacuously for an empty
+        # set, so an empty `routed` must fail loudly rather than let
+        # the assertion below report success for nothing checked.
+        self.assertTrue(routed)
+        self.assertLessEqual(
+            routed, set(DashboardBuilderViewSet.ACCESS_PER_ACTION)
         )

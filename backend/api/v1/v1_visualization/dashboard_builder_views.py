@@ -96,9 +96,17 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # Deny rather than fall through to IsAuthenticated. An
             # action missing from the map above is an oversight, and the
             # safe reading of an oversight is "no access" rather than
-            # "every signed-in user in the tenant". Nothing routed hits
-            # this today; the branch exists so that adding a tenth
-            # action and forgetting its entry fails closed.
+            # "every signed-in user in the tenant".
+            #
+            # OPTIONS hits this branch too, deliberately. DRF's
+            # ViewSetMixin.initialize_request sets self.action to the
+            # literal string "metadata" for an OPTIONS request (it is
+            # not left unset) — "metadata" is simply never a key in
+            # ACCESS_PER_ACTION, so it falls into the same deny path as
+            # any other unmapped action. That is fine to leave as-is:
+            # this project has no corsheaders in INSTALLED_APPS, the
+            # frontend is same-origin behind nginx, and nothing
+            # preflights these paths, so 403-ing OPTIONS costs nothing.
             return [DenyUnmappedAction()]
         return [IsAuthenticated(), DashboardAccess(access)()]
 
