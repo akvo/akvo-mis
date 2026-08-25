@@ -55,20 +55,16 @@ def annotate_broken(widgets, user):
     the caller's snapshot is never mutated, because it is a row from
     the database that nobody meant to write back.
     """
-    form_ids = {w.get("form") for w in widgets if w.get("form")}
-    question_ids = {
-        w.get("question") for w in widgets if w.get("question")
-    }
-    live_forms = set(
-        Forms.objects.for_user(user)
-        .filter(id__in=form_ids)
-        .values_list("id", flat=True)
-    )
-    live_questions = set(
-        Questions.objects.for_user(user)
-        .filter(id__in=question_ids)
-        .values_list("id", flat=True)
-    )
+    def live(model, key):
+        ids = {w.get(key) for w in widgets if w.get(key)}
+        return set(
+            model.objects.for_user(user)
+            .filter(id__in=ids)
+            .values_list("id", flat=True)
+        )
+
+    live_forms = live(Forms, "form")
+    live_questions = live(Questions, "question")
 
     annotated = []
     for widget in widgets:

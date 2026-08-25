@@ -50,6 +50,9 @@ class BuildSnapshotTestCase(TestCase, ProfileTestHelperMixin):
     def test_snapshot_holds_widgets_and_default_filters(self):
         self.widget(title="Operational")
         snapshot = build_snapshot(self.dashboard)
+        # Exactly two keys, which is also what pins spec D-1: name,
+        # slug and root_form are served live from the row, so a
+        # corrected typo must not need a re-publish to reach viewers.
         self.assertEqual(
             sorted(snapshot), ["default_filters", "widgets"]
         )
@@ -63,14 +66,6 @@ class BuildSnapshotTestCase(TestCase, ProfileTestHelperMixin):
         # The string name, not the integer column — the snapshot is read
         # by a client, and by validate_dashboard_payload.
         self.assertEqual(snapshot["widgets"][0]["type"], "kpi")
-
-    def test_snapshot_omits_identity_fields(self):
-        # Spec D-1: name, slug and root_form are served live from the
-        # row, so a corrected typo must not need a re-publish.
-        self.widget()
-        snapshot = build_snapshot(self.dashboard)
-        for absent in ("name", "slug", "root_form", "id", "status"):
-            self.assertNotIn(absent, snapshot)
 
     def test_snapshot_orders_widgets_by_order_then_id(self):
         third = self.widget(order=3, title="Third")

@@ -106,17 +106,15 @@ def suggest_slug(slug, queryset):
 # Both columns are varchar(255). The stem is truncated *before* the
 # suffix is appended rather than after, because truncating the finished
 # string would cut the suffix off — a "copy" that is not named "copy".
-# SLUG_TAIL_ROOM leaves space for suggest_slug's "-N" on a collision.
 MAX_LENGTH = 255
-SLUG_TAIL_ROOM = 6
-NAME_COPY_SUFFIX = " (copy)"
-SLUG_COPY_SUFFIX = "-copy"
 
 
 def copy_name(name):
     """Name for a duplicate: "<name> (copy)"."""
-    stem = (name or "")[: MAX_LENGTH - len(NAME_COPY_SUFFIX)]
-    return "{0}{1}".format(stem, NAME_COPY_SUFFIX)
+    suffix = " (copy)"
+    return "{0}{1}".format(
+        (name or "")[: MAX_LENGTH - len(suffix)], suffix
+    )
 
 
 def copy_slug(slug, queryset):
@@ -127,10 +125,13 @@ def copy_slug(slug, queryset):
     reads "...water-points--copy", and it fails SLUG_PATTERN — leaving a
     dashboard that cannot be duplicated for a reason no error message
     would explain.
+
+    The extra 6 characters withheld from the stem leave room for
+    suggest_slug's "-N" tail when the plain "-copy" is already taken.
     """
-    room = MAX_LENGTH - len(SLUG_COPY_SUFFIX) - SLUG_TAIL_ROOM
-    stem = slug[:room].rstrip("-")
-    candidate = "{0}{1}".format(stem, SLUG_COPY_SUFFIX)
+    suffix = "-copy"
+    stem = slug[: MAX_LENGTH - len(suffix) - 6].rstrip("-")
+    candidate = "{0}{1}".format(stem, suffix)
     if queryset.filter(slug=candidate).exists():
         return suggest_slug(candidate, queryset)
     return candidate
