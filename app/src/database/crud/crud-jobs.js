@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import sql from '../sql';
 import crudUsers from './crud-users';
 
@@ -17,7 +18,12 @@ const jobsQuery = () => ({
         return rows?.[0] || null;
       }
       return null;
-    } catch {
+    } catch (error) {
+      // Still null, so callers keep treating this as "no active job" — but a dead
+      // connection used to be indistinguishable from that, which let a whole
+      // session fail invisibly until the follow-up insert threw instead.
+      Sentry.captureMessage('[crudJobs] getActiveJob failed, treating as no active job');
+      Sentry.captureException(error);
       return null;
     }
   },

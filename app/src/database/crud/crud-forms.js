@@ -145,9 +145,12 @@ const formsQuery = () => ({
             DISTINCT CASE WHEN dp.submitted = 1
             THEN dp.id END
           ) AS submitted,
+          -- Every unfinished draft, synced or not: a draft downloaded from the web
+          -- is still one the user can open and finish. Counting only unsynced ones
+          -- made this disagree with the Home card and the datapoint list.
           COUNT(
             DISTINCT CASE WHEN dp.submitted = 0
-            AND dp.syncedAt IS NULL THEN dp.id END
+            THEN dp.id END
           ) AS draft,
           COUNT(
             DISTINCT CASE WHEN dp.submitted = 1 AND dp.syncedAt IS NOT NULL
