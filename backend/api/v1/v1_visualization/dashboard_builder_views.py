@@ -18,6 +18,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api.v1.v1_profile.constants import FeatureAccessTypes
+from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardDetailSerializer,
     DashboardListSerializer,
@@ -30,6 +31,7 @@ from api.v1.v1_visualization.dashboard_functions import (
     suggest_slug,
     validate_dashboard_payload,
 )
+from api.v1.v1_visualization.dashboard_snapshot import build_snapshot
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_permissions import DashboardAccess
 
@@ -70,6 +72,8 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "update": FeatureAccessTypes.dashboard_edit,
         "destroy": FeatureAccessTypes.dashboard_delete,
         "sources": FeatureAccessTypes.dashboard_view,
+        "publish": FeatureAccessTypes.dashboard_publish,
+        "unpublish": FeatureAccessTypes.dashboard_publish,
     }
 
     def get_permissions(self):
@@ -155,6 +159,60 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             dashboard.save()
             apply_widgets(dashboard, request.data.get("widgets") or [])
 
+        return Response(
+            DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    def publish(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        snapshot = build_snapshot(dashboard)
+        # Revalidate through the *same* function PUT uses (spec D-3).
+        # `published_config` is what viewers read and nothing
+        # revalidates it downstream, so publishing is the last place a
+        # broken dashboard can be stopped. Calling the save-time
+        # validator rather than writing a stored-rows twin is what keeps
+        # the two from drifting; tests_dashboard_snapshot pins the shape
+        # compatibility that makes it possible.
+        error = validate_dashboard_payload(
+            {"name": dashboard.name, "widgets": snapshot["widgets"]},
+            request.user,
+            dashboard=dashboard,
+        )
+        if error:
+            # Nothing written: status, published_config and
+            # published_at are all exactly as they were, so a failed
+            # republish keeps serving the last good snapshot.
+            return Response(error, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            dashboard.published_config = snapshot
+            dashboard.status = DashboardStatus.published
+            # Rewritten on every publish, unlike Forms.published_at
+            # (spec D-2): a form's date is provenance, a dashboard's
+            # answers "how fresh is what I am looking at".
+            dashboard.published_at = timezone.now()
+            dashboard.save()
+        return Response(
+            DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    def unpublish(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        if dashboard.status != DashboardStatus.published:
+            # 400 rather than an idempotent 204, following
+            # FormBuilderViewSet.unpublish: this is a button-triggered
+            # state transition, and a caller arriving from a stale UI is
+            # better told than silently agreed with.
+            return Response(
+                {"message": "Dashboard is not published"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # published_config is deliberately left in place. The read
+        # namespace filters on status, so clearing it would destroy the
+        # record of what was last live without changing what any caller
+        # can reach.
+        dashboard.status = DashboardStatus.draft
+        dashboard.save(update_fields=["status"])
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
         )

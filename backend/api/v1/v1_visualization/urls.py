@@ -54,6 +54,15 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view({"get": "sources"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/publish$",
+        DashboardBuilderViewSet.as_view({"post": "publish"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"unpublish$",
+        DashboardBuilderViewSet.as_view({"post": "unpublish"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)$",
         DashboardBuilderViewSet.as_view(
             {"get": "retrieve", "put": "update", "delete": "destroy"}
