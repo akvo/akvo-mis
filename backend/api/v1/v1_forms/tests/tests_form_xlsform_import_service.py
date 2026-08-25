@@ -1,8 +1,13 @@
 import io
+import json
+import tempfile
+from unittest.mock import patch
+
 import openpyxl
 from django.test import TestCase
 
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
+from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.services.xlsform_export import generate_xlsform
 from api.v1.v1_forms.services.xlsform_import import (
     build_form_payload,
@@ -10,6 +15,10 @@ from api.v1.v1_forms.services.xlsform_import import (
     parse_xlsform,
     validate_preflight,
 )
+from api.v1.v1_forms.tasks import import_xlsform_job
+from api.v1.v1_jobs.constants import JobStatus, JobTypes
+from api.v1.v1_jobs.models import Jobs
+from api.v1.v1_users.models import SystemUser
 
 
 def _build_test_workbook(
@@ -548,3 +557,109 @@ class XLSFormImportServiceTestCase(TestCase):
         self.assertEqual(questions[2]["name"], "gender")
         self.assertEqual(questions[2]["type"], "option")
         self.assertEqual(len(questions[2]["option"]), 2)
+
+    def test_import_xlsform_job_success(self):
+        user = SystemUser.objects.create(
+            email="import_test_user@akvo.org",
+            first_name="Import",
+            last_name="User",
+        )
+        survey_rows = [
+            ["text", "fav_sport", "Sport", "yes", None, None, None, None],
+        ]
+        stream = _build_test_workbook(
+            survey_rows,
+            settings_row=["Sport Survey", "sport_form", "1", "English (en)"],
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tf:
+            tf.write(stream.getvalue())
+            tf.flush()
+            temp_path = tf.name
+
+        job = Jobs.objects.create(
+            type=JobTypes.import_form,
+            status=JobStatus.on_progress,
+            user=user,
+            info={
+                "file": "sport.xlsx",
+                "form_type": "registration",
+                "parent_id": None,
+            },
+        )
+
+        with patch("api.v1.v1_forms.tasks.download", return_value=temp_path):
+            import_xlsform_job(job.id)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.done)
+        res = json.loads(job.result)
+        self.assertIn("form_id", res)
+        self.assertEqual(res["form_name"], "Sport Survey")
+
+        # Verify created form in DB
+        created_form = Forms.objects.get(id=res["form_id"])
+        self.assertEqual(created_form.name, "Sport Survey")
+        self.assertEqual(created_form.type, FormTypes.registration)
+        self.assertEqual(created_form.form_question_group.count(), 1)
+        self.assertEqual(created_form.form_questions.count(), 1)
+
+    def test_import_xlsform_job_read_error(self):
+        user = SystemUser.objects.create(
+            email="read_err_user@akvo.org",
+            first_name="Read",
+            last_name="User",
+        )
+        job = Jobs.objects.create(
+            type=JobTypes.import_form,
+            status=JobStatus.on_progress,
+            user=user,
+            info={"file": "missing.xlsx"},
+        )
+
+        with patch(
+            "api.v1.v1_forms.tasks.download",
+            side_effect=FileNotFoundError("File not found on storage"),
+        ):
+            import_xlsform_job(job.id)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.failed)
+        res = json.loads(job.result)
+        self.assertEqual(res[0]["code"], "file_read_error")
+
+    def test_import_xlsform_job_preflight_error(self):
+        user = SystemUser.objects.create(
+            email="preflight_err_user@akvo.org",
+            first_name="Preflight",
+            last_name="User",
+        )
+        survey_rows = [
+            ["calculate", "calc_only", "Calc", None, None, None, None, None],
+        ]
+        stream = _build_test_workbook(survey_rows)
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tf:
+            tf.write(stream.getvalue())
+            tf.flush()
+            temp_path = tf.name
+
+        job = Jobs.objects.create(
+            type=JobTypes.import_form,
+            status=JobStatus.on_progress,
+            user=user,
+            info={"file": "empty.xlsx"},
+        )
+
+        with patch("api.v1.v1_forms.tasks.download", return_value=temp_path):
+            import_xlsform_job(job.id)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.failed)
+        res = json.loads(job.result)
+        self.assertTrue(
+            any(
+                "No valid questions found" in err.get("message", "")
+                for err in res
+            )
+        )
