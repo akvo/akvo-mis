@@ -10,6 +10,7 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
 
   return (
     <Dialog visible={visible} testID="save-dialog-menu" overlayStyle={styles.dialogMenuContainer}>
+      <Dialog.Title title={trans.unsavedChangesTitle} />
       <Dialog.Button
         type="solid"
         title={trans.buttonSaveNExit}
