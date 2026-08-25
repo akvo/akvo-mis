@@ -63,6 +63,11 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view({"post": "unpublish"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"duplicate$",
+        DashboardBuilderViewSet.as_view({"post": "duplicate"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)$",
         DashboardBuilderViewSet.as_view(
             {"get": "retrieve", "put": "update", "delete": "destroy"}

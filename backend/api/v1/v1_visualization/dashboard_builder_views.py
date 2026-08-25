@@ -27,12 +27,14 @@ from api.v1.v1_visualization.dashboard_builder_serializers import (
 from api.v1.v1_visualization.dashboard_functions import (
     SLUG_PATTERN,
     apply_widgets,
+    copy_name,
+    copy_slug,
     derive_slug,
     suggest_slug,
     validate_dashboard_payload,
 )
 from api.v1.v1_visualization.dashboard_snapshot import build_snapshot
-from api.v1.v1_visualization.models import Dashboard
+from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 from utils.custom_permissions import DashboardAccess
 
 
@@ -74,6 +76,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "sources": FeatureAccessTypes.dashboard_view,
         "publish": FeatureAccessTypes.dashboard_publish,
         "unpublish": FeatureAccessTypes.dashboard_publish,
+        "duplicate": FeatureAccessTypes.dashboard_create,
     }
 
     def get_permissions(self):
@@ -215,6 +218,52 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         dashboard.save(update_fields=["status"])
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    def duplicate(self, request, *args, **kwargs):
+        source = self.get_object()
+        live = Dashboard.objects.for_user(request.user)
+        with transaction.atomic():
+            clone = Dashboard.objects.create(
+                name=copy_name(source.name),
+                slug=copy_slug(source.slug, live),
+                description=source.description,
+                # From the caller, never copied from the source: a
+                # duplicate must not be able to move a dashboard into
+                # another workspace (MT-004).
+                tenant=getattr(request.user, "tenant", None),
+                root_form=source.root_form,
+                created_by=request.user,
+                # Copied, not shared: the source's dict must not become
+                # reachable through two rows.
+                default_filters=dict(source.default_filters or {}),
+                # A clone is a draft with no publication history of its
+                # own. published_config and published_at are model
+                # defaults, spelled out here because dropping them is
+                # the point of the operation.
+                status=DashboardStatus.draft,
+                published_config=None,
+                published_at=None,
+            )
+            DashboardWidget.objects.bulk_create(
+                [
+                    DashboardWidget(
+                        dashboard=clone,
+                        order=widget.order,
+                        type=widget.type,
+                        col_span=widget.col_span,
+                        title=widget.title,
+                        color=widget.color,
+                        form_id=widget.form_id,
+                        question_id=widget.question_id,
+                        config=widget.config,
+                    )
+                    for widget in source.widgets.order_by("order", "id")
+                ]
+            )
+        return Response(
+            DashboardListSerializer(instance=clone).data,
+            status=status.HTTP_201_CREATED,
         )
 
     def sources(self, request, *args, **kwargs):
