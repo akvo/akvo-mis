@@ -14,6 +14,9 @@ from api.v1.v1_visualization.dashboard_views import (
 from api.v1.v1_visualization.dashboard_builder_views import (
     DashboardBuilderViewSet,
 )
+from api.v1.v1_visualization.dashboard_read_views import (
+    DashboardReadViewSet,
+)
 
 urlpatterns = [
     re_path(
@@ -78,5 +81,14 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view(
             {"get": "list", "post": "create"}
         ),
+    ),
+    # The authenticated read namespace (slug before collection)
+    re_path(
+        r"^(?P<version>(v1))/dashboards/(?P<slug>[-a-z0-9]+)$",
+        DashboardReadViewSet.as_view({"get": "retrieve"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/dashboards$",
+        DashboardReadViewSet.as_view({"get": "list"}),
     ),
 ]
