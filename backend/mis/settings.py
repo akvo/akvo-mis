@@ -111,6 +111,7 @@ API_APPS = [
     "api.v1.v1_mobile",
     "api.v1.v1_files",
     "api.v1.v1_visualization",
+    "api.v1.v1_chatbot",
     "api.sentry_test",
 ]
 
@@ -254,6 +255,11 @@ WEBDOMAIN = environ.get("WEBDOMAIN", "http://localhost:3000")
 APK_UPLOAD_SECRET = environ.get("APK_UPLOAD_SECRET")
 MASTER_DATA = "./source"
 STORAGE_PATH = environ.get("STORAGE_PATH", "./storage")
+
+# AI CHATBOT ENV VARIABLES
+OPENAI_API_KEY = environ.get("OPENAI_API_KEY", "")
+OPENAI_ASSISTANT_ID = environ.get("OPENAI_ASSISTANT_ID", "")
+OPENAI_VECTOR_STORE_ID = environ.get("OPENAI_VECTOR_STORE_ID", "")
 
 FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(
