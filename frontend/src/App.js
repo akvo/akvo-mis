@@ -58,7 +58,7 @@ import {
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
-import { Layout, PageLoader } from "./components";
+import { Layout, PageLoader, ChatbotWidget } from "./components";
 import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
 import { reloadData, fetchPublishedForms } from "./util/form";
@@ -542,6 +542,7 @@ const App = () => {
             <RouteList />
           )}
         </Layout.Body>
+        <ChatbotWidget />
       </Layout>
     </AbilityContext.Provider>
   );

@@ -72,6 +72,9 @@ services:
       # Unbuffered stdout: send_email swallows failures into a bare print(),
       # which otherwise sits in the buffer and never reaches docker logs.
       - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=$OPENAI_API_KEY
+      - OPENAI_ASSISTANT_ID=$OPENAI_ASSISTANT_ID
+      - OPENAI_VECTOR_STORE_ID=$OPENAI_VECTOR_STORE_ID
     network_mode: service:mainnetwork
     depends_on:
       - mailpit
