@@ -807,3 +807,16 @@ class ImportFormSerializer(serializers.Serializer):
         default="create_or_update",
     )
     parent_id = serializers.IntegerField(required=False)
+
+
+class XLSFormImportPreflightSerializer(serializers.Serializer):
+    file = CustomFileField()
+
+
+class XLSFormImportSerializer(serializers.Serializer):
+    file = CustomFileField()
+    form_type = serializers.ChoiceField(
+        choices=["registration", "monitoring"],
+        default="registration",
+    )
+    parent_id = serializers.IntegerField(required=False, allow_null=True)
