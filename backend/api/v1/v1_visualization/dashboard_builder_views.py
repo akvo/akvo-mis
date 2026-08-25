@@ -14,7 +14,7 @@
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from api.v1.v1_profile.constants import FeatureAccessTypes
@@ -36,6 +36,17 @@ from api.v1.v1_visualization.dashboard_functions import (
 from api.v1.v1_visualization.dashboard_snapshot import build_snapshot
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 from utils.custom_permissions import DashboardAccess
+
+
+class DenyUnmappedAction(BasePermission):
+    """The safe reading of an action nobody mapped.
+
+    Not exported: an action missing from ACCESS_PER_ACTION is a mistake
+    in this file, and nowhere else has that map.
+    """
+
+    def has_permission(self, request, view):
+        return False
 
 
 class DashboardBuilderViewSet(viewsets.ModelViewSet):
@@ -82,7 +93,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         access = self.ACCESS_PER_ACTION.get(self.action)
         if access is None:
-            return [IsAuthenticated()]
+            # Deny rather than fall through to IsAuthenticated. An
+            # action missing from the map above is an oversight, and the
+            # safe reading of an oversight is "no access" rather than
+            # "every signed-in user in the tenant". Nothing routed hits
+            # this today; the branch exists so that adding a tenth
+            # action and forgetting its entry fails closed.
+            return [DenyUnmappedAction()]
         return [IsAuthenticated(), DashboardAccess(access)()]
 
     def create(self, request, *args, **kwargs):

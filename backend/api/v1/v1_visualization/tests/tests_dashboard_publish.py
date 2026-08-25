@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from types import SimpleNamespace
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -22,6 +23,9 @@ from api.v1.v1_profile.models import (
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.dashboard_builder_views import (
+    DashboardBuilderViewSet,
+)
 from api.v1.v1_visualization.models import Dashboard
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -628,3 +632,56 @@ class DashboardDuplicateTenantIsolationTestCase(
         clone = Dashboard.objects.get(pk=res.json()["id"])
         self.assertEqual(clone.tenant_id, self.a["tenant"].id)
         self.assertEqual(clone.created_by_id, self.a["user"].id)
+
+
+@override_settings(USE_TZ=False)
+class DashboardActionMapTestCase(TestCase):
+    """Every routed action must be in ACCESS_PER_ACTION.
+
+    That map is the only thing standing between an action and
+    tenant-wide access. Before this slice a missing entry fell through
+    to IsAuthenticated, which for anyone already signed in is
+    indistinguishable from a granted permission.
+    """
+
+    def test_get_permissions_denies_an_unmapped_action(self):
+        # A superuser deliberately: the branch has to refuse the most
+        # privileged caller there is, not merely an unprivileged one.
+        user = SystemUser.objects.create_superuser(
+            email="root@akvo.org",
+            password="Secret#Pass123",
+            first_name="Ro",
+            last_name="Ot",
+        )
+        view = DashboardBuilderViewSet()
+        view.action = "not_a_real_action"
+        # SimpleNamespace rather than APIRequestFactory, as in
+        # tests_dashboard_permissions: these permission classes read
+        # request.user and nothing else, and a bare factory request has
+        # no .user attached at all — IsAuthenticated would raise on it
+        # instead of returning a verdict.
+        request = SimpleNamespace(user=user)
+        permissions = view.get_permissions()
+        self.assertTrue(permissions)
+        self.assertFalse(
+            any(
+                permission.has_permission(request, view)
+                for permission in permissions
+            )
+        )
+
+    def test_every_routed_action_is_mapped(self):
+        self.assertEqual(
+            sorted(DashboardBuilderViewSet.ACCESS_PER_ACTION),
+            [
+                "create",
+                "destroy",
+                "duplicate",
+                "list",
+                "publish",
+                "retrieve",
+                "sources",
+                "unpublish",
+                "update",
+            ],
+        )
