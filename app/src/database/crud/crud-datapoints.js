@@ -16,7 +16,10 @@ const dataPointsQuery = () => ({
   selectDataPointsByFormAndSubmitted: async (db, { form, submitted, user, uuid }) => {
     const uuidVal = uuid ? { uuid } : {};
     const userVal = user ? { user } : {};
-    const columns = { form, submitted, ...userVal, ...uuidVal };
+    // Omitting `submitted` returns drafts and submissions together, so the list can
+    // filter them client-side instead of re-querying on every checkbox toggle.
+    const submittedVal = typeof submitted === 'number' ? { submitted } : {};
+    const columns = { form, ...submittedVal, ...userVal, ...uuidVal };
     const rows = await sql.getFilteredRows(db, 'datapoints', { ...columns }, 'id', 'DESC', true);
     return rows;
   },
@@ -30,6 +33,14 @@ const dataPointsQuery = () => ({
         FROM datapoints
         JOIN forms ON datapoints.form = forms.id
         WHERE datapoints.syncedAt IS NULL
+          AND (
+            datapoints.submitted = 1
+            -- A draft the server already knows about must keep syncing:
+            -- onSyncDraftDatapoint dedups downloads by draftId, so holding it back
+            -- locally would make the next download insert a duplicate.
+            OR datapoints.draftId IS NOT NULL
+            OR datapoints.sendToWeb = 1
+          )
         ORDER BY datapoints.createdAt ASC
         ${limit ? `LIMIT ${parseInt(limit, 10)}` : ''}`,
     );
@@ -53,6 +64,7 @@ const dataPointsQuery = () => ({
       id,
       locallyCreated,
       submissionKey,
+      sendToWeb,
     },
   ) => {
     try {
@@ -67,6 +79,8 @@ const dataPointsQuery = () => ({
       const locallyCreatedVal =
         locallyCreated !== undefined ? { locallyCreated: locallyCreated === 1 ? 1 : 0 } : {};
       const submissionKeyVal = submissionKey ? { submissionKey } : {};
+      // Truthy-only, so an edit can never silently unset the flag.
+      const sendToWebVal = sendToWeb ? { sendToWeb: 1 } : {};
 
       const dataToInsert = {
         form,
@@ -86,6 +100,7 @@ const dataPointsQuery = () => ({
         ...idVal,
         ...locallyCreatedVal,
         ...submissionKeyVal,
+        ...sendToWebVal,
       };
 
       const res = await sql.insertRow(db, 'datapoints', dataToInsert);
@@ -108,6 +123,7 @@ const dataPointsQuery = () => ({
       repeats,
       locallyCreated,
       submissionKey,
+      sendToWeb,
     },
   ) => {
     try {
@@ -117,6 +133,8 @@ const dataPointsQuery = () => ({
       const locallyCreatedVal =
         locallyCreated !== undefined ? { locallyCreated: locallyCreated === 1 ? 1 : 0 } : {};
       const submissionKeyVal = submissionKey ? { submissionKey } : {};
+      // Truthy-only: set-once semantics, matching setSendToWeb.
+      const sendToWebVal = sendToWeb ? { sendToWeb: 1 } : {};
 
       const res = await sql.updateRow(
         db,
@@ -134,6 +152,7 @@ const dataPointsQuery = () => ({
           ...syncedAtVal,
           ...locallyCreatedVal,
           ...submissionKeyVal,
+          ...sendToWebVal,
         },
       );
       return res;
@@ -293,6 +312,96 @@ const dataPointsQuery = () => ({
     } catch (error) {
       throw new Error(`Error in totalSavedData: ${error.message}`);
     }
+  },
+  /**
+   * Local-only delete. The server copy, if any, is untouched — a draft with a
+   * draftId re-downloads on the next sync, which the confirmation dialog warns about.
+   */
+  deleteDataPoint: async (db, id) => {
+    await sql.deleteRow(db, 'datapoints', id);
+    return true;
+  },
+  /**
+   * Opt a local-born draft into web upload. Set once: updateDataPoint never writes
+   * this column, so the flag survives every later edit of the draft.
+   */
+  setSendToWeb: async (db, id) => {
+    const res = await sql.updateRow(db, 'datapoints', { id }, { sendToWeb: 1 });
+    return res;
+  },
+  /**
+   * How many OTHER datapoints still reference this file URI. Guards the local file
+   * cleanup on delete: a shared file must outlive the row being deleted, or the
+   * surviving row shows a broken preview.
+   */
+  countJsonReferences: async (db, uri, excludeId) => {
+    const res = await sql.safeGetFirstRow(
+      db,
+      'SELECT COUNT(*) AS total FROM datapoints WHERE id != ? AND json LIKE ?',
+      [excludeId, `%${uri}%`],
+      'countJsonReferences',
+    );
+    return res?.total || 0;
+  },
+  /**
+   * Per-registration monitoring rollup for the datapoint list. One query per list
+   * load, grouped by the registration uuid that monitoring datapoints inherit.
+   * parentFormId is the registration form's BACKEND formId, so every monitoring form
+   * version is covered. Registration rows never appear: their forms have parentId NULL.
+   */
+  getMonitoringStats: async (db, parentFormId, user) => {
+    const rows = await sql.safeExecuteQuery(
+      db,
+      `SELECT dp.uuid,
+          SUM(CASE WHEN dp.submitted = 0 THEN 1 ELSE 0 END) AS draftCount,
+          SUM(CASE WHEN dp.submitted = 1 THEN 1 ELSE 0 END) AS submissionCount,
+          MAX(CASE WHEN dp.submitted = 1 THEN dp.submittedAt END) AS lastSubmissionAt
+        FROM datapoints dp
+        JOIN forms f ON dp.form = f.id
+        WHERE f.parentId = ? AND dp.user = ? AND dp.uuid IS NOT NULL
+        GROUP BY dp.uuid`,
+      [parentFormId, user],
+      'getMonitoringStats',
+    );
+    return rows;
+  },
+  /**
+   * Every unfinished draft in one form family — the registration form plus all of its
+   * monitoring forms, across versions. Backs the grouped drafts-only view. The form's
+   * json is deliberately excluded: it is large and only needed for the one row the
+   * user opens, which crudForms.selectFormById fetches on tap.
+   */
+  getFamilyDrafts: async (db, { formDbId, backendFormId, user }) => {
+    const rows = await sql.safeExecuteQuery(
+      db,
+      `SELECT dp.*, f.formId AS groupFormId, f.name AS groupName, f.parentId AS groupParentId
+        FROM datapoints dp
+        JOIN forms f ON dp.form = f.id
+        WHERE dp.submitted = 0 AND dp.user = ?
+          AND (f.id = ? OR f.parentId = ?)
+        ORDER BY f.parentId IS NULL DESC, f.name ASC, dp.createdAt DESC`,
+      [user, formDbId, backendFormId],
+      'getFamilyDrafts',
+    );
+    return rows;
+  },
+  /**
+   * Total unfinished drafts in one form family. Same scope as getFamilyDrafts, but
+   * independent of whichever list query is currently loaded — the checkbox label has
+   * to show the family total even while the list is showing submissions only.
+   */
+  countFamilyDrafts: async (db, { formDbId, backendFormId, user }) => {
+    const res = await sql.safeGetFirstRow(
+      db,
+      `SELECT COUNT(*) AS total
+        FROM datapoints dp
+        JOIN forms f ON dp.form = f.id
+        WHERE dp.submitted = 0 AND dp.user = ?
+          AND (f.id = ? OR f.parentId = ?)`,
+      [user, formDbId, backendFormId],
+      'countFamilyDrafts',
+    );
+    return res?.total || 0;
   },
   countSyncedByFormId: async (db, backendFormId) => {
     const res = await sql.safeGetFirstRow(
