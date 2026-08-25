@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   SectionList,
@@ -29,6 +29,11 @@ const Submission = ({ navigation, route }) => {
   const [draftsOnly, setDraftsOnly] = useState(false);
   const [sortByLastSubmission, setSortByLastSubmission] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  // Armed only by openFamilyDraft, which is the one place that swaps the active form.
+  // A bare 'focus' listener would also fire on this screen's FIRST focus — and
+  // FormOptions sets previousForm before pushing here, so the monitoring list would
+  // restore the registration form onto itself the moment it opened.
+  const restoreFormOnFocusRef = useRef(false);
 
   const previousForm = FormState.useState((s) => s.previousForm);
   const activeForm = FormState.useState((s) => s.form);
@@ -171,6 +176,7 @@ const Submission = ({ navigation, route }) => {
       s.surveyDuration = item?.duration;
       s.repeats = item?.repeats ? JSON.parse(item.repeats) : {};
     });
+    restoreFormOnFocusRef.current = true;
     navigation.push('FormPage', {
       id: targetForm.id,
       name: targetForm.name,
@@ -309,6 +315,28 @@ const Submission = ({ navigation, route }) => {
       // would fire the same action a second time — and once this screen is gone the
       // duplicate has no navigator left to handle it ("GO_BACK was not handled").
       navigation.addListener('beforeRemove', () => {
+        if (previousForm) {
+          FormState.update((s) => {
+            s.form = previousForm;
+            s.previousForm = null;
+          });
+        }
+      }),
+    [navigation, previousForm],
+  );
+
+  useEffect(
+    () =>
+      // Returning from a form opened by openFamilyDraft focuses this screen without
+      // unmounting it, so the swapped form has to be undone here or the registration
+      // list reloads itself as a monitoring list. Gated on the ref: this also fires on
+      // first focus, when previousForm belongs to the screen that pushed us — and
+      // restoring then would swap the monitoring list onto the registration form.
+      navigation.addListener('focus', () => {
+        if (!restoreFormOnFocusRef.current) {
+          return;
+        }
+        restoreFormOnFocusRef.current = false;
         if (previousForm) {
           FormState.update((s) => {
             s.form = previousForm;
