@@ -1,10 +1,16 @@
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
-from django.test.utils import override_settings
+from django.test.utils import CaptureQueriesContext, override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_forms.constants import FormStatus, FormTypes, QuestionTypes
-from api.v1.v1_forms.models import Forms, Questions
+from api.v1.v1_forms.models import (
+    Forms,
+    QuestionGroup,
+    QuestionOptions,
+    Questions,
+)
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import Tenant
 from api.v1.v1_visualization.constants import SUPPORTED_QUESTION_TYPES
@@ -142,6 +148,57 @@ class DashboardSourcesTestCase(TestCase, ProfileTestHelperMixin):
             **self.header
         )
         self.assertEqual(res.status_code, 404)
+
+    def test_a_child_form_belonging_to_another_tenant_is_excluded(self):
+        # "Two barriers, one rule": serialize_sources must draw the
+        # family line exactly like validate_dashboard_payload does,
+        # through Forms.objects.for_user(), not the plain `children`
+        # reverse relation. Only reachable under corrupt data (a
+        # cross-tenant parent link), which is exactly what this sets
+        # up directly rather than through the API.
+        foreign_tenant = Tenant.objects.create(subdomain="beta")
+        foreign_child = Forms.objects.create(
+            name="Foreign child",
+            tenant=foreign_tenant,
+            type=FormTypes.monitoring,
+            parent=self.root,
+            status=FormStatus.published,
+        )
+        body = self.get().json()
+        ids = [f["id"] for f in body["forms"]]
+        self.assertNotIn(foreign_child.id, ids)
+
+    def test_choice_question_options_query_count_is_flat(self):
+        # Before the fix, serialize_question read
+        # question.options.order_by(...), which clones the related
+        # manager's queryset and drops the prefetch cache, so options
+        # cost one query per choice question rather than one query
+        # total. Adding more choice questions must not grow the count.
+        group = QuestionGroup.objects.filter(form=self.monitoring).first()
+
+        def add_choice_question(name):
+            question = Questions.objects.create(
+                form=self.monitoring,
+                question_group=group,
+                label=name,
+                name=name,
+                type=QuestionTypes.option,
+                order=999,
+            )
+            QuestionOptions.objects.create(
+                question=question, order=1, label="Yes", value="yes"
+            )
+
+        add_choice_question("extra_choice_1")
+        with CaptureQueriesContext(connection) as few:
+            self.get()
+        add_choice_question("extra_choice_2")
+        add_choice_question("extra_choice_3")
+        with CaptureQueriesContext(connection) as many:
+            self.get()
+        self.assertEqual(
+            len(few.captured_queries), len(many.captured_queries)
+        )
 
     def test_question_type_ids_are_the_four_aggregatable_ones(self):
         # Guards the import: if SUPPORTED_QUESTION_TYPES ever changes,

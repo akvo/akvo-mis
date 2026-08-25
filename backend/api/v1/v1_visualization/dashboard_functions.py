@@ -31,7 +31,10 @@ from api.v1.v1_visualization.models import DashboardWidget
 # it — but it does insist the word is one of the two that exist.
 VALID_MEASURES = {"current_state", "all_submissions"}
 
-SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# \Z (not $) so a trailing newline does not slip through: $ matches
+# just before a trailing "\n", which let "water-points\n" store a slug
+# with an embedded newline that no URL could reach.
+SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*\Z")
 
 WIDGET_TYPE_IDS = {
     name: value for value, name in WidgetTypes.FieldStr.items()
@@ -92,12 +95,41 @@ def validate_dashboard_payload(data, user, dashboard=None):
     `dashboard` is None on create and the instance on update. The two
     paths differ in exactly two ways: create resolves and checks
     `root_form`, update refuses to change it.
+
+    This function is the *entire* trust boundary for the payload — no
+    DRF serializer sits in front of it (spec D-2) — so every shape and
+    length check below exists to turn ordinary bad input (a pasted
+    300-character name, a stray `null`) into a 400 instead of a 500 or
+    a database error.
     """
+    if not isinstance(data, dict):
+        return _error("payload must be an object")
+
     forms = Forms.objects.for_user(user)
 
+    name = data.get("name")
+    if name is not None and not isinstance(name, str):
+        return _error("name must be text", field="name")
+
     if dashboard is None:
-        if not (data.get("name") or "").strip():
+        if not (name or "").strip():
             return _error("name is required", field="name")
+    if name is not None and len(name.strip()) > 255:
+        # Dashboard.name is varchar(255); a longer value would 500 at
+        # INSERT/UPDATE instead of being refused here.
+        return _error(
+            "name must be 255 characters or fewer", field="name"
+        )
+
+    description = data.get("description")
+    if description is not None and not isinstance(description, str):
+        return _error("description must be text", field="description")
+
+    widgets = data.get("widgets")
+    if widgets is not None and not isinstance(widgets, list):
+        return _error("widgets must be a list")
+
+    if dashboard is None:
         root_form = forms.filter(pk=_as_int(data.get("root_form"))).first()
         if root_form is None:
             return _error("root_form not found", field="root_form")
@@ -128,7 +160,22 @@ def validate_dashboard_payload(data, user, dashboard=None):
         )
 
     questions = Questions.objects.for_user(user)
-    for index, widget in enumerate(data.get("widgets") or []):
+    seen_widget_ids = set()
+    for index, widget in enumerate(widgets or []):
+        if not isinstance(widget, dict):
+            return _error("widget must be an object", index)
+        widget_id = widget.get("id")
+        if widget_id is not None:
+            if widget_id in seen_widget_ids:
+                # Both ids are live, so nothing else here catches this:
+                # apply_widgets maps id -> row, and a repeat collapses
+                # to one row, silently dropping the widget the user
+                # thinks they added (VIZ-007's "duplicate dashboard" is
+                # exactly the feature that would reach this).
+                return _error(
+                    "duplicate widget id in payload", index, "id"
+                )
+            seen_widget_ids.add(widget_id)
         error = _validate_widget(
             widget, index, root_form, forms, questions, live_widget_ids
         )
@@ -160,7 +207,37 @@ def _validate_widget(
             "col_span must be between 1 and 24", index, "col_span"
         )
 
-    config = widget.get("config") or {}
+    title = widget.get("title")
+    if title is not None:
+        if not isinstance(title, str):
+            return _error("title must be text", index, "title")
+        if len(title) > 255:
+            # DashboardWidget.title is varchar(255); an unbounded title
+            # would make the dashboard permanently unsavable — every
+            # future PUT resends it and 500s again at UPDATE.
+            return _error(
+                "title must be 255 characters or fewer", index, "title"
+            )
+
+    color = widget.get("color")
+    if color is not None:
+        if not isinstance(color, str):
+            return _error("color must be text", index, "color")
+        if len(color) > 32:
+            return _error(
+                "color must be 32 characters or fewer", index, "color"
+            )
+
+    if "order" in widget and not isinstance(widget.get("order"), int):
+        # apply_widgets only defaults `order` when the key is absent
+        # (payload.get("order", index + 1)); an explicit null sails
+        # through to a NOT NULL column.
+        return _error("order must be a whole number", index, "order")
+
+    config_raw = widget.get("config")
+    if config_raw is not None and not isinstance(config_raw, dict):
+        return _error("config must be an object", index, "config")
+    config = config_raw or {}
 
     form = None
     form_id = widget.get("form")
@@ -250,7 +327,18 @@ def _validate_widget(
             )
 
     if type_name == "table":
-        for column in config.get("columns") or []:
+        columns = config.get("columns")
+        if columns is not None and not isinstance(columns, list):
+            return _error(
+                "columns must be a list", index, "config.columns"
+            )
+        for column in columns or []:
+            if not isinstance(column, dict):
+                return _error(
+                    "each column must be an object",
+                    index,
+                    "config.columns",
+                )
             if column.get("source") not in VALID_COLUMN_SOURCES:
                 return _error(
                     "column source must be one of: {0}".format(
@@ -259,7 +347,18 @@ def _validate_widget(
                     index,
                     "config.columns",
                 )
-        for criterion in config.get("criteria") or []:
+        criteria = config.get("criteria")
+        if criteria is not None and not isinstance(criteria, list):
+            return _error(
+                "criteria must be a list", index, "config.criteria"
+            )
+        for criterion in criteria or []:
+            if not isinstance(criterion, dict):
+                return _error(
+                    "each criterion must be an object",
+                    index,
+                    "config.criteria",
+                )
             if criterion.get("type") not in VALID_CRITERIA_TYPES:
                 return _error(
                     "criteria type must be one of: {0}".format(

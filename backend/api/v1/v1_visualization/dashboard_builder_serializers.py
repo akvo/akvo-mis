@@ -10,9 +10,12 @@
 # root_form goes out as {id, name} but comes in as a plain int, and
 # widget form/question are plain ints in both directions.
 
+from django.db.models import Prefetch
+
 from rest_framework import serializers
 
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
+from api.v1.v1_forms.models import Forms, QuestionOptions
 from api.v1.v1_visualization.constants import (
     DashboardStatus,
     SUPPORTED_QUESTION_TYPES,
@@ -127,9 +130,14 @@ def serialize_question(question):
         QuestionTypes.option,
         QuestionTypes.multiple_option,
     ):
+        # .all(), not .order_by(): chaining a fresh filter/order call on
+        # a prefetched related manager clones the queryset and drops
+        # its cached results, which would silently reintroduce the
+        # one-query-per-question cost prefetch_related below exists to
+        # remove. The ordering is baked into that Prefetch instead.
         row["options"] = [
             {"value": option.value, "label": option.label}
-            for option in question.options.order_by("order", "id")
+            for option in question.options.all()
         ]
     return row
 
@@ -146,23 +154,36 @@ def serialize_source_form(form, is_root):
         serialize_question(question)
         for question in form.form_questions.filter(
             type__in=SUPPORTED_QUESTION_TYPES
-        ).order_by("order", "id")
+        ).order_by("order", "id").prefetch_related(
+            Prefetch(
+                "options",
+                queryset=QuestionOptions.objects.order_by("order", "id"),
+            )
+        )
     ]
     return row
 
 
-def serialize_sources(dashboard):
+def serialize_sources(dashboard, user):
     """The dashboard's form family, as the inspector needs it.
 
     No form-status filter: the family is a structural fact, and §4.5
     imposes no status rule. Filtering to published here would make a
     dashboard's own root_form vanish from its source list the moment
     someone unpublished it.
+
+    Children are resolved through the same Forms.objects.for_user(user)
+    the validator uses (dashboard_functions.validate_dashboard_payload)
+    rather than the plain `root.children` reverse relation, so this
+    endpoint and the save-time rule draw the family line identically —
+    "two barriers, one rule".
     """
     root = dashboard.root_form
     forms = [serialize_source_form(root, is_root=True)]
+    children = Forms.objects.for_user(user).filter(
+        parent=root
+    ).order_by("id")
     forms.extend(
-        serialize_source_form(child, is_root=False)
-        for child in root.children.order_by("id")
+        serialize_source_form(child, is_root=False) for child in children
     )
     return {"forms": forms}

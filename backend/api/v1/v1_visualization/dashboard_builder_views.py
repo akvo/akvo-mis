@@ -43,9 +43,17 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return Dashboard.objects.for_user(self.request.user).order_by(
-            "-id"
-        )
+        queryset = Dashboard.objects.for_user(self.request.user)
+        queryset = queryset.select_related("root_form", "created_by")
+        if self.action == "list":
+            # Only list touches every row's widgets (for the thumbnail
+            # stubs). update() serialises its response from this same
+            # get_object() instance *after* apply_widgets rewrites the
+            # widget rows — a prefetch cache filled here would still
+            # hold the pre-save rows and make the PUT response show
+            # stale widgets, so the other actions must not carry it.
+            queryset = queryset.prefetch_related("widgets")
+        return queryset.order_by("-id")
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -87,15 +95,26 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             return Response(error, status=status.HTTP_400_BAD_REQUEST)
 
         name = request.data.get("name")
-        slug = derive_slug(name, request.data.get("slug"))
+        requested_slug = request.data.get("slug")
+        slug = derive_slug(name, requested_slug)
         if not SLUG_PATTERN.match(slug):
+            # Report whichever field actually produced the bad slug: a
+            # client-supplied slug that fails the pattern is a "slug"
+            # problem even though the derived-from-name path is what
+            # usually trips this.
+            if (requested_slug or "").strip():
+                field, message = (
+                    "slug",
+                    "slug may only contain lowercase letters, numbers "
+                    "and hyphens",
+                )
+            else:
+                field, message = (
+                    "name",
+                    "name must contain at least one letter or digit",
+                )
             return Response(
-                {
-                    "message": (
-                        "name must contain at least one letter or digit"
-                    ),
-                    "field": "name",
-                },
+                {"message": message, "field": field},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         live = Dashboard.objects.for_user(request.user)
@@ -161,4 +180,6 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # This endpoint IS the family boundary as the UI sees it: if a
         # form is not here the builder cannot offer it, and if it
         # somehow does, validate_dashboard_payload rejects it on save.
-        return Response(serialize_sources(self.get_object()))
+        return Response(
+            serialize_sources(self.get_object(), request.user)
+        )

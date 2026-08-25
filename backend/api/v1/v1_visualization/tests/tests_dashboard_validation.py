@@ -6,6 +6,7 @@ from api.v1.v1_forms.constants import FormStatus, FormTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_visualization.dashboard_functions import (
+    SLUG_PATTERN,
     validate_dashboard_payload,
 )
 from api.v1.v1_visualization.models import Dashboard
@@ -298,3 +299,117 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
         err = self.check(self.widget(id=stolen.id))
         self.assertEqual(err["widget_index"], 0)
         self.assertEqual(err["field"], "id")
+
+    def test_two_widgets_sharing_one_id_are_rejected(self):
+        # Not reachable from today's builder, but VIZ-007's "duplicate
+        # dashboard" is exactly the feature that would introduce it:
+        # both ids are live, so nothing else here would catch it, and
+        # apply_widgets would silently collapse the pair to one row.
+        live = self.dashboard.widgets.create(
+            order=1, type=1, col_span=6, config={}
+        )
+        err = self.check(
+            self.widget(id=live.id), self.widget(id=live.id)
+        )
+        self.assertEqual(err["widget_index"], 1)
+        self.assertEqual(err["field"], "id")
+
+    # ── F1: shapes and lengths, so ordinary input 400s instead of
+    # raising ──
+
+    def test_a_non_dict_payload_is_rejected(self):
+        err = validate_dashboard_payload(["not", "a", "dict"], self.user)
+        self.assertIsNotNone(err)
+        self.assertNotIn("widget_index", err)
+
+    def test_a_numeric_name_is_rejected(self):
+        err = self.check(self.widget(), name=12345)
+        self.assertEqual(err["field"], "name")
+
+    def test_a_300_character_name_is_rejected(self):
+        err = self.check(self.widget(), name="A" * 300)
+        self.assertEqual(err["field"], "name")
+
+    def test_a_non_string_description_is_rejected(self):
+        err = validate_dashboard_payload(
+            {"name": "X", "description": 123, "widgets": []},
+            self.user,
+            dashboard=self.dashboard,
+        )
+        self.assertEqual(err["field"], "description")
+
+    def test_widgets_that_is_not_a_list_is_rejected(self):
+        err = validate_dashboard_payload(
+            {"name": "X", "widgets": "not-a-list"},
+            self.user,
+            dashboard=self.dashboard,
+        )
+        self.assertIsNotNone(err)
+        self.assertNotIn("widget_index", err)
+
+    def test_a_non_dict_widget_is_rejected(self):
+        err = self.check("not-a-widget")
+        self.assertEqual(err["widget_index"], 0)
+
+    def test_a_non_dict_config_is_rejected(self):
+        err = self.check(self.widget(config=["measure"]))
+        self.assertEqual(err["field"], "config")
+
+    def test_a_title_over_255_characters_is_rejected(self):
+        err = self.check(self.widget(title="A" * 256))
+        self.assertEqual(err["widget_index"], 0)
+        self.assertEqual(err["field"], "title")
+
+    def test_a_color_over_32_characters_is_rejected(self):
+        err = self.check(self.widget(color="A" * 33))
+        self.assertEqual(err["widget_index"], 0)
+        self.assertEqual(err["field"], "color")
+
+    def test_a_null_order_is_rejected(self):
+        # The column is NOT NULL; apply_widgets only defaults `order`
+        # when the key is absent, not when it is explicitly null.
+        err = self.check(self.widget(order=None))
+        self.assertEqual(err["field"], "order")
+
+    def test_columns_that_is_not_a_list_is_rejected(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={"columns": {"a": 1}},
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+
+    def test_a_criteria_entry_that_is_not_a_dict_is_rejected(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={"criteria": ["not-a-dict"]},
+            )
+        )
+        self.assertEqual(err["field"], "config.criteria")
+
+    def test_slug_pattern_rejects_a_trailing_newline(self):
+        # $ (without re.MULTILINE) matches just before a trailing "\n",
+        # so the naive pattern would accept "water-points\n" and let it
+        # through to storage with an embedded newline no URL can reach.
+        self.assertIsNone(SLUG_PATTERN.match("water-points\n"))
+
+    # ── F9: section_title is the one widget type with no form/question
+    # ──
+
+    def test_a_section_title_widget_with_no_form_or_question_is_valid(
+        self,
+    ):
+        self.assertIsNone(
+            self.check(
+                self.widget(
+                    type="section_title",
+                    form=None,
+                    question=None,
+                    config={},
+                )
+            )
+        )

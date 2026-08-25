@@ -1,8 +1,9 @@
 import json
 
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
-from django.test.utils import override_settings
+from django.test.utils import CaptureQueriesContext, override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_forms.constants import FormStatus, FormTypes
@@ -86,6 +87,30 @@ class DashboardCrudTestCase(TestCase, ProfileTestHelperMixin):
     def test_create_rejects_a_name_with_no_slug_characters(self):
         res = self.post({"name": "###", "root_form": self.root.id})
         self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["field"], "name")
+
+    def test_a_client_supplied_slug_that_fails_the_pattern_reports_slug(
+        self,
+    ):
+        # The value is a client-supplied "slug", not a derived "name",
+        # even though a bad name is what usually trips this check.
+        res = self.post(
+            {
+                "name": "Water Points",
+                "root_form": self.root.id,
+                "slug": "Not A Valid Slug!!",
+            }
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["field"], "slug")
+
+    def test_a_300_character_name_is_400_not_500(self):
+        # This is the user-reachable one: BuilderInspector and
+        # CreateDashboardModal render the name input with no
+        # maxLength, so a pasted long name must not 500.
+        res = self.post({"name": "A" * 300, "root_form": self.root.id})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["field"], "name")
 
     # ── slug collisions ──
 
@@ -149,6 +174,32 @@ class DashboardCrudTestCase(TestCase, ProfileTestHelperMixin):
         res = self.client.get(BASE_URL, **self.header)
         self.assertEqual(
             res.json()[0]["widgets"], [{"type": "kpi", "col_span": 6}]
+        )
+
+    def test_list_query_count_does_not_grow_with_dashboard_count(self):
+        # Without select_related/prefetch_related, root_form,
+        # created_by and widgets are each a fresh query per row: five
+        # dashboards would cost roughly 1 + 5*3 queries. The exact
+        # count is not the point (JWT auth adds its own queries) — the
+        # point is that it stays flat as N grows.
+        def make(n):
+            for i in range(n):
+                d = Dashboard.objects.create(
+                    name="D{0}".format(i),
+                    slug="d{0}".format(i),
+                    root_form=self.root,
+                    created_by=self.user,
+                )
+                d.widgets.create(order=1, type=1, col_span=6, config={})
+
+        make(2)
+        with CaptureQueriesContext(connection) as small:
+            self.client.get(BASE_URL, **self.header)
+        make(3)
+        with CaptureQueriesContext(connection) as large:
+            self.client.get(BASE_URL, **self.header)
+        self.assertEqual(
+            len(small.captured_queries), len(large.captured_queries)
         )
 
     def test_retrieve_returns_the_detail_shape(self):
@@ -453,6 +504,26 @@ class DashboardUpdateTestCase(TestCase, ProfileTestHelperMixin):
         self.put(self.body([], name="Something else entirely"))
         self.dashboard.refresh_from_db()
         self.assertEqual(self.dashboard.slug, "water-points")
+
+    def test_an_explicit_slug_in_the_payload_is_ignored(self):
+        # update() never reads request.data["slug"] at all — the
+        # rename test above only covers the derived case, this pins
+        # the case where a client tries to set one directly.
+        self.put(self.body([], slug="hijack"))
+        self.dashboard.refresh_from_db()
+        self.assertEqual(self.dashboard.slug, "water-points")
+
+    def test_omitting_description_clears_the_stored_value(self):
+        # This is intended PUT-replace semantics, not a bug: pinned so
+        # it cannot drift silently, not because it should change.
+        self.dashboard.description = "Existing description"
+        self.dashboard.save()
+        payload = self.body([])
+        del payload["description"]
+        res = self.put(payload)
+        self.assertEqual(res.status_code, 200)
+        self.dashboard.refresh_from_db()
+        self.assertIsNone(self.dashboard.description)
 
     def test_changing_root_form_is_400_without_a_widget_index(self):
         other = Forms.objects.create(
