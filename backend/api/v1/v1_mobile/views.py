@@ -35,6 +35,7 @@ from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
+    OpenApiResponse,
     extend_schema,
     inline_serializer,
 )
@@ -782,3 +783,25 @@ class DraftFormDataViewSet(ModelViewSet):
         return FormData.objects_draft.filter(
             created_by=user
         ).order_by("-created")
+
+    @extend_schema(
+        responses={
+            204: OpenApiResponse(description="Deletion with no response")
+        },
+        summary="Delete a draft submission from the device",
+    )
+    def destroy(self, request, *args, **kwargs):
+        """
+        The device deletes a draft it owns. get_queryset already scopes to the
+        assignment's user, so a 404 is returned for anything else.
+
+        The web equivalent (DraftFormDataDetailView) cannot serve this: it
+        requires IsAuthenticated, and AssignmentAwareJWTAuthentication resolves
+        a MobileAssignmentToken to AnonymousUser, so a device never passes it.
+
+        hard_delete rather than delete: a soft-deleted draft still comes back
+        through the draft-list download, undoing the deletion on next sync.
+        """
+        draft_data = self.get_object()
+        draft_data.hard_delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
