@@ -12,6 +12,7 @@
 # an envelope would break the builder silently. See the spec, D-1.
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -23,6 +24,7 @@ from api.v1.v1_visualization.dashboard_builder_serializers import (
 )
 from api.v1.v1_visualization.dashboard_functions import (
     SLUG_PATTERN,
+    apply_widgets,
     derive_slug,
     suggest_slug,
     validate_dashboard_payload,
@@ -123,4 +125,33 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         return Response(
             DashboardDetailSerializer(instance=dashboard).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        error = validate_dashboard_payload(
+            request.data, request.user, dashboard=dashboard
+        )
+        if error:
+            # Nothing has been written yet, and nothing will be: the
+            # stored dashboard is byte-identical after a rejected save.
+            return Response(error, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            name = request.data.get("name")
+            if name:
+                # The slug is not re-derived. A dashboard's slug is its
+                # URL and renaming is a cosmetic edit.
+                dashboard.name = name.strip()
+            dashboard.description = request.data.get("description")
+            dashboard.default_filters = (
+                request.data.get("default_filters") or {}
+            )
+            dashboard.updated = timezone.now()
+            dashboard.save()
+            apply_widgets(dashboard, request.data.get("widgets") or [])
+
+        dashboard.refresh_from_db()
+        return Response(
+            DashboardDetailSerializer(instance=dashboard).data
         )

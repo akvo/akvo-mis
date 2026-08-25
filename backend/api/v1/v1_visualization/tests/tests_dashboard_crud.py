@@ -330,3 +330,191 @@ class DashboardPermissionTestCase(TestCase):
         self.assertEqual(self.call("delete", url).status_code, 403)
         self.grant(FeatureAccessTypes.dashboard_delete)
         self.assertEqual(self.call("delete", url).status_code, 204)
+
+    def test_update_needs_dashboard_edit_not_view(self):
+        url = "{0}/{1}".format(BASE_URL, self.dashboard.id)
+        body = {"name": "Renamed", "widgets": []}
+        self.grant(FeatureAccessTypes.dashboard_view)
+        self.assertEqual(self.call("put", url, body).status_code, 403)
+        self.grant(FeatureAccessTypes.dashboard_edit)
+        self.assertEqual(self.call("put", url, body).status_code, 200)
+
+
+@override_settings(USE_TZ=False)
+class DashboardUpdateTestCase(TestCase, ProfileTestHelperMixin):
+    """PUT replaces the widget array wholesale, or changes nothing."""
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.user = self.create_user(
+            email="viz_update@akvo.org", role_level=self.IS_SUPER_ADMIN
+        )
+        self.header = auth(self.user)
+        self.root = Forms.objects.get(pk=6001)
+        self.monitoring = Forms.objects.get(pk=6002)
+        self.dashboard = Dashboard.objects.create(
+            name="Water Points",
+            slug="water-points",
+            root_form=self.root,
+            created_by=self.user,
+        )
+        self.url = "{0}/{1}".format(BASE_URL, self.dashboard.id)
+        self.kept = self.dashboard.widgets.create(
+            order=1, type=1, col_span=6, title="Kept", config={}
+        )
+        self.dropped = self.dashboard.widgets.create(
+            order=2, type=1, col_span=6, title="Dropped", config={}
+        )
+
+    def put(self, payload):
+        return self.client.put(
+            self.url,
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header
+        )
+
+    def body(self, widgets, **overrides):
+        payload = {
+            "name": "Water Points",
+            "description": None,
+            "default_filters": {"date": {"enabled": True}},
+            "widgets": widgets,
+        }
+        payload.update(overrides)
+        return payload
+
+    def widget(self, **overrides):
+        payload = {
+            "id": None,
+            "order": 1,
+            "type": "kpi",
+            "col_span": 6,
+            "title": None,
+            "color": None,
+            "form": self.root.id,
+            "question": None,
+            "config": {},
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_put_updates_creates_and_deletes_in_one_call(self):
+        res = self.put(
+            self.body(
+                [
+                    self.widget(
+                        id=self.kept.id, order=1, title="Renamed"
+                    ),
+                    self.widget(order=2, title="Brand new"),
+                ]
+            )
+        )
+        self.assertEqual(res.status_code, 200)
+        titles = list(
+            self.dashboard.widgets.order_by("order").values_list(
+                "title", flat=True
+            )
+        )
+        self.assertEqual(titles, ["Renamed", "Brand new"])
+        self.kept.refresh_from_db()
+        self.assertEqual(self.kept.title, "Renamed")
+        self.assertFalse(
+            self.dashboard.widgets.filter(pk=self.dropped.id).exists()
+        )
+
+    def test_put_returns_the_reserialized_detail(self):
+        res = self.put(self.body([self.widget(id=self.kept.id)]))
+        body = res.json()
+        self.assertEqual(len(body["widgets"]), 1)
+        self.assertEqual(body["widgets"][0]["id"], self.kept.id)
+        self.assertEqual(body["widgets"][0]["type"], "kpi")
+
+    def test_put_updates_the_dashboard_metadata(self):
+        res = self.put(
+            self.body([], name="Renamed dashboard", description="Hi")
+        )
+        self.assertEqual(res.status_code, 200)
+        self.dashboard.refresh_from_db()
+        self.assertEqual(self.dashboard.name, "Renamed dashboard")
+        self.assertEqual(self.dashboard.description, "Hi")
+        self.assertIsNotNone(self.dashboard.updated)
+
+    def test_renaming_does_not_change_the_slug(self):
+        # The slug is the dashboard's URL. Re-slugging on rename would
+        # break every link for a cosmetic edit.
+        self.put(self.body([], name="Something else entirely"))
+        self.dashboard.refresh_from_db()
+        self.assertEqual(self.dashboard.slug, "water-points")
+
+    def test_changing_root_form_is_400_without_a_widget_index(self):
+        other = Forms.objects.create(
+            name="Other registration",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        res = self.put(self.body([], root_form=other.id))
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["field"], "root_form")
+        self.assertNotIn("widget_index", res.json())
+
+    def test_a_failing_last_widget_leaves_the_stored_rows_untouched(
+        self,
+    ):
+        before = list(
+            self.dashboard.widgets.order_by("order").values_list(
+                "id", "title", "col_span"
+            )
+        )
+        res = self.put(
+            self.body(
+                [
+                    self.widget(id=self.kept.id, title="Renamed"),
+                    self.widget(order=2, col_span=99),
+                ]
+            )
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["widget_index"], 1)
+        after = list(
+            self.dashboard.widgets.order_by("order").values_list(
+                "id", "title", "col_span"
+            )
+        )
+        self.assertEqual(before, after)
+
+    def test_an_empty_widget_array_clears_the_dashboard(self):
+        res = self.put(self.body([]))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.dashboard.widgets.count(), 0)
+
+    def test_a_widget_id_from_another_dashboard_is_400(self):
+        other = Dashboard.objects.create(
+            name="Other", slug="other", root_form=self.root
+        )
+        stolen = other.widgets.create(
+            order=1, type=1, col_span=6, config={}
+        )
+        res = self.put(self.body([self.widget(id=stolen.id)]))
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["field"], "id")
+        # And the victim keeps its row.
+        self.assertTrue(other.widgets.filter(pk=stolen.id).exists())
+
+    def test_a_widget_on_another_tenants_form_is_400(self):
+        foreign_tenant = Tenant.objects.create(subdomain="beta")
+        foreign_form = Forms.objects.create(
+            name="beta-form",
+            tenant=foreign_tenant,
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        res = self.put(
+            self.body([self.widget(form=foreign_form.id)])
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["field"], "form")
+        # "not found", not "outside the family": the second message
+        # would confirm the id exists in another workspace.
+        self.assertIn("not found", res.json()["message"])
