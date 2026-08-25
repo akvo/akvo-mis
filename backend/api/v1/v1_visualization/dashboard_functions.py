@@ -57,6 +57,25 @@ def _error(message, widget_index=None, field=None):
     return error
 
 
+def _text_error(value, field, limit, index=None):
+    """Text field must be a string that fits its column.
+
+    Every varchar on these two models needs the same pair of checks,
+    and the length half is not cosmetic: a value longer than the column
+    raises a DataError at INSERT/UPDATE, which reaches the user as a
+    500 rather than a message naming the field.
+    """
+    if not isinstance(value, str):
+        return _error("{0} must be text".format(field), index, field)
+    if len(value) > limit:
+        return _error(
+            "{0} must be {1} characters or fewer".format(field, limit),
+            index,
+            field,
+        )
+    return None
+
+
 def _as_int(value):
     try:
         return int(value)
@@ -108,18 +127,12 @@ def validate_dashboard_payload(data, user, dashboard=None):
     forms = Forms.objects.for_user(user)
 
     name = data.get("name")
-    if name is not None and not isinstance(name, str):
-        return _error("name must be text", field="name")
-
-    if dashboard is None:
-        if not (name or "").strip():
-            return _error("name is required", field="name")
-    if name is not None and len(name.strip()) > 255:
-        # Dashboard.name is varchar(255); a longer value would 500 at
-        # INSERT/UPDATE instead of being refused here.
-        return _error(
-            "name must be 255 characters or fewer", field="name"
-        )
+    if name is not None:
+        error = _text_error(name, "name", 255)
+        if error:
+            return error
+    if dashboard is None and not (name or "").strip():
+        return _error("name is required", field="name")
 
     description = data.get("description")
     if description is not None and not isinstance(description, str):
@@ -207,26 +220,15 @@ def _validate_widget(
             "col_span must be between 1 and 24", index, "col_span"
         )
 
-    title = widget.get("title")
-    if title is not None:
-        if not isinstance(title, str):
-            return _error("title must be text", index, "title")
-        if len(title) > 255:
-            # DashboardWidget.title is varchar(255); an unbounded title
-            # would make the dashboard permanently unsavable — every
-            # future PUT resends it and 500s again at UPDATE.
-            return _error(
-                "title must be 255 characters or fewer", index, "title"
-            )
-
-    color = widget.get("color")
-    if color is not None:
-        if not isinstance(color, str):
-            return _error("color must be text", index, "color")
-        if len(color) > 32:
-            return _error(
-                "color must be 32 characters or fewer", index, "color"
-            )
+    # title is varchar(255), color varchar(32). An unbounded value here
+    # would make the dashboard permanently unsavable — every future PUT
+    # resends it and fails again at UPDATE.
+    for field, limit in (("title", 255), ("color", 32)):
+        value = widget.get(field)
+        if value is not None:
+            error = _text_error(value, field, limit, index)
+            if error:
+                return error
 
     if "order" in widget and not isinstance(widget.get("order"), int):
         # apply_widgets only defaults `order` when the key is absent

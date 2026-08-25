@@ -60,34 +60,23 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             return DashboardListSerializer
         return DashboardDetailSerializer
 
+    # One access type per action. FormBuilderViewSet spells the same
+    # mapping out as full permission lists; this is the same rule in the
+    # form that cannot drift between two near-identical entries.
+    ACCESS_PER_ACTION = {
+        "list": FeatureAccessTypes.dashboard_view,
+        "create": FeatureAccessTypes.dashboard_create,
+        "retrieve": FeatureAccessTypes.dashboard_view,
+        "update": FeatureAccessTypes.dashboard_edit,
+        "destroy": FeatureAccessTypes.dashboard_delete,
+        "sources": FeatureAccessTypes.dashboard_view,
+    }
+
     def get_permissions(self):
-        perm_map = {
-            "list": [
-                IsAuthenticated,
-                DashboardAccess(FeatureAccessTypes.dashboard_view),
-            ],
-            "create": [
-                IsAuthenticated,
-                DashboardAccess(FeatureAccessTypes.dashboard_create),
-            ],
-            "retrieve": [
-                IsAuthenticated,
-                DashboardAccess(FeatureAccessTypes.dashboard_view),
-            ],
-            "update": [
-                IsAuthenticated,
-                DashboardAccess(FeatureAccessTypes.dashboard_edit),
-            ],
-            "destroy": [
-                IsAuthenticated,
-                DashboardAccess(FeatureAccessTypes.dashboard_delete),
-            ],
-            "sources": [
-                IsAuthenticated,
-                DashboardAccess(FeatureAccessTypes.dashboard_view),
-            ],
-        }
-        return [p() for p in perm_map.get(self.action, [IsAuthenticated])]
+        access = self.ACCESS_PER_ACTION.get(self.action)
+        if access is None:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DashboardAccess(access)()]
 
     def create(self, request, *args, **kwargs):
         error = validate_dashboard_payload(request.data, request.user)
@@ -102,17 +91,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # client-supplied slug that fails the pattern is a "slug"
             # problem even though the derived-from-name path is what
             # usually trips this.
-            if (requested_slug or "").strip():
-                field, message = (
-                    "slug",
-                    "slug may only contain lowercase letters, numbers "
-                    "and hyphens",
-                )
-            else:
-                field, message = (
-                    "name",
-                    "name must contain at least one letter or digit",
-                )
+            field, message = (
+                ("slug", "slug may only contain lowercase letters, "
+                         "numbers and hyphens")
+                if (requested_slug or "").strip()
+                else ("name", "name must contain at least one letter "
+                              "or digit")
+            )
             return Response(
                 {"message": message, "field": field},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -129,19 +114,18 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        with transaction.atomic():
-            dashboard = Dashboard.objects.create(
-                name=name.strip(),
-                slug=slug,
-                description=request.data.get("description"),
-                # Never from the payload: tenant comes from the
-                # authenticated user, so a caller cannot plant a row in
-                # someone else's workspace (MT-004).
-                tenant=getattr(request.user, "tenant", None),
-                root_form_id=request.data.get("root_form"),
-                created_by=request.user,
-                default_filters=request.data.get("default_filters") or {},
-            )
+        dashboard = Dashboard.objects.create(
+            name=name.strip(),
+            slug=slug,
+            description=request.data.get("description"),
+            # Never from the payload: tenant comes from the
+            # authenticated user, so a caller cannot plant a row in
+            # someone else's workspace (MT-004).
+            tenant=getattr(request.user, "tenant", None),
+            root_form_id=request.data.get("root_form"),
+            created_by=request.user,
+            default_filters=request.data.get("default_filters") or {},
+        )
         return Response(
             DashboardDetailSerializer(instance=dashboard).data,
             status=status.HTTP_201_CREATED,
@@ -171,7 +155,6 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             dashboard.save()
             apply_widgets(dashboard, request.data.get("widgets") or [])
 
-        dashboard.refresh_from_db()
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
         )

@@ -24,29 +24,6 @@ from api.v1.v1_visualization.constants import (
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 
 
-def form_ref(form):
-    if form is None:
-        return None
-    return {"id": form.id, "name": form.name}
-
-
-def user_ref(user):
-    if user is None:
-        return None
-    return {"id": user.id, "name": user.name}
-
-
-def lower_form_type(form):
-    return FormTypes.FieldStr.get(form.type, "").lower()
-
-
-def lower_question_type(question):
-    # "Multiple_Option" -> "multiple_option". BuilderInspector compares
-    # against lowercase literals, so the map is lowercased at the
-    # boundary rather than duplicated.
-    return QuestionTypes.FieldStr.get(question.type, "").lower()
-
-
 class DashboardWidgetSerializer(serializers.ModelSerializer):
     type = serializers.SerializerMethodField()
 
@@ -93,10 +70,14 @@ class DashboardListSerializer(serializers.ModelSerializer):
         return DashboardStatus.FieldStr.get(instance.status)
 
     def get_root_form(self, instance):
-        return form_ref(instance.root_form)
+        form = instance.root_form
+        return {"id": form.id, "name": form.name}
 
     def get_created_by(self, instance):
-        return user_ref(instance.created_by)
+        user = instance.created_by
+        if user is None:
+            return None
+        return {"id": user.id, "name": user.name}
 
     def get_widgets(self, instance):
         # Stubs, not full widgets: WidgetThumbnailStrip renders a
@@ -124,7 +105,10 @@ def serialize_question(question):
     row = {
         "id": question.id,
         "label": question.label,
-        "type": lower_question_type(question),
+        # "Multiple_Option" -> "multiple_option". BuilderInspector
+        # compares against lowercase literals, so the map is lowercased
+        # at the boundary rather than duplicated.
+        "type": QuestionTypes.FieldStr.get(question.type, "").lower(),
     }
     if question.type in (
         QuestionTypes.option,
@@ -146,7 +130,7 @@ def serialize_source_form(form, is_root):
     row = {
         "id": form.id,
         "name": form.name,
-        "type": lower_form_type(form),
+        "type": FormTypes.FieldStr.get(form.type, "").lower(),
     }
     if not is_root:
         row["parent"] = form.parent_id
