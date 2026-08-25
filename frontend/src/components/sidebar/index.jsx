@@ -298,7 +298,7 @@ const Sidebar = () => {
             <Menu.Item
               key="menu-dashboards"
               icon={<BarChartOutlined />}
-              data-url="/dashboards"
+              data-url="/control-center/dashboard"
             >
               {text.menuDashboards}
             </Menu.Item>

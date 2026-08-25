@@ -10,7 +10,6 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  CopyOutlined,
   ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -77,24 +76,9 @@ const DashboardList = () => {
     (created) => {
       setCreateVisible(false);
       message.success(text.dashboardCreated || "Dashboard created");
-      navigate(`/dashboards/${created.slug}/edit`);
+      navigate(`/control-center/dashboard/${created.slug}`);
     },
     [navigate, text]
-  );
-
-  const handleDuplicate = useCallback(
-    (id) => {
-      dashboardApi
-        .duplicate(id)
-        .then((res) => {
-          message.success(text.dashboardDuplicated || "Dashboard duplicated");
-          setDashboards((prev) => [...prev, res.data]);
-        })
-        .catch((err) => {
-          handleApiError(err, text);
-        });
-    },
-    [text]
   );
 
   const handleDelete = useCallback(
@@ -125,7 +109,14 @@ const DashboardList = () => {
     if (!dateStr) {
       return "";
     }
-    const d = new Date(dateStr);
+    // Backend returns DD-MM-YYYY HH:MM:SS — convert to YYYY-MM-DD for parsing
+    const parts = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})/);
+    const d = parts
+      ? new Date(`${parts[3]}-${parts[2]}-${parts[1]}`)
+      : new Date(dateStr);
+    if (isNaN(d.getTime())) {
+      return "";
+    }
     return d.toLocaleDateString("en-GB", {
       day: "numeric",
       month: "short",
@@ -270,19 +261,12 @@ const DashboardList = () => {
                     {canEdit && (
                       <button
                         className="dashboard-btn-edit"
-                        onClick={() => navigate(`/dashboards/${d.slug}/edit`)}
+                        onClick={() =>
+                          navigate(`/control-center/dashboard/${d.slug}`)
+                        }
                       >
                         <EditOutlined />
                         {text.edit || "Edit"}
-                      </button>
-                    )}
-                    {canCreate && (
-                      <button
-                        className="dashboard-btn-icon"
-                        title={text.duplicate || "Duplicate"}
-                        onClick={() => handleDuplicate(d.id)}
-                      >
-                        <CopyOutlined />
                       </button>
                     )}
                     {canDelete && (

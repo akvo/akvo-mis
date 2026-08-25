@@ -351,18 +351,18 @@ const RouteList = () => {
           path="profile/edit"
           element={<Private element={EditProfile} alias="profile" />}
         />
+        <Route
+          path="dashboard"
+          element={<Private element={DashboardList} alias="dashboard" />}
+        />
       </Route>
       <Route
-        path="/dashboards"
-        element={<Private element={DashboardList} alias="dashboard" />}
+        path="/control-center/dashboard/:slug"
+        element={<Private element={DashboardBuilder} alias="dashboard" />}
       />
       <Route
         path="/dashboards/:slug"
         element={<Private element={DashboardViewer} alias="dashboard" />}
-      />
-      <Route
-        path="/dashboards/:slug/edit"
-        element={<Private element={DashboardBuilder} alias="dashboard" />}
       />
       <Route
         path="/downloads"
