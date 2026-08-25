@@ -248,15 +248,30 @@ const uiText = {
     formBuilderExportCascadeCsvError: "Failed to export Cascade CSV",
     formBuilderImportButton: "Import Form",
     formBuilderImportModalTitle: "Import Form",
-    formBuilderImportDraggerText: "Click or drag a form export file here",
+    formBuilderImportFormatLabel: "Format",
+    formBuilderImportFormatJson: "JSON (Native)",
+    formBuilderImportFormatXlsform: "XLSForm (.xlsx)",
+    formBuilderImportDraggerText: "Click or drag a form file here",
     formBuilderImportDraggerHint: (mb) =>
       `Only .json form export files, up to ${mb} MB`,
+    formBuilderImportDraggerHintXlsform: (mb) =>
+      `Only .xlsx or .xls files, up to ${mb} MB`,
     formBuilderImportFileTooLarge: (mb) => `File exceeds the ${mb} MB limit`,
     formBuilderImportInvalidFile: "Only .json files are supported",
+    formBuilderImportInvalidFileXlsform:
+      "Only .xlsx or .xls files are supported",
     formBuilderImportPreflightError: "Failed to validate the file",
     formBuilderImportErrorsTitle: "Validation errors",
     formBuilderImportWarningsTitle: "Warnings",
     formBuilderImportFormLabel: "Form",
+    formBuilderImportQuestionsLabel: "Questions",
+    formBuilderImportGroupsLabel: "Groups",
+    formBuilderImportFormTypeLabel: "Form Type",
+    formBuilderImportFormTypeRegistration: "Registration",
+    formBuilderImportFormTypeMonitoring: "Monitoring",
+    formBuilderImportFormTypeRequired: "Please select a form type",
+    formBuilderImportSkippedCount: (count) =>
+      `${count} unsupported row(s) will be skipped`,
     formBuilderImportUpdateTitle: (name) => `Update existing form "${name}"?`,
     formBuilderImportUpdateDesc: (count) =>
       `A form with the same ID already exists in this environment` +
