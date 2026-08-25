@@ -497,6 +497,21 @@ class DashboardDuplicateTestCase(TestCase, ProfileTestHelperMixin):
         # match SLUG_PATTERN and could never be reached by URL.
         self.assertNotIn("--", body["slug"])
 
+    def test_a_slug_truncated_onto_a_hyphen_does_not_double_it(self):
+        # copy_slug keeps slug[:244], so a hyphen at index 243 is the
+        # last character retained. Without the rstrip("-") the result
+        # would be "b...b--copy", which fails SLUG_PATTERN and could
+        # never be reached by URL.
+        hyphenated = Dashboard.objects.create(
+            name="Hyphen edge",
+            slug="{0}-{1}".format("b" * 243, "c" * 11),
+            root_form=self.root,
+            created_by=self.user,
+        )
+        body = self.duplicate(hyphenated.id).json()
+        self.assertEqual(body["slug"], "{0}-copy".format("b" * 243))
+        self.assertNotIn("--", body["slug"])
+
     def test_a_soft_deleted_copy_frees_its_slug(self):
         first = self.duplicate().json()
         Dashboard.objects.get(pk=first["id"]).delete()
