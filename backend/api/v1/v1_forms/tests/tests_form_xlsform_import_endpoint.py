@@ -1,4 +1,6 @@
 import io
+import json
+import tempfile
 from unittest.mock import patch
 
 import openpyxl
@@ -7,8 +9,11 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import override_settings
 
+from api.v1.v1_forms.constants import FormTypes
 from api.v1.v1_forms.models import Forms
-from api.v1.v1_jobs.constants import JobTypes
+from api.v1.v1_forms.services.xlsform_export import generate_xlsform
+from api.v1.v1_forms.tasks import import_xlsform_job
+from api.v1.v1_jobs.constants import JobTypes, JobStatus
 from api.v1.v1_jobs.models import Jobs
 from api.v1.v1_users.models import SystemUser
 
@@ -188,3 +193,52 @@ class XLSFormImportEndpointTestCase(TestCase):
         job = Jobs.objects.get(id=data["job_id"])
         self.assertEqual(job.info["form_type"], "monitoring")
         self.assertEqual(job.info["parent_id"], self.existing_form.id)
+
+    @patch("api.v1.v1_forms.views.storage.upload")
+    @patch("api.v1.v1_forms.tasks.download")
+    def test_round_trip_export_and_import_endpoint(
+        self, mock_download, mock_upload
+    ):
+        # 1. Export seeded form to XLSForm binary
+        stream, skipped = generate_xlsform(self.existing_form)
+        self.assertIsNotNone(stream)
+
+        # 2. Preflight the generated workbook
+        stream.seek(0)
+        stream.name = "exported_form.xlsx"
+        res_preflight = self.client.post(
+            "/api/v1/manage/forms/import/xlsform/preflight",
+            {"file": stream},
+            **self.header,
+        )
+        self.assertEqual(res_preflight.status_code, 200)
+        self.assertTrue(res_preflight.json()["valid"])
+
+        # 3. Post to import endpoint
+        stream.seek(0)
+        res_import = self.client.post(
+            "/api/v1/manage/forms/import/xlsform",
+            {"file": stream, "form_type": "registration"},
+            **self.header,
+        )
+        self.assertEqual(res_import.status_code, 200)
+        job_id = res_import.json()["job_id"]
+
+        # 4. Mock download storage to return local temp file and run job
+        stream.seek(0)
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tf:
+            tf.write(stream.getvalue())
+            tf.flush()
+            temp_path = tf.name
+
+        mock_download.return_value = temp_path
+        import_xlsform_job(job_id)
+
+        job = Jobs.objects.get(id=job_id)
+        self.assertEqual(job.status, JobStatus.done)
+        res_job = json.loads(job.result)
+        new_form_id = res_job["form_id"]
+        new_form = Forms.objects.get(id=new_form_id)
+        self.assertEqual(new_form.name, self.existing_form.name)
+        self.assertEqual(new_form.type, FormTypes.registration)
+        self.assertGreater(new_form.form_questions.count(), 0)
