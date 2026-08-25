@@ -12,7 +12,13 @@ const Content = ({ children = null, data = [], columns = 1, action = null }) => 
     return (
       <ScrollView
         style={{ width: '100%' }}
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 8, paddingTop: 8 }}
+        // paddingBottom clears the floating action button, which overlays this list
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 8,
+          paddingTop: 8,
+          paddingBottom: 88,
+        }}
       >
         <Stack row columns={columns}>
           {data?.map((d) => {

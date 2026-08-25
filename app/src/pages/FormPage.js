@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Platform,
   ToastAndroid,
@@ -17,6 +17,7 @@ import FormContainer from '../form/FormContainer';
 import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
 import { BaseLayout } from '../components';
 import { crudDataPoints } from '../database/crud';
+import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
 import { UserState, UIState, FormState } from '../store';
 import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
 import { i18n } from '../lib';
@@ -44,6 +45,9 @@ const FormPage = ({ navigation, route }) => {
   const [currentDataPoint, setCurrentDataPoint] = useState({});
   const [loading, setLoading] = useState(false);
   const db = SQLite.useSQLiteContext();
+  // Stable for the life of this screen, so a retry after a failed save overwrites its
+  // own fallback file instead of accumulating one per attempt.
+  const submissionUuidRef = useRef(route.params?.uuid || Crypto.randomUUID());
 
   const formJSON = useMemo(() => {
     if (!selectedForm?.json) {
@@ -82,15 +86,51 @@ const FormPage = ({ navigation, route }) => {
     navigation.goBack();
   };
 
-  const handleOnSaveAndExit = async () => {
-    const activeJob = await crudJobs.getActiveJob(db, SYNC_FORM_SUBMISSION_TASK_NAME);
-    if (!activeJob) {
+  // Queues the upload job. Deliberately non-fatal: the answers are what matter, and
+  // SyncService recreates a missing job on its next pass. Reported so that a job
+  // insert failing systematically cannot hide behind that.
+  const queueSyncJob = async (info = null) => {
+    try {
+      const activeJob = await crudJobs.getActiveJob(db, SYNC_FORM_SUBMISSION_TASK_NAME);
+      if (activeJob) {
+        return;
+      }
+      const infoVal = info ? { info } : {};
       await crudJobs.addJob(db, {
         user: userId,
         type: SYNC_FORM_SUBMISSION_TASK_NAME,
         status: jobStatus.PENDING,
+        ...infoVal,
       });
+    } catch (error) {
+      Sentry.captureMessage('[FormPage] could not queue the sync job, saving anyway');
+      Sentry.captureException(error);
     }
+  };
+
+  // Shared tail for both save paths. 'saved' and 'fallback' are durable, so leaving
+  // the screen is safe; 'failed' means the answers exist only in the Pullstate store,
+  // and navigating away would discard them.
+  const finishSave = async (result, successText) => {
+    if (result === 'failed') {
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(trans.saveFailedKeepOpenText, ToastAndroid.LONG);
+      }
+      return;
+    }
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(
+        result === 'fallback' ? trans.savedToDeviceText : successText,
+        ToastAndroid.LONG,
+      );
+    }
+    await refreshStorageWarning();
+    await refreshForm();
+    navigation.navigate('Home', { ...route?.params });
+  };
+
+  const handleOnSaveAndExit = async ({ sendToWeb = false } = {}) => {
+    await queueSyncJob();
     const { dpName, dpGeo } = generateDataPointName(formJSON, currentValues, cascades);
     const jsonAnswers = transformAnswers(currentValues, formJSON);
     try {
@@ -101,7 +141,7 @@ const FormPage = ({ navigation, route }) => {
         submitted: 0,
         duration: surveyDuration,
         json: jsonAnswers,
-        uuid: route.params?.uuid || Crypto.randomUUID(),
+        uuid: submissionUuidRef.current,
         geo: dpGeo,
         // A draft save is a deliberate overwrite, so each save mints a fresh
         // key. Only an unintended replay reuses one.
@@ -115,22 +155,16 @@ const FormPage = ({ navigation, route }) => {
         duration: duration === 0 ? 1 : duration,
         repeats: Object.keys(repeats).length ? JSON.stringify(repeats) : null,
         syncedAt: null,
+        ...(isNewSubmission ? { locallyCreated: 1 } : {}),
+        ...(sendToWeb ? { sendToWeb: 1 } : {}),
       };
-      if (isNewSubmission) {
-        await crudDataPoints.saveDataPoint(db, { ...payload, locallyCreated: 1 });
-      } else {
-        await crudDataPoints.updateDataPoint(db, payload);
-      }
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(trans.successSaveDatapoint, ToastAndroid.LONG);
-      }
-      await refreshForm();
-      navigation.navigate('Home', { ...route?.params });
+      const result = await persistSubmission(db, payload, isNewSubmission);
+      await finishSave(result, trans.successSaveDatapoint);
     } catch (error) {
       Sentry.captureMessage('[FormPage] Cannot save draft submissions');
       Sentry.captureException(error);
       if (Platform.OS === 'android') {
-        ToastAndroid.show(`SQL: ${error}`, ToastAndroid.LONG);
+        ToastAndroid.show(trans.saveFailedKeepOpenText, ToastAndroid.LONG);
       }
     }
   };
@@ -159,7 +193,7 @@ const FormPage = ({ navigation, route }) => {
         submitted: 1,
         duration: surveyDuration,
         json: answers,
-        uuid: route.params?.uuid || Crypto.randomUUID(),
+        uuid: submissionUuidRef.current,
         locallyCreated: 1,
         // Minted once here and resent unchanged on every retry. saveAsPending
         // clears syncedAt but never this, which is what makes a retry a replay
@@ -173,31 +207,19 @@ const FormPage = ({ navigation, route }) => {
         duration: duration === 0 ? 1 : duration,
         syncedAt: null,
       };
-      if (isNewSubmission) {
-        await crudDataPoints.saveDataPoint(db, payload);
-      } else {
-        await crudDataPoints.updateDataPoint(db, payload);
+      const result = await persistSubmission(db, payload, isNewSubmission);
+      if (result !== 'failed') {
+        /**
+         * Create a new job for syncing form submissions.
+         */
+        await queueSyncJob(route.params?.uuid);
       }
-      /**
-       * Create a new job for syncing form submissions.
-       */
-      await crudJobs.addJob(db, {
-        user: userId,
-        type: SYNC_FORM_SUBMISSION_TASK_NAME,
-        status: jobStatus.PENDING,
-        info: route.params?.uuid,
-      });
-
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(trans.successSubmitted, ToastAndroid.LONG);
-      }
-      await refreshForm();
-      navigation.navigate('Home', { ...route?.params });
+      await finishSave(result, trans.successSubmitted);
     } catch (error) {
       Sentry.captureMessage('[FormPage] Cannot submit submissions');
       Sentry.captureException(error);
       if (Platform.OS === 'android') {
-        ToastAndroid.show(`SQL: ${error}`, ToastAndroid.LONG);
+        ToastAndroid.show(trans.saveFailedKeepOpenText, ToastAndroid.LONG);
       }
     }
   };

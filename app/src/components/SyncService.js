@@ -4,6 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import { BuildParamsState, DatapointSyncState, UIState, UserState } from '../store';
 import { backgroundTask } from '../lib';
+import { refreshStorageWarning } from '../lib/submission-fallback';
 import crudJobs from '../database/crud/crud-jobs';
 import { crudConfig, crudDataPoints, crudForms, crudSyncQueue } from '../database/crud';
 import {
@@ -567,6 +568,11 @@ const SyncService = () => {
       } catch (error) {
         Sentry.captureException(error);
       }
+
+      // Uploaded photos are deleted on success, so this is the moment a low-storage
+      // warning can legitimately stand down — and what makes "sync now to free
+      // space" visibly true rather than just advice.
+      await refreshStorageWarning();
 
       // All phases complete
       UIState.update((s) => {

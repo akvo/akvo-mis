@@ -10,6 +10,7 @@ const UIState = new Store({
   isManualSynced: false,
   statusBar: null,
   refreshPage: false,
+  lowStorage: false,
 });
 
 export default UIState;
