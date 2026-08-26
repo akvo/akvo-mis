@@ -1,0 +1,173 @@
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import DashboardViewer from "../DashboardViewer";
+import dashboardApi from "../../../util/dashboardApi";
+import { store } from "../../../lib";
+
+jest.mock("../../../util/dashboardApi");
+
+// The grid has its own suite; here we only care that the page hands it
+// the right widgets and filters.
+jest.mock("../../../components/dashboard/DashboardGrid", () => {
+  const MockGrid = (props) => (
+    <div
+      data-testid="grid"
+      data-widget-count={props.widgets.length}
+      data-root-form={props.rootFormId}
+      data-filters={JSON.stringify(props.filters)}
+    />
+  );
+  MockGrid.displayName = "DashboardGrid";
+  return MockGrid;
+});
+
+// AdministrationDropdownLocal fetches on mount; not this page's concern.
+jest.mock("../../../components/dashboard/DashboardViewFilters", () => {
+  const MockFilters = (props) => (
+    <div
+      data-testid="filters"
+      data-date={String(Boolean(props.defaultFilters?.date?.enabled))}
+      data-adm={String(Boolean(props.defaultFilters?.administration?.enabled))}
+    />
+  );
+  MockFilters.displayName = "DashboardViewFilters";
+  return MockFilters;
+});
+
+const mockNavigate = jest.fn();
+jest.mock("react-router-dom", () => ({
+  ...jest.requireActual("react-router-dom"),
+  useNavigate: () => mockNavigate,
+}));
+
+const PAYLOAD = {
+  id: 12,
+  name: "Water Points Overview",
+  slug: "water-points-overview",
+  description: "Operational status across all registered sites",
+  root_form: { id: 6001, name: "Water Point Registration" },
+  published_at: "26-08-2026 10:11:12",
+  default_filters: {
+    date: { enabled: true, date_question: null },
+    administration: { enabled: true },
+  },
+  widgets: [
+    { id: 1, type: "kpi", col_span: 6, title: "Operational" },
+    { id: 2, type: "bar", col_span: 12, title: "By type" },
+  ],
+};
+
+const setUser = (user) => {
+  store.update((s) => {
+    s.user = user;
+  });
+};
+
+const SUPERUSER = { id: 1, name: "Admin", is_superuser: true, roles: [] };
+const VIEWER = { id: 2, name: "Viewer", is_superuser: false, roles: [] };
+
+const renderViewer = () =>
+  render(
+    <MemoryRouter initialEntries={["/dashboards/water-points-overview"]}>
+      <Routes>
+        <Route path="/dashboards/:slug" element={<DashboardViewer />} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  setUser(SUPERUSER);
+});
+
+describe("loading a published dashboard", () => {
+  test("renders name, description, filters and the grid", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+
+    expect(dashboardApi.getPublished).toHaveBeenCalledWith(
+      "water-points-overview"
+    );
+    expect(screen.getAllByText("Water Points Overview").length).toBeGreaterThan(
+      0
+    );
+    expect(
+      screen.getByText(/Operational status across all registered sites/)
+    ).toBeInTheDocument();
+
+    const grid = screen.getByTestId("grid");
+    expect(grid).toHaveAttribute("data-widget-count", "2");
+    // root_form arrives as {id, name}; the grid needs the bare id for the
+    // escalation path segment.
+    expect(grid).toHaveAttribute("data-root-form", "6001");
+  });
+
+  test("passes default_filters through to the filter bar", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("filters")).toBeInTheDocument()
+    );
+    expect(screen.getByTestId("filters")).toHaveAttribute("data-date", "true");
+    expect(screen.getByTestId("filters")).toHaveAttribute("data-adm", "true");
+  });
+
+  test("the published viewer shows no Preview badge", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    // The mockup's view screen carries one because there, view IS preview.
+    // The published viewer is not a preview of anything.
+    expect(document.querySelector(".dashboard-view-badge")).toBeNull();
+  });
+});
+
+describe("not found", () => {
+  test.each([[404], [500]])(
+    "a %s renders one not-found screen",
+    async (code) => {
+      dashboardApi.getPublished.mockRejectedValue({
+        response: { status: code },
+      });
+      renderViewer();
+
+      await waitFor(() =>
+        expect(screen.getByText(/dashboard not found/i)).toBeInTheDocument()
+      );
+      // Unpublished, deleted and another tenant's are indistinguishable by
+      // design, so the screen does not speculate about which.
+      expect(screen.queryByTestId("grid")).not.toBeInTheDocument();
+    }
+  );
+});
+
+describe("the Edit button is gated on dashboard_edit", () => {
+  test("shown to a user who can edit, and routes to the builder", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    const edit = screen.getByRole("button", { name: /edit dashboard/i });
+    edit.click();
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/control-center/dashboard/water-points-overview"
+    );
+  });
+
+  test("hidden from a user without the permission", async () => {
+    setUser(VIEWER);
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(
+      screen.queryByRole("button", { name: /edit dashboard/i })
+    ).not.toBeInTheDocument();
+  });
+});
