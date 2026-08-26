@@ -573,3 +573,30 @@
     cursor: pointer;
   }
 }
+
+/* ── Per-mode renderer sizing (canvas half) ──
+   VizKPI and VizSectionTitle are shared with the dashboard viewer and
+   render at different sizes in each (mockup _enrich, mode "canvas" vs
+   "view"). The cascade carries the difference so that neither component
+   needs to know which surface it is on — see viewer.scss for the other
+   half, and the VIZ-008 spec's UI specification for why. */
+
+.builder-widget-body {
+  .viz-kpi-value {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  /* The canvas card header already shows the title; the body copy the
+     viewer needs would be a duplicate here. */
+  .viz-kpi-title {
+    display: none;
+  }
+
+  .viz-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #081c40;
+  }
+}
