@@ -10,6 +10,11 @@ from api.v1.v1_forms.functions import (
     validate_form_definition,
     import_form_definition,
 )
+from api.v1.v1_forms.services.xlsform_import import (
+    parse_xlsform,
+    validate_preflight,
+    build_form_payload,
+)
 
 
 def refresh_form_config():
@@ -47,11 +52,15 @@ def import_form_job(job_id):
             raw = json.load(fh)
     except Exception as exc:
         job.status = JobStatus.failed
-        job.result = json.dumps([{
-            "code": "file_read_error",
-            "message": str(exc),
-            "level": "error",
-        }])
+        job.result = json.dumps(
+            [
+                {
+                    "code": "file_read_error",
+                    "message": str(exc),
+                    "level": "error",
+                }
+            ]
+        )
         job.save(update_fields=["status", "result"])
         return
 
@@ -70,22 +79,111 @@ def import_form_job(job_id):
         )
     except Exception as exc:
         job.status = JobStatus.failed
-        job.result = json.dumps([{
-            "code": "import_error",
-            "message": str(exc),
-            "level": "error",
-        }])
+        job.result = json.dumps(
+            [
+                {
+                    "code": "import_error",
+                    "message": str(exc),
+                    "level": "error",
+                }
+            ]
+        )
         job.save(update_fields=["status", "result"])
         return
 
     warnings = [i for i in issues if i.get("level") == "warning"]
     job.status = JobStatus.done
-    job.result = json.dumps({
-        "form_id": form.id,
-        "form_name": form.name,
-        "action": action,
-        "warnings": warnings,
-    })
+    job.result = json.dumps(
+        {
+            "form_id": form.id,
+            "form_name": form.name,
+            "action": action,
+            "warnings": warnings,
+        }
+    )
+    job.save(update_fields=["status", "result"])
+
+
+def import_xlsform_job(job_id):
+    """Background task: parse, validate, and import an XLSForm (.xlsx) file.
+
+    Called via async_task("api.v1.v1_forms.tasks.import_xlsform_job", job.id).
+    Reads Jobs.info for filename, form_type, and parent_id, parses the
+    workbook, runs canonical validation, and creates the draft form.
+    """
+    job = Jobs.objects.get(id=job_id)
+    info = job.info or {}
+    filename = info.get("file")
+    form_type = info.get("form_type", "registration")
+    parent_id = info.get("parent_id")
+    user = job.user
+
+    try:
+        file_path = download(f"upload/{filename}")
+        parsed = parse_xlsform(file_path)
+    except Exception as exc:
+        job.status = JobStatus.failed
+        job.result = json.dumps(
+            [
+                {
+                    "code": "file_read_error",
+                    "message": str(exc),
+                    "level": "error",
+                }
+            ]
+        )
+        job.save(update_fields=["status", "result"])
+        return
+
+    preflight_errors, preflight_warnings = validate_preflight(parsed)
+    if preflight_errors:
+        job.status = JobStatus.failed
+        job.result = json.dumps(preflight_errors)
+        job.save(update_fields=["status", "result"])
+        return
+
+    payload = build_form_payload(
+        parsed, form_type=form_type, parent_id=parent_id
+    )
+    norm = normalize_form_definition(payload)
+    issues = validate_form_definition(norm)
+    errors = [i for i in issues if i.get("level") == "error"]
+    if errors:
+        job.status = JobStatus.failed
+        job.result = json.dumps(errors)
+        job.save(update_fields=["status", "result"])
+        return
+
+    try:
+        form, action = import_form_definition(
+            norm, user, mode="create_copy", parent_id=parent_id
+        )
+    except Exception as exc:
+        job.status = JobStatus.failed
+        job.result = json.dumps(
+            [
+                {
+                    "code": "import_error",
+                    "message": str(exc),
+                    "level": "error",
+                }
+            ]
+        )
+        job.save(update_fields=["status", "result"])
+        return
+
+    warnings = list(preflight_warnings) + [
+        i for i in issues if i.get("level") == "warning"
+    ]
+    job.status = JobStatus.done
+    job.result = json.dumps(
+        {
+            "form_id": form.id,
+            "form_name": form.name,
+            "action": action,
+            "warnings": warnings,
+        }
+    )
     job.save(update_fields=["status", "result"])
 
 
@@ -103,11 +201,15 @@ def import_form_job_result(task):
         job = Jobs.objects.get(id=job_id)
         if job.status not in (JobStatus.done, JobStatus.failed):
             job.status = JobStatus.failed
-            job.result = json.dumps([{
-                "code": "task_error",
-                "message": str(task.result),
-                "level": "error",
-            }])
+            job.result = json.dumps(
+                [
+                    {
+                        "code": "task_error",
+                        "message": str(task.result),
+                        "level": "error",
+                    }
+                ]
+            )
             job.save(update_fields=["status", "result"])
     except Exception:
         pass

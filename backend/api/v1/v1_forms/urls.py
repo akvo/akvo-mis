@@ -82,6 +82,15 @@ urlpatterns = [
         r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/administration-csv$",
         FormBuilderViewSet.as_view({"get": "export_administration_csv"}),
     ),
+    # FB-016: XLSForm Import
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/import/xlsform/preflight$",
+        FormBuilderViewSet.as_view({"post": "import_xlsform_preflight"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/import/xlsform$",
+        FormBuilderViewSet.as_view({"post": "import_xlsform"}),
+    ),
     re_path(
         r"^(?P<version>(v1))/manage/forms/import/preflight$",
         FormBuilderViewSet.as_view({"post": "import_preflight"}),
