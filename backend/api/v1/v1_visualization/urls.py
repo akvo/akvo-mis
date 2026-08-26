@@ -14,6 +14,9 @@ from api.v1.v1_visualization.dashboard_views import (
 from api.v1.v1_visualization.dashboard_builder_views import (
     DashboardBuilderViewSet,
 )
+from api.v1.v1_visualization.dashboard_read_views import (
+    DashboardReadViewSet,
+)
 
 urlpatterns = [
     re_path(
@@ -54,6 +57,20 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view({"get": "sources"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/publish$",
+        DashboardBuilderViewSet.as_view({"post": "publish"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"unpublish$",
+        DashboardBuilderViewSet.as_view({"post": "unpublish"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"duplicate$",
+        DashboardBuilderViewSet.as_view({"post": "duplicate"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)$",
         DashboardBuilderViewSet.as_view(
             {"get": "retrieve", "put": "update", "delete": "destroy"}
@@ -64,5 +81,14 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view(
             {"get": "list", "post": "create"}
         ),
+    ),
+    # The authenticated read namespace (slug before collection)
+    re_path(
+        r"^(?P<version>(v1))/dashboards/(?P<slug>[-a-z0-9]+)$",
+        DashboardReadViewSet.as_view({"get": "retrieve"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/dashboards$",
+        DashboardReadViewSet.as_view({"get": "list"}),
     ),
 ]

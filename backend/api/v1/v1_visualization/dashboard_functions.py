@@ -103,6 +103,40 @@ def suggest_slug(slug, queryset):
     return "{0}-{1}".format(slug, suffix)
 
 
+# Both columns are varchar(255). The stem is truncated *before* the
+# suffix is appended rather than after, because truncating the finished
+# string would cut the suffix off — a "copy" that is not named "copy".
+MAX_LENGTH = 255
+
+
+def copy_name(name):
+    """Name for a duplicate: "<name> (copy)"."""
+    suffix = " (copy)"
+    return "{0}{1}".format(
+        (name or "")[: MAX_LENGTH - len(suffix)], suffix
+    )
+
+
+def copy_slug(slug, queryset):
+    """Slug for a duplicate: "<slug>-copy", uniquified.
+
+    The stem is right-stripped of hyphens after truncation. Without it a
+    near-limit slug truncates to "...water-points-", the finished slug
+    reads "...water-points--copy", and it fails SLUG_PATTERN — leaving a
+    dashboard that cannot be duplicated for a reason no error message
+    would explain.
+
+    The extra 6 characters withheld from the stem leave room for
+    suggest_slug's "-N" tail when the plain "-copy" is already taken.
+    """
+    suffix = "-copy"
+    stem = slug[: MAX_LENGTH - len(suffix) - 6].rstrip("-")
+    candidate = "{0}{1}".format(stem, suffix)
+    if queryset.filter(slug=candidate).exists():
+        return suggest_slug(candidate, queryset)
+    return candidate
+
+
 # =========================================================
 # Validation
 # =========================================================

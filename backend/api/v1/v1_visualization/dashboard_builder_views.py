@@ -14,10 +14,11 @@
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from api.v1.v1_profile.constants import FeatureAccessTypes
+from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardDetailSerializer,
     DashboardListSerializer,
@@ -26,12 +27,26 @@ from api.v1.v1_visualization.dashboard_builder_serializers import (
 from api.v1.v1_visualization.dashboard_functions import (
     SLUG_PATTERN,
     apply_widgets,
+    copy_name,
+    copy_slug,
     derive_slug,
     suggest_slug,
     validate_dashboard_payload,
 )
-from api.v1.v1_visualization.models import Dashboard
+from api.v1.v1_visualization.dashboard_snapshot import build_snapshot
+from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 from utils.custom_permissions import DashboardAccess
+
+
+class DenyUnmappedAction(BasePermission):
+    """The safe reading of an action nobody mapped.
+
+    Not exported: an action missing from ACCESS_PER_ACTION is a mistake
+    in this file, and nowhere else has that map.
+    """
+
+    def has_permission(self, request, view):
+        return False
 
 
 class DashboardBuilderViewSet(viewsets.ModelViewSet):
@@ -70,12 +85,29 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "update": FeatureAccessTypes.dashboard_edit,
         "destroy": FeatureAccessTypes.dashboard_delete,
         "sources": FeatureAccessTypes.dashboard_view,
+        "publish": FeatureAccessTypes.dashboard_publish,
+        "unpublish": FeatureAccessTypes.dashboard_publish,
+        "duplicate": FeatureAccessTypes.dashboard_create,
     }
 
     def get_permissions(self):
         access = self.ACCESS_PER_ACTION.get(self.action)
         if access is None:
-            return [IsAuthenticated()]
+            # Deny rather than fall through to IsAuthenticated. An
+            # action missing from the map above is an oversight, and the
+            # safe reading of an oversight is "no access" rather than
+            # "every signed-in user in the tenant".
+            #
+            # OPTIONS hits this branch too, deliberately. DRF's
+            # ViewSetMixin.initialize_request sets self.action to the
+            # literal string "metadata" for an OPTIONS request (it is
+            # not left unset) — "metadata" is simply never a key in
+            # ACCESS_PER_ACTION, so it falls into the same deny path as
+            # any other unmapped action. That is fine to leave as-is:
+            # this project has no corsheaders in INSTALLED_APPS, the
+            # frontend is same-origin behind nginx, and nothing
+            # preflights these paths, so 403-ing OPTIONS costs nothing.
+            return [DenyUnmappedAction()]
         return [IsAuthenticated(), DashboardAccess(access)()]
 
     def create(self, request, *args, **kwargs):
@@ -157,6 +189,106 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
 
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    def publish(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        snapshot = build_snapshot(dashboard)
+        # Revalidate through the *same* function PUT uses (spec D-3).
+        # `published_config` is what viewers read and nothing
+        # revalidates it downstream, so publishing is the last place a
+        # broken dashboard can be stopped. Calling the save-time
+        # validator rather than writing a stored-rows twin is what keeps
+        # the two from drifting; tests_dashboard_snapshot pins the shape
+        # compatibility that makes it possible.
+        error = validate_dashboard_payload(
+            {"name": dashboard.name, "widgets": snapshot["widgets"]},
+            request.user,
+            dashboard=dashboard,
+        )
+        if error:
+            # Nothing written: status, published_config and
+            # published_at are all exactly as they were, so a failed
+            # republish keeps serving the last good snapshot.
+            return Response(error, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            dashboard.published_config = snapshot
+            dashboard.status = DashboardStatus.published
+            # Rewritten on every publish, unlike Forms.published_at
+            # (spec D-2): a form's date is provenance, a dashboard's
+            # answers "how fresh is what I am looking at".
+            dashboard.published_at = timezone.now()
+            dashboard.save()
+        return Response(
+            DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    def unpublish(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        if dashboard.status != DashboardStatus.published:
+            # 400 rather than an idempotent 204, following
+            # FormBuilderViewSet.unpublish: this is a button-triggered
+            # state transition, and a caller arriving from a stale UI is
+            # better told than silently agreed with.
+            return Response(
+                {"message": "Dashboard is not published"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # published_config is deliberately left in place. The read
+        # namespace filters on status, so clearing it would destroy the
+        # record of what was last live without changing what any caller
+        # can reach.
+        dashboard.status = DashboardStatus.draft
+        dashboard.save(update_fields=["status"])
+        return Response(
+            DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    def duplicate(self, request, *args, **kwargs):
+        source = self.get_object()
+        live = Dashboard.objects.for_user(request.user)
+        with transaction.atomic():
+            clone = Dashboard.objects.create(
+                name=copy_name(source.name),
+                slug=copy_slug(source.slug, live),
+                description=source.description,
+                # From the caller, never copied from the source: a
+                # duplicate must not be able to move a dashboard into
+                # another workspace (MT-004).
+                tenant=getattr(request.user, "tenant", None),
+                root_form=source.root_form,
+                created_by=request.user,
+                # Copied, not shared: the source's dict must not become
+                # reachable through two rows.
+                default_filters=dict(source.default_filters or {}),
+                # A clone is a draft with no publication history of its
+                # own. published_config and published_at are model
+                # defaults, spelled out here because dropping them is
+                # the point of the operation.
+                status=DashboardStatus.draft,
+                published_config=None,
+                published_at=None,
+            )
+            DashboardWidget.objects.bulk_create(
+                [
+                    DashboardWidget(
+                        dashboard=clone,
+                        order=widget.order,
+                        type=widget.type,
+                        col_span=widget.col_span,
+                        title=widget.title,
+                        color=widget.color,
+                        form_id=widget.form_id,
+                        question_id=widget.question_id,
+                        config=widget.config,
+                    )
+                    for widget in source.widgets.order_by("order", "id")
+                ]
+            )
+        return Response(
+            DashboardListSerializer(instance=clone).data,
+            status=status.HTTP_201_CREATED,
         )
 
     def sources(self, request, *args, **kwargs):
