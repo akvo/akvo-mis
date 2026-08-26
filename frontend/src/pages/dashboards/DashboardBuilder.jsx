@@ -53,7 +53,7 @@ const DashboardBuilder = () => {
         const found = list.find((d) => d.slug === slug);
         if (!found) {
           message.error(text.errorSomething || "Dashboard not found");
-          navigate("/dashboards");
+          navigate("/control-center/dashboard");
           return Promise.reject(new Error("not found"));
         }
         dashboardIdRef.current = found.id;
@@ -340,10 +340,10 @@ const DashboardBuilder = () => {
                   okText: "Leave",
                   okType: "danger",
                   cancelText: "Stay",
-                  onOk: () => navigate("/dashboards"),
+                  onOk: () => navigate("/control-center/dashboard"),
                 });
               } else {
-                navigate("/dashboards");
+                navigate("/control-center/dashboard");
               }
             }}
           >
