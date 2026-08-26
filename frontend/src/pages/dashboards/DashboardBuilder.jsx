@@ -9,6 +9,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button, Modal, Spin, message } from "antd";
 import {
   ArrowLeftOutlined,
+  ArrowLeftOutlined as BackToEditIcon,
   EyeOutlined,
   SaveOutlined,
   SendOutlined,
@@ -18,10 +19,20 @@ import dashboardApi from "../../util/dashboardApi";
 import BuilderPalette from "./BuilderPalette";
 import BuilderCanvas from "./BuilderCanvas";
 import BuilderInspector from "./BuilderInspector";
+import DashboardGrid from "../../components/dashboard/DashboardGrid";
+import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import { WIDGET_DEFAULTS } from "./builderConstants";
 import "./builder.scss";
+import "./viewer.scss";
 
 let nextTempId = -1;
+
+const EMPTY_FILTERS = {
+  from_date: null,
+  to_date: null,
+  date_question_id: null,
+  administration_id: null,
+};
 
 const DashboardBuilder = () => {
   const { slug } = useParams();
@@ -39,6 +50,9 @@ const DashboardBuilder = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [widgetError, setWidgetError] = useState(null);
+  // Preview is a mode of this screen, not a different screen. See below.
+  const [previewing, setPreviewing] = useState(false);
+  const [previewFilters, setPreviewFilters] = useState(EMPTY_FILTERS);
 
   const dashboardIdRef = useRef(null);
 
@@ -288,9 +302,20 @@ const DashboardBuilder = () => {
   }, [dirty, buildPayload, dashboard?.status, text]);
 
   // Preview
+  //
+  // This used to open /dashboards/:slug in a new tab, which showed the
+  // last *published* snapshot: an author who had added three widgets and
+  // not pressed Publish saw none of them, and an author of an unpublished
+  // draft got a 404. That is not a preview.
+  //
+  // It now swaps the canvas for the viewer's own renderer, fed from
+  // unsaved local state. Same component tree, two entry points — which is
+  // what makes "viewer and preview render identically" testable rather
+  // than merely asserted.
   const handlePreview = useCallback(() => {
-    window.open(`/dashboards/${slug}`, "_blank");
-  }, [slug]);
+    setPreviewing((prev) => !prev);
+    setSelectedId(null);
+  }, []);
 
   // Unsaved changes prompt
   useEffect(() => {
@@ -360,10 +385,19 @@ const DashboardBuilder = () => {
           >
             {statusLabel}
           </span>
+          {previewing && (
+            <span className="dashboard-view-badge">
+              {text.dashboardPreview}
+            </span>
+          )}
         </div>
         <div className="builder-toolbar-right">
-          <Button icon={<EyeOutlined />} shape="round" onClick={handlePreview}>
-            {text.preview || "Preview"}
+          <Button
+            icon={previewing ? <BackToEditIcon /> : <EyeOutlined />}
+            shape="round"
+            onClick={handlePreview}
+          >
+            {previewing ? text.dashboardBackToEditing : text.dashboardPreview}
           </Button>
           <Button
             type="primary"
@@ -385,31 +419,61 @@ const DashboardBuilder = () => {
         </div>
       </div>
 
-      {/* Body */}
-      <div className="builder-body">
-        <BuilderPalette onAdd={handleAdd} />
-        <BuilderCanvas
-          widgets={widgets}
-          selectedId={selectedId}
-          dashboardName={dashboard.name}
-          dashboardDesc={dashboard.description || ""}
-          onSelect={handleSelect}
-          onDeselect={handleDeselect}
-          onMove={handleMove}
-          onDelete={handleDelete}
-          onReorder={handleReorder}
-        />
-        <BuilderInspector
-          widget={selectedWidget}
-          sources={sources}
-          dashboardName={dashboard.name}
-          dashboardDesc={dashboard.description || ""}
-          defaultFilters={dashboard.default_filters}
-          onWidgetChange={handleWidgetChange}
-          onDashboardChange={handleDashboardChange}
-          errorMessage={widgetError}
-        />
-      </div>
+      {/* Body — the editing surface, or the viewer's own renderer */}
+      {previewing ? (
+        <div className="dashboard-view-content">
+          <div className="dashboard-view-header">
+            <div className="dashboard-view-header-inner">
+              <div className="dashboard-view-title">{dashboard.name}</div>
+              {dashboard.description && (
+                <div className="dashboard-view-desc">
+                  {dashboard.description}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DashboardViewFilters
+            defaultFilters={dashboard.default_filters}
+            value={previewFilters}
+            onChange={setPreviewFilters}
+          />
+
+          {/* Local, unsaved widgets — the whole point of a preview. The
+              same component the viewer renders, with no prop telling it
+              which caller it has. */}
+          <DashboardGrid
+            widgets={widgets}
+            filters={previewFilters}
+            rootFormId={dashboard.root_form?.id}
+          />
+        </div>
+      ) : (
+        <div className="builder-body">
+          <BuilderPalette onAdd={handleAdd} />
+          <BuilderCanvas
+            widgets={widgets}
+            selectedId={selectedId}
+            dashboardName={dashboard.name}
+            dashboardDesc={dashboard.description || ""}
+            onSelect={handleSelect}
+            onDeselect={handleDeselect}
+            onMove={handleMove}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+          />
+          <BuilderInspector
+            widget={selectedWidget}
+            sources={sources}
+            dashboardName={dashboard.name}
+            dashboardDesc={dashboard.description || ""}
+            defaultFilters={dashboard.default_filters}
+            onWidgetChange={handleWidgetChange}
+            onDashboardChange={handleDashboardChange}
+            errorMessage={widgetError}
+          />
+        </div>
+      )}
     </div>
   );
 };
