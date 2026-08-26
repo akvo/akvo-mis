@@ -245,6 +245,24 @@
   }
 }
 
+/* App.scss:356 pins EVERY akvo-charts chart in the app to a fixed
+   `height: 500px`, and `div[role="figure"]` (0-1-1) outranks the package's
+   own `.ae-container` (0-1-0), so the chart ignores its container. That is
+   invisible everywhere else, because every other card in the app grows to
+   fit its contents — a 500px chart just makes a 500px card.
+
+   These cards have a fixed per-type height from the mockup's _bodyStyle
+   (300/300/320/380) plus `overflow: hidden`, so the same 500px chart is
+   silently cropped instead: the x-axis labels and the bottom of the plot
+   are drawn outside the card and clipped.
+
+   Overridden here rather than in App.scss, because the legacy dashboard
+   still renders against that global and VIZ-009 deletes it anyway. */
+.dashboard-view-cell-body div[role="figure"] {
+  height: 100%;
+  min-height: 0;
+}
+
 .dashboard-view-cell-note {
   padding: 16px;
   text-align: center;
@@ -276,6 +294,59 @@
     font-weight: 600;
     color: #081c40;
   }
+}
+
+/* ── Map (akvo-charts MapCluster) ── */
+
+.dashboard-view-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  .ae-container {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* MapCluster's default marker is an empty <span> carrying only an inline
+   background-color and border; the package ships no rule for its class. */
+.custom-marker {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.custom-marker-cluster {
+  background: transparent;
+  border: none;
+}
+
+.dashboard-view-map-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 500;
+  display: flex;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 7px 13px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.dashboard-view-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-view-map-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 .dashboard-view-loading {

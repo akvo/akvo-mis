@@ -1,8 +1,10 @@
 import React from "react";
 import PropTypes from "prop-types";
+import useChartResize from "./useChartResize";
 import { Line, StackLine } from "akvo-charts";
 
 const VizLine = ({ config, data }) => {
+  const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const hasStack = Boolean(widgetConfig.stack_by);
   const Component = hasStack ? StackLine : Line;
@@ -28,8 +30,8 @@ const VizLine = ({ config, data }) => {
   }
 
   return (
-    <div style={{ width: "100%", height: "100%" }}>
-      <Component {...props} />
+    <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
+      <Component ref={chartRef} {...props} />
     </div>
   );
 };

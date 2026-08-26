@@ -1,124 +1,100 @@
-import React from "react";
+import React, { useMemo } from "react";
 import PropTypes from "prop-types";
+import { MapCluster } from "akvo-charts";
+import "leaflet/dist/leaflet.css";
+import { geo } from "../../../lib";
 
-const PIN_POSITIONS = [
-  { left: "24%", top: "36%" },
-  { left: "52%", top: "54%" },
-  { left: "68%", top: "32%" },
-  { left: "40%", top: "70%" },
-  { left: "80%", top: "50%" },
-  { left: "30%", top: "58%" },
-];
+// =========================================================
+// The map widget — akvo-charts MapCluster over Leaflet
+// =========================================================
+//
+// VIZ-006 shipped this as a hand-drawn SVG with six hardcoded pin
+// positions, standing in until the data layer existed. It placed points at
+// fixed percentages of the container and silently dropped everything past
+// the sixth, which is wrong in a way a viewer cannot detect.
+//
+// Two integration details the package does not handle:
+//
+//  - `type="circle"` rather than the default cluster type. The default
+//    renders leaflet.markercluster's own icons, whose stylesheet lives in
+//    akvo-charts' nested node_modules and does not resolve from
+//    application code. The circle type draws a self-contained inline SVG
+//    donut segmented by `groupKey` — dependency-free, and closer to the
+//    mockup, where a cluster should show its status mix.
+//  - `.custom-marker` gets its rules from viewer.scss. MapCluster's
+//    default marker is an empty <span> carrying only an inline
+//    background-color and border; the package ships no rule for the class
+//    it puts on it.
+//
+// The imported leaflet.css is the app's own 1.7.1 while MapCluster runs
+// its nested 1.9.4. The container, pane and control rules this needs are
+// unchanged between the two.
 
 const DEFAULT_COLOR = "#64A73B";
+const NO_STATUS_COLOR = "#999";
+
+const OSM_TILE = {
+  url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+};
 
 const VizMap = ({ config, data }) => {
-  const statusColors = config?.config?.status_colors || {};
-  const points = Array.isArray(data) ? data : [];
+  // Memoised, not just destructured: `|| {}` mints a fresh object on every
+  // render, which would make the points memo below recompute every time and
+  // hand MapCluster a new data array — remounting every marker.
+  const statusColors = useMemo(
+    () => config?.config?.status_colors || {},
+    [config]
+  );
+  const fallback = config?.color || DEFAULT_COLOR;
 
-  const getPointColor = (point) => {
-    if (point.status && statusColors[point.status]) {
-      return statusColors[point.status];
-    }
-    return config?.color || DEFAULT_COLOR;
-  };
+  const points = useMemo(() => {
+    const rows = Array.isArray(data) ? data : [];
+    return (
+      rows
+        // A datapoint with no geo is not a point. Rendering it at [0, 0]
+        // would put a site in the Gulf of Guinea.
+        .filter((row) => Array.isArray(row?.geo) && row.geo.length === 2)
+        .map((row) => ({
+          id: row.id,
+          // /maps/geolocation returns geo as [lat, lng], which is what
+          // Leaflet wants — no reordering.
+          point: row.geo,
+          label: row.name,
+          status: row.status,
+          color: row.status ? statusColors[row.status] || fallback : fallback,
+        }))
+    );
+  }, [data, statusColors, fallback]);
 
-  const statuses = [...new Set(points.map((p) => p.status).filter(Boolean))];
+  const center = useMemo(() => geo?.defaultPos?.()?.coordinates || [0, 0], []);
+
+  const legend = Object.keys(statusColors);
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        minHeight: 190,
-        borderRadius: 6,
-        overflow: "hidden",
-        background: "linear-gradient(135deg, #e7eef4, #dde8ea)",
-      }}
-    >
-      <svg
-        width="100%"
-        height="100%"
-        viewBox="0 0 320 190"
-        preserveAspectRatio="none"
-        style={{ position: "absolute", inset: 0 }}
-      >
-        <path
-          d="M0 120 Q80 90 150 118 T320 100 V190 H0 Z"
-          fill="#d4e4d0"
-          opacity="0.6"
-        />
-        <path
-          d="M40 40 Q120 60 180 40 T300 55"
-          fill="none"
-          stroke="#c3d3dd"
-          strokeWidth="2"
-        />
-      </svg>
-      {points.slice(0, PIN_POSITIONS.length).map((point, i) => {
-        const pos = PIN_POSITIONS[i];
-        return (
-          <span
-            key={point.id || i}
-            title={point.name}
-            style={{
-              position: "absolute",
-              left: pos.left,
-              top: pos.top,
-              width: 13,
-              height: 13,
-              borderRadius: "50%",
-              background: getPointColor(point),
-              border: "2px solid #fff",
-              boxShadow: "0 1px 3px rgba(0,0,0,.3)",
-            }}
-          />
-        );
-      })}
-      {points.length === 0 && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#8a93a0",
-            fontSize: 13,
-          }}
-        >
-          Map preview
-        </div>
-      )}
-      {statuses.length > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            left: 10,
-            bottom: 10,
-            display: "flex",
-            gap: 10,
-            background: "rgba(255,255,255,.9)",
-            padding: "5px 10px",
-            borderRadius: 6,
-            fontSize: 11,
-          }}
-        >
-          {statuses.map((s) => (
-            <span
-              key={s}
-              style={{ display: "flex", alignItems: "center", gap: 5 }}
-            >
+    <div className="dashboard-view-map">
+      <MapCluster
+        data={points}
+        groupKey="status"
+        type="circle"
+        config={{ center, zoom: 5, height: "100%", width: "100%" }}
+        tile={OSM_TILE}
+        renderPopup={(point) => point?.label}
+      />
+      {/* Overlaid rather than drawn inside the chart, which is why it is
+          this component's job and not akvo-charts'. */}
+      {legend.length > 0 && (
+        <div className="dashboard-view-map-legend">
+          {legend.map((status) => (
+            <span key={status} className="dashboard-view-map-legend-item">
               <span
+                className="dashboard-view-map-legend-dot"
                 style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: "50%",
-                  background: statusColors[s] || DEFAULT_COLOR,
+                  background: statusColors[status] || NO_STATUS_COLOR,
                 }}
               />
-              {s}
+              {status}
             </span>
           ))}
         </div>
