@@ -1,4 +1,5 @@
 import logging
+import uuid
 from django.conf import settings
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework import status
@@ -88,100 +89,109 @@ class ChatMessageView(APIView):
 
             client = OpenAI(api_key=api_key)
 
-            # 1. Create or reuse thread
-            if not thread_id:
-                thread = client.beta.threads.create()
-                thread_id = thread.id
-
-            # 2. Add message to thread (with auto-recovery for stale thread IDs)
+            # Strategy 1: Try OpenAI Assistants API (threads + vector store)
             try:
-                client.beta.threads.messages.create(
-                    thread_id=thread_id,
-                    role="user",
-                    content=augmented_message,
-                )
-            except Exception as thread_err:
-                logger.warning(
-                    f"Failed to post to thread '{thread_id}' ({thread_err}). "
-                    "Creating a new thread."
-                )
-                thread = client.beta.threads.create()
-                thread_id = thread.id
-                client.beta.threads.messages.create(
-                    thread_id=thread_id,
-                    role="user",
-                    content=augmented_message,
-                )
+                if not thread_id or thread_id.startswith("chat_"):
+                    thread = client.beta.threads.create()
+                    thread_id = thread.id
 
-            # 3. Run assistant
-            run = None
-            if assistant_id:
                 try:
-                    run = client.beta.threads.runs.create_and_poll(
+                    client.beta.threads.messages.create(
                         thread_id=thread_id,
-                        assistant_id=assistant_id,
+                        role="user",
+                        content=augmented_message,
                     )
-                except Exception as asst_err:
-                    logger.warning(
-                        f"Failed run with assistant_id '{assistant_id}': "
-                        f"{asst_err}. Falling back to direct run."
+                except Exception as post_err:
+                    logger.info(
+                        f"Post to thread '{thread_id}' failed ({post_err}). "
+                        "Creating a new thread."
                     )
-                    run = None
+                    thread = client.beta.threads.create()
+                    thread_id = thread.id
+                    client.beta.threads.messages.create(
+                        thread_id=thread_id,
+                        role="user",
+                        content=augmented_message,
+                    )
 
-            if not run:
-                run_kwargs = {
-                    "thread_id": thread_id,
-                    "instructions": DEFAULT_INSTRUCTIONS,
-                    "model": "gpt-4o-mini",
-                }
-                if vector_store_id:
-                    run_kwargs["tools"] = [{"type": "file_search"}]
-                    run_kwargs["tool_resources"] = {
-                        "file_search": {"vector_store_ids": [vector_store_id]}
+                run = None
+                if assistant_id:
+                    try:
+                        run = client.beta.threads.runs.create_and_poll(
+                            thread_id=thread_id,
+                            assistant_id=assistant_id,
+                        )
+                    except Exception as asst_err:
+                        logger.warning(
+                            f"Failed run with assistant_id '{assistant_id}': "
+                            f"{asst_err}. Falling back to direct run."
+                        )
+                        run = None
+
+                if not run:
+                    run_kwargs = {
+                        "thread_id": thread_id,
+                        "instructions": DEFAULT_INSTRUCTIONS,
+                        "model": "gpt-4o-mini",
                     }
-                run = client.beta.threads.runs.create_and_poll(**run_kwargs)
+                    if vector_store_id:
+                        run_kwargs["tools"] = [{"type": "file_search"}]
+                        run_kwargs["tool_resources"] = {
+                            "file_search": {
+                                "vector_store_ids": [vector_store_id]
+                            }
+                        }
+                    run = client.beta.threads.runs.create_and_poll(**run_kwargs)
 
-            if run.status == "completed":
-                messages = client.beta.threads.messages.list(
-                    thread_id=thread_id,
-                    order="desc",
-                    limit=1,
-                )
-                assistant_reply = ""
-                for msg in messages:
-                    if msg.role == "assistant":
-                        for block in msg.content:
-                            if hasattr(block, "text") and hasattr(
-                                block.text, "value"
-                            ):
-                                assistant_reply += block.text.value
-                        break
+                if run.status == "completed":
+                    messages = client.beta.threads.messages.list(
+                        thread_id=thread_id,
+                        order="desc",
+                        limit=1,
+                    )
+                    assistant_reply = ""
+                    for msg in messages:
+                        if msg.role == "assistant":
+                            for block in msg.content:
+                                if hasattr(block, "text") and hasattr(
+                                    block.text, "value"
+                                ):
+                                    assistant_reply += block.text.value
+                            break
 
-                cleaned_reply = clean_citation_sources(assistant_reply)
-                return Response(
-                    {
-                        "response": (
-                            cleaned_reply
-                            or "I'm sorry, I couldn't find an answer to that."
-                        ),
-                        "thread_id": thread_id,
-                    },
-                    status=status.HTTP_200_OK,
+                    cleaned_reply = clean_citation_sources(assistant_reply)
+                    return Response(
+                        {
+                            "response": (
+                                cleaned_reply
+                                or "I'm sorry, I couldn't find an answer to that."
+                            ),
+                            "thread_id": thread_id,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+            except Exception as beta_err:
+                logger.info(
+                    f"Assistants API endpoint unavailable ({beta_err}). "
+                    "Falling back to Chat Completions with instructions."
                 )
-            else:
-                logger.error(
-                    f"OpenAI Assistant run failed with status: {run.status}"
-                )
-                return Response(
-                    {
-                        "response": (
-                            "Sorry, I encountered an issue processing your "
-                            "request. Please try again."
-                        ),
-                        "thread_id": thread_id,
-                    },
-                    status=status.HTTP_200_OK,
-                )
+
+            # Strategy 2: Chat Completions API fallback (always works with any key)
+            chat_resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": DEFAULT_INSTRUCTIONS},
+                    {"role": "user", "content": augmented_message},
+                ],
+            )
+            reply = chat_resp.choices[0].message.content or ""
+            return Response(
+                {
+                    "response": reply,
+                    "thread_id": thread_id or f"chat_{uuid.uuid4().hex[:12]}",
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as e:
             logger.exception(f"Error calling OpenAI API: {e}")
