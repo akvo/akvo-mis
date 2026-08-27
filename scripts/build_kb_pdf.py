@@ -345,8 +345,8 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     pdf.add_heading("Akvo Form Builder & Runtime Reference Guide", level=1)
     pdf.add_paragraph(
         "Technical reference for the Akvo MIS Form Builder. Covers the "
-        "editor interface, question configuration, skip logic, form lifecycle, "
-        "and all supported question types."
+        "editor interface, question configuration, skip logic, form "
+        "lifecycle, and all supported question types."
     )
 
     pdf.add_heading("1. Editor Interface Overview", level=2)
@@ -405,16 +405,44 @@ def build_form_editor_docs_pdf(output_pdf: Path):
         "(ignored when hidden by skip logic)"
     )
     pdf.add_bullet(
-        "Double Entry - prompts the respondent to enter the value twice; "
-        "useful for critical numeric data"
+        "Double Entry - prompts the respondent to enter the value twice. "
+        "Best used for critical values such as ID numbers, phone numbers, "
+        "or financial amounts where a typo would be costly."
+    )
+    pdf.add_bullet(
+        "Password / Show-Hide (Text fields only) - when enabled the input "
+        "text is masked like a password field. The respondent can toggle "
+        "visibility with an eye icon. Useful for sensitive fields such as "
+        "PIN codes or personal identifiers."
     )
     pdf.add_paragraph("Type-specific settings:")
-    pdf.add_bullet("Number: Min Value, Max Value")
-    pdf.add_bullet("Text: character limit")
+    pdf.add_bullet("Number: Min Value, Max Value validation bounds")
+    pdf.add_bullet("Text: optional character limit")
     pdf.add_bullet("Option / Multiple Option: add, remove, reorder choices")
     pdf.add_bullet("Cascade: select source data list")
     pdf.add_bullet(
         "Autofield: define formula using references to other variable names"
+    )
+
+    pdf.add_heading("3b. Copying a Question", level=2)
+    pdf.add_paragraph(
+        "Any existing question can be duplicated to save time when building "
+        "forms with similar questions."
+    )
+    pdf.add_bullet(
+        "How to copy: Click the COPY QUESTION HERE button that appears below "
+        "a question card in the editor. A duplicate of the question is "
+        "inserted immediately after."
+    )
+    pdf.add_bullet(
+        "What is copied: The question type, label, settings, and options are "
+        "all duplicated. The variable name is also copied — remember to "
+        "rename it to keep variable names unique within the form."
+    )
+    pdf.add_bullet(
+        "Skip logic is NOT copied: Any skip logic rules on the original "
+        "question are not transferred to the copy. Configure skip logic "
+        "separately on the new question."
     )
 
     pdf.add_heading("4. Skip Logic (Dependencies)", level=2)
@@ -427,9 +455,35 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     pdf.add_bullet("2. Open its Skip Logic tab")
     pdf.add_bullet("3. Select the Source Question (trigger) from the dropdown")
     pdf.add_bullet(
-        "4. Select the matching answer value that will reveal this question"
+        "4. Choose the Logic operator (see below) and enter the value"
     )
     pdf.add_bullet("5. Save")
+    pdf.add_paragraph("Logic operators available:")
+    pdf.add_bullet(
+        "Equal (=) - shows the question when the answer exactly matches the "
+        "specified value. Most common operator."
+    )
+    pdf.add_bullet(
+        "Not Equal (!=) - shows the question when the answer does NOT match "
+        "the specified value."
+    )
+    pdf.add_bullet(
+        "Contains - shows the question when the answer text includes the "
+        "specified string. Useful for text and multiple-choice fields."
+    )
+    pdf.add_bullet(
+        "Greater Than (>) / Less Than (<) - shows the question when a "
+        "numeric answer is above or below a threshold."
+    )
+    pdf.add_bullet(
+        "Between (Min / Max) - shows the question when a numeric answer "
+        "falls within a specified range."
+    )
+    pdf.add_paragraph(
+        "Multiple conditions: You can add more than one skip logic condition "
+        "to a single question. All conditions are evaluated together — the "
+        "question is shown when at least one condition is satisfied."
+    )
     pdf.add_paragraph(
         "Best practices: avoid circular dependencies, keep chains shallow, "
         "and always test in the Preview tab before publishing."
@@ -557,6 +611,60 @@ def build_form_editor_docs_pdf(output_pdf: Path):
         "to view previous versions. Older versions are read-only."
     )
 
+    pdf.add_heading("8b. Translations Tab", level=2)
+    pdf.add_paragraph(
+        "The Translations tab lets you provide translated versions of all "
+        "user-facing text in the form so respondents can answer in their "
+        "preferred language."
+    )
+    pdf.add_bullet(
+        "What can be translated: question labels, tooltip/help text, option "
+        "choice labels, and question group names."
+    )
+    pdf.add_bullet(
+        "How to add a language: Use the language selector at the top of the "
+        "Translations tab to choose a language, then fill in the translated "
+        "text for each field."
+    )
+    pdf.add_bullet(
+        "Multiple languages: You can add as many languages as needed. Each "
+        "language appears as a separate column in the translations grid."
+    )
+    pdf.add_bullet(
+        "Untranslated fields: If a field has no translation for the selected "
+        "language, the form falls back to displaying the original text."
+    )
+
+    pdf.add_heading(
+        "8c. Extra Content Blocks (extra field)", level=2
+    )
+    pdf.add_paragraph(
+        "The 'extra' field allows HTML content — such as explanatory text, "
+        "images, links, or formatted instructions — to be placed immediately "
+        "before or after a question in the web form."
+    )
+    pdf.add_bullet(
+        "Before block (extra.before): Displays the HTML content above the "
+        "question. Use it to provide context, instructions, or section "
+        "headers that guide the respondent."
+    )
+    pdf.add_bullet(
+        "After block (extra.after): Displays the HTML content below the "
+        "question. Use it for notes, warnings, or follow-up information."
+    )
+    pdf.add_bullet(
+        "Difference from addonBefore/addonAfter: The 'extra' field is for "
+        "rich content blocks (paragraphs, images, HTML) placed around the "
+        "whole question. The addonBefore/addonAfter fields are compact "
+        "inline labels (plain text/symbols) placed directly next to the "
+        "input box of text and number fields."
+    )
+    pdf.add_bullet(
+        "Availability: The extra field is configured in the form JSON schema "
+        "and is not yet available as a visual toggle in the Form Builder UI. "
+        "Advanced users can add it by editing the JSON tab of the form."
+    )
+
     pdf.add_heading(
         "9. Field Prefix and Suffix (addonBefore / addonAfter)", level=2
     )
@@ -633,8 +741,8 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     pdf.add_bullet(
         "Availability note: This cross-question prefilling runs in the web "
         "browser. It is currently configured in the form definition schema "
-        "(using the 'pre' setting) and is not yet available as a visual toggle "
-        "in the Form Builder editor."
+        "(using the 'pre' setting) and is not yet available as a visual "
+        "toggle in the Form Builder editor."
     )
 
     pdf.add_heading(
@@ -654,8 +762,8 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     pdf.add_bullet(
         "How it works: When an enumerator selects an existing data point on "
         "their mobile device and starts a linked Monitoring Form, known "
-        "details (such as the facility name or GPS location) are pre-populated "
-        "so the enumerator only updates changed information."
+        "details (such as the facility name or GPS location) are "
+        "pre-populated so the enumerator only updates changed information."
     )
     pdf.add_bullet(
         "Configuration: No special setup is needed in the Form Builder. "
@@ -679,9 +787,9 @@ def build_platform_docs_pdf(docs_dir: Path, output_pdf: Path):
 
     pdf.add_heading("Akvo MIS Platform Documentation", level=1)
     pdf.add_paragraph(
-        "Comprehensive user and administrator guide for Akvo MIS - a Real-Time "
-        "Monitoring Information System. Covers form design, data collection, "
-        "approvals, administration, and mobile app."
+        "Comprehensive user and administrator guide for Akvo MIS - a "
+        "Real-Time Monitoring Information System. Covers form design, "
+        "data collection, approvals, administration, and mobile app."
     )
 
     source_dir = docs_dir / "source"
