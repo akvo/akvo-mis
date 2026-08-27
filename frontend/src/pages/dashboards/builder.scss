@@ -226,13 +226,13 @@
 // The viewer's filter bar, re-proportioned for the canvas: same controls,
 // same component, but the viewer's full-width page padding would be absurd
 // inside a 1080px editing column.
+/* The bar paints nothing now, so the canvas only has to drop the viewer's
+   page gutters — inside the editing column the canvas padding is the
+   gutter. The controls carry their own card and are identical on both
+   surfaces. */
 .builder-canvas-inner .dashboard-view-filters {
-  padding: 11px 16px;
-  border-radius: 6px;
-  margin-bottom: 16px;
+  padding: 0 0 16px;
 
-  /* The viewer's page gutters belong to the viewer's column; inside the
-     editing canvas the card's own padding is the gutter. */
   .dashboard-view-filters-inner {
     padding-left: 0;
     padding-right: 0;

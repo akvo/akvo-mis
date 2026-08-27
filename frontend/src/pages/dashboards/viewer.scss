@@ -98,9 +98,12 @@ $view-gutter: 50px;
   padding-right: $view-gutter;
 }
 
+/* No background of its own. The page is grey and the white belongs to
+   things you can act on — the filter controls and the cards. A full-bleed
+   white strip behind the title read as a third band of chrome stacked on
+   two others. */
 .dashboard-view-header {
-  background: #fff;
-  padding: 20px 0;
+  padding: 20px 0 4px;
 }
 
 .dashboard-view-title {
@@ -117,11 +120,10 @@ $view-gutter: 50px;
 
 /* ── Filter bar ── */
 
+/* The bar is a layout row, not a surface: it positions the controls in the
+   page column and paints nothing. */
 .dashboard-view-filters {
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
-  padding: 12px 0;
-  margin-bottom: 16px;
+  padding: 8px 0 16px;
 }
 
 .dashboard-view-filters-inner {
@@ -129,6 +131,16 @@ $view-gutter: 50px;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* The white is the card, and the card is the width of its controls. It
+   used to be a strip spanning the page, most of which was empty. */
+.dashboard-view-filters-card {
+  background: #fff;
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
+  padding: 8px 12px;
 }
 
 /* ── Grid ── */

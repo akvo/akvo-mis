@@ -85,3 +85,22 @@ describe("what each filter's toggle controls is unchanged", () => {
     expect(screen.queryByTestId("adm-dropdown")).not.toBeInTheDocument();
   });
 });
+
+describe("the white belongs to the controls, not to a strip", () => {
+  test("the controls sit in a card of their own", () => {
+    const { container } = draw();
+    expect(
+      container.querySelector(".dashboard-view-filters-card")
+    ).not.toBeNull();
+  });
+
+  test("the card holds both controls, so it is one card and not two", () => {
+    const { container } = draw();
+    const cards = container.querySelectorAll(".dashboard-view-filters-card");
+    expect(cards).toHaveLength(1);
+    expect(cards[0].querySelector(".ant-picker")).not.toBeNull();
+    expect(
+      cards[0].querySelector('[data-testid="adm-dropdown"]')
+    ).not.toBeNull();
+  });
+});

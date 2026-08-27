@@ -74,7 +74,7 @@ const DashboardViewFilters = ({
   return (
     <div className="dashboard-view-filters">
       <div className="dashboard-view-filters-inner">
-        <Space>
+        <Space className="dashboard-view-filters-card">
           {dateEnabled && (
             <RangePicker
               disabled={disabled}
