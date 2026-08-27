@@ -34,7 +34,7 @@ Inside the Form Builder workspace, `WebformEditor` renders **3 primary tabs** (s
 
 ### Tab 1: Edit Form (Default Workspace)
 - **Purpose**: Main visual drag-and-drop workspace for structuring sections and question cards.
-- **Question Groups**: Sections grouping related questions. Each group has a title, collapse/expand toggle, drag handle to reorder, and a **Repeatable** toggle (source: `akvo-react-form/README.md#question-group`).
+- **Question Groups**: Sections grouping related questions (see Section 4 below).
 - **Group Actions**: Click **+ Add Group** at the bottom to append a new section.
 - **Question Actions**: Click **+ Add Question** inside a group to insert a question card.
 - **Duplicate Question**: Click **COPY QUESTION HERE** below any question to duplicate label, type, options, and settings. Note: Skip logic is **NOT** copied to prevent circular dependencies (source: `akvo-react-form-editor/README.md`).
@@ -54,14 +54,32 @@ Inside the Form Builder workspace, `WebformEditor` renders **3 primary tabs** (s
 
 ---
 
-## 4. Platform Distinction: No In-Page JSON Tab in Akvo MIS
+## 4. Question Group Properties Dictionary
+
+Source: `akvo-react-form/README.md#question-group`
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `id` | Integer | Required | Unique identifier for the question group. |
+| `name` | String | Required | Title / heading displayed for the question group section. |
+| `order` | Integer | `undefined` | Sequence order of the group in the form. |
+| `description` | String | `undefined` | Narrative description or instructions displayed under the group header. |
+| `repeatable` | Boolean | `false` | Enables repeating rows/rosters for collecting tabular multi-row data. |
+| `leading_question` | Integer \| String | `undefined` | Designates a specific question ID as the repeating row leader. |
+| `show_repeat_in_question_level` | Boolean | `false` | Renders repeatable rows at question level rather than boxed group format. |
+| `question` | Array[Question] | Required | Array of child question objects belonging to this group. |
+| `translations` | Array[Translations] | `undefined` | Array of localized group titles and descriptions. |
+
+---
+
+## 5. Platform Distinction: No In-Page JSON Tab in Akvo MIS
 
 In the standalone `akvo-react-form-editor` library demo website, an extra "JSON" tab is shown for developer testing. However, **in the Akvo MIS platform, there is NO in-page JSON tab / viewer**. 
 - To inspect or obtain the form's raw JSON schema in Akvo MIS, click the **`Export JSON`** button in the top action toolbar (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L355-L362`).
 
 ---
 
-## 5. Version History Drawer & Banners
+## 6. Version History Drawer & Banners
 
 - **Information Banners (`FormEditorBanners`)**: Renders status banners above the editor canvas:
   - *Published Info Banner*: Indicates the form is currently live and receiving submissions.
