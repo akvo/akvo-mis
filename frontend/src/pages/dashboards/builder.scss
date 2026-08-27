@@ -8,23 +8,33 @@
   flex: 1;
 }
 
+// The builder is an app shell, not a page: the palette and the inspector
+// stay put and only the canvas scrolls.
+//
+// Pinned to the viewport rather than sized inside `.body`. A height of
+// `calc(100vh - header)` only bounds the shell if its top lands exactly at
+// the header's bottom edge, which means `.body`'s padding, this rule's
+// negative margins and any wrapper the router introduces must all cancel
+// to the pixel. They did not, so the shell overflowed, the document
+// scrolled, and the side panels scrolled away with it — the panes' own
+// `overflow-y: auto` never engaged because nothing above them was bounded.
+//
+// `position: fixed` removes every one of those dependencies: the shell
+// occupies the space under the fixed header by definition, is full-bleed
+// without margins, and contributes no height to the document, so the page
+// cannot scroll at all. `min-height: 0` down the chain is what then lets
+// `.builder-canvas` — and only it — scroll.
 .builder-shell {
   display: flex;
   flex-direction: column;
-  /* Break out of the .body padding to go full-bleed */
-  margin: -$padding-default (-$layout-padding-small-screen) (-$padding-default);
-  // Interpolation is required here. node-sass emits a bare variable inside
-  // calc() verbatim, and the browser then drops the whole declaration as
-  // invalid CSS. The shell got no height, grew with the canvas, and the
-  // document scrolled instead of the canvas — carrying the palette and the
-  // inspector out of view. Same form as the .body rule whose padding this
-  // margin cancels (components/layout/style.scss).
-  height: calc(100vh - #{$header-height});
-
-  @media screen and (min-width: $screen-regular) {
-    margin-left: -$layout-padding;
-    margin-right: -$layout-padding;
-  }
+  position: fixed;
+  top: $header-height;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  // Below the header (z-index 999), above the page behind it. Also caps the
+  // toolbar's own z-index inside this stacking context.
+  z-index: 1;
 }
 
 /* ── Toolbar ── */
