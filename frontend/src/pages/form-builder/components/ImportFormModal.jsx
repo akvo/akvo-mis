@@ -406,6 +406,14 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
 
     return (
       <>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={text.formBuilderImportXlsformNoticeTitle}
+          description={text.formBuilderImportXlsformNoticeDesc}
+        />
+
         <div style={{ marginBottom: 12 }}>
           <p style={{ marginBottom: 4 }}>
             <strong>{text.formBuilderImportFormLabel}:</strong>{" "}

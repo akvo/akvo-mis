@@ -272,6 +272,9 @@ const uiText = {
     formBuilderImportFormTypeRequired: "Please select a form type",
     formBuilderImportSkippedCount: (count) =>
       `${count} unsupported row(s) will be skipped`,
+    formBuilderImportXlsformNoticeTitle: "XLSForm Compatibility Note",
+    formBuilderImportXlsformNoticeDesc:
+      "Akvo MIS imports standard question types, options, multi-language labels, validations, and skip-logic. Advanced features such as dynamic calculations, programmatic repeat counts, or complex multi-field constraints are not supported and may be skipped or require manual adjustments. Please review the warnings below and verify the form structure in the Form Editor after import.",
     formBuilderImportUpdateTitle: (name) => `Update existing form "${name}"?`,
     formBuilderImportUpdateDesc: (count) =>
       `A form with the same ID already exists in this environment` +
