@@ -135,10 +135,12 @@ question row (used for dependency resolution before DB IDs exist).
 - Clauses joined by ` or ` → `dependency_rule: "OR"`
 - Unrecognized XPath → skip + append warning; question still imported
 
-**`constraint` column** → `rule.min` / `rule.max` (reverse of `_build_constraint()`):
-- `. >= N` → `min: N`
-- `. <= N` → `max: N`
-- `. >= N and . <= N` → `min: N, max: N`
+**`constraint` column** → `rule.min` / `rule.max`:
+- Standard `. >= N`, `. <= N`, `. >= N and . <= N`
+- Self-variable references `${q_name} <= N`, `(${q_name} <= N)`
+- Parenthesized compound expressions `((. >= 0) and (. <= 100))`
+- Reversed bounds `0 <= . and . <= 100` (translated to `min: 0, max: 100`)
+- Unparsed constraint logic (e.g. `regex(...)`) extracts valid bounds and appends warning
 
 **`required` column** → `rule.required: true` if cell is `"yes"` or `"true"`
 
@@ -154,8 +156,10 @@ display suffix `(en)`, `(fr)`, etc. using `_extract_iso()` from `xlsform_export.
 - **Error**: no questions found after skipping
 - **Error**: duplicate `variable_name` / `name` values within a group
 - **Error**: missing `name` column in survey sheet
-- **Warning**: N rows skipped (unsupported type)
-- **Warning**: unresolvable `relevant` expression on row N
+- **Warning**: N rows skipped (unsupported type e.g. `calculate`)
+- **Warning**: unresolvable `relevant` expression on question or group
+- **Warning**: dynamic `repeat_count` on repeat groups (explaining manual repeat behavior)
+- **Warning**: unsupported constraint clauses or calculations
 
 #### `build_form_payload(parsed, form_type, parent_id) → dict`
 

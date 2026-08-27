@@ -10,6 +10,7 @@ from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.services.xlsform_export import generate_xlsform
 from api.v1.v1_forms.services.xlsform_import import (
+    _parse_constraint,
     build_form_payload,
     parse_relevant_expression,
     parse_xlsform,
@@ -661,5 +662,293 @@ class XLSFormImportServiceTestCase(TestCase):
             any(
                 "No valid questions found" in err.get("message", "")
                 for err in res
+            )
+        )
+
+    def test_parse_constraint_kobo_patterns(self):
+        # 1. Variable name self-references and parentheses
+        r, w = _parse_constraint("${macrophytes} <= 100", "macrophytes")
+        self.assertEqual(r, {"max": 100})
+        self.assertIsNone(w)
+
+        r, w = _parse_constraint("(${total_weight} <= 500)", "total_weight")
+        self.assertEqual(r, {"max": 500})
+        self.assertIsNone(w)
+
+        r, w = _parse_constraint("((. <= 100))")
+        self.assertEqual(r, {"max": 100})
+        self.assertIsNone(w)
+
+        # 2. Compound and clauses
+        r, w = _parse_constraint(". >= 0 and . <= 100")
+        self.assertEqual(r, {"min": 0, "max": 100})
+        self.assertIsNone(w)
+
+        r, w = _parse_constraint("(. <= 100 and . >= 0)")
+        self.assertEqual(r, {"min": 0, "max": 100})
+        self.assertIsNone(w)
+
+        r, w = _parse_constraint("((. >= 0) and (. <= 100))")
+        self.assertEqual(r, {"min": 0, "max": 100})
+        self.assertIsNone(w)
+
+        r, w = _parse_constraint("0 <= . and . <= 100")
+        self.assertEqual(r, {"min": 0, "max": 100})
+        self.assertIsNone(w)
+
+        # 3. Floats and strict bounds
+        r, w = _parse_constraint(". >= 0.5 and . <= 99.5")
+        self.assertEqual(r, {"min": 0.5, "max": 99.5})
+        self.assertIsNone(w)
+
+        # 4. Partially unparseable regex
+        r, w = _parse_constraint(". <= 100 and regex(., '^[0-9]+$')", "code_q")
+        self.assertEqual(r, {"max": 100})
+        self.assertIsNotNone(w)
+        self.assertIn("could not be fully converted", w)
+
+    def test_kobo_validation_criteria_import(self):
+        # Test full workbook parsing with Kobo-style constraints
+        survey_rows = [
+            [
+                "decimal",
+                "macrophytes",
+                "% Macrophytes",
+                "no",
+                None,
+                None,
+                "${macrophytes} <= 100",
+                None,
+                None,
+            ],
+            [
+                "integer",
+                "fish_weight",
+                "Total weight of fish caught",
+                "no",
+                None,
+                None,
+                "(${fish_weight} <= 500)",
+                None,
+                None,
+            ],
+        ]
+        stream = _build_test_workbook(survey_rows)
+        parsed = parse_xlsform(stream)
+
+        q1 = parsed["question_groups"][0]["question"][0]
+        self.assertEqual(q1["name"], "macrophytes")
+        self.assertEqual(q1["rule"]["max"], 100)
+        self.assertTrue(q1["rule"]["allowDecimal"])
+
+        q2 = parsed["question_groups"][0]["question"][1]
+        self.assertEqual(q2["name"], "fish_weight")
+        self.assertEqual(q2["rule"]["max"], 500)
+        self.assertFalse(q2["rule"]["allowDecimal"])
+
+    def test_repeat_group_dynamic_repeat_count_warning(self):
+        s_headers = [
+            "type",
+            "name",
+            "label",
+            "required",
+            "hint",
+            "relevant",
+            "constraint",
+            "appearance",
+            "body::accept",
+            "repeat_count",
+        ]
+        survey_rows = [
+            [
+                "select_multiple species",
+                "species_list",
+                "Observed Species",
+                "no",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            [
+                "begin_repeat",
+                "species_repeat",
+                "Species Details",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "count-selected(${species_list})",
+            ],
+            [
+                "decimal",
+                "percentage_value",
+                "% value",
+                "no",
+                None,
+                None,
+                ". <= 100",
+                None,
+                None,
+                None,
+            ],
+            [
+                "end_repeat",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+        ]
+        choices_rows = [
+            ["species", "tilapia", "Tilapia"],
+            ["species", "catfish", "Catfish"],
+        ]
+        stream = _build_test_workbook(
+            survey_rows,
+            choices_rows=choices_rows,
+            survey_headers=s_headers,
+        )
+        parsed = parse_xlsform(stream)
+        self.assertTrue(
+            any(
+                "dynamic repeat_count" in w.get("message", "")
+                for w in parsed["warnings"]
+            )
+        )
+        groups = parsed["question_groups"]
+        repeat_group = [g for g in groups if g["name"] == "species_repeat"][0]
+        self.assertTrue(repeat_group["repeatable"])
+
+    def test_group_level_relevant_warning(self):
+        survey_rows = [
+            [
+                "select_one yn",
+                "has_children",
+                "Have children?",
+                "yes",
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            [
+                "begin_group",
+                "child_group",
+                "Child Details",
+                None,
+                None,
+                "selected(${has_children}, 'yes')",
+                None,
+                None,
+                None,
+            ],
+            [
+                "integer",
+                "num_children",
+                "Number of Children",
+                "yes",
+                None,
+                None,
+                ". >= 1",
+                None,
+                None,
+            ],
+            ["end_group", None, None, None, None, None, None, None, None],
+        ]
+        choices_rows = [
+            ["yn", "yes", "Yes"],
+            ["yn", "no", "No"],
+        ]
+        stream = _build_test_workbook(
+            survey_rows,
+            choices_rows=choices_rows,
+        )
+        parsed = parse_xlsform(stream)
+        self.assertTrue(
+            any(
+                "Group 'child_group' has a 'relevant' condition"
+                in w.get("message", "")
+                for w in parsed["warnings"]
+            )
+        )
+
+    def test_calculate_type_and_calculation_column_warnings(self):
+        s_headers = [
+            "type",
+            "name",
+            "label",
+            "required",
+            "hint",
+            "relevant",
+            "constraint",
+            "appearance",
+            "body::accept",
+            "calculation",
+        ]
+        survey_rows = [
+            [
+                "integer",
+                "fish_a",
+                "Fish A count",
+                "no",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+            [
+                "calculate",
+                "total_calc",
+                "Total",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "${fish_a} * 2",
+            ],
+            [
+                "integer",
+                "fish_b",
+                "Fish B count",
+                "no",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "${fish_a} + 5",
+            ],
+        ]
+        stream = _build_test_workbook(
+            survey_rows,
+            survey_headers=s_headers,
+        )
+        parsed = parse_xlsform(stream)
+        self.assertEqual(parsed["total_questions"], 2)  # calculate skipped
+        self.assertTrue(
+            any(
+                "Calculated field 'total_calc'" in w.get("message", "")
+                for w in parsed["warnings"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "Question 'fish_b' has calculation" in w.get("message", "")
+                for w in parsed["warnings"]
             )
         )

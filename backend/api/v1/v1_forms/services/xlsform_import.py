@@ -254,37 +254,134 @@ def parse_relevant_expression(
     return dependencies, rule, None
 
 
-def _parse_constraint(constraint_str: str) -> Dict[str, Any]:
-    """Parse XLSForm constraint expression into rule min/max."""
+def _strip_outer_parens(s: str) -> str:
+    """Recursively strips matching outermost parentheses."""
+    s = s.strip()
+    while s.startswith("(") and s.endswith(")"):
+        depth = 0
+        matched = False
+        for i, ch in enumerate(s):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    if i == len(s) - 1:
+                        matched = True
+                    break
+        if matched:
+            s = s[1:-1].strip()
+        else:
+            break
+    return s
+
+
+def _parse_constraint(
+    constraint_str: str, q_name: Optional[str] = None
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Parse XLSForm constraint expression into rule min/max.
+
+    Supports:
+      - . <= 100, (. <= 100), ((. <= 100))
+      - ${q_name} <= 100, (${q_name} <= 100)
+      - . >= 0 and . <= 100
+      - (. >= 0 and . <= 100), ((. >= 0) and (. <= 100))
+      - . <= 100 and . >= 0
+      - 0 <= . and . <= 100
+      - < and > boundaries
+      - Floats and integers
+
+    Returns:
+      (rule_dict, warning_message_or_None)
+    """
     if not constraint_str or not isinstance(constraint_str, str):
-        return {}
+        return {}, None
+
+    clean = constraint_str.strip()
+    if not clean:
+        return {}, None
+
+    clean = _strip_outer_parens(clean)
+
+    # Split by top-level ' and ' or ' AND '
+    clauses = []
+    depth = 0
+    last_idx = 0
+    for idx in range(len(clean)):
+        if clean[idx] == "(":
+            depth += 1
+        elif clean[idx] == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and clean[idx:idx + 5].lower() == " and ":
+            clauses.append(clean[last_idx:idx].strip())
+            last_idx = idx + 5
+    clauses.append(clean[last_idx:].strip())
 
     rule: Dict[str, Any] = {}
-    clean = constraint_str.strip()
+    unparsed_clauses = []
 
-    m_between = re.match(
-        r"^\.\s*>=\s*(-?[0-9]+(?:\.[0-9]+)?)\s+and\s+"
-        r"\.\s*<=\s*(-?[0-9]+(?:\.[0-9]+)?)$",
-        clean,
-        re.IGNORECASE,
-    )
-    if m_between:
-        min_str, max_str = m_between.groups()
-        rule["min"] = float(min_str) if "." in min_str else int(min_str)
-        rule["max"] = float(max_str) if "." in max_str else int(max_str)
-        return rule
+    var_pat = r"(?:\.|\$\{[^}]+\})"
+    num_pat = r"(-?[0-9]+(?:\.[0-9]+)?)"
 
-    m_gte = re.match(r"^\.\s*>=\s*(-?[0-9]+(?:\.[0-9]+)?)$", clean)
-    if m_gte:
-        min_str = m_gte.group(1)
-        rule["min"] = float(min_str) if "." in min_str else int(min_str)
+    for raw_clause in clauses:
+        clause = _strip_outer_parens(raw_clause)
+        if not clause:
+            continue
 
-    m_lte = re.match(r"^\.\s*<=\s*(-?[0-9]+(?:\.[0-9]+)?)$", clean)
-    if m_lte:
-        max_str = m_lte.group(1)
-        rule["max"] = float(max_str) if "." in max_str else int(max_str)
+        matched = False
 
-    return rule
+        # Pattern 1: target >= N or target > N
+        m1 = re.match(rf"^{var_pat}\s*(>=|>)\s*{num_pat}$", clause)
+        if m1:
+            op, val_str = m1.groups()
+            val = float(val_str) if "." in val_str else int(val_str)
+            rule["min"] = val
+            matched = True
+
+        # Pattern 2: target <= N or target < N
+        if not matched:
+            m2 = re.match(rf"^{var_pat}\s*(<=|<)\s*{num_pat}$", clause)
+            if m2:
+                op, val_str = m2.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["max"] = val
+                matched = True
+
+        # Pattern 3: N <= target or N < target (means target >= N)
+        if not matched:
+            m3 = re.match(rf"^{num_pat}\s*(<=|<)\s*{var_pat}$", clause)
+            if m3:
+                val_str, op = m3.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["min"] = val
+                matched = True
+
+        # Pattern 4: N >= target or N > target (means target <= N)
+        if not matched:
+            m4 = re.match(rf"^{num_pat}\s*(>=|>)\s*{var_pat}$", clause)
+            if m4:
+                val_str, op = m4.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["max"] = val
+                matched = True
+
+        if not matched:
+            unparsed_clauses.append(raw_clause)
+
+    warning = None
+    if unparsed_clauses:
+        warning = (
+            f"Constraint '{constraint_str}' contains logic that could not be "
+            f"fully converted to standard min/max rules: "
+            f"{', '.join(unparsed_clauses)}"
+        )
+    elif not rule and constraint_str:
+        warning = (
+            f"Constraint '{constraint_str}' could not be parsed into "
+            "validation rules"
+        )
+
+    return rule, warning
 
 
 def _parse_file_accept(body_accept: str) -> List[str]:
@@ -569,6 +666,40 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                             {"language": iso, "name": val, "label": val}
                         )
 
+            # Check repeat_count on begin_repeat
+            repeat_count_val = _get_cell_value(row, s_col_map, "repeat_count")
+            if is_repeat and repeat_count_val:
+                warnings.append(
+                    {
+                        "path": f"row:{row_idx}",
+                        "message": (
+                            f"Repeat group '{q_name}' uses dynamic "
+                            f"repeat_count '{repeat_count_val}'. In Akvo MIS, "
+                            "repeatable groups allow manual entry "
+                            "('Add another') without a fixed programmatic "
+                            "count."
+                        ),
+                        "level": "warning",
+                    }
+                )
+
+            # Check group-level relevant
+            grp_relevant = _get_cell_value(row, s_col_map, "relevant")
+            if grp_relevant:
+                warnings.append(
+                    {
+                        "path": f"row:{row_idx}",
+                        "message": (
+                            f"Group '{q_name}' has a 'relevant' condition "
+                            f"('{grp_relevant}'). Group-level relevance is "
+                            "not natively supported in Akvo MIS; please "
+                            "configure dependencies on individual questions "
+                            "in the Form Editor."
+                        ),
+                        "level": "warning",
+                    }
+                )
+
             current_group = {
                 "id": group_counter,
                 "name": q_name,
@@ -636,6 +767,20 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                 select_list_name = parts[1]
             if "or_other" in type_lower:
                 has_or_other = True
+        elif type_lower == "calculate":
+            calc_expr = _get_cell_value(row, s_col_map, "calculation")
+            msg = f"Calculated field '{q_name}' (type: calculate"
+            if calc_expr:
+                msg += f", calculation: '{calc_expr}'"
+            msg += ") is not supported in Akvo MIS — skipped"
+            warn_obj = {
+                "path": f"row:{row_idx}",
+                "message": msg,
+                "level": "warning",
+            }
+            skipped_rows.append(warn_obj)
+            warnings.append(warn_obj)
+            continue
         else:
             warn_obj = {
                 "path": f"row:{row_idx}",
@@ -688,10 +833,31 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
         if akvo_type == "number":
             rule_dict["allowDecimal"] = allow_decimal
 
+        calc_expr = _get_cell_value(row, s_col_map, "calculation")
+        if calc_expr:
+            warnings.append(
+                {
+                    "path": f"row:{row_idx}",
+                    "message": (
+                        f"Question '{q_name}' has calculation '{calc_expr}'. "
+                        "Dynamic calculations are not evaluated in Akvo MIS."
+                    ),
+                    "level": "warning",
+                }
+            )
+
         constraint_val = _get_cell_value(row, s_col_map, "constraint")
         if constraint_val:
-            c_rule = _parse_constraint(constraint_val)
+            c_rule, c_warn = _parse_constraint(constraint_val, q_name)
             rule_dict.update(c_rule)
+            if c_warn:
+                warnings.append(
+                    {
+                        "path": f"row:{row_idx}",
+                        "message": f"Question '{q_name}': {c_warn}",
+                        "level": "warning",
+                    }
+                )
 
         if akvo_type == "attachment":
             body_accept = _get_cell_value(
