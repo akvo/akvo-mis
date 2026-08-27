@@ -77,15 +77,30 @@
   background: #f0f2f5;
 }
 
-.dashboard-view-header {
-  background: #fff;
-  padding: 20px 50px;
-}
+/* One column for the whole page. The title, the filter bar and the grid
+   all sit in the same 1120px box with the same 50px gutters, so their left
+   and right edges line up down the page.
+
+   They did not before: the header and the filter bar carried their gutters
+   on the full-bleed outer element and centred a 1120px inner inside it,
+   while the grid carried its gutters *inside* its own 1120px box. On a
+   wide screen that left the title and filters 1120px wide and the cards
+   1020px — every card visibly inboard of the heading above it. */
+$view-column: 1120px;
+$view-gutter: 50px;
 
 .dashboard-view-header-inner,
-.dashboard-view-filters-inner {
-  max-width: 1120px;
+.dashboard-view-filters-inner,
+.dashboard-view-grid {
+  max-width: $view-column;
   margin: 0 auto;
+  padding-left: $view-gutter;
+  padding-right: $view-gutter;
+}
+
+.dashboard-view-header {
+  background: #fff;
+  padding: 20px 0;
 }
 
 .dashboard-view-title {
@@ -105,7 +120,7 @@
 .dashboard-view-filters {
   background: #fff;
   box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
-  padding: 12px 50px;
+  padding: 12px 0;
   margin-bottom: 16px;
 }
 
@@ -119,9 +134,8 @@
 /* ── Grid ── */
 
 .dashboard-view-grid {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 0 50px 60px;
+  /* Column and gutters come from the shared rule above. */
+  padding-bottom: 60px;
   display: grid;
   grid-template-columns: repeat(24, 1fr);
   gap: 16px;

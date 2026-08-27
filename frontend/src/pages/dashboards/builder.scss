@@ -230,6 +230,13 @@
   padding: 11px 16px;
   border-radius: 6px;
   margin-bottom: 16px;
+
+  /* The viewer's page gutters belong to the viewer's column; inside the
+     editing canvas the card's own padding is the gutter. */
+  .dashboard-view-filters-inner {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .builder-canvas-title {
