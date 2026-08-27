@@ -100,7 +100,15 @@ const DashboardBuilder = () => {
     (type) => {
       nextTempId -= 1;
       const defaults = WIDGET_DEFAULTS[type] || {};
-      const firstForm = sources?.forms?.[0];
+      // /escalation sends widget.form as `monitoring_form_id` — it is
+      // inherently a "registration parent plus its latest monitoring child"
+      // query, and returns nothing at all for a registration form. Every
+      // other widget type is happy on forms[0], which /sources always leads
+      // with; a table is not, so it takes the first monitoring form or none.
+      const firstForm =
+        type === "table"
+          ? sources?.forms?.find((f) => f.type === "monitoring")
+          : sources?.forms?.[0];
       const newWidget = {
         id: nextTempId,
         order: widgets.length + 1,

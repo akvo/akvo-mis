@@ -157,3 +157,36 @@ describe("a new widget defaults to a measure its form supports", () => {
     expect(payload.widgets[0].config.measure).toBeFalsy();
   });
 });
+
+describe("a new table binds to a monitoring form", () => {
+  // /escalation sends widget.form as `monitoring_form_id` — it is inherently
+  // a "registration parent plus its latest monitoring child" query. Bound to
+  // the registration form it returns count: 0 for every criteria and every
+  // column set, so a table added from the palette could never show a row.
+  test("it skips the registration form the other widgets default to", async () => {
+    await renderBuilder();
+    addWidget("Table");
+    const payload = await save();
+
+    expect(payload.widgets[0].form).toBe(MONITORING_FORM.id);
+    expect(payload.widgets[0].form).not.toBe(ROOT_FORM.id);
+  });
+
+  test("a chart still defaults to the first form offered", async () => {
+    await renderBuilder();
+    addWidget("Bar chart");
+    const payload = await save();
+
+    expect(payload.widgets[0].form).toBe(ROOT_FORM.id);
+  });
+
+  test("with no monitoring form in the family it stays unbound", async () => {
+    // Better an explicit "choose a data source" than a form guaranteed to
+    // return nothing.
+    await renderBuilder({ forms: [{ ...ROOT_FORM, questions: [] }] });
+    addWidget("Table");
+    const payload = await save();
+
+    expect(payload.widgets[0].form).toBeNull();
+  });
+});

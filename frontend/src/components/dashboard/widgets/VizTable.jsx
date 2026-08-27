@@ -30,6 +30,18 @@ const VizTable = ({ config, data }) => {
     );
   }
 
+  // /escalation requires criteria as well as columns, so until there is at
+  // least one condition useWidgetData issues no request and `data` stays
+  // null. Without saying so the widget drew an empty grid, which reads as a
+  // broken table rather than an unfinished one.
+  if (!Array.isArray(widgetConfig.criteria) || !widgetConfig.criteria.length) {
+    return (
+      <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
+        Add at least one filter condition in the inspector
+      </div>
+    );
+  }
+
   return (
     <Table
       columns={columns}

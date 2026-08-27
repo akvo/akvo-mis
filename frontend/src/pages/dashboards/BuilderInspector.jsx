@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
-import { Input, Select, Switch, Checkbox } from "antd";
+import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
 import {
   NEEDS_FORM,
   NEEDS_QUESTION,
@@ -480,7 +480,15 @@ const BuilderInspector = ({
                         if (e.target.checked) {
                           updateConfig("columns", [
                             ...cols,
-                            { key: col.key, source: col.key },
+                            // The label travels with the column: VizTable
+                            // renders `label || key`, so without it the
+                            // header read `parent_name` rather than
+                            // "Datapoint name".
+                            {
+                              key: col.key,
+                              source: col.key,
+                              label: col.label,
+                            },
                           ]);
                         } else {
                           updateConfig(
@@ -609,6 +617,30 @@ const BuilderInspector = ({
             >
               + Add criterion
             </button>
+          </div>
+        )}
+
+        {/* Table row limit */}
+        {wType === "table" && widget.form && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Rows to show</label>
+            <InputNumber
+              value={wConfig.page_size || 20}
+              min={1}
+              max={100}
+              step={5}
+              style={{ width: "100%" }}
+              onChange={(val) => {
+                // Reaches /escalation as `page_size` and Ant's pagination as
+                // the page length, so one control governs both how much is
+                // fetched and how much is drawn. Clamped to the serializer's
+                // own bounds rather than sending a value it would reject.
+                updateConfig("page_size", val || 20);
+              }}
+            />
+            <div className="builder-inspector-hint">
+              Rows per page, up to 100.
+            </div>
           </div>
         )}
 
