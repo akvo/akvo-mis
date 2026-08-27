@@ -9,6 +9,37 @@ from api.v1.v1_forms.services.xlsform_export import (
     _extract_iso,
 )
 
+# Language tags recognised by the locale-codes npm package used by
+# akvo-react-form.  Any ISO code outside this set will crash the form
+# preview with "can't access property 'name', getByTag(...) is undefined".
+# Source: locale-codes@1.x getByTag – all valid base language subtags.
+_LOCALE_CODES_VALID_TAGS: frozenset = frozenset((
+    "aa", "af", "agq", "ak", "am", "ar", "arn", "as", "asa", "ast",
+    "az", "ba", "bas", "be", "bem", "bez", "bg", "bm", "bn", "bo",
+    "br", "brx", "bs", "byn", "ca", "ccp", "cd", "ceb", "cgg", "chr",
+    "co", "cs", "cu", "cy", "da", "dav", "de", "dje", "dsb", "dua",
+    "dv", "dyo", "dz", "ebu", "ee", "el", "en", "eo", "es", "et",
+    "eu", "ewo", "fa", "ff", "fi", "fil", "fo", "fr", "fur", "fy",
+    "ga", "gd", "gl", "gn", "gsw", "gu", "guz", "gv", "ha", "haw",
+    "he", "hi", "hr", "hsb", "hu", "hy", "ia", "id", "ig", "ii",
+    "is", "it", "iu", "ja", "jgo", "jmc", "jv", "ka", "kab", "kam",
+    "kde", "kea", "khq", "ki", "kk", "kkj", "kl", "kln", "km", "kn",
+    "ko", "kok", "ks", "ksb", "ksf", "ksh", "ku", "kw", "ky", "lag",
+    "lb", "lg", "lkt", "ln", "lo", "lrc", "lt", "lu", "luo", "luy",
+    "lv", "mas", "mer", "mfe", "mg", "mgh", "mgo", "mi", "mk", "ml",
+    "mn", "moh", "mr", "ms", "mt", "mua", "my", "mzn", "naq", "nb",
+    "nd", "nds", "ne", "nl", "nmg", "nn", "nnh", "no", "nqo", "nr",
+    "nso", "nus", "nyn", "oc", "om", "or", "os", "pa", "pl", "prg",
+    "prs", "ps", "pt", "qps", "quc", "quz", "rm", "rn", "ro", "rof",
+    "ru", "rw", "rwk", "sa", "sah", "saq", "sbp", "sd", "se", "seh",
+    "ses", "sg", "shi", "si", "sk", "sl", "sma", "smj", "smn", "sms",
+    "sn", "so", "sq", "sr", "ss", "ssy", "st", "sv", "sw", "swc",
+    "syr", "ta", "te", "teo", "tg", "th", "ti", "tig", "tk", "tn",
+    "to", "tr", "ts", "tt", "twq", "tzm", "ug", "uk", "ur", "uz",
+    "vai", "ve", "vi", "vo", "vun", "wae", "wal", "wo", "xh", "xog",
+    "yav", "yo", "zgh", "zh", "zu",
+))
+
 # Supported XLSForm types for Akvo MIS
 _SUPPORTED_BASE_TYPES = {
     "text",
@@ -27,6 +58,28 @@ _SUPPORTED_BASE_TYPES = {
     "end_repeat",
     "end repeat",
 }
+
+
+def _strip_outer_parens(s: str) -> str:
+    """Recursively strips matching outermost parentheses."""
+    s = s.strip()
+    while s.startswith("(") and s.endswith(")"):
+        depth = 0
+        matched = False
+        for i, ch in enumerate(s):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    if i == len(s) - 1:
+                        matched = True
+                    break
+        if matched:
+            s = s[1:-1].strip()
+        else:
+            break
+    return s
 
 
 def parse_relevant_expression(
@@ -49,7 +102,7 @@ def parse_relevant_expression(
     if not expr or not isinstance(expr, str) or not expr.strip():
         return [], "AND", None
 
-    clean_expr = expr.strip()
+    clean_expr = _strip_outer_parens(expr.strip())
 
     # Determine overall rule: OR vs AND
     # Look for top-level ' or ' outside parentheses
@@ -154,7 +207,19 @@ def parse_relevant_expression(
                             f"Target question '{v_name}' not found",
                         )
                     q_id = name_to_tmp_id[v_name]
-                    dependencies.append({"id": q_id, "options": opt_vals})
+                    found = False
+                    for existing_dep in dependencies:
+                        if (
+                            existing_dep["id"] == q_id
+                            and "options" in existing_dep
+                        ):
+                            for oval in opt_vals:
+                                if oval not in existing_dep["options"]:
+                                    existing_dep["options"].append(oval)
+                            found = True
+                            break
+                    if not found:
+                        dependencies.append({"id": q_id, "options": opt_vals})
                 continue
 
         m_gte = pattern_gte.fullmatch(clause_clean)
@@ -254,37 +319,139 @@ def parse_relevant_expression(
     return dependencies, rule, None
 
 
-def _parse_constraint(constraint_str: str) -> Dict[str, Any]:
-    """Parse XLSForm constraint expression into rule min/max."""
+def _parse_constraint(
+    constraint_str: str, q_name: Optional[str] = None
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Parse XLSForm constraint expression into rule min/max.
+
+    Supports:
+      - . <= 100, (. <= 100), ((. <= 100))
+      - ${q_name} <= 100, (${q_name} <= 100)
+      - . >= 0 and . <= 100
+      - (. >= 0 and . <= 100), ((. >= 0) and (. <= 100))
+      - . <= 100 and . >= 0
+      - 0 <= . and . <= 100
+      - < and > boundaries
+      - Floats and integers
+
+    Returns:
+      (rule_dict, warning_message_or_None)
+    """
     if not constraint_str or not isinstance(constraint_str, str):
-        return {}
+        return {}, None
+
+    clean = constraint_str.strip()
+    if not clean:
+        return {}, None
+
+    clean = _strip_outer_parens(clean)
+
+    # Split by top-level ' and ' or ' AND '
+    clauses = []
+    depth = 0
+    last_idx = 0
+    for idx in range(len(clean)):
+        if clean[idx] == "(":
+            depth += 1
+        elif clean[idx] == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and clean[idx : idx + 5].lower() == " and ":  # noqa
+            clauses.append(clean[last_idx:idx].strip())
+            last_idx = idx + 5
+    clauses.append(clean[last_idx:].strip())
 
     rule: Dict[str, Any] = {}
-    clean = constraint_str.strip()
+    unparsed_clauses = []
 
-    m_between = re.match(
-        r"^\.\s*>=\s*(-?[0-9]+(?:\.[0-9]+)?)\s+and\s+"
-        r"\.\s*<=\s*(-?[0-9]+(?:\.[0-9]+)?)$",
-        clean,
-        re.IGNORECASE,
-    )
-    if m_between:
-        min_str, max_str = m_between.groups()
-        rule["min"] = float(min_str) if "." in min_str else int(min_str)
-        rule["max"] = float(max_str) if "." in max_str else int(max_str)
-        return rule
+    var_pat = r"(?:\.|\$\{[^}]+\})"
+    num_pat = r"(-?[0-9]+(?:\.[0-9]+)?)"
 
-    m_gte = re.match(r"^\.\s*>=\s*(-?[0-9]+(?:\.[0-9]+)?)$", clean)
-    if m_gte:
-        min_str = m_gte.group(1)
-        rule["min"] = float(min_str) if "." in min_str else int(min_str)
+    for raw_clause in clauses:
+        clause = _strip_outer_parens(raw_clause)
+        if not clause:
+            continue
 
-    m_lte = re.match(r"^\.\s*<=\s*(-?[0-9]+(?:\.[0-9]+)?)$", clean)
-    if m_lte:
-        max_str = m_lte.group(1)
-        rule["max"] = float(max_str) if "." in max_str else int(max_str)
+        matched = False
 
-    return rule
+        # Chained Pattern 1: N <= target <= M (or <)
+        m_chain1 = re.match(
+            rf"^{num_pat}\s*(<=|<)\s*{var_pat}\s*(<=|<)\s*{num_pat}$", clause
+        )
+        if m_chain1:
+            min_str, op1, op2, max_str = m_chain1.groups()
+            rule["min"] = float(min_str) if "." in min_str else int(min_str)
+            rule["max"] = float(max_str) if "." in max_str else int(max_str)
+            matched = True
+
+        # Chained Pattern 2: M >= target >= N (or >)
+        if not matched:
+            m_chain2 = re.match(
+                rf"^{num_pat}\s*(>=|>)\s*{var_pat}\s*(>=|>)\s*{num_pat}$",
+                clause,
+            )
+            if m_chain2:
+                max_str, op1, op2, min_str = m_chain2.groups()
+                rule["min"] = (
+                    float(min_str) if "." in min_str else int(min_str)
+                )
+                rule["max"] = (
+                    float(max_str) if "." in max_str else int(max_str)
+                )
+                matched = True
+
+        # Pattern 1: target >= N or target > N
+        if not matched:
+            m1 = re.match(rf"^{var_pat}\s*(>=|>)\s*{num_pat}$", clause)
+            if m1:
+                op, val_str = m1.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["min"] = val
+                matched = True
+
+        # Pattern 2: target <= N or target < N
+        if not matched:
+            m2 = re.match(rf"^{var_pat}\s*(<=|<)\s*{num_pat}$", clause)
+            if m2:
+                op, val_str = m2.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["max"] = val
+                matched = True
+
+        # Pattern 3: N <= target or N < target (means target >= N)
+        if not matched:
+            m3 = re.match(rf"^{num_pat}\s*(<=|<)\s*{var_pat}$", clause)
+            if m3:
+                val_str, op = m3.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["min"] = val
+                matched = True
+
+        # Pattern 4: N >= target or N > target (means target <= N)
+        if not matched:
+            m4 = re.match(rf"^{num_pat}\s*(>=|>)\s*{var_pat}$", clause)
+            if m4:
+                val_str, op = m4.groups()
+                val = float(val_str) if "." in val_str else int(val_str)
+                rule["max"] = val
+                matched = True
+
+        if not matched:
+            unparsed_clauses.append(raw_clause)
+
+    warning = None
+    if unparsed_clauses:
+        warning = (
+            f"Constraint '{constraint_str}' contains logic that could not be "
+            f"fully converted to standard min/max rules: "
+            f"{', '.join(unparsed_clauses)}"
+        )
+    elif not rule and constraint_str:
+        warning = (
+            f"Constraint '{constraint_str}' could not be parsed into "
+            "validation rules"
+        )
+
+    return rule, warning
 
 
 def _parse_file_accept(body_accept: str) -> List[str]:
@@ -465,6 +632,55 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
     if default_language not in all_languages:
         default_language = list(all_languages)[0]
 
+    # 3b. Validate language tags against locale-codes supported set.
+    # Unsupported tags crash akvo-react-form's transformForm (getByTag returns
+    # undefined).  Emit a warning and strip unsupported languages so their
+    # columns are never written into translations.
+    lang_warn_rows: List[Dict[str, Any]] = []
+    invalid_langs: Set[str] = set()
+    for iso in list(all_languages):
+        if iso != _DEFAULT_LANG_CODE and iso not in _LOCALE_CODES_VALID_TAGS:
+            invalid_langs.add(iso)
+            lang_warn_rows.append(
+                {
+                    "path": "settings",
+                    "message": (
+                        f"Language tag '{iso}' is not recognised by the"
+                        " Akvo MIS form viewer (locale-codes). Translations"
+                        " for this language will be skipped. Check the"
+                        f" XLSForm column header (e.g. 'label::{iso}')"
+                        " and use a valid BCP-47 tag (e.g. 'nso' not 'ns')."
+                    ),
+                    "level": "warning",
+                }
+            )
+    all_languages -= invalid_langs
+    if default_language in invalid_langs:
+        default_language = _DEFAULT_LANG_CODE
+        all_languages.add(default_language)
+    # Strip invalid ISOs from column-lookup maps so no translations are emitted
+    s_label_langs = {
+        col: iso
+        for col, iso in s_label_langs.items()
+        if iso not in invalid_langs
+    }
+    s_hint_langs = {
+        col: iso
+        for col, iso in s_hint_langs.items()
+        if iso not in invalid_langs
+    }
+    if invalid_langs:
+        for opt_list in choices_map.values():
+            for opt in opt_list:
+                if opt.get("translations"):
+                    opt["translations"] = [
+                        t
+                        for t in opt["translations"]
+                        if t.get("language") not in invalid_langs
+                    ]
+                    if not opt["translations"]:
+                        opt["translations"] = None
+
     # PASS 1: Identify all survey rows, assign tmp_id, build name_to_tmp_id
     survey_rows_raw = list(ws_survey.iter_rows(min_row=2, values_only=False))
     name_to_tmp_id: Dict[str, int] = {}
@@ -487,7 +703,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                 name_to_tmp_id[q_name] = tmp_id_counter
                 tmp_id_counter += 1
 
-    warnings: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = lang_warn_rows
     errors: List[Dict[str, Any]] = []
     skipped_rows: List[Dict[str, Any]] = []
 
@@ -569,6 +785,46 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                             {"language": iso, "name": val, "label": val}
                         )
 
+            # Check repeat_count on begin_repeat
+            repeat_count_val = _get_cell_value(row, s_col_map, "repeat_count")
+            leading_q_id = None
+            if is_repeat and repeat_count_val:
+                warnings.append(
+                    {
+                        "path": f"row:{row_idx}",
+                        "message": (
+                            f"Repeat group '{q_name}' uses dynamic "
+                            f"repeat_count '{repeat_count_val}'. In Akvo MIS, "
+                            "repeatable groups allow manual entry "
+                            "('Add another') without a fixed programmatic "
+                            "count."
+                        ),
+                        "level": "warning",
+                    }
+                )
+                m_lq = re.search(r"\$\{([^}]+)\}", repeat_count_val)
+                if m_lq:
+                    lq_name = m_lq.group(1).strip()
+                    if lq_name in name_to_tmp_id:
+                        leading_q_id = name_to_tmp_id[lq_name]
+
+            # Check group-level relevant
+            grp_relevant = _get_cell_value(row, s_col_map, "relevant")
+            if grp_relevant:
+                warnings.append(
+                    {
+                        "path": f"row:{row_idx}",
+                        "message": (
+                            f"Group '{q_name}' has a 'relevant' condition "
+                            f"('{grp_relevant}'). Group-level relevance is "
+                            "not natively supported in Akvo MIS; please "
+                            "configure dependencies on individual questions "
+                            "in the Form Editor."
+                        ),
+                        "level": "warning",
+                    }
+                )
+
             current_group = {
                 "id": group_counter,
                 "name": q_name,
@@ -576,6 +832,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                 "order": group_counter,
                 "repeatable": is_repeat,
                 "repeat_text": "Add another" if is_repeat else None,
+                "leading_question": leading_q_id if is_repeat else None,
                 "translations": g_translations if g_translations else None,
                 "question": [],
             }
@@ -597,9 +854,9 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
         has_or_other = False
         allow_decimal = False
 
-        if type_lower == "text":
+        if type_lower in ("text", "string", "input"):
             akvo_type = "text"
-        elif type_lower == "integer":
+        elif type_lower in ("integer", "int"):
             akvo_type = "number"
             allow_decimal = False
         elif type_lower == "decimal":
@@ -609,33 +866,69 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
             akvo_type = "date"
         elif type_lower == "geopoint":
             akvo_type = "geo"
-        elif type_lower == "image":
+        elif type_lower in ("image", "photo"):
             if appearance and "signature" in appearance.lower():
                 akvo_type = "signature"
             else:
                 akvo_type = "image"
         elif type_lower == "file":
             akvo_type = "attachment"
-        elif type_lower.startswith("select_one_from_file"):
+        elif type_lower.startswith(
+            "select_one_from_file"
+        ) or type_lower.startswith("select one_from_file"):
             akvo_type = "cascade"
-        elif type_lower.startswith("select_one ") or type_lower.startswith(
-            "select_one\t"
+        elif (
+            type_lower.startswith("select_one ")
+            or type_lower.startswith("select_one\t")
+            or type_lower.startswith("select one ")
+            or type_lower.startswith("select one\t")
+            or type_lower.startswith("select_1 ")
+            or type_lower.startswith("select_1\t")
         ):
             akvo_type = "option"
             parts = type_clean.split()
             if len(parts) >= 2:
-                select_list_name = parts[1]
+                if parts[0].lower() == "select" and parts[1].lower() == "one":
+                    if len(parts) >= 3:
+                        select_list_name = parts[2]
+                else:
+                    select_list_name = parts[1]
             if "or_other" in type_lower:
                 has_or_other = True
-        elif type_lower.startswith(
-            "select_multiple "
-        ) or type_lower.startswith("select_multiple\t"):
+        elif (
+            type_lower.startswith("select_multiple ")
+            or type_lower.startswith("select_multiple\t")
+            or type_lower.startswith("select multiple ")
+            or type_lower.startswith("select multiple\t")
+        ):
             akvo_type = "multiple_option"
             parts = type_clean.split()
             if len(parts) >= 2:
-                select_list_name = parts[1]
+                is_multi_word = (
+                    parts[0].lower() == "select"
+                    and parts[1].lower() == "multiple"
+                )
+                if is_multi_word:
+                    if len(parts) >= 3:
+                        select_list_name = parts[2]
+                else:
+                    select_list_name = parts[1]
             if "or_other" in type_lower:
                 has_or_other = True
+        elif type_lower == "calculate":
+            calc_expr = _get_cell_value(row, s_col_map, "calculation")
+            msg = f"Calculated field '{q_name}' (type: calculate"
+            if calc_expr:
+                msg += f", calculation: '{calc_expr}'"
+            msg += ") is not supported in Akvo MIS — skipped"
+            warn_obj = {
+                "path": f"row:{row_idx}",
+                "message": msg,
+                "level": "warning",
+            }
+            skipped_rows.append(warn_obj)
+            warnings.append(warn_obj)
+            continue
         else:
             warn_obj = {
                 "path": f"row:{row_idx}",
@@ -688,10 +981,31 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
         if akvo_type == "number":
             rule_dict["allowDecimal"] = allow_decimal
 
+        calc_expr = _get_cell_value(row, s_col_map, "calculation")
+        if calc_expr:
+            warnings.append(
+                {
+                    "path": f"row:{row_idx}",
+                    "message": (
+                        f"Question '{q_name}' has calculation '{calc_expr}'. "
+                        "Dynamic calculations are not evaluated in Akvo MIS."
+                    ),
+                    "level": "warning",
+                }
+            )
+
         constraint_val = _get_cell_value(row, s_col_map, "constraint")
         if constraint_val:
-            c_rule = _parse_constraint(constraint_val)
+            c_rule, c_warn = _parse_constraint(constraint_val, q_name)
             rule_dict.update(c_rule)
+            if c_warn:
+                warnings.append(
+                    {
+                        "path": f"row:{row_idx}",
+                        "message": f"Question '{q_name}': {c_warn}",
+                        "level": "warning",
+                    }
+                )
 
         if akvo_type == "attachment":
             body_accept = _get_cell_value(

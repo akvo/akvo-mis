@@ -103,20 +103,20 @@ question row (used for dependency resolution before DB IDs exist).
 
 | XLSForm `type` value | `appearance` | → Akvo MIS type | Note |
 |---|---|---|---|
-| `text` | — | `text` |  |
-| `integer` | — | `number` | `allowDecimal=false` |
+| `text`, `string`, `input` | — | `text` |  |
+| `integer`, `int` | — | `number` | `allowDecimal=false` |
 | `decimal` | — | `number` | `allowDecimal=true` |
 | `date` | — | `date` |  |
-| `select_one {list}` | — | `option` | list_name → choices sheet |
-| `select_multiple {list}` | — | `multiple_option` | with `or_other` if applicable |
+| `select_one {list}`, `select one {list}`, `select_1 {list}` | — | `option` | list_name → choices sheet (supports `or_other`) |
+| `select_multiple {list}`, `select multiple {list}` | — | `multiple_option` | choices sheet (supports `or_other`) |
 | `geopoint` | — | `geo` |  |
-| `image` | — | `image` |  |
-| `image` | `signature` | `signature` |  |
+| `image`, `photo` | — | `image` |  |
+| `image`, `photo` | `signature` | `signature` |  |
 | `file` | — | `attachment` | reads `body::accept` → `allowedFileTypes` |
 | `select_one_from_file administration.csv` | — | `cascade` |  |
-| `begin_group` | — | new question group boundary |  |
-| `end_group` | — | close current group |  |
-| anything else | — | **skipped** + warning `{"path": "row:N", ...}` |  |
+| `begin_group` / `end_group` | — | question group boundary |  |
+| `begin_repeat` / `end_repeat` | — | repeat group boundary | `repeat_count` links `leading_question` |
+| anything else (e.g. `calculate`, `note`, `audio`, `barcode`) | — | **skipped** + warning `{"path": "row:N", ...}` |  |
 
 **`relevant` column → dependency**:
 
@@ -124,23 +124,32 @@ question row (used for dependency resolution before DB IDs exist).
 
 | XPath pattern | → dependency field |
 |---|---|
-| `selected(${q}, 'v')` | `options: ['v']` |
+| `selected(${q}, 'v')` / `selected(${q}, "v")` | `options: ['v']` |
 | `selected(${q}, 'a') or selected(${q}, 'b')` | `options: ['a','b']` |
-| `${q} >= N` | `min: N` |
-| `${q} <= N` | `max: N` |
-| `${q} = 'v'` | `equal: 'v'` |
+| `${q} >= N` / `${q} > N` | `min: N` |
+| `${q} <= N` / `${q} < N` | `max: N` |
+| `${q} = 'v'` / `${q} = "v"` | `equal: 'v'` |
 | `${q} != 'v' and string-length(${q}) > 0` | `notEqual: 'v'` |
 
 - Clauses joined by ` and ` → `dependency_rule: "AND"` (default)
 - Clauses joined by ` or ` → `dependency_rule: "OR"`
 - Unrecognized XPath → skip + append warning; question still imported
 
-**`constraint` column** → `rule.min` / `rule.max` (reverse of `_build_constraint()`):
-- `. >= N` → `min: N`
-- `. <= N` → `max: N`
-- `. >= N and . <= N` → `min: N, max: N`
+**`constraint` column** → `rule.min` / `rule.max`:
 
-**`required` column** → `rule.required: true` if cell is `"yes"` or `"true"`
+- Standard `. >= N`, `. <= N`, `. >= N and . <= N`
+- Chained comparisons: `0 <= . <= 100`, `100 >= . >= 0`, `0 <= ${q} <= 100`
+- Self-variable references `${q_name} <= N`, `(${q_name} <= N)`
+- Parenthesized compound expressions `((. >= 0) and (. <= 100))`
+- Reversed bounds `0 <= . and . <= 100` (translated to `min: 0, max: 100`)
+- Unparsed constraint logic (e.g. `regex(...)`) extracts valid bounds and appends warning
+
+**`repeat_count` column** → Repeat Groups:
+
+- Extracts referenced question tmp_id for expressions like `count-selected(${fish_species})` or `${target_count}`
+- Automatically assigns `leading_question` tmp_id on the repeat group for Akvo MIS data model compatibility
+
+**`required` column** → `rule.required: true` if cell is `"yes"`, `"true"`, `"1"`, etc.
 
 **Choices sheet** → `option[]` list per `list_name`. Each row: `name` (value), `label::*`
 
@@ -154,8 +163,10 @@ display suffix `(en)`, `(fr)`, etc. using `_extract_iso()` from `xlsform_export.
 - **Error**: no questions found after skipping
 - **Error**: duplicate `variable_name` / `name` values within a group
 - **Error**: missing `name` column in survey sheet
-- **Warning**: N rows skipped (unsupported type)
-- **Warning**: unresolvable `relevant` expression on row N
+- **Warning**: N rows skipped (unsupported type e.g. `calculate`)
+- **Warning**: unresolvable `relevant` expression on question or group
+- **Warning**: dynamic `repeat_count` on repeat groups (explaining manual repeat behavior)
+- **Warning**: unsupported constraint clauses or calculations
 
 #### `build_form_payload(parsed, form_type, parent_id) → dict`
 
