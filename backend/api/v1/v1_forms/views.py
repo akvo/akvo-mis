@@ -60,6 +60,12 @@ from api.v1.v1_forms.serializers import (
     FormUpdateRequestSerializer,
     ImportPreflightSerializer,
     ImportFormSerializer,
+    XLSFormImportPreflightSerializer,
+    XLSFormImportSerializer,
+)
+from api.v1.v1_forms.services.xlsform_import import (
+    parse_xlsform,
+    validate_preflight as validate_xlsform_preflight,
 )
 from api.v1.v1_jobs.constants import JobStatus, JobTypes
 from api.v1.v1_jobs.models import Jobs
@@ -647,6 +653,14 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_create),
             ],
+            "import_xlsform_preflight": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_create),
+            ],
+            "import_xlsform": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_create),
+            ],
             "import_definition": [
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_create),
@@ -1143,6 +1157,73 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Manage Forms"],
+        summary="Validate an XLSForm (.xlsx) file without writing (FB-016)",
+        request={"multipart/form-data": XLSFormImportPreflightSerializer},
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import/xlsform/preflight",
+        parser_classes=[MultiPartParser],
+    )
+    def import_xlsform_preflight(self, request, *args, **kwargs):
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"message": "file is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not (
+            file_obj.name.endswith(".xlsx") or file_obj.name.endswith(".xls")
+        ):
+            return Response(
+                {"message": "Only .xlsx or .xls files are supported"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_size = getattr(
+            settings, "FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024
+        )
+        if file_obj.size > max_size:
+            return Response(
+                {"message": "File too large"},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        try:
+            parsed = parse_xlsform(file_obj)
+        except Exception as exc:
+            return Response(
+                {"message": f"Invalid XLSForm file: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        errors, warnings = validate_xlsform_preflight(parsed)
+        is_valid = len(errors) == 0
+
+        return Response(
+            {
+                "valid": is_valid,
+                "errors": errors,
+                "warnings": warnings,
+                "form": {
+                    "name": parsed.get("form_name"),
+                    "version": parsed.get("version"),
+                    "default_language": parsed.get("default_language"),
+                    "languages": parsed.get("languages"),
+                },
+                "question_count": parsed.get("total_questions", 0),
+                "group_count": parsed.get("total_groups", 0),
+                "skipped_count": len(parsed.get("skipped_rows", [])),
+            },
+            status=(
+                status.HTTP_200_OK if is_valid else status.HTTP_400_BAD_REQUEST
+            ),
+        )
+
+    @extend_schema(
+        tags=["Manage Forms"],
         summary="Enqueue a form definition import job (FB-007)",
         request={"multipart/form-data": ImportFormSerializer},
     )
@@ -1239,6 +1320,115 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         )
         task_id = async_task(
             "api.v1.v1_forms.tasks.import_form_job",
+            job.id,
+            hook="api.v1.v1_forms.tasks.import_form_job_result",
+        )
+        job.task_id = task_id
+        job.save(update_fields=["task_id"])
+
+        return Response(
+            {"task_id": task_id, "job_id": job.id},
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Manage Forms"],
+        summary="Enqueue an XLSForm (.xlsx) import job (FB-016)",
+        request={"multipart/form-data": XLSFormImportSerializer},
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import/xlsform",
+        parser_classes=[MultiPartParser],
+    )
+    def import_xlsform(self, request, *args, **kwargs):
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"message": "file is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not (
+            file_obj.name.endswith(".xlsx") or file_obj.name.endswith(".xls")
+        ):
+            return Response(
+                {"message": "Only .xlsx or .xls files are supported"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_size = getattr(
+            settings, "FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024
+        )
+        if file_obj.size > max_size:
+            return Response(
+                {"message": "File too large"},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        form_type = request.data.get("form_type", "registration")
+        if form_type not in ("registration", "monitoring"):
+            return Response(
+                {"message": "form_type must be registration or monitoring"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        parent_id = request.data.get("parent_id")
+        if parent_id is not None and parent_id != "":
+            try:
+                parent_id = int(parent_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {"message": "parent_id must be an integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            parent_id = None
+
+        if form_type == "monitoring" and not parent_id:
+            return Response(
+                {"message": "parent_id is required for monitoring forms"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Server-side pre-validation
+        try:
+            parsed = parse_xlsform(file_obj)
+        except Exception as exc:
+            return Response(
+                {"message": f"Invalid XLSForm file: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        errors, _ = validate_xlsform_preflight(parsed)
+        if errors:
+            return Response(
+                {"valid": False, "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Persist file to upload storage
+        file_obj.seek(0)
+        fs = FileSystemStorage()
+        uid = "_".join(str(uuid4()).split("-")[:-1])
+        filename = f"import-xlsform-{request.user.id}-{uid}.xlsx"
+        tmp = fs.save(f"./tmp/{file_obj.name}", file_obj)
+        tmp_path = fs.path(tmp)
+        storage.upload(file=tmp_path, filename=filename, folder="upload")
+
+        job = Jobs.objects.create(
+            type=JobTypes.import_form,
+            status=JobStatus.on_progress,
+            user=request.user,
+            info={
+                "file": filename,
+                "form_type": form_type,
+                "parent_id": parent_id,
+            },
+        )
+        task_id = async_task(
+            "api.v1.v1_forms.tasks.import_xlsform_job",
             job.id,
             hook="api.v1.v1_forms.tasks.import_form_job_result",
         )

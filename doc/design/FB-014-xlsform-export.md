@@ -263,8 +263,6 @@ formBuilderExportXlsformError: "Failed to export XLSForm",
 | `attachment` | 11 | `file` |
 | `signature` | 12 | `image` + `appearance: signature` |
 | `input` | 13 | `text` |
-| `geoshape` | 14 | `geoshape` |
-| `geotrace` | 15 | `geotrace` |
 | `tree` | 16 | *(skipped)* |
 | `table` | 17 | *(skipped)* |
 
