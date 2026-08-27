@@ -141,7 +141,9 @@ class ChatMessageView(APIView):
                                 "vector_store_ids": [vector_store_id]
                             }
                         }
-                    run = client.beta.threads.runs.create_and_poll(**run_kwargs)
+                    run = client.beta.threads.runs.create_and_poll(
+                        **run_kwargs
+                    )
 
                 if run.status == "completed":
                     messages = client.beta.threads.messages.list(
@@ -164,7 +166,10 @@ class ChatMessageView(APIView):
                         {
                             "response": (
                                 cleaned_reply
-                                or "I'm sorry, I couldn't find an answer to that."
+                                or (
+                                    "I'm sorry, I couldn't find an answer "
+                                    "to that."
+                                )
                             ),
                             "thread_id": thread_id,
                         },
@@ -176,7 +181,8 @@ class ChatMessageView(APIView):
                     "Falling back to Chat Completions with instructions."
                 )
 
-            # Strategy 2: Chat Completions API fallback (always works with any key)
+            # Strategy 2: Chat Completions API fallback
+            # (always works with any key)
             chat_resp = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[

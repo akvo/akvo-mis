@@ -151,11 +151,14 @@ def get_or_create_assistant(
         print(f"Assistant Created: {assistant.id}")
         return assistant.id
     except Exception as e:
-        print(f"Warning: Could not create Assistant automatically: {e}")
+        err_detail = ""
+        if hasattr(e, "response") and hasattr(e.response, "json"):
+            try:
+                err_detail = f" | Details: {e.response.json()}"
+            except Exception:
+                pass
         print(
-            "Note: You can attach Vector Store "
-            f"'{vs_id}' to your Assistant in the OpenAI Dashboard, "
-            "or specify an existing Assistant ID."
+            f"Warning: Could not create Assistant automatically: {e}{err_detail}"  # noqa
         )
         return None
 
@@ -190,10 +193,7 @@ def upload_kb(
         print("Install it with: pip install openai>=1.30.0")
         sys.exit(1)
 
-    client = OpenAI(
-        api_key=api_key,
-        default_headers={"OpenAI-Beta": "assistants=v2"},
-    )
+    client = OpenAI(api_key=api_key)
 
     # 1. Resolve Vector Store (reuse existing if available)
     vs_id_to_use = vector_store_id or os.environ.get("OPENAI_VECTOR_STORE_ID")
