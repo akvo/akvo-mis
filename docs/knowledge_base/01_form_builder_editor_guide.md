@@ -1,0 +1,72 @@
+# Akvo MIS Form Builder Editor Guide
+
+This document is the technical reference for the **Form Builder Edit Page** within the Akvo MIS platform, located at `http://localhost:3000/control-center/form-builder/:formId/edit` (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx`).
+
+---
+
+## 1. Page Layout & Navigation
+
+When opening a form to edit in Akvo MIS (**Control Centre > Form Builder > [Select Form] > Edit**), the page contains three distinct sections:
+- **Top Header & Breadcrumbs**: Displays navigation path `Control Centre > Form Builder > Edit Form`.
+- **Action Toolbar**: Action buttons for file exports, version management, and lifecycle state changes.
+- **Embedded Webform Editor**: The core `WebformEditor` component workspace from `akvo-react-form-editor`.
+
+---
+
+## 2. Top Action Toolbar Buttons
+
+Located in the header above the editor canvas (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L344-L421`):
+
+| Button | Icon / Type | Action & Purpose in Akvo MIS |
+|---|---|---|
+| **Export JSON** | Download | Downloads the raw JSON form schema file (`.json`) representing the current form definition. |
+| **Export XLSForm** | Download | Exports an XLSForm-compatible Excel file (`.xlsx`) containing `survey`, `choices`, and `settings` sheets. |
+| **Export Administration CSV** | Download | Exports the tenant administrative cascade hierarchy linked to this form. |
+| **Version History** | Clock (`HistoryOutlined`) | Opens the **Version History Drawer** on the right side of the screen. Displays all immutable published snapshot versions with timestamps and preview/restore actions. |
+| **Publish** | Primary Blue | Publishes the current draft live. Enumerators and web respondents can immediately collect data against this new version. |
+| **Unpublish** | Popconfirm | Reverts the form from published status back to draft status, pausing live data collection. |
+
+---
+
+## 3. The Three Workspace Tabs in Akvo MIS
+
+Inside the Form Builder workspace, `WebformEditor` renders **3 primary tabs** (source: `akvo-react-form-editor/dist/index.modern.js`, `frontend/src/pages/form-builder/FormBuilderEdit.jsx`):
+
+### Tab 1: Edit Form (Default Workspace)
+- **Purpose**: Main visual drag-and-drop workspace for structuring sections and question cards.
+- **Question Groups**: Sections grouping related questions. Each group has a title, collapse/expand toggle, drag handle to reorder, and a **Repeatable** toggle (source: `akvo-react-form/README.md#question-group`).
+- **Group Actions**: Click **+ Add Group** at the bottom to append a new section.
+- **Question Actions**: Click **+ Add Question** inside a group to insert a question card.
+- **Duplicate Question**: Click **COPY QUESTION HERE** below any question to duplicate label, type, options, and settings. Note: Skip logic is **NOT** copied to prevent circular dependencies (source: `akvo-react-form-editor/README.md`).
+- **Question Settings Modal**: Clicking any question opens its settings panel with sub-tabs:
+  - **`Setting`**: Label, Variable Name, Tooltip, Required, Min/Max bounds, Double Entry, Password Mask, Prefix (`addonBefore`), Suffix (`addonAfter`), and Option Hex Colors.
+  - **`Skip Logic`**: Conditional dependency configuration rules.
+
+### Tab 2: Translations
+- **Purpose**: Multi-language localization workspace for multilingual surveys (source: `akvo-react-form-editor/README.md#translations`).
+- **Language Selector**: Choose the target language code from the dropdown (e.g. `id`, `fr`, `es`).
+- **Translation Grid**: Side-by-side editing of question prompts, tooltips, option choice labels, and group headers.
+- **Fallback**: Untranslated fields automatically fall back to the base language.
+
+### Tab 3: Preview
+- **Purpose**: Live, interactive runtime preview of the form as field respondents and enumerators will experience it (source: `akvo-react-form-editor/README.md#preview`).
+- **Verification**: Used to test skip logic visibility, autofield mathematical calculations, required field triggers, and repeatable group entry rows prior to publishing.
+
+---
+
+## 4. Platform Distinction: No In-Page JSON Tab in Akvo MIS
+
+In the standalone `akvo-react-form-editor` library demo website, an extra "JSON" tab is shown for developer testing. However, **in the Akvo MIS platform, there is NO in-page JSON tab / viewer**. 
+- To inspect or obtain the form's raw JSON schema in Akvo MIS, click the **`Export JSON`** button in the top action toolbar (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L355-L362`).
+
+---
+
+## 5. Version History Drawer & Banners
+
+- **Information Banners (`FormEditorBanners`)**: Renders status banners above the editor canvas:
+  - *Published Info Banner*: Indicates the form is currently live and receiving submissions.
+  - *Pending Snapshot Banner*: Indicates changes have been saved to a published form and are ready to be published as the next version (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L324-L332`).
+  - *Version Preview Banner*: Renders when inspecting an older read-only snapshot, with an **"Exit Preview"** button.
+- **Version History Drawer (`VersionHistoryDrawer`)**:
+  - Displays chronological list of published version snapshots (e.g. Version 1, Version 2).
+  - Provides **Preview** (read-only inspection) and **Restore / Activate** actions (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L441-L460`).
