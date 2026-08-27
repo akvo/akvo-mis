@@ -357,6 +357,12 @@ class UserRole(models.Model):
             access=FeatureAccessTypes.dashboard_delete,
         ).exists()
 
+    def can_dashboard_share_public(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_share_public,
+        ).exists()
+
     def __str__(self):
         return f"{self.user.name} - {self.role.name} ({self.administration})"
 

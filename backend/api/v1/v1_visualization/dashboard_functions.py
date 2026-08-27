@@ -12,10 +12,16 @@
 import re
 
 from django.utils.text import slugify
+from rest_framework import status
 
 from api.v1.v1_forms.constants import FormTypes
+from api.v1.v1_profile.constants import (
+    FeatureAccessTypes,
+    FeatureTypes,
+)
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_visualization.constants import (
+    DashboardVisibility,
     SUPPORTED_QUESTION_TYPES,
     VALID_COLUMN_SOURCES,
     VALID_CRITERIA_TYPES,
@@ -448,3 +454,67 @@ def apply_widgets(dashboard, widgets):
     for widget_id, widget in existing.items():
         if widget_id not in kept:
             widget.delete()
+
+
+def resolve_visibility(payload, user, dashboard):
+    """The visibility this PUT should store, or why it may not.
+
+    Returns `(visibility, None)` on success and `(None, error)` on
+    refusal, where error carries the status the view should answer with.
+
+    Three cases, in order:
+
+    - The key is absent. Visibility is not part of what the builder edits
+      on every save, so an omitted key means "leave it alone" rather than
+      "make it internal" — otherwise every save from a client that has
+      not been taught the field would quietly unpublish a public
+      dashboard.
+    - The value is unchanged. Nothing is being decided, so no permission
+      is required: an editor who may not share must still be able to save
+      a dashboard that is already public.
+    - The value differs. This is the act `dashboard_share_public` exists
+      to gate (VIZ-010 D-6), and it is checked here rather than in
+      ACCESS_PER_ACTION because it shares its action with `dashboard_edit`.
+    """
+    if "visibility" not in payload:
+        return dashboard.visibility, None
+
+    raw = payload.get("visibility")
+    lookup = {
+        name: value
+        for value, name in DashboardVisibility.FieldStr.items()
+    }
+    if raw not in lookup:
+        return None, {
+            "status": status.HTTP_400_BAD_REQUEST,
+            "body": {
+                "message": "unknown visibility: {0!r}".format(raw),
+                "field": "visibility",
+            },
+        }
+
+    requested = lookup[raw]
+    if requested == dashboard.visibility:
+        return requested, None
+
+    if not user.is_superuser:
+        allowed = user.user_user_role.filter(
+            role__role_role_feature_access__type=(
+                FeatureTypes.dashboard_builder
+            ),
+            role__role_role_feature_access__access=(
+                FeatureAccessTypes.dashboard_share_public
+            ),
+        ).exists()
+        if not allowed:
+            return None, {
+                "status": status.HTTP_403_FORBIDDEN,
+                "body": {
+                    "message": (
+                        "you do not have permission to change who can "
+                        "view this dashboard"
+                    ),
+                    "field": "visibility",
+                },
+            }
+    return requested, None

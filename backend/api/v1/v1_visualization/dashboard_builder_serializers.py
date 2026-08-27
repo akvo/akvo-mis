@@ -17,6 +17,7 @@ from rest_framework import serializers
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms, QuestionOptions
 from api.v1.v1_visualization.constants import (
+    DashboardVisibility,
     DashboardStatus,
     SUPPORTED_QUESTION_TYPES,
     WidgetTypes,
@@ -47,6 +48,7 @@ class DashboardWidgetSerializer(serializers.ModelSerializer):
 
 class DashboardListSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
+    visibility = serializers.SerializerMethodField()
     root_form = serializers.SerializerMethodField()
     created_by = serializers.SerializerMethodField()
     widgets = serializers.SerializerMethodField()
@@ -59,6 +61,7 @@ class DashboardListSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "status",
+            "visibility",
             "root_form",
             "created",
             "updated",
@@ -68,6 +71,12 @@ class DashboardListSerializer(serializers.ModelSerializer):
 
     def get_status(self, instance):
         return DashboardStatus.FieldStr.get(instance.status)
+
+    def get_visibility(self, instance):
+        # A string on the wire for the same reason status is one: the
+        # frontend compares against literals, and an integer would put
+        # the vocabulary in two places.
+        return DashboardVisibility.FieldStr.get(instance.visibility)
 
     def get_root_form(self, instance):
         form = instance.root_form

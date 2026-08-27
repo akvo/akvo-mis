@@ -25,6 +25,7 @@ from api.v1.v1_visualization.dashboard_builder_serializers import (
     serialize_sources,
 )
 from api.v1.v1_visualization.dashboard_functions import (
+    resolve_visibility,
     SLUG_PATTERN,
     apply_widgets,
     copy_name,
@@ -173,6 +174,18 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # stored dashboard is byte-identical after a rejected save.
             return Response(error, status=status.HTTP_400_BAD_REQUEST)
 
+        # Visibility is gated on the field rather than on the action:
+        # `dashboard_edit` and a visibility change arrive in the same PUT,
+        # and an editor who may not share must still be able to save a
+        # dashboard that is already public (VIZ-010 D-6).
+        visibility, error = resolve_visibility(
+            request.data, request.user, dashboard
+        )
+        if error:
+            return Response(
+                error["body"], status=error["status"]
+            )
+
         with transaction.atomic():
             name = request.data.get("name")
             if name:
@@ -183,6 +196,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             dashboard.default_filters = (
                 request.data.get("default_filters") or {}
             )
+            dashboard.visibility = visibility
             dashboard.updated = timezone.now()
             dashboard.save()
             apply_widgets(dashboard, request.data.get("widgets") or [])

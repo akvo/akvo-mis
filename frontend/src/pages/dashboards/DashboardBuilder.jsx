@@ -1,5 +1,6 @@
 import React, {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -15,6 +16,7 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import { store, uiText } from "../../lib";
+import { AbilityContext } from "../../components/can";
 import dashboardApi from "../../util/dashboardApi";
 import BuilderPalette from "./BuilderPalette";
 import BuilderCanvas from "./BuilderCanvas";
@@ -37,6 +39,9 @@ const EMPTY_FILTERS = {
 const DashboardBuilder = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const ability = useContext(AbilityContext);
+  const canShare =
+    ability.can("manage", "dashboard") || ability.can("share", "dashboard");
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -214,6 +219,9 @@ const DashboardBuilder = () => {
     return {
       name: dashboard?.name,
       description: dashboard?.description || null,
+      // Omitted keys mean "leave it alone" server-side, but the builder
+      // always knows the current value, so it always sends it.
+      visibility: dashboard?.visibility || "internal",
       default_filters: dashboard?.default_filters || {
         date: { enabled: true },
         administration: { enabled: true },
@@ -483,6 +491,8 @@ const DashboardBuilder = () => {
             dashboardName={dashboard.name}
             dashboardDesc={dashboard.description || ""}
             defaultFilters={dashboard.default_filters}
+            visibility={dashboard.visibility}
+            canShare={canShare}
             onWidgetChange={handleWidgetChange}
             onDashboardChange={handleDashboardChange}
             errorMessage={widgetError}

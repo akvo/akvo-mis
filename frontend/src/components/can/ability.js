@@ -70,6 +70,8 @@ const defineAbilityFor = (user) => {
       roles.filter((r) => r?.can_dashboard_edit).length > 0;
     const can_dashboard_delete =
       roles.filter((r) => r?.can_dashboard_delete).length > 0;
+    const can_dashboard_share_public =
+      roles.filter((r) => r?.can_dashboard_share_public).length > 0;
 
     if (can_dashboard_view) {
       can("read", "dashboard");
@@ -82,6 +84,12 @@ const defineAbilityFor = (user) => {
     }
     if (can_dashboard_delete) {
       can("delete", "dashboard");
+    }
+    // Publishing to colleagues and publishing to the internet are
+    // different acts (VIZ-010 D-6), so this is its own ability rather
+    // than a reading of `publish`.
+    if (can_dashboard_share_public) {
+      can("share", "dashboard");
     }
 
     can("read", "data");

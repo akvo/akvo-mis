@@ -7,6 +7,7 @@ import DashboardBuilder from "../DashboardBuilder";
 import dashboardApi from "../../../util/dashboardApi";
 import useWidgetData from "../../../util/hooks/useWidgetData";
 import { store } from "../../../lib";
+import { AbilityContext } from "../../../components/can";
 
 jest.mock("../../../util/dashboardApi");
 jest.mock("../../../util/hooks/useWidgetData");
@@ -144,16 +145,18 @@ const renderBuilderPreview = async () => {
   dashboardApi.sources.mockResolvedValue({ data: { forms: [] } });
 
   const utils = render(
-    <MemoryRouter
-      initialEntries={["/control-center/dashboard/water-points-overview"]}
-    >
-      <Routes>
-        <Route
-          path="/control-center/dashboard/:slug"
-          element={<DashboardBuilder />}
-        />
-      </Routes>
-    </MemoryRouter>
+    <AbilityContext.Provider value={{ can: () => true }}>
+      <MemoryRouter
+        initialEntries={["/control-center/dashboard/water-points-overview"]}
+      >
+        <Routes>
+          <Route
+            path="/control-center/dashboard/:slug"
+            element={<DashboardBuilder />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </AbilityContext.Provider>
   );
   await waitFor(() =>
     expect(screen.getByRole("button", { name: /preview/i })).toBeInTheDocument()

@@ -245,3 +245,75 @@ describe("monitoringForms", () => {
     expect(monitoringForms(FORMS).map((f) => f.id)).toEqual([6002]);
   });
 });
+
+// =========================================================
+// Who can view this dashboard (VIZ-010)
+// =========================================================
+//
+// Lives in the dashboard settings panel — what the inspector shows when
+// no widget is selected — because it is a property of the dashboard, not
+// of anything on the canvas. Gated on `share dashboard`: publishing to
+// colleagues and publishing to the internet are different acts, so an
+// editor who may do the first does not silently gain the second.
+
+const settings = (props = {}) => {
+  const onDashboardChange = jest.fn();
+  render(
+    <BuilderInspector
+      widget={null}
+      sources={SOURCES}
+      dashboardName="Water access"
+      dashboardDesc=""
+      defaultFilters={{}}
+      visibility="internal"
+      canShare
+      onWidgetChange={jest.fn()}
+      onDashboardChange={onDashboardChange}
+      errorMessage={null}
+      {...props}
+    />
+  );
+  return onDashboardChange;
+};
+
+describe("the visibility control", () => {
+  test("it sits in the dashboard settings panel", () => {
+    settings();
+    expect(screen.getByText(/who can view/i)).toBeInTheDocument();
+  });
+
+  test("turning it on writes public", () => {
+    const onDashboardChange = settings();
+    fireEvent.click(
+      screen.getByRole("switch", { name: /anyone with the link/i })
+    );
+    expect(onDashboardChange).toHaveBeenCalledWith("visibility", "public");
+  });
+
+  test("turning it off writes internal", () => {
+    const onDashboardChange = settings({ visibility: "public" });
+    fireEvent.click(
+      screen.getByRole("switch", { name: /anyone with the link/i })
+    );
+    expect(onDashboardChange).toHaveBeenCalledWith("visibility", "internal");
+  });
+
+  test("it says what public actually means", () => {
+    // "Public" on its own does not tell an author that no sign-in is
+    // required, which is the part with consequences.
+    settings({ visibility: "public" });
+    expect(screen.getByText(/without signing in/i)).toBeInTheDocument();
+  });
+
+  test("without the permission it is not offered", () => {
+    settings({ canShare: false });
+    expect(screen.queryByText(/who can view/i)).not.toBeInTheDocument();
+  });
+
+  test("a public dashboard still says so to someone who cannot change it", () => {
+    // Hiding the control is right; hiding the fact is not — anyone
+    // editing a public dashboard should know it is public.
+    settings({ canShare: false, visibility: "public" });
+    expect(screen.getByText(/public/i)).toBeInTheDocument();
+  });
+});

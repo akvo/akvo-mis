@@ -35,6 +35,8 @@ const BuilderInspector = ({
   dashboardName,
   dashboardDesc,
   defaultFilters,
+  visibility,
+  canShare = false,
   onWidgetChange,
   onDashboardChange,
   errorMessage,
@@ -140,6 +142,50 @@ const BuilderInspector = ({
               />
             </label>
           </div>
+
+          {/* Who can view this — a property of the dashboard, so it
+              belongs here rather than on any widget. Gated on `share`
+              because publishing to colleagues and publishing to the
+              internet are different acts (VIZ-010 D-6). */}
+          {canShare ? (
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">
+                Who can view this dashboard
+              </label>
+              <label className="builder-inspector-filter-row">
+                Anyone with the link
+                <Switch
+                  size="small"
+                  aria-label="Anyone with the link"
+                  checked={visibility === "public"}
+                  onChange={(checked) => {
+                    onDashboardChange(
+                      "visibility",
+                      checked ? "public" : "internal"
+                    );
+                  }}
+                />
+              </label>
+              <div className="builder-inspector-hint">
+                {visibility === "public"
+                  ? "Anyone with the link can view this dashboard, without signing in. It appears in this workspace's public dashboard menu once published."
+                  : "Only people signed in to this workspace can view it."}
+              </div>
+            </div>
+          ) : (
+            visibility === "public" && (
+              /* The control is hidden, the fact is not: anyone editing a
+                 public dashboard should know that it is public. */
+              <div className="builder-inspector-field">
+                <label className="builder-inspector-label">
+                  Who can view this dashboard
+                </label>
+                <div className="builder-inspector-hint">
+                  Public — anyone with the link can view it, without signing in.
+                </div>
+              </div>
+            )
+          )}
 
           <div className="builder-inspector-info">
             <svg
@@ -742,6 +788,8 @@ BuilderInspector.propTypes = {
   sources: PropTypes.object,
   dashboardName: PropTypes.string,
   dashboardDesc: PropTypes.string,
+  visibility: PropTypes.string,
+  canShare: PropTypes.bool,
   defaultFilters: PropTypes.object,
   onWidgetChange: PropTypes.func.isRequired,
   onDashboardChange: PropTypes.func.isRequired,
