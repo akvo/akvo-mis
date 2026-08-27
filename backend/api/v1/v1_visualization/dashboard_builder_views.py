@@ -335,7 +335,16 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         and the same family rule applies here.
         """
         dashboard = self.get_object()
-        widget = request.data.get("widget") or {}
+        widget = dict(request.data.get("widget") or {})
+        # The id is dropped before validation. `validate_dashboard_payload`
+        # checks that a widget id belongs to this dashboard, which is right
+        # for the wholesale replace on PUT and wrong here: a widget being
+        # previewed is one the author just dropped on the canvas, carrying
+        # a temporary negative id that by definition belongs to nothing.
+        # Every other rule — the family, the question's form, the
+        # aggregatable types — still applies, which is what stops a preview
+        # reaching outside what the author could have saved.
+        widget.pop("id", None)
         error = validate_dashboard_payload(
             {"widgets": [widget]}, request.user, dashboard=dashboard
         )

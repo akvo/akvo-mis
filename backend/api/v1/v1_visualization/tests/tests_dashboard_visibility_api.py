@@ -9,6 +9,8 @@ from api.v1.v1_profile.models import (
     UserRole,
 )
 from api.v1.v1_users.models import SystemUser
+from api.v1.v1_forms.constants import FormTypes
+from api.v1.v1_forms.models import Forms
 from api.v1.v1_visualization.constants import DashboardVisibility
 from api.v1.v1_visualization.models import Dashboard
 from api.v1.v1_visualization.tests.mixins import (
@@ -172,3 +174,86 @@ class DashboardVisibilityApiTestCase(
         self.assertEqual(
             self.dashboard.visibility, DashboardVisibility.internal
         )
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class PreviewWidgetTestCase(VisualizationValuesTestMixin, APITestCase):
+    """Data for a widget the author has not saved yet (VIZ-010).
+
+    The canvas renders unsaved state, so its widgets carry temporary
+    negative ids. `validate_dashboard_payload` checks that a widget id
+    belongs to the dashboard — right for the wholesale replace on PUT, and
+    wrong here, where the id belongs to nothing by definition. It rejected
+    every preview, which meant every widget on the canvas failed to load.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.dashboard = Dashboard.objects.create(
+            name="Water points",
+            slug="water-points",
+            root_form=self.registration,
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def preview(self, widget, filters=None):
+        return self.client.post(
+            f"{MANAGE}/{self.dashboard.id}/preview-widget",
+            {"widget": widget, "filters": filters or {}},
+            format="json",
+        )
+
+    def test_a_widget_with_a_temporary_id_is_previewed(self):
+        response = self.preview(
+            {
+                "id": -1,
+                "type": "bar",
+                "col_span": 12,
+                "form": self.MONITORING_FORM_ID,
+                "question": self.Q_OPTION_ID,
+                "config": {"measure": "current_state", "group_by": "option"},
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.json()["data"])
+
+    def test_an_unconfigured_widget_previews_as_nothing_not_an_error(self):
+        # The state every widget is in the moment it lands on the canvas.
+        response = self.preview(
+            {"id": -2, "type": "bar", "form": None, "question": None,
+             "config": {}}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["data"])
+
+    def test_string_filters_survive_the_preview_path_too(self):
+        response = self.preview(
+            {
+                "id": -3,
+                "type": "table",
+                "form": self.MONITORING_FORM_ID,
+                "question": None,
+                "config": {
+                    "columns": [{"key": "site", "source": "parent_name"}],
+                    "page_size": 1,
+                },
+            },
+            {"page": "2"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_dropping_the_id_does_not_weaken_the_family_rule(self):
+        """The only check removed is the one about identity.
+
+        Everything that stops a preview reaching outside what the author
+        could have saved still applies.
+        """
+        outsider = Forms.objects.create(
+            name="Someone else's", type=FormTypes.registration, version=1
+        )
+        response = self.preview(
+            {"id": -4, "type": "bar", "form": outsider.id, "question": None,
+             "config": {}}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["field"], "form")
