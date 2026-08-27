@@ -43,33 +43,32 @@ const SAMPLE_TABLE = [
   },
 ];
 
+// Matches what useWidgetData produces for a map: geolocation rows joined
+// with their status bucket. `geo` is [lat, lng], as /maps/geolocation
+// returns it.
 const SAMPLE_MAP = [
   {
     id: 1,
     name: "Nadi Central EPS",
-    lat: -17.78,
-    lng: 177.94,
+    geo: [-17.78, 177.94],
     status: "Operational",
   },
   {
     id: 2,
     name: "Lautoka North EPS",
-    lat: -17.62,
-    lng: 177.45,
+    geo: [-17.62, 177.45],
     status: "Issue",
   },
   {
     id: 3,
     name: "Ba Riverside EPS",
-    lat: -17.53,
-    lng: 177.67,
+    geo: [-17.53, 177.67],
     status: "Operational",
   },
   {
     id: 4,
     name: "Suva South EPS",
-    lat: -18.14,
-    lng: 178.44,
+    geo: [-18.14, 178.44],
     status: "Operational",
   },
 ];

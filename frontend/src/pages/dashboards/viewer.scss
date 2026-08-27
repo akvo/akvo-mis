@@ -1,0 +1,358 @@
+/* =========================================================
+   Dashboard viewer and preview
+   =========================================================
+   Values from doc/design/VIZ-Example/index.html — the view screen at
+   363-412 and its style builders at 679-730 (mode === "view").
+
+   These are close enough to builder.scss to look interchangeable and are
+   not: the view card is square where the canvas card is rounded, the view
+   chips are darker and larger, the container is 1120px against 1080px,
+   and the chart bodies are roughly two thirds taller. Copying the canvas
+   values and adjusting is how those differences get lost. */
+
+.dashboard-view-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #f0f2f5;
+}
+
+/* ── Top bar ── */
+
+.dashboard-view-topbar {
+  height: 57px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid #e7eaee;
+}
+
+.dashboard-view-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-view-back {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f4f6f9;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #334;
+}
+
+.dashboard-view-topbar-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #081c40;
+}
+
+/* Preview only. The published viewer is not a preview of anything, so it
+   carries no badge — the mockup shows one because its view screen is
+   reached from the builder. */
+.dashboard-view-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1651b6;
+  background: #eef2fb;
+  border: 1px solid #cfdcf5;
+  padding: 3px 9px;
+  border-radius: 12px;
+}
+
+/* ── Scrolling content ── */
+
+.dashboard-view-content {
+  flex: 1;
+  overflow-y: auto;
+  background: #f0f2f5;
+}
+
+.dashboard-view-header {
+  background: #fff;
+  padding: 20px 50px;
+}
+
+.dashboard-view-header-inner,
+.dashboard-view-filters-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.dashboard-view-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #081c40;
+}
+
+.dashboard-view-desc {
+  font-size: 14px;
+  color: #666;
+  margin-top: 3px;
+}
+
+/* ── Filter bar ── */
+
+.dashboard-view-filters {
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
+  padding: 12px 50px;
+  margin-bottom: 16px;
+}
+
+.dashboard-view-filters-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Not .builder-filter-chip: that one is the canvas's inert placeholder
+   and is deliberately greyer and smaller. These are live controls. */
+.dashboard-view-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #5b6472;
+  font-size: 13px;
+  border: 1px solid #d9dee4;
+  border-radius: 6px;
+  padding: 7px 12px;
+
+  .ant-picker,
+  .ant-select-selector {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    height: auto !important;
+    font-size: 13px;
+    color: #5b6472;
+  }
+
+  .ant-picker-input > input {
+    font-size: 13px;
+    color: #5b6472;
+  }
+}
+
+/* ── Grid ── */
+
+.dashboard-view-grid {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 50px 60px;
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.dashboard-view-empty {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 64px 50px;
+  text-align: center;
+  color: #8a93a0;
+  font-size: 14px;
+}
+
+/* ── The widget card ── */
+
+.dashboard-view-cell {
+  /* This app has no global border-box reset, so the fixed body heights
+     below would otherwise sit *outside* the padding and make every chart
+     card 32px taller than the mockup's. */
+  box-sizing: border-box;
+
+  * {
+    box-sizing: border-box;
+  }
+
+  background: #fff;
+  /* Square in view mode; the canvas card is 8px. */
+  border-radius: 0;
+  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Each cell fades in as its own request lands, which is what makes the
+     per-widget fetching visible rather than merely true. */
+  animation: dashFadeUp 0.26s ease-out both;
+
+  /* A section title is a heading on the page, not a card. */
+  &--section_title {
+    background: transparent;
+    box-shadow: none;
+    padding: 10px 2px 2px;
+  }
+}
+
+@keyframes dashFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dashboard-view-cell-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f1f3f5;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #081c40;
+}
+
+.dashboard-view-cell-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+
+  /* The chart wrapper must consume the body's fixed height rather than
+     size to its own content — ECharts measures its container, so a
+     content-sized wrapper gives it nothing to work with. `min-height: 0`
+     lets it shrink below content size instead of overflowing the card. */
+  > * {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .dashboard-view-cell--table & {
+    display: block;
+
+    > * {
+      flex: none;
+    }
+  }
+}
+
+/* App.scss:356 pins EVERY akvo-charts chart in the app to a fixed
+   `height: 500px`, and `div[role="figure"]` (0-1-1) outranks the package's
+   own `.ae-container` (0-1-0), so the chart ignores its container. That is
+   invisible everywhere else, because every other card in the app grows to
+   fit its contents — a 500px chart just makes a 500px card.
+
+   These cards have a fixed per-type height from the mockup's _bodyStyle
+   (300/300/320/380) plus `overflow: hidden`, so the same 500px chart is
+   silently cropped instead: the x-axis labels and the bottom of the plot
+   are drawn outside the card and clipped.
+
+   Overridden here rather than in App.scss, because the legacy dashboard
+   still renders against that global and VIZ-009 deletes it anyway. */
+.dashboard-view-cell-body div[role="figure"] {
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-view-cell-note {
+  padding: 16px;
+  text-align: center;
+  color: #8a93a0;
+  font-size: 13px;
+}
+
+/* ── Per-mode renderer sizing (see the spec's UI specification) ──
+   The two `Viz*` components below are shared with the builder canvas and
+   render at different sizes in each. Threading a mode prop through
+   WidgetRenderer to express that would put a caller-dependent branch in
+   the one tree that must not have one, so the cascade carries it. */
+
+.dashboard-view-cell {
+  .viz-kpi-title {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+
+  .viz-kpi-value {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .viz-section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #081c40;
+  }
+}
+
+/* ── Map (akvo-charts MapCluster) ── */
+
+.dashboard-view-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  .ae-container {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* MapCluster's default marker is an empty <span> carrying only an inline
+   background-color and border; the package ships no rule for its class. */
+.custom-marker {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.custom-marker-cluster {
+  background: transparent;
+  border: none;
+}
+
+.dashboard-view-map-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 500;
+  display: flex;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 7px 13px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.dashboard-view-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-view-map-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dashboard-view-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 0;
+}

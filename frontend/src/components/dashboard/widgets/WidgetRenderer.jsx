@@ -1,5 +1,13 @@
 import React from "react";
 import PropTypes from "prop-types";
+// akvo-charts renders <div className="ae-container"> and sizes the chart to
+// that element, but the rule making it fill its parent ships in the
+// package's own stylesheet, which nothing had ever imported. Without it the
+// chart has no height box, so ECharts picks its own and overflows the card
+// — charts came out visibly cropped at the bottom. Imported here because
+// every chart reaches the DOM through this component, on both the viewer
+// and the builder canvas. Same pattern as akvo-react-form in Forms.jsx.
+import "akvo-charts/dist/index.css";
 import VizKPI from "./VizKPI";
 import VizBar from "./VizBar";
 import VizLine from "./VizLine";
