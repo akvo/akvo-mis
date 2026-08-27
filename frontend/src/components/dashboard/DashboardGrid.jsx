@@ -33,11 +33,8 @@ const HEADER_TYPES = ["bar", "line", "pie", "table", "map"];
 const BODY_PADDING = { table: 0, map: 12 };
 
 const DashboardWidgetCell = ({ widget, filters, rootFormId, text }) => {
-  const { data, renderWidget, loading, error, refetch } = useWidgetData(
-    widget,
-    filters,
-    { rootFormId }
-  );
+  const { data, renderWidget, pagination, loading, error, refetch } =
+    useWidgetData(widget, filters, { rootFormId });
 
   const type = widget.type;
   const height = WIDGET_BODY_HEIGHT[type];
@@ -85,7 +82,13 @@ const DashboardWidgetCell = ({ widget, filters, rootFormId, text }) => {
     // renderer, which shows its own "No data" — under `current_state`,
     // sites never monitored are excluded unless include_unmonitored is
     // set, so empty is routine rather than a failure.
-    return <WidgetRenderer widget={renderWidget || widget} data={data} />;
+    return (
+      <WidgetRenderer
+        widget={renderWidget || widget}
+        data={data}
+        pagination={pagination}
+      />
+    );
   };
 
   return (

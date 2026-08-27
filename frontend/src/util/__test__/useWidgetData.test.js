@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, act } from "@testing-library/react";
 import axios from "axios";
 import useWidgetData from "../hooks/useWidgetData";
 import { __clearVisualizationCache } from "../hooks/useVisualizationRequest";
@@ -715,5 +715,76 @@ describe("failure containment", () => {
     expect(a.error).toBeTruthy();
     expect(b.error).toBeNull();
     expect(b.data).toEqual({ value: 7 });
+  });
+});
+
+// ── Server-side pagination ───────────────────────────────────────────
+//
+// /escalation pages on the server and reports `count` for the whole set,
+// returning one page of `results`. The hook hardcoded `page: 1`, so there
+// was no way to reach page 2 — and because the renderer was handed a
+// single page as its entire dataSource, antd concluded there was only one
+// page and hid the pager. A table with page_size 3 over 5 datapoints
+// showed 3 rows and no way to the other 2.
+
+describe("table pagination", () => {
+  const tableWidget = (config = {}) =>
+    widget({
+      type: "table",
+      question: null,
+      config: {
+        criteria: [{ type: "option_equals", question: QUESTION, value: "x" }],
+        columns: [{ key: "site", source: "parent_name" }],
+        page_size: 3,
+        ...config,
+      },
+    });
+
+  test("the first request asks for page 1 at the configured size", async () => {
+    axios.mockResolvedValue({ data: { count: 5, results: [] } });
+    const probe = run(tableWidget());
+    await settle(probe);
+
+    const call = callFor("visualization/escalation");
+    expect(call.params.page).toBe(1);
+    expect(call.params.page_size).toBe(3);
+  });
+
+  test("it reports the whole set's size, not the page's", async () => {
+    axios.mockResolvedValue({
+      data: { count: 5, results: [{ id: 1 }, { id: 2 }, { id: 3 }] },
+    });
+    const probe = run(tableWidget());
+    await settle(probe);
+
+    expect(probe.latest().data).toHaveLength(3);
+    expect(probe.latest().pagination.total).toBe(5);
+    expect(probe.latest().pagination.current).toBe(1);
+    expect(probe.latest().pagination.pageSize).toBe(3);
+  });
+
+  test("asking for another page re-requests it", async () => {
+    axios.mockResolvedValue({ data: { count: 5, results: [] } });
+    const probe = run(tableWidget());
+    await settle(probe);
+
+    await act(async () => {
+      probe.latest().pagination.onChange(2);
+    });
+    await settle(probe);
+
+    const pages = axios.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.url && c.url.includes("escalation"))
+      .map((c) => c.params.page);
+    expect(pages).toContain(2);
+    expect(probe.latest().pagination.current).toBe(2);
+  });
+
+  test("a chart reports no pagination at all", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(widget({ type: "bar" }));
+    await settle(probe);
+    expect(probe.latest().pagination).toBeNull();
   });
 });

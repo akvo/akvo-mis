@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import VizTable from "../widgets/VizTable";
 
@@ -138,5 +138,64 @@ describe("row limit", () => {
       />
     );
     expect(screen.getByText("Site 12")).toBeInTheDocument();
+  });
+});
+
+// ── Server-side pagination ───────────────────────────────────────────
+//
+// The rows in `data` are one page, and `count` for the whole set arrives
+// separately. Handing antd a single page and letting it paginate meant it
+// saw exactly `pageSize` rows, concluded there was one page and — with
+// `hideOnSinglePage` — hid the pager. A table with page_size 3 over 5
+// datapoints showed 3 rows and no route to the other 2.
+
+describe("paging over a set larger than the page", () => {
+  const cols = [{ key: "parent_name", source: "parent_name", label: "Site" }];
+  const page1 = [
+    { id: 1, parent_name: "Site 1" },
+    { id: 2, parent_name: "Site 2" },
+    { id: 3, parent_name: "Site 3" },
+  ];
+  const pager = (overrides = {}) => ({
+    total: 5,
+    current: 1,
+    pageSize: 3,
+    onChange: jest.fn(),
+    ...overrides,
+  });
+
+  test("the pager appears when the set is larger than the page", () => {
+    render(
+      <VizTable
+        config={widget({ columns: cols, page_size: 3 })}
+        data={page1}
+        pagination={pager()}
+      />
+    );
+    expect(screen.getByTitle("2")).toBeInTheDocument();
+  });
+
+  test("choosing a page asks the server for it", () => {
+    const p = pager();
+    render(
+      <VizTable
+        config={widget({ columns: cols, page_size: 3 })}
+        data={page1}
+        pagination={p}
+      />
+    );
+    fireEvent.click(screen.getByTitle("2"));
+    expect(p.onChange).toHaveBeenCalledWith(2, expect.anything());
+  });
+
+  test("one page's worth of records still hides the pager", () => {
+    render(
+      <VizTable
+        config={widget({ columns: cols, page_size: 20 })}
+        data={page1}
+        pagination={pager({ total: 3, pageSize: 20 })}
+      />
+    );
+    expect(screen.queryByTitle("2")).not.toBeInTheDocument();
   });
 });

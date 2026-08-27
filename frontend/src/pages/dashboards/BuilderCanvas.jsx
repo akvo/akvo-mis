@@ -36,11 +36,8 @@ const CanvasWidgetCard = memo(
     onDragOver,
     onDrop,
   }) => {
-    const { data, renderWidget, loading, error, refetch } = useWidgetData(
-      widget,
-      filters,
-      { rootFormId }
-    );
+    const { data, renderWidget, pagination, loading, error, refetch } =
+      useWidgetData(widget, filters, { rootFormId });
 
     const body = () => {
       // Before anything else: a widget still being configured has no data
@@ -71,7 +68,13 @@ const CanvasWidgetCard = memo(
       // own "No data". Under current_state, sites never monitored are
       // excluded unless include_unmonitored is set, so empty is a routine
       // answer rather than a fault.
-      return <WidgetRenderer widget={renderWidget || widget} data={data} />;
+      return (
+        <WidgetRenderer
+          widget={renderWidget || widget}
+          data={data}
+          pagination={pagination}
+        />
+      );
     };
 
     return (

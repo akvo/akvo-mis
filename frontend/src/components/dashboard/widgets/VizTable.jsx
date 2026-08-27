@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 import { Table } from "antd";
 import { serializeColumns } from "../../../util/hooks/useWidgetData";
 
-const VizTable = ({ config, data }) => {
+const VizTable = ({ config, data, pagination }) => {
   const widgetConfig = config?.config || {};
   const columns = useMemo(() => {
     if (!Array.isArray(widgetConfig.columns)) {
@@ -46,9 +46,18 @@ const VizTable = ({ config, data }) => {
       columns={columns}
       dataSource={rows}
       size="small"
+      // Server-side. `data` is one page and `pagination.total` is the
+      // whole set, so antd must be told the total rather than left to infer
+      // it from the rows in front of it — inferring gave it one page every
+      // time and `hideOnSinglePage` then removed the pager entirely.
+      // `onChange` fetches the next page rather than slicing locally.
       pagination={{
-        pageSize: widgetConfig.page_size || 20,
+        current: pagination?.current || 1,
+        pageSize: pagination?.pageSize || widgetConfig.page_size || 20,
+        total: pagination?.total ?? (Array.isArray(data) ? data.length : 0),
+        onChange: pagination?.onChange,
         hideOnSinglePage: true,
+        showSizeChanger: false,
       }}
       scroll={{ x: true }}
     />
@@ -58,6 +67,7 @@ const VizTable = ({ config, data }) => {
 VizTable.propTypes = {
   config: PropTypes.object.isRequired,
   data: PropTypes.array,
+  pagination: PropTypes.object,
 };
 
 export default VizTable;

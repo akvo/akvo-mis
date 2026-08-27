@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import useVisualizationRequest from "./useVisualizationRequest";
 import { expandMeasure, MONITORING_LATEST } from "../dashboardMeasure";
 
@@ -86,7 +86,7 @@ const dateFilters = (filters) => ({
  * accepted and silently dropped rather than rejected. Each divergence is
  * commented where it happens.
  */
-const buildRequest = (widget, filters, rootFormId) => {
+const buildRequest = (widget, filters, rootFormId, page = 1) => {
   const config = widget?.config || {};
   const type = widget?.type;
 
@@ -117,7 +117,7 @@ const buildRequest = (widget, filters, rootFormId) => {
         monitoring_form_id: widget.form,
         criteria,
         columns,
-        page: 1,
+        page,
         page_size: config.page_size || 20,
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
@@ -300,9 +300,22 @@ const normalize = (widget, response, statusResponse) => {
  * @returns {{data, renderWidget, loading, error, refetch, pagination}}
  */
 export const useWidgetData = (widget, filters, { rootFormId } = {}) => {
+  // /escalation pages on the server: it reports `count` for the whole set
+  // and returns one page of `results`. The page therefore has to live here,
+  // where the request is built — the renderer only ever sees one page and
+  // cannot page through a set it was never given.
+  const [page, setPage] = useState(1);
+  const pageSize = widget?.config?.page_size || 20;
+
+  // A narrower set can leave the current page past the end of it, which the
+  // backend answers with an empty page and no way back.
+  useEffect(() => {
+    setPage(1);
+  }, [widget?.id, widget?.form, filters, pageSize]);
+
   const request = useMemo(
-    () => buildRequest(widget, filters, rootFormId),
-    [widget, filters, rootFormId]
+    () => buildRequest(widget, filters, rootFormId, page),
+    [widget, filters, rootFormId, page]
   );
   const statusRequest = useMemo(
     () => buildStatusRequest(widget, filters),
@@ -348,10 +361,17 @@ export const useWidgetData = (widget, filters, { rootFormId } = {}) => {
     };
   }, [widget, extraConfig, color]);
 
+  const onChange = useCallback((next) => setPage(next), []);
+
   return {
     data,
     renderWidget,
-    pagination,
+    // Only a paged widget reports pagination; a chart has none. `total` is
+    // the whole set, `current` and `pageSize` describe the slice in `data`,
+    // and `onChange` fetches another one.
+    pagination: pagination
+      ? { ...pagination, current: page, pageSize, onChange }
+      : null,
     loading: primary.loading || status.loading,
     error: primary.error || status.error,
     refetch: primary.refetch,
