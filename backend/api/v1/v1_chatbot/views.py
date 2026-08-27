@@ -35,6 +35,16 @@ DEFAULT_INSTRUCTIONS = (
     "feature!'\n"
 )
 
+FALLBACK_INSTRUCTIONS = (
+    DEFAULT_INSTRUCTIONS
+    + "\nNotice: You are operating in direct mode without active vector "
+    "file search. Answer general Akvo MIS workflow questions to the best of "
+    "your knowledge, but if you are uncertain about a specific configuration, "
+    "prop, or schema detail, explicitly acknowledge uncertainty and advise "
+    "the user to consult the Akvo MIS platform documentation or their "
+    "system administrator.\n"
+)
+
 
 class ChatMessageView(APIView):
     permission_classes = [IsAuthenticated]
@@ -188,7 +198,7 @@ class ChatMessageView(APIView):
             chat_resp = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": DEFAULT_INSTRUCTIONS},
+                    {"role": "system", "content": FALLBACK_INSTRUCTIONS},
                     {"role": "user", "content": augmented_message},
                 ],
             )
