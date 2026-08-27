@@ -160,7 +160,7 @@ def get_or_create_assistant(
         print(
             f"Warning: Could not create Assistant automatically: {e}{err_detail}"  # noqa
         )
-        return None
+        return ""
 
 
 def upload_kb(

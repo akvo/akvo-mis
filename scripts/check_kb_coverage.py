@@ -15,8 +15,8 @@ PURPOSE & SCOPE:
 
 NOTE ON COVERAGE:
 This script audits terminology presence across the knowledge base. A match
-indicates the term appears in the KB; it verifies presence and surface coverage,
-not subjective semantic documentation quality.
+indicates the term appears in the KB; it verifies surface presence and
+coverage, not subjective semantic documentation quality.
 
 USAGE EXAMPLES:
   # Default audit against local packages and docs/knowledge_base:
@@ -69,7 +69,7 @@ class AuditReport:
 
 
 def clean_markdown_cell(cell: str) -> str:
-    """Normalize markdown cell: strip links, bold, code, italics, whitespace."""
+    """Normalize markdown cell: strip links, bold, code, whitespace."""
     # Convert markdown links [Label](url) -> Label
     cell = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", cell)
     # Strip bold **text** or __text__
@@ -321,7 +321,7 @@ def audit_coverage(
 def resolve_path(
     arg_path: Optional[str], default_candidates: List[Path]
 ) -> Optional[Path]:
-    """Resolve file or directory path from CLI argument or candidate defaults."""
+    """Resolve file or directory path from CLI argument or defaults."""
     if arg_path:
         p = Path(arg_path)
         if p.is_dir():
