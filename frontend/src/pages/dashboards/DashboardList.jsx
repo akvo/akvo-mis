@@ -9,6 +9,7 @@ import { Alert, Button, Modal, Spin, message } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
+  EyeOutlined,
   DeleteOutlined,
   ExclamationCircleOutlined,
 } from "@ant-design/icons";
@@ -17,7 +18,6 @@ import { store, uiText } from "../../lib";
 import { AbilityContext } from "../../components/can";
 import dashboardApi from "../../util/dashboardApi";
 import CreateDashboardModal from "./CreateDashboardModal";
-import WidgetThumbnailStrip from "./WidgetThumbnailStrip";
 import "./style.scss";
 
 const handleApiError = (err, text) => {
@@ -233,12 +233,16 @@ const DashboardList = () => {
           <div className="dashboards-grid">
             {dashboards.map((d) => (
               <div key={d.id} className="dashboard-card">
-                <div
-                  className="dashboard-card-thumb"
-                  onClick={() => navigate(`/dashboards/${d.slug}`)}
-                >
-                  <WidgetThumbnailStrip widgets={d.widgets} />
-                </div>
+                {canDelete && (
+                  <button
+                    className="dashboard-card-delete dashboard-btn-icon dashboard-btn-icon--danger"
+                    title={text.delete || "Delete"}
+                    aria-label={text.delete || "Delete"}
+                    onClick={() => handleDelete(d.id, d.name)}
+                  >
+                    <DeleteOutlined />
+                  </button>
+                )}
                 <div className="dashboard-card-body">
                   <div className="dashboard-card-name-row">
                     <span className="dashboard-card-name">{d.name}</span>
@@ -258,6 +262,13 @@ const DashboardList = () => {
                     &middot; {formatDate(d.updated || d.created)}
                   </div>
                   <div className="dashboard-card-actions">
+                    <button
+                      className="dashboard-btn-preview"
+                      onClick={() => navigate(`/dashboards/${d.slug}`)}
+                    >
+                      <EyeOutlined />
+                      {text.dashboardPreview || "Preview"}
+                    </button>
                     {canEdit && (
                       <button
                         className="dashboard-btn-edit"
@@ -267,15 +278,6 @@ const DashboardList = () => {
                       >
                         <EditOutlined />
                         {text.edit || "Edit"}
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        className="dashboard-btn-icon dashboard-btn-icon--danger"
-                        title={text.delete || "Delete"}
-                        onClick={() => handleDelete(d.id, d.name)}
-                      >
-                        <DeleteOutlined />
                       </button>
                     )}
                   </div>

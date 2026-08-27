@@ -98,18 +98,7 @@
   flex-direction: column;
   border: 1px solid #edf0f3;
   animation: dashFadeUp 0.26s ease-out both;
-
-  .dashboard-card-thumb {
-    height: 132px;
-    background: #f0f2f5;
-    border-bottom: 1px solid #edf0f3;
-    padding: 14px;
-    cursor: pointer;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    align-content: flex-start;
-  }
+  position: relative;
 
   .dashboard-card-body {
     padding: 14px 16px 4px;
@@ -118,6 +107,9 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      /* Clear the corner delete so a long name ellipsises before it
+         reaches the button rather than sliding underneath it. */
+      padding-right: 30px;
     }
 
     .dashboard-card-name {
@@ -139,11 +131,17 @@
     }
   }
 
+  /* Two rows, not one. Preview, Edit and Delete on the same line as the
+     meta left the text competing with three controls for a card that is a
+     third of the grid wide, and the meta lost — it is the line that says
+     how many widgets and when it last changed, which is what makes a list
+     of similar dashboards scannable. */
   .dashboard-card-footer {
     padding: 8px 16px 14px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
   .dashboard-card-meta {
@@ -173,19 +171,36 @@
     }
   }
 
+  /* Destructive, and permanent — it sits apart from the two actions you
+     reach for routinely rather than one tab-stop away from Edit. */
+  .dashboard-card-delete {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+  }
+
   .dashboard-card-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
+
+    /* The two labelled actions share the row equally; delete keeps its
+       icon footprint and does not stretch. */
+    .dashboard-btn-preview,
+    .dashboard-btn-edit {
+      flex: 1;
+      justify-content: center;
+    }
+
   }
 }
 
+.dashboard-btn-preview,
 .dashboard-btn-edit {
   display: flex;
   align-items: center;
   gap: 5px;
-  background: #eef2fb;
-  color: #1651b6;
   border: none;
   border-radius: 16px;
   padding: 5px 12px;
@@ -193,6 +208,23 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+}
+
+/* Preview reads the dashboard, Edit changes it. Same shape so they group,
+   different weight so the destructive-adjacent one is not the quiet one. */
+.dashboard-btn-preview {
+  background: #f0f2f5;
+  color: #5b6472;
+
+  &:hover {
+    background: #e4e8ee;
+    color: #374151;
+  }
+}
+
+.dashboard-btn-edit {
+  background: #eef2fb;
+  color: #1651b6;
 
   &:hover {
     background: #dce5f7;
