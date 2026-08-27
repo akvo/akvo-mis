@@ -372,6 +372,21 @@
   padding: 8px;
 }
 
+/* Shown in place of a chart while a widget has no data source, and when
+   its request fails. Sized to the body's min-height so selecting the
+   widget and configuring it does not make the card jump. */
+.builder-widget-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #7a828d;
+}
+
 /* ── Inspector ── */
 .builder-inspector {
   width: 310px;

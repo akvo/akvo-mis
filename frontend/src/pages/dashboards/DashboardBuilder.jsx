@@ -456,6 +456,12 @@ const DashboardBuilder = () => {
             selectedId={selectedId}
             dashboardName={dashboard.name}
             dashboardDesc={dashboard.description || ""}
+            // The canvas is unfiltered on purpose: the chips above it are
+            // not controls, and an author sizing a widget wants the whole
+            // family, not a slice of it. Preview is where the filter bar
+            // becomes real.
+            filters={EMPTY_FILTERS}
+            rootFormId={dashboard.root_form?.id}
             onSelect={handleSelect}
             onDeselect={handleDeselect}
             onMove={handleMove}

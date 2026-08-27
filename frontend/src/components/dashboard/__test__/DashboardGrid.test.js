@@ -32,8 +32,7 @@ const w = (overrides = {}) => ({
   ...overrides,
 });
 
-// Type-appropriate stand-ins, matching what useWidgetData really returns
-// (and what sampleWidgetData.js produces).
+// Type-appropriate stand-ins, matching what useWidgetData really returns.
 const DATA_FOR = {
   kpi: { value: 42 },
   table: [{ id: 1, site: "Nadi" }],

@@ -222,6 +222,30 @@ describe("endpoint selection", () => {
     await settle(probe);
     expect(axios).not.toHaveBeenCalled();
   });
+
+  // form_id is `required=True` on ValuesFilterSerializer, so a widget that
+  // has not been given a data source yet is a guaranteed 400 — re-issued
+  // on every keystroke once the builder canvas fetches, and rendered as a
+  // network error for what is really an unfinished widget. question_id is
+  // NOT part of this: it is optional, and a count-only KPI legitimately
+  // has none.
+  test.each(["kpi", "bar", "line", "pie"])(
+    "a %s with no data source issues no request",
+    async (type) => {
+      const probe = run(widget({ type, form: null, question: null }));
+      await settle(probe);
+      expect(axios).not.toHaveBeenCalled();
+    }
+  );
+
+  test("a count-only KPI still requests without a question", async () => {
+    axios.mockResolvedValue({ data: { data: [{ label: "Total", value: 5 }] } });
+    const probe = run(widget({ question: null }));
+    await settle(probe);
+    const call = callFor("visualization/values");
+    expect(call.params.form_id).toBe(MONITORING);
+    expect(call.params.question_id).toBeUndefined();
+  });
 });
 
 describe("entries the backend would reject are dropped, not sent", () => {
@@ -486,7 +510,7 @@ describe("map status lookup", () => {
   });
 });
 
-// ── Normalization to the sampleWidgetData contract ───────────────────
+// ── Normalization to the renderers' input contract ───────────────────
 
 describe("normalization", () => {
   test("kpi unwraps the envelope to {value}", async () => {

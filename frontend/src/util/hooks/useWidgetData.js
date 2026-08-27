@@ -7,11 +7,10 @@ import { expandMeasure, MONITORING_LATEST } from "../dashboardMeasure";
 // =========================================================
 //
 // Three jobs, in order: decide what to ask for, ask, then reshape the
-// answer into the shape `pages/dashboards/sampleWidgetData.js` produces.
-// That last step is why none of the seven widget renderers needed changing
-// for a data reason — the sample data the builder canvas already feeds them
-// *is* their input contract, so matching it is cheaper than teaching seven
-// components to read API envelopes.
+// answer into the shape the seven `Viz*` renderers already read. That last
+// step is why none of them needed changing for a data reason: their input
+// contract was fixed before this hook existed, and matching it is cheaper
+// than teaching seven presentational components to read API envelopes.
 //
 // Built on `useVisualizationRequest`, which is deliberately left alone: it
 // is already endpoint-and-params generic and carries the module-level LRU
@@ -152,6 +151,16 @@ const buildRequest = (widget, filters, rootFormId) => {
   }
 
   // kpi, bar, line, pie
+  if (!widget.form) {
+    // form_id is `required=True` on ValuesFilterSerializer, so a widget
+    // whose data source has not been picked yet is a guaranteed 400. That
+    // was harmless while only the viewer fetched — the server never stores
+    // such a widget — but the builder canvas renders unsaved state, where
+    // a half-built widget is the normal case for as long as it takes to
+    // configure it. question_id is deliberately not part of this check:
+    // it is optional, and a count-only KPI has none.
+    return null;
+  }
   return {
     endpoint: "visualization/values",
     params: compact({

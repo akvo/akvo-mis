@@ -1,18 +1,31 @@
-import React, { memo, useCallback, useMemo, useRef } from "react";
+import React, { memo, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
+import { Button, Skeleton } from "antd";
 import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
 import WidgetRenderer from "../../components/dashboard/widgets/WidgetRenderer";
-import getSampleData from "./sampleWidgetData";
-import { TYPE_LABELS } from "./builderConstants";
+import useWidgetData from "../../util/hooks/useWidgetData";
+import { TYPE_LABELS, NEEDS_FORM } from "./builderConstants";
 
+// The canvas fetches through the same hook as the viewer and the preview.
+// It used to render a hardcoded array keyed on widget.type, which meant a
+// bar chart showed the same four invented categories whatever question it
+// was pointed at, and changing that question produced no request and no
+// visible change. A chart of plausible numbers for the wrong question is
+// worse than no chart at all — see VIZ-006's opening note.
+//
+// What stays different from the viewer's cell is the chrome: the canvas
+// draws its own header, actions and heights, because it is an editing
+// surface. Only the body is shared.
 const CanvasWidgetCard = memo(
   ({
     widget,
     index,
+    filters,
+    rootFormId,
     isSelected,
     onSelect,
     onMove,
@@ -21,7 +34,43 @@ const CanvasWidgetCard = memo(
     onDragOver,
     onDrop,
   }) => {
-    const sampleData = useMemo(() => getSampleData(widget.type), [widget.type]);
+    const { data, renderWidget, loading, error, refetch } = useWidgetData(
+      widget,
+      filters,
+      { rootFormId }
+    );
+
+    const body = () => {
+      // Before anything else: a widget still being configured has no data
+      // source, so there is nothing to ask for and nothing honest to draw.
+      // Saying so is the point — this is where the author is told what the
+      // widget still needs.
+      if (NEEDS_FORM.has(widget.type) && !widget.form) {
+        return (
+          <div className="builder-widget-note">
+            Choose a data source in the panel on the right.
+          </div>
+        );
+      }
+      if (loading) {
+        return <Skeleton active paragraph={{ rows: 2 }} />;
+      }
+      if (error) {
+        return (
+          <div className="builder-widget-note">
+            <div>Could not load this widget&apos;s data.</div>
+            <Button type="link" size="small" onClick={refetch}>
+              Retry
+            </Button>
+          </div>
+        );
+      }
+      // An empty successful response reaches the renderer, which shows its
+      // own "No data". Under current_state, sites never monitored are
+      // excluded unless include_unmonitored is set, so empty is a routine
+      // answer rather than a fault.
+      return <WidgetRenderer widget={renderWidget || widget} data={data} />;
+    };
 
     return (
       <div
@@ -78,9 +127,7 @@ const CanvasWidgetCard = memo(
             </button>
           </div>
         </div>
-        <div className="builder-widget-body">
-          <WidgetRenderer widget={widget} data={sampleData} />
-        </div>
+        <div className="builder-widget-body">{body()}</div>
       </div>
     );
   }
@@ -91,6 +138,8 @@ CanvasWidgetCard.displayName = "CanvasWidgetCard";
 CanvasWidgetCard.propTypes = {
   widget: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
+  filters: PropTypes.object,
+  rootFormId: PropTypes.number,
   isSelected: PropTypes.bool.isRequired,
   onSelect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
@@ -105,6 +154,8 @@ const BuilderCanvas = ({
   selectedId,
   dashboardName,
   dashboardDesc,
+  filters,
+  rootFormId,
   onSelect,
   onDeselect,
   onMove,
@@ -221,6 +272,8 @@ const BuilderCanvas = ({
                 key={w.id}
                 widget={w}
                 index={idx}
+                filters={filters}
+                rootFormId={rootFormId}
                 isSelected={w.id === selectedId}
                 onSelect={onSelect}
                 onMove={onMove}
@@ -242,6 +295,8 @@ BuilderCanvas.propTypes = {
   selectedId: PropTypes.number,
   dashboardName: PropTypes.string,
   dashboardDesc: PropTypes.string,
+  filters: PropTypes.object,
+  rootFormId: PropTypes.number,
   onSelect: PropTypes.func.isRequired,
   onDeselect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
