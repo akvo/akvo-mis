@@ -95,12 +95,17 @@ const buildRequest = (widget, filters, rootFormId) => {
   }
 
   if (type === "table") {
-    // Both are `required=True` on EscalationFilterSerializer, so an
-    // unconfigured table is a guaranteed 400 — re-issued on every filter
+    // Columns are still `required=True` on EscalationFilterSerializer, so
+    // a table with none is a guaranteed 400 — re-issued on every filter
     // change and rendered as a network error for a configuration gap.
+    //
+    // Criteria are NOT required: they narrow the datapoint list, they do
+    // not define it, so a table with no conditions is the plain list of
+    // every datapoint. That is the useful default for a dashboard table
+    // and it is what the endpoint now returns.
     const criteria = serializeCriteria(config.criteria);
     const columns = serializeColumns(config.columns);
-    if (!criteria || !columns) {
+    if (!columns) {
       return null;
     }
     return {

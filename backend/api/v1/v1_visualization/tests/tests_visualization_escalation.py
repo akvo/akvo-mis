@@ -33,12 +33,50 @@ class EscalationTestCases(VisualizationValuesTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_missing_criteria(self):
-        """criteria is required — returns 400."""
+    def test_no_criteria_lists_every_datapoint(self):
+        """criteria is optional — no conditions means no narrowing.
+
+        The escalation grammar narrows a list of datapoints; it does not
+        define one. Requiring it was an artifact of the Fiji escalation
+        table, where a dashboard only ever asked "which sites need
+        attention". A dashboard table wants the plain list just as often,
+        and the compute layer already supports it —
+        build_escalation_criteria_filter([]) is an empty Q(), which filters
+        nothing out.
+        """
         response = self.client.get(
             f"{self.BASE_ESC_URL}/{self.registration.id}"
             f"?monitoring_form_id={self.monitoring.id}"
             "&columns=name:parent_name"
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        # Both registration datapoints, not the subset any one condition
+        # would have matched.
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(
+            sorted(row["name"] for row in body["results"]),
+            ["Site Alpha", "Site Beta"],
+        )
+
+    def test_blank_criteria_is_the_same_as_none(self):
+        """An empty criteria= is not a malformed one."""
+        response = self.client.get(
+            f"{self.BASE_ESC_URL}/{self.registration.id}"
+            f"?monitoring_form_id={self.monitoring.id}"
+            "&columns=name:parent_name"
+            "&criteria="
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 2)
+
+    def test_malformed_criteria_is_still_rejected(self):
+        """Optional is not the same as unvalidated."""
+        response = self.client.get(
+            f"{self.BASE_ESC_URL}/{self.registration.id}"
+            f"?monitoring_form_id={self.monitoring.id}"
+            "&columns=name:parent_name"
+            "&criteria=option_equals:600203"
         )
         self.assertEqual(response.status_code, 400)
 

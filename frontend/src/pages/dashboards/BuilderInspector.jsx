@@ -22,6 +22,7 @@ import {
   COLOR_SWATCHES,
   TYPE_LABELS,
   defaultMeasure,
+  pruneConfigForForm,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -245,12 +246,19 @@ const BuilderInspector = ({
                   wType,
                   forms.find((f) => f.id === val)
                 );
+                // Table columns and criteria carry question ids of their
+                // own; left behind they point at the previous form and the
+                // backend refuses the request.
+                const pruned = pruneConfigForForm(
+                  widget.config,
+                  questionsForForm(val)
+                );
                 onWidgetChange({
                   ...widget,
                   form: val,
                   question: null,
                   config: {
-                    ...widget.config,
+                    ...pruned,
                     measure: supported
                       ? widget.config?.measure || supported
                       : null,

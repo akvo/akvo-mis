@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import BuilderInspector from "../BuilderInspector";
+import { pruneConfigForForm } from "../builderConstants";
 
 // =========================================================
 // Removing a criterion
@@ -95,5 +96,73 @@ describe("criteria rows can be removed", () => {
 
     const next = onWidgetChange.mock.calls[0][0];
     expect(next.config.criteria).toEqual([]);
+  });
+});
+
+// =========================================================
+// Switching a widget's form must not leave stale question ids behind
+// =========================================================
+//
+// Changing the form already clears `widget.question`, but table columns and
+// criteria carry question ids of their own and were left untouched. A real
+// dashboard ended up with a table on form 10001 whose column referenced
+// question 102 — a question belonging to form 1 — which the backend rejects
+// because a column's question must belong to the widget's form.
+
+describe("pruneConfigForForm", () => {
+  const QUESTIONS = [{ id: 600203 }, { id: 600204 }];
+
+  test("drops columns whose question is not in the new form", () => {
+    const config = {
+      columns: [
+        { key: "parent_name", source: "parent_name" },
+        { key: "answer_600203", source: "answer", question: 600203 },
+        { key: "answer_102", source: "answer", question: 102 },
+      ],
+    };
+    expect(pruneConfigForForm(config, QUESTIONS).columns).toEqual([
+      { key: "parent_name", source: "parent_name" },
+      { key: "answer_600203", source: "answer", question: 600203 },
+    ]);
+  });
+
+  test("drops criteria whose question is not in the new form", () => {
+    const config = {
+      criteria: [
+        { type: "option_equals", question: 600204, value: "a" },
+        { type: "option_equals", question: 102, value: "b" },
+      ],
+    };
+    expect(pruneConfigForForm(config, QUESTIONS).criteria).toEqual([
+      { type: "option_equals", question: 600204, value: "a" },
+    ]);
+  });
+
+  test("keeps question-free entries, which are form-independent", () => {
+    const config = {
+      columns: [
+        { key: "parent_name", source: "parent_name" },
+        { key: "administration", source: "administration" },
+      ],
+      criteria: [],
+    };
+    expect(pruneConfigForForm(config, QUESTIONS).columns).toHaveLength(2);
+  });
+
+  test("leaves keys it does not own alone", () => {
+    const config = { measure: "current_state", page_size: 50 };
+    const out = pruneConfigForForm(config, QUESTIONS);
+    expect(out.measure).toBe("current_state");
+    expect(out.page_size).toBe(50);
+  });
+
+  test("an empty form offering drops every question-bound entry", () => {
+    const config = {
+      columns: [{ key: "answer_1", source: "answer", question: 1 }],
+      criteria: [{ type: "option_equals", question: 1, value: "x" }],
+    };
+    const out = pruneConfigForForm(config, []);
+    expect(out.columns).toEqual([]);
+    expect(out.criteria).toEqual([]);
   });
 });

@@ -325,21 +325,37 @@ describe("a table that cannot be requested is not requested", () => {
         columns: [],
       },
     ],
-    [
-      "empty criteria",
-      { criteria: [], columns: [{ key: "site", source: "parent_name" }] },
-    ],
-    ["neither", {}],
+    ["neither columns nor criteria", {}],
   ])("%s", async (_label, config) => {
     const probe = run(widget({ type: "table", question: null, config }));
     await settle(probe);
-    // /escalation marks both criteria and columns required, so this would
-    // be a guaranteed 400 re-issued on every filter change.
+    // Columns are what the request asks for and what the grid draws, and
+    // /escalation still marks them required — without them this would be a
+    // guaranteed 400 re-issued on every filter change.
     expect(axios).not.toHaveBeenCalled();
   });
-});
 
-// ── Filter merge: the endpoints disagree, so the mapping is per type ──
+  test("no criteria is a request for every datapoint, not a broken one", async () => {
+    axios.mockResolvedValue({ data: { count: 0, results: [] } });
+    const probe = run(
+      widget({
+        type: "table",
+        question: null,
+        config: {
+          criteria: [],
+          columns: [{ key: "site", source: "parent_name" }],
+        },
+      })
+    );
+    await settle(probe);
+
+    const call = callFor("visualization/escalation");
+    expect(call).toBeDefined();
+    // Nothing to narrow by, so the parameter is left off entirely rather
+    // than sent empty.
+    expect(call.params).not.toHaveProperty("criteria");
+  });
+});
 
 describe("filter merge", () => {
   test("/values takes all four parameters", async () => {

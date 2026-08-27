@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import { Table } from "antd";
+import { serializeColumns } from "../../../util/hooks/useWidgetData";
 
 const VizTable = ({ config, data }) => {
   const widgetConfig = config?.config || {};
@@ -22,22 +23,20 @@ const VizTable = ({ config, data }) => {
     return data.map((row, i) => ({ ...row, key: row.id || i }));
   }, [data]);
 
-  if (columns.length === 0) {
+  // Columns are the one thing a table cannot do without: they are what the
+  // request asks for and what the grid draws. Criteria are optional — no
+  // conditions means every datapoint — so there is nothing to prompt for
+  // there, and an unfinished condition simply does not narrow anything.
+  //
+  // Readiness is decided by the same function that builds the request
+  // rather than by counting array entries, so "what we say is missing" and
+  // "what stops the request" cannot drift apart: a `latest_date` column
+  // with no question id is dropped by the serializer, and a table holding
+  // only that one asks for nothing.
+  if (columns.length === 0 || !serializeColumns(widgetConfig.columns)) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
         Configure table columns in the inspector
-      </div>
-    );
-  }
-
-  // /escalation requires criteria as well as columns, so until there is at
-  // least one condition useWidgetData issues no request and `data` stays
-  // null. Without saying so the widget drew an empty grid, which reads as a
-  // broken table rather than an unfinished one.
-  if (!Array.isArray(widgetConfig.criteria) || !widgetConfig.criteria.length) {
-    return (
-      <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        Add at least one filter condition in the inspector
       </div>
     );
   }

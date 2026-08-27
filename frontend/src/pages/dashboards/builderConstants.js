@@ -185,6 +185,31 @@ export const defaultMeasure = (type, form) =>
     ? "current_state"
     : null;
 
+/**
+ * Drop config entries bound to questions the new form does not have.
+ *
+ * Changing a widget's form already clears `widget.question`, but a table's
+ * columns and criteria carry question ids of their own and used to survive
+ * the switch. That left a table on one form referencing another form's
+ * question, which the backend rejects — a column's question must belong to
+ * the widget's form — so the whole table went blank with no explanation.
+ *
+ * Entries with no question (parent_name, administration) are
+ * form-independent and are kept.
+ */
+export const pruneConfigForForm = (config, questions = []) => {
+  const allowed = new Set((questions || []).map((q) => q.id));
+  const belongs = (entry) => !entry?.question || allowed.has(entry.question);
+  const next = { ...(config || {}) };
+  if (Array.isArray(next.columns)) {
+    next.columns = next.columns.filter(belongs);
+  }
+  if (Array.isArray(next.criteria)) {
+    next.criteria = next.criteria.filter(belongs);
+  }
+  return next;
+};
+
 export const TYPE_LABELS = {
   kpi: "KPI",
   bar: "Bar",

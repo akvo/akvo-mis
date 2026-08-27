@@ -4,14 +4,17 @@ import "@testing-library/jest-dom";
 import VizTable from "../widgets/VizTable";
 
 // =========================================================
-// The table's three states
+// What a table needs before it can ask for anything
 // =========================================================
 //
-// /escalation requires BOTH `criteria` and `columns`
-// (EscalationFilterSerializer: required=True on each), so useWidgetData
-// issues no request until both exist. Without a state for the missing half
-// the widget rendered an empty grid and said nothing, which reads as "the
-// table is broken" rather than "the table is not finished".
+// Columns, and only columns. They are what the request asks for and what
+// the grid draws, and /escalation still marks them required.
+//
+// Criteria are not required: the criteria grammar NARROWS a list of
+// datapoints, it does not define one, so a table with no conditions is the
+// plain list of every datapoint — which is what a dashboard table usually
+// wants. Readiness is asked of the same serializer that builds the request,
+// so "what we say is missing" and "what stops the request" cannot drift.
 
 const widget = (config = {}) => ({
   id: 1,
@@ -42,11 +45,46 @@ describe("configuration states", () => {
     expect(screen.getByText(/column/i)).toBeInTheDocument();
   });
 
-  test("columns but no criteria asks for a filter condition", () => {
-    render(<VizTable config={widget({ columns: COLUMNS })} data={null} />);
-    // The half the mockup never had, and the reason a fully "configured"
-    // table stayed empty: no criteria means no request at all.
-    expect(screen.getByText(/filter condition/i)).toBeInTheDocument();
+  // Criteria are optional: they narrow the datapoint list, they do not
+  // define it. A table with columns and no conditions is the plain list of
+  // every datapoint, which is what a dashboard table usually wants — so
+  // there is nothing to prompt for, and no gate to pass.
+  test("columns and no criteria renders rows, not a prompt", () => {
+    render(<VizTable config={widget({ columns: COLUMNS })} data={ROWS} />);
+    expect(screen.getByText("Conrad-Forbes")).toBeInTheDocument();
+    expect(screen.queryByText(/filter condition/i)).not.toBeInTheDocument();
+  });
+
+  test("an unfinished condition simply does not narrow anything", () => {
+    // [{type: "option_equals", question: 10106, value: ""}] — the shape a
+    // real dashboard hit. It used to serialize to nothing and cancel the
+    // whole request, leaving a grid with headers and no rows.
+    render(
+      <VizTable
+        config={widget({
+          columns: COLUMNS,
+          criteria: [{ type: "option_equals", question: 600203, value: "" }],
+        })}
+        data={ROWS}
+      />
+    );
+    expect(screen.getByText("Conrad-Forbes")).toBeInTheDocument();
+  });
+
+  test("columns the serializer would drop count as no columns", () => {
+    // `latest_date` without a question id is rejected by the backend and
+    // dropped client-side, so a table whose only column is that one asks
+    // for nothing.
+    render(
+      <VizTable
+        config={widget({
+          columns: [{ key: "latest_date", source: "latest_date" }],
+          criteria: CRITERIA,
+        })}
+        data={null}
+      />
+    );
+    expect(screen.getByText(/column/i)).toBeInTheDocument();
   });
 
   test("fully configured renders the rows", () => {
