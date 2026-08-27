@@ -333,443 +333,115 @@ def add_rst_section(pdf: SimplePDFWriter, source_dir: Path, fname: str):
 
 
 # ---------------------------------------------------------------------------
-# Form Editor supplementary PDF
+# Dynamic Markdown Knowledge Base Compiler
 # ---------------------------------------------------------------------------
 
 
-def build_form_editor_docs_pdf(output_pdf: Path):
-    """Generates akvo-react-form-editor-docs.pdf."""
+def add_markdown_file(pdf: SimplePDFWriter, file_path: Path):
+    """Parses a Markdown file and appends content to SimplePDFWriter."""
+    if not file_path.exists():
+        return
+
+    text = file_path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+
+    in_code_block = False
+    current_paragraph = []
+
+    def flush_paragraph():
+        if current_paragraph:
+            combined = " ".join(current_paragraph).strip()
+            if combined:
+                pdf.add_paragraph(combined)
+            current_paragraph.clear()
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Code block fences
+        if stripped.startswith("```"):
+            flush_paragraph()
+            in_code_block = not in_code_block
+            continue
+
+        if in_code_block:
+            pdf.add_line(line[:78])
+            continue
+
+        if not stripped:
+            flush_paragraph()
+            continue
+
+        # Horizontal rules
+        if re.match(r"^---+$", stripped) or re.match(r"^===+$", stripped):
+            flush_paragraph()
+            continue
+
+        # Headings
+        if stripped.startswith("#"):
+            flush_paragraph()
+            if stripped.startswith("###"):
+                level = 3
+                heading_text = stripped.lstrip("#").strip()
+            elif stripped.startswith("##"):
+                level = 2
+                heading_text = stripped.lstrip("#").strip()
+            else:
+                level = 1
+                heading_text = stripped.lstrip("#").strip()
+            pdf.add_heading(heading_text, level=level)
+            continue
+
+        # Bullet points and numbered items
+        bullet_match = re.match(r"^(\s*)([-*]|\d+\.)\s+(.+)$", line)
+        if bullet_match:
+            flush_paragraph()
+            indent_spaces = len(bullet_match.group(1))
+            indent_level = min(2, indent_spaces // 2)
+            bullet_text = bullet_match.group(3).strip()
+            pdf.add_bullet(bullet_text, indent=indent_level)
+            continue
+
+        # Markdown tables
+        if stripped.startswith("|") and stripped.endswith("|"):
+            flush_paragraph()
+            # Skip separator rows like |---|---|
+            if re.match(r"^\|[\s\-:|]+\|$", stripped):
+                continue
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            row_str = " | ".join(cells)
+            pdf.add_bullet(row_str, indent=0)
+            continue
+
+        # Regular prose line -> accumulate in current paragraph
+        current_paragraph.append(stripped)
+
+    flush_paragraph()
+
+
+def build_form_editor_docs_pdf(output_pdf: Path, kb_dir: Path = None):
+    """Generates akvo-react-form-editor-docs.pdf from docs/knowledge_base/."""
     print(f"Building supplementary {output_pdf}...")
-    pdf = SimplePDFWriter(title="Akvo MIS - Form Builder Guide")
+    pdf = SimplePDFWriter(title="Akvo MIS - Form Builder & Knowledge Base")
 
-    pdf.add_heading("Akvo Form Builder & Runtime Reference Guide", level=1)
+    pdf.add_heading("Akvo Form Builder & System Knowledge Base", level=1)
     pdf.add_paragraph(
-        "Technical reference for the Akvo MIS Form Builder. Covers the "
-        "editor interface, question configuration, skip logic, form "
-        "lifecycle, and all supported question types."
-    )
-
-    pdf.add_heading("1. Editor Interface Overview", level=2)
-    pdf.add_paragraph(
-        "Access the Form Builder editor from: Control Centre > Form Builder > "
-        "(create or select a form). The editor has four workspace tabs:"
-    )
-    pdf.add_bullet(
-        "Edit Form - the main drag-and-drop editor for question groups "
-        "and questions"
-    )
-    pdf.add_bullet(
-        "Translations - add translated labels and option text for "
-        "multi-language forms"
-    )
-    pdf.add_bullet(
-        "Preview - live preview of the form as respondents will see it; "
-        "use this to test skip logic"
-    )
-    pdf.add_bullet(
-        "JSON - view and optionally edit the raw form schema (advanced users)"
+        "Comprehensive technical reference, form design recipes, property "
+        "catalogs, calculation formulas, and platform capability guides "
+        "for Akvo MIS."
     )
 
-    pdf.add_heading("2. Question Groups", level=2)
-    pdf.add_paragraph(
-        "Questions are organised into Question Groups, which become named "
-        "sections in the web and mobile form. Every form must have at least "
-        "one group."
-    )
-    pdf.add_bullet("Add Group - click + Add Group below the last group")
-    pdf.add_bullet("Rename - click the group name to edit it in-place")
-    pdf.add_bullet(
-        "Repeatable - toggle Repeatable to allow enumerators to add multiple "
-        "entries (e.g. one row per household member)"
-    )
-    pdf.add_bullet("Reorder - drag the group handle to change the order")
-    pdf.add_bullet(
-        "Delete - remove a group and all its questions "
-        "(cannot be undone on a published form)"
-    )
-
-    pdf.add_heading("3. Question Configuration", level=2)
-    pdf.add_paragraph(
-        "Click any question to open its settings panel. Common settings:"
-    )
-    pdf.add_bullet("Label - the question text shown to the respondent")
-    pdf.add_bullet(
-        "Variable Name - internal identifier used in exports and autofields; "
-        "must be unique within the form"
-    )
-    pdf.add_bullet(
-        "Tooltip / Help Text - additional guidance shown below the question"
-    )
-    pdf.add_bullet(
-        "Required - blocks submission until answered "
-        "(ignored when hidden by skip logic)"
-    )
-    pdf.add_bullet(
-        "Double Entry - prompts the respondent to enter the value twice. "
-        "Best used for critical values such as ID numbers, phone numbers, "
-        "or financial amounts where a typo would be costly."
-    )
-    pdf.add_bullet(
-        "Password / Show-Hide (Text fields only) - when enabled the input "
-        "text is masked like a password field. The respondent can toggle "
-        "visibility with an eye icon. Useful for sensitive fields such as "
-        "PIN codes or personal identifiers."
-    )
-    pdf.add_paragraph("Type-specific settings:")
-    pdf.add_bullet("Number: Min Value, Max Value validation bounds")
-    pdf.add_bullet("Text: optional character limit")
-    pdf.add_bullet("Option / Multiple Option: add, remove, reorder choices")
-    pdf.add_bullet("Cascade: select source data list")
-    pdf.add_bullet(
-        "Autofield: define formula using references to other variable names"
-    )
-
-    pdf.add_heading("3b. Copying a Question", level=2)
-    pdf.add_paragraph(
-        "Any existing question can be duplicated to save time when building "
-        "forms with similar questions."
-    )
-    pdf.add_bullet(
-        "How to copy: Click the COPY QUESTION HERE button that appears below "
-        "a question card in the editor. A duplicate of the question is "
-        "inserted immediately after."
-    )
-    pdf.add_bullet(
-        "What is copied: The question type, label, settings, and options are "
-        "all duplicated. The variable name is also copied — remember to "
-        "rename it to keep variable names unique within the form."
-    )
-    pdf.add_bullet(
-        "Skip logic is NOT copied: Any skip logic rules on the original "
-        "question are not transferred to the copy. Configure skip logic "
-        "separately on the new question."
-    )
-
-    pdf.add_heading("4. Skip Logic (Dependencies)", level=2)
-    pdf.add_paragraph(
-        "Skip logic hides a question until a specific condition is met. "
-        "Configured on the dependent question (the one shown conditionally)."
-    )
-    pdf.add_paragraph("To add skip logic:")
-    pdf.add_bullet("1. Click the question that should be conditionally shown")
-    pdf.add_bullet("2. Open its Skip Logic tab")
-    pdf.add_bullet("3. Select the Source Question (trigger) from the dropdown")
-    pdf.add_bullet(
-        "4. Choose the Logic operator (see below) and enter the value"
-    )
-    pdf.add_bullet("5. Save")
-    pdf.add_paragraph("Logic operators available:")
-    pdf.add_bullet(
-        "Equal (=) - shows the question when the answer exactly matches the "
-        "specified value. Most common operator."
-    )
-    pdf.add_bullet(
-        "Not Equal (!=) - shows the question when the answer does NOT match "
-        "the specified value."
-    )
-    pdf.add_bullet(
-        "Contains - shows the question when the answer text includes the "
-        "specified string. Useful for text and multiple-choice fields."
-    )
-    pdf.add_bullet(
-        "Greater Than (>) / Less Than (<) - shows the question when a "
-        "numeric answer is above or below a threshold."
-    )
-    pdf.add_bullet(
-        "Between (Min / Max) - shows the question when a numeric answer "
-        "falls within a specified range."
-    )
-    pdf.add_paragraph(
-        "Multiple conditions: You can add more than one skip logic condition "
-        "to a single question. All conditions are evaluated together — the "
-        "question is shown when at least one condition is satisfied."
-    )
-    pdf.add_paragraph(
-        "Best practices: avoid circular dependencies, keep chains shallow, "
-        "and always test in the Preview tab before publishing."
-    )
-
-    pdf.add_heading("5. Question Types Reference", level=2)
-    types_info = [
-        (
-            "Text (Input)",
-            "Single-line free text. For names, identifiers, short answers.",
-        ),
-        (
-            "Text Area (Memo)",
-            "Multi-line text. Use for descriptions, notes, long answers.",
-        ),
-        (
-            "Number",
-            "Integer or decimal. Supports Min/Max validation bounds.",
-        ),
-        (
-            "Date",
-            "Calendar date picker (YYYY-MM-DD). Use for visit dates, "
-            "dates of birth.",
-        ),
-        (
-            "Image / Photo",
-            "Camera capture or file upload. Stored server-side with the "
-            "submission.",
-        ),
-        (
-            "Geo / Geopoint",
-            "Latitude + Longitude capture. On mobile reads device GPS "
-            "automatically.",
-        ),
-        (
-            "Option",
-            "Single choice (radio buttons). Configure allowed choices.",
-        ),
-        (
-            "Multiple Option",
-            "Multiple choice (checkboxes). Configure allowed choices.",
-        ),
-        (
-            "Cascade",
-            "Hierarchical dropdowns (e.g. Country > Province > District). "
-            "Requires a configured cascade data source.",
-        ),
-        (
-            "Entity",
-            "Dropdown linked to an entity type (e.g. schools). Requires "
-            "entity data to be configured.",
-        ),
-        (
-            "Autofield",
-            "Computed field derived from other answers via a formula. "
-            "Not editable by the respondent.",
-        ),
-        (
-            "Attachment",
-            "File upload for non-image files (PDF, spreadsheet, etc).",
-        ),
-        (
-            "Signature",
-            "Hand-drawn signature pad; stored as an image.",
-        ),
-        (
-            "Table",
-            "Tabular grid of answers. Cannot be created in the Form Builder "
-            "UI - must be defined in the form JSON.",
-        ),
-        (
-            "Tree",
-            "Nested hierarchical selector. Cannot be created in the "
-            "Form Builder UI.",
-        ),
-        (
-            "Administration",
-            "Linked to the administration hierarchy. Cannot be created in "
-            "the Form Builder UI.",
-        ),
-    ]
-    for qtype, desc in types_info:
-        pdf.add_bullet(f"{qtype}: {desc}")
-
-    pdf.add_heading("6. Form Lifecycle", level=2)
-    pdf.add_paragraph("Forms progress through these states:")
-    pdf.add_bullet(
-        "Draft - the form is being edited and cannot receive submissions"
-    )
-    pdf.add_bullet("Published - the form is live; enumerators can submit data")
-    pdf.add_bullet(
-        "Editing a published form - creates a new draft version; the previous "
-        "version remains active until the new version is published"
-    )
-    pdf.add_paragraph("Two form types exist:")
-    pdf.add_bullet(
-        "Registration Form - creates a new data record (entity/location)"
-    )
-    pdf.add_bullet(
-        "Monitoring Form - adds ongoing data points to an existing record "
-        "via a parent_id reference"
-    )
-
-    pdf.add_heading("7. Form Import and Export", level=2)
-    pdf.add_bullet(
-        "Import JSON - upload a previously exported JSON schema to create "
-        "a new form"
-    )
-    pdf.add_bullet(
-        "Import XLSForm - upload an XLSForm Excel file to create a form "
-        "from an external definition"
-    )
-    pdf.add_bullet(
-        "Export JSON - download the raw JSON schema for the current form"
-    )
-    pdf.add_bullet(
-        "Export XLSForm - download the form as an XLSForm-compatible Excel "
-        "file (must be enabled in Settings)"
-    )
-
-    pdf.add_heading("8. Version History", level=2)
-    pdf.add_paragraph(
-        "Every time a draft is published a version snapshot is saved. "
-        "Open the Version History drawer (clock icon, top-right of editor) "
-        "to view previous versions. Older versions are read-only."
-    )
-
-    pdf.add_heading("8b. Translations Tab", level=2)
-    pdf.add_paragraph(
-        "The Translations tab lets you provide translated versions of all "
-        "user-facing text in the form so respondents can answer in their "
-        "preferred language."
-    )
-    pdf.add_bullet(
-        "What can be translated: question labels, tooltip/help text, option "
-        "choice labels, and question group names."
-    )
-    pdf.add_bullet(
-        "How to add a language: Use the language selector at the top of the "
-        "Translations tab to choose a language, then fill in the translated "
-        "text for each field."
-    )
-    pdf.add_bullet(
-        "Multiple languages: You can add as many languages as needed. Each "
-        "language appears as a separate column in the translations grid."
-    )
-    pdf.add_bullet(
-        "Untranslated fields: If a field has no translation for the selected "
-        "language, the form falls back to displaying the original text."
-    )
-
-    pdf.add_heading(
-        "8c. Extra Content Blocks (extra field)", level=2
-    )
-    pdf.add_paragraph(
-        "The 'extra' field allows HTML content — such as explanatory text, "
-        "images, links, or formatted instructions — to be placed immediately "
-        "before or after a question in the web form."
-    )
-    pdf.add_bullet(
-        "Before block (extra.before): Displays the HTML content above the "
-        "question. Use it to provide context, instructions, or section "
-        "headers that guide the respondent."
-    )
-    pdf.add_bullet(
-        "After block (extra.after): Displays the HTML content below the "
-        "question. Use it for notes, warnings, or follow-up information."
-    )
-    pdf.add_bullet(
-        "Difference from addonBefore/addonAfter: The 'extra' field is for "
-        "rich content blocks (paragraphs, images, HTML) placed around the "
-        "whole question. The addonBefore/addonAfter fields are compact "
-        "inline labels (plain text/symbols) placed directly next to the "
-        "input box of text and number fields."
-    )
-    pdf.add_bullet(
-        "Availability: The extra field is configured in the form JSON schema "
-        "and is not yet available as a visual toggle in the Form Builder UI. "
-        "Advanced users can add it by editing the JSON tab of the form."
-    )
-
-    pdf.add_heading(
-        "9. Field Prefix and Suffix (addonBefore / addonAfter)", level=2
-    )
-    pdf.add_paragraph(
-        "You can display a small label directly before or after an answer box "
-        "to give users context on what to type."
-    )
-    pdf.add_bullet(
-        "Supported field types: Available on Input (text) and Number "
-        "questions only."
-    )
-    pdf.add_bullet(
-        "Prefix (addonBefore): Appears immediately before the input box. Use "
-        "it for currency symbols ($), phone country codes (+62), or short "
-        "text labels."
-    )
-    pdf.add_bullet(
-        "Suffix (addonAfter): Appears immediately after the input box. Use it "
-        "for measurement units like kg, %, or cm."
-    )
-    pdf.add_bullet(
-        "Can we add icons? No. Field prefixes and suffixes accept plain text "
-        "and symbols only. Images, icons, and graphic elements are not "
-        "supported."
-    )
-    pdf.add_paragraph(
-        "How to configure: Click the question in the Form Builder to open its "
-        "settings panel, then type your desired prefix or suffix text into "
-        "the setting field."
-    )
-
-    pdf.add_heading("10. Option Choice Color Coding", level=2)
-    pdf.add_paragraph(
-        "For single-choice (Option) and multi-choice (Multiple Option) "
-        "questions, you can assign a visual color tag to each answer choice."
-    )
-    pdf.add_bullet(
-        "Visual appearance: When respondents or reviewers view the form on "
-        "the web, each choice is displayed with a colored badge or highlight."
-    )
-    pdf.add_bullet(
-        "Color format: Uses standard hex color codes. For example: enter "
-        "#00FF00 for green (such as a 'Pass' status), #FF0000 for red (such "
-        "as a 'Fail' status), or #FFA500 for orange (such as 'Pending')."
-    )
-    pdf.add_bullet(
-        "Submission impact: The color code is purely visual to help users "
-        "quickly spot statuses. It does not alter how answer data is stored "
-        "or exported."
-    )
-    pdf.add_paragraph(
-        "How to configure: In the Form Builder settings panel for an Option "
-        "question, open the option choices list and enter the hex color code "
-        "for each choice."
-    )
-
-    pdf.add_heading(
-        "11. Pre-filled Default Values on the Web (Cross-Question Copying)",
-        level=2,
-    )
-    pdf.add_paragraph(
-        "On web forms, an answer can automatically copy data from an earlier "
-        "question in the same form session."
-    )
-    pdf.add_bullet(
-        "What it does: When a respondent types an answer into Question A, "
-        "Question B can automatically populate with the same answer in real "
-        "time."
-    )
-    pdf.add_bullet(
-        "Example use case: Automatically copying a respondent's Name into a "
-        "subsequent Confirmation or Signature section."
-    )
-    pdf.add_bullet(
-        "Availability note: This cross-question prefilling runs in the web "
-        "browser. It is currently configured in the form definition schema "
-        "(using the 'pre' setting) and is not yet available as a visual "
-        "toggle in the Form Builder editor."
-    )
-
-    pdf.add_heading(
-        "12. Pre-filled Fields on Mobile (Registration to Monitoring)",
-        level=2,
-    )
-    pdf.add_paragraph(
-        "When using the Akvo MIS mobile app for fieldwork, monitoring forms "
-        "can automatically show information recorded during the initial "
-        "registration."
-    )
-    pdf.add_bullet(
-        "Mobile-only feature: Automatic registration-to-monitoring "
-        "pre-filling is specifically built into the Akvo MIS mobile app. "
-        "It is not active on web browser forms."
-    )
-    pdf.add_bullet(
-        "How it works: When an enumerator selects an existing data point on "
-        "their mobile device and starts a linked Monitoring Form, known "
-        "details (such as the facility name or GPS location) are "
-        "pre-populated so the enumerator only updates changed information."
-    )
-    pdf.add_bullet(
-        "Configuration: No special setup is needed in the Form Builder. "
-        "Linking a Monitoring Form to a Registration Form enables this "
-        "workflow automatically on mobile."
-    )
+    if kb_dir and kb_dir.exists():
+        md_files = sorted(kb_dir.rglob("*.md"))
+        print(
+            f"  Compiling {len(md_files)} knowledge base modules from "
+            f"{kb_dir}..."
+        )
+        for md_file in md_files:
+            print(f"    + {md_file.relative_to(kb_dir.parent)}")
+            add_markdown_file(pdf, md_file)
+    else:
+        print("  [warning] No docs/knowledge_base directory found.")
 
     pdf.write_to_file(output_pdf)
     print(f"Generated: {output_pdf} ({output_pdf.stat().st_size:,} bytes)")
@@ -834,11 +506,12 @@ def main():
     docs_dir = root_dir / "docs"
     build_dir = docs_dir / "build"
 
+    kb_dir = docs_dir / "knowledge_base"
     mis_docs_pdf = build_dir / "akvo-mis-docs.pdf"
     form_editor_pdf = build_dir / "akvo-react-form-editor-docs.pdf"
 
     build_platform_docs_pdf(docs_dir, mis_docs_pdf)
-    build_form_editor_docs_pdf(form_editor_pdf)
+    build_form_editor_docs_pdf(form_editor_pdf, kb_dir=kb_dir)
 
     print("\nValidating generated PDFs...")
     ok1 = validate_pdf(mis_docs_pdf)
