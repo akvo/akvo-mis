@@ -56,6 +56,11 @@ urlpatterns = [
     ),
     # Dashboard builder CRUD (sub-resource routes before generic)
     re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"preview-widget$",
+        DashboardBuilderViewSet.as_view({"post": "preview_widget"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/sources$",
         DashboardBuilderViewSet.as_view({"get": "sources"}),
     ),

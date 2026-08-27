@@ -254,3 +254,43 @@ class ResolveWidgetDataTestCase(
         self.assertEqual(smuggled, resolve_widget_data(
             self.dashboard, self.widget()
         ))
+
+    def test_a_map_joins_each_point_to_its_status_bucket(self):
+        """Pin colour is a second source, resolved here.
+
+        This ran in the browser as a separate /values/formula request. It
+        moved server-side with everything else, because an anonymous
+        caller cannot be trusted to author a formula — and a map whose
+        pins are all one colour is a wrong answer that looks like a
+        design choice.
+        """
+        points = resolve_widget_data(
+            self.dashboard,
+            self.widget(
+                type="map",
+                question=self.Q_OPTION_ID,
+                config={
+                    "status_colors": {
+                        "active": "#64A73B",
+                        "pending": "#F5A623",
+                    }
+                },
+            ),
+        )
+        self.assertTrue(points)
+        for point in points:
+            self.assertIn("status", point)
+        self.assertTrue(
+            any(p["status"] in ("active", "pending") for p in points)
+        )
+
+    def test_an_uncoloured_map_leaves_the_points_alone(self):
+        # validate_shape rejects an empty bucket list, and every pin then
+        # takes the widget's own accent colour.
+        points = resolve_widget_data(
+            self.dashboard,
+            self.widget(type="map", question=self.Q_OPTION_ID, config={}),
+        )
+        self.assertTrue(points)
+        for point in points:
+            self.assertNotIn("status", point)

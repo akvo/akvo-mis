@@ -16,7 +16,7 @@ two paths cannot disagree about what a widget means.
 """
 from django.db.models import Q
 
-from api.v1.v1_data.models import FormData
+from api.v1.v1_data.models import Answers, FormData
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_visualization.constants import WidgetTypes
@@ -25,6 +25,10 @@ from api.v1.v1_visualization.dashboard_measure import (
     expand_measure,
 )
 from api.v1.v1_visualization.escalation_functions import handle_escalation
+from api.v1.v1_visualization.formula import (
+    evaluate as formula_evaluate,
+    pick_latest_repeat,
+)
 from api.v1.v1_visualization.values_functions import (
     handle_count_mode,
     handle_number_question,
@@ -231,6 +235,87 @@ def _map_points(dashboard, widget, filters):
     )
 
 
+def _map_status(widget, points):
+    """Join each point to its status bucket.
+
+    A map draws coordinates from the registration form and colours them by
+    an answer on the monitoring form, so it needs a second source. The
+    bucket list comes from `config.status_colors`' own keys — they are
+    option values, which is exactly what the formula needs — so no form
+    metadata has to be fetched.
+
+    This ran in the browser as a second request to /values/formula. It
+    moves here for the same reason the measure expansion did: an anonymous
+    caller cannot be trusted to author a formula, and a map whose pins are
+    all one colour is a wrong answer that looks like a design choice.
+    """
+    config = widget.get("config") or {}
+    values = list((config.get("status_colors") or {}).keys())
+    question_id = widget.get("question")
+    if not (values and question_id and points):
+        # validate_shape() rejects an empty bucket list, and an uncoloured
+        # map takes the widget's own accent for every pin.
+        return points
+
+    form = Forms.objects.filter(pk=widget.get("form")).first()
+    if not form:
+        return points
+
+    is_registration = form.parent_id is None
+    queryset = form.form_form_data.filter(
+        is_pending=False, is_draft=False, parent__isnull=is_registration
+    )
+
+    if is_registration:
+        id_to_group = {
+            row: row for row in queryset.values_list("id", flat=True)
+        }
+    else:
+        latest_by_parent = {}
+        for row in queryset.order_by("parent_id", "-created").values(
+            "id", "parent_id"
+        ):
+            latest_by_parent.setdefault(row["parent_id"], row["id"])
+        id_to_group = {v: k for k, v in latest_by_parent.items()}
+
+    if not id_to_group:
+        return points
+
+    formula = {
+        "buckets": [
+            {
+                "value": value,
+                "label": value,
+                "all_of": [
+                    {
+                        "question_id": question_id,
+                        "op": "option_equals",
+                        "value": value,
+                    }
+                ],
+            }
+            for value in values
+        ],
+        "default": {"value": "_no_info", "label": "_no_info"},
+    }
+
+    answers_by_data = {}
+    for answer in Answers.objects.filter(
+        data_id__in=list(id_to_group.keys())
+    ).values("data_id", "question_id", "value", "options", "index"):
+        answers_by_data.setdefault(answer["data_id"], []).append(answer)
+
+    by_parent = {}
+    for data_id, group in id_to_group.items():
+        per_question = pick_latest_repeat(answers_by_data.get(data_id, []))
+        by_parent[group] = formula_evaluate(formula, per_question)
+
+    return [
+        dict(point, status=by_parent.get(point["id"]))
+        for point in points
+    ]
+
+
 def resolve_widget_data(dashboard, widget, filters=None):
     """This widget's data, in the shape its renderer already reads.
 
@@ -256,7 +341,9 @@ def resolve_widget_data(dashboard, widget, filters=None):
     if type_name == "table":
         return _table_data(dashboard, widget, filters)
     if type_name == "map":
-        return _map_points(dashboard, widget, filters)
+        return _map_status(
+            widget, _map_points(dashboard, widget, filters)
+        )
     if type_name in ("kpi", "bar", "line", "pie"):
         if not widget.get("form"):
             # form_id is required by the aggregation, and an unfinished

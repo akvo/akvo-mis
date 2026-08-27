@@ -24,6 +24,9 @@ from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardListSerializer,
     serialize_sources,
 )
+from api.v1.v1_visualization.dashboard_widget_data import (
+    resolve_widget_data,
+)
 from api.v1.v1_visualization.dashboard_functions import (
     resolve_visibility,
     SLUG_PATTERN,
@@ -89,6 +92,8 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "publish": FeatureAccessTypes.dashboard_publish,
         "unpublish": FeatureAccessTypes.dashboard_publish,
         "duplicate": FeatureAccessTypes.dashboard_create,
+        # Reading data for a widget the author is still building.
+        "preview_widget": FeatureAccessTypes.dashboard_edit,
     }
 
     def get_permissions(self):
@@ -312,3 +317,30 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         return Response(
             serialize_sources(self.get_object(), request.user)
         )
+
+    def preview_widget(self, request, *args, **kwargs):
+        """Data for a widget that has not been saved yet.
+
+        The canvas renders unsaved state, so its widgets have no id for
+        `/dashboards/{slug}/widgets/{id}/data` to look up — a widget the
+        author added thirty seconds ago exists only in the browser. This
+        is the one place a widget config travels *to* the server rather
+        than being read from it, and it is why the route is authenticated
+        and gated on `dashboard_edit`: an author editing this dashboard
+        may already author any widget on it.
+
+        The dashboard still supplies the family and the tenant, so the
+        config cannot reach outside what the author could have saved —
+        `validate_dashboard_payload` is what enforces that at save time
+        and the same family rule applies here.
+        """
+        dashboard = self.get_object()
+        widget = request.data.get("widget") or {}
+        error = validate_dashboard_payload(
+            {"widgets": [widget]}, request.user, dashboard=dashboard
+        )
+        if error:
+            return Response(error, status=status.HTTP_400_BAD_REQUEST)
+        filters = request.data.get("filters") or {}
+        data = resolve_widget_data(dashboard, widget, filters)
+        return Response({"data": data})
