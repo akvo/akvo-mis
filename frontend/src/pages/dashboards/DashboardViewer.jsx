@@ -1,12 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button, Spin } from "antd";
-import { ArrowLeftOutlined, EditOutlined } from "@ant-design/icons";
+import { Spin } from "antd";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 import dashboardApi from "../../util/dashboardApi";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import { store, uiText } from "../../lib";
-import { ability } from "../../components/can/ability";
 import "./viewer.scss";
 
 // =========================================================
@@ -27,7 +26,7 @@ const EMPTY_FILTERS = {
 const DashboardViewer = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { language, user: authUser } = store.useState((s) => s);
+  const { language } = store.useState((s) => s);
   const text = useMemo(() => uiText[language.active], [language.active]);
 
   const [loading, setLoading] = useState(true);
@@ -69,16 +68,6 @@ const DashboardViewer = () => {
     };
   }, [slug]);
 
-  const canEdit = useMemo(
-    () => ability(authUser).can("edit", "dashboard"),
-    [authUser]
-  );
-
-  const handleEdit = useCallback(
-    () => navigate(`/control-center/dashboard/${slug}`),
-    [navigate, slug]
-  );
-
   if (loading) {
     return (
       <div className="dashboard-view-shell">
@@ -102,28 +91,20 @@ const DashboardViewer = () => {
 
   return (
     <div className="dashboard-view-shell">
-      <div className="dashboard-view-topbar">
-        <div className="dashboard-view-topbar-left">
-          <button
-            className="dashboard-view-back"
-            title={text.backBtn}
-            onClick={() => navigate("/control-center/dashboard")}
-          >
-            <ArrowLeftOutlined />
-          </button>
-          <div className="dashboard-view-topbar-name">{dashboard.name}</div>
-        </div>
-        {canEdit && (
-          <Button
-            type="primary"
-            shape="round"
-            icon={<EditOutlined />}
-            onClick={handleEdit}
-          >
-            {text.dashboardEdit}
-          </Button>
-        )}
-      </div>
+      {/* Fixed, and on its own. The bar that held it also held Edit and a
+          copy of the dashboard's name; the list already offers Edit on
+          every card and the header repeats the name directly below, so the
+          page's widest row was chrome for one button. Fixed rather than
+          scrolled away, because "back" is wanted most at the bottom of a
+          long dashboard. */}
+      <button
+        className="dashboard-view-back"
+        title={text.backBtn}
+        aria-label={text.backBtn}
+        onClick={() => navigate("/control-center/dashboard")}
+      >
+        <ArrowLeftOutlined />
+      </button>
 
       <div className="dashboard-view-content">
         <div className="dashboard-view-header">

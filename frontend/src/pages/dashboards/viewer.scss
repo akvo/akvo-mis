@@ -1,3 +1,5 @@
+@import "../../variables";
+
 /* =========================================================
    Dashboard viewer and preview
    =========================================================
@@ -10,50 +12,49 @@
    and the chart bodies are roughly two thirds taller. Copying the canvas
    values and adjusting is how those differences get lost. */
 
+/* Full-bleed and full-height. `flex: 1` did nothing here — `.body` is a
+   block, so the shell was only as tall as its content and only as wide as
+   the padded column, and the page's own white showed below and beside the
+   grey. Breaking out of `.body`'s padding is the same trick the rest of
+   the app uses; the interpolation in calc() is required, because node-sass
+   emits a bare variable verbatim and the browser drops the declaration. */
 .dashboard-view-shell {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   background: #f0f2f5;
+  margin: (-$padding-default) (-$layout-padding-small-screen)
+    (-$padding-default);
+  min-height: calc(100vh - #{$header-height});
+
+  @media screen and (min-width: $screen-regular) {
+    margin-left: -$layout-padding;
+    margin-right: -$layout-padding;
+  }
 }
 
-/* ── Top bar ── */
-
-.dashboard-view-topbar {
-  height: 57px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid #e7eaee;
-}
-
-.dashboard-view-topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
+/* Sits in the page's left gutter (50px, so a 34px button at 16px clears
+   it exactly) and stays put while the dashboard scrolls. */
 .dashboard-view-back {
+  position: fixed;
+  top: calc(#{$header-height} + 16px);
+  left: 16px;
+  z-index: 5;
   width: 34px;
   height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f4f6f9;
-  border: none;
+  background: #fff;
+  border: 1px solid #e7eaee;
   border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
   cursor: pointer;
   color: #334;
-}
 
-.dashboard-view-topbar-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #081c40;
+  &:hover {
+    background: #f4f6f9;
+    color: #081c40;
+  }
 }
 
 /* Preview only. The published viewer is not a preview of anything, so it
