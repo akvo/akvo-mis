@@ -4,9 +4,9 @@ This document is the definitive guide to the **Form Builder Edit Page** in Akvo 
 
 ---
 
-## 1. Page Layout & Structure
+## 1. Page Layout & Structure in Akvo MIS
 
-When navigating to `Control Centre > Form Builder > [Select a Form] > Edit`, the page is structured into three main sections:
+When navigating to `Control Centre > Form Builder > [Select a Form] > Edit`, the page layout is structured as follows:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -17,16 +17,20 @@ When navigating to `Control Centre > Form Builder > [Select a Form] > Edit`, the
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ Banners: Form Published Info / Pending Snapshot Banner / Version Preview     │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Embedded Webform Editor (akvo-react-form-editor):                            │
+│ Embedded Webform Editor:                                                     │
 │ ┌──────────────────────────────────────────────────────────────────────────┐ │
-│ │ Tabs: [ Edit Form ]    [ Translations ]    [ Preview ]    [ JSON ]       │ │
+│ │ Tabs: [ Edit Form ]    [ Translations ]    [ Preview ]                   │ │
 │ ├──────────────────────────────────────────────────────────────────────────┤ │
 │ │                                                                          │ │
-│ │ (Active Tab Workspace: Question Groups, Question Cards, Settings Panel)  │ │
+│ │ (Active Tab Workspace: Question Groups, Question Cards, Settings Modal)  │ │
 │ │                                                                          │ │
 │ └──────────────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Important Platform Note (Akvo MIS vs. Standalone Library Demo)**:
+> In the standalone `akvo-react-form-editor` developer demo website, an extra "JSON" tab is shown for demo purposes. However, **in the Akvo MIS platform, there is NO in-page JSON tab / viewer**.
+> - To inspect or obtain the form's raw JSON schema in Akvo MIS, use the **`Export JSON`** button in the top action toolbar.
 
 ---
 
@@ -34,7 +38,7 @@ When navigating to `Control Centre > Form Builder > [Select a Form] > Edit`, the
 
 Located in the top-right header above the editor canvas:
 
-| Button | Icon | Action / Purpose |
+| Button | Icon | Action / Purpose in Akvo MIS |
 |---|---|---|
 | **Export JSON** | Download | Downloads the raw JSON schema file for the current form definition (`.json`). |
 | **Export XLSForm** | Download | Generates and downloads an XLSForm-compatible Excel spreadsheet (`.xlsx`) containing `survey`, `choices`, and `settings` sheets. |
@@ -45,18 +49,20 @@ Located in the top-right header above the editor canvas:
 
 ---
 
-## 3. The 4 Editor Workspace Tabs (`akvo-react-form-editor`)
+## 3. The 3 Editor Workspace Tabs in Akvo MIS
 
-Inside the main editor panel, `WebformEditor` provides four workspace tabs:
+Inside the Form Builder workspace, there are **3 primary tabs**:
 
 ### Tab 1: Edit Form (Default Workspace)
-- **What it is**: The visual drag-and-drop builder for organizing sections and question elements.
+- **What it is**: The main visual drag-and-drop builder for organizing sections and question elements.
 - **Controls & Actions**:
   - **Question Groups**: Sections that group related questions. Each group has a title, collapse/expand toggle, drag handle to reorder, and a **Repeatable** toggle (for rosters/sub-tables).
   - **+ Add Group**: Adds a new group section to the bottom of the form.
   - **+ Add Question**: Adds a new question card into the active question group.
   - **COPY QUESTION HERE**: Appears below each question card to duplicate the question (duplicates type, label, and options; does **not** copy skip logic).
-  - **Settings Panel**: Clicking any question opens its sidebar to configure Label, Variable Name, Tooltip, Required, Min/Max validation, Double Entry, Mask/Password, Prefix (`addonBefore`), Suffix (`addonAfter`), Option Hex Colors, and Skip Logic rules.
+  - **Settings Panel**: Clicking any question opens its settings drawer/modal with sub-tabs:
+    - **`Setting`**: Label, Variable Name, Tooltip, Required, Min/Max validation, Double Entry, Mask/Password, Prefix (`addonBefore`), Suffix (`addonAfter`), and Option Hex Colors.
+    - **`Skip Logic`**: Dependent logic operator rules (`=`, `!=`, `contains`, `>`, `<`, `between`).
 
 ### Tab 2: Translations
 - **What it is**: The multi-language localization workspace.
@@ -72,12 +78,6 @@ Inside the main editor panel, `WebformEditor` provides four workspace tabs:
   - Test **Autofield calculations** with sample numeric inputs.
   - Check **Double Entry** and **Required** validation prompts.
   - Test **Repeatable Question Groups** by adding and removing rows.
-
-### Tab 4: JSON
-- **What it is**: The raw form definition schema viewer and editor.
-- **Controls & Actions**:
-  - View and edit the complete underlying JSON schema.
-  - Used for advanced configurations not exposed in the visual drag-and-drop palette (e.g., Table / Matrix questions, `extra.before`/`extra.after` HTML content blocks, and same-session `pre` cross-question copy rules).
 
 ---
 
