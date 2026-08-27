@@ -55,10 +55,28 @@ def annotate_broken(widgets, user):
     the caller's snapshot is never mutated, because it is a row from
     the database that nobody meant to write back.
     """
+    return _annotate(widgets, lambda model: model.objects.for_user(user))
+
+
+def annotate_broken_for_tenant(widgets, tenant):
+    """The same annotation for a caller with no user (VIZ-010).
+
+    A public dashboard is read anonymously, so there is nobody to scope
+    by. `for_user(AnonymousUser)` is not a stand-in: it resolves to
+    `tenant IS NULL`, which matches nothing on a real deployment and
+    every row on a tenant-less one. The tenant comes from the host
+    instead, and is named explicitly.
+    """
+    return _annotate(
+        widgets, lambda model: model.objects.for_tenant(tenant)
+    )
+
+
+def _annotate(widgets, scoped):
     def live(model, key):
         ids = {w.get(key) for w in widgets if w.get(key)}
         return set(
-            model.objects.for_user(user)
+            scoped(model)
             .filter(id__in=ids)
             .values_list("id", flat=True)
         )

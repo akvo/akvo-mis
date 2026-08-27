@@ -16,11 +16,16 @@
 # /dashboard/:slug route goes away in VIZ-009.
 
 from rest_framework import serializers, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
+from api.v1.v1_visualization.dashboard_widget_data import (
+    resolve_widget_data,
+)
 from api.v1.v1_visualization.models import Dashboard
 
 # REST_FRAMEWORK.DATETIME_FORMAT is "%d-%m-%Y %H:%M:%S" project-wide,
@@ -120,3 +125,36 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
             snapshot["widgets"], request.user
         )
         return Response(row)
+
+    @action(detail=True, url_path=r"widgets/(?P<widget_id>[0-9]+)/data")
+    def widget_data(self, request, widget_id=None, **kwargs):
+        """This widget's data, by id.
+
+        The same resolver the public namespace uses (VIZ-010 D-4). The
+        viewer used to build `/visualization/*` requests in the browser
+        and expand `measure` there; two implementations of that rule is
+        the hazard VIZ-008 named, so both surfaces ask here instead.
+        """
+        dashboard = self.get_object()
+        widgets = annotate_broken(
+            read_snapshot(dashboard)["widgets"], request.user
+        )
+        widget = next(
+            (w for w in widgets if str(w.get("id")) == str(widget_id)),
+            None,
+        )
+        if widget is None:
+            raise NotFound()
+        params = request.query_params
+        data = resolve_widget_data(
+            dashboard,
+            widget,
+            {
+                "from_date": params.get("from_date"),
+                "to_date": params.get("to_date"),
+                "date_question_id": params.get("date_question_id"),
+                "administration_id": params.get("administration_id"),
+                "page": params.get("page") or 1,
+            },
+        )
+        return Response({"data": data})

@@ -58,6 +58,12 @@ class SoftDeletesManager(models.Manager):
     def for_user(self, user):
         return self.get_queryset().for_user(user)
 
+    def for_tenant(self, tenant):
+        # Delegated by hand for the same reason for_user is: get_queryset
+        # carries the with_deleted state that a generated manager would
+        # drop.
+        return self.get_queryset().for_tenant(tenant)
+
 
 class SoftDeletes(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)

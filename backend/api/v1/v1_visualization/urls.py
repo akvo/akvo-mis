@@ -17,6 +17,9 @@ from api.v1.v1_visualization.dashboard_builder_views import (
 from api.v1.v1_visualization.dashboard_read_views import (
     DashboardReadViewSet,
 )
+from api.v1.v1_visualization.dashboard_public_views import (
+    PublicDashboardViewSet,
+)
 
 urlpatterns = [
     re_path(
@@ -82,7 +85,13 @@ urlpatterns = [
             {"get": "list", "post": "create"}
         ),
     ),
-    # The authenticated read namespace (slug before collection)
+    # The authenticated read namespace (widget data, then slug, then
+    # collection — the more specific pattern has to win)
+    re_path(
+        r"^(?P<version>(v1))/dashboards/(?P<slug>[-a-z0-9]+)/"
+        r"widgets/(?P<widget_id>[0-9]+)/data$",
+        DashboardReadViewSet.as_view({"get": "widget_data"}),
+    ),
     re_path(
         r"^(?P<version>(v1))/dashboards/(?P<slug>[-a-z0-9]+)$",
         DashboardReadViewSet.as_view({"get": "retrieve"}),
@@ -90,5 +99,20 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/dashboards$",
         DashboardReadViewSet.as_view({"get": "list"}),
+    ),
+    # The public namespace (VIZ-010). Anonymous, and scoped to the
+    # tenant the request host names.
+    re_path(
+        r"^(?P<version>(v1))/public/dashboards/(?P<slug>[-a-z0-9]+)/"
+        r"widgets/(?P<widget_id>[0-9]+)/data$",
+        PublicDashboardViewSet.as_view({"get": "widget_data"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/public/dashboards/(?P<slug>[-a-z0-9]+)$",
+        PublicDashboardViewSet.as_view({"get": "retrieve"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/public/dashboards$",
+        PublicDashboardViewSet.as_view({"get": "list"}),
     ),
 ]

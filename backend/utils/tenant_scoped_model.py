@@ -23,6 +23,15 @@ class TenantScopedQuerySetMixin:
         tenant = getattr(user, "tenant", None)
         return self.filter(**{self.model.TENANT_PATH: tenant})
 
+    def for_tenant(self, tenant):
+        # The host-derived scope, for surfaces with no user to read a
+        # tenant from. `for_user(AnonymousUser)` is not a substitute: it
+        # resolves to `tenant IS NULL`, which matches nothing on a real
+        # deployment but matches EVERY row on a tenant-less one — the
+        # transitional state this repo's own dev database is in. A public
+        # endpoint must name the tenant it means.
+        return self.filter(**{self.model.TENANT_PATH: tenant})
+
 
 class TenantQuerySet(TenantScopedQuerySetMixin, models.QuerySet):
     pass
