@@ -24,19 +24,22 @@ DASHBOARD_ACCESSES = [
     FeatureAccessTypes.dashboard_edit,
     FeatureAccessTypes.dashboard_publish,
     FeatureAccessTypes.dashboard_delete,
+    FeatureAccessTypes.dashboard_share_public,
 ]
 
 
 class DashboardConstantsTestCase(SimpleTestCase):
-    """The five accesses and the group the role editor renders."""
+    """The dashboard accesses and the group the role editor renders."""
 
     def test_access_values_continue_from_form_delete(self):
         # 2 stays a gap on purpose: FeatureAccessTypes values are
         # persisted in role_feature_access rows, so reusing a retired
         # number would silently re-point existing grants.
-        self.assertEqual(DASHBOARD_ACCESSES, [8, 9, 10, 11, 12])
+        # 13 is VIZ-010's dashboard_share_public, continuing the block
+        # rather than filling the gap for the same reason.
+        self.assertEqual(DASHBOARD_ACCESSES, [8, 9, 10, 11, 12, 13])
 
-    def test_dashboard_builder_groups_all_five(self):
+    def test_dashboard_builder_groups_them_all(self):
         # generate_config walks FieldStr and emits each key's FieldGroup
         # members, so this is the whole role-editor integration.
         self.assertEqual(FeatureTypes.dashboard_builder, 3)

@@ -85,6 +85,25 @@ class DashboardStatus:
     }
 
 
+class DashboardVisibility:
+    """Who may read a published dashboard.
+
+    `internal` is every dashboard that exists today and the default for
+    every new one: published to the tenant, and a login is required.
+    `public` opens it to anonymous readers on the workspace's own
+    subdomain — see VIZ-010. Publication and visibility are independent:
+    a public draft is visible to nobody until it is published.
+    """
+
+    internal = 1
+    public = 2
+
+    FieldStr = {
+        internal: "internal",
+        public: "public",
+    }
+
+
 class WidgetTypes:
     kpi = 1
     bar = 2

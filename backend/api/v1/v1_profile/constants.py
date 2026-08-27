@@ -56,6 +56,7 @@ class FeatureAccessTypes:
     dashboard_edit = 10
     dashboard_publish = 11
     dashboard_delete = 12
+    dashboard_share_public = 13
 
     FieldStr = {
         invite_user: "Invite User",
@@ -69,6 +70,7 @@ class FeatureAccessTypes:
         dashboard_edit: "Dashboard Edit",
         dashboard_publish: "Dashboard Publish",
         dashboard_delete: "Dashboard Delete",
+        dashboard_share_public: "Dashboard Share Publicly",
     }
 
 
@@ -100,6 +102,7 @@ class FeatureTypes:
             FeatureAccessTypes.dashboard_edit,
             FeatureAccessTypes.dashboard_publish,
             FeatureAccessTypes.dashboard_delete,
+            FeatureAccessTypes.dashboard_share_public,
         ],
     }
 

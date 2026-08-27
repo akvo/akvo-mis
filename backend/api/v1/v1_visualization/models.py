@@ -6,6 +6,7 @@ from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.models import SystemUser
 from api.v1.v1_visualization.constants import (
     DashboardStatus,
+    DashboardVisibility,
     WidgetTypes,
 )
 from utils.soft_deletes_model import SoftDeletes
@@ -73,6 +74,14 @@ class Dashboard(SoftDeletes):
     )
     # Snapshot of the widget rows, written by publish (VIZ-007). Viewers
     # read this; the builder edits the rows. Null while draft.
+    # Independent of `status`: publication decides whether a dashboard is
+    # readable at all, visibility decides by whom. A public draft is
+    # visible to nobody, which is why the public read path filters on
+    # both (VIZ-010 D-5).
+    visibility = models.IntegerField(
+        choices=DashboardVisibility.FieldStr.items(),
+        default=DashboardVisibility.internal,
+    )
     published_config = models.JSONField(null=True, default=None)
     published_at = models.DateTimeField(null=True, default=None)
     default_filters = models.JSONField(default=dict)
