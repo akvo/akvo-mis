@@ -116,7 +116,7 @@ question row (used for dependency resolution before DB IDs exist).
 | `select_one_from_file administration.csv` | — | `cascade` |  |
 | `begin_group` / `end_group` | — | question group boundary |  |
 | `begin_repeat` / `end_repeat` | — | repeat group boundary | `repeat_count` links `leading_question` |
-| anything else (e.g. `geoshape`, `geotrace`, `calculate`) | — | **skipped** + warning `{"path": "row:N", ...}` |  |
+| anything else (e.g. `calculate`, `note`, `audio`, `barcode`) | — | **skipped** + warning `{"path": "row:N", ...}` |  |
 
 **`relevant` column → dependency**:
 

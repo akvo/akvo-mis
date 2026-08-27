@@ -139,7 +139,7 @@ class XLSFormExportServiceTestCase(TestCase):
             ("select_one_from_file administration.csv", None),
         )
 
-        # 8. Skipped types (tree, table, autofield, geoshape, geotrace)
+        # 8. Skipped / unsupported types (tree, table, autofield, unknown)
         self.assertEqual(
             _map_type(DummyObject(type=QuestionTypes.tree)), (None, None)
         )
@@ -149,15 +149,7 @@ class XLSFormExportServiceTestCase(TestCase):
         self.assertEqual(
             _map_type(DummyObject(type=QuestionTypes.autofield)), (None, None)
         )
-        self.assertEqual(
-            _map_type(DummyObject(type=QuestionTypes.geoshape)), (None, None)
-        )
-        self.assertEqual(
-            _map_type(DummyObject(type=QuestionTypes.geotrace)), (None, None)
-        )
-
-        # 9. Fallback for unknown
-        self.assertEqual(_map_type(DummyObject(type=999)), ("text", None))
+        self.assertEqual(_map_type(DummyObject(type=999)), (None, None))
 
     def test_build_question_map(self):
         q1 = DummyObject(id=1, name="q_one", type=QuestionTypes.text)

@@ -461,8 +461,8 @@ class XLSFormImportServiceTestCase(TestCase):
         survey_rows = [
             ["calculate", "calc_1", "Calc", None, None, None, None, None],
             ["note", "note_1", "Note", None, None, None, None, None],
-            ["geoshape", "poly_1", "Poly", None, None, None, None, None],
-            ["geotrace", "trace_1", "Trace", None, None, None, None, None],
+            ["audio", "aud_1", "Audio", None, None, None, None, None],
+            ["barcode", "bar_1", "Barcode", None, None, None, None, None],
             ["text", "q_real", "Real", "no", None, None, None, None],
         ]
         stream = _build_test_workbook(survey_rows)
@@ -471,8 +471,8 @@ class XLSFormImportServiceTestCase(TestCase):
         self.assertEqual(parsed["total_questions"], 1)
         self.assertEqual(len(parsed["skipped_rows"]), 4)
         self.assertIn("calculate", parsed["skipped_rows"][0]["message"])
-        self.assertIn("geoshape", parsed["skipped_rows"][2]["message"])
-        self.assertIn("geotrace", parsed["skipped_rows"][3]["message"])
+        self.assertIn("audio", parsed["skipped_rows"][2]["message"])
+        self.assertIn("barcode", parsed["skipped_rows"][3]["message"])
 
     def test_preflight_error_no_survey_sheet(self):
         wb = openpyxl.Workbook()
