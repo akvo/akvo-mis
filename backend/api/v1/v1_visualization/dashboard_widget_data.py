@@ -94,6 +94,21 @@ def _parse_criteria(config):
     return parsed
 
 
+def _as_int(value, default):
+    """Query parameters are strings; the aggregation does arithmetic.
+
+    `handle_escalation` computes `(page - 1) * page_size`, so a page that
+    arrived as "1" raised TypeError and the endpoint answered 500. Every
+    caller reads its filters from `request.query_params`, so a string is
+    the normal case — coercing here rather than at each call site keeps
+    the next filter from repeating it.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _base_params(filters):
     """The only parameters a caller may influence (VIZ-001 §4.4).
 
@@ -165,8 +180,8 @@ def _table_data(dashboard, widget, filters):
     params = _base_params(filters)
     params.update(
         {
-            "page": filters.get("page") or 1,
-            "page_size": config.get("page_size") or 20,
+            "page": _as_int(filters.get("page"), 1),
+            "page_size": _as_int(config.get("page_size"), 20),
             "date_question_id": filters.get("date_question_id"),
         }
     )
@@ -223,12 +238,18 @@ def _map_points(dashboard, widget, filters):
         from api.v1.v1_profile.models import Administration
 
         adm = Administration.objects.filter(pk=administration_id).first()
-        if adm:
-            adm_path = f"{adm.path}{adm.id}." if adm.path else f"{adm.id}."
-            queryset = queryset.filter(
-                Q(administration=adm)
-                | Q(administration__path__startswith=adm_path)
-            )
+        if adm is None:
+            # A filter that cannot be satisfied matches nothing. Skipping
+            # it instead would answer a narrowed question with every point
+            # on the map — the viewer believes they are looking at one
+            # district and are looking at all of them, with nothing on
+            # screen to say otherwise.
+            return []
+        adm_path = f"{adm.path}{adm.id}." if adm.path else f"{adm.id}."
+        queryset = queryset.filter(
+            Q(administration=adm)
+            | Q(administration__path__startswith=adm_path)
+        )
 
     return list(
         queryset.values("id", "name", "geo", "administration_id")

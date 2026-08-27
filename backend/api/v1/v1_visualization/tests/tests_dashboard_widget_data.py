@@ -294,3 +294,47 @@ class ResolveWidgetDataTestCase(
         self.assertTrue(points)
         for point in points:
             self.assertNotIn("status", point)
+
+    def test_filters_arriving_as_strings_are_coerced(self):
+        """Query parameters are always strings.
+
+        `handle_escalation` computes `(page - 1) * page_size`, so a page
+        that arrived from a query string rather than a test's dict raised
+        TypeError and the endpoint answered 500. Every caller of this
+        resolver reads its filters from `request.query_params`, so the
+        string form is the normal case, not the exotic one.
+        """
+        table = self.widget(
+            type="table",
+            question=None,
+            config={
+                "columns": [{"key": "site", "source": "parent_name"}],
+                "page_size": 1,
+            },
+        )
+        typed = resolve_widget_data(self.dashboard, table, {"page": 2})
+        as_string = resolve_widget_data(self.dashboard, table, {"page": "2"})
+        self.assertEqual(typed, as_string)
+
+    def test_an_unusable_page_falls_back_rather_than_raising(self):
+        table = self.widget(
+            type="table",
+            question=None,
+            config={"columns": [{"key": "site", "source": "parent_name"}]},
+        )
+        for page in ("", "abc", None):
+            result = resolve_widget_data(
+                self.dashboard, table, {"page": page}
+            )
+            self.assertEqual(result["count"], 2)
+
+    def test_a_string_administration_id_still_narrows_a_map(self):
+        # Same class of bug, different filter: this one reaches a queryset
+        # rather than arithmetic, so Django coerces it — but the resolver
+        # should not depend on which of its filters happen to be forgiving.
+        points = resolve_widget_data(
+            self.dashboard,
+            self.widget(type="map", question=self.Q_OPTION_ID, config={}),
+            {"administration_id": "999999"},
+        )
+        self.assertEqual(points, [])
