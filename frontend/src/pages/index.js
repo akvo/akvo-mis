@@ -55,3 +55,4 @@ export { default as FormBuilderEdit } from "./form-builder/FormBuilderEdit";
 export { default as DashboardList } from "./dashboards/DashboardList";
 export { default as DashboardBuilder } from "./dashboards/DashboardBuilder";
 export { default as DashboardViewer } from "./dashboards/DashboardViewer";
+export { default as PublicDashboardViewer } from "./dashboards/PublicDashboardViewer";

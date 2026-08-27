@@ -58,6 +58,7 @@ import {
   DashboardList,
   DashboardBuilder,
   DashboardViewer,
+  PublicDashboardViewer,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -163,6 +164,15 @@ const RouteList = () => {
       <Route exact path="/configure" element={<Configure />} />
       <Route exact path="/data" element={<Home />} />
       <Route exact path="/dashboard/:slug" element={<Dashboard />} />
+      {/* Anonymous by design (VIZ-010): no Private wrapper, because the
+          point of a public dashboard is that a visitor without an account
+          can read it. The server still refuses anything that is not both
+          published and public, on a host that names a workspace. */}
+      <Route
+        exact
+        path="/public/dashboards/:slug"
+        element={<PublicDashboardViewer />}
+      />
       <Route
         path="/control-center"
         element={

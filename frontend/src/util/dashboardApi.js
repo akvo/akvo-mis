@@ -2,6 +2,7 @@ import api from "../lib/api";
 
 const MANAGE = "manage/dashboards";
 const PUBLIC = "dashboards";
+const PUBLIC_OPEN = "public/dashboards";
 
 // One module per VIZ-004: no component calls api.get directly, so the
 // widget payload shape (VIZ-006) and the measure expansion (VIZ-008)
@@ -33,6 +34,14 @@ const dashboardApi = {
   sources: (id) => api.get(`${MANAGE}/${id}/sources`),
 
   getPublished: (slug) => api.get(`${PUBLIC}/${slug}`),
+
+  // The anonymous surface (VIZ-010). Served only on a workspace's own
+  // subdomain, and only for dashboards that are both published and
+  // public — the server decides both from the request host and the row,
+  // so there is nothing to pass here.
+  listPublic: () => api.get(`${PUBLIC_OPEN}`),
+
+  getPublic: (slug) => api.get(`${PUBLIC_OPEN}/${slug}`),
 };
 
 export default dashboardApi;

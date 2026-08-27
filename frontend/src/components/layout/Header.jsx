@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { Row, Col, Button, Dropdown, Space } from "antd";
 import { UserOutlined } from "@ant-design/icons";
@@ -8,6 +8,7 @@ import { config, store, uiText } from "../../lib";
 import { eraseCookieFromAllPaths } from "../../util/date";
 import { getForms } from "../../util/form";
 import { listVisualizations } from "../../config/visualizations";
+import dashboardApi from "../../util/dashboardApi";
 
 const Header = ({ className = "header", ...props }) => {
   const { isLoggedIn, user } = store.useState();
@@ -23,9 +24,43 @@ const Header = ({ className = "header", ...props }) => {
     const availableFormIds = new Set(getForms().map((f) => f.id));
     return registered.filter((d) => availableFormIds.has(d.parent_form_id));
   }, []);
-  const showDashboardsMenu =
+  // Public dashboards (VIZ-010). Fetched without a token, because the
+  // menu has to exist for a visitor who has no account — that is what
+  // "public" means. The server answers with this workspace's published
+  // public dashboards, resolved from the request host, or an empty list
+  // on the base domain and on a deployment with no subdomains, so the
+  // menu simply does not appear where the feature does not apply.
+  const [publicDashboards, setPublicDashboards] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    dashboardApi
+      .listPublic()
+      .then((res) => {
+        if (!cancelled) {
+          setPublicDashboards(Array.isArray(res.data) ? res.data : []);
+        }
+      })
+      .catch(() => {
+        // A workspace with none, an unreachable API, or the base domain.
+        // None of them is worth a message in the header.
+        if (!cancelled) {
+          setPublicDashboards([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The legacy entries appear where they always did; the public ones
+  // appear everywhere, including to signed-out visitors. VIZ-009 removes
+  // the legacy half.
+  const showLegacyDashboards =
     location.pathname.startsWith("/control-center") ||
     location.pathname.startsWith("/dashboard");
+  const showDashboardsMenu =
+    publicDashboards.length > 0 ||
+    (showLegacyDashboards && dashboardForms.length > 0);
 
   const signOut = useCallback(async () => {
     eraseCookieFromAllPaths("AUTH_TOKEN");
@@ -82,21 +117,34 @@ const Header = ({ className = "header", ...props }) => {
   }, [text, signOut]);
 
   const DashboardMenu = useMemo(() => {
-    return dashboardForms?.map((d) => {
-      return {
-        key: d.slug,
-        label: (
-          <Link
-            key={d.slug}
-            to={`/dashboard/${d.slug}`}
-            className="dropdown-menu-item"
-          >
-            {d.name}
-          </Link>
-        ),
-      };
-    });
-  }, [dashboardForms]);
+    const publicItems = publicDashboards.map((d) => ({
+      key: `public-${d.slug}`,
+      label: (
+        <Link
+          key={d.slug}
+          to={`/public/dashboards/${d.slug}`}
+          className="dropdown-menu-item"
+        >
+          {d.name}
+        </Link>
+      ),
+    }));
+    const legacyItems = showLegacyDashboards
+      ? (dashboardForms || []).map((d) => ({
+          key: d.slug,
+          label: (
+            <Link
+              key={d.slug}
+              to={`/dashboard/${d.slug}`}
+              className="dropdown-menu-item"
+            >
+              {d.name}
+            </Link>
+          ),
+        }))
+      : [];
+    return [...publicItems, ...legacyItems];
+  }, [publicDashboards, dashboardForms, showLegacyDashboards]);
 
   return (
     <Row
@@ -120,7 +168,7 @@ const Header = ({ className = "header", ...props }) => {
       </Col>
       {!location.pathname.includes("/report/") && (
         <Col>
-          {showDashboardsMenu && dashboardForms.length > 0 && (
+          {showDashboardsMenu && (
             <div className="navigation">
               <Space>
                 <Dropdown menu={{ items: DashboardMenu }}>
