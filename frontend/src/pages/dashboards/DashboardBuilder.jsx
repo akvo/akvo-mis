@@ -21,7 +21,7 @@ import BuilderCanvas from "./BuilderCanvas";
 import BuilderInspector from "./BuilderInspector";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
-import { WIDGET_DEFAULTS } from "./builderConstants";
+import { WIDGET_DEFAULTS, defaultMeasure } from "./builderConstants";
 import "./builder.scss";
 import "./viewer.scss";
 
@@ -100,7 +100,15 @@ const DashboardBuilder = () => {
     (type) => {
       nextTempId -= 1;
       const defaults = WIDGET_DEFAULTS[type] || {};
-      const firstForm = sources?.forms?.[0];
+      // /escalation sends widget.form as `monitoring_form_id` — it is
+      // inherently a "registration parent plus its latest monitoring child"
+      // query, and returns nothing at all for a registration form. Every
+      // other widget type is happy on forms[0], which /sources always leads
+      // with; a table is not, so it takes the first monitoring form or none.
+      const firstForm =
+        type === "table"
+          ? sources?.forms?.find((f) => f.type === "monitoring")
+          : sources?.forms?.[0];
       const newWidget = {
         id: nextTempId,
         order: widgets.length + 1,
@@ -112,13 +120,13 @@ const DashboardBuilder = () => {
         question: null,
         config: { ...(defaults.config || {}) },
       };
-      // Default measure for monitoring forms
-      if (
-        firstForm?.type === "monitoring" &&
-        type !== "section_title" &&
-        type !== "table"
-      ) {
-        newWidget.config.measure = "current_state";
+      // Only for a monitoring form. `/sources` leads with the root
+      // registration form, so this is usually null — and seeding
+      // current_state anyway is what made every new chart widget fail its
+      // first save.
+      const measure = defaultMeasure(type, firstForm);
+      if (measure) {
+        newWidget.config.measure = measure;
       }
       setWidgets((prev) => [...prev, newWidget]);
       setSelectedId(newWidget.id);
@@ -456,6 +464,13 @@ const DashboardBuilder = () => {
             selectedId={selectedId}
             dashboardName={dashboard.name}
             dashboardDesc={dashboard.description || ""}
+            // The canvas is unfiltered on purpose: the chips above it are
+            // not controls, and an author sizing a widget wants the whole
+            // family, not a slice of it. Preview is where the filter bar
+            // becomes real.
+            filters={EMPTY_FILTERS}
+            rootFormId={dashboard.root_form?.id}
+            defaultFilters={dashboard.default_filters}
             onSelect={handleSelect}
             onDeselect={handleDeselect}
             onMove={handleMove}

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import useVisualizationRequest from "./useVisualizationRequest";
 import { expandMeasure, MONITORING_LATEST } from "../dashboardMeasure";
 
@@ -7,11 +7,10 @@ import { expandMeasure, MONITORING_LATEST } from "../dashboardMeasure";
 // =========================================================
 //
 // Three jobs, in order: decide what to ask for, ask, then reshape the
-// answer into the shape `pages/dashboards/sampleWidgetData.js` produces.
-// That last step is why none of the seven widget renderers needed changing
-// for a data reason — the sample data the builder canvas already feeds them
-// *is* their input contract, so matching it is cheaper than teaching seven
-// components to read API envelopes.
+// answer into the shape the seven `Viz*` renderers already read. That last
+// step is why none of them needed changing for a data reason: their input
+// contract was fixed before this hook existed, and matching it is cheaper
+// than teaching seven presentational components to read API envelopes.
 //
 // Built on `useVisualizationRequest`, which is deliberately left alone: it
 // is already endpoint-and-params generic and carries the module-level LRU
@@ -87,7 +86,7 @@ const dateFilters = (filters) => ({
  * accepted and silently dropped rather than rejected. Each divergence is
  * commented where it happens.
  */
-const buildRequest = (widget, filters, rootFormId) => {
+const buildRequest = (widget, filters, rootFormId, page = 1) => {
   const config = widget?.config || {};
   const type = widget?.type;
 
@@ -96,12 +95,17 @@ const buildRequest = (widget, filters, rootFormId) => {
   }
 
   if (type === "table") {
-    // Both are `required=True` on EscalationFilterSerializer, so an
-    // unconfigured table is a guaranteed 400 — re-issued on every filter
+    // Columns are still `required=True` on EscalationFilterSerializer, so
+    // a table with none is a guaranteed 400 — re-issued on every filter
     // change and rendered as a network error for a configuration gap.
+    //
+    // Criteria are NOT required: they narrow the datapoint list, they do
+    // not define it, so a table with no conditions is the plain list of
+    // every datapoint. That is the useful default for a dashboard table
+    // and it is what the endpoint now returns.
     const criteria = serializeCriteria(config.criteria);
     const columns = serializeColumns(config.columns);
-    if (!criteria || !columns) {
+    if (!columns) {
       return null;
     }
     return {
@@ -113,7 +117,7 @@ const buildRequest = (widget, filters, rootFormId) => {
         monitoring_form_id: widget.form,
         criteria,
         columns,
-        page: 1,
+        page,
         page_size: config.page_size || 20,
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
@@ -152,6 +156,16 @@ const buildRequest = (widget, filters, rootFormId) => {
   }
 
   // kpi, bar, line, pie
+  if (!widget.form) {
+    // form_id is `required=True` on ValuesFilterSerializer, so a widget
+    // whose data source has not been picked yet is a guaranteed 400. That
+    // was harmless while only the viewer fetched — the server never stores
+    // such a widget — but the builder canvas renders unsaved state, where
+    // a half-built widget is the normal case for as long as it takes to
+    // configure it. question_id is deliberately not part of this check:
+    // it is optional, and a count-only KPI has none.
+    return null;
+  }
   return {
     endpoint: "visualization/values",
     params: compact({
@@ -286,9 +300,22 @@ const normalize = (widget, response, statusResponse) => {
  * @returns {{data, renderWidget, loading, error, refetch, pagination}}
  */
 export const useWidgetData = (widget, filters, { rootFormId } = {}) => {
+  // /escalation pages on the server: it reports `count` for the whole set
+  // and returns one page of `results`. The page therefore has to live here,
+  // where the request is built — the renderer only ever sees one page and
+  // cannot page through a set it was never given.
+  const [page, setPage] = useState(1);
+  const pageSize = widget?.config?.page_size || 20;
+
+  // A narrower set can leave the current page past the end of it, which the
+  // backend answers with an empty page and no way back.
+  useEffect(() => {
+    setPage(1);
+  }, [widget?.id, widget?.form, filters, pageSize]);
+
   const request = useMemo(
-    () => buildRequest(widget, filters, rootFormId),
-    [widget, filters, rootFormId]
+    () => buildRequest(widget, filters, rootFormId, page),
+    [widget, filters, rootFormId, page]
   );
   const statusRequest = useMemo(
     () => buildStatusRequest(widget, filters),
@@ -334,10 +361,17 @@ export const useWidgetData = (widget, filters, { rootFormId } = {}) => {
     };
   }, [widget, extraConfig, color]);
 
+  const onChange = useCallback((next) => setPage(next), []);
+
   return {
     data,
     renderWidget,
-    pagination,
+    // Only a paged widget reports pagination; a chart has none. `total` is
+    // the whole set, `current` and `pageSize` describe the slice in `data`,
+    // and `onChange` fetches another one.
+    pagination: pagination
+      ? { ...pagination, current: page, pageSize, onChange }
+      : null,
     loading: primary.loading || status.loading,
     error: primary.error || status.error,
     refetch: primary.refetch,

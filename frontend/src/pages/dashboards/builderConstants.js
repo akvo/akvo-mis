@@ -47,23 +47,22 @@ export const WIDGET_DEFAULTS = {
   kpi: {
     col_span: 6,
     color: "#1890ff",
-    config: { measure: "current_state", value_type: "number" },
+    config: { value_type: "number" },
   },
   bar: {
     col_span: 12,
     color: "#1890ff",
-    config: { measure: "current_state", group_by: "option" },
+    config: { group_by: "option" },
   },
   line: {
     col_span: 12,
     color: "#1651b6",
-    config: { measure: "current_state", group_by: "month" },
+    config: { group_by: "month" },
   },
   pie: {
     col_span: 8,
     color: "#64A73B",
     config: {
-      measure: "current_state",
       group_by: "option",
       variant: "pie",
     },
@@ -164,6 +163,89 @@ export const NEEDS_STACK_BY = new Set(["bar", "line"]);
 export const NEEDS_VALUE_TYPE = new Set(["kpi", "bar", "line", "pie"]);
 export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar", "line"]);
 export const NEEDS_COLOR = new Set(["kpi", "bar", "line", "pie", "map"]);
+
+// Every widget type that can carry a measure — a table's rows are already
+// "latest per site" by construction, and a section title has no data.
+export const NEEDS_MEASURE = new Set(["kpi", "bar", "line", "pie", "map"]);
+
+/**
+ * The measure a widget should carry for the form it is bound to, or null.
+ *
+ * `current_state` means "the latest submission per site", which is only
+ * defined relative to a monitoring form; the server rejects it anywhere
+ * else ("measure current_state requires a monitoring form"). Both places
+ * that write a measure — the palette's new-widget defaults and the
+ * inspector's form picker — go through here, because when they disagreed
+ * every newly added chart widget was born unsavable: WIDGET_DEFAULTS
+ * seeded `current_state` unconditionally while a new widget is bound to
+ * `/sources.forms[0]`, which is always the root registration form.
+ */
+export const defaultMeasure = (type, form) =>
+  NEEDS_MEASURE.has(type) && form?.type === "monitoring"
+    ? "current_state"
+    : null;
+
+/**
+ * The forms a table widget may bind to.
+ *
+ * /escalation is a "registration parent plus its latest monitoring child"
+ * query and the widget's own form is the monitoring side, so a table bound
+ * to the registration form matches nothing — `latest_id__isnull=False`
+ * excludes every row — and returns count: 0 whatever its columns say.
+ */
+export const monitoringForms = (forms = []) =>
+  (forms || []).filter((f) => f.type === "monitoring");
+
+/**
+ * The columns a table can offer, across both sides of that join.
+ *
+ * A table's columns come from two forms and the source differs by which:
+ * a registration question is read off the parent (`parent_answer`), a
+ * monitoring question off the latest submission (`answer`). The inspector
+ * used to write `answer` for everything and only offer the widget's own
+ * form, so registration attributes were either unreachable or fetched from
+ * the wrong side of the join and came back empty.
+ *
+ * The key carries the source because the response is keyed by it.
+ */
+export const tableColumnOptions = (forms = [], widgetFormId = null) => {
+  const root = (forms || []).find((f) => f.type === "registration");
+  const monitoring = (forms || []).find((f) => f.id === widgetFormId);
+  const from = (form, source) =>
+    (form?.questions || []).map((q) => ({
+      key: `${source}_${q.id}`,
+      label: q.label || q.name,
+      source,
+      question: q.id,
+      formName: form.name,
+    }));
+  return [...from(root, "parent_answer"), ...from(monitoring, "answer")];
+};
+
+/**
+ * Drop config entries bound to questions the new form does not have.
+ *
+ * Changing a widget's form already clears `widget.question`, but a table's
+ * columns and criteria carry question ids of their own and used to survive
+ * the switch. That left a table on one form referencing another form's
+ * question, which the backend rejects — a column's question must belong to
+ * the widget's form — so the whole table went blank with no explanation.
+ *
+ * Entries with no question (parent_name, administration) are
+ * form-independent and are kept.
+ */
+export const pruneConfigForForm = (config, questions = []) => {
+  const allowed = new Set((questions || []).map((q) => q.id));
+  const belongs = (entry) => !entry?.question || allowed.has(entry.question);
+  const next = { ...(config || {}) };
+  if (Array.isArray(next.columns)) {
+    next.columns = next.columns.filter(belongs);
+  }
+  if (Array.isArray(next.criteria)) {
+    next.criteria = next.criteria.filter(belongs);
+  }
+  return next;
+};
 
 export const TYPE_LABELS = {
   kpi: "KPI",

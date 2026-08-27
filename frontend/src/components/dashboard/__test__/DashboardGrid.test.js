@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import DashboardGrid from "../DashboardGrid";
 import useWidgetData from "../../../util/hooks/useWidgetData";
+import { WIDGET_BODY_HEIGHT } from "../widgetLayout";
 
 jest.mock("../../../util/hooks/useWidgetData");
 
@@ -32,8 +33,7 @@ const w = (overrides = {}) => ({
   ...overrides,
 });
 
-// Type-appropriate stand-ins, matching what useWidgetData really returns
-// (and what sampleWidgetData.js produces).
+// Type-appropriate stand-ins, matching what useWidgetData really returns.
 const DATA_FOR = {
   kpi: { value: 42 },
   table: [{ id: 1, site: "Nadi" }],
@@ -137,7 +137,7 @@ describe("mockup chrome", () => {
     expect(body("B")).toHaveStyle("padding: 16px");
   });
 
-  test("chart bodies carry the view-mode fixed heights", () => {
+  test("chart bodies carry the shared per-type heights", () => {
     renderGrid([
       w({ type: "bar", title: "B" }),
       w({ id: 2, type: "pie", title: "P" }),
@@ -145,11 +145,14 @@ describe("mockup chrome", () => {
       w({ id: 4, type: "kpi", title: "K" }),
     ]);
     const body = (t) => cellFor(t).querySelector(".dashboard-view-cell-body");
-    expect(body("B")).toHaveStyle("height: 300px");
-    expect(body("P")).toHaveStyle("height: 320px");
-    expect(body("M")).toHaveStyle("height: 380px");
+    // Read from the constant rather than restated: the canvas reads the
+    // same one, and the point of moving it there was that two copies of a
+    // height drift. widgetLayout.test.js is what pins the values.
+    expect(body("B")).toHaveStyle(`height: ${WIDGET_BODY_HEIGHT.bar}px`);
+    expect(body("P")).toHaveStyle(`height: ${WIDGET_BODY_HEIGHT.pie}px`);
+    expect(body("M")).toHaveStyle(`height: ${WIDGET_BODY_HEIGHT.map}px`);
     // A KPI sizes to its content.
-    expect(body("K")).not.toHaveStyle("height: 300px");
+    expect(body("K").style.height).toBe("");
   });
 });
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
-import { Input, Select, Switch, Checkbox } from "antd";
+import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
+import { DeleteOutlined } from "@ant-design/icons";
 import {
   NEEDS_FORM,
   NEEDS_QUESTION,
@@ -20,6 +21,10 @@ import {
   WIDTH_PRESETS,
   COLOR_SWATCHES,
   TYPE_LABELS,
+  defaultMeasure,
+  pruneConfigForForm,
+  tableColumnOptions,
+  monitoringForms,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -235,14 +240,33 @@ const BuilderInspector = ({
             <Select
               value={widget.form || null}
               onChange={(val) => {
+                // Same rule as the palette's new-widget default, from the
+                // same function: a measure the widget's form cannot carry
+                // is a 400 at save time, not a UI detail. An existing
+                // choice survives a move between two monitoring forms.
+                const supported = defaultMeasure(
+                  wType,
+                  forms.find((f) => f.id === val)
+                );
+                // Table columns and criteria carry question ids of their
+                // own; left behind they point at the previous form and the
+                // backend refuses the request.
+                const pruned = pruneConfigForForm(
+                  widget.config,
+                  wType === "table"
+                    ? tableColumnOptions(forms, val).map((o) => ({
+                        id: o.question,
+                      }))
+                    : questionsForForm(val)
+                );
                 onWidgetChange({
                   ...widget,
                   form: val,
                   question: null,
                   config: {
-                    ...widget.config,
-                    measure: isMonitoringForm(val)
-                      ? widget.config?.measure || "current_state"
+                    ...pruned,
+                    measure: supported
+                      ? widget.config?.measure || supported
                       : null,
                   },
                 });
@@ -251,7 +275,7 @@ const BuilderInspector = ({
               style={{ width: "100%" }}
               allowClear
             >
-              {forms.map((f) => (
+              {(wType === "table" ? monitoringForms(forms) : forms).map((f) => (
                 <Select.Option key={f.id} value={f.id}>
                   {f.name}
                 </Select.Option>
@@ -471,7 +495,15 @@ const BuilderInspector = ({
                         if (e.target.checked) {
                           updateConfig("columns", [
                             ...cols,
-                            { key: col.key, source: col.key },
+                            // The label travels with the column: VizTable
+                            // renders `label || key`, so without it the
+                            // header read `parent_name` rather than
+                            // "Datapoint name".
+                            {
+                              key: col.key,
+                              source: col.key,
+                              label: col.label,
+                            },
                           ]);
                         } else {
                           updateConfig(
@@ -485,14 +517,13 @@ const BuilderInspector = ({
                   </label>
                 );
               })}
-              {/* Question columns */}
-              {questionsForForm(widget.form).map((q) => {
-                const colKey = `answer_${q.id}`;
+              {/* Question columns, from both sides of the join */}
+              {tableColumnOptions(forms, widget.form).map((opt) => {
                 const checked = (wConfig.columns || []).some(
-                  (c) => c.key === colKey
+                  (c) => c.key === opt.key
                 );
                 return (
-                  <label key={colKey} className="builder-inspector-col-row">
+                  <label key={opt.key} className="builder-inspector-col-row">
                     <Checkbox
                       checked={checked}
                       onChange={(e) => {
@@ -501,21 +532,26 @@ const BuilderInspector = ({
                           updateConfig("columns", [
                             ...cols,
                             {
-                              key: colKey,
-                              label: q.label,
-                              source: "answer",
-                              question: q.id,
+                              key: opt.key,
+                              label: opt.label,
+                              source: opt.source,
+                              question: opt.question,
                             },
                           ]);
                         } else {
                           updateConfig(
                             "columns",
-                            cols.filter((c) => c.key !== colKey)
+                            cols.filter((c) => c.key !== opt.key)
                           );
                         }
                       }}
                     />
-                    {q.label}
+                    <span>
+                      {opt.label}
+                      <span className="builder-inspector-col-form">
+                        {opt.formName}
+                      </span>
+                    </span>
                   </label>
                 );
               })}
@@ -577,7 +613,9 @@ const BuilderInspector = ({
                   style={{ width: 90 }}
                 />
                 <button
-                  className="builder-widget-btn builder-widget-btn--danger"
+                  className="builder-inspector-criteria-remove"
+                  title="Remove condition"
+                  aria-label="Remove condition"
                   onClick={() => {
                     const updated = (wConfig.criteria || []).filter(
                       (_, i) => i !== idx
@@ -585,7 +623,7 @@ const BuilderInspector = ({
                     updateConfig("criteria", updated);
                   }}
                 >
-                  &times;
+                  <DeleteOutlined />
                 </button>
               </div>
             ))}
@@ -600,6 +638,30 @@ const BuilderInspector = ({
             >
               + Add criterion
             </button>
+          </div>
+        )}
+
+        {/* Table row limit */}
+        {wType === "table" && widget.form && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Rows to show</label>
+            <InputNumber
+              value={wConfig.page_size || 20}
+              min={1}
+              max={100}
+              step={5}
+              style={{ width: "100%" }}
+              onChange={(val) => {
+                // Reaches /escalation as `page_size` and Ant's pagination as
+                // the page length, so one control governs both how much is
+                // fetched and how much is drawn. Clamped to the serializer's
+                // own bounds rather than sending a value it would reject.
+                updateConfig("page_size", val || 20);
+              }}
+            />
+            <div className="builder-inspector-hint">
+              Rows per page, up to 100.
+            </div>
           </div>
         )}
 

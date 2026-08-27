@@ -1,3 +1,5 @@
+@import "../../variables";
+
 /* =========================================================
    Dashboard viewer and preview
    =========================================================
@@ -10,50 +12,49 @@
    and the chart bodies are roughly two thirds taller. Copying the canvas
    values and adjusting is how those differences get lost. */
 
+/* Full-bleed and full-height. `flex: 1` did nothing here — `.body` is a
+   block, so the shell was only as tall as its content and only as wide as
+   the padded column, and the page's own white showed below and beside the
+   grey. Breaking out of `.body`'s padding is the same trick the rest of
+   the app uses; the interpolation in calc() is required, because node-sass
+   emits a bare variable verbatim and the browser drops the declaration. */
 .dashboard-view-shell {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   background: #f0f2f5;
+  margin: (-$padding-default) (-$layout-padding-small-screen)
+    (-$padding-default);
+  min-height: calc(100vh - #{$header-height});
+
+  @media screen and (min-width: $screen-regular) {
+    margin-left: -$layout-padding;
+    margin-right: -$layout-padding;
+  }
 }
 
-/* ── Top bar ── */
-
-.dashboard-view-topbar {
-  height: 57px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid #e7eaee;
-}
-
-.dashboard-view-topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
+/* Sits in the page's left gutter (50px, so a 34px button at 16px clears
+   it exactly) and stays put while the dashboard scrolls. */
 .dashboard-view-back {
+  position: fixed;
+  top: calc(#{$header-height} + 16px);
+  left: 16px;
+  z-index: 5;
   width: 34px;
   height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f4f6f9;
-  border: none;
+  background: #fff;
+  border: 1px solid #e7eaee;
   border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
   cursor: pointer;
   color: #334;
-}
 
-.dashboard-view-topbar-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #081c40;
+  &:hover {
+    background: #f4f6f9;
+    color: #081c40;
+  }
 }
 
 /* Preview only. The published viewer is not a preview of anything, so it
@@ -77,15 +78,33 @@
   background: #f0f2f5;
 }
 
-.dashboard-view-header {
-  background: #fff;
-  padding: 20px 50px;
-}
+/* One column for the whole page. The title, the filter bar and the grid
+   all sit in the same 1120px box with the same 50px gutters, so their left
+   and right edges line up down the page.
+
+   They did not before: the header and the filter bar carried their gutters
+   on the full-bleed outer element and centred a 1120px inner inside it,
+   while the grid carried its gutters *inside* its own 1120px box. On a
+   wide screen that left the title and filters 1120px wide and the cards
+   1020px — every card visibly inboard of the heading above it. */
+$view-column: 1120px;
+$view-gutter: 50px;
 
 .dashboard-view-header-inner,
-.dashboard-view-filters-inner {
-  max-width: 1120px;
+.dashboard-view-filters-inner,
+.dashboard-view-grid {
+  max-width: $view-column;
   margin: 0 auto;
+  padding-left: $view-gutter;
+  padding-right: $view-gutter;
+}
+
+/* No background of its own. The page is grey and the white belongs to
+   things you can act on — the filter controls and the cards. A full-bleed
+   white strip behind the title read as a third band of chrome stacked on
+   two others. */
+.dashboard-view-header {
+  padding: 20px 0 4px;
 }
 
 .dashboard-view-title {
@@ -102,11 +121,10 @@
 
 /* ── Filter bar ── */
 
+/* The bar is a layout row, not a surface: it positions the controls in the
+   page column and paints nothing. */
 .dashboard-view-filters {
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
-  padding: 12px 50px;
-  margin-bottom: 16px;
+  padding: 8px 0 16px;
 }
 
 .dashboard-view-filters-inner {
@@ -116,41 +134,21 @@
   flex-wrap: wrap;
 }
 
-/* Not .builder-filter-chip: that one is the canvas's inert placeholder
-   and is deliberately greyer and smaller. These are live controls. */
-.dashboard-view-chip {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #5b6472;
-  font-size: 13px;
-  border: 1px solid #d9dee4;
-  border-radius: 6px;
-  padding: 7px 12px;
-
-  .ant-picker,
-  .ant-select-selector {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    padding: 0 !important;
-    height: auto !important;
-    font-size: 13px;
-    color: #5b6472;
-  }
-
-  .ant-picker-input > input {
-    font-size: 13px;
-    color: #5b6472;
-  }
+/* The white is the card, and the card is the width of its controls. It
+   used to be a strip spanning the page, most of which was empty. */
+.dashboard-view-filters-card {
+  background: #fff;
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
+  padding: 8px 12px;
 }
 
 /* ── Grid ── */
 
 .dashboard-view-grid {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 0 50px 60px;
+  /* Column and gutters come from the shared rule above. */
+  padding-bottom: 60px;
   display: grid;
   grid-template-columns: repeat(24, 1fr);
   gap: 16px;

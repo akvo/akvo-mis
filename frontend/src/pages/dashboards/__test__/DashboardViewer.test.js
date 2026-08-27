@@ -66,7 +66,6 @@ const setUser = (user) => {
 };
 
 const SUPERUSER = { id: 1, name: "Admin", is_superuser: true, roles: [] };
-const VIEWER = { id: 2, name: "Viewer", is_superuser: false, roles: [] };
 
 const renderViewer = () =>
   render(
@@ -147,27 +146,37 @@ describe("not found", () => {
   );
 });
 
-describe("the Edit button is gated on dashboard_edit", () => {
-  test("shown to a user who can edit, and routes to the builder", async () => {
-    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
-    renderViewer();
-
-    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
-    const edit = screen.getByRole("button", { name: /edit dashboard/i });
-    edit.click();
-    expect(mockNavigate).toHaveBeenCalledWith(
-      "/control-center/dashboard/water-points-overview"
-    );
-  });
-
-  test("hidden from a user without the permission", async () => {
-    setUser(VIEWER);
+describe("the top bar is a back button and nothing else", () => {
+  // Edit lived here, gated on dashboard_edit. It is gone: the list already
+  // offers Edit on every card, and a viewer that carries an authoring
+  // control spends its widest row on chrome. The dashboard's name was
+  // beside it and is dropped too — the header repeats it directly below,
+  // so the bar was showing the title twice.
+  test("no Edit control, for anyone", async () => {
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     expect(
-      screen.queryByRole("button", { name: /edit dashboard/i })
+      screen.queryByRole("button", { name: /edit/i })
     ).not.toBeInTheDocument();
+  });
+
+  test("back still returns to the list", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    screen.getByRole("button", { name: /back/i }).click();
+    expect(mockNavigate).toHaveBeenCalledWith("/control-center/dashboard");
+  });
+
+  test("the name is shown once, by the header", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    const { container } = renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(container.querySelector(".dashboard-view-topbar-name")).toBeNull();
+    expect(screen.getAllByText(PAYLOAD.name)).toHaveLength(1);
   });
 });

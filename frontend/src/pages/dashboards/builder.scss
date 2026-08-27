@@ -8,17 +8,33 @@
   flex: 1;
 }
 
+// The builder is an app shell, not a page: the palette and the inspector
+// stay put and only the canvas scrolls.
+//
+// Pinned to the viewport rather than sized inside `.body`. A height of
+// `calc(100vh - header)` only bounds the shell if its top lands exactly at
+// the header's bottom edge, which means `.body`'s padding, this rule's
+// negative margins and any wrapper the router introduces must all cancel
+// to the pixel. They did not, so the shell overflowed, the document
+// scrolled, and the side panels scrolled away with it — the panes' own
+// `overflow-y: auto` never engaged because nothing above them was bounded.
+//
+// `position: fixed` removes every one of those dependencies: the shell
+// occupies the space under the fixed header by definition, is full-bleed
+// without margins, and contributes no height to the document, so the page
+// cannot scroll at all. `min-height: 0` down the chain is what then lets
+// `.builder-canvas` — and only it — scroll.
 .builder-shell {
   display: flex;
   flex-direction: column;
-  /* Break out of the .body padding to go full-bleed */
-  margin: -$padding-default (-$layout-padding-small-screen) (-$padding-default);
-  height: calc(100vh - $header-height);
-
-  @media screen and (min-width: $screen-regular) {
-    margin-left: -$layout-padding;
-    margin-right: -$layout-padding;
-  }
+  position: fixed;
+  top: $header-height;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  // Below the header (z-index 999), above the page behind it. Also caps the
+  // toolbar's own z-index inside this stacking context.
+  z-index: 1;
 }
 
 /* ── Toolbar ── */
@@ -207,31 +223,19 @@
   padding: 22px 26px 80px;
 }
 
-.builder-canvas-filters {
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
-  border-radius: 6px;
-  padding: 11px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-}
+// The viewer's filter bar, re-proportioned for the canvas: same controls,
+// same component, but the viewer's full-width page padding would be absurd
+// inside a 1080px editing column.
+/* The bar paints nothing now, so the canvas only has to drop the viewer's
+   page gutters — inside the editing column the canvas padding is the
+   gutter. The controls carry their own card and are identical on both
+   surfaces. */
+.builder-canvas-inner .dashboard-view-filters {
+  padding: 0 0 16px;
 
-.builder-filter-chip {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #8a93a0;
-  font-size: 12.5px;
-  border: 1px solid #e3e7ec;
-  border-radius: 6px;
-  padding: 6px 11px;
-
-  &--right {
-    margin-left: auto;
-    border-radius: 20px;
-    padding: 6px 13px;
+  .dashboard-view-filters-inner {
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
@@ -370,6 +374,42 @@
 .builder-widget-body {
   min-height: 80px;
   padding: 8px;
+  /* The per-type height arrives inline from WIDGET_BODY_HEIGHT, and this
+     app has no global border-box reset — without this the 8px padding
+     would sit outside it and every chart card would be 16px taller here
+     than in the viewer. */
+  box-sizing: border-box;
+  overflow: hidden;
+
+  > * {
+    min-height: 0;
+  }
+
+  /* App.scss:355 pins EVERY akvo-charts chart in the app to a fixed
+     `height: 500px`, and `div[role="figure"]` (0-1-1) outranks the
+     package's own `.ae-container` (0-1-0). The viewer overrides it
+     (viewer.scss); the canvas never did, so its cards grew around a 500px
+     chart while the same widget was squeezed into the viewer's bounded
+     cell — the author reviewed a taller chart than anyone else saw. */
+  div[role="figure"] {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+/* Shown in place of a chart while a widget has no data source, and when
+   its request fails. Sized to the body's min-height so selecting the
+   widget and configuring it does not make the card jump. */
+.builder-widget-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #7a828d;
 }
 
 /* ── Inspector ── */
@@ -414,6 +454,13 @@
 
 .builder-inspector-field {
   margin-bottom: 16px;
+}
+
+.builder-inspector-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7a828d;
+  line-height: 1.5;
 }
 
 .builder-inspector-label {
@@ -534,11 +581,57 @@
   cursor: pointer;
 }
 
+// Which form a table column comes from. The same label can legitimately
+// appear on the registration and the monitoring form, and the two are read
+// off different sides of the join, so the source has to be visible.
+.builder-inspector-col-form {
+  display: block;
+  font-size: 10.5px;
+  color: #a7aeb8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+// 274px of usable width (310px pane less its padding) cannot hold the type
+// select, the question select, the value input and the remove button on one
+// line. It used to try: everything shrank proportionally, and the button —
+// the only item with no text to set a minimum width — shrank the most,
+// leaving a sliver that was neither visible nor clickable. Wrapping lets
+// the controls take a second line instead, and `flex: none` keeps the
+// button whole whatever the row does.
 .builder-inspector-criteria-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #eef0f3;
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+
+.builder-inspector-criteria-remove {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #a7aeb8;
+  font-size: 13px;
+
+  &:hover {
+    background: #fdeceb;
+    color: #d4380d;
+  }
 }
 
 .builder-inspector-add-btn {

@@ -1,18 +1,33 @@
-import React, { memo, useCallback, useMemo, useRef } from "react";
+import React, { memo, useCallback, useRef } from "react";
 import PropTypes from "prop-types";
+import { Button, Skeleton } from "antd";
 import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
 import WidgetRenderer from "../../components/dashboard/widgets/WidgetRenderer";
-import getSampleData from "./sampleWidgetData";
-import { TYPE_LABELS } from "./builderConstants";
+import useWidgetData from "../../util/hooks/useWidgetData";
+import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
+import { WIDGET_BODY_HEIGHT } from "../../components/dashboard/widgetLayout";
+import { TYPE_LABELS, NEEDS_FORM } from "./builderConstants";
 
+// The canvas fetches through the same hook as the viewer and the preview.
+// It used to render a hardcoded array keyed on widget.type, which meant a
+// bar chart showed the same four invented categories whatever question it
+// was pointed at, and changing that question produced no request and no
+// visible change. A chart of plausible numbers for the wrong question is
+// worse than no chart at all — see VIZ-006's opening note.
+//
+// What stays different from the viewer's cell is the chrome: the canvas
+// draws its own header, actions and heights, because it is an editing
+// surface. Only the body is shared.
 const CanvasWidgetCard = memo(
   ({
     widget,
     index,
+    filters,
+    rootFormId,
     isSelected,
     onSelect,
     onMove,
@@ -21,7 +36,46 @@ const CanvasWidgetCard = memo(
     onDragOver,
     onDrop,
   }) => {
-    const sampleData = useMemo(() => getSampleData(widget.type), [widget.type]);
+    const { data, renderWidget, pagination, loading, error, refetch } =
+      useWidgetData(widget, filters, { rootFormId });
+
+    const body = () => {
+      // Before anything else: a widget still being configured has no data
+      // source, so there is nothing to ask for and nothing honest to draw.
+      // Saying so is the point — this is where the author is told what the
+      // widget still needs.
+      if (NEEDS_FORM.has(widget.type) && !widget.form) {
+        return (
+          <div className="builder-widget-note">
+            Choose a data source in the panel on the right.
+          </div>
+        );
+      }
+      if (loading) {
+        return <Skeleton active paragraph={{ rows: 2 }} />;
+      }
+      if (error) {
+        return (
+          <div className="builder-widget-note">
+            <div>Could not load this widget&apos;s data.</div>
+            <Button type="link" size="small" onClick={refetch}>
+              Retry
+            </Button>
+          </div>
+        );
+      }
+      // An empty successful response reaches the renderer, which shows its
+      // own "No data". Under current_state, sites never monitored are
+      // excluded unless include_unmonitored is set, so empty is a routine
+      // answer rather than a fault.
+      return (
+        <WidgetRenderer
+          widget={renderWidget || widget}
+          data={data}
+          pagination={pagination}
+        />
+      );
+    };
 
     return (
       <div
@@ -78,8 +132,18 @@ const CanvasWidgetCard = memo(
             </button>
           </div>
         </div>
-        <div className="builder-widget-body">
-          <WidgetRenderer widget={widget} data={sampleData} />
+        <div
+          className="builder-widget-body"
+          // The same per-type height the viewer uses. Without it the
+          // canvas card grew around App.scss's global 500px chart and the
+          // author reviewed a taller chart than anyone else would see.
+          style={
+            WIDGET_BODY_HEIGHT[widget.type]
+              ? { height: WIDGET_BODY_HEIGHT[widget.type] }
+              : {}
+          }
+        >
+          {body()}
         </div>
       </div>
     );
@@ -91,6 +155,8 @@ CanvasWidgetCard.displayName = "CanvasWidgetCard";
 CanvasWidgetCard.propTypes = {
   widget: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
+  filters: PropTypes.object,
+  rootFormId: PropTypes.number,
   isSelected: PropTypes.bool.isRequired,
   onSelect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
@@ -100,11 +166,16 @@ CanvasWidgetCard.propTypes = {
   onDrop: PropTypes.func.isRequired,
 };
 
+const noop = () => {};
+
 const BuilderCanvas = ({
   widgets,
   selectedId,
   dashboardName,
   dashboardDesc,
+  filters,
+  rootFormId,
+  defaultFilters,
   onSelect,
   onDeselect,
   onMove,
@@ -147,50 +218,18 @@ const BuilderCanvas = ({
   return (
     <div className="builder-canvas" onClick={handleCanvasClick}>
       <div className="builder-canvas-inner">
-        <div className="builder-canvas-filters">
-          <span className="builder-filter-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <rect
-                x="3"
-                y="4"
-                width="18"
-                height="17"
-                rx="2"
-                stroke="#a7aeb8"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M3 9h18M8 2v4M16 2v4"
-                stroke="#a7aeb8"
-                strokeWidth="1.6"
-              />
-            </svg>
-            Monitoring period
-          </span>
-          <span className="builder-filter-chip">
-            Location
-            <svg width="10" height="7" viewBox="0 0 10 7">
-              <path
-                d="M1 1l4 4 4-4"
-                stroke="#a7aeb8"
-                strokeWidth="1.4"
-                fill="none"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-          <span className="builder-filter-chip builder-filter-chip--right">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M3 5h18l-7 8v5l-4 2v-7L3 5z"
-                stroke="#a7aeb8"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Filters
-          </span>
-        </div>
+        {/* The viewer's own filter bar, inert. It used to be three
+            hand-drawn chips that only resembled it; the moment the real
+            bar was restyled to match Manage Data the two drifted apart,
+            which is exactly what a look-alike guarantees. The canvas is
+            unfiltered by design, so the controls are disabled rather than
+            wired. */}
+        <DashboardViewFilters
+          defaultFilters={defaultFilters}
+          value={filters}
+          onChange={noop}
+          disabled
+        />
 
         <div className="builder-canvas-title">{dashboardName}</div>
         <div className="builder-canvas-desc">{dashboardDesc}</div>
@@ -221,6 +260,8 @@ const BuilderCanvas = ({
                 key={w.id}
                 widget={w}
                 index={idx}
+                filters={filters}
+                rootFormId={rootFormId}
                 isSelected={w.id === selectedId}
                 onSelect={onSelect}
                 onMove={onMove}
@@ -242,6 +283,9 @@ BuilderCanvas.propTypes = {
   selectedId: PropTypes.number,
   dashboardName: PropTypes.string,
   dashboardDesc: PropTypes.string,
+  filters: PropTypes.object,
+  rootFormId: PropTypes.number,
+  defaultFilters: PropTypes.object,
   onSelect: PropTypes.func.isRequired,
   onDeselect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
