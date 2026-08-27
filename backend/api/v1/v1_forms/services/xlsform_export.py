@@ -179,6 +179,8 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
         QuestionTypes.tree,
         QuestionTypes.table,
         QuestionTypes.autofield,
+        QuestionTypes.geoshape,
+        QuestionTypes.geotrace,
     ):
         return (None, None)
 
