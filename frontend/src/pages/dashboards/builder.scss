@@ -13,7 +13,13 @@
   flex-direction: column;
   /* Break out of the .body padding to go full-bleed */
   margin: -$padding-default (-$layout-padding-small-screen) (-$padding-default);
-  height: calc(100vh - $header-height);
+  // Interpolation is required here. node-sass emits a bare variable inside
+  // calc() verbatim, and the browser then drops the whole declaration as
+  // invalid CSS. The shell got no height, grew with the canvas, and the
+  // document scrolled instead of the canvas — carrying the palette and the
+  // inspector out of view. Same form as the .body rule whose padding this
+  // margin cancels (components/layout/style.scss).
+  height: calc(100vh - #{$header-height});
 
   @media screen and (min-width: $screen-regular) {
     margin-left: -$layout-padding;
