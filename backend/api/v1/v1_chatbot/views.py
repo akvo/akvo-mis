@@ -86,22 +86,32 @@ class ChatMessageView(APIView):
         try:
             from openai import OpenAI
 
-            client = OpenAI(
-                api_key=api_key,
-                default_headers={"OpenAI-Beta": "assistants=v2"},
-            )
+            client = OpenAI(api_key=api_key)
 
             # 1. Create or reuse thread
             if not thread_id:
                 thread = client.beta.threads.create()
                 thread_id = thread.id
 
-            # 2. Add message to thread
-            client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=augmented_message,
-            )
+            # 2. Add message to thread (with auto-recovery for stale thread IDs)
+            try:
+                client.beta.threads.messages.create(
+                    thread_id=thread_id,
+                    role="user",
+                    content=augmented_message,
+                )
+            except Exception as thread_err:
+                logger.warning(
+                    f"Failed to post to thread '{thread_id}' ({thread_err}). "
+                    "Creating a new thread."
+                )
+                thread = client.beta.threads.create()
+                thread_id = thread.id
+                client.beta.threads.messages.create(
+                    thread_id=thread_id,
+                    role="user",
+                    content=augmented_message,
+                )
 
             # 3. Run assistant
             run = None
@@ -127,9 +137,7 @@ class ChatMessageView(APIView):
                 if vector_store_id:
                     run_kwargs["tools"] = [{"type": "file_search"}]
                     run_kwargs["tool_resources"] = {
-                        "file_search": {
-                            "vector_store_ids": [vector_store_id]
-                        }
+                        "file_search": {"vector_store_ids": [vector_store_id]}
                     }
                 run = client.beta.threads.runs.create_and_poll(**run_kwargs)
 
