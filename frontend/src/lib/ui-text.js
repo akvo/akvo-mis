@@ -35,6 +35,54 @@ const uiText = {
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
     menuFormBuilder: "Form Builder",
+    menuDashboards: "Dashboards",
+    // Dashboards
+    dashboardListTitle: "My dashboards",
+    dashboardListSubtitle: "Build and manage your custom data dashboards.",
+    dashboardNew: "New dashboard",
+    dashboardEmptyTitle: "No dashboards yet",
+    dashboardEmptyDesc:
+      "Create your first custom dashboard to visualise data from your forms.",
+    dashboardCreateTitle: "Create a dashboard",
+    dashboardCreateHint:
+      "Name it, then pick the registration form whose data this dashboard will show.",
+    dashboardCreateBtn: "Create dashboard",
+    dashboardNameLabel: "Dashboard name",
+    dashboardNameRequired: "Please enter a dashboard name",
+    dashboardFormLabel: "Data source",
+    dashboardFormExtra:
+      "This dashboard will show data from this form and its monitoring forms. This cannot be changed later.",
+    dashboardFormRequired: "Please select a registration form",
+    dashboardFormPlaceholder: "Select a registration form",
+    dashboardNoForms: "No published registration forms available.",
+    dashboardGoFormBuilder: "Go to Form Builder to create and publish a form.",
+    dashboardForbidden: "You no longer have permission to perform this action.",
+    dashboardCreated: "Dashboard created",
+    dashboardDeleted: "Dashboard deleted",
+    dashboardDuplicated: "Dashboard duplicated",
+    dashboardDeleteConfirm: "Delete this dashboard?",
+    dashboardSlugConflict:
+      "A dashboard with a similar name already exists. Please choose a different name.",
+    dashboardSaved: "Dashboard saved",
+    dashboardPublished: "Dashboard published",
+    // Viewer and preview (VIZ-008)
+    dashboardViewEmpty: "This dashboard has no widgets yet.",
+    dashboardNotFound: "Dashboard not found",
+    dashboardNotFoundHint:
+      "It may have been unpublished or deleted, or you may not have access to it.",
+    dashboardEdit: "Edit dashboard",
+    dashboardPreview: "Preview",
+    dashboardBackToEditing: "Back to editing",
+    dashboardWidgetError: "Couldn't load this widget",
+    dashboardWidgetRetry: "Retry",
+    dashboardWidgetQuestionGone: "This widget's question no longer exists.",
+    dashboardWidgetFormGone: "This widget's form no longer exists.",
+    dashboardFilterPeriod: "Monitoring period",
+    dashboardFilterAllLocations: "All locations",
+    preview: "Preview",
+    publish: "Publish",
+    published: "Published",
+    draft: "Draft",
     // Login
     loginLoadingTex: (
       <Fragment>
