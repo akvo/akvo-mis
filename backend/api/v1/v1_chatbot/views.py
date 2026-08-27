@@ -149,12 +149,14 @@ class ChatMessageView(APIView):
                     messages = client.beta.threads.messages.list(
                         thread_id=thread_id,
                         order="desc",
-                        limit=1,
+                        limit=10,
                     )
                     assistant_reply = ""
-                    for msg in messages:
-                        if msg.role == "assistant":
-                            for block in msg.content:
+                    msg_list = getattr(messages, "data", messages)
+                    for msg in msg_list:
+                        if getattr(msg, "role", None) == "assistant":
+                            content_blocks = getattr(msg, "content", []) or []
+                            for block in content_blocks:
                                 if hasattr(block, "text") and hasattr(
                                     block.text, "value"
                                 ):
