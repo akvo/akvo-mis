@@ -125,7 +125,7 @@ const DashboardViewer = () => {
         <DashboardGrid
           widgets={dashboard.widgets}
           filters={filters}
-          rootFormId={dashboard.root_form?.id}
+          source={{ slug }}
         />
       </div>
     </div>

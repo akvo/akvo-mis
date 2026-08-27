@@ -1,7 +1,18 @@
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import { Table } from "antd";
-import { serializeColumns } from "../../../util/hooks/useWidgetData";
+
+// Sources the backend refuses without a question id
+// (EscalationFilterSerializer.validate_columns).
+const QID_REQUIRED = ["answer", "parent_answer", "latest_date"];
+
+const usableColumns = (columns) =>
+  (Array.isArray(columns) ? columns : []).filter(
+    (c) =>
+      c?.key &&
+      c?.source &&
+      (!QID_REQUIRED.includes(c.source) || Boolean(c.question))
+  );
 
 const VizTable = ({ config, data, pagination }) => {
   const widgetConfig = config?.config || {};
@@ -23,17 +34,18 @@ const VizTable = ({ config, data, pagination }) => {
     return data.map((row, i) => ({ ...row, key: row.id || i }));
   }, [data]);
 
-  // Columns are the one thing a table cannot do without: they are what the
-  // request asks for and what the grid draws. Criteria are optional — no
-  // conditions means every datapoint — so there is nothing to prompt for
-  // there, and an unfinished condition simply does not narrow anything.
+  // Columns are the one thing a table cannot do without: they are what
+  // the request asks for and what the grid draws. Criteria are optional —
+  // no conditions means every datapoint — so there is nothing to prompt
+  // for there, and an unfinished condition simply does not narrow
+  // anything.
   //
-  // Readiness is decided by the same function that builds the request
-  // rather than by counting array entries, so "what we say is missing" and
-  // "what stops the request" cannot drift apart: a `latest_date` column
-  // with no question id is dropped by the serializer, and a table holding
-  // only that one asks for nothing.
-  if (columns.length === 0 || !serializeColumns(widgetConfig.columns)) {
+  // The server decides what to send now (VIZ-010), and it drops a column
+  // whose source needs a question id and has none. This mirrors that rule
+  // so the empty state says "no columns" instead of drawing a grid the
+  // server will answer with nothing. It is a prompt, not a query: the
+  // rule that must not be duplicated is the one that produces numbers.
+  if (columns.length === 0 || !usableColumns(widgetConfig.columns).length) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
         Configure table columns in the inspector

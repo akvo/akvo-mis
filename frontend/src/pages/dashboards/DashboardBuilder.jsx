@@ -461,7 +461,7 @@ const DashboardBuilder = () => {
           <DashboardGrid
             widgets={widgets}
             filters={previewFilters}
-            rootFormId={dashboard.root_form?.id}
+            source={{ slug, dashboardId: dashboardIdRef.current }}
           />
         </div>
       ) : (
@@ -477,7 +477,7 @@ const DashboardBuilder = () => {
             // family, not a slice of it. Preview is where the filter bar
             // becomes real.
             filters={EMPTY_FILTERS}
-            rootFormId={dashboard.root_form?.id}
+            source={{ slug, dashboardId: dashboardIdRef.current }}
             defaultFilters={dashboard.default_filters}
             onSelect={handleSelect}
             onDeselect={handleDeselect}

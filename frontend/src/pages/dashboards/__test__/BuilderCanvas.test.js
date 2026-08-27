@@ -34,7 +34,6 @@ jest.mock("akvo-charts", () => ({
 // "the canvas shows what the viewer will show" (VIZ-006 §3) true rather
 // than aspirational.
 
-const ROOT = 6001;
 const MONITORING = 6002;
 
 const NO_FILTERS = {
@@ -76,7 +75,7 @@ const draw = (widgets, extra = {}) =>
       dashboardName="Water access"
       dashboardDesc=""
       filters={NO_FILTERS}
-      rootFormId={ROOT}
+      source={{ slug: "water-points" }}
       onSelect={noop}
       onDeselect={noop}
       onMove={noop}
@@ -97,7 +96,7 @@ describe("the canvas fetches per widget", () => {
     draw([widget]);
 
     expect(useWidgetData).toHaveBeenCalledWith(widget, NO_FILTERS, {
-      rootFormId: ROOT,
+      slug: "water-points",
     });
   });
 
@@ -112,7 +111,7 @@ describe("the canvas fetches per widget", () => {
         dashboardName="Water access"
         dashboardDesc=""
         filters={NO_FILTERS}
-        rootFormId={ROOT}
+        source={{ slug: "water-points" }}
         onSelect={noop}
         onDeselect={noop}
         onMove={noop}
@@ -124,7 +123,7 @@ describe("the canvas fetches per widget", () => {
     // The config the inspector just wrote reaches the hook. Without this
     // the canvas is showing one question's chart while claiming another.
     expect(useWidgetData).toHaveBeenLastCalledWith(changed, NO_FILTERS, {
-      rootFormId: ROOT,
+      slug: "water-points",
     });
   });
 

@@ -27,7 +27,7 @@ const CanvasWidgetCard = memo(
     widget,
     index,
     filters,
-    rootFormId,
+    source,
     isSelected,
     onSelect,
     onMove,
@@ -37,7 +37,7 @@ const CanvasWidgetCard = memo(
     onDrop,
   }) => {
     const { data, renderWidget, pagination, loading, error, refetch } =
-      useWidgetData(widget, filters, { rootFormId });
+      useWidgetData(widget, filters, source);
 
     const body = () => {
       // Before anything else: a widget still being configured has no data
@@ -156,7 +156,7 @@ CanvasWidgetCard.propTypes = {
   widget: PropTypes.object.isRequired,
   index: PropTypes.number.isRequired,
   filters: PropTypes.object,
-  rootFormId: PropTypes.number,
+  source: PropTypes.object,
   isSelected: PropTypes.bool.isRequired,
   onSelect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
@@ -174,7 +174,7 @@ const BuilderCanvas = ({
   dashboardName,
   dashboardDesc,
   filters,
-  rootFormId,
+  source,
   defaultFilters,
   onSelect,
   onDeselect,
@@ -261,7 +261,7 @@ const BuilderCanvas = ({
                 widget={w}
                 index={idx}
                 filters={filters}
-                rootFormId={rootFormId}
+                source={source}
                 isSelected={w.id === selectedId}
                 onSelect={onSelect}
                 onMove={onMove}
@@ -284,7 +284,7 @@ BuilderCanvas.propTypes = {
   dashboardName: PropTypes.string,
   dashboardDesc: PropTypes.string,
   filters: PropTypes.object,
-  rootFormId: PropTypes.number,
+  source: PropTypes.object,
   defaultFilters: PropTypes.object,
   onSelect: PropTypes.func.isRequired,
   onDeselect: PropTypes.func.isRequired,

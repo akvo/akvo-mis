@@ -63,7 +63,11 @@ beforeEach(() => {
 
 const viewerBody = (widget) => {
   const { container } = render(
-    <DashboardGrid widgets={[widget]} filters={{}} rootFormId={6001} />
+    <DashboardGrid
+      widgets={[widget]}
+      filters={{}}
+      source={{ slug: "water-points" }}
+    />
   );
   return container.querySelector(".dashboard-view-cell-body");
 };
@@ -76,7 +80,7 @@ const canvasBody = (widget) => {
       dashboardName="D"
       dashboardDesc=""
       filters={{}}
-      rootFormId={6001}
+      source={{ slug: "water-points" }}
       defaultFilters={{}}
       onSelect={noop}
       onDeselect={noop}

@@ -19,8 +19,6 @@ jest.mock("akvo-charts", () => ({
   MapCluster: () => <div data-testid="chart-map" />,
 }));
 
-const ROOT = 6001;
-
 const w = (overrides = {}) => ({
   id: 1,
   type: "bar",
@@ -64,7 +62,11 @@ const resolveAll = (overrides = {}) => {
 
 const renderGrid = (widgets, filters = {}) =>
   render(
-    <DashboardGrid widgets={widgets} filters={filters} rootFormId={ROOT} />
+    <DashboardGrid
+      widgets={widgets}
+      filters={filters}
+      source={{ slug: "water-points" }}
+    />
   );
 
 const cellFor = (title) =>
@@ -271,7 +273,7 @@ describe("filters", () => {
       <DashboardGrid
         widgets={widgets}
         filters={{ administration_id: 42 }}
-        rootFormId={ROOT}
+        source={{ slug: "water-points" }}
       />
     );
 

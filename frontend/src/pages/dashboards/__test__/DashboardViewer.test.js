@@ -15,7 +15,7 @@ jest.mock("../../../components/dashboard/DashboardGrid", () => {
     <div
       data-testid="grid"
       data-widget-count={props.widgets.length}
-      data-root-form={props.rootFormId}
+      data-source={JSON.stringify(props.source)}
       data-filters={JSON.stringify(props.filters)}
     />
   );
@@ -102,7 +102,12 @@ describe("loading a published dashboard", () => {
     expect(grid).toHaveAttribute("data-widget-count", "2");
     // root_form arrives as {id, name}; the grid needs the bare id for the
     // escalation path segment.
-    expect(grid).toHaveAttribute("data-root-form", "6001");
+    // The grid fetches by slug now, not by form: VIZ-010 moved the
+    // query off the wire and the widget id addresses the data.
+    expect(grid).toHaveAttribute(
+      "data-source",
+      JSON.stringify({ slug: "water-points-overview" })
+    );
   });
 
   test("passes default_filters through to the filter bar", async () => {

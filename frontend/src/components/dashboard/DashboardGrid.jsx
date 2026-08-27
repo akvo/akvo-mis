@@ -32,9 +32,9 @@ const HEADER_TYPES = ["bar", "line", "pie", "table", "map"];
 // Everything else is 16.
 const BODY_PADDING = { table: 0, map: 12 };
 
-const DashboardWidgetCell = ({ widget, filters, rootFormId, text }) => {
+const DashboardWidgetCell = ({ widget, filters, source, text }) => {
   const { data, renderWidget, pagination, loading, error, refetch } =
-    useWidgetData(widget, filters, { rootFormId });
+    useWidgetData(widget, filters, source);
 
   const type = widget.type;
   const height = WIDGET_BODY_HEIGHT[type];
@@ -110,11 +110,12 @@ const DashboardWidgetCell = ({ widget, filters, rootFormId, text }) => {
 DashboardWidgetCell.propTypes = {
   widget: PropTypes.object.isRequired,
   filters: PropTypes.object,
-  rootFormId: PropTypes.number,
+  // {slug, dashboardId, isPublic} — where this grid's widgets fetch from.
+  source: PropTypes.object,
   text: PropTypes.object.isRequired,
 };
 
-const DashboardGrid = ({ widgets, filters, rootFormId }) => {
+const DashboardGrid = ({ widgets, filters, source }) => {
   const { language } = store.useState((s) => s);
   const text = uiText[language.active];
 
@@ -131,7 +132,7 @@ const DashboardGrid = ({ widgets, filters, rootFormId }) => {
           key={widget.id}
           widget={widget}
           filters={filters}
-          rootFormId={rootFormId}
+          source={source}
           text={text}
         />
       ))}
@@ -142,7 +143,7 @@ const DashboardGrid = ({ widgets, filters, rootFormId }) => {
 DashboardGrid.propTypes = {
   widgets: PropTypes.array,
   filters: PropTypes.object,
-  rootFormId: PropTypes.number,
+  source: PropTypes.object,
 };
 
 export default DashboardGrid;

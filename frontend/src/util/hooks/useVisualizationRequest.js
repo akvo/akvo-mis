@@ -42,10 +42,18 @@ const cacheSet = (key, entry) => {
   cache.set(key, entry);
 };
 
-const buildKey = (endpoint, params) => `${endpoint}?${JSON.stringify(params)}`;
+// `body` is part of the key: a POST for an unsaved widget is identified by
+// what it sends, since its URL is the same for every widget on the
+// dashboard.
+const buildKey = (endpoint, params, body) =>
+  `${endpoint}?${JSON.stringify(params)}${
+    body ? `#${JSON.stringify(body)}` : ""
+  }`;
 
-const sendRequest = (endpoint, params) =>
-  api.get(endpoint, { params }).then((res) => res.data);
+const sendRequest = (endpoint, params, body) =>
+  (body ? api.post(endpoint, body) : api.get(endpoint, { params })).then(
+    (res) => res.data
+  );
 
 /**
  * Generic visualization fetch hook. Reused by useDashboardValues,
@@ -53,9 +61,13 @@ const sendRequest = (endpoint, params) =>
  *
  * @param {string|null} endpoint  e.g. "visualization/values". null skips the fetch.
  * @param {object}       params   Plain object serialized into query string.
+ * @param {object|null}  body     When given, the request is a POST of this
+ *                                body rather than a GET. Used for the
+ *                                builder's unsaved widgets, which have no
+ *                                id to address (VIZ-010).
  * @returns {{ data, loading, error, refetch: () => void }}
  */
-export const useVisualizationRequest = (endpoint, params) => {
+export const useVisualizationRequest = (endpoint, params, body = null) => {
   const [state, setState] = useState({
     data: null,
     loading: Boolean(endpoint),
@@ -64,14 +76,14 @@ export const useVisualizationRequest = (endpoint, params) => {
   const mountedRef = useRef(true);
   const keyRef = useRef(null);
 
-  const key = endpoint ? buildKey(endpoint, params) : null;
+  const key = endpoint ? buildKey(endpoint, params, body) : null;
 
   const run = useCallback(
     (bypassCache = false) => {
       if (!endpoint) {
         return;
       }
-      const cacheKey = buildKey(endpoint, params);
+      const cacheKey = buildKey(endpoint, params, body);
       keyRef.current = cacheKey;
 
       const existing = bypassCache ? null : cacheGet(cacheKey);
@@ -86,7 +98,7 @@ export const useVisualizationRequest = (endpoint, params) => {
       if (existing && existing.promise) {
         promise = existing.promise;
       } else {
-        promise = sendRequest(endpoint, params);
+        promise = sendRequest(endpoint, params, body);
         cacheSet(cacheKey, { promise });
       }
 
