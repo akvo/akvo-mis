@@ -572,11 +572,46 @@
   cursor: pointer;
 }
 
+// 274px of usable width (310px pane less its padding) cannot hold the type
+// select, the question select, the value input and the remove button on one
+// line. It used to try: everything shrank proportionally, and the button —
+// the only item with no text to set a minimum width — shrank the most,
+// leaving a sliver that was neither visible nor clickable. Wrapping lets
+// the controls take a second line instead, and `flex: none` keeps the
+// button whole whatever the row does.
 .builder-inspector-criteria-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #eef0f3;
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+
+.builder-inspector-criteria-remove {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #a7aeb8;
+  font-size: 13px;
+
+  &:hover {
+    background: #fdeceb;
+    color: #d4380d;
+  }
 }
 
 .builder-inspector-add-btn {

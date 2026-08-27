@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
+import { DeleteOutlined } from "@ant-design/icons";
 import {
   NEEDS_FORM,
   NEEDS_QUESTION,
@@ -594,7 +595,9 @@ const BuilderInspector = ({
                   style={{ width: 90 }}
                 />
                 <button
-                  className="builder-widget-btn builder-widget-btn--danger"
+                  className="builder-inspector-criteria-remove"
+                  title="Remove condition"
+                  aria-label="Remove condition"
                   onClick={() => {
                     const updated = (wConfig.criteria || []).filter(
                       (_, i) => i !== idx
@@ -602,7 +605,7 @@ const BuilderInspector = ({
                     updateConfig("criteria", updated);
                   }}
                 >
-                  &times;
+                  <DeleteOutlined />
                 </button>
               </div>
             ))}
