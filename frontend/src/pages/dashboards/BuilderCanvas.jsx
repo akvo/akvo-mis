@@ -8,6 +8,7 @@ import {
 } from "@ant-design/icons";
 import WidgetRenderer from "../../components/dashboard/widgets/WidgetRenderer";
 import useWidgetData from "../../util/hooks/useWidgetData";
+import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import { TYPE_LABELS, NEEDS_FORM } from "./builderConstants";
 
 // The canvas fetches through the same hook as the viewer and the preview.
@@ -149,6 +150,8 @@ CanvasWidgetCard.propTypes = {
   onDrop: PropTypes.func.isRequired,
 };
 
+const noop = () => {};
+
 const BuilderCanvas = ({
   widgets,
   selectedId,
@@ -156,6 +159,7 @@ const BuilderCanvas = ({
   dashboardDesc,
   filters,
   rootFormId,
+  defaultFilters,
   onSelect,
   onDeselect,
   onMove,
@@ -198,50 +202,18 @@ const BuilderCanvas = ({
   return (
     <div className="builder-canvas" onClick={handleCanvasClick}>
       <div className="builder-canvas-inner">
-        <div className="builder-canvas-filters">
-          <span className="builder-filter-chip">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <rect
-                x="3"
-                y="4"
-                width="18"
-                height="17"
-                rx="2"
-                stroke="#a7aeb8"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M3 9h18M8 2v4M16 2v4"
-                stroke="#a7aeb8"
-                strokeWidth="1.6"
-              />
-            </svg>
-            Monitoring period
-          </span>
-          <span className="builder-filter-chip">
-            Location
-            <svg width="10" height="7" viewBox="0 0 10 7">
-              <path
-                d="M1 1l4 4 4-4"
-                stroke="#a7aeb8"
-                strokeWidth="1.4"
-                fill="none"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-          <span className="builder-filter-chip builder-filter-chip--right">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M3 5h18l-7 8v5l-4 2v-7L3 5z"
-                stroke="#a7aeb8"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Filters
-          </span>
-        </div>
+        {/* The viewer's own filter bar, inert. It used to be three
+            hand-drawn chips that only resembled it; the moment the real
+            bar was restyled to match Manage Data the two drifted apart,
+            which is exactly what a look-alike guarantees. The canvas is
+            unfiltered by design, so the controls are disabled rather than
+            wired. */}
+        <DashboardViewFilters
+          defaultFilters={defaultFilters}
+          value={filters}
+          onChange={noop}
+          disabled
+        />
 
         <div className="builder-canvas-title">{dashboardName}</div>
         <div className="builder-canvas-desc">{dashboardDesc}</div>
@@ -297,6 +269,7 @@ BuilderCanvas.propTypes = {
   dashboardDesc: PropTypes.string,
   filters: PropTypes.object,
   rootFormId: PropTypes.number,
+  defaultFilters: PropTypes.object,
   onSelect: PropTypes.func.isRequired,
   onDeselect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,

@@ -186,3 +186,36 @@ describe("per-widget states stay inside their own card", () => {
     expect(screen.getByTestId("chart-pie")).toBeInTheDocument();
   });
 });
+
+describe("the canvas shows the viewer's filter bar, inert", () => {
+  test("it renders the real bar rather than a look-alike", () => {
+    const { container } = draw([w()], {
+      defaultFilters: {
+        date: { enabled: true },
+        administration: { enabled: true },
+      },
+    });
+    // The component itself, not three hand-drawn chips that resemble it.
+    expect(container.querySelector(".dashboard-view-filters")).not.toBeNull();
+  });
+
+  test("its controls are disabled — the canvas is unfiltered by design", () => {
+    const { container } = draw([w()], {
+      defaultFilters: {
+        date: { enabled: true },
+        administration: { enabled: false },
+      },
+    });
+    expect(container.querySelector(".ant-picker-disabled")).not.toBeNull();
+  });
+
+  test("a dashboard with both filters off shows no bar", () => {
+    const { container } = draw([w()], {
+      defaultFilters: {
+        date: { enabled: false },
+        administration: { enabled: false },
+      },
+    });
+    expect(container.querySelector(".dashboard-view-filters")).toBeNull();
+  });
+});

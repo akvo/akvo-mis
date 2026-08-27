@@ -223,32 +223,13 @@
   padding: 22px 26px 80px;
 }
 
-.builder-canvas-filters {
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
-  border-radius: 6px;
+// The viewer's filter bar, re-proportioned for the canvas: same controls,
+// same component, but the viewer's full-width page padding would be absurd
+// inside a 1080px editing column.
+.builder-canvas-inner .dashboard-view-filters {
   padding: 11px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.builder-filter-chip {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #8a93a0;
-  font-size: 12.5px;
-  border: 1px solid #e3e7ec;
   border-radius: 6px;
-  padding: 6px 11px;
-
-  &--right {
-    margin-left: auto;
-    border-radius: 20px;
-    padding: 6px 13px;
-  }
+  margin-bottom: 16px;
 }
 
 .builder-canvas-title {

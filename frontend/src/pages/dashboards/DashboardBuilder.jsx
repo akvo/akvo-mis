@@ -470,6 +470,7 @@ const DashboardBuilder = () => {
             // becomes real.
             filters={EMPTY_FILTERS}
             rootFormId={dashboard.root_form?.id}
+            defaultFilters={dashboard.default_filters}
             onSelect={handleSelect}
             onDeselect={handleDeselect}
             onMove={handleMove}

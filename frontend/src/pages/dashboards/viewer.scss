@@ -116,35 +116,6 @@
   flex-wrap: wrap;
 }
 
-/* Not .builder-filter-chip: that one is the canvas's inert placeholder
-   and is deliberately greyer and smaller. These are live controls. */
-.dashboard-view-chip {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #5b6472;
-  font-size: 13px;
-  border: 1px solid #d9dee4;
-  border-radius: 6px;
-  padding: 7px 12px;
-
-  .ant-picker,
-  .ant-select-selector {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    padding: 0 !important;
-    height: auto !important;
-    font-size: 13px;
-    color: #5b6472;
-  }
-
-  .ant-picker-input > input {
-    font-size: 13px;
-    color: #5b6472;
-  }
-}
-
 /* ── Grid ── */
 
 .dashboard-view-grid {

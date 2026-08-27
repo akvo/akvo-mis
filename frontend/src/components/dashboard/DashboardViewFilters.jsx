@@ -1,6 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { DatePicker } from "antd";
+import { DatePicker, Space } from "antd";
+import { CalendarOutlined } from "@ant-design/icons";
 import AdministrationDropdownLocal from "../filters/AdministrationDropdownLocal";
 import { store, uiText } from "../../lib";
 
@@ -21,26 +22,24 @@ const { RangePicker } = DatePicker;
 // global Pullstate store. A page-scoped filter must not leak its selection
 // into other screens the user navigates to next.
 //
+// The controls are the same ones Manage Data uses, laid out the same way
+// (DataFilters.js:469-495): a Space of plain bordered antd widgets, a
+// RangePicker with From/To placeholders and antd's calendar suffix, then
+// the administration dropdown bare. The mockup drew each control inside a
+// bordered pill with a borderless picker inside it, which put two idioms
+// in one app and nested a bordered select in a bordered pill. The bar
+// itself — the white strip — is page chrome and stays.
+//
 // Not built: the mockup's blue "Filters" pill. Custom per-question filters
 // are not part of the `default_filters` schema (VIZ-001 §4.4), and adding
 // them would mean inventing a persistence format this slice cannot save.
 
-const CalendarIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-    <rect
-      x="3"
-      y="4"
-      width="18"
-      height="17"
-      rx="2"
-      stroke="#5b6472"
-      strokeWidth="1.6"
-    />
-    <path d="M3 9h18M8 2v4M16 2v4" stroke="#5b6472" strokeWidth="1.6" />
-  </svg>
-);
-
-const DashboardViewFilters = ({ defaultFilters, value, onChange }) => {
+const DashboardViewFilters = ({
+  defaultFilters,
+  value,
+  onChange,
+  disabled = false,
+}) => {
   const { language } = store.useState((s) => s);
   const text = uiText[language.active];
 
@@ -75,26 +74,25 @@ const DashboardViewFilters = ({ defaultFilters, value, onChange }) => {
   return (
     <div className="dashboard-view-filters">
       <div className="dashboard-view-filters-inner">
-        {dateEnabled && (
-          <div className="dashboard-view-chip">
-            <CalendarIcon />
+        <Space>
+          {dateEnabled && (
             <RangePicker
+              disabled={disabled}
               onChange={handleDateChange}
               allowEmpty={[true, true]}
-              bordered={false}
-              suffixIcon={null}
+              allowClear
+              placeholder={[text.dateFromPlaceholder, text.dateToPlaceholder]}
+              suffixIcon={<CalendarOutlined />}
               aria-label={text.dashboardFilterPeriod}
             />
-          </div>
-        )}
-        {administrationEnabled && (
-          <div className="dashboard-view-chip">
+          )}
+          {administrationEnabled && (
             <AdministrationDropdownLocal
               onChange={handleAdministrationChange}
-              width={150}
+              loading={disabled}
             />
-          </div>
-        )}
+          )}
+        </Space>
       </div>
     </div>
   );
@@ -104,6 +102,11 @@ DashboardViewFilters.propTypes = {
   defaultFilters: PropTypes.object,
   value: PropTypes.object.isRequired,
   onChange: PropTypes.func.isRequired,
+  // The builder canvas shows the bar so the author can see what viewers
+  // will get, but the canvas is unfiltered by design — the controls are
+  // rendered inert rather than redrawn as look-alikes, which is what let
+  // the two surfaces drift apart in the first place.
+  disabled: PropTypes.bool,
 };
 
 export default DashboardViewFilters;
