@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { Button, Skeleton } from "antd";
 import WidgetRenderer from "./widgets/WidgetRenderer";
 import useWidgetData from "../../util/hooks/useWidgetData";
+import { WIDGET_BODY_HEIGHT } from "./widgetLayout";
 import { store, uiText } from "../../lib";
 
 // =========================================================
@@ -28,10 +29,6 @@ import { store, uiText } from "../../lib";
 // inside the body instead, and a section title is not a card at all.
 const HEADER_TYPES = ["bar", "line", "pie", "table", "map"];
 
-// View-mode heights from the mockup's _bodyStyle. The canvas uses smaller
-// ones; those live in BuilderCanvas.
-const BODY_HEIGHT = { bar: 300, line: 300, pie: 320, map: 380 };
-
 // Everything else is 16.
 const BODY_PADDING = { table: 0, map: 12 };
 
@@ -43,7 +40,7 @@ const DashboardWidgetCell = ({ widget, filters, rootFormId, text }) => {
   );
 
   const type = widget.type;
-  const height = BODY_HEIGHT[type];
+  const height = WIDGET_BODY_HEIGHT[type];
 
   const cellStyle = { gridColumn: `span ${widget.col_span || 24}` };
   // The only place a widget's accent colour appears as chrome rather than

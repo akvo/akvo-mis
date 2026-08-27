@@ -367,6 +367,27 @@
 .builder-widget-body {
   min-height: 80px;
   padding: 8px;
+  /* The per-type height arrives inline from WIDGET_BODY_HEIGHT, and this
+     app has no global border-box reset — without this the 8px padding
+     would sit outside it and every chart card would be 16px taller here
+     than in the viewer. */
+  box-sizing: border-box;
+  overflow: hidden;
+
+  > * {
+    min-height: 0;
+  }
+
+  /* App.scss:355 pins EVERY akvo-charts chart in the app to a fixed
+     `height: 500px`, and `div[role="figure"]` (0-1-1) outranks the
+     package's own `.ae-container` (0-1-0). The viewer overrides it
+     (viewer.scss); the canvas never did, so its cards grew around a 500px
+     chart while the same widget was squeezed into the viewer's bounded
+     cell — the author reviewed a taller chart than anyone else saw. */
+  div[role="figure"] {
+    height: 100%;
+    min-height: 0;
+  }
 }
 
 /* Shown in place of a chart while a widget has no data source, and when

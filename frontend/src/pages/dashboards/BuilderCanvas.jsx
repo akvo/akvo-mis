@@ -9,6 +9,7 @@ import {
 import WidgetRenderer from "../../components/dashboard/widgets/WidgetRenderer";
 import useWidgetData from "../../util/hooks/useWidgetData";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
+import { WIDGET_BODY_HEIGHT } from "../../components/dashboard/widgetLayout";
 import { TYPE_LABELS, NEEDS_FORM } from "./builderConstants";
 
 // The canvas fetches through the same hook as the viewer and the preview.
@@ -128,7 +129,19 @@ const CanvasWidgetCard = memo(
             </button>
           </div>
         </div>
-        <div className="builder-widget-body">{body()}</div>
+        <div
+          className="builder-widget-body"
+          // The same per-type height the viewer uses. Without it the
+          // canvas card grew around App.scss's global 500px chart and the
+          // author reviewed a taller chart than anyone else would see.
+          style={
+            WIDGET_BODY_HEIGHT[widget.type]
+              ? { height: WIDGET_BODY_HEIGHT[widget.type] }
+              : {}
+          }
+        >
+          {body()}
+        </div>
       </div>
     );
   }
