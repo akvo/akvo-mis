@@ -2,7 +2,11 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import BuilderInspector from "../BuilderInspector";
-import { pruneConfigForForm } from "../builderConstants";
+import {
+  pruneConfigForForm,
+  tableColumnOptions,
+  monitoringForms,
+} from "../builderConstants";
 
 // =========================================================
 // Removing a criterion
@@ -164,5 +168,80 @@ describe("pruneConfigForForm", () => {
     const out = pruneConfigForForm(config, []);
     expect(out.columns).toEqual([]);
     expect(out.criteria).toEqual([]);
+  });
+});
+
+// =========================================================
+// Table columns span two forms, with two different sources
+// =========================================================
+//
+// /escalation is a "registration parent plus its latest monitoring child"
+// query, so a table's own form is the MONITORING side. Its columns come
+// from both forms and the source differs:
+//
+//   registration question -> parent_answer   (read off the parent)
+//   monitoring question   -> answer          (read off the latest child)
+//
+// The inspector wrote `answer` for every question it offered, and only
+// offered the widget's own form. A dashboard bound to the registration
+// form with `answer` columns therefore asked a query that returns count: 0
+// no matter what — verified against seeded data.
+
+const FORMS = [
+  {
+    id: 6001,
+    name: "Registration",
+    type: "registration",
+    questions: [
+      { id: 102, label: "Gender" },
+      { id: 106, label: "Members" },
+    ],
+  },
+  {
+    id: 6002,
+    name: "Monitoring",
+    type: "monitoring",
+    questions: [{ id: 10106, label: "Status" }],
+  },
+];
+
+describe("tableColumnOptions", () => {
+  test("registration questions are read off the parent", () => {
+    const opts = tableColumnOptions(FORMS, 6002);
+    const gender = opts.find((o) => o.question === 102);
+    expect(gender.source).toBe("parent_answer");
+  });
+
+  test("monitoring questions are read off the latest submission", () => {
+    const opts = tableColumnOptions(FORMS, 6002);
+    const status = opts.find((o) => o.question === 10106);
+    expect(status.source).toBe("answer");
+  });
+
+  test("both forms are offered, not just the widget's own", () => {
+    const opts = tableColumnOptions(FORMS, 6002);
+    // Numeric sort: the default is lexicographic, which puts 10106 second.
+    expect(opts.map((o) => o.question).sort((a, b) => a - b)).toEqual([
+      102, 106, 10106,
+    ]);
+  });
+
+  test("keys distinguish the two sources so they cannot collide", () => {
+    // A question id can only appear once, but the key has to say which
+    // side of the join it came from — the response is keyed by it.
+    const opts = tableColumnOptions(FORMS, 6002);
+    expect(opts.find((o) => o.question === 102).key).toBe("parent_answer_102");
+    expect(opts.find((o) => o.question === 10106).key).toBe("answer_10106");
+  });
+
+  test("no monitoring form selected offers the registration side only", () => {
+    const opts = tableColumnOptions(FORMS, null);
+    expect(opts.map((o) => o.question)).toEqual([102, 106]);
+  });
+});
+
+describe("monitoringForms", () => {
+  test("a table may only bind to a monitoring form", () => {
+    expect(monitoringForms(FORMS).map((f) => f.id)).toEqual([6002]);
   });
 });

@@ -23,6 +23,8 @@ import {
   TYPE_LABELS,
   defaultMeasure,
   pruneConfigForForm,
+  tableColumnOptions,
+  monitoringForms,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -251,7 +253,11 @@ const BuilderInspector = ({
                 // backend refuses the request.
                 const pruned = pruneConfigForForm(
                   widget.config,
-                  questionsForForm(val)
+                  wType === "table"
+                    ? tableColumnOptions(forms, val).map((o) => ({
+                        id: o.question,
+                      }))
+                    : questionsForForm(val)
                 );
                 onWidgetChange({
                   ...widget,
@@ -269,7 +275,7 @@ const BuilderInspector = ({
               style={{ width: "100%" }}
               allowClear
             >
-              {forms.map((f) => (
+              {(wType === "table" ? monitoringForms(forms) : forms).map((f) => (
                 <Select.Option key={f.id} value={f.id}>
                   {f.name}
                 </Select.Option>
@@ -511,14 +517,13 @@ const BuilderInspector = ({
                   </label>
                 );
               })}
-              {/* Question columns */}
-              {questionsForForm(widget.form).map((q) => {
-                const colKey = `answer_${q.id}`;
+              {/* Question columns, from both sides of the join */}
+              {tableColumnOptions(forms, widget.form).map((opt) => {
                 const checked = (wConfig.columns || []).some(
-                  (c) => c.key === colKey
+                  (c) => c.key === opt.key
                 );
                 return (
-                  <label key={colKey} className="builder-inspector-col-row">
+                  <label key={opt.key} className="builder-inspector-col-row">
                     <Checkbox
                       checked={checked}
                       onChange={(e) => {
@@ -527,21 +532,26 @@ const BuilderInspector = ({
                           updateConfig("columns", [
                             ...cols,
                             {
-                              key: colKey,
-                              label: q.label,
-                              source: "answer",
-                              question: q.id,
+                              key: opt.key,
+                              label: opt.label,
+                              source: opt.source,
+                              question: opt.question,
                             },
                           ]);
                         } else {
                           updateConfig(
                             "columns",
-                            cols.filter((c) => c.key !== colKey)
+                            cols.filter((c) => c.key !== opt.key)
                           );
                         }
                       }}
                     />
-                    {q.label}
+                    <span>
+                      {opt.label}
+                      <span className="builder-inspector-col-form">
+                        {opt.formName}
+                      </span>
+                    </span>
                   </label>
                 );
               })}

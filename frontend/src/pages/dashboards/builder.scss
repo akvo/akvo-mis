@@ -572,6 +572,17 @@
   cursor: pointer;
 }
 
+// Which form a table column comes from. The same label can legitimately
+// appear on the registration and the monitoring form, and the two are read
+// off different sides of the join, so the source has to be visible.
+.builder-inspector-col-form {
+  display: block;
+  font-size: 10.5px;
+  color: #a7aeb8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
 // 274px of usable width (310px pane less its padding) cannot hold the type
 // select, the question select, the value input and the remove button on one
 // line. It used to try: everything shrank proportionally, and the button —
