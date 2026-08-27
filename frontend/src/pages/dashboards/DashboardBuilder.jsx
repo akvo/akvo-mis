@@ -21,7 +21,7 @@ import BuilderCanvas from "./BuilderCanvas";
 import BuilderInspector from "./BuilderInspector";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
-import { WIDGET_DEFAULTS } from "./builderConstants";
+import { WIDGET_DEFAULTS, defaultMeasure } from "./builderConstants";
 import "./builder.scss";
 import "./viewer.scss";
 
@@ -112,13 +112,13 @@ const DashboardBuilder = () => {
         question: null,
         config: { ...(defaults.config || {}) },
       };
-      // Default measure for monitoring forms
-      if (
-        firstForm?.type === "monitoring" &&
-        type !== "section_title" &&
-        type !== "table"
-      ) {
-        newWidget.config.measure = "current_state";
+      // Only for a monitoring form. `/sources` leads with the root
+      // registration form, so this is usually null — and seeding
+      // current_state anyway is what made every new chart widget fail its
+      // first save.
+      const measure = defaultMeasure(type, firstForm);
+      if (measure) {
+        newWidget.config.measure = measure;
       }
       setWidgets((prev) => [...prev, newWidget]);
       setSelectedId(newWidget.id);

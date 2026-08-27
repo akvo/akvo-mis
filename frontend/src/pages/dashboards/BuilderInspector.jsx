@@ -20,6 +20,7 @@ import {
   WIDTH_PRESETS,
   COLOR_SWATCHES,
   TYPE_LABELS,
+  defaultMeasure,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -235,14 +236,22 @@ const BuilderInspector = ({
             <Select
               value={widget.form || null}
               onChange={(val) => {
+                // Same rule as the palette's new-widget default, from the
+                // same function: a measure the widget's form cannot carry
+                // is a 400 at save time, not a UI detail. An existing
+                // choice survives a move between two monitoring forms.
+                const supported = defaultMeasure(
+                  wType,
+                  forms.find((f) => f.id === val)
+                );
                 onWidgetChange({
                   ...widget,
                   form: val,
                   question: null,
                   config: {
                     ...widget.config,
-                    measure: isMonitoringForm(val)
-                      ? widget.config?.measure || "current_state"
+                    measure: supported
+                      ? widget.config?.measure || supported
                       : null,
                   },
                 });

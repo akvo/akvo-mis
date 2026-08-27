@@ -47,23 +47,22 @@ export const WIDGET_DEFAULTS = {
   kpi: {
     col_span: 6,
     color: "#1890ff",
-    config: { measure: "current_state", value_type: "number" },
+    config: { value_type: "number" },
   },
   bar: {
     col_span: 12,
     color: "#1890ff",
-    config: { measure: "current_state", group_by: "option" },
+    config: { group_by: "option" },
   },
   line: {
     col_span: 12,
     color: "#1651b6",
-    config: { measure: "current_state", group_by: "month" },
+    config: { group_by: "month" },
   },
   pie: {
     col_span: 8,
     color: "#64A73B",
     config: {
-      measure: "current_state",
       group_by: "option",
       variant: "pie",
     },
@@ -164,6 +163,27 @@ export const NEEDS_STACK_BY = new Set(["bar", "line"]);
 export const NEEDS_VALUE_TYPE = new Set(["kpi", "bar", "line", "pie"]);
 export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar", "line"]);
 export const NEEDS_COLOR = new Set(["kpi", "bar", "line", "pie", "map"]);
+
+// Every widget type that can carry a measure — a table's rows are already
+// "latest per site" by construction, and a section title has no data.
+export const NEEDS_MEASURE = new Set(["kpi", "bar", "line", "pie", "map"]);
+
+/**
+ * The measure a widget should carry for the form it is bound to, or null.
+ *
+ * `current_state` means "the latest submission per site", which is only
+ * defined relative to a monitoring form; the server rejects it anywhere
+ * else ("measure current_state requires a monitoring form"). Both places
+ * that write a measure — the palette's new-widget defaults and the
+ * inspector's form picker — go through here, because when they disagreed
+ * every newly added chart widget was born unsavable: WIDGET_DEFAULTS
+ * seeded `current_state` unconditionally while a new widget is bound to
+ * `/sources.forms[0]`, which is always the root registration form.
+ */
+export const defaultMeasure = (type, form) =>
+  NEEDS_MEASURE.has(type) && form?.type === "monitoring"
+    ? "current_state"
+    : null;
 
 export const TYPE_LABELS = {
   kpi: "KPI",
