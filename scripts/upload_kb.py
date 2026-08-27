@@ -41,6 +41,14 @@ ASSISTANT_INSTRUCTIONS = (
     "3. If the user asks about a different feature, answer accurately.\n"
     "4. Keep answers concise, step-by-step, actionable, and formatted.\n"
     "5. If docs do not cover a topic, politely inform the user.\n"
+    "6. SCOPE: You only answer questions about Akvo MIS and its features "
+    "(forms, data collection, approvals, users, mobile app, reports, and "
+    "related platform topics). If a question is clearly unrelated to "
+    "Akvo MIS — for example about politics, geography, science, history, "
+    "other software products, or general knowledge — politely decline and "
+    "redirect: 'I can only help with Akvo MIS questions. Feel free to ask "
+    "me about forms, data collection, approvals, or any other platform "
+    "feature!'\n"
 )
 
 
@@ -132,15 +140,24 @@ def get_or_create_assistant(
 
     # If none found, create a new one
     print(f"Creating new OpenAI Assistant '{ASSISTANT_NAME}'...")
-    assistant = client.beta.assistants.create(
-        name=ASSISTANT_NAME,
-        instructions=ASSISTANT_INSTRUCTIONS,
-        model="gpt-4o-mini",
-        tools=[{"type": "file_search"}],
-        tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-    )
-    print(f"Assistant Created: {assistant.id}")
-    return assistant.id
+    try:
+        assistant = client.beta.assistants.create(
+            name=ASSISTANT_NAME,
+            instructions=ASSISTANT_INSTRUCTIONS,
+            model="gpt-4o-mini",
+            tools=[{"type": "file_search"}],
+            tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
+        )
+        print(f"Assistant Created: {assistant.id}")
+        return assistant.id
+    except Exception as e:
+        print(f"Warning: Could not create Assistant automatically: {e}")
+        print(
+            "Note: You can attach Vector Store "
+            f"'{vs_id}' to your Assistant in the OpenAI Dashboard, "
+            "or specify an existing Assistant ID."
+        )
+        return None
 
 
 def upload_kb(
@@ -173,7 +190,10 @@ def upload_kb(
         print("Install it with: pip install openai>=1.30.0")
         sys.exit(1)
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(
+        api_key=api_key,
+        default_headers={"OpenAI-Beta": "assistants=v2"},
+    )
 
     # 1. Resolve Vector Store (reuse existing if available)
     vs_id_to_use = vector_store_id or os.environ.get("OPENAI_VECTOR_STORE_ID")

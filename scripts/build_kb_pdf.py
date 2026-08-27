@@ -4,7 +4,7 @@ scripts/build_kb_pdf.py
 
 Builds knowledge base PDFs for OpenAI Vector Store ingestion:
 1. docs/build/akvo-mis-docs.pdf   - Full platform documentation
-2. docs/build/akvo-react-form-editor-docs.pdf - Form Builder & runtime reference
+2. docs/build/akvo-react-form-editor-docs.pdf - Form Builder reference
 
 Generates standard PDF 1.4 documents with structured pages and headers.
 """
@@ -131,7 +131,8 @@ class SimplePDFWriter:
         )
         objects.append(
             b"5 0 obj\n<< /Type /Font /Subtype /Type1 /Name /F2 "
-            b"/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n"
+            b"/BaseFont /Helvetica-Bold /Encoding "
+            b"/WinAnsiEncoding >>\nendobj\n"
         )
 
         # Pages & content
@@ -343,9 +344,9 @@ def build_form_editor_docs_pdf(output_pdf: Path):
 
     pdf.add_heading("Akvo Form Builder & Runtime Reference Guide", level=1)
     pdf.add_paragraph(
-        "Technical reference for the Akvo MIS Form Builder. Covers the editor "
-        "interface, question configuration, skip logic, form lifecycle, and all "
-        "supported question types."
+        "Technical reference for the Akvo MIS Form Builder. Covers the "
+        "editor interface, question configuration, skip logic, form lifecycle, "
+        "and all supported question types."
     )
 
     pdf.add_heading("1. Editor Interface Overview", level=2)
@@ -393,7 +394,7 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     )
     pdf.add_bullet("Label - the question text shown to the respondent")
     pdf.add_bullet(
-        "Variable Name - the internal identifier used in exports and autofields; "
+        "Variable Name - internal identifier used in exports and autofields; "
         "must be unique within the form"
     )
     pdf.add_bullet(
@@ -438,7 +439,7 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     types_info = [
         (
             "Text (Input)",
-            "Single-line free text. Use for names, identifiers, short answers.",
+            "Single-line free text. For names, identifiers, short answers.",
         ),
         (
             "Text Area (Memo)",
@@ -465,11 +466,11 @@ def build_form_editor_docs_pdf(output_pdf: Path):
         ),
         (
             "Option",
-            "Single choice (radio buttons). Configure a list of allowed options.",
+            "Single choice (radio buttons). Configure allowed choices.",
         ),
         (
             "Multiple Option",
-            "Multiple choice (checkboxes). Configure a list of allowed options.",
+            "Multiple choice (checkboxes). Configure allowed choices.",
         ),
         (
             "Cascade",
@@ -552,8 +553,114 @@ def build_form_editor_docs_pdf(output_pdf: Path):
     pdf.add_heading("8. Version History", level=2)
     pdf.add_paragraph(
         "Every time a draft is published a version snapshot is saved. "
-        "Open the Version History drawer (clock icon, top-right of the editor) "
+        "Open the Version History drawer (clock icon, top-right of editor) "
         "to view previous versions. Older versions are read-only."
+    )
+
+    pdf.add_heading(
+        "9. Field Prefix and Suffix (addonBefore / addonAfter)", level=2
+    )
+    pdf.add_paragraph(
+        "You can display a small label directly before or after an answer box "
+        "to give users context on what to type."
+    )
+    pdf.add_bullet(
+        "Supported field types: Available on Input (text) and Number "
+        "questions only."
+    )
+    pdf.add_bullet(
+        "Prefix (addonBefore): Appears immediately before the input box. Use "
+        "it for currency symbols ($), phone country codes (+62), or short "
+        "text labels."
+    )
+    pdf.add_bullet(
+        "Suffix (addonAfter): Appears immediately after the input box. Use it "
+        "for measurement units like kg, %, or cm."
+    )
+    pdf.add_bullet(
+        "Can we add icons? No. Field prefixes and suffixes accept plain text "
+        "and symbols only. Images, icons, and graphic elements are not "
+        "supported."
+    )
+    pdf.add_paragraph(
+        "How to configure: Click the question in the Form Builder to open its "
+        "settings panel, then type your desired prefix or suffix text into "
+        "the setting field."
+    )
+
+    pdf.add_heading("10. Option Choice Color Coding", level=2)
+    pdf.add_paragraph(
+        "For single-choice (Option) and multi-choice (Multiple Option) "
+        "questions, you can assign a visual color tag to each answer choice."
+    )
+    pdf.add_bullet(
+        "Visual appearance: When respondents or reviewers view the form on "
+        "the web, each choice is displayed with a colored badge or highlight."
+    )
+    pdf.add_bullet(
+        "Color format: Uses standard hex color codes. For example: enter "
+        "#00FF00 for green (such as a 'Pass' status), #FF0000 for red (such "
+        "as a 'Fail' status), or #FFA500 for orange (such as 'Pending')."
+    )
+    pdf.add_bullet(
+        "Submission impact: The color code is purely visual to help users "
+        "quickly spot statuses. It does not alter how answer data is stored "
+        "or exported."
+    )
+    pdf.add_paragraph(
+        "How to configure: In the Form Builder settings panel for an Option "
+        "question, open the option choices list and enter the hex color code "
+        "for each choice."
+    )
+
+    pdf.add_heading(
+        "11. Pre-filled Default Values on the Web (Cross-Question Copying)",
+        level=2,
+    )
+    pdf.add_paragraph(
+        "On web forms, an answer can automatically copy data from an earlier "
+        "question in the same form session."
+    )
+    pdf.add_bullet(
+        "What it does: When a respondent types an answer into Question A, "
+        "Question B can automatically populate with the same answer in real "
+        "time."
+    )
+    pdf.add_bullet(
+        "Example use case: Automatically copying a respondent's Name into a "
+        "subsequent Confirmation or Signature section."
+    )
+    pdf.add_bullet(
+        "Availability note: This cross-question prefilling runs in the web "
+        "browser. It is currently configured in the form definition schema "
+        "(using the 'pre' setting) and is not yet available as a visual toggle "
+        "in the Form Builder editor."
+    )
+
+    pdf.add_heading(
+        "12. Pre-filled Fields on Mobile (Registration to Monitoring)",
+        level=2,
+    )
+    pdf.add_paragraph(
+        "When using the Akvo MIS mobile app for fieldwork, monitoring forms "
+        "can automatically show information recorded during the initial "
+        "registration."
+    )
+    pdf.add_bullet(
+        "Mobile-only feature: Automatic registration-to-monitoring "
+        "pre-filling is specifically built into the Akvo MIS mobile app. "
+        "It is not active on web browser forms."
+    )
+    pdf.add_bullet(
+        "How it works: When an enumerator selects an existing data point on "
+        "their mobile device and starts a linked Monitoring Form, known "
+        "details (such as the facility name or GPS location) are pre-populated "
+        "so the enumerator only updates changed information."
+    )
+    pdf.add_bullet(
+        "Configuration: No special setup is needed in the Form Builder. "
+        "Linking a Monitoring Form to a Registration Form enables this "
+        "workflow automatically on mobile."
     )
 
     pdf.write_to_file(output_pdf)
