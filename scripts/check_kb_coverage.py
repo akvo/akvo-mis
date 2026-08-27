@@ -83,7 +83,9 @@ def clean_markdown_cell(cell: str) -> str:
     return cell.strip()
 
 
-def parse_markdown_tables(file_path: Path, source_name: str) -> List[InventoryItem]:
+def parse_markdown_tables(
+    file_path: Path, source_name: str
+) -> List[InventoryItem]:
     """Parse pipe-delimited markdown tables from a README file."""
     if not file_path.exists():
         raise FileNotFoundError(f"Source file not found: {file_path}")
@@ -105,8 +107,7 @@ def parse_markdown_tables(file_path: Path, source_name: str) -> List[InventoryIt
 
         header_line = table_lines[0][1]
         header_cells = [
-            clean_markdown_cell(c)
-            for c in header_line.split("|")[1:-1]
+            clean_markdown_cell(c) for c in header_line.split("|")[1:-1]
         ]
 
         for line_no, row_str in table_lines[2:]:
@@ -131,25 +132,29 @@ def parse_markdown_tables(file_path: Path, source_name: str) -> List[InventoryIt
                 if has_value_col:
                     val_name = cleaned_cells[1]
                     if val_name:
-                        items.append(InventoryItem(
-                            source_repo=source_name,
-                            source_table=heading,
-                            item_name=val_name,
-                            raw_text=cells[1],
-                            source_file=str(file_path),
-                            line_number=line_no
-                        ))
+                        items.append(
+                            InventoryItem(
+                                source_repo=source_name,
+                                source_table=heading,
+                                item_name=val_name,
+                                raw_text=cells[1],
+                                source_file=str(file_path),
+                                line_number=line_no,
+                            )
+                        )
                 else:
                     item_name = cleaned_cells[0]
                     if item_name:
-                        items.append(InventoryItem(
-                            source_repo=source_name,
-                            source_table=heading,
-                            item_name=item_name,
-                            raw_text=cells[0],
-                            source_file=str(file_path),
-                            line_number=line_no
-                        ))
+                        items.append(
+                            InventoryItem(
+                                source_repo=source_name,
+                                source_table=heading,
+                                item_name=item_name,
+                                raw_text=cells[0],
+                                source_file=str(file_path),
+                                line_number=line_no,
+                            )
+                        )
             else:
                 item_name = cleaned_cells[0]
                 if item_name:
@@ -157,14 +162,16 @@ def parse_markdown_tables(file_path: Path, source_name: str) -> List[InventoryIt
                     clean_name = re.sub(
                         r"^Unique\{.*\}$", "Unique{any}", item_name
                     )
-                    items.append(InventoryItem(
-                        source_repo=source_name,
-                        source_table=heading,
-                        item_name=clean_name,
-                        raw_text=cells[0],
-                        source_file=str(file_path),
-                        line_number=line_no
-                    ))
+                    items.append(
+                        InventoryItem(
+                            source_repo=source_name,
+                            source_table=heading,
+                            item_name=clean_name,
+                            raw_text=cells[0],
+                            source_file=str(file_path),
+                            line_number=line_no,
+                        )
+                    )
 
     for idx, line in enumerate(lines):
         line_num = idx + 1
@@ -190,8 +197,7 @@ def parse_markdown_tables(file_path: Path, source_name: str) -> List[InventoryIt
 
 
 def parse_rst_headings(
-    rst_dir: Path,
-    source_name: str = "akvo-mis (RST)"
+    rst_dir: Path, source_name: str = "akvo-mis (RST)"
 ) -> List[InventoryItem]:
     """Extract headings and subheadings from platform RST documentation."""
     if not rst_dir.exists():
@@ -214,21 +220,25 @@ def parse_rst_headings(
                     and line_str
                     and not line_str.startswith("..")
                 ):
-                    items.append(InventoryItem(
-                        source_repo=source_name,
-                        source_table=rst_file.name,
-                        item_name=line_str,
-                        raw_text=line_str,
-                        source_file=str(rst_file),
-                        line_number=i + 1
-                    ))
+                    items.append(
+                        InventoryItem(
+                            source_repo=source_name,
+                            source_table=rst_file.name,
+                            item_name=line_str,
+                            raw_text=line_str,
+                            source_file=str(rst_file),
+                            line_number=i + 1,
+                        )
+                    )
     return items
 
 
 def load_kb_documents(kb_dir: Path) -> Dict[str, str]:
     """Load all markdown documents under docs/knowledge_base/."""
     if not kb_dir.exists():
-        raise FileNotFoundError(f"Knowledge base directory not found: {kb_dir}")
+        raise FileNotFoundError(
+            f"Knowledge base directory not found: {kb_dir}"
+        )
 
     docs: Dict[str, str] = {}
     for md_file in kb_dir.rglob("*.md"):
@@ -237,8 +247,7 @@ def load_kb_documents(kb_dir: Path) -> Dict[str, str]:
 
 
 def audit_coverage(
-    inventory: List[InventoryItem],
-    kb_docs: Dict[str, str]
+    inventory: List[InventoryItem], kb_docs: Dict[str, str]
 ) -> AuditReport:
     """Audit all inventory items against loaded KB documents."""
     table_groups: Dict[Tuple[str, str], List[InventoryItem]] = {}
@@ -282,14 +291,16 @@ def audit_coverage(
         if missing_list:
             missing_by_table[table_key] = missing_list
 
-        table_reports.append(TableCoverage(
-            source_repo=repo,
-            source_table=table_name,
-            total_items=len(items),
-            covered_items=covered_count,
-            missing_items=missing_list,
-            covered_details=covered_details
-        ))
+        table_reports.append(
+            TableCoverage(
+                source_repo=repo,
+                source_table=table_name,
+                total_items=len(items),
+                covered_items=covered_count,
+                missing_items=missing_list,
+                covered_details=covered_details,
+            )
+        )
 
     pct = (
         (total_covered / total_inventoried * 100.0)
@@ -303,13 +314,12 @@ def audit_coverage(
         total_missing=total_missing,
         coverage_percentage=round(pct, 2),
         tables=table_reports,
-        missing_by_table=missing_by_table
+        missing_by_table=missing_by_table,
     )
 
 
 def resolve_path(
-    arg_path: Optional[str],
-    default_candidates: List[Path]
+    arg_path: Optional[str], default_candidates: List[Path]
 ) -> Optional[Path]:
     """Resolve file or directory path from CLI argument or candidate defaults."""
     if arg_path:
@@ -364,7 +374,9 @@ def print_human_report(report: AuditReport, verbose: bool = False):
     print(f"Overall Coverage:        {report.coverage_percentage:.2f}%")
 
     if report.total_missing == 0:
-        print("\n✨ STATUS: PASSED - 100% of inventoried surfaces are covered!")
+        print(
+            "\n✨ STATUS: PASSED - 100% of inventoried surfaces are covered!"
+        )
     else:
         print(
             f"\n⚠️ STATUS: FAILED - Found {report.total_missing} undocumented "
@@ -380,38 +392,38 @@ def main():
     parser.add_argument(
         "--react-form-path",
         help="Path to akvo-react-form README.md or repo directory",
-        default=None
+        default=None,
     )
     parser.add_argument(
         "--react-form-editor-path",
         help="Path to akvo-react-form-editor README.md or repo directory",
-        default=None
+        default=None,
     )
     parser.add_argument(
         "--rst-path",
         help="Path to akvo-mis docs/source directory containing RST docs",
-        default="docs/source"
+        default="docs/source",
     )
     parser.add_argument(
         "--kb-path",
         help="Path to docs/knowledge_base directory",
-        default="docs/knowledge_base"
+        default="docs/knowledge_base",
     )
     parser.add_argument(
         "--include-rst",
         action="store_true",
-        help="Include platform RST headings in coverage audit"
+        help="Include platform RST headings in coverage audit",
     )
     parser.add_argument(
         "--format",
         choices=["text", "json"],
         default="text",
-        help="Output format (text or json)"
+        help="Output format (text or json)",
     )
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Show matched KB files for each covered item"
+        help="Show matched KB files for each covered item",
     )
 
     args = parser.parse_args()
@@ -421,17 +433,25 @@ def main():
     arf_path = resolve_path(
         args.react_form_path,
         [
-            repo_root / "frontend" / "node_modules" / "akvo-react-form" / "README.md",
+            repo_root
+            / "frontend"
+            / "node_modules"
+            / "akvo-react-form"
+            / "README.md",
             repo_root / ".." / "akvo-react-form" / "README.md",
-        ]
+        ],
     )
 
     arfe_path = resolve_path(
         args.react_form_editor_path,
         [
-            repo_root / "frontend" / "node_modules" / "akvo-react-form-editor" / "README.md",
+            repo_root
+            / "frontend"
+            / "node_modules"
+            / "akvo-react-form-editor"
+            / "README.md",
             repo_root / ".." / "akvo-react-form-editor" / "README.md",
-        ]
+        ],
     )
 
     kb_path = repo_root / args.kb_path
@@ -441,7 +461,7 @@ def main():
         print(
             "Error: Could not locate akvo-react-form README. "
             "Specify via --react-form-path.",
-            file=sys.stderr
+            file=sys.stderr,
         )
         sys.exit(2)
 
@@ -449,21 +469,23 @@ def main():
         print(
             "Error: Could not locate akvo-react-form-editor README. "
             "Specify via --react-form-editor-path.",
-            file=sys.stderr
+            file=sys.stderr,
         )
         sys.exit(2)
 
     if not kb_path.exists():
         print(
             f"Error: Knowledge base directory '{kb_path}' does not exist.",
-            file=sys.stderr
+            file=sys.stderr,
         )
         sys.exit(2)
 
     # 1. Parse inventories
     inventory: List[InventoryItem] = []
     inventory.extend(parse_markdown_tables(arf_path, "akvo-react-form"))
-    inventory.extend(parse_markdown_tables(arfe_path, "akvo-react-form-editor"))
+    inventory.extend(
+        parse_markdown_tables(arfe_path, "akvo-react-form-editor")
+    )
 
     if args.include_rst and rst_path.exists():
         inventory.extend(parse_rst_headings(rst_path, "akvo-mis (RST)"))

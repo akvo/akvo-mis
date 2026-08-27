@@ -1,68 +1,100 @@
-# Knowledge Base Maintenance Procedure (SOP)
+# Knowledge Base Maintenance & Coverage Audit Guide
 
-This document establishes the systematic, repeatable procedure for keeping the Akvo MIS AI Knowledge Base provably complete and synchronized with upstream source code repositories.
-
----
-
-## 1. Trigger Conditions for KB Updates
-
-A knowledge base audit and recompilation is required whenever any of the following occur:
-1. **Upstream Schema Updates**: New properties, field types, or dependency operators are added to `akvo-react-form`.
-2. **Editor Enhancements**: New props, UI controls, or parameters are added to `akvo-react-form-editor`.
-3. **Platform Releases**: New features, workflows, or documentation pages are added to `akvo-mis/docs/source/*.rst` or `frontend/`.
+This document establishes the systematic procedure and automated tooling for maintaining and auditing the Akvo MIS AI Knowledge Base (`docs/knowledge_base/`).
 
 ---
 
-## 2. 4-Phase Maintenance Lifecycle
+## 1. Overview & Audit Tooling
 
-```
-┌──────────────────────────────┐
-│ Phase 1: Source Inventory    │ ➔ Extract all props, types, and RST headings
-└──────────────┬───────────────┘
-               ▼
-┌──────────────────────────────┐
-│ Phase 2: Matrix Mapping      │ ➔ Map 100% of items to docs/knowledge_base/*.md
-└──────────────┬───────────────┘
-               ▼
-┌──────────────────────────────┐
-│ Phase 3: Content & Verify    │ ➔ Author/update markdown with inline audit notes
-└──────────────┬───────────────┘
-               ▼
-┌──────────────────────────────┐
-│ Phase 4: Sync & Ingest       │ ➔ Run ./kb.sh sync to compile PDF & Vector Store
-└──────────────────────────────┘
-```
+The knowledge base is continuously audited by a standalone verification tool:
+- **Direct Script**: [`scripts/check_kb_coverage.py`](file:///Users/galihpratama/Sites/akvo-mis/scripts/check_kb_coverage.py)
+- **Helper Command**: `./kb.sh check`
+
+### Why This Exists
+Instead of relying on reactive user reports for undocumented features, this tool extracts **100% of all properties, field types, and config parameters** from upstream libraries (`akvo-react-form`, `akvo-react-form-editor`) and verifies their presence in `docs/knowledge_base/**/*.md`.
 
 ---
 
-## 3. Step-by-Step Execution Workflow
+## 2. Using `check_kb_coverage.py`
 
-### Step 1: Inventory Diffing (Phase 1)
-Run an automated diff against upstream READMEs:
+### Standard Human-Readable Audit
+Run the check directly via `kb.sh` or the Python script:
 ```bash
-# Check akvo-react-form README
-git diff HEAD upstream/main -- frontend/node_modules/akvo-react-form/README.md
-
-# Check akvo-react-form-editor README
-git diff HEAD upstream/main -- frontend/node_modules/akvo-react-form-editor/README.md
+./kb.sh check
+# OR
+./scripts/check_kb_coverage.py
 ```
-Extract any newly added props, field types, or options into the inventory matrix.
+**Output**: Displays a table-by-table inventory with pass/fail markers, percentage coverage, and an actionable list of any missing gaps.
 
-### Step 2: Update Target Markdown Files (Phase 2 & 3)
-- Update or create the target `.md` file under `docs/knowledge_base/`.
-- Ensure standard formatting: `#`/`##`/`###` headings, `-` bullet points, and `|` tables.
-- Avoid nested code blocks in bullet points or inline images.
-- Include the inline audit citation: `(source: repo/file.md#section)`.
+---
 
-### Step 3: Coverage Verification
-Verify that every inventory item maps to at least one file and section in `docs/knowledge_base/`.
-
-### Step 4: Compile and Upload
-Execute the synchronized build and vector store upload script:
+### Detailed / Verbose Tracing
+To see which specific `.md` file(s) satisfy each inventoried item:
 ```bash
-./kb.sh sync
+./kb.sh check --verbose
+# OR
+./scripts/check_kb_coverage.py --verbose
 ```
-Verify that:
-1. `akvo-mis-docs.pdf` compiles without errors from RST sources.
-2. `akvo-react-form-editor-docs.pdf` compiles all modules from `docs/knowledge_base/`.
-3. The OpenAI Vector Store confirms status: `completed`.
+
+---
+
+### Structured JSON for CI / Tooling
+To integrate the audit into CI pipelines or automated reporting:
+```bash
+./scripts/check_kb_coverage.py --format json > coverage_report.json
+```
+**Exit Codes for CI**:
+- `0`: All inventoried items are 100% covered in the Knowledge Base.
+- `1`: One or more items are missing (fails CI build).
+- `2`: Missing source files or invalid directory arguments.
+
+---
+
+### Custom Source Paths
+If auditing against sibling git checkouts instead of the installed `node_modules`:
+```bash
+./scripts/check_kb_coverage.py \
+  --react-form-path ../akvo-react-form/README.md \
+  --react-form-editor-path ../akvo-react-form-editor/README.md
+```
+
+---
+
+### Optional Platform RST Headings Audit
+To check if headings from `docs/source/*.rst` (user manual) are also present in the markdown KB:
+```bash
+./scripts/check_kb_coverage.py --include-rst
+```
+
+---
+
+## 3. Step-by-Step Maintenance Lifecycle
+
+When updating `akvo-react-form` or `akvo-react-form-editor`:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ 1. Update Upstream Packages / Checkouts                  │
+├──────────────────────────────────────────────────────────┤
+│ 2. Run Coverage Audit: ./kb.sh check                     │
+│    ➔ Identifies any new props or types (Gaps)            │
+├──────────────────────────────────────────────────────────┤
+│ 3. Update Markdown in docs/knowledge_base/*.md           │
+│    ➔ Add property definitions & inline source citations  │
+├──────────────────────────────────────────────────────────┤
+│ 4. Re-run Audit: ./kb.sh check                           │
+│    ➔ Confirms 100% coverage (Exit Code 0)                │
+├──────────────────────────────────────────────────────────┤
+│ 5. Compile & Synchronize Vector Store: ./kb.sh sync      │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Markdown Formatting Rules for KB Authors
+
+1. **Standard Headings**: Use standard Markdown `#`, `##`, `###`.
+2. **Lists & Bullets**: Use `-` or `*` with blank lines before and after lists.
+3. **Data Tables**: Format tables using standard Markdown pipe syntax `| Prop | Type | Description |`. Avoid nested code fences inside list items.
+4. **Traceable Citations**: Always include an inline audit citation for every table/feature, e.g.:
+   `(source: akvo-react-form/README.md#question)`
