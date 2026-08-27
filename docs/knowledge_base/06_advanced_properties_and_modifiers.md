@@ -1,6 +1,6 @@
 # Advanced Field Properties, Modifiers & Validation Rules
 
-This document details specialized properties, modifiers, and validation rules in `akvo-react-form` (source: `akvo-react-form/README.md#question`, `akvo-react-form/README.md#rule`, `akvo-react-form/README.md#extra-component`).
+This document details specialized properties, modifiers, and validation rules in `akvo-react-form` (source: `akvo-react-form/README.md#question`, `akvo-react-form/README.md#rule`, `akvo-react-form/README.md#extra-component`, `akvo-react-form/README.md#pre-filled-question`).
 
 ---
 
@@ -24,11 +24,17 @@ This document details specialized properties, modifiers, and validation rules in
 
 On web forms, an `option` or `multiple_option` field can automatically copy its default selection based on the answer to an earlier source question in the same form session (source: `akvo-react-form/README.md#pre-filled-question`):
 
+| Property | Type | Description |
+|---|---|---|
+| `source_question` | String | Variable name or ID of the trigger question. |
+| `source_answer` | String | Answer value on the source question that triggers the prefill. |
+| `default_value` | Array | Array of default option value(s) to automatically assign to this question. |
+
 ```json
 {
   "pre": {
-    "source_question_name": {
-      "matching_source_answer": ["default_target_value"]
+    "source_question": {
+      "source_answer": ["default_value"]
     }
   }
 }
@@ -38,7 +44,7 @@ On web forms, an `option` or `multiple_option` field can automatically copy its 
 
 ## 4. Extra Content Blocks (`extra`)
 
-The `extra` property attaches custom HTML content blocks before or after a question (source: `akvo-react-form/README.md#extra-component`):
+The `extra` property attaches custom HTML component blocks before or after a question (source: `akvo-react-form/README.md#extra-component`):
 
 | Property | Type | Description |
 |---|---|---|

@@ -30,7 +30,32 @@ The runtime engine (`akvo-react-form`) supports **17 field types**, while the vi
 
 ---
 
-## 2. Root Form Schema Structure
+## 2. Core Form Engine Feature Set
+
+Source: `akvo-react-form/README.md#feature-set`
+
+| Feature | Description |
+|---|---|
+| Initial values | Predefine default values for form fields to streamline user input. |
+| Question Group Description | Provides a description for a group of related questions in the form. |
+| Translations | Enables multilingual support by allowing form fields and labels to be displayed in multiple languages. |
+| Multiple Question Dependency | Allows questions to depend on multiple other questions, enabling complex conditional logic. |
+| Rule based response validation | Validates user responses based on predefined rules, such as minimum and maximum values. |
+| Save Datapoint | Allows users to save form responses as a draft for later completion or review. |
+| Computed field value | Automatically calculates and displays a value based on other field inputs. |
+| Clear response | Allows users to reset or clear their responses for specific fields or the entire form. |
+| Custom style | Allows users to apply custom CSS styles to form elements for a tailored appearance. |
+| Tooltip | Provides additional information or guidance to users when they hover over a form element. |
+| Extra component on Question | Allows users to add custom components before or after a question for enhanced functionality or additional context. |
+| HTML Support on Question | Allows embedding and rendering of HTML content within form questions for enhanced customization. |
+| Field Suffix / Prefix | Allows users to add custom text or symbols before or after input fields for better context or formatting. |
+| Print | Allows users to print the form or its responses for offline use or record-keeping. |
+| Download response to tabular format | Allows users to export form responses into a structured tabular format, such as CSV or Excel. |
+| Upload any file type attachment | Allows users to upload files of any format as attachments. |
+
+---
+
+## 3. Root Form Schema Structure
 
 Source: `akvo-react-form/README.md#form-root`
 
@@ -38,14 +63,14 @@ Source: `akvo-react-form/README.md#form-root`
 |---|---|---|
 | `name` | String | Form title / name. |
 | `question_group` | Array[QuestionGroup] | List of question group sections in sequential order. |
-| `cascade` | Object | Root cascade dictionary (e.g. `{"administration": [...]}`). |
+| `Unique{any}` | Object | Cascade definition, can be any named property (e.g. `cascade: { administration: [...] }`). |
 | `languages` | Array[String] | List of available ISO 639-1 language codes (e.g. `["en", "id", "fr"]`). |
 | `defaultLanguage` | String | Default active language code. |
 | `translations` | Array[Translations] | Array of localized form title translations `[{"name": "...", "language": "id"}]`. |
 
 ---
 
-## 3. Complete Question Schema Attribute Dictionary
+## 4. Complete Question Schema Attribute Dictionary
 
 Source: `akvo-react-form/README.md#question`
 
@@ -83,7 +108,7 @@ Source: `akvo-react-form/README.md#question`
 
 ---
 
-## 4. Option Object Properties (`option`)
+## 5. Option Object Properties (`option`)
 
 Source: `akvo-react-form/README.md#option`
 
@@ -96,7 +121,7 @@ Source: `akvo-react-form/README.md#option`
 
 ---
 
-## 5. Columns Object Properties (`table`)
+## 6. Columns Object Properties (`table`)
 
 Source: `akvo-react-form/README.md#columns`
 

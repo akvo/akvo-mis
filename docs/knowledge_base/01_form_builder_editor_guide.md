@@ -48,6 +48,14 @@ Inside the Form Builder workspace, `WebformEditor` renders **3 primary tabs** (s
 - **Translation Grid**: Side-by-side editing of question prompts, tooltips, option choice labels, and group headers.
 - **Fallback**: Untranslated fields automatically fall back to the base language.
 
+#### Translation Object Schema
+Source: `akvo-react-form/README.md#translations-optional`
+
+| Property | Type | Description |
+|---|---|---|
+| `Unique{any}` | Object / String | Target property to be translated (e.g. `name`, `label`, `description`, `content`). |
+| `language` | Enum[ISO 639-1] | Language code for the translation (e.g. `"id"`, `"fr"`, `"es"`). |
+
 ### Tab 3: Preview
 - **Purpose**: Live, interactive runtime preview of the form as field respondents and enumerators will experience it (source: `akvo-react-form-editor/README.md#preview`).
 - **Verification**: Used to test skip logic visibility, autofield mathematical calculations, required field triggers, and repeatable group entry rows prior to publishing.
@@ -74,7 +82,7 @@ Source: `akvo-react-form/README.md#question-group`
 
 ## 5. Platform Distinction: No In-Page JSON Tab in Akvo MIS
 
-In the standalone `akvo-react-form-editor` library demo website, an extra "JSON" tab is shown for developer testing. However, **in the Akvo MIS platform, there is NO in-page JSON tab / viewer**. 
+In the standalone `akvo-react-form-editor` library demo website, an extra "JSON" tab is shown for developer testing. However, **in the Akvo MIS platform, there is NO in-page JSON tab / viewer**.
 - To inspect or obtain the form's raw JSON schema in Akvo MIS, click the **`Export JSON`** button in the top action toolbar (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L355-L362`).
 
 ---
