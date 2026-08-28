@@ -4,29 +4,28 @@ This document is the exhaustive catalog of all 17 question types and their JSON 
 
 ---
 
-## 1. Supported Field Types & Discrepancy Matrix
+## 1. Supported Field Types in Akvo MIS (`frontend/src/lib/constants.js`)
 
-The runtime engine (`akvo-react-form`) supports **17 field types**, while the visual builder palette in `akvo-react-form-editor` natively exposes **11 question types**. Types not in the visual palette can be configured via raw schema or customized extensions (source: `akvo-react-form/README.md#supported-field-type`, `akvo-react-form-editor/README.md#supported-question-type`).
+In the Akvo MIS platform (`QUESTION_TYPES` constant in `frontend/src/lib/constants.js`), exactly **13 question types** are supported and active in the Form Builder:
 
-| Type Key | Display Name | In Form Editor Palette | Description & Common Use Cases |
-|---|---|---|---|
-| `input` | Text Input | Yes | Single-line text for names, codes, short answers (source: `akvo-react-form/README.md#supported-field-type`). |
-| `number` | Number Input | Yes | Integer or decimal numbers for quantities, age, prices, metrics (source: `akvo-react-form/README.md#supported-field-type`). |
-| `text` | TextArea / Memo | Yes | Multi-line text for long notes, descriptions, addresses (source: `akvo-react-form/README.md#supported-field-type`). |
-| `option` | Single Choice | Yes | Radio buttons / single select list where exactly one choice is selected (source: `akvo-react-form/README.md#option`). |
-| `multiple_option` | Multiple Choice | Yes | Checkboxes allowing multiple choices to be selected (source: `akvo-react-form/README.md#supported-field-type`). |
-| `cascade` | Cascade Select | Yes | Hierarchical multi-level dropdowns (e.g. Province > District > Village) (source: `akvo-react-form/README.md#cascade-any`). |
-| `date` | Date Picker | Yes | Calendar date picker for inspection dates, birth dates, timestamps (source: `akvo-react-form/README.md#supported-field-type`). |
-| `geo` | Geopoint | Yes | Geographic point capturing Latitude, Longitude, Altitude, and Accuracy (source: `akvo-react-form/README.md#supported-field-type`). |
-| `autofield` | Computed Autofield | Yes | Dynamic read-only field calculated via mathematical function string (source: `akvo-react-form/README.md#autofieled-object`). |
-| `tree` | Tree Hierarchy | Yes | Nested tree selector with parent/children check strategies (source: `akvo-react-form/README.md#question`). |
-| `table` | Multiple Question Grid | Yes | Tabular multi-question grid with structured column definitions (source: `akvo-react-form/README.md#columns`). |
-| `photo` / `image` | Photo / Image | Extension | In-app camera photo capture or image file upload with max MB limits (source: `akvo-react-form/README.md#question`). |
-| `signature` | Digital Signature | Extension | Hand-drawn touchscreen / mouse canvas signature pad (source: `akvo-react-form/README.md#supported-field-type`). |
-| `attachment` | File Attachment | Extension | Generic file uploader for non-image files (PDF, spreadsheet, DOCX) (source: `akvo-react-form/README.md#supported-field-type`). |
-| `geotrace` | Geographic Polyline | Schema | Linear geographic coordinates for routes, pipelines, boundaries (source: `akvo-react-form/README.md#supported-field-type`). |
-| `geoshape` | Geographic Polygon | Schema | Enclosed geographic area polygon for land parcels, fields (source: `akvo-react-form/README.md#supported-field-type`). |
-| `entity` | Entity Cascade Select | Schema | Cascade dropdown linked to tenant registered entity API endpoints (source: `akvo-react-form/README.md#entity`). |
+| Type Key | Display Name in Akvo MIS | Description & Purpose |
+|---|---|---|
+| `input` | Text Input | Single-line text for names, codes, short text (source: `frontend/src/lib/constants.js`). |
+| `text` | TextArea / Long Memo | Multi-line text for long notes, descriptions, narratives (source: `frontend/src/lib/constants.js`). |
+| `number` | Number Input | Numerical input for quantities, age, prices, metrics (source: `frontend/src/lib/constants.js`). |
+| `date` | Date Picker | Calendar date selection for inspections, birthdays, events (source: `frontend/src/lib/constants.js`). |
+| `image` | Photo / Image | Camera photo capture and image upload (source: `frontend/src/lib/constants.js`). |
+| `geo` | Geopoint | GPS coordinates (Latitude, Longitude, Altitude, Accuracy) (source: `frontend/src/lib/constants.js`). |
+| `option` | Single Choice | Radio buttons / single select list where exactly one choice is chosen (source: `frontend/src/lib/constants.js`). |
+| `multiple_option` | Multiple Choice | Checkboxes allowing multiple choices to be selected (source: `frontend/src/lib/constants.js`). |
+| `cascade` | Cascade Select | Hierarchical multi-level dropdowns (e.g. Province > District > Village) (source: `frontend/src/lib/constants.js`). |
+| `entity` | Entity Cascade | Cascade dropdown linked to tenant master entities (source: `frontend/src/lib/constants.js`). |
+| `autofield` | Calculated Autofield | Dynamic read-only calculation evaluated via JavaScript function string (source: `frontend/src/lib/constants.js`). |
+| `attachment` | File Attachment | File uploader for non-image files (PDF, spreadsheet, DOCX) (source: `frontend/src/lib/constants.js`). |
+| `signature` | Digital Signature | Touchscreen / mouse hand-drawn canvas signature pad (source: `frontend/src/lib/constants.js`). |
+
+> **Restricted / Unsupported Types in Akvo MIS**:
+> Although underlying libraries (`akvo-react-form`) define `tree`, `table`, `geotrace`, and `geoshape`, these types are **restricted and not enabled** in the standard Akvo MIS Form Builder palette (`frontend/src/lib/constants.js`).
 
 ---
 
