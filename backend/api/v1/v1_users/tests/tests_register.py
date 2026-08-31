@@ -112,15 +112,15 @@ class RegisterEndpointTestCase(TestCase):
             SystemUser.objects.filter(email="owner@beta.org").exists()
         )
 
-    def test_duplicate_email_is_rejected(self):
+    def test_same_email_different_workspace_registration_succeeds(self):
         with mock.patch("api.v1.v1_users.views.send_email"):
             self.register()
             response = self.register(subdomain="beta")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(
-            response.json()["message"], "Email is already registered"
-        )
-        self.assertEqual(self.registered_tenants().count(), 1)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.registered_tenants().count(), 2)
+        users = SystemUser.objects.filter(email=self.payload["email"])
+        self.assertEqual(users.count(), 2)
+        self.assertNotEqual(users[0].tenant_id, users[1].tenant_id)
 
     def test_losing_a_uniqueness_race_is_a_400(self):
         # Two simultaneous sign-ups can both pass the serializer's

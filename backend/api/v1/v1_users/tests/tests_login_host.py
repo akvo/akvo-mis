@@ -39,7 +39,9 @@ class LoginHostTestCase(TestCase, TenantTestHelperMixin):
             LOGIN, self.credentials, HTTP_HOST="beta.app.com"
         )
         self.assertEqual(response.status_code, 401)
-        self.assertIn("workspace", response.json()["message"])
+        self.assertEqual(
+            response.json()["message"], "Invalid login credentials"
+        )
 
     def test_base_domain_does_not_sign_in(self):
         # The main site signs people up; it has no workspace to sign in

@@ -43,7 +43,7 @@ class AdministrationTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)
 
     def test_create(self):
         level_2 = Levels.objects.get(level=2)
@@ -131,7 +131,7 @@ class AdministrationTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)
 
     def test_update(self):
         level_2 = Levels.objects.get(level=2)
@@ -246,7 +246,7 @@ class AdministrationAttributeValueTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)
 
     def test_create(self):
         adm = Administration.objects.filter(level__level=1).first()
@@ -574,7 +574,7 @@ class AdministrationListFiltersTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)
 
     def test_filter_search_code(self):
         response = typing.cast(
@@ -598,7 +598,7 @@ class AdministrationListFiltersTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)
 
     def test_filter_parent(self):
         parent = Administration.objects.get(name='Jakarta Timur')
@@ -623,7 +623,7 @@ class AdministrationListFiltersTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)
 
     def test_filter_level(self):
         level = Levels.objects.get(level=2)
@@ -647,4 +647,4 @@ class AdministrationListFiltersTestCase(TestCase, ProfileTestHelperMixin):
             self.client.get(
                 reverse("administrations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(1, call_route)
+        self.assertNumQueries(0, call_route)

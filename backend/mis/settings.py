@@ -250,6 +250,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "v1_users.SystemUser"
 
+AUTHENTICATION_BACKENDS = [
+    "utils.tenant_auth_backend.TenantAwareBackend",
+]
+
 # MOBILE ENV VARIABLES
 WEBDOMAIN = environ.get("WEBDOMAIN", "http://localhost:3000")
 APK_UPLOAD_SECRET = environ.get("APK_UPLOAD_SECRET")
