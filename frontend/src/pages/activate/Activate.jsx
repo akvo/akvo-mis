@@ -113,8 +113,10 @@ const Activate = () => {
     return frame(
       <>
         <div style={{ fontSize: 46, lineHeight: 1, color: "#52c41a" }}>✓</div>
-        <Title level={2}>Activation email sent</Title>
-        <Text type="secondary">Check your inbox for a fresh link.</Text>
+        <Title level={2}>Check your inbox</Title>
+        <Text type="secondary">
+          If that account still needs activating, a fresh link is on its way.
+        </Text>
         <Link to="/login">
           <Button type="primary" shape="round" block style={{ marginTop: 24 }}>
             Back to login
