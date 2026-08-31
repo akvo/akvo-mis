@@ -51,10 +51,16 @@ const Register = () => {
 
   const onResend = () => {
     resend(sentTo)
-      .then(() => {
+      .then((res) => {
+        // The API answers identically whether or not it sent anything —
+        // it will not confirm that an address is registered. Asserting
+        // delivery here made an already-activated account, whose resend
+        // is a deliberate no-op, look broken.
         notify({
           type: "success",
-          message: `Activation email re-sent to ${sentTo}`,
+          message:
+            res?.data?.message ||
+            "If that account still needs activating, an email is on its way",
         });
       })
       .catch(() => {
