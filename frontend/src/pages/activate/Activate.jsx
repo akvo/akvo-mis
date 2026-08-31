@@ -16,7 +16,9 @@ const Activate = () => {
   const { token } = useParams();
   const navigate = useNavigate();
   const [verified, setVerified] = useState(false);
-  const [failed, setFailed] = useState(false);
+  // null while verifying, then "expired" (the API rejected the token)
+  // or "error" (we never got an answer).
+  const [failed, setFailed] = useState(null);
   const [resent, setResent] = useState(false);
   const { notify } = useNotification();
   const { resend, resending } = useResendActivation();
@@ -46,8 +48,12 @@ const Activate = () => {
         reloadData(res.data);
         setVerified(true);
       },
-      () => {
-        setFailed(true);
+      (err) => {
+        // Only a 400 means the link itself is bad. An unreachable
+        // backend or an unresolved workspace is a different problem,
+        // and blaming the link sends the visitor to a resend that
+        // cannot help them.
+        setFailed(err?.response?.status === 400 ? "expired" : "error");
       }
     );
   }, [token]);
@@ -122,6 +128,30 @@ const Activate = () => {
             Back to login
           </Button>
         </Link>
+      </>
+    );
+  }
+
+  if (failed === "error") {
+    return frame(
+      <>
+        <div style={{ fontSize: 46, lineHeight: 1, color: "#ff4d4f" }}>!</div>
+        <Title level={2}>We could not check your link</Title>
+        <Text type="secondary">
+          Something went wrong on the way to the server. Your link is probably
+          fine — try again in a moment.
+        </Text>
+        <Button
+          type="primary"
+          shape="round"
+          block
+          style={{ marginTop: 24 }}
+          onClick={() => {
+            window.location.reload();
+          }}
+        >
+          Try again
+        </Button>
       </>
     );
   }

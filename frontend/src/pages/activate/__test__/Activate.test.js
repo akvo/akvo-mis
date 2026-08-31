@@ -52,4 +52,15 @@ describe("Activate", () => {
       screen.getByRole("button", { name: /Resend activation email/i })
     ).toBeInTheDocument();
   });
+
+  test("a failure that is not the token's fault does not blame the link", async () => {
+    // No response at all — the backend was unreachable. Calling that an
+    // expired link sends the visitor to a resend that cannot help.
+    axios.mockRejectedValue(new Error("Network Error"));
+    renderAt("good-token");
+    expect(await screen.findByText(/could not check your link/i)).toBeVisible();
+    expect(
+      screen.queryByText(/This link has expired/i)
+    ).not.toBeInTheDocument();
+  });
 });
