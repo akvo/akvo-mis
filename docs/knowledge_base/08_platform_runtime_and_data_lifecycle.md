@@ -17,7 +17,19 @@ This document describes runtime execution differences between Web and Mobile, th
 
 ---
 
-## 2. Registration vs. Monitoring Lifecycle
+## 2. Downloading & Installing the Mobile App
+
+- **Platform**: Android only (there is no iOS version).
+- **Distribution**: The app is **NOT** on Google Play Store or Apple App Store.
+- **Two Ways to Get the App**:
+  1. **From the Web App (Logged-in Users)**: Click **Download App** (Android icon) at the bottom of the left navigation sidebar. A modal pops up displaying a **QR Code** to scan with your phone, and a direct download link.
+  2. **Directly on Android Device**: Open a mobile browser on your phone and navigate to `https://<your-server-url>/app`. This directly downloads the installer APK package (`.apk`).
+- **Installation**: Tap the downloaded `.apk` file, allow installation from unknown sources if prompted, and install.
+- **Authentication**: Enumerators log in using their ~8-character **mobile assignment passcode** (configured by supervisors in **Control Centre > Mobile Assignment**), not an email/password.
+
+---
+
+## 3. Registration vs. Monitoring Lifecycle
 
 Source: `docs/source/formBuilder.rst`, `docs/source/dataManagement.rst`
 
@@ -27,7 +39,7 @@ Source: `docs/source/formBuilder.rst`, `docs/source/dataManagement.rst`
 
 ---
 
-## 3. Data Governance & Approvals
+## 4. Data Governance & Approvals
 
 Source: `docs/source/approval.rst`, `docs/source/dataManagement.rst`
 

@@ -20,12 +20,15 @@ DEFAULT_INSTRUCTIONS = (
     "Guidelines:\n"
     "1. Ground your answers directly in the attached documentation.\n"
     "2. If the user message includes a page context tag "
-    "(e.g. [Context: User is on the 'Form Builder — Edit' page]), "
-    "tailor your answer specifically to that page/feature context first.\n"
-    "3. If the user asks about a different feature, answer accurately.\n"
-    "4. Keep answers concise, step-by-step, actionable, and formatted.\n"
-    "5. If docs do not cover a topic, politely inform the user.\n"
-    "6. SCOPE: You only answer questions about Akvo MIS and its features "
+    "(e.g. [Context: User is on the 'Control Center' page]), use that "
+    "context when the question relates to the current page. If the question "
+    "is about a general or external feature (such as downloading the mobile "
+    "app, which is done via the /app server URL and not within the web "
+    "Control Center), answer accurately from the documentation without "
+    "forcing the answer into the current page context.\n"
+    "3. Keep answers concise, step-by-step, actionable, and formatted.\n"
+    "4. If docs do not cover a topic, politely inform the user.\n"
+    "5. SCOPE: You only answer questions about Akvo MIS and its features "
     "(forms, data collection, approvals, users, mobile app, reports, and "
     "related platform topics). If a question is clearly unrelated to "
     "Akvo MIS — for example about politics, geography, science, history, "
@@ -99,9 +102,70 @@ class ChatMessageView(APIView):
 
             client = OpenAI(api_key=api_key)
 
-            # Strategy 1: Try OpenAI Assistants API (threads + vector store)
+            # Strategy 1: OpenAI Responses API with Vector Store file_search
+            # (Official OpenAI API for Vector Stores & File Search)
+            if hasattr(client, "responses") and vector_store_id:
+                try:
+                    resp_kwargs = {
+                        "model": "gpt-4o-mini",
+                        "input": augmented_message,
+                        "instructions": DEFAULT_INSTRUCTIONS,
+                        "tools": [
+                            {
+                                "type": "file_search",
+                                "vector_store_ids": [vector_store_id],
+                            }
+                        ],
+                    }
+                    if thread_id and thread_id.startswith("resp_"):
+                        resp_kwargs["previous_response_id"] = thread_id
+
+                    resp = client.responses.create(**resp_kwargs)
+                    assistant_reply = ""
+                    for out in getattr(resp, "output", []):
+                        if getattr(out, "type", "") == "message":
+                            for content in getattr(out, "content", []):
+                                if (
+                                    getattr(content, "type", "")
+                                    == "output_text"
+                                ):
+                                    assistant_reply += getattr(
+                                        content, "text", ""
+                                    )
+                                elif hasattr(content, "text"):
+                                    assistant_reply += getattr(
+                                        content.text,
+                                        "value",
+                                        str(content.text),
+                                    )
+
+                    cleaned_reply = clean_citation_sources(assistant_reply)
+                    return Response(
+                        {
+                            "response": (
+                                cleaned_reply
+                                or (
+                                    "I'm sorry, I couldn't find an answer "
+                                    "to that."
+                                )
+                            ),
+                            "thread_id": resp.id,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                except Exception as resp_err:
+                    logger.info(
+                        f"Responses API unavailable ({resp_err}). "
+                        "Trying Assistants API..."
+                    )
+
+            # Strategy 2: Try OpenAI Assistants API (threads + vector store)
             try:
-                if not thread_id or thread_id.startswith("chat_"):
+                if (
+                    not thread_id
+                    or thread_id.startswith("chat_")
+                    or thread_id.startswith("resp_")
+                ):
                     thread = client.beta.threads.create()
                     thread_id = thread.id
 
@@ -193,7 +257,7 @@ class ChatMessageView(APIView):
                     "Falling back to Chat Completions with instructions."
                 )
 
-            # Strategy 2: Chat Completions API fallback
+            # Strategy 3: Chat Completions API fallback
             # (always works with any key)
             chat_resp = client.chat.completions.create(
                 model="gpt-4o-mini",

@@ -77,25 +77,31 @@ One registration, many monitoring visits.
     monitor: they have not synced yet. See :ref:`Syncing Datapoints<mobile_sync>`.
 
 
-Installing the app
-------------------
+Downloading and installing the app
+-----------------------------------
 
-You need an Android device, an internet connection, your passcode, and the web address of
-your MIS server. Your supervisor will give you the address.
+The Akvo MIS mobile app is designed for Android devices (there is no iOS version). It is **not** distributed through the Google Play Store or Apple App Store. Instead, you download the installer package (``.apk``) directly from your MIS server.
 
-1. On the device, open a web browser and go to your MIS address followed by **/app**, for
-   example ``https://your-server.example.org/app``. This is not a page — it immediately
-   downloads the installer file (an ``.apk``).
-2. Tap the downloaded file to install it.
-3. Android will warn you that the app is not from the Play Store and ask you to **allow
-   installation from this source**. Switch the permission on, go back, and tap
-   :bolditalic:`Install`.
-4. Tap :bolditalic:`Open`, or find the new icon in your app drawer.
+There are two ways to get the app:
+
+**Method 1: From the Web Platform (Logged-in Users)**
+1. In the left navigation sidebar of the Akvo MIS web interface (at the bottom near Documentation), click **Download App** (Android icon).
+2. A popup modal will appear displaying:
+   - A **QR Code** that you can scan directly using your phone's camera.
+   - The direct download link to ``https://<your-server-url>/app``.
+3. Scan the QR code or click the link on your mobile device to download the installer (``.apk``).
+
+**Method 2: Directly on your Android Device**
+1. On the Android device, open a mobile web browser (e.g. Chrome) and go to your MIS address followed by **/app**, for example ``https://your-server.example.org/app``.
+2. This immediately downloads the installer file (an ``.apk``).
+
+**Installation Steps:**
+1. Tap the downloaded ``.apk`` file on your phone.
+2. Android will prompt you to **allow installation from this source**. Switch the permission on, go back, and tap :bolditalic:`Install`.
+3. Tap :bolditalic:`Open`, or launch the app from your app drawer.
 
 .. note::
-    If ``/app`` shows an error instead of downloading, the installer has not been uploaded
-    to your server yet. Tell your administrator — nobody can install the app until that is
-    done.
+    - If ``/app`` shows an error instead of downloading, the installer APK has not been uploaded to your server yet. Contact your system administrator to upload the mobile APK package.
 
 
 Getting your passcode
