@@ -28,6 +28,13 @@ This document provides quick answers to common questions and explicit boundaries
 
 - Skip logic rules are intentionally **not copied** when clicking **"COPY QUESTION HERE"** to prevent circular or conflicting dependencies. Configure skip logic explicitly on the new question (source: `akvo-react-form-editor/README.md`).
 
+### Q: How do I download the Akvo MIS mobile app?
+
+- **Platform**: Android only (there is no iOS version). It is **NOT** available on Google Play Store or Apple App Store.
+- **Method 1 (From Web App)**: In the web platform, click **Download App** (Android icon) at the bottom of the left navigation sidebar. A modal opens with a **QR code** to scan with your phone camera, plus a direct download link.
+- **Method 2 (Directly on Phone)**: On your Android device, open a mobile web browser and go to `https://<your-server-url>/app`. This directly downloads the installer APK file (`.apk`).
+- **Installation**: Tap the downloaded `.apk` file (allow "install from unknown sources" if prompted), and log in with your 8-character **mobile assignment passcode** provided by your supervisor (source: `docs/source/mobileApp.rst`).
+
 ### Q: What question types are supported in Akvo MIS?
 
 - Exactly **13 question types** are supported in Akvo MIS (`frontend/src/lib/constants.js`): `input` (Text), `text` (TextArea/Memo), `number` (Number), `date` (Date), `image` (Photo/Image), `geo` (Geopoint), `option` (Single Choice), `multiple_option` (Multiple Choice), `cascade` (Cascade Select), `entity` (Entity Cascade), `autofield` (Calculated Autofield), `attachment` (File Attachment), and `signature` (Digital Signature).
