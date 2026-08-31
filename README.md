@@ -149,7 +149,7 @@ To specify a custom URL:
 
 Refresh Materialized Views:
 
-The dashboard map/visualization queries read from the `view_data_options`
+Manage Data's monitoring overview reads from the `view_data_options`
 materialized view. By default, `generate_config` (run on backend startup, by
 the seeder, and lazily by the `/config-file` endpoint when the JS bundle is
 missing) **does not** refresh this view because `REFRESH MATERIALIZED VIEW`
@@ -169,16 +169,18 @@ during a maintenance window:
 #### Log
 
 ```bash
-./dc.sh log --follow <container_name>
+./dc.sh logs --follow <container_name>
 ```
 
 Available containers:
 
 - backend
+- worker
 - frontend
 - mainnetwork
 - db
 - pgadmin
+- mailpit
 
 #### Stop
 
@@ -223,7 +225,7 @@ export CI_COMMIT='local'
 ./ci/build.sh
 ```
 
-Above command will generate two docker images with prefix `eu.gcr.io/akvo-lumen/akvo-mis` for backend and frontend
+Above command will generate three docker images with prefix `eu.gcr.io/akvo-lumen/akvo-mis` — `backend`, `frontend` and `worker`
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d
@@ -234,25 +236,47 @@ Network config: [nginx](https://github.com/akvo/akvo-mis/blob/main/frontend/ngin
 
 ## Dashboard Visualizations
 
-Dashboards at `/dashboard/:formId` are **config-driven** — a new form family
-can get a full dashboard without any component code changes. Each dashboard is
-a single JSON file whose top-level `items[]` is a flat array of self-describing
-widgets (cards, charts, tables, map, filters) dispatched by `chart_type`.
-Recursive containers (`tabs`, `filter_bar`) group widgets; layout emerges from
-per-item `order` + `col_span`. Cross-references between widgets resolve by
-globally-unique `id`.
+Dashboards are **authored in the app by each workspace**, not configured in the
+repo. A dashboard is a database row owned by a tenant, plus one row per widget —
+nothing ships in the frontend bundle, and adding one requires no code change and
+no deploy.
 
-To add a new dashboard:
+Screens:
 
-1. Drop a `<parent_form_id>.json` file in [frontend/src/config/visualizations/](frontend/src/config/visualizations/)
-2. Register it in [frontend/src/config/visualizations/index.js](frontend/src/config/visualizations/index.js)
-3. Visit `/dashboard/<parent_form_id>`
+| Route | Purpose | Permission |
+|---|---|---|
+| `/control-center/dashboard` | List and create | `dashboard_view` / `dashboard_create` |
+| `/control-center/dashboard/:slug` | Builder — drag widgets onto a 24-column grid | `dashboard_edit` |
+| `/dashboards/:slug` | Viewer — what colleagues see | `dashboard_view` |
 
-References:
+To add a dashboard: open `/control-center/dashboard`, click Create, pick a name
+and a root registration form (which fixes the dashboard's data universe and
+cannot be changed later), then add widgets and press Publish.
 
-- Full schema, `chart_type` catalogue, filter hints, troubleshooting: [frontend/src/config/visualizations/README.md](frontend/src/config/visualizations/README.md)
-- Reference implementation (EPS Overview): [1749623934933.json](frontend/src/config/visualizations/1749623934933.json)
-- Extended example walkthrough + migration mapping from the legacy nested schema: [doc/claude/iwsims-dashboard-config-example.md](doc/claude/iwsims-dashboard-config-example.md)
+Widget types are `kpi`, `bar`, `line`, `pie`, `table`, `map` and
+`section_title`. Every chart is rendered by [akvo-charts](https://akvo.github.io/akvo-charts);
+no module under `frontend/src/components/dashboard/` imports `echarts` directly.
+
+Editing a published dashboard is safe: viewers keep reading the last published
+snapshot (`published_config`) until Publish is pressed again. A widget whose
+question was deleted in the form builder renders a placeholder in its own grid
+cell rather than failing the page.
+
+Two API namespaces, both authenticated — there is no anonymous dashboard
+surface:
+
+- `/api/v1/manage/dashboards` — authoring (Swagger tag **Manage Dashboards**)
+- `/api/v1/dashboards` — published reads (Swagger tag **Dashboards**)
+
+Design docs: [VIZ-001](doc/design/VIZ-001-dashboard-builder-data-architecture.md)
+covers the data model, widget config schema and the `measure` semantics;
+`doc/design/VIZ-002` … `VIZ-009` cover the individual slices.
+
+> The previous file-based system — JSON configs under
+> `frontend/src/config/visualizations/` rendered at an anonymous
+> `/dashboard/:formId` — was removed in VIZ-009. Its two configs were not
+> migrated: they encoded compute modes the current schema deliberately does not
+> have, so there was no mechanical path from one to the other.
 
 ## Data Seeder
 
