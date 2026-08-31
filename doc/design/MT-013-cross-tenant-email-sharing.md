@@ -368,6 +368,24 @@ def validate_email(self, value):
     )
 ```
 
+#### `backend/api/v1/v1_users/views.py` — register view
+
+In `register`, `IntegrityError` handling previously checked `SystemUser.objects.filter(email=validated["email"]).exists()`. Since email is no longer globally unique, `Tenant.objects.filter(subdomain=...)` must be checked first to avoid false-positive error attribution:
+
+```python
+# In register view:
+except IntegrityError:
+    taken = (
+        "Subdomain"
+        if Tenant.objects.filter(subdomain=validated["subdomain"]).exists()
+        else "Email"
+    )
+    return Response(
+        {"message": f"{taken} is already registered"},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+```
+
 #### Bug Fixes — `email=request.user` Latent Bombs
 
 Three call sites use `SystemUser.objects.get/filter(email=request.user)`. Today they
@@ -458,22 +476,34 @@ N/A — no new types or constants introduced.
 
 ---
 
-## 8. Security Considerations
+## 8. Security & Anti-Regression Invariants
 
-- [x] **Token scoping**: JWT encodes `pk`. Each `(email, tenant)` pair has a distinct `pk`.
-  `TenantMiddleware` already rejects tokens whose `user.tenant_id != request.tenant.id`.
-  Cross-tenant token replay is impossible.
-- [x] **Password independence**: Each row holds its own password hash. A person can choose
-  different passwords per workspace.
-- [x] **Information disclosure improvement**: Inviting `alice@example.com` in Tenant B no
-  longer reveals whether the address is used in Tenant A — a privacy improvement over
-  MT-011's policy error.
-- [x] **Brute-force attack surface**: Login queries `WHERE email=? AND tenant_id=?`,
-  reducing the match surface vs. a global lookup.
-- [x] **Timing attack mitigation**: `TenantAwareBackend` calls `SystemUser().set_password(password)`
-  when the user is not found, matching Django's `ModelBackend` behaviour.
-- [x] **Shell/mgmt fallback**: `TenantAwareBackend` returns `None` when `tenant` is absent;
-  `ModelBackend` handles it. Acceptable for controlled dev/admin environments.
+A complete leak-prevention and anti-regression analysis across all system boundaries:
+
+### 8.1 Cross-Tenant Data Isolation (Zero Data Leak Invariant)
+
+- **Foreign Key Scoping**: Every relational entity in the system (`UserRole`, `UserForms`, `DataBatch`, `MobileAssignment`) links directly to `SystemUser.pk` (primary key integer), **not** `email`. Because each workspace holds a distinct `SystemUser` record with its own unique `pk`, assignments in Workspace A can never leak or grant permissions in Workspace B, even though the email string is identical.
+- **ORM Level `for_user` Filtering**: Querysets using `SystemUser.objects.for_user(request.user)` automatically append `WHERE tenant_id = request.user.tenant_id`. Cross-tenant record visibility is structurally impossible.
+
+### 8.2 Session & Token Boundary (Replay Immunity)
+
+- **JWT Payload**: JWT tokens encode `user_id` (the integer primary key).
+- **Edge Middleware Enforcement**: `TenantMiddleware` decodes the token at the request boundary and compares `user.tenant_id == request.tenant.id`. If a user authenticated in Workspace A sends their Bearer token to Workspace B (`beta.mis.app`), the request is immediately rejected with `403 Forbidden` before executing any view logic.
+
+### 8.3 Cross-Tenant Enumeration & Information Disclosure Prevention
+
+- **User Invitation (`POST /api/v1/user`)**: When inviting `alice@example.com` in Workspace B, the system returns `201 Created` without querying or disclosing whether Alice has an account in Workspace A. This eliminates the email enumeration vulnerability that existed under MT-011.
+- **Password Reset (`POST /api/v1/forgot-password`)**: Lookups are strictly scoped: `SystemUser.objects.filter(email=email, tenant=request.tenant, deleted_at=None)`. If the email does not exist in the requesting workspace, a standard error is returned without revealing if it exists in another workspace.
+- **Resend Activation (`POST /api/v1/resend-activation`)**: Scoped to `tenant=request.tenant`. It will only resend for an unverified account within the requesting workspace.
+
+### 8.4 Defusal of Latent 500 Bugs (Zero Runtime Regressions)
+
+- **Eliminated `MultipleObjectsReturned` Risks**: The 3 legacy call sites executing `SystemUser.objects.get(email=request.user)` are refactored to use `request.user` directly (or `pk=request.user.pk`). When multiple accounts with the same email exist across different tenants, these endpoints will continue to function without crashing.
+
+### 8.5 Authentication Hardening
+
+- **Timing Attack Mitigation**: In `TenantAwareBackend`, if `SystemUser` is not found for `(email, tenant)`, `SystemUser().set_password(password)` is executed to equalize response time with failed password checks.
+- **Fallback for Management Commands**: When `tenant` is not supplied (e.g. `./manage.py createsuperuser` or dev shell), `TenantAwareBackend` returns `None`, allowing Django's `ModelBackend` to handle the operation.
 
 ---
 
