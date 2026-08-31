@@ -14,3 +14,6 @@ notify.team.sh
 **/db.env
 .virtual_documents/
 android/.claude/
+.agent/
+agent_docs/
+task.md

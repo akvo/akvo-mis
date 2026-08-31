@@ -79,7 +79,13 @@ def download_data(
     date_to: str = None,
     selection_ids: list = None,
     filter_child_form_ids: list = None,
+    user: SystemUser = None,
 ) -> list:
+    # Belt-and-suspenders: floors every FormData lookup to the acting
+    # user's tenant, so a form id that slipped past request validation
+    # (or a future caller of this task) can never surface another
+    # tenant's rows, even though `form` itself is trusted by this point.
+    scoped_form_data = FormData.objects.for_user(user)
     if child_form_ids is None:
         child_form_ids = []
     # filter_child_form_ids controls which child forms are used when
@@ -92,7 +98,8 @@ def download_data(
     )
 
     if selection_ids:
-        data = form.form_form_data.filter(
+        data = scoped_form_data.filter(
+            form=form,
             id__in=selection_ids,
             is_pending=False,
             is_draft=False,
@@ -137,31 +144,31 @@ def download_data(
         }
         if administration_ids:
             child_filter["administration_id__in"] = administration_ids
-        matched_children = FormData.objects.filter(**child_filter)
+        matched_children = scoped_form_data.filter(**child_filter)
         parent_ids_from_children = set(
             matched_children.values_list("parent_id", flat=True)
         )
         # Parents in date range themselves
         parent_date_filter = {**filter_data, **date_filter}
         parent_ids_in_range = set(
-            form.form_form_data.filter(**parent_date_filter)
+            scoped_form_data.filter(form=form, **parent_date_filter)
             .values_list("id", flat=True)
         )
         # Union: parents with in-range children OR in-range themselves
         all_parent_ids = parent_ids_from_children | parent_ids_in_range
-        data = form.form_form_data.filter(
-            id__in=all_parent_ids, **filter_data
+        data = scoped_form_data.filter(
+            form=form, id__in=all_parent_ids, **filter_data
         ).order_by("id").all()
     elif has_date_filter:
         # No child forms — filter parents directly by date
         filter_data.update(date_filter)
-        data = form.form_form_data.filter(
-            **filter_data
+        data = scoped_form_data.filter(
+            form=form, **filter_data
         ).order_by("id").all()
     else:
         # No date filter — existing behavior
-        data = form.form_form_data.filter(
-            **filter_data
+        data = scoped_form_data.filter(
+            form=form, **filter_data
         ).order_by("id").all()
 
     data_items = []
@@ -234,6 +241,7 @@ def generate_data_sheet(
     date_to: str = None,
     selection_ids: list = None,
     filter_child_form_ids: list = None,
+    user: SystemUser = None,
 ) -> None:
     if child_form_ids is None:
         child_form_ids = []
@@ -251,6 +259,7 @@ def generate_data_sheet(
         date_to=date_to,
         selection_ids=selection_ids,
         filter_child_form_ids=filter_child_form_ids,
+        user=user,
     )
     if len(data):
         df = pd.DataFrame(data)
@@ -317,6 +326,7 @@ def download_monitoring_data(
     date_from: str = None,
     date_to: str = None,
     selection_ids: list = None,
+    user: SystemUser = None,
 ) -> list:
     date_filter = _build_date_filter(date_from, date_to)
     filter_data = {
@@ -332,7 +342,10 @@ def download_monitoring_data(
         filter_data["parent__administration_id__in"] = administration_ids
     filter_data.update(date_filter)
 
-    queryset = FormData.objects.filter(
+    # Belt-and-suspenders, matching download_data: floors the query to
+    # the acting user's tenant regardless of what child_form/parent_form
+    # were resolved to upstream.
+    queryset = FormData.objects.for_user(user).filter(
         **filter_data
     ).select_related("parent", "parent__administration", "created_by")
 
@@ -371,6 +384,7 @@ def generate_monitoring_data_sheet(
     date_from: str = None,
     date_to: str = None,
     selection_ids: list = None,
+    user: SystemUser = None,
 ) -> None:
     questions = get_question_names(form=child_form)
     data = download_monitoring_data(
@@ -381,6 +395,7 @@ def generate_monitoring_data_sheet(
         date_from=date_from,
         date_to=date_to,
         selection_ids=selection_ids,
+        user=user,
     )
     if len(data):
         df = pd.DataFrame(data)
@@ -562,6 +577,7 @@ def _generate_excel_download(job, **kwargs):
             date_from=date_from,
             date_to=date_to,
             selection_ids=selection_ids or None,
+            user=job.user,
         )
         monitoring_forms = form.children.filter(pk__in=child_form_ids).all()
         _write_context_sheet(
@@ -613,6 +629,7 @@ def _generate_zip_download(job, **kwargs):
                     # falls within the date range are included even when the
                     # registration itself was created before date_from.
                     filter_child_form_ids=child_form_ids,
+                    user=job.user,
                 )
                 _write_context_sheet(
                     rw, form, child_forms, job,
@@ -642,6 +659,7 @@ def _generate_zip_download(job, **kwargs):
                         date_from=date_from,
                         date_to=date_to,
                         selection_ids=selection_ids or None,
+                        user=job.user,
                     )
                 zf.write(child_path, f"{child_name}.xlsx")
 
@@ -663,7 +681,10 @@ def job_generate_data_download(job_id, **kwargs):
 
 
 def transform_form_data_for_report(
-    form: Forms, selection_ids: list = None, child_form_ids: list = []
+    form: Forms,
+    selection_ids: list = None,
+    child_form_ids: list = [],
+    user: SystemUser = None,
 ):
     """
     Transform form data from database into the format expected by the
@@ -674,6 +695,9 @@ def transform_form_data_for_report(
     (without form filter) to support selection of child form data directly.
     This ensures all available answers for each selection_id are included.
     """
+    # Belt-and-suspenders, matching download_data: floors every FormData
+    # lookup below to the acting user's tenant.
+    scoped_form_data = FormData.objects.for_user(user)
     try:
         forms = [form]
         child_forms = list(form.children.all())
@@ -684,7 +708,7 @@ def transform_form_data_for_report(
         # When selection_ids is provided, query by ID only (no form filter)
         # This allows child form data IDs to be included directly
         if selection_ids and len(selection_ids):
-            main_form_data_queryset = FormData.objects.filter(
+            main_form_data_queryset = scoped_form_data.filter(
                 id__in=selection_ids, is_pending=False
             )
             # Also include forms from the selected FormData to ensure
@@ -701,7 +725,7 @@ def transform_form_data_for_report(
                         pass
                         # If a referenced form no longer exists, skip it
         else:
-            main_form_data_queryset = FormData.objects.filter(
+            main_form_data_queryset = scoped_form_data.filter(
                 form=form, is_pending=False
             )
         main_form_data = main_form_data_queryset.order_by("id").all()
@@ -997,6 +1021,7 @@ def job_generate_data_report(job_id: int, **kwargs):
             form=form,
             selection_ids=selection_ids,
             child_form_ids=child_form_ids,
+            user=job.user,
         )
 
         # Fallback to empty list if no data found
@@ -1165,11 +1190,30 @@ def validate_excel_result(task):
         job.save()
 
 
-def handle_administrations_bulk_upload(filename, user_id, upload_time):
+def set_bulk_upload_job(job_id, job_status, result=None):
+    """Record the outcome on the Jobs row.
+
+    Every exit from the upload handler goes through here. The row is
+    updated by queryset rather than loaded and saved so that a status
+    written by one path cannot be overwritten by a stale copy from
+    another.
+    """
+    fields = {"status": job_status}
+    if result:
+        fields["result"] = result
+    Jobs.objects.filter(pk=job_id).update(**fields)
+
+
+def handle_administrations_bulk_upload(
+    filename, user_id, upload_time, job_id
+):
     user = SystemUser.objects.get(id=user_id)
+    set_bulk_upload_job(job_id, JobStatus.on_progress)
     storage.download(f"upload/{filename}")
     file_path = f"./tmp/{filename}"
-    errors = validate_administrations_bulk_upload(file_path)
+    errors = validate_administrations_bulk_upload(
+        file_path, tenant=user.tenant
+    )
     xlsx = pd.ExcelFile(file_path)
     if "data" not in xlsx.sheet_names:
         logger.error(f"Sheet 'data' not found in {filename}")
@@ -1193,6 +1237,7 @@ def handle_administrations_bulk_upload(filename, user_id, upload_time):
             },
             type=EmailTypes.upload_error,
         )
+        set_bulk_upload_job(job_id, JobStatus.failed)
         return
     df = pd.read_excel(file_path, sheet_name="data")
     email_context = {
@@ -1223,10 +1268,14 @@ def handle_administrations_bulk_upload(filename, user_id, upload_time):
             path=error_file,
             content_type="text/csv",
         )
+        set_bulk_upload_job(job_id, JobStatus.failed, result=error_file)
         return
-    seed_administration_data(file_path)
-    generate_sqlite(Administration)
+    seed_administration_data(file_path, tenant=user.tenant)
+    # The uploader's tenant, not the root file: that is the one its devices
+    # download, so regenerating anything else leaves them stale.
+    generate_sqlite(Administration, tenant=user.tenant)
     send_email(context=email_context, type=EmailTypes.administration_upload)
+    set_bulk_upload_job(job_id, JobStatus.done)
 
 
 def handle_master_data_bulk_upload_failure(task: Task):
@@ -1271,7 +1320,7 @@ def handle_entities_bulk_upload(filename, user_id, upload_time):
     user = SystemUser.objects.get(id=user_id)
     storage.download(f"upload/{filename}")
     file_path = f"./tmp/{filename}"
-    errors = validate_entity_file(file_path)
+    errors = validate_entity_file(file_path, tenant=user.tenant)
     email_context = {
         "send_to": [user.email],
         "listing": [
@@ -1288,8 +1337,8 @@ def handle_entities_bulk_upload(filename, user_id, upload_time):
     if len(errors):
         handle_entities_error_upload(errors, email_context, user, upload_time)
         return
-    errors = validate_entity_data(file_path)
+    errors = validate_entity_data(file_path, tenant=user.tenant)
     if len(errors):
         handle_entities_error_upload(errors, email_context, user, upload_time)
         return
-    generate_sqlite(EntityData)
+    generate_sqlite(EntityData, tenant=user.tenant)

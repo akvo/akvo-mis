@@ -1,16 +1,23 @@
 import typing
+from io import BytesIO
+
+import pandas as pd
 from django.core.management.color import no_style
 from django.db import connection
 from django.test.client import Client
 from faker import Faker
+from rest_framework_simplejwt.tokens import RefreshToken
 from api.v1.v1_profile.models import (
     Administration,
+    Levels,
     Role,
     UserRole,
 )
-from api.v1.v1_users.models import SystemUser
+from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_forms.models import UserForms, Forms
 fake = Faker()
+
+TENANT_PASSWORD = "Secret#Pass123"
 
 
 class HasTestClientProtocol(typing.Protocol):
@@ -101,3 +108,70 @@ class ProfileTestHelperMixin:
                 content_type='application/json')
         user = response.json()
         return user.get('token')
+
+
+class TenantFixture(typing.NamedTuple):
+    tenant: Tenant
+    levels: typing.List[Levels]
+    root: Administration
+    admin: SystemUser
+
+
+class TenantTestHelperMixin:
+    """Builds the state a tenant is in once it has configured itself.
+
+    Registration leaves exactly this behind — named levels, one root
+    unit, one superadmin — and it is the starting point for everything
+    the bulk-upload tests do. Four of them were assembling it by hand.
+    """
+
+    def create_tenant(
+        self, subdomain: str, level_names: typing.List[str], root_name: str
+    ) -> TenantFixture:
+        tenant = Tenant.objects.create(subdomain=subdomain)
+        levels = [
+            Levels.objects.create(name=name, level=idx, tenant=tenant)
+            for idx, name in enumerate(level_names)
+        ]
+        root = Administration.objects.create(
+            parent=None, level=levels[0], name=root_name, tenant=tenant
+        )
+        admin = SystemUser.objects.create_superuser(
+            email=f"admin@{subdomain}.org", password=TENANT_PASSWORD,
+            first_name=subdomain.title(), last_name="Admin", tenant=tenant,
+        )
+        return TenantFixture(tenant, levels, root, admin)
+
+    @staticmethod
+    def bearer(user: SystemUser) -> dict:
+        token = RefreshToken.for_user(user).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+
+def administration_columns(levels: typing.List[Levels]) -> typing.List[str]:
+    """The header row a generated administration template carries."""
+    return [
+        col
+        for lvl in levels
+        for col in [f"{lvl.id}|{lvl.name}", f"{lvl.id}|{lvl.name} Code"]
+    ]
+
+
+def write_administration_excel(levels, rows, path=None):
+    """Build an upload file. Each row is one value per level, None blank.
+
+    Returns the path when given one and an in-memory file otherwise —
+    the validator takes either, but the job handler reads from ./tmp.
+    """
+    columns = administration_columns(levels)
+    named = [
+        {columns[idx * 2]: value for idx, value in enumerate(row)}
+        for row in rows
+    ]
+    target = path or BytesIO()
+    writer = pd.ExcelWriter(target, engine="xlsxwriter")
+    pd.DataFrame(named, columns=columns).to_excel(
+        writer, sheet_name="data", index=False
+    )
+    writer.save()
+    return target

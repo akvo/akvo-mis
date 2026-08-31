@@ -2,70 +2,42 @@ import "@testing-library/jest-dom";
 import geo from "../geo";
 
 describe("geo", () => {
-  test("test if getBounds when empty array is passed as administration", () => {
-    const expectedResult = {
+  test("exports exactly the topojson-free helpers", () => {
+    expect(Object.keys(geo).sort()).toEqual([
+      "defaultPos",
+      "fixCoordinates",
+      "getColorScale",
+      "normalizeLon",
+      "shiftLonPositive",
+      "tile",
+    ]);
+  });
+
+  test("defaultPos returns the neutral world viewport", () => {
+    expect(geo.defaultPos()).toEqual({
+      coordinates: [0, 0],
       bbox: [
-        [NaN, NaN],
-        [NaN, NaN],
+        [-60, -180],
+        [75, 180],
       ],
-      coordinates: [NaN, NaN],
-    };
-    expect(geo.getBounds([])).toEqual(expectedResult);
+    });
   });
 
-  test("test if getBounds with an administration", () => {
-    const administration = [
-      {
-        childLevelName: "ADM_1",
-        children: [
-          {
-            full_name: "ADM_0A|ADM_1A",
-            id: 2,
-            level: 1,
-            name: "ADM_1A",
-            parent: 1,
-            path: "1.",
-          },
-          {
-            full_name: "ADM_0A|ADM_1B",
-            id: 3,
-            level: 1,
-            name: "ADM_1B",
-            parent: 1,
-            path: "1.",
-          },
-          {
-            full_name: "ADM_0A|ADM_1C",
-            id: 4,
-            level: 1,
-            name: "ADM_1C",
-            parent: 1,
-            path: "1.",
-          },
-        ],
-        full_name: "ADM_0A",
-        id: 1,
-        level: 0,
-        levelName: "ADM_0",
-        name: "ADM_0A",
-        parent: null,
-        path: null,
-      },
-    ];
+  test("fixCoordinates wraps a longitude past the antimeridian", () => {
+    expect(geo.fixCoordinates([10, 190])).toEqual([10, -170]);
+  });
 
-    const bounds = geo.getBounds(administration);
-    expect(typeof bounds).toBe("object");
-    expect(bounds).toHaveProperty("coordinates");
+  test("fixCoordinates leaves malformed input untouched", () => {
+    expect(geo.fixCoordinates([10])).toEqual([10]);
+    expect(geo.fixCoordinates("nope")).toEqual("nope");
   });
-  test("defaultPos", () => {
-    expect(typeof geo.defaultPos()).toBe("object");
-  });
-  test("check geo Object", () => {
-    expect(geo).toHaveProperty("geojson");
-    expect(geo).toHaveProperty("shapeLevels");
-    expect(geo).toHaveProperty("tile");
-    expect(geo).toHaveProperty("getBounds");
-    expect(geo).toHaveProperty("defaultPos");
-    expect(geo).toMatchSnapshot();
+
+  test("getColorScale with percent method spans 0-100", () => {
+    const scale = geo.getColorScale({
+      method: "percent",
+      colors: [],
+      colorRange: ["#a", "#b"],
+    });
+    expect(scale.domain()).toEqual([0, 100]);
   });
 });

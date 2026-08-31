@@ -32,6 +32,22 @@ python manage.py migrate  # Running directly on host
 cd frontend && npm run lint  # Running on host instead of container
 ```
 
+### Subdomain Routing in Local Development
+
+Each workspace (tenant) is served at its own host, `<subdomain>.<BASE_DOMAIN>`,
+and the backend resolves the tenant from the request's `Host` header. This is
+**off by default**: with `BASE_DOMAIN` empty, every host is the base domain,
+nothing resolves to a tenant, and the app behaves as a single-host install.
+
+To work on it locally you must add an `/etc/hosts` line **per workspace** —
+`/etc/hosts` has no wildcard, so registering a workspace is not enough to reach
+it. Full workflow and the four things that commonly break it:
+`doc/notes/subdomain-local-dev.md`.
+
+Tests need no hosts entries: pass `HTTP_HOST="acme.app.com"` to the test client.
+`BASE_DOMAIN` is forced empty under `manage.py test`, so a test that wants host
+routing opts in with `override_settings`.
+
 ## Architecture
 
 ### Multi-Tier Application Structure

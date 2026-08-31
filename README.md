@@ -8,7 +8,6 @@ Real Time Monitoring Information Systems
 
 - Docker > v19
 - Docker Compose > v2.1
-- Docker Sync 0.7.1
 
 ## Development
 
@@ -54,17 +53,54 @@ You can generate a Sentry auth token by following [this official Sentry document
 
 #### Start
 
-For initial run, you need to create a new docker volume.
-
-```bash
-./dc.sh up -d
-```
+The frontend's `node_modules` live in a named Docker volume that is declared
+`external`, so Docker never creates it automatically. On **every** operating
+system (Linux, macOS and Windows) you must create it once before the first run,
+otherwise `docker compose up` aborts with an _"external volume not found"_
+error:
 
 ```bash
 docker volume create akvo-mis-docker-sync
 ```
 
-Note: On some linux systems, you may need to change the permissions of the directory where the volume is stored.
+Then start the stack:
+
+```bash
+./dc.sh up -d
+```
+
+> **Note:** the separate `docker-sync` tool is **not** required on any OS — the
+> stack uses this named volume with native bind mounts. The legacy
+> `docker-sync.yml` in the repo is only an optional file-sync accelerator for
+> macOS/Windows Docker Desktop and can be ignored.
+
+##### Adjusting volume permissions on Linux
+
+On a standard Docker Engine setup the frontend container runs as `root` and
+installs `node_modules` into the volume without trouble. On some Linux
+configurations — **rootless Docker**, **user-namespace remapping**, or an
+**SELinux-enforcing** host — the container cannot write into the freshly
+created (root-owned) volume, and startup fails with a _permission denied_ /
+`EACCES` error while installing dependencies.
+
+If that happens, fix the volume's ownership with a throwaway container — no
+`sudo`, and no need to touch `/var/lib/docker/volumes` directly:
+
+```bash
+# Own the volume as your host user (fixes rootless / userns-remap setups)
+docker run --rm -v akvo-mis-docker-sync:/data alpine \
+    chown -R "$(id -u):$(id -g)" /data
+```
+
+On an **SELinux** host the volume is readable but mislabeled; relabel it for
+container access instead (run on the host, where `chcon` is available):
+
+```bash
+sudo chcon -Rt svirt_sandbox_file_t \
+    "$(docker volume inspect akvo-mis-docker-sync --format '{{.Mountpoint}}')"
+```
+
+Then re-run `./dc.sh up -d`.
 
 The development site should be running at: [localhost:3000](http://localhost:3000). Any endpoints with prefix
 
@@ -194,6 +230,43 @@ docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d
 ```
 
 Network config: [nginx](https://github.com/akvo/akvo-mis/blob/main/frontend/nginx/conf.d/default.conf)
+
+### Dedicated Tenant Deployment (UNICEF FSM)
+
+This branch deploys one customer at `https://unicef-fsm.akvotest.org`, while
+the multi-tenant SaaS build of `main` runs separately at
+`https://mis.akvotest.org`. Three things follow, and the third is the one
+that bites.
+
+**Run single-host: leave `BASE_DOMAIN` unset.** With no base domain,
+`is_base_domain()` answers true for every host, so `TenantMiddleware`
+resolves no tenant, never returns its "workspace not found" 404, and never
+enforces the host/session match. The `Host` header stops mattering, and
+activation and invite links keep pointing at `WEBDOMAIN` unchanged. No DNS
+change is needed to run the multi-tenant code this way.
+
+**Set `ALLOW_REGISTRATION=false`.** It defaults to on, which is right for
+the SaaS install and wrong here: a dedicated deployment's one workspace
+already exists, so an open `/register` only lets strangers create tenants
+and accounts in this customer's database. The deployment runs on GKE via
+`ci/deploy.sh` into `unicef-fsm-namespace`, so `deploy/app.env.template`
+covers the self-hosted Compose path only and does *not* reach the cluster —
+the variable has to be added to the backend Deployment manifest.
+
+> **Confirm the manifest location.** The `akvo-config` checkout used while
+> preparing this branch was from 2026-06-29 and contained no `unicef-fsm`
+> directory (it did contain `mohhs-mis`). That is either staleness or a
+> deployment that does not exist yet. Check against a current checkout
+> before assuming where this variable belongs.
+
+**Never set `BASE_DOMAIN` on this deployment.** `unicef-fsm.akvotest.org`
+is a *sibling* of `mis.akvotest.org` under `akvotest.org`, not a subdomain
+of it. Copying `BASE_DOMAIN=mis.akvotest.org` across from the SaaS config
+means the host no longer ends in `.mis.akvotest.org`, so
+`resolve_tenant_from_host` returns `None` while `is_base_domain` returns
+`False` — and the middleware 404s every request except `health/check` and
+`config.js`. The site goes dark while the readiness probe stays green,
+which is the worst possible way to fail.
 
 
 ## Dashboard Visualizations

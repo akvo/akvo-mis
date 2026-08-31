@@ -45,9 +45,9 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.fields.get(
-            "administration"
-        ).queryset = Administration.objects.all()
+        self.fields.get("administration").queryset = (
+            Administration.objects.all()
+        )
 
     class Meta:
         model = FormData
@@ -82,9 +82,7 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
             # but ensure that the question is provided and
             # value is correct type
             if not attrs.get("question"):
-                raise ValidationError(
-                    "Question is required for Answer"
-                )
+                raise ValidationError("Question is required for Answer")
             if attrs.get("value") is None:
                 attrs["value"] = ""
             question = attrs.get("question")
@@ -371,9 +369,9 @@ class ListFormDataRequestSerializer(serializers.Serializer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.fields.get(
-            "administration"
-        ).queryset = Administration.objects.all()
+        self.fields.get("administration").queryset = (
+            Administration.objects.all()
+        )
 
     def validate(self, attrs):
         date_from = attrs.get("date_from")
@@ -395,6 +393,9 @@ class ListFormDataSerializer(serializers.ModelSerializer):
     administration = serializers.SerializerMethodField()
     pending_data = serializers.SerializerMethodField()
     total_children = serializers.SerializerMethodField()
+    parent_name = serializers.SerializerMethodField()
+    parent_id = serializers.SerializerMethodField()
+    parent_form_id = serializers.SerializerMethodField()
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_created_by(self, instance: FormData):
@@ -454,6 +455,18 @@ class ListFormDataSerializer(serializers.ModelSerializer):
     def get_total_children(self, instance: FormData):
         return getattr(instance, "total_children", 0)
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_parent_name(self, instance: FormData):
+        return instance.parent.name if instance.parent else None
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_parent_id(self, instance: FormData):
+        return instance.parent.id if instance.parent else None
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_parent_form_id(self, instance: FormData):
+        return instance.parent.form_id if instance.parent else None
+
     class Meta:
         model = FormData
         fields = [
@@ -472,6 +485,9 @@ class ListFormDataSerializer(serializers.ModelSerializer):
             "pending_data",
             "submitter",
             "total_children",
+            "parent_name",
+            "parent_id",
+            "parent_form_id",
         ]
 
 
@@ -510,10 +526,9 @@ class ListPendingDataAnswerSerializer(serializers.ModelSerializer):
             if instance.question.form.parent:
                 # If the question is from a parent form,
                 # get the parent question from the parent form
-                qg = instance.question.form.parent \
-                    .form_question_group.filter(
-                        name=instance.question.question_group.name
-                    ).first()
+                qg = instance.question.form.parent.form_question_group.filter(
+                    name=instance.question.question_group.name
+                ).first()
                 if qg:
                     parent_question = qg.question_group_question.filter(
                         name=instance.question.name
@@ -524,8 +539,8 @@ class ListPendingDataAnswerSerializer(serializers.ModelSerializer):
                     Q(
                         question=instance.question,
                         index=instance.index,
-                    ) |
-                    Q(
+                    )
+                    | Q(
                         question=parent_question,
                         index=instance.index,
                     )
@@ -576,9 +591,7 @@ class ListPendingFormDataSerializer(serializers.ModelSerializer):
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_answer_history(self, instance: FormData):
         # Check for history in answer_history table
-        history = AnswerHistory.objects.filter(
-            data=instance
-        ).count()
+        history = AnswerHistory.objects.filter(data=instance).count()
         return True if history > 0 else False
 
     @extend_schema_field(ParentFormDataSerializer)
@@ -715,37 +728,45 @@ class SubmitPendingFormSerializer(serializers.Serializer):
                 ep = q_api.get("endpoint", "")
                 val = None
                 if "organisation" in ep:
-                    val = Organisation.objects.filter(pk=id).values_list(
-                        'name', flat=True).first()
+                    val = (
+                        Organisation.objects.filter(pk=id)
+                        .values_list("name", flat=True)
+                        .first()
+                    )
                 elif "entity-data" in ep or extra_type == "entity":
-                    val = EntityData.objects.filter(pk=id).values_list(
-                        'name', flat=True).first()
+                    val = (
+                        EntityData.objects.filter(pk=id)
+                        .values_list("name", flat=True)
+                        .first()
+                    )
                 else:
                     # administration cascade: store both name and integer value
-                    val = Administration.objects.filter(pk=id).values_list(
-                        'name', flat=True).first()
+                    val = (
+                        Administration.objects.filter(pk=id)
+                        .values_list("name", flat=True)
+                        .first()
+                    )
                     value = id
                 name = val
             else:
                 # for number question type
                 value = answer.get("value")
 
-            answers.append(Answers(
-                data=obj_data,
-                question=question,
-                name=name,
-                value=value,
-                options=option,
-                created_by=self.context.get("user"),
-                index=answer.get("index", 0)
-            ))
+            answers.append(
+                Answers(
+                    data=obj_data,
+                    question=question,
+                    name=name,
+                    value=value,
+                    options=option,
+                    created_by=self.context.get("user"),
+                    index=answer.get("index", 0),
+                )
+            )
 
         Answers.objects.bulk_create(answers)
 
-        if (
-            not is_draft and
-            not obj_data.is_pending
-        ):
+        if not is_draft and not obj_data.is_pending:
             # Refresh materialized view via async task
             async_task("api.v1.v1_data.tasks.seed_approved_data", obj_data)
 
@@ -830,30 +851,41 @@ class SubmitUpdateDraftFormSerializer(SubmitPendingFormSerializer):
                 ep = q_api.get("endpoint", "")
                 val = None
                 if "organisation" in ep:
-                    val = Organisation.objects.filter(pk=id).values_list(
-                        'name', flat=True).first()
+                    val = (
+                        Organisation.objects.filter(pk=id)
+                        .values_list("name", flat=True)
+                        .first()
+                    )
                 elif "entity-data" in ep or extra_type == "entity":
-                    val = EntityData.objects.filter(pk=id).values_list(
-                        'name', flat=True).first()
+                    val = (
+                        EntityData.objects.filter(pk=id)
+                        .values_list("name", flat=True)
+                        .first()
+                    )
                 else:
                     # administration cascade: store both name and integer value
-                    val = Administration.objects.filter(pk=id).values_list(
-                        'name', flat=True).first()
+                    val = (
+                        Administration.objects.filter(pk=id)
+                        .values_list("name", flat=True)
+                        .first()
+                    )
                     value = id
                 name = val
             else:
                 # for number question type
                 value = answer.get("value")
 
-            answers.append(Answers(
-                data=instance,
-                question=question,
-                name=name,
-                value=value,
-                options=option,
-                created_by=self.context.get("user"),
-                index=answer.get("index", 0)
-            ))
+            answers.append(
+                Answers(
+                    data=instance,
+                    question=question,
+                    name=name,
+                    value=value,
+                    options=option,
+                    created_by=self.context.get("user"),
+                    index=answer.get("index", 0),
+                )
+            )
 
         Answers.objects.bulk_create(answers)
         return instance
@@ -880,9 +912,9 @@ class FilterDraftFormDataSerializer(serializers.Serializer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.fields.get(
-            "administration"
-        ).queryset = Administration.objects.all()
+        self.fields.get("administration").queryset = (
+            Administration.objects.all()
+        )
 
     class Meta:
         fields = ["administration", "page", "search"]
@@ -892,9 +924,7 @@ class DraftFormDataDetailSerializer(serializers.ModelSerializer):
     answers = serializers.SerializerMethodField()
     datapoint_name = CustomCharField(source="name")
     geolocation = CustomListField(
-        source="geo",
-        required=False,
-        allow_null=True
+        source="geo", required=False, allow_null=True
     )
 
     @extend_schema_field(OpenApiTypes.ANY)

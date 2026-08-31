@@ -6,13 +6,6 @@ import "@testing-library/jest-dom";
 import "jest-canvas-mock";
 import store from "./lib/store";
 
-window.topojson = { objects: { fiji: { geometries: [{ properties: {} }] } } };
-window.levels = [
-  { id: 1, name: "National", level: 0 },
-  { id: 2, name: "County", level: 1 },
-  { id: 3, name: "Sub-County", level: 2 },
-  { id: 4, name: "Ward", level: 3 },
-];
 const formsFixture = [
   { id: 1, name: "Example 1", type: 1, version: 1, type_text: "County" },
   { id: 2, name: "Example 2", type: 2, version: 1, type_text: "National" },
@@ -23,7 +16,23 @@ const formsFixture = [
 store.update((s) => {
   s.allForms = formsFixture;
   s.forms = formsFixture;
+  // Levels are fetched at runtime now; seed the store, not a global.
+  s.levels = [
+    { id: 1, name: "National", level: 0 },
+    { id: 2, name: "County", level: 1 },
+    { id: 3, name: "Sub-County", level: 2 },
+    { id: 4, name: "Ward", level: 3 },
+  ];
 });
+
+// antd's responsive Row/Col subscribe to media queries on mount and jsdom
+// has no matchMedia. Every suite that renders a page needs this, so it
+// lives here rather than in each of them.
+window.matchMedia =
+  window.matchMedia ||
+  function () {
+    return { matches: false, addListener: () => {}, removeListener: () => {} };
+  };
 
 window.visualisation = [];
 

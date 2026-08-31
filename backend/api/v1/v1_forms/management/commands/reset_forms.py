@@ -1,5 +1,6 @@
 from django.core.management import call_command
 from django.core.management import BaseCommand
+from django.db import transaction
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import SystemUser
 
@@ -20,6 +21,13 @@ class Command(BaseCommand):
             type=int
         )
 
+    # This command destroys every Forms row before it repopulates them
+    # (hard_delete below cascades to submissions), so a failure partway
+    # through — e.g. form_seeder raising CommandError on an invalid
+    # source file — must not leave the database with the wipe committed
+    # and nothing restored. Wrapping the whole method in one transaction
+    # makes the destroy-and-repopulate sequence all-or-nothing.
+    @transaction.atomic
     def handle(self, *args, **options):
         # Get all non-test users
         users = SystemUser.objects.exclude(

@@ -22,6 +22,8 @@ services:
       - APK_UPLOAD_SECRET
       - STORAGE_PATH
       - SENTRY_DSN
+      - BASE_DOMAIN
+      - ALLOW_REGISTRATION
     depends_on:
       - db
   worker:
@@ -42,6 +44,9 @@ services:
       - APK_UPLOAD_SECRET
       - STORAGE_PATH
       - SENTRY_DSN
+      # The worker sends mail too, and an emailed link has to name the
+      # recipient's own workspace host.
+      - BASE_DOMAIN
     depends_on:
       - backend
   frontend:
