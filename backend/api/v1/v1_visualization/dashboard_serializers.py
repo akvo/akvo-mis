@@ -8,7 +8,6 @@ from api.v1.v1_visualization.constants import (
     VALID_CRITERIA_TYPES,
     VALID_VALUES_CRITERIA_TYPES,
     VALID_COLUMN_SOURCES,
-    VALID_PROGRESS_FORMULAS,
     SUPPORTED_QUESTION_TYPES,
 )
 from api.v1.v1_visualization.functions import parse_criteria_string
@@ -287,128 +286,6 @@ class EscalationFilterSerializer(serializers.Serializer):
         return parsed
 
 
-class ProgressFilterSerializer(serializers.Serializer):
-    """Validates query parameters for /visualization/progress.
-
-    Components format: comma-separated, colon-delimited.
-      {key}:{formula}:{qid1}:{qid2}:...:{total_items}
-
-    Example:
-      base:any_yes:111:222:333,tank:completed_binary:444,
-      pipes:ratio:555,security:multi_select_proportion:666:3
-    """
-
-    monitoring_form_id = serializers.IntegerField(
-        required=True
-    )
-    components = serializers.CharField(required=True)
-    filter_question_id = serializers.IntegerField(
-        required=False
-    )
-    filter_option_value = serializers.CharField(
-        required=False
-    )
-    scope_question_id = serializers.IntegerField(
-        required=False
-    )
-    from_date = serializers.DateField(required=False)
-    to_date = serializers.DateField(required=False)
-    date_question_id = serializers.IntegerField(
-        required=False
-    )
-    administration_id = serializers.IntegerField(
-        required=False
-    )
-    criteria = serializers.CharField(required=False)
-
-    def validate_criteria(self, value):
-        try:
-            return parse_criteria_string(
-                value, VALID_VALUES_CRITERIA_TYPES,
-            )
-        except ValueError as e:
-            raise serializers.ValidationError(str(e))
-
-    def validate_components(self, value):
-        """Parse and validate components string.
-
-        Format: key:formula:qid[:qid...][@type1|type2|...]
-        The optional @-suffix lists applicable project types.
-        """
-        parsed = []
-        for item in value.split(","):
-            raw = item.strip()
-
-            # Split off optional @applicable_types suffix
-            applicable_types = None
-            if "@" in raw:
-                raw, types_str = raw.split("@", 1)
-                applicable_types = [
-                    t.strip() for t in types_str.split("|")
-                    if t.strip()
-                ]
-
-            parts = raw.split(":")
-            if len(parts) < 3:
-                raise serializers.ValidationError(
-                    f"Invalid component format: '{item}'."
-                    " Expected key:formula:qid[:qid...]"
-                )
-            key = parts[0]
-            formula = parts[1]
-            if formula not in VALID_PROGRESS_FORMULAS:
-                raise serializers.ValidationError(
-                    f"Invalid formula: '{formula}'."
-                    f" Options: {VALID_PROGRESS_FORMULAS}"
-                )
-
-            comp = {"key": key, "formula": formula}
-
-            if formula == "multi_select_proportion":
-                # Last segment is total_items
-                if len(parts) < 4:
-                    raise serializers.ValidationError(
-                        f"{formula} requires total_items:"
-                        f" '{item}'"
-                    )
-                comp["question_ids"] = [
-                    int(q) for q in parts[2:-1]
-                ]
-                try:
-                    total_items = int(parts[-1])
-                except ValueError:
-                    raise serializers.ValidationError(
-                        f"Invalid total_items in component: '{item}'."
-                    )
-                if total_items < 1:
-                    raise serializers.ValidationError(
-                        f"total_items must be >= 1: '{item}'"
-                    )
-                comp["total_items"] = total_items
-            elif formula == "ratio":
-                # ratio requires implemented_qid:planned_qid
-                if len(parts) != 4:
-                    raise serializers.ValidationError(
-                        f"{formula} requires exactly two"
-                        " question ids"
-                        " (implemented:planned):"
-                        f" '{item}'"
-                    )
-                comp["question_ids"] = [
-                    int(parts[2]), int(parts[3]),
-                ]
-            else:
-                comp["question_ids"] = [
-                    int(q) for q in parts[2:]
-                ]
-
-            if applicable_types:
-                comp["applicable_types"] = applicable_types
-
-            parsed.append(comp)
-        return parsed
-
-
 # -- Response serializers (documentation only) --------------------
 #
 # These serializers describe the shape of JSON bodies returned by
@@ -502,36 +379,3 @@ class EscalationResponseSerializer(serializers.Serializer):
         allow_null=True, required=False,
     )
     results = EscalationResultItemSerializer(many=True)
-
-
-class ProgressHistogramBucketSerializer(serializers.Serializer):
-    progress = serializers.CharField(
-        help_text="Bucket label, e.g. '0-10%', '11-20%'.",
-    )
-    count = serializers.IntegerField()
-
-
-class ProgressDetailItemSerializer(serializers.Serializer):
-    """One EPS / parent in the /progress `details` array."""
-
-    label = serializers.CharField()
-    group = serializers.CharField(
-        help_text="Parent FormData.id as string.",
-    )
-    components = serializers.DictField(
-        child=serializers.FloatField(),
-        help_text=(
-            "Per-component percent score, keyed by the component"
-            " `key` from the request."
-        ),
-    )
-    overall = serializers.FloatField(
-        help_text="Average across components, 0-100.",
-    )
-
-
-class ProgressResponseSerializer(serializers.Serializer):
-    """/visualization/progress response envelope."""
-
-    histogram = ProgressHistogramBucketSerializer(many=True)
-    details = ProgressDetailItemSerializer(many=True)

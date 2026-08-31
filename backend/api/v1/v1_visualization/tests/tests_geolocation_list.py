@@ -85,8 +85,8 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
 
         # Ensure the geolocation is correctly formatted
         self.assertIsInstance(data[0]["geo"], list)
-        # administration_full_name and updated are fetched on demand
-        # via /maps/datapoint/{id} — not bundled into the list response
+        # The list response carries coordinates and a label, nothing
+        # more; the map widget renders its popup from exactly this.
         self.assertNotIn("administration_full_name", data[0])
         self.assertNotIn("updated", data[0])
 
