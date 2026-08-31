@@ -6,7 +6,7 @@ from datetime import datetime as dt_datetime, timedelta, date
 from rest_framework.exceptions import ValidationError
 
 from api.v1.v1_data.models import FormData, Answers
-from api.v1.v1_forms.models import Questions
+from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import Administration
 
 
@@ -43,16 +43,65 @@ def apply_administration_filter(queryset, administration_id):
     )
 
 
-def resolve_default_administration_id(administration_id):
+def resolve_request_tenant(request):
+    """The workspace a visualization request belongs to.
+
+    Host first: these endpoints answer without a token, so a public
+    dashboard served at a workspace address has to resolve the same
+    workspace a logged-in reader does. The authenticated account is the
+    fallback for single-host deployments, where no host names a
+    workspace but the account still does — and TenantMiddleware has
+    already refused any request where the two disagree, so consulting
+    the host first can only narrow, never contradict.
+
+    None means there is no workspace to be had: the base domain, or an
+    install with BASE_DOMAIN unset and tenant-less accounts, which is
+    how the test suite and every single-tenant deployment run.
+    """
+    tenant = getattr(request, "tenant", None)
+    if tenant is not None:
+        return tenant
+    return getattr(getattr(request, "user", None), "tenant", None)
+
+
+def tenant_scoped_forms(tenant):
+    """The forms a visualization request is allowed to name.
+
+    form_id reaches these endpoints as a bare integer off the query
+    string, so without this any workspace's aggregates are one guessed
+    id away. Scoping the form scopes the question with it:
+    ValuesFilterSerializer already rejects a question_id that does not
+    belong to form_id.
+    """
+    forms = Forms.objects.all()
+    if tenant is not None:
+        forms = forms.filter(tenant=tenant)
+    return forms
+
+
+def resolve_default_administration_id(administration_id, tenant=None):
     """Fall back to the root administration (parent IS NULL) when no
     administration_id is provided. These visualization endpoints are
     public, so we scope to the top-level country by default instead of
-    leaking data across unrelated administrations."""
+    leaking data across unrelated administrations.
+
+    The fallback is per workspace, because every tenant has its own
+    root. An unscoped lookup here does not leak anyone's rows — it does
+    something quieter and worse: it scopes the caller to somebody
+    else's country, so every widget on a freshly opened dashboard
+    reports 0 with nothing on screen to say why. Passing tenant=None
+    keeps the install-wide lookup, which is right only where there is a
+    single hierarchy to find.
+    """
     if administration_id:
         return administration_id
-    root = Administration.objects.filter(
-        parent__isnull=True
-    ).values_list("id", flat=True).first()
+    roots = Administration.objects.filter(parent__isnull=True)
+    if tenant is not None:
+        roots = roots.filter(tenant=tenant)
+    # Ordered: .first() on an unordered queryset returns whatever the
+    # planner hands back, which is how one deployment's answer came to
+    # depend on which root happened to be read first.
+    root = roots.order_by("id").values_list("id", flat=True).first()
     if root is None:
         raise ValidationError(
             "No root administration configured; "
