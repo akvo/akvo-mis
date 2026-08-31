@@ -22,6 +22,7 @@ import { api, store, uiText } from "../../lib";
 import "./style.scss";
 
 const { Option } = Select;
+const MAX_CODE_LENGTH = 25;
 
 const AddAdministration = () => {
   const [submitting, setSubmitting] = useState(false);
@@ -144,7 +145,10 @@ const AddAdministration = () => {
       setSubmitting(false);
       navigate("/control-center/master-data/administration");
     } catch (e) {
-      console.error(e);
+      notify({
+        type: "error",
+        message: e?.response?.data?.message || text.admErrSaveTitle,
+      });
       setSubmitting(false);
     }
   };
@@ -283,7 +287,9 @@ const AddAdministration = () => {
             <Row gutter={16}>
               <Col span={24}>
                 <Form.Item name="code" label={text.codeLabel}>
-                  <Input />
+                  {/* The column is varchar(${MAX_CODE_LENGTH}); without this the form
+                      posts a value the API can only reject. */}
+                  <Input maxLength={MAX_CODE_LENGTH} showCount />
                 </Form.Item>
               </Col>
               <Col span={24}>

@@ -35,6 +35,54 @@ const uiText = {
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
     menuFormBuilder: "Form Builder",
+    menuDashboards: "Dashboards",
+    // Dashboards
+    dashboardListTitle: "My dashboards",
+    dashboardListSubtitle: "Build and manage your custom data dashboards.",
+    dashboardNew: "New dashboard",
+    dashboardEmptyTitle: "No dashboards yet",
+    dashboardEmptyDesc:
+      "Create your first custom dashboard to visualise data from your forms.",
+    dashboardCreateTitle: "Create a dashboard",
+    dashboardCreateHint:
+      "Name it, then pick the registration form whose data this dashboard will show.",
+    dashboardCreateBtn: "Create dashboard",
+    dashboardNameLabel: "Dashboard name",
+    dashboardNameRequired: "Please enter a dashboard name",
+    dashboardFormLabel: "Data source",
+    dashboardFormExtra:
+      "This dashboard will show data from this form and its monitoring forms. This cannot be changed later.",
+    dashboardFormRequired: "Please select a registration form",
+    dashboardFormPlaceholder: "Select a registration form",
+    dashboardNoForms: "No published registration forms available.",
+    dashboardGoFormBuilder: "Go to Form Builder to create and publish a form.",
+    dashboardForbidden: "You no longer have permission to perform this action.",
+    dashboardCreated: "Dashboard created",
+    dashboardDeleted: "Dashboard deleted",
+    dashboardDuplicated: "Dashboard duplicated",
+    dashboardDeleteConfirm: "Delete this dashboard?",
+    dashboardSlugConflict:
+      "A dashboard with a similar name already exists. Please choose a different name.",
+    dashboardSaved: "Dashboard saved",
+    dashboardPublished: "Dashboard published",
+    // Viewer and preview (VIZ-008)
+    dashboardViewEmpty: "This dashboard has no widgets yet.",
+    dashboardNotFound: "Dashboard not found",
+    dashboardNotFoundHint:
+      "It may have been unpublished or deleted, or you may not have access to it.",
+    dashboardEdit: "Edit dashboard",
+    dashboardPreview: "Preview",
+    dashboardBackToEditing: "Back to editing",
+    dashboardWidgetError: "Couldn't load this widget",
+    dashboardWidgetRetry: "Retry",
+    dashboardWidgetQuestionGone: "This widget's question no longer exists.",
+    dashboardWidgetFormGone: "This widget's form no longer exists.",
+    dashboardFilterPeriod: "Monitoring period",
+    dashboardFilterAllLocations: "All locations",
+    preview: "Preview",
+    publish: "Publish",
+    published: "Published",
+    draft: "Draft",
     // Login
     loginLoadingTex: (
       <Fragment>
@@ -248,15 +296,33 @@ const uiText = {
     formBuilderExportCascadeCsvError: "Failed to export Cascade CSV",
     formBuilderImportButton: "Import Form",
     formBuilderImportModalTitle: "Import Form",
-    formBuilderImportDraggerText: "Click or drag a form export file here",
+    formBuilderImportFormatLabel: "Format",
+    formBuilderImportFormatJson: "JSON (Native)",
+    formBuilderImportFormatXlsform: "XLSForm (.xlsx)",
+    formBuilderImportDraggerText: "Click or drag a form file here",
     formBuilderImportDraggerHint: (mb) =>
       `Only .json form export files, up to ${mb} MB`,
+    formBuilderImportDraggerHintXlsform: (mb) =>
+      `Only .xlsx or .xls files, up to ${mb} MB`,
     formBuilderImportFileTooLarge: (mb) => `File exceeds the ${mb} MB limit`,
     formBuilderImportInvalidFile: "Only .json files are supported",
+    formBuilderImportInvalidFileXlsform:
+      "Only .xlsx or .xls files are supported",
     formBuilderImportPreflightError: "Failed to validate the file",
     formBuilderImportErrorsTitle: "Validation errors",
     formBuilderImportWarningsTitle: "Warnings",
     formBuilderImportFormLabel: "Form",
+    formBuilderImportQuestionsLabel: "Questions",
+    formBuilderImportGroupsLabel: "Groups",
+    formBuilderImportFormTypeLabel: "Form Type",
+    formBuilderImportFormTypeRegistration: "Registration",
+    formBuilderImportFormTypeMonitoring: "Monitoring",
+    formBuilderImportFormTypeRequired: "Please select a form type",
+    formBuilderImportSkippedCount: (count) =>
+      `${count} unsupported row(s) will be skipped`,
+    formBuilderImportXlsformNoticeTitle: "XLSForm Compatibility Note",
+    formBuilderImportXlsformNoticeDesc:
+      "Akvo MIS imports standard question types, options, multi-language labels, validations, and skip-logic. Follow-up questions for 'Other' choices are preserved as dependent questions (which you can optionally streamline using 'Allow other' in the Form Editor). Advanced features such as dynamic calculations, programmatic repeat counts, or complex XPath expressions are skipped. Please review any warnings below and verify the form in the Form Editor after import.",
     formBuilderImportUpdateTitle: (name) => `Update existing form "${name}"?`,
     formBuilderImportUpdateDesc: (count) =>
       `A form with the same ID already exists in this environment` +
@@ -752,6 +818,7 @@ const uiText = {
     selectOne: "Select one...",
     confirmDeleteEntityData: "Are you sure you want to delete this data?",
     errDeleteEntityDataTitle: "Unable to delete the data",
+    errSaveEntityDataTitle: "Unable to save the data",
     successEntityDataAdded: "Entity data added",
     successEntityDataUpdated: "Entity data updated",
     successEntityDataDeleted: "Entity data deleted",
@@ -821,6 +888,7 @@ const uiText = {
     admSuccessUpdated: "Administration updated",
     admSuccessAdded: "Administration added",
     admErrDeleteTitle: "Unable to delete the administration",
+    admErrSaveTitle: "Unable to save the administration",
     admConfirmDelete: "Are you sure you want to delete this administration?",
     admParent: "Administration Parent",
     admName: "Administration Name",

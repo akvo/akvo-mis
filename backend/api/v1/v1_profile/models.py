@@ -323,6 +323,40 @@ class UserRole(models.Model):
             access=FeatureAccessTypes.form_publish
         ).exists()
 
+    # The dashboard block mirrors the form_builder one above. Each is
+    # exposed on UserRoleListSerializer, and the web client reads them
+    # straight off each role to build its CASL ability (VIZ-004), so the
+    # method names are part of the API contract, not internal helpers.
+    def can_dashboard_view(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_view,
+        ).exists()
+
+    def can_dashboard_create(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_create,
+        ).exists()
+
+    def can_dashboard_edit(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_edit,
+        ).exists()
+
+    def can_dashboard_publish(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_publish,
+        ).exists()
+
+    def can_dashboard_delete(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_delete,
+        ).exists()
+
     def __str__(self):
         return f"{self.user.name} - {self.role.name} ({self.administration})"
 

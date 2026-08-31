@@ -23,6 +23,7 @@ import { api } from "../../../lib";
 import "./style.scss";
 
 const { Option } = Select;
+const MAX_CODE_LENGTH = 25;
 
 const AddEntityData = () => {
   const [submitting, setSubmitting] = useState(false);
@@ -123,7 +124,11 @@ const AddEntityData = () => {
       });
       setSubmitting(false);
       navigate("/control-center/master-data/entities/");
-    } catch {
+    } catch (e) {
+      notify({
+        type: "error",
+        message: e?.response?.data?.message || text.errSaveEntityDataTitle,
+      });
       setSubmitting(false);
     }
   };
@@ -243,7 +248,9 @@ const AddEntityData = () => {
                     },
                   ]}
                 >
-                  <Input />
+                  {/* The column is varchar(${MAX_CODE_LENGTH}); without this the form
+                      posts a value the API can only reject. */}
+                  <Input maxLength={MAX_CODE_LENGTH} showCount />
                 </Form.Item>
               </Col>
             </Row>

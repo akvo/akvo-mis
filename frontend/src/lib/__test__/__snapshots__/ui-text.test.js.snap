@@ -13,7 +13,7 @@ Object {
     "accountDisclaimer": "The user is accountable for his/her account and in case there are any changes (Transfers, retirement, any kind of leave, resignation etc) this should be communicated to the County Administrator or National Super Admin who might be able to assign the roles to the new officer.",
     "actionColumn": "Action",
     "addAdmDesc": <React.Fragment>
-      This page allows you to add administration to the 
+      This page allows you to add administration to the
       Test App
        platform.
     </React.Fragment>,
@@ -21,7 +21,7 @@ Object {
     "addAttachment": "Add Attachment",
     "addAttachmentDesc": "Add a new attachment to the batch",
     "addAttributeDesc": <React.Fragment>
-      This page allows you to add attribute to the 
+      This page allows you to add attribute to the
       Test App
        platform.
     </React.Fragment>,
@@ -30,12 +30,12 @@ Object {
     "addEntity": "Add New",
     "addEntityData": "Add New",
     "addEntityDesc": <React.Fragment>
-      This page allows you to add entity to the 
+      This page allows you to add entity to the
       Test App
        platform.
     </React.Fragment>,
     "addEntityTypeDesc": <React.Fragment>
-      This page allows you to add entity type to the 
+      This page allows you to add entity type to the
       Test App
        platform.
     </React.Fragment>,
@@ -45,7 +45,7 @@ Object {
     "addNewUser": "Add new user",
     "addOptionButton": "Add option",
     "addOrgDesc": <React.Fragment>
-      This page allows you to add organisations to the 
+      This page allows you to add organisations to the
       Test App
        platform.
     </React.Fragment>,
@@ -54,7 +54,7 @@ Object {
     "addRoleDescription": [Function],
     "addUser": "Add User",
     "addUserDescription": <React.Fragment>
-      This page allows you to add users to the 
+      This page allows you to add users to the
       Test App
        platform. You will only be able to add users for regions under your jurisdisction.
       <br />
@@ -148,6 +148,42 @@ Object {
     "controlCenter": "Control Center",
     "createDraftMonitoring": "Create Draft Monitoring Data",
     "createNewBatch": "Create a new batch",
+    "dashboardBackToEditing": "Back to editing",
+    "dashboardCreateBtn": "Create dashboard",
+    "dashboardCreateHint": "Name it, then pick the registration form whose data this dashboard will show.",
+    "dashboardCreateTitle": "Create a dashboard",
+    "dashboardCreated": "Dashboard created",
+    "dashboardDeleteConfirm": "Delete this dashboard?",
+    "dashboardDeleted": "Dashboard deleted",
+    "dashboardDuplicated": "Dashboard duplicated",
+    "dashboardEdit": "Edit dashboard",
+    "dashboardEmptyDesc": "Create your first custom dashboard to visualise data from your forms.",
+    "dashboardEmptyTitle": "No dashboards yet",
+    "dashboardFilterAllLocations": "All locations",
+    "dashboardFilterPeriod": "Monitoring period",
+    "dashboardForbidden": "You no longer have permission to perform this action.",
+    "dashboardFormExtra": "This dashboard will show data from this form and its monitoring forms. This cannot be changed later.",
+    "dashboardFormLabel": "Data source",
+    "dashboardFormPlaceholder": "Select a registration form",
+    "dashboardFormRequired": "Please select a registration form",
+    "dashboardGoFormBuilder": "Go to Form Builder to create and publish a form.",
+    "dashboardListSubtitle": "Build and manage your custom data dashboards.",
+    "dashboardListTitle": "My dashboards",
+    "dashboardNameLabel": "Dashboard name",
+    "dashboardNameRequired": "Please enter a dashboard name",
+    "dashboardNew": "New dashboard",
+    "dashboardNoForms": "No published registration forms available.",
+    "dashboardNotFound": "Dashboard not found",
+    "dashboardNotFoundHint": "It may have been unpublished or deleted, or you may not have access to it.",
+    "dashboardPreview": "Preview",
+    "dashboardPublished": "Dashboard published",
+    "dashboardSaved": "Dashboard saved",
+    "dashboardSlugConflict": "A dashboard with a similar name already exists. Please choose a different name.",
+    "dashboardViewEmpty": "This dashboard has no widgets yet.",
+    "dashboardWidgetError": "Couldn't load this widget",
+    "dashboardWidgetFormGone": "This widget's form no longer exists.",
+    "dashboardWidgetQuestionGone": "This widget's question no longer exists.",
+    "dashboardWidgetRetry": "Retry",
     "dashboards": "Dashboards",
     "dataAdministrationDownloadText": <React.Fragment>
       This is where you :
@@ -209,6 +245,7 @@ Object {
       </ul>
     </React.Fragment>,
     "dataUploadTitle": "Data Upload",
+    "datapointCol": "Datapoint",
     "dateFromPlaceholder": "From",
     "dateToPlaceholder": "To",
     "deleteAttachmentDesc": "Are you sure you want to delete this attachment?",
@@ -223,7 +260,7 @@ Object {
     "deleteOrganisationTitle": "You are about to delete the organization",
     "deleteText": "Delete",
     "deleteUserDesc": <React.Fragment>
-      The User will no longer be able to access the 
+      The User will no longer be able to access the
       Test App
        platform as an Enumrator/Admin etc
     </React.Fragment>,
@@ -231,13 +268,13 @@ Object {
     "deleteUserTitle": "You are about to delete the user",
     "download": "Download",
     "downloadAppText": <React.Fragment>
-      Download 
+      Download
       Test App
        App
     </React.Fragment>,
     "downloadAppsLinkText": "or download using the links below:",
     "downloadAppsQRText": <React.Fragment>
-      Download the 
+      Download the
       <b>
         Test App
          App
@@ -250,6 +287,7 @@ Object {
     "downloadReportError": "Unable to download report",
     "downloadReportSuccess": "Report downloaded successfully",
     "downloadTitle": "Downloads",
+    "draft": "Draft",
     "draftFormDescription": <p>
       Please fill up the webform below with relevant responses. You can save your responses and continue later or if you have completed the form then you can submit it.
     </p>,
@@ -261,7 +299,7 @@ Object {
     "draftFormSaveSuccess": "Draft saved successfully",
     "dropFile": "Drop your file here",
     "editAdmDesc": <React.Fragment>
-      This page allows you to edit administration to the 
+      This page allows you to edit administration to the
       Test App
        platform.
     </React.Fragment>,
@@ -270,7 +308,7 @@ Object {
     "editAttachment": "Edit Attachment",
     "editAttachmentDesc": "Replace the existing attachment with a new one",
     "editAttributeDesc": <React.Fragment>
-      This page allows you to edit attribute to the 
+      This page allows you to edit attribute to the
       Test App
        platform.
     </React.Fragment>,
@@ -280,17 +318,17 @@ Object {
     "editEntity": "Edit Entity",
     "editEntityData": "Edit data",
     "editEntityDesc": <React.Fragment>
-      This page allows you to edit entity to the 
+      This page allows you to edit entity to the
       Test App
        platform.
     </React.Fragment>,
     "editEntityTypeDesc": <React.Fragment>
-      This page allows you to edit entity type to the 
+      This page allows you to edit entity type to the
       Test App
        platform.
     </React.Fragment>,
     "editOrgDesc": <React.Fragment>
-      This page allows you to edit organisations to the 
+      This page allows you to edit organisations to the
       Test App
        platform.
     </React.Fragment>,
@@ -326,9 +364,9 @@ Object {
     "errorPageNA": "Oops, this page is not available",
     "errorSomething": "Something went wrong",
     "errorURL": <React.Fragment>
-      Please check the URL again or let us take you back to the 
+      Please check the URL again or let us take you back to the
       Test App
-       
+
       homepage
     </React.Fragment>,
     "errorUnknown": "An unknown error occurred",
@@ -405,20 +443,35 @@ Object {
     "formBuilderEditTitle": "Edit Form",
     "formBuilderEmptyText": "No forms found",
     "formBuilderExportButton": "Export",
+    "formBuilderExportCascadeCsvButton": "Export Cascade CSV",
+    "formBuilderExportCascadeCsvError": "Failed to export Cascade CSV",
     "formBuilderExportError": "Failed to export form",
+    "formBuilderExportXlsformButton": "Export XLSForm",
+    "formBuilderExportXlsformError": "Failed to export XLSForm",
+    "formBuilderExportXlsformWarningTitle": "XLSForm Export Warnings",
     "formBuilderFilterStatusAll": "All Statuses",
     "formBuilderFilterTypeAll": "All Types",
     "formBuilderImportButton": "Import Form",
     "formBuilderImportCloseButton": "Close",
     "formBuilderImportConfirmButton": "Import",
     "formBuilderImportDraggerHint": [Function],
-    "formBuilderImportDraggerText": "Click or drag a form export file here",
+    "formBuilderImportDraggerHintXlsform": [Function],
+    "formBuilderImportDraggerText": "Click or drag a form file here",
     "formBuilderImportErrorsTitle": "Validation errors",
     "formBuilderImportFailed": "Import failed",
     "formBuilderImportFileTooLarge": [Function],
     "formBuilderImportFormLabel": "Form",
+    "formBuilderImportFormatJson": "JSON (Native)",
+    "formBuilderImportFormatLabel": "Format",
+    "formBuilderImportFormatXlsform": "XLSForm (.xlsx)",
+    "formBuilderImportFormTypeLabel": "Form Type",
+    "formBuilderImportFormTypeMonitoring": "Monitoring",
+    "formBuilderImportFormTypeRegistration": "Registration",
+    "formBuilderImportFormTypeRequired": "Please select a form type",
+    "formBuilderImportGroupsLabel": "Groups",
     "formBuilderImportInProgress": "Importing form…",
     "formBuilderImportInvalidFile": "Only .json files are supported",
+    "formBuilderImportInvalidFileXlsform": "Only .xlsx or .xls files are supported",
     "formBuilderImportModalTitle": "Import Form",
     "formBuilderImportModeCopy": "Import as new copy",
     "formBuilderImportModeUpdate": "Update existing form",
@@ -428,11 +481,15 @@ Object {
     "formBuilderImportParentPlaceholder": "Select a registration form",
     "formBuilderImportParentRequired": "A monitoring form requires a parent registration form.",
     "formBuilderImportPreflightError": "Failed to validate the file",
+    "formBuilderImportQuestionsLabel": "Questions",
     "formBuilderImportRetryButton": "Try another file",
+    "formBuilderImportSkippedCount": [Function],
     "formBuilderImportSuccess": "Form imported",
     "formBuilderImportUpdateDesc": [Function],
     "formBuilderImportUpdateTitle": [Function],
     "formBuilderImportWarningsTitle": "Warnings",
+    "formBuilderImportXlsformNoticeDesc": "Akvo MIS imports standard question types, options, multi-language labels, validations, and skip-logic. Follow-up questions for 'Other' choices are preserved as dependent questions (which you can optionally streamline using 'Allow other' in the Form Editor). Advanced features such as dynamic calculations, programmatic repeat counts, or complex XPath expressions are skipped. Please review any warnings below and verify the form in the Form Editor after import.",
+    "formBuilderImportXlsformNoticeTitle": "XLSForm Compatibility Note",
     "formBuilderLastUpdatedCol": "Last Updated",
     "formBuilderMonitoringFor": [Function],
     "formBuilderMonitoringType": "Monitoring",
@@ -496,7 +553,7 @@ Object {
        is a comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation. It serves as a centralised hub for evidence-based reporting and efficient resource allocation.
     </React.Fragment>,
     "homeFooterAboutTitle": <React.Fragment>
-      About 
+      About
       Test App
     </React.Fragment>,
     "homeFooterContactAddress": Array [
@@ -535,7 +592,7 @@ Object {
       Test App
     </React.Fragment>,
     "homeKeyRolesHeadline": <React.Fragment>
-      Policy, oversight and 
+      Policy, oversight and
       <span
         className="accent"
       >
@@ -576,7 +633,7 @@ Object {
     "homeKeyRolesText": "The key roles and responsibilities of the organisation include policy and legislation development, technical and policy advisory, compliance monitoring, and service delivery oversight.",
     "homeKeyRolesTitle": "Key Roles and Responsibilities",
     "homeMandateHeadline": <React.Fragment>
-      Ensuring a 
+      Ensuring a
       <span
         className="accent"
       >
@@ -606,7 +663,7 @@ Object {
         "href": "/app",
         "isPage": false,
         "text": <React.Fragment>
-          Download 
+          Download
           Test App
            App
         </React.Fragment>,
@@ -619,7 +676,7 @@ Object {
     "homeStructureText": "Replace this text with a description of your organisation structure. This section can be updated in ui-text.js or configured via a content management system.",
     "homeStructureTitle": "Organisation Structure",
     "homeVideoHeadline": <React.Fragment>
-      See 
+      See
       <span
         className="accent"
       >
@@ -799,6 +856,7 @@ Object {
     "menuApprovals": "Approvals",
     "menuAttributes": "Attributes",
     "menuControlCenter": "Control Center",
+    "menuDashboards": "Dashboards",
     "menuData": "Data",
     "menuDocumentation": "Documentation",
     "menuDownloadApps": "Download App",
@@ -833,16 +891,16 @@ Object {
     "mobileLevelRequired": "Level is required",
     "mobileNameRequired": "Name is required",
     "mobilePanelAddDesc": <React.Fragment>
-      This page allows you to add mobile data collectors to the 
+      This page allows you to add mobile data collectors to the
       Test App
-       
+
       platform.
     </React.Fragment>,
     "mobilePanelButton": "Manage Data Collectors",
     "mobilePanelEditDesc": <React.Fragment>
-      This page allows you to edit mobile data collectors to the 
+      This page allows you to edit mobile data collectors to the
       Test App
-       
+
       platform.
     </React.Fragment>,
     "mobilePanelText": <React.Fragment>
@@ -921,7 +979,7 @@ Object {
       This is where you :
       <ul>
         <li>
-          View pending data approvals awaiting your approval 
+          View pending data approvals awaiting your approval
         </li>
         <li>
           View pending approvals by your subordinate approvers
@@ -953,15 +1011,19 @@ Object {
       </p>
     </React.Fragment>,
     "prev": "Prev",
+    "preview": "Preview",
     "printBtn": "Print",
     "profileDes": "This page shows your current user setup. It also shows the most important activities for your current user setup",
     "profileLabel": "Profile",
+    "publish": "Publish",
+    "published": "Published",
     "questionCol": "Question",
     "questionnaireText": "Questionnaire",
     "questionnairesLabel": "Questionnaires",
     "questionnairesRequired": "Please select at least one questionnaire access level: Read-only, Editor, or Approver.",
     "recentActivityCol": "Recent Activity",
     "regionCol": "Region",
+    "registrationView": "Registration",
     "rejectText": "Reject",
     "reports": "Reports",
     "requiredError": "{{field}} is required",
@@ -1014,6 +1076,7 @@ Object {
     "selectRowsToDownload": "Please select rows to download",
     "selectText": "Select...",
     "selectType": "Select type...",
+    "selectViewMode": "Select View",
     "sendInstructions": "Send Instructions",
     "sendNewRequest": "Notify Approver",
     "settings": "System Settings",
@@ -1023,6 +1086,7 @@ Object {
     "showPendingUsers": "Show Pending Users",
     "signOut": "Sign Out",
     "submissionComment": "Submission comment",
+    "submissionDateCol": "Submission Date",
     "submissionsText": "Submissions",
     "successAddedEntity": "Entity added",
     "successAddedOrg": "Organisation added",
@@ -1095,10 +1159,11 @@ Object {
     "valRole": "Please select a Role",
     "viewAttachment": "View Attachment",
     "viewDetails": "View Details",
+    "viewFullContext": "View Full Context",
     "viewText": "View",
     "webformText": "Webform",
     "welcomeShort": <React.Fragment>
-      Welcome to the 
+      Welcome to the
       <b>
         Test App
       </b>

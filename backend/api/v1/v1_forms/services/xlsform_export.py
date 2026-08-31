@@ -175,14 +175,9 @@ def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
         return ("image", "signature")
     elif qtype == QuestionTypes.cascade:
         return ("select_one_from_file administration.csv", None)
-    elif qtype in (
-        QuestionTypes.tree,
-        QuestionTypes.table,
-        QuestionTypes.autofield,
-    ):
-        return (None, None)
 
-    return ("text", None)
+    # All unsupported or skipped types (tree, table, autofield, etc.)
+    return (None, None)
 
 
 def _get_levels_map(form: Any = None) -> Dict[int, str]:

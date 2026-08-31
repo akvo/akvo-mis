@@ -74,17 +74,28 @@ class IsSuperAdminOrFormUser(BasePermission):
         return request.user.is_superuser
 
 
-def FormBuilderAccess(required_access):
-    """Return a permission class for the given granular access type."""
+def FeatureAccess(feature_type, required_access):
+    """Return a permission class for one feature's granular access type."""
+    # Both lookups stay inside one filter(): they must be satisfied by the
+    # same role_feature_access row. Chained filter() calls join the table
+    # twice and would let a role holding the halves on different rows pass.
     class _Permission(BasePermission):
         def has_permission(self, request, view):
             if request.user.is_superuser:
                 return True
             return request.user.user_user_role.filter(
-                role__role_role_feature_access__type=FeatureTypes.form_builder,
+                role__role_role_feature_access__type=feature_type,
                 role__role_role_feature_access__access=required_access,
             ).exists()
     return _Permission
+
+
+def FormBuilderAccess(required_access):
+    return FeatureAccess(FeatureTypes.form_builder, required_access)
+
+
+def DashboardAccess(required_access):
+    return FeatureAccess(FeatureTypes.dashboard_builder, required_access)
 
 
 class PublicGet(BasePermission):

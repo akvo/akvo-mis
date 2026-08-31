@@ -157,9 +157,21 @@ You can move a form between deployments (or keep a backup) using export and
 import:
 
 - :bolditalic:`Export` (in the form editor) downloads the form definition as a
-  ``.json`` file.
+  ``.json`` or ``.xlsx`` (XLSForm) file.
 - :bolditalic:`Import Form` (on the form list) opens a dialog where you upload a
-  previously exported ``.json`` file to recreate the form.
+  previously exported ``.json`` file or an XLSForm (``.xlsx`` / ``.xls``) to create the form.
+
+.. note::
+   **XLSForm Compatibility.** Akvo MIS supports core XLSForm question types,
+   choices, multi-language translations, min/max numerical constraints, and
+   skip-logic dependencies. Follow-up text questions for "Other" choices are
+   preserved as separate dependent questions (which you can optionally merge
+   into a single question using the "Allow other" toggle in the Form Editor).
+   Advanced XLSForm constructs (e.g. calculated fields, dynamic repeat count
+   limits, group-level relevance, or complex custom XPath functions) are not
+   natively evaluated. When importing external forms (such as from KoboToolbox
+   or ODK), review the preflight warnings and verify the form structure in the
+   Form Editor after import.
 
 .. image:: ../assets/form-builder-import-export.png
    :alt: Importing a form from a JSON export file

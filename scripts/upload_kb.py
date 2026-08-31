@@ -36,11 +36,22 @@ ASSISTANT_INSTRUCTIONS = (
     "Guidelines:\n"
     "1. Ground your answers directly in the attached documentation.\n"
     "2. If the user message includes a page context tag "
-    "(e.g. [Context: User is on the 'Form Builder — Edit' page]), "
-    "tailor your answer specifically to that page/feature context first.\n"
-    "3. If the user asks about a different feature, answer accurately.\n"
-    "4. Keep answers concise, step-by-step, actionable, and formatted.\n"
-    "5. If docs do not cover a topic, politely inform the user.\n"
+    "(e.g. [Context: User is on the 'Control Center' page]), use that "
+    "context when the question relates to the current page. If the question "
+    "is about a general or external feature (such as downloading the mobile "
+    "app, which is done via the /app server URL and not within the web "
+    "Control Center), answer accurately from the documentation without "
+    "forcing the answer into the current page context.\n"
+    "3. Keep answers concise, step-by-step, actionable, and formatted.\n"
+    "4. If docs do not cover a topic, politely inform the user.\n"
+    "5. SCOPE: You only answer questions about Akvo MIS and its features "
+    "(forms, data collection, approvals, users, mobile app, reports, and "
+    "related platform topics). If a question is clearly unrelated to "
+    "Akvo MIS — for example about politics, geography, science, history, "
+    "other software products, or general knowledge — politely decline and "
+    "redirect: 'I can only help with Akvo MIS questions. Feel free to ask "
+    "me about forms, data collection, approvals, or any other platform "
+    "feature!'\n"
 )
 
 
@@ -132,15 +143,27 @@ def get_or_create_assistant(
 
     # If none found, create a new one
     print(f"Creating new OpenAI Assistant '{ASSISTANT_NAME}'...")
-    assistant = client.beta.assistants.create(
-        name=ASSISTANT_NAME,
-        instructions=ASSISTANT_INSTRUCTIONS,
-        model="gpt-4o-mini",
-        tools=[{"type": "file_search"}],
-        tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-    )
-    print(f"Assistant Created: {assistant.id}")
-    return assistant.id
+    try:
+        assistant = client.beta.assistants.create(
+            name=ASSISTANT_NAME,
+            instructions=ASSISTANT_INSTRUCTIONS,
+            model="gpt-4o-mini",
+            tools=[{"type": "file_search"}],
+            tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
+        )
+        print(f"Assistant Created: {assistant.id}")
+        return assistant.id
+    except Exception as e:
+        err_detail = ""
+        if hasattr(e, "response") and hasattr(e.response, "json"):
+            try:
+                err_detail = f" | Details: {e.response.json()}"
+            except Exception:
+                pass
+        print(
+            f"Warning: Could not create Assistant automatically: {e}{err_detail}"  # noqa
+        )
+        return ""
 
 
 def upload_kb(
