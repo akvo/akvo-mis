@@ -33,7 +33,7 @@ class StorageTestCase(TestCase):
         uploaded_file = storage.upload(file=filename, folder="test")
         self.assertTrue(
             os.path.exists(f"{STORAGE_PATH}/test/{filename}"),
-            "File not exists"
+            "File not exists",
         )
         self.assertTrue(storage.check(f"test/{filename}"), "File not exists")
         self.assertEqual(uploaded_file, f"{STORAGE_PATH}/test/{filename}")
