@@ -4,7 +4,7 @@ scripts/build_kb_pdf.py
 
 Builds knowledge base PDFs for OpenAI Vector Store ingestion:
 1. docs/build/akvo-mis-docs.pdf   - Full platform documentation
-2. docs/build/akvo-react-form-editor-docs.pdf - Form Builder & runtime reference
+2. docs/build/akvo-react-form-editor-docs.pdf - Form Builder reference
 
 Generates standard PDF 1.4 documents with structured pages and headers.
 """
@@ -131,7 +131,8 @@ class SimplePDFWriter:
         )
         objects.append(
             b"5 0 obj\n<< /Type /Font /Subtype /Type1 /Name /F2 "
-            b"/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n"
+            b"/BaseFont /Helvetica-Bold /Encoding "
+            b"/WinAnsiEncoding >>\nendobj\n"
         )
 
         # Pages & content
@@ -332,229 +333,115 @@ def add_rst_section(pdf: SimplePDFWriter, source_dir: Path, fname: str):
 
 
 # ---------------------------------------------------------------------------
-# Form Editor supplementary PDF
+# Dynamic Markdown Knowledge Base Compiler
 # ---------------------------------------------------------------------------
 
 
-def build_form_editor_docs_pdf(output_pdf: Path):
-    """Generates akvo-react-form-editor-docs.pdf."""
+def add_markdown_file(pdf: SimplePDFWriter, file_path: Path):
+    """Parses a Markdown file and appends content to SimplePDFWriter."""
+    if not file_path.exists():
+        return
+
+    text = file_path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+
+    in_code_block = False
+    current_paragraph = []
+
+    def flush_paragraph():
+        if current_paragraph:
+            combined = " ".join(current_paragraph).strip()
+            if combined:
+                pdf.add_paragraph(combined)
+            current_paragraph.clear()
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Code block fences
+        if stripped.startswith("```"):
+            flush_paragraph()
+            in_code_block = not in_code_block
+            continue
+
+        if in_code_block:
+            pdf.add_line(line[:78])
+            continue
+
+        if not stripped:
+            flush_paragraph()
+            continue
+
+        # Horizontal rules
+        if re.match(r"^---+$", stripped) or re.match(r"^===+$", stripped):
+            flush_paragraph()
+            continue
+
+        # Headings
+        if stripped.startswith("#"):
+            flush_paragraph()
+            if stripped.startswith("###"):
+                level = 3
+                heading_text = stripped.lstrip("#").strip()
+            elif stripped.startswith("##"):
+                level = 2
+                heading_text = stripped.lstrip("#").strip()
+            else:
+                level = 1
+                heading_text = stripped.lstrip("#").strip()
+            pdf.add_heading(heading_text, level=level)
+            continue
+
+        # Bullet points and numbered items
+        bullet_match = re.match(r"^(\s*)([-*]|\d+\.)\s+(.+)$", line)
+        if bullet_match:
+            flush_paragraph()
+            indent_spaces = len(bullet_match.group(1))
+            indent_level = min(2, indent_spaces // 2)
+            bullet_text = bullet_match.group(3).strip()
+            pdf.add_bullet(bullet_text, indent=indent_level)
+            continue
+
+        # Markdown tables
+        if stripped.startswith("|") and stripped.endswith("|"):
+            flush_paragraph()
+            # Skip separator rows like |---|---|
+            if re.match(r"^\|[\s\-:|]+\|$", stripped):
+                continue
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            row_str = " | ".join(cells)
+            pdf.add_bullet(row_str, indent=0)
+            continue
+
+        # Regular prose line -> accumulate in current paragraph
+        current_paragraph.append(stripped)
+
+    flush_paragraph()
+
+
+def build_form_editor_docs_pdf(output_pdf: Path, kb_dir: Path = None):
+    """Generates akvo-react-form-editor-docs.pdf from docs/knowledge_base/."""
     print(f"Building supplementary {output_pdf}...")
-    pdf = SimplePDFWriter(title="Akvo MIS - Form Builder Guide")
+    pdf = SimplePDFWriter(title="Akvo MIS - Form Builder & Knowledge Base")
 
-    pdf.add_heading("Akvo Form Builder & Runtime Reference Guide", level=1)
+    pdf.add_heading("Akvo Form Builder & System Knowledge Base", level=1)
     pdf.add_paragraph(
-        "Technical reference for the Akvo MIS Form Builder. Covers the editor "
-        "interface, question configuration, skip logic, form lifecycle, and all "
-        "supported question types."
+        "Comprehensive technical reference, form design recipes, property "
+        "catalogs, calculation formulas, and platform capability guides "
+        "for Akvo MIS."
     )
 
-    pdf.add_heading("1. Editor Interface Overview", level=2)
-    pdf.add_paragraph(
-        "Access the Form Builder editor from: Control Centre > Form Builder > "
-        "(create or select a form). The editor has four workspace tabs:"
-    )
-    pdf.add_bullet(
-        "Edit Form - the main drag-and-drop editor for question groups "
-        "and questions"
-    )
-    pdf.add_bullet(
-        "Translations - add translated labels and option text for "
-        "multi-language forms"
-    )
-    pdf.add_bullet(
-        "Preview - live preview of the form as respondents will see it; "
-        "use this to test skip logic"
-    )
-    pdf.add_bullet(
-        "JSON - view and optionally edit the raw form schema (advanced users)"
-    )
-
-    pdf.add_heading("2. Question Groups", level=2)
-    pdf.add_paragraph(
-        "Questions are organised into Question Groups, which become named "
-        "sections in the web and mobile form. Every form must have at least "
-        "one group."
-    )
-    pdf.add_bullet("Add Group - click + Add Group below the last group")
-    pdf.add_bullet("Rename - click the group name to edit it in-place")
-    pdf.add_bullet(
-        "Repeatable - toggle Repeatable to allow enumerators to add multiple "
-        "entries (e.g. one row per household member)"
-    )
-    pdf.add_bullet("Reorder - drag the group handle to change the order")
-    pdf.add_bullet(
-        "Delete - remove a group and all its questions "
-        "(cannot be undone on a published form)"
-    )
-
-    pdf.add_heading("3. Question Configuration", level=2)
-    pdf.add_paragraph(
-        "Click any question to open its settings panel. Common settings:"
-    )
-    pdf.add_bullet("Label - the question text shown to the respondent")
-    pdf.add_bullet(
-        "Variable Name - the internal identifier used in exports and autofields; "
-        "must be unique within the form"
-    )
-    pdf.add_bullet(
-        "Tooltip / Help Text - additional guidance shown below the question"
-    )
-    pdf.add_bullet(
-        "Required - blocks submission until answered "
-        "(ignored when hidden by skip logic)"
-    )
-    pdf.add_bullet(
-        "Double Entry - prompts the respondent to enter the value twice; "
-        "useful for critical numeric data"
-    )
-    pdf.add_paragraph("Type-specific settings:")
-    pdf.add_bullet("Number: Min Value, Max Value")
-    pdf.add_bullet("Text: character limit")
-    pdf.add_bullet("Option / Multiple Option: add, remove, reorder choices")
-    pdf.add_bullet("Cascade: select source data list")
-    pdf.add_bullet(
-        "Autofield: define formula using references to other variable names"
-    )
-
-    pdf.add_heading("4. Skip Logic (Dependencies)", level=2)
-    pdf.add_paragraph(
-        "Skip logic hides a question until a specific condition is met. "
-        "Configured on the dependent question (the one shown conditionally)."
-    )
-    pdf.add_paragraph("To add skip logic:")
-    pdf.add_bullet("1. Click the question that should be conditionally shown")
-    pdf.add_bullet("2. Open its Skip Logic tab")
-    pdf.add_bullet("3. Select the Source Question (trigger) from the dropdown")
-    pdf.add_bullet(
-        "4. Select the matching answer value that will reveal this question"
-    )
-    pdf.add_bullet("5. Save")
-    pdf.add_paragraph(
-        "Best practices: avoid circular dependencies, keep chains shallow, "
-        "and always test in the Preview tab before publishing."
-    )
-
-    pdf.add_heading("5. Question Types Reference", level=2)
-    types_info = [
-        (
-            "Text (Input)",
-            "Single-line free text. Use for names, identifiers, short answers.",
-        ),
-        (
-            "Text Area (Memo)",
-            "Multi-line text. Use for descriptions, notes, long answers.",
-        ),
-        (
-            "Number",
-            "Integer or decimal. Supports Min/Max validation bounds.",
-        ),
-        (
-            "Date",
-            "Calendar date picker (YYYY-MM-DD). Use for visit dates, "
-            "dates of birth.",
-        ),
-        (
-            "Image / Photo",
-            "Camera capture or file upload. Stored server-side with the "
-            "submission.",
-        ),
-        (
-            "Geo / Geopoint",
-            "Latitude + Longitude capture. On mobile reads device GPS "
-            "automatically.",
-        ),
-        (
-            "Option",
-            "Single choice (radio buttons). Configure a list of allowed options.",
-        ),
-        (
-            "Multiple Option",
-            "Multiple choice (checkboxes). Configure a list of allowed options.",
-        ),
-        (
-            "Cascade",
-            "Hierarchical dropdowns (e.g. Country > Province > District). "
-            "Requires a configured cascade data source.",
-        ),
-        (
-            "Entity",
-            "Dropdown linked to an entity type (e.g. schools). Requires "
-            "entity data to be configured.",
-        ),
-        (
-            "Autofield",
-            "Computed field derived from other answers via a formula. "
-            "Not editable by the respondent.",
-        ),
-        (
-            "Attachment",
-            "File upload for non-image files (PDF, spreadsheet, etc).",
-        ),
-        (
-            "Signature",
-            "Hand-drawn signature pad; stored as an image.",
-        ),
-        (
-            "Table",
-            "Tabular grid of answers. Cannot be created in the Form Builder "
-            "UI - must be defined in the form JSON.",
-        ),
-        (
-            "Tree",
-            "Nested hierarchical selector. Cannot be created in the "
-            "Form Builder UI.",
-        ),
-        (
-            "Administration",
-            "Linked to the administration hierarchy. Cannot be created in "
-            "the Form Builder UI.",
-        ),
-    ]
-    for qtype, desc in types_info:
-        pdf.add_bullet(f"{qtype}: {desc}")
-
-    pdf.add_heading("6. Form Lifecycle", level=2)
-    pdf.add_paragraph("Forms progress through these states:")
-    pdf.add_bullet(
-        "Draft - the form is being edited and cannot receive submissions"
-    )
-    pdf.add_bullet("Published - the form is live; enumerators can submit data")
-    pdf.add_bullet(
-        "Editing a published form - creates a new draft version; the previous "
-        "version remains active until the new version is published"
-    )
-    pdf.add_paragraph("Two form types exist:")
-    pdf.add_bullet(
-        "Registration Form - creates a new data record (entity/location)"
-    )
-    pdf.add_bullet(
-        "Monitoring Form - adds ongoing data points to an existing record "
-        "via a parent_id reference"
-    )
-
-    pdf.add_heading("7. Form Import and Export", level=2)
-    pdf.add_bullet(
-        "Import JSON - upload a previously exported JSON schema to create "
-        "a new form"
-    )
-    pdf.add_bullet(
-        "Import XLSForm - upload an XLSForm Excel file to create a form "
-        "from an external definition"
-    )
-    pdf.add_bullet(
-        "Export JSON - download the raw JSON schema for the current form"
-    )
-    pdf.add_bullet(
-        "Export XLSForm - download the form as an XLSForm-compatible Excel "
-        "file (must be enabled in Settings)"
-    )
-
-    pdf.add_heading("8. Version History", level=2)
-    pdf.add_paragraph(
-        "Every time a draft is published a version snapshot is saved. "
-        "Open the Version History drawer (clock icon, top-right of the editor) "
-        "to view previous versions. Older versions are read-only."
-    )
+    if kb_dir and kb_dir.exists():
+        md_files = sorted(kb_dir.rglob("*.md"))
+        print(
+            f"  Compiling {len(md_files)} knowledge base modules from "
+            f"{kb_dir}..."
+        )
+        for md_file in md_files:
+            print(f"    + {md_file.relative_to(kb_dir.parent)}")
+            add_markdown_file(pdf, md_file)
+    else:
+        print("  [warning] No docs/knowledge_base directory found.")
 
     pdf.write_to_file(output_pdf)
     print(f"Generated: {output_pdf} ({output_pdf.stat().st_size:,} bytes)")
@@ -572,9 +459,9 @@ def build_platform_docs_pdf(docs_dir: Path, output_pdf: Path):
 
     pdf.add_heading("Akvo MIS Platform Documentation", level=1)
     pdf.add_paragraph(
-        "Comprehensive user and administrator guide for Akvo MIS - a Real-Time "
-        "Monitoring Information System. Covers form design, data collection, "
-        "approvals, administration, and mobile app."
+        "Comprehensive user and administrator guide for Akvo MIS - a "
+        "Real-Time Monitoring Information System. Covers form design, "
+        "data collection, approvals, administration, and mobile app."
     )
 
     source_dir = docs_dir / "source"
@@ -619,11 +506,12 @@ def main():
     docs_dir = root_dir / "docs"
     build_dir = docs_dir / "build"
 
+    kb_dir = docs_dir / "knowledge_base"
     mis_docs_pdf = build_dir / "akvo-mis-docs.pdf"
     form_editor_pdf = build_dir / "akvo-react-form-editor-docs.pdf"
 
     build_platform_docs_pdf(docs_dir, mis_docs_pdf)
-    build_form_editor_docs_pdf(form_editor_pdf)
+    build_form_editor_docs_pdf(form_editor_pdf, kb_dir=kb_dir)
 
     print("\nValidating generated PDFs...")
     ok1 = validate_pdf(mis_docs_pdf)

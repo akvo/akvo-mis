@@ -17,3 +17,4 @@ android/.claude/
 .agent/
 agent_docs/
 task.md
+chatbot_qa_test_sheet.csv

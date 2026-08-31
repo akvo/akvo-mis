@@ -3,6 +3,7 @@ set -e
 
 # Akvo MIS Knowledge Base Helper Script
 # Usage:
+#   ./kb.sh check                     - Audit KB coverage against upstream docs
 #   ./kb.sh build                     - Build documentation PDFs
 #   ./kb.sh upload                    - Upload PDFs to OpenAI Vector Store
 #   ./kb.sh upload --create-assistant - Upload and create/link OpenAI Assistant
@@ -23,6 +24,12 @@ run_in_docker() {
 }
 
 case "$ACTION" in
+  check|coverage)
+    shift || true
+    echo "🔍 Auditing Knowledge Base Coverage..."
+    python3 scripts/check_kb_coverage.py "$@"
+    ;;
+
   build)
     echo "🔨 Building Knowledge Base PDFs..."
     run_in_docker "scripts/build_kb_pdf.py"
@@ -46,6 +53,9 @@ case "$ACTION" in
     echo "Akvo MIS Knowledge Base Utility"
     echo ""
     echo "Usage:"
+    echo "  ./kb.sh check                      Audit KB coverage against upstream docs"
+    echo "  ./kb.sh check --verbose            Audit with matched file details"
+    echo "  ./kb.sh check --format json        Emit coverage report as structured JSON"
     echo "  ./kb.sh build                      Build documentation PDFs into docs/build/"
     echo "  ./kb.sh upload                     Upload PDFs to OpenAI Vector Store"
     echo "  ./kb.sh upload --create-assistant  Upload PDFs and create/link Mira Assistant"
