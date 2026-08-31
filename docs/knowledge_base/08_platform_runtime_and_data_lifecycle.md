@@ -15,9 +15,19 @@ This document describes runtime execution differences between Web and Mobile, th
 | **Camera Capture** | File picker upload | Native In-App Camera | Mobile embeds timestamp and location EXIF metadata into photos. |
 | **Barcode / QR Scan** | Manual input | Native Camera Scanner | Mobile scans barcodes directly into text fields (source: `docs/source/mobileApp.rst`). |
 
+## 2. Downloading & Installing the Mobile App
+
+- **Platform**: Android only (there is no iOS version).
+- **Distribution**: The app is **NOT** on Google Play Store or Apple App Store.
+- **Two Ways to Get the App**:
+  1. **From the Web App (Logged-in Users)**: Click **Download App** (Android icon) at the bottom of the left navigation sidebar. A modal pops up displaying a **QR Code** to scan with your phone, and a direct download link.
+  2. **Directly on Android Device**: Open a mobile browser on your phone and navigate to `https://<your-server-url>/app`. This directly downloads the installer APK package (`.apk`).
+- **Installation**: Tap the downloaded `.apk` file, allow installation from unknown sources if prompted, and install.
+- **Authentication**: Enumerators log in using their ~8-character **mobile assignment passcode** (configured by supervisors in **Control Centre > Mobile Assignment**), not an email/password.
+
 ---
 
-## 2. Registration vs. Monitoring Lifecycle
+## 3. Registration vs. Monitoring Lifecycle
 
 Source: `docs/source/formBuilder.rst`, `docs/source/dataManagement.rst`
 
