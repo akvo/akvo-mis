@@ -176,7 +176,16 @@ class EscalationFilterSerializer(serializers.Serializer):
     """
 
     monitoring_form_id = serializers.IntegerField(required=True)
-    criteria = serializers.CharField(required=True)
+    # Optional: the criteria grammar NARROWS a list of datapoints, it does
+    # not define one. Requiring it came from the Fiji escalation table,
+    # whose only question was "which sites need attention"; a dashboard
+    # table asks for the plain list just as often. The compute layer has
+    # always handled it — build_escalation_criteria_filter([]) is an empty
+    # Q() — so this only stops the request being refused before it gets
+    # there. Malformed criteria are still rejected.
+    criteria = serializers.CharField(
+        required=False, allow_blank=True, default="",
+    )
     columns = serializers.CharField(required=True)
     page = serializers.IntegerField(default=1, min_value=1)
     page_size = serializers.IntegerField(
@@ -198,6 +207,11 @@ class EscalationFilterSerializer(serializers.Serializer):
 
     def validate_criteria(self, value):
         """Parse and validate criteria string."""
+        if not value:
+            # Not a malformed criteria string — the absence of one.
+            # Splitting "" on "," yields [""], which would fail the
+            # format check below and turn "no conditions" into a 400.
+            return []
         parsed = []
         for item in value.split(","):
             parts = item.strip().split(":")

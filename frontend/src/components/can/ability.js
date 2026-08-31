@@ -61,6 +61,29 @@ const defineAbilityFor = (user) => {
     if (can_form_publish) {
       can("publish", "form-builder");
     }
+
+    const can_dashboard_view =
+      roles.filter((r) => r?.can_dashboard_view).length > 0;
+    const can_dashboard_create =
+      roles.filter((r) => r?.can_dashboard_create).length > 0;
+    const can_dashboard_edit =
+      roles.filter((r) => r?.can_dashboard_edit).length > 0;
+    const can_dashboard_delete =
+      roles.filter((r) => r?.can_dashboard_delete).length > 0;
+
+    if (can_dashboard_view) {
+      can("read", "dashboard");
+    }
+    if (can_dashboard_create) {
+      can("create", "dashboard");
+    }
+    if (can_dashboard_edit) {
+      can("edit", "dashboard");
+    }
+    if (can_dashboard_delete) {
+      can("delete", "dashboard");
+    }
+
     can("read", "data");
     can("read", "downloads");
     can("read", "approvals");

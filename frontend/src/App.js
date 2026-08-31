@@ -55,6 +55,9 @@ import {
   FormBuilderEdit,
   FindWorkspace,
   WorkspaceNotFound,
+  DashboardList,
+  DashboardBuilder,
+  DashboardViewer,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -348,7 +351,19 @@ const RouteList = () => {
           path="profile/edit"
           element={<Private element={EditProfile} alias="profile" />}
         />
+        <Route
+          path="dashboard"
+          element={<Private element={DashboardList} alias="dashboard" />}
+        />
       </Route>
+      <Route
+        path="/control-center/dashboard/:slug"
+        element={<Private element={DashboardBuilder} alias="dashboard" />}
+      />
+      <Route
+        path="/dashboards/:slug"
+        element={<Private element={DashboardViewer} alias="dashboard" />}
+      />
       <Route
         path="/downloads"
         element={<Private element={Downloads} alias="downloads" />}

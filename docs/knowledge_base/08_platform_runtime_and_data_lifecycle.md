@@ -15,6 +15,8 @@ This document describes runtime execution differences between Web and Mobile, th
 | **Camera Capture** | File picker upload | Native In-App Camera | Mobile embeds timestamp and location EXIF metadata into photos. |
 | **Barcode / QR Scan** | Manual input | Native Camera Scanner | Mobile scans barcodes directly into text fields (source: `docs/source/mobileApp.rst`). |
 
+---
+
 ## 2. Downloading & Installing the Mobile App
 
 - **Platform**: Android only (there is no iOS version).
@@ -37,7 +39,7 @@ Source: `docs/source/formBuilder.rst`, `docs/source/dataManagement.rst`
 
 ---
 
-## 3. Data Governance & Approvals
+## 4. Data Governance & Approvals
 
 Source: `docs/source/approval.rst`, `docs/source/dataManagement.rst`
 

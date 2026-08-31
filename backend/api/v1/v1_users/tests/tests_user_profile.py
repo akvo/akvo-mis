@@ -104,6 +104,11 @@ class UserProfileTestCase(TestCase, ProfileTestHelperMixin):
                 'can_form_create',
                 'can_form_edit',
                 'can_form_publish',
+                'can_dashboard_view',
+                'can_dashboard_create',
+                'can_dashboard_edit',
+                'can_dashboard_publish',
+                'can_dashboard_delete',
             ]
         )
         self.assertEqual(
