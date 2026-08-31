@@ -159,6 +159,30 @@ class ValuesTenantScopeTestCase(TenantIsolationTestCase):
             self.counts(response), {"borehole": 1, "well": 0}
         )
 
+    def test_foreign_administration_id_narrows_to_nothing(self):
+        """Another workspace's administration id cannot widen the read.
+
+        The caller-supplied administration_id is deliberately taken at
+        face value rather than validated against the tenant: it only
+        ever reaches apply_administration_filter, which narrows a
+        queryset already rooted at the form — and the form is scoped
+        above. So a foreign id can subtract rows, never add them, and
+        the worst it produces is an empty chart of the caller's own
+        options. This pins that, so the day administration_id gains a
+        second use the boundary is not silently lost.
+        """
+        response = APIClient().get(
+            self.BASE_URL,
+            {
+                **self.values_params(self.a),
+                "administration_id": self.b["child"].id,
+            },
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(
+            self.counts(response), {"borehole": 0, "well": 0}
+        )
+
     def test_tenant_without_a_root_administration_is_rejected(self):
         """No root to fall back to is a 400, not another tenant's root.
 
