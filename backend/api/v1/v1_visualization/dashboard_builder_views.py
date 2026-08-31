@@ -13,6 +13,12 @@
 
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import status, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
@@ -49,6 +55,73 @@ class DenyUnmappedAction(BasePermission):
         return False
 
 
+# Every method carries its own @extend_schema rather than the class
+# carrying one @extend_schema_view. FormBuilderViewSet can use the
+# class-level form because its custom actions are @action-decorated and
+# the router registers them; these are plain methods wired through
+# as_view({...}) in urls.py, so drf-spectacular does not see them as
+# actions and silently drops a class-level override ("argument was not
+# found on view"). Decorating the method itself is what actually lands.
+#
+# "Manage Dashboards" mirrors "Manage Forms" (FB-002), which this viewset
+# mirrors in every other respect. Untagged, these routes fall back to the
+# first path segment and Swagger files the namespace under "v1".
+MANAGE = "Manage Dashboards"
+
+DASHBOARD_PK = OpenApiParameter(
+    name="pk",
+    required=True,
+    type=OpenApiTypes.INT,
+    location=OpenApiParameter.PATH,
+    description="Dashboard id, scoped to the caller's workspace.",
+)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=[MANAGE],
+        summary="List dashboards the caller may view",
+        description=(
+            "Bare array, not a paginated envelope (VIZ-005 D-1). Each row "
+            "carries widget stubs (type and col_span) for the list "
+            "screen's thumbnail strip."
+        ),
+        responses={200: DashboardListSerializer(many=True)},
+    ),
+    create=extend_schema(
+        tags=[MANAGE],
+        summary="Create a draft dashboard",
+        description=(
+            "The slug is derived server-side from the name unless one is "
+            "supplied. `root_form` fixes the dashboard's data universe "
+            "and cannot be changed afterwards (VIZ-001 D-3)."
+        ),
+        responses={201: DashboardDetailSerializer},
+    ),
+    retrieve=extend_schema(
+        tags=[MANAGE],
+        summary="Get a dashboard with its live widget rows",
+        parameters=[DASHBOARD_PK],
+        responses={200: DashboardDetailSerializer},
+    ),
+    update=extend_schema(
+        tags=[MANAGE],
+        summary="Replace a dashboard's settings and widgets",
+        description=(
+            "Edits the live rows, not the publish snapshot: a published "
+            "dashboard keeps serving `published_config` until Publish is "
+            "pressed again (VIZ-007 D-2). The slug is never re-derived — "
+            "renaming is a cosmetic edit and the slug is the URL."
+        ),
+        parameters=[DASHBOARD_PK],
+        responses={200: DashboardDetailSerializer},
+    ),
+    destroy=extend_schema(
+        tags=[MANAGE],
+        summary="Soft-delete a dashboard",
+        parameters=[DASHBOARD_PK],
+    ),
+)
 class DashboardBuilderViewSet(viewsets.ModelViewSet):
     # REST_FRAMEWORK.DEFAULT_PAGINATION_CLASS is LimitOffsetPagination
     # project-wide, so simply omitting pagination_class here would still
@@ -191,6 +264,19 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             DashboardDetailSerializer(instance=dashboard).data
         )
 
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Publish — snapshot the widget rows into published_config",
+        description=(
+            "Revalidates before writing: `published_config` is what "
+            "viewers read and nothing revalidates it downstream. A failed "
+            "publish leaves the previous snapshot serving unchanged. "
+            "Republishing re-snapshots."
+        ),
+        request=None,
+        parameters=[DASHBOARD_PK],
+        responses={200: DashboardDetailSerializer},
+    )
     def publish(self, request, *args, **kwargs):
         dashboard = self.get_object()
         snapshot = build_snapshot(dashboard)
@@ -224,6 +310,19 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             DashboardDetailSerializer(instance=dashboard).data
         )
 
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Unpublish — hide from the read namespace",
+        description=(
+            "Sets status back to draft. `published_config` is deliberately "
+            "left in place as the record of what was last live; the read "
+            "namespace filters on status, not on the field's presence. "
+            "400 when the dashboard is not currently published."
+        ),
+        request=None,
+        parameters=[DASHBOARD_PK],
+        responses={200: DashboardDetailSerializer},
+    )
     def unpublish(self, request, *args, **kwargs):
         dashboard = self.get_object()
         if dashboard.status != DashboardStatus.published:
@@ -245,6 +344,18 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             DashboardDetailSerializer(instance=dashboard).data
         )
 
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Duplicate a dashboard as a new draft",
+        description=(
+            "The copy belongs to the caller's workspace, never the "
+            "source's (MT-004), and carries no publication history of "
+            "its own."
+        ),
+        request=None,
+        parameters=[DASHBOARD_PK],
+        responses={201: DashboardListSerializer},
+    )
     def duplicate(self, request, *args, **kwargs):
         source = self.get_object()
         live = Dashboard.objects.for_user(request.user)
@@ -291,6 +402,16 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Forms and questions a widget here may bind to",
+        description=(
+            "The family boundary as the builder sees it: the root "
+            "registration form plus its monitoring forms. A form absent "
+            "here is rejected on save."
+        ),
+        parameters=[DASHBOARD_PK],
+    )
     def sources(self, request, *args, **kwargs):
         # This endpoint IS the family boundary as the UI sees it: if a
         # form is not here the builder cannot offer it, and if it
