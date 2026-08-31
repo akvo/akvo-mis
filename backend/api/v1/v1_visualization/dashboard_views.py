@@ -6,7 +6,6 @@ from drf_spectacular.utils import (
 )
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.generics import get_object_or_404
-from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_visualization.dashboard_serializers import (
     ValuesFilterSerializer,
@@ -27,6 +26,8 @@ from api.v1.v1_visualization.escalation_functions import (
 )
 from api.v1.v1_visualization.functions import (
     resolve_default_administration_id,
+    resolve_request_tenant,
+    tenant_scoped_forms,
 )
 from api.v1.v1_visualization.dashboard_serializers import (
     EscalationFilterSerializer,
@@ -161,8 +162,9 @@ def visualization_values(request, version):
         )
 
     validated = serializer.validated_data
+    tenant = resolve_request_tenant(request)
     form = get_object_or_404(
-        Forms, pk=validated["form_id"]
+        tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
     question = validated.get("question")
 
@@ -185,7 +187,7 @@ def visualization_values(request, version):
             "date_question_id"
         ),
         "administration_id": resolve_default_administration_id(
-            validated.get("administration_id"),
+            validated.get("administration_id"), tenant,
         ),
         "option_value": validated.get("option_value"),
         "criteria": validated.get("criteria"),
@@ -305,7 +307,10 @@ def visualization_values(request, version):
 @api_view(["GET"])
 def visualization_escalation(request, form_id, version):
     """Escalation table with query-param-driven criteria."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
+    tenant = resolve_request_tenant(request)
+    parent_form = get_object_or_404(
+        tenant_scoped_forms(tenant), pk=form_id
+    )
 
     serializer = EscalationFilterSerializer(
         data=request.query_params
@@ -328,7 +333,7 @@ def visualization_escalation(request, form_id, version):
             "page": validated.get("page", 1),
             "page_size": validated.get("page_size", 20),
             "administration_id": resolve_default_administration_id(
-                validated.get("administration_id"),
+                validated.get("administration_id"), tenant,
             ),
             "from_date": validated.get("from_date"),
             "to_date": validated.get("to_date"),
