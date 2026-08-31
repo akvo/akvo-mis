@@ -12,19 +12,17 @@ import { expandMeasure, MONITORING_LATEST } from "../dashboardMeasure";
 // contract was fixed before this hook existed, and matching it is cheaper
 // than teaching seven presentational components to read API envelopes.
 //
-// Built on `useVisualizationRequest`, which is deliberately left alone: it
-// is already endpoint-and-params generic and carries the module-level LRU
+// Built on `useVisualizationRequest`, which carries the module-level LRU
 // cache and in-flight request sharing that make a twelve-widget page cost
-// far fewer than twelve round trips. The Fiji-shaped wrappers above it
-// (`useDashboardValues`, `useDashboardEscalation`) are not reused — they
-// take an `apiBlock` from a file-based config that VIZ-009 deletes.
+// far fewer than twelve round trips. The Fiji-shaped wrappers that used to
+// sit above it took an `apiBlock` from a file-based config; VIZ-009 (#313)
+// deleted them, and this module is now the only caller.
 
 // ── Escalation serializers ───────────────────────────────────────────
 //
-// Written here rather than imported from `useDashboardEscalation.js`:
-// those versions filter on `hide` and `computed` flags that belong to the
-// Fiji config shape and do not exist in the VIZ-001 schema. Importing them
-// would tie this module to one scheduled for deletion.
+// Written here rather than reused: the legacy versions filtered on `hide`
+// and `computed` flags belonging to the Fiji config shape, which the
+// VIZ-001 schema does not have. They went with the rest of that tree.
 
 // Sources the backend refuses without a question id
 // (EscalationFilterSerializer.validate_columns).

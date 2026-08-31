@@ -66,14 +66,6 @@ VALID_COLUMN_SOURCES = {
     "latest_date",
 }
 
-# Progress formula types
-VALID_PROGRESS_FORMULAS = {
-    "any_yes",
-    "completed_binary",
-    "ratio",
-    "multi_select_proportion",
-}
-
 
 class DashboardStatus:
     draft = 1

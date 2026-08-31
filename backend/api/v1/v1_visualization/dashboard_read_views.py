@@ -15,6 +15,8 @@
 # surface — that is the CLEANUP-001 fix, and the reason the legacy
 # /dashboard/:slug route goes away in VIZ-009.
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -72,6 +74,21 @@ def serialize_identity(dashboard):
     }
 
 
+# "Dashboards" for what a viewer reads, "Manage Dashboards" for what an
+# author edits — the same split as "Form" and "Manage Forms". Untagged,
+# both routes fall back to the first path segment and Swagger files them
+# under "v1".
+#
+# Decorated per method rather than with a class-level @extend_schema_view:
+# urls.py wires these through as_view({...}) rather than a router, so
+# drf-spectacular does not treat them as registered actions and drops a
+# class-level override. `operation_id` is explicit for the same reason —
+# both routes otherwise derive "v1_dashboards_retrieve" and collide, and
+# spectacular resolves that by appending a numeral, which is neither
+# stable nor readable in a generated client.
+READ = "Dashboards"
+
+
 class DashboardReadViewSet(viewsets.GenericViewSet):
     # A dashboard is published *to the tenant*, so a token is the whole
     # requirement — no dashboard feature access on top of it.
@@ -93,6 +110,17 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
             .order_by("-published_at", "-id")
         )
 
+    @extend_schema(
+        tags=[READ],
+        operation_id="v1_dashboards_list",
+        summary="List published dashboards in the caller's workspace",
+        description=(
+            "Drafts are not visible here — unpublishing takes effect by "
+            "status, so it removes a dashboard from this list at once. "
+            "Rows carry widget stubs (type and col_span) for thumbnails, "
+            "not annotated widgets (VIZ-007 D-7)."
+        ),
+    )
     def list(self, request, *args, **kwargs):
         rows = []
         for dashboard in self.get_queryset():
@@ -108,6 +136,29 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
             rows.append(row)
         return Response(rows)
 
+    @extend_schema(
+        tags=[READ],
+        operation_id="v1_dashboards_retrieve",
+        summary="Read a published dashboard by slug",
+        description=(
+            "Serves `published_config`, so editing a live dashboard does "
+            "not change what colleagues see until it is republished. Name "
+            "and description come from the row rather than the snapshot, "
+            "so a corrected typo reaches viewers immediately (VIZ-007 "
+            "D-1). Widgets are annotated with `is_broken` as they are "
+            "served — never baked in at publish time, because a question "
+            "can be deleted at any point afterwards."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="slug",
+                required=True,
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.PATH,
+                description="Dashboard slug, unique within the workspace.",
+            ),
+        ],
+    )
     def retrieve(self, request, *args, **kwargs):
         dashboard = self.get_object()
         snapshot = read_snapshot(dashboard)

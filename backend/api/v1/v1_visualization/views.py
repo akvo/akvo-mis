@@ -13,7 +13,6 @@ from api.v1.v1_visualization.serializers import (
     FormDataStatSerializer,
     FormDataStatsFilterSerializer,
     FormulaValuesSerializer,
-    DatapointDetailSerializer,
 )
 from api.v1.v1_visualization.models import (
     ViewDataOptions,
@@ -404,31 +403,6 @@ class GeolocationListView(APIView):
         )
         serializer = GeoLocationListSerializer(rows, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class DatapointDetailView(APIView):
-    # permission_classes = [IsAuthenticated]
-    # public, same as GeolocationListView
-
-    @extend_schema(
-        responses=DatapointDetailSerializer,
-        tags=["Maps"],
-        summary="Lightweight datapoint metadata for the map popup",
-        description=(
-            "Returns name, administration_full_name, and updated for "
-            "a single registration datapoint. Fetched on demand when "
-            "the user clicks a map marker; results are cached client-side."
-        ),
-    )
-    def get(self, request, data_id, version):
-        point = get_object_or_404(
-            FormData.objects.for_user(request.user), pk=data_id,
-            is_pending=False, is_draft=False, parent__isnull=True
-        )
-        return Response(
-            DatapointDetailSerializer(instance=point).data,
-            status=status.HTTP_200_OK,
-        )
 
 
 @extend_schema(

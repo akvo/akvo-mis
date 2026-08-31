@@ -1,13 +1,10 @@
 import React, { useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
-import { Row, Col, Button, Dropdown, Space } from "antd";
+import { Row, Col, Button, Dropdown } from "antd";
 import { UserOutlined } from "@ant-design/icons";
-import { FaChevronDown } from "react-icons/fa";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { config, store, uiText } from "../../lib";
 import { eraseCookieFromAllPaths } from "../../util/date";
-import { getForms } from "../../util/form";
-import { listVisualizations } from "../../config/visualizations";
 
 const Header = ({ className = "header", ...props }) => {
   const { isLoggedIn, user } = store.useState();
@@ -18,15 +15,6 @@ const Header = ({ className = "header", ...props }) => {
   const text = useMemo(() => {
     return uiText[activeLang];
   }, [activeLang]);
-  const dashboardForms = useMemo(() => {
-    const registered = listVisualizations();
-    const availableFormIds = new Set(getForms().map((f) => f.id));
-    return registered.filter((d) => availableFormIds.has(d.parent_form_id));
-  }, []);
-  const showDashboardsMenu =
-    location.pathname.startsWith("/control-center") ||
-    location.pathname.startsWith("/dashboard");
-
   const signOut = useCallback(async () => {
     eraseCookieFromAllPaths("AUTH_TOKEN");
     store.update((s) => {
@@ -81,23 +69,6 @@ const Header = ({ className = "header", ...props }) => {
     return userMenu;
   }, [text, signOut]);
 
-  const DashboardMenu = useMemo(() => {
-    return dashboardForms?.map((d) => {
-      return {
-        key: d.slug,
-        label: (
-          <Link
-            key={d.slug}
-            to={`/dashboard/${d.slug}`}
-            className="dropdown-menu-item"
-          >
-            {d.name}
-          </Link>
-        ),
-      };
-    });
-  }, [dashboardForms]);
-
   return (
     <Row
       className={className}
@@ -120,23 +91,6 @@ const Header = ({ className = "header", ...props }) => {
       </Col>
       {!location.pathname.includes("/report/") && (
         <Col>
-          {showDashboardsMenu && dashboardForms.length > 0 && (
-            <div className="navigation">
-              <Space>
-                <Dropdown menu={{ items: DashboardMenu }}>
-                  <a
-                    className="ant-dropdown-link"
-                    onClick={(e) => {
-                      e.preventDefault();
-                    }}
-                  >
-                    {text?.dashboards}
-                    <FaChevronDown />
-                  </a>
-                </Dropdown>
-              </Space>
-            </div>
-          )}
           <div className="account">
             {isLoggedIn ? (
               <Dropdown menu={{ items: accessUserMenu }}>

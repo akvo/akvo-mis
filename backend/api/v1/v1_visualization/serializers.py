@@ -90,19 +90,6 @@ class GeoLocationListSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "geo", "administration_id"]
 
 
-class DatapointDetailSerializer(serializers.ModelSerializer):
-    administration_full_name = serializers.SerializerMethodField()
-
-    def get_administration_full_name(self, obj):
-        if obj.administration:
-            return obj.administration.full_name
-        return ""
-
-    class Meta:
-        model = FormData
-        fields = ["id", "name", "administration_full_name", "updated"]
-
-
 class GeoLocationFilterSerializer(serializers.Serializer):
     administration = CustomPrimaryKeyRelatedField(
         queryset=Administration.objects.none(), required=False
