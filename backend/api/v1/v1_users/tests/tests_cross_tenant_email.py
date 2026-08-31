@@ -562,6 +562,32 @@ class CrossTenantEmailTestCase(TenantIsolationTestCase):
         signed_pk = user_a.get_sign_pk()
         self.assertEqual(signing.loads(signed_pk), user_a.pk)
 
+    def test_forgot_password_without_tenant_context_finds_user_safely(self):
+        email = "shared_notenant@example.com"
+        SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassA123",
+            first_name="Alice",
+            last_name="Acme",
+            tenant=self.a["tenant"],
+        )
+        SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="Alice",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        # Single-host / bare domain request where request.tenant is None
+        res = self.client.post(
+            "/api/v1/user/forgot-password",
+            {"email": email},
+            content_type="application/json",
+            HTTP_HOST="app.com",
+        )
+        self.assertEqual(res.status_code, 200)
+
     def test_resend_activation_scoped_to_tenant(self):
         email = "shared_pending@example.com"
         user_a = SystemUser.objects.create_user(
@@ -665,3 +691,295 @@ class CrossTenantEmailTestCase(TenantIsolationTestCase):
         user_b.refresh_from_db()
         self.assertIsNotNone(user_a.last_login)
         self.assertIsNone(user_b.last_login)
+
+    def test_delete_user_in_tenant_a_does_not_delete_tenant_b_user(
+        self,
+    ):
+        email = "bob_delete_iso@example.com"
+        bob_a = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassA123",
+            first_name="Bob",
+            last_name="Acme",
+            tenant=self.a["tenant"],
+        )
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="Bob",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        # Tenant A admin deletes Bob A
+        res = self.client.delete(
+            f"/api/v1/user/{bob_a.id}",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 204)
+
+        bob_a.refresh_from_db()
+        bob_b.refresh_from_db()
+
+        # Bob A is soft-deleted
+        self.assertIsNotNone(bob_a.deleted_at)
+        # Bob B in Tenant B remains completely active and untouched
+        self.assertIsNone(bob_b.deleted_at)
+        self.assertEqual(bob_b.tenant_id, self.b["tenant"].id)
+
+    def test_tenant_a_admin_cannot_delete_tenant_b_user_by_id(self):
+        email = "bob_cross_del@example.com"
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="Bob",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        # Tenant A admin tries to delete Bob B's ID
+        res = self.client.delete(
+            f"/api/v1/user/{bob_b.id}",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        # Must return 404 because bob_b is not in tenant A
+        self.assertEqual(res.status_code, 404)
+
+        # Bob B is still active
+        bob_b.refresh_from_db()
+        self.assertIsNone(bob_b.deleted_at)
+
+    def test_update_user_in_tenant_a_does_not_modify_tenant_b_user(
+        self,
+    ):
+        email = "bob_update_iso@example.com"
+        bob_a = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassA123",
+            first_name="Bob",
+            last_name="OriginalA",
+            phone_number="111111",
+            tenant=self.a["tenant"],
+        )
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="Bob",
+            last_name="OriginalB",
+            phone_number="222222",
+            tenant=self.b["tenant"],
+        )
+
+        # Tenant A admin updates Bob A's details
+        payload = {
+            "first_name": "BobUpdated",
+            "last_name": "AcmeModified",
+            "email": email,
+            "phone_number": "999999",
+            "trained": True,
+            "roles": [
+                {
+                    "role": self.a["role"].id,
+                    "administration": self.a["root"].id,
+                }
+            ],
+            "forms": [],
+        }
+        res = self.client.put(
+            f"/api/v1/user/{bob_a.id}",
+            payload,
+            content_type="application/json",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 200)
+
+        bob_a.refresh_from_db()
+        bob_b.refresh_from_db()
+
+        # Bob A is updated
+        self.assertEqual(bob_a.first_name, "BobUpdated")
+        self.assertEqual(bob_a.last_name, "AcmeModified")
+        self.assertEqual(bob_a.phone_number, "999999")
+        self.assertTrue(bob_a.trained)
+
+        # Bob B in Tenant B is completely unchanged
+        self.assertEqual(bob_b.first_name, "Bob")
+        self.assertEqual(bob_b.last_name, "OriginalB")
+        self.assertEqual(bob_b.phone_number, "222222")
+        self.assertFalse(bob_b.trained)
+
+    def test_tenant_a_admin_cannot_update_tenant_b_user_by_id(self):
+        email = "bob_cross_put@example.com"
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="Bob",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        payload = {
+            "first_name": "AttackerHacked",
+            "last_name": "Hacked",
+            "email": email,
+            "phone_number": "000000",
+            "roles": [],
+            "forms": [],
+        }
+        res = self.client.put(
+            f"/api/v1/user/{bob_b.id}",
+            payload,
+            content_type="application/json",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 404)
+
+        bob_b.refresh_from_db()
+        self.assertEqual(bob_b.first_name, "Bob")
+        self.assertEqual(bob_b.last_name, "Beta")
+
+    def test_get_user_detail_scoped_to_tenant_cannot_read_tenant_b_user(self):
+        email = "bob_read_iso@example.com"
+        bob_a = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassA123",
+            first_name="BobA",
+            last_name="Acme",
+            tenant=self.a["tenant"],
+        )
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="BobB",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        # Reading Bob A in Tenant A -> 200
+        res_a = self.client.get(
+            f"/api/v1/user/{bob_a.id}",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res_a.status_code, 200)
+        self.assertEqual(res_a.json()["first_name"], "BobA")
+
+        # Reading Bob B in Tenant A -> 404 Not Found
+        res_b = self.client.get(
+            f"/api/v1/user/{bob_b.id}",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res_b.status_code, 404)
+
+    def test_update_profile_in_tenant_a_does_not_mutate_tenant_b_account(self):
+        email = "bob_profile_iso@example.com"
+        bob_a = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassA123",
+            first_name="Bob",
+            last_name="Acme",
+            tenant=self.a["tenant"],
+        )
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="Bob",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        # Bob updates his own profile in Tenant A
+        res = self.client.put(
+            "/api/v1/update-profile",
+            {
+                "first_name": "BobUpdatedAcme",
+                "last_name": "AcmeNew",
+                "phone_number": "555555",
+            },
+            content_type="application/json",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(bob_a),
+        )
+        self.assertEqual(res.status_code, 200)
+
+        bob_a.refresh_from_db()
+        bob_b.refresh_from_db()
+
+        self.assertEqual(bob_a.first_name, "BobUpdatedAcme")
+        self.assertEqual(bob_a.last_name, "AcmeNew")
+
+        # Bob in Tenant B is unchanged
+        self.assertEqual(bob_b.first_name, "Bob")
+        self.assertEqual(bob_b.last_name, "Beta")
+
+    def test_set_user_password_via_invite_updates_only_target_tenant_user(
+        self,
+    ):
+        email = "bob_invite_pass@example.com"
+        bob_a = SystemUser.objects.create_user(
+            email=email,
+            password="",
+            first_name="Bob",
+            last_name="Acme",
+            tenant=self.a["tenant"],
+        )
+        bob_b = SystemUser.objects.create_user(
+            email=email,
+            password="OriginalBetaPassword#123",
+            first_name="Bob",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        # Set password for Bob A via signed invite token
+        res = self.client.put(
+            "/api/v1/user/set-password",
+            {
+                "invite": bob_a.get_sign_pk(),
+                "password": "NewAcmePassword#123",
+                "confirm_password": "NewAcmePassword#123",
+            },
+            content_type="application/json",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+        )
+        self.assertEqual(res.status_code, 200)
+
+        bob_a.refresh_from_db()
+        bob_b.refresh_from_db()
+
+        self.assertTrue(bob_a.check_password("NewAcmePassword#123"))
+        # Bob B still has original password
+        self.assertTrue(bob_b.check_password("OriginalBetaPassword#123"))
+        self.assertFalse(bob_b.check_password("NewAcmePassword#123"))
+
+    def test_user_list_endpoint_scopes_to_requesting_tenant(self):
+        email = "bob_list_iso@example.com"
+        SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassA123",
+            first_name="BobAcmeVisible",
+            last_name="Acme",
+            tenant=self.a["tenant"],
+        )
+        SystemUser.objects.create_user(
+            email=email,
+            password="Secret#PassB123",
+            first_name="BobBetaHidden",
+            last_name="Beta",
+            tenant=self.b["tenant"],
+        )
+
+        res = self.client.get(
+            "/api/v1/users?page=1",
+            HTTP_HOST=f"{self.a['tenant'].subdomain}.app.com",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 200)
+        user_names = [u["first_name"] for u in res.json()["data"]]
+        self.assertIn("BobAcmeVisible", user_names)
+        self.assertNotIn("BobBetaHidden", user_names)

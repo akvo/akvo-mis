@@ -64,7 +64,7 @@ from api.v1.v1_users.serializers import (
     ConfigureSerializer,
     tenant_is_configured,
 )
-from mis.settings import REST_FRAMEWORK, WEBDOMAIN
+from mis.settings import REST_FRAMEWORK
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
@@ -1029,7 +1029,7 @@ def forgot_password(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     user: SystemUser = serializer.validated_data.get("email")
-    url = f"{WEBDOMAIN}/login/{signing.dumps(user.pk)}"
+    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
     data = {"button_url": url, "send_to": [user.email]}
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(

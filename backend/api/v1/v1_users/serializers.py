@@ -167,11 +167,8 @@ class ForgotPasswordSerializer(serializers.Serializer):
         qs = SystemUser.objects.filter(email=email, deleted_at=None)
         if tenant is not None:
             qs = qs.filter(tenant=tenant)
-        try:
-            user = qs.get()
-        except SystemUser.DoesNotExist:
-            raise ValidationError("Invalid email, user not found")
-        except SystemUser.MultipleObjectsReturned:
+        user = qs.first()
+        if not user:
             raise ValidationError("Invalid email, user not found")
         return user
 
