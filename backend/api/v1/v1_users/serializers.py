@@ -163,9 +163,15 @@ class ForgotPasswordSerializer(serializers.Serializer):
     email = CustomEmailField()
 
     def validate_email(self, email):
+        tenant = self.context.get("tenant")
+        qs = SystemUser.objects.filter(email=email, deleted_at=None)
+        if tenant is not None:
+            qs = qs.filter(tenant=tenant)
         try:
-            user = SystemUser.objects.get(email=email, deleted_at=None)
+            user = qs.get()
         except SystemUser.DoesNotExist:
+            raise ValidationError("Invalid email, user not found")
+        except SystemUser.MultipleObjectsReturned:
             raise ValidationError("Invalid email, user not found")
         return user
 
@@ -411,7 +417,12 @@ class AddEditUserSerializer(
 
     def validate_email(self, value):
         acting = acting_user(self.context)
-        existing = SystemUser.objects_with_deleted.filter(email=value).first()
+        acting_tenant_id = getattr(acting, "tenant_id", None)
+
+        existing = SystemUser.objects_with_deleted.filter(
+            email=value,
+            tenant_id=acting_tenant_id,
+        ).first()
 
         if existing is None:
             return value
@@ -419,18 +430,13 @@ class AddEditUserSerializer(
         if self.instance and self.instance.pk == existing.pk:
             return value
 
-        if existing.tenant_id == getattr(acting, "tenant_id", None):
-            if existing.deleted_at is not None:
-                return value
-            raise serializers.ValidationError(
-                "This email is already in your workspace. "
-                "To make changes, edit the existing user."
-            )
+        if existing.deleted_at is not None:
+            # Soft-deleted in same tenant — create() restore path handles it.
+            return value
 
         raise serializers.ValidationError(
-            "This email address is already registered to another workspace. "
-            "An account can only belong to one workspace — ask them to use "
-            "a different address, or contact support."
+            "This email is already in your workspace. "
+            "To make changes, edit the existing user."
         )
 
     def create(self, validated_data):
