@@ -28,7 +28,7 @@ class OrganisationEndpointsTestCase(TestCase):
             self.client.get(
                 reverse("organisations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(3, call_route)
+        self.assertNumQueries(2, call_route)
 
     def test_filter_organisations_by_search(self):
         org = Organisation.objects.order_by("?").first()
@@ -45,7 +45,7 @@ class OrganisationEndpointsTestCase(TestCase):
             self.client.get(
                 reverse("organisations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(3, call_route)
+        self.assertNumQueries(2, call_route)
 
     def test_get_children_by_organisation_attribute(self):
         data = self.client.get(
@@ -64,7 +64,7 @@ class OrganisationEndpointsTestCase(TestCase):
             self.client.get(
                 reverse("organisations-list", kwargs={"version": "v1"})
             )
-        self.assertNumQueries(3, call_route)
+        self.assertNumQueries(2, call_route)
 
     def test_get_empty_children_by_selected_organisation(self):
         data = self.client.get(

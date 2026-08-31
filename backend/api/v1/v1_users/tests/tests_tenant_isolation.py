@@ -2,8 +2,7 @@ from django.db.utils import IntegrityError
 from django.test.utils import override_settings
 from django.urls import NoReverseMatch, reverse
 
-from api.v1.v1_profile.models import Role, UserRole
-from api.v1.v1_forms.models import UserForms
+from api.v1.v1_profile.models import Role
 from api.v1.v1_users.models import Organisation, SystemUser
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -113,7 +112,7 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
         res = self.client.get("/api/v1/public/administrations")
         self.assertEqual(res.status_code, 404)
 
-    def test_invite_active_user_from_other_workspace_returns_policy_error(
+    def test_invite_active_user_from_other_workspace_succeeds(
         self,
     ):
         res = self.client.post(
@@ -128,12 +127,17 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
             content_type="application/json",
             **self.auth(self.a["user"]),
         )
-        self.assertEqual(res.status_code, 400)
-        data = res.json()["details"]
-        self.assertIn("email", data)
-        self.assertIn("another workspace", data["email"][0])
+        self.assertEqual(res.status_code, 201)
+        created_user = SystemUser.objects.get(
+            email=self.b["user"].email,
+            tenant=self.a["tenant"],
+        )
+        self.assertNotEqual(created_user.pk, self.b["user"].pk)
+        self.assertEqual(created_user.tenant_id, self.a["tenant"].id)
 
-    def test_invite_soft_deleted_user_from_other_workspace_not_restored(self):
+    def test_invite_soft_deleted_user_from_other_workspace_creates_new_row(
+        self,
+    ):
         self.b["user"].soft_delete()
 
         res = self.client.post(
@@ -148,25 +152,23 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
             content_type="application/json",
             **self.auth(self.a["user"]),
         )
-        self.assertEqual(res.status_code, 400)
-        data = res.json()["details"]
-        self.assertIn("email", data)
-        self.assertIn("another workspace", data["email"][0])
+        self.assertEqual(res.status_code, 201)
 
-        # Assert target user remains deleted and tenant_id is unchanged
+        # Assert target user in workspace B remains deleted
+        # and tenant_id is unchanged
         user_b = SystemUser.objects_with_deleted.get(pk=self.b["user"].pk)
         self.assertEqual(user_b.tenant_id, self.b["tenant"].id)
         self.assertIsNotNone(user_b.deleted_at)
-        self.assertFalse(
-            UserRole.objects.filter(
-                user=user_b, administration=self.a["root"]
-            ).exists()
-        )
-        self.assertFalse(
-            UserForms.objects.filter(user=user_b, form=self.a["form"]).exists()
-        )
 
-    def test_invite_pending_user_from_other_workspace_returns_policy_error(
+        # Assert new user in workspace A is created and active
+        user_a = SystemUser.objects.get(
+            email=self.b["user"].email,
+            tenant=self.a["tenant"],
+        )
+        self.assertIsNone(user_a.deleted_at)
+        self.assertNotEqual(user_a.pk, user_b.pk)
+
+    def test_invite_pending_user_from_other_workspace_succeeds(
         self,
     ):
         pending_user = SystemUser.objects.create_user(
@@ -190,10 +192,12 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
             content_type="application/json",
             **self.auth(self.a["user"]),
         )
-        self.assertEqual(res.status_code, 400)
-        data = res.json()["details"]
-        self.assertIn("email", data)
-        self.assertIn("another workspace", data["email"][0])
+        self.assertEqual(res.status_code, 201)
+        created_user = SystemUser.objects.get(
+            email=pending_user.email,
+            tenant=self.a["tenant"],
+        )
+        self.assertNotEqual(created_user.pk, pending_user.pk)
 
     def test_invite_duplicate_in_same_workspace_returns_same_workspace_error(
         self,
