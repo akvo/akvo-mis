@@ -133,7 +133,8 @@ if there is also a way to undo a run that landed in the wrong workspace.
 - [x] Answers, AnswerHistory and monitoring children go by database cascade,
       not a second queryset. Soft-deleted and draft rows from earlier runs are
       collected too.
-- [x] `--clean` raises `CommandError` when `settings.DEBUG` is `False` (R-4).
+- [x] `--clean` runs in any environment. It is scoped to `DUMMY-` rows in one
+      workspace, so there is no `DEBUG` gate (R-4).
 - [x] `--tenant` is required outside `--test`, and every lookup is scoped by it
       — forms, levels, administrations, roles, organisations, created users.
 - [x] Unit lookup is disambiguated by parent, not by name alone (Part 2 D-1).
@@ -1190,7 +1191,7 @@ latitude. Nothing new should reorder either.
 | `form_seeder` | `--tenant` added, optional — omitting it keeps the pre-workspace behaviour |
 | `default_roles_seeder` | unchanged; takes no `--tenant` (it derives each role's workspace from its level) |
 | `administration_attribute_seeder` | unchanged |
-| `seeder.sh` | `--tenant` is now a required argument, not a prompt; `seeder.prod.sh` merged in and deleted; entities step dropped; bounding-box prompt removed |
+| `seeder.sh` | `--tenant` is now a required argument, not a prompt; `seeder.prod.sh` merged in and deleted; entities step dropped; bounding-box prompt removed; the `DEBUG` gate on the fake-data step removed with the `--clean` gate it mirrored (R-4) |
 
 ---
 
@@ -1212,17 +1213,17 @@ latitude. Nothing new should reorder either.
 - [x] **The delete filter is a compile-time constant, never a CLI argument.**
       A `--prefix <str>` option must not be added: it would turn `--clean` into
       an arbitrary `DELETE FROM form_data WHERE name LIKE $1`.
-- [ ] **Destructive-operation review required.** `--clean` hard-deletes. Four
+- [ ] **Destructive-operation review required.** `--clean` hard-deletes. Three
       guards, all of which a reviewer should confirm are present:
       (a) the delete key is the prefix, never `created_by` (Part 1 D-2);
       (b) the prefix is a compile-time constant, not user input;
       (c) user deletion is additionally guarded on having no surviving
-      `FormData`; (d) the command refuses to run when `settings.DEBUG` is
-      `False` (R-4).
+      `FormData`.
 
-R-4 is a *configuration* guard, not an environment guard: a staging deployment
-running with `DEBUG=True` is still allowed to clean, which is intended — staging
-is where dashboard debugging happens.
+There is deliberately **no `DEBUG` gate** — see R-4. The three guards above are
+what make the operation safe, and they hold in every environment; an
+environment check would add nothing they do not already provide, while blocking
+the staging workspace where dashboard debugging actually happens.
 
 ---
 
@@ -1245,7 +1246,7 @@ prefix, `--clean` and the bounding boxes.
 | Unit | `--approved true --draft true` raises `CommandError` |
 | Unit | Omitting `--tenant` without `--test` raises before any write; `--test=true` alone succeeds |
 | Integration | Two workspaces seeded separately: cleaning one leaves the other's `DUMMY-` data untouched |
-| Unit | `--clean` under `override_settings(DEBUG=False)` raises and deletes nothing |
+| Unit | `--clean` runs under `override_settings(DEBUG=False)` and still removes every `DUMMY-` row — asserts the absence of the gate (R-4) |
 | Integration | The uploaded blob's `datapoint_name` carries `DUMMY-` — asserts the stamp landed before `save_to_file` |
 
 ### Part 2 — CSV import
@@ -1296,9 +1297,9 @@ prefix, `--clean` and the bounding boxes.
   implementation** before the fix was restored: the hyphen shredding, `--clean`
   preserving real data authored by a reused submitter, and — by mutating the
   seeder to use a fixed unit's box — the pin-inside-its-own-unit assertion.
-- `seeder.sh` argument handling, both `--tenant` forms, the `DEBUG` gate and
-  both administration branches were exercised by dry-running the script with
-  `python manage.py` substituted for `echo`.
+- `seeder.sh` argument handling, both `--tenant` forms and both administration
+  branches were exercised by dry-running the script with `python manage.py`
+  substituted for `echo`.
 - End to end: 6,695 GADM features → CSV → 7,230 administrations; then seed, then
   `--clean`, leaving 0 rows and the imported hierarchy intact.
 - End to end with a real Fiji file: 15 provinces imported with boxes → 140
@@ -1341,9 +1342,16 @@ entity-cascade dropdown keeps showing seeder-invented options after a `--clean`.
 Deleting them would risk removing entities a real submission references, and
 `EntityData.administration` is `PROTECT` besides.
 
-**R-4 · `--clean` refuses to run when `DEBUG=False`.**
-The guard makes the destructive path impossible to trigger under production
-configuration, independently of the other three guards in §8.
+**R-4 · No `DEBUG` gate on `--clean`.**
+An earlier revision refused to clean when `settings.DEBUG` was `False`, on the
+grounds that a hard delete is a development tool. That is removed.
+
+The delete is keyed on the `DUMMY-` prefix and scoped to one workspace, so its
+blast radius is generated data and nothing else — the three guards in §8 are
+what make it safe, and they do not vary by environment. The gate meanwhile
+blocked the case the feature exists for: a shared dev or staging deployment,
+which is where dashboard debugging happens and where `DEBUG` is normally
+`False`. It traded a real capability for no additional protection.
 
 **R-5 · CSVs live in storage, not in the repository.**
 `--source` resolves against `STORAGE_PATH` with a literal-path fallback. The

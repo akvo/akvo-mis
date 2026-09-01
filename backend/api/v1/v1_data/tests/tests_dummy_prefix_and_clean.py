@@ -251,13 +251,19 @@ class CleanTest(SeederTestModeMixin, TestCase):
         self.seed("--clean=true")
         self.assertEqual(MobileAssignment.objects.count(), 0)
 
-    @override_settings(DEBUG=False)
-    def test_clean_is_refused_when_debug_is_false(self):
+    def test_clean_runs_regardless_of_debug(self):
+        # There is no DEBUG gate: --clean deletes only DUMMY- rows, scoped
+        # to one workspace, so it is as safe on staging as it is locally --
+        # and staging is where dashboard debugging happens.
         self.seed("-r", 2)
-        before = FormData.objects.count()
-        with self.assertRaisesMessage(CommandError, "DEBUG=False"):
+        with override_settings(DEBUG=False):
             self.seed("--clean=true")
-        self.assertEqual(FormData.objects.count(), before)
+        self.assertEqual(
+            FormData.objects_with_deleted.filter(
+                name__startswith=DUMMY_PREFIX
+            ).count(),
+            0,
+        )
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True, DEBUG=True)
@@ -392,7 +398,6 @@ class RequiredArgumentsTest(TestCase):
         ):
             self.seed("-r", 1, "--tenant", "acme")
 
-    @override_settings(DEBUG=True)
     def test_clean_needs_only_a_tenant(self):
         # A clean generates no points, so it must not be blocked by the
         # geography checks that seeding needs.

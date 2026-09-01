@@ -8,7 +8,6 @@ import re
 import time as time_module
 from datetime import datetime, timedelta, time
 
-from django.conf import settings
 from django.core.management import BaseCommand
 from django.core.management.base import CommandError
 from django.utils.timezone import make_aware
@@ -390,13 +389,6 @@ class Command(BaseCommand):
                 "has no drafts. Pass --approved false to seed a mixed "
                 "workflow."
             )
-        if clean and not settings.DEBUG:
-            raise CommandError(
-                "--clean is refused when DEBUG=False. This hard-deletes "
-                "rows and is a development tool; it must never run "
-                "against a production configuration."
-            )
-
         # --test drives a closed fixture seeded with tenant=None, which
         # is how all 34 existing callers invoke this command.
         tenant = resolve_tenant(

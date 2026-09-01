@@ -228,12 +228,10 @@ The script then asks whether to run each step:
 - seed fake data
 
 Answer each prompt by entering 'y' or 'n' followed by the Enter key. The fake
-data step also asks for a **bounding box** for the generated map points, which
-has no default — see [Fake Data (Development)](#fake-data-development) for what
-that means and for running each seeder on its own.
-
-The fake data step is offered only when `DEBUG` is set. Without it the seeder's
-own `--clean` would refuse to undo the data, so it is not offered at all.
+data step asks for nothing beyond counts — map coordinates come from the
+hierarchy imported in the first step. See
+[Fake Data (Development)](#fake-data-development) for running each seeder on
+its own.
 
 Default Fake User's password: `Test#123`
 
@@ -617,8 +615,8 @@ carry no `DUMMY-` prefix. To reset, chain the two commands:
 
 The delete is a hard delete scoped to one workspace, keyed on the `DUMMY-`
 prefix and never on the creating user — the seeder reuses an existing submitter
-when one matches, which on a shared workspace is a real person's account. It is
-refused when `DEBUG` is `False`.
+when one matches, which on a shared workspace is a real person's account. That
+bound is what makes it safe, so it runs in any environment.
 
 Data seeded before this convention existed carries no prefix and is invisible
 to `--clean`.
