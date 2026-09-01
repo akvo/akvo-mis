@@ -3,10 +3,9 @@
 # One seeder for every environment.
 #
 # seeder.prod.sh used to be a near-copy of this file and had drifted in
-# both directions: it alone seeded entities, and it alone lacked the
-# form_seeder abort and the cache clear. Nothing invoked it -- no CI job,
-# no Dockerfile, no documentation -- so the two were merged here rather
-# than kept in sync by hand.
+# both directions. Nothing invoked it -- no CI job, no Dockerfile, no
+# documentation -- so the two were merged here rather than kept in sync
+# by hand.
 #
 # The workspace is an argument, not a prompt. Every tenant-aware command
 # below needs the same value, and asking for it three times invites three
@@ -20,7 +19,7 @@ Usage: ./seeder.sh --tenant=<subdomain>
                         'default' exists on any migrated database.
   -h, --help            Show this message.
 
-Administrations, organisations, entities, attributes and roles are not
+Organisations, administration attributes and roles are not
 workspace-scoped and ignore this value.
 EOF
 }
@@ -54,8 +53,22 @@ echo
 echo "Seed Administration? [y/n]"
 read -r seed_administration
 if [[ "${seed_administration}" == 'y' || "${seed_administration}" == 'Y' ]]; then
-    python manage.py administration_seeder
-    python manage.py resetsequence v1_profile
+    echo "Path to an administration CSV, relative to STORAGE_PATH?"
+    echo "  e.g. administrations/indonesia.csv"
+    echo "  Leave blank to seed the small bundled sample instead."
+    read -r admin_csv
+    if [[ "${admin_csv}" == '' ]]; then
+        # The bundled sample is two Indonesian paths and is not
+        # workspace-scoped -- enough to click around, not enough to
+        # demo. A real hierarchy comes from a CSV.
+        python manage.py administration_seeder
+        python manage.py resetsequence v1_profile
+    else
+        python manage.py administration_csv_seeder \
+            --source="${admin_csv}" \
+            --tenant="${tenant}" \
+            || { echo "Administration import failed — aborting."; exit 1; }
+    fi
 fi
 
 echo "Seed Form? [y/n]"
@@ -82,12 +95,6 @@ echo "Seed Organisation? [y/n]"
 read -r seed_organization
 if [[ "${seed_organization}" == 'y' || "${seed_organization}" == 'Y' ]]; then
     python manage.py organisation_seeder
-fi
-
-echo "Seed Entities? [y/n]"
-read -r seed_entities
-if [[ "${seed_entities}" == 'y' || "${seed_entities}" == 'Y' ]]; then
-    python manage.py entities_seeder
 fi
 
 echo "Seed Administration Attribute? [y/n]"

@@ -1,5 +1,3 @@
-import json
-from mis.settings import COUNTRY_NAME
 from django.core.management.base import BaseCommand
 from django.core.management.color import no_style
 from django.db import connection
@@ -51,8 +49,12 @@ def seed_administration(row: dict, geo_config: list = []) -> None:
                         level=parent_level
                     ).first()
                 else:
+                    # The row names no parent at this tier, so attach to
+                    # the root. This used to look the root up by
+                    # COUNTRY_NAME.capitalize(), which was "Fiji" even
+                    # while seeding the Indonesian sample.
                     parent = Administration.objects.filter(
-                        name=COUNTRY_NAME.capitalize()
+                        parent__isnull=True
                     ).first()
 
         # Get the level from the geo_config
@@ -61,8 +63,9 @@ def seed_administration(row: dict, geo_config: list = []) -> None:
         code = row.get(f"code_{geo['level']}")
         # Get the name from the row
         name = row.get(col_level)
-        if not name and geo["level"] == 0:
-            name = COUNTRY_NAME.capitalize()
+        # A row that names no unit at this tier creates nothing. The old
+        # code invented one from COUNTRY_NAME here, which put a "Fiji"
+        # root into every fixture regardless of the data.
         if name:
             Administration.objects.update_or_create(
                 name=name,
@@ -88,61 +91,12 @@ def seed_administration_test(
         seed_administration(row=row, geo_config=geo_config)
 
 
-def seed_administration_prod() -> int:
-    """
-    Seed the Administration model with production data from a TopoJSON file.
-    :return: The number of administrations created.
-    """
-    topojson_file_path = f"./source/{COUNTRY_NAME}.topojson"
-    with open(topojson_file_path, "r") as f:
-        topo_data = json.load(f)
-        features = topo_data.get('objects', {}).values()
-        administrations = [
-            f["properties"]
-            for fg in features
-            for f in fg.get('geometries', [])
-        ]
-        if administrations:
-            # Get first row of administrations to seed_levels
-            first_row = administrations[0]
-            geo_config = list(first_row.keys())
-            # Filter out keys that end with pattern "_<digit>"
-            # eg: "Province_1"
-            geo_config = [
-                key for key in geo_config if (
-                    key.split("_")[-1].isdigit()
-                    and not key.startswith("code_")
-                )
-            ]
-            geo_config = [
-                {
-                    "level": int(key.split("_")[-1]),
-                    "alias": key.split("_")[0],
-                }
-                for i, key in enumerate(geo_config)
-            ]
-            # Order geo_config by level
-            geo_config.sort(key=lambda x: x["level"])
-            # Add id to geo_config
-            for i, geo in enumerate(geo_config):
-                # Assign id starting from 2
-                # to avoid conflict with the national level
-                geo["id"] = i + 2
-            # Add the national level
-            geo_config.insert(
-                0,
-                {"id": 1, "level": 0, "alias": "National"}
-            )
-            seed_levels(geo_config=geo_config)
-
-            for adm in administrations:
-                seed_administration(row=adm, geo_config=geo_config)
-
-        return len(administrations)
-
-
 class Command(BaseCommand):
-    help = "Generates administrations from the TopoJSON."
+    help = (
+        "Seed the bundled sample hierarchy, for development and tests. "
+        "For a real hierarchy in a real workspace use "
+        "administration_csv_seeder, which is tenant-aware."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -153,16 +107,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        test = options.get("test")
         clean = options.get("clean")
         if clean:
             Levels.objects.all().delete()
             Administration.objects.all().delete()
             self.stdout.write("-- Administration Cleared")
-        if test:
-            seed_administration_test()
-        if not test:
-            total = seed_administration_prod()
-            self.stdout.write(self.style.SUCCESS(
-                f"Created {total} Administrations successfully."
-            ))  # pragma: no cover
+        # --test is accepted but no longer switches anything: the
+        # TopoJSON path it used to select was hardcoded to one country
+        # and wrote tenant=None. The flag stays so the 140-odd callers
+        # that pass it keep working.
+        seed_administration_test()
