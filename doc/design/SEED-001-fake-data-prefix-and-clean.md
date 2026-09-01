@@ -878,7 +878,8 @@ Levels.objects.filter(
 (`administration_seeder.py:158-161`) does `Levels.objects.all().delete()` then
 `Administration.objects.all().delete()` with no ordering and no PROTECT
 handling. It appears in **no test** and in neither `seeder.sh` nor
-`seeder.prod.sh` — it is the only `--clean` in the repo and nothing exercises
+`seeder.prod.sh` (since merged into `seeder.sh`) — it is the only `--clean`
+in the repo and nothing exercises
 it. Do not treat it as a working precedent; verify it by hand before copying
 any part of its shape.
 

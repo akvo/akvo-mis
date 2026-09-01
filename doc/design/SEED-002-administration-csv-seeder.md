@@ -546,7 +546,8 @@ does not exist.
 **Decision**: no change to `administration_seeder` in this task.
 
 **Rationale**: 30+ test files call it with `--test`, and `seeder.sh` /
-`seeder.prod.sh` call it bare. Touching it couples a risky refactor to a new
+`seeder.prod.sh` (since merged into `seeder.sh`) call it bare. Touching it
+couples a risky refactor to a new
 feature and makes the diff unreviewable. The three defects named in D-1 are
 real and affect production data, but they are a separate task.
 
@@ -557,7 +558,7 @@ They are not latent bugs in shared code; they live entirely inside
 
 | Caller | Fate |
 |---|---|
-| `seeder.sh` / `seeder.prod.sh` (bare — Fiji topojson) | Replaced by `administration_csv_seeder` |
+| `seeder.sh` (bare — Fiji topojson) | Replaced by `administration_csv_seeder` |
 | 30+ tests via `--test` (`DEFAULT_ADMINISTRATION_DATA`) | The only real dependency |
 
 Nothing else imports it. So the correct follow-up is **deletion, not repair** —

@@ -117,23 +117,30 @@ Add New User and Seed Master Data:
 Once the containers are up and running, you can seed the necessary data by running the following command:
 
 ```bash
-./dc.sh exec backend ./seeder.sh
+./dc.sh exec backend ./seeder.sh --tenant=default
 ```
 
-The script will prompt you for various actions related to data seeding such as:
+`--tenant` is required. It names the workspace the forms and generated data
+belong to; `default` exists on any migrated database. Every tenant-aware
+command in the script reuses that one value, which is why it is an argument
+rather than a prompt.
+
+The script then asks whether to run each step:
 
 - seed administrative data
-- add a new super admin
-- seed fake users
 - seed forms
+- add a new super admin
+- seed organisations, entities and administration attributes
+- seed default roles
+- seed fake data
 
-Answer each prompt by entering 'y' or 'n' followed by the Enter key.
+Answer each prompt by entering 'y' or 'n' followed by the Enter key. The fake
+data step also asks for a **bounding box** for the generated map points, which
+has no default — see [Fake Data (Development)](#fake-data-development) for what
+that means and for running each seeder on its own.
 
-Two prompts ask for a value rather than y/n: the **workspace subdomain** the
-forms and fake data belong to (blank means a single-host install with no
-workspace), and a **bounding box** for the generated map points, which has no
-default. See [Fake Data (Development)](#fake-data-development) for what those
-mean and for running the seeders individually.
+The fake data step is offered only when `DEBUG` is set. Without it the seeder's
+own `--clean` would refuse to undo the data, so it is not offered at all.
 
 Default Fake User's password: `Test#123`
 
