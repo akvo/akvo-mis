@@ -88,11 +88,12 @@ const FormOptions = ({ navigation, route }) => {
 
   useEffect(
     () =>
-      navigation.addListener('beforeRemove', (e) => {
+      // Same as Submission: nothing is prevented here, so re-dispatching the action
+      // would run it twice and the duplicate goes unhandled once the screen is gone.
+      navigation.addListener('beforeRemove', () => {
         UIState.update((s) => {
           s.refreshPage = true;
         });
-        navigation.dispatch(e.data.action);
       }),
     [navigation, activeForm?.id],
   );
