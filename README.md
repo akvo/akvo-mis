@@ -129,6 +129,12 @@ The script will prompt you for various actions related to data seeding such as:
 
 Answer each prompt by entering 'y' or 'n' followed by the Enter key.
 
+Two prompts ask for a value rather than y/n: the **workspace subdomain** the
+forms and fake data belong to (blank means a single-host install with no
+workspace), and a **bounding box** for the generated map points, which has no
+default. See [Fake Data (Development)](#fake-data-development) for what those
+mean and for running the seeders individually.
+
 Default Fake User's password: `Test#123`
 
 Generate QR Code for Mobile App Download:
@@ -279,6 +285,233 @@ covers the data model, widget config schema and the `measure` semantics;
 > have, so there was no mechanical path from one to the other.
 
 ## Data Seeder
+
+### Fake Data (Development)
+
+Building a workspace up from nothing. Every command below is tenant-aware and
+takes `--tenant <subdomain>`.
+
+```mermaid
+flowchart TD
+    register["<b>0</b> · register<br/><code>POST /api/v1/register</code>"]
+    workspace(["workspace<br/><i>root unit only</i>"])
+
+    geojson[/"GeoJSON<br/><i>gadm.org</i>"/]
+    notebook["administration_csv_generator<br/><i>notebook</i>"]
+    csv[/"storage/administrations/*.csv"/]
+    admseeder["<b>1</b> · administration_csv_seeder"]
+    hierarchy(["hierarchy<br/><i>levels + units</i>"])
+
+    roleseeder["<b>2</b> · default_roles_seeder"]
+    roles(["roles<br/><i>Admin / Submitter / Approver<br/>per level</i>"])
+
+    formseeder["<b>3</b> · form_seeder<br/><i>or the Form Builder</i>"]
+    forms(["forms"])
+
+    dataseeder["<b>4</b> · fake_complete_data_seeder<br/><code>--bbox</code>"]
+    data(["datapoints + users<br/><b>DUMMY-</b> prefixed"])
+
+    clean["<b>5</b> · fake_complete_data_seeder<br/><code>--clean</code>"]
+
+    register --> workspace
+    geojson --> notebook --> csv --> admseeder
+    workspace --> admseeder --> hierarchy
+    hierarchy --> roleseeder --> roles
+    workspace --> formseeder --> forms
+
+    roles --> dataseeder
+    forms --> dataseeder
+    dataseeder --> data
+    data --> clean
+    clean -. "back to an empty workspace" .-> workspace
+```
+
+#### 0. Create a workspace
+
+Registration is the only thing that creates one. It is a two-phase flow: sign
+up claims the subdomain, then a configuration form names the top tier and its
+root unit.
+
+```bash
+curl -X POST http://localhost:3000/api/v1/register \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"you@example.org","password":"Secret#Pass123","subdomain":"acme"}'
+```
+
+The account starts inactive. Read the activation email at
+[localhost:8025](http://localhost:8025) (Mailpit), follow the link, and fill in
+the configuration form — it asks for the top tier's name ("National") and the
+unit at it ("Indonesia"), which are two different things.
+
+If you are working on subdomain routing, each workspace also needs an
+`/etc/hosts` line; the full walkthrough and the four things that commonly break
+it are in [`doc/notes/subdomain-local-dev.md`](doc/notes/subdomain-local-dev.md).
+With `BASE_DOMAIN` empty — the default — host routing is inert and you can skip
+that.
+
+**Or skip registration entirely:** a migrated database already has a `default`
+workspace (created by the tenant backfill migration), which is what a
+single-host install uses. `--tenant default` works immediately after `migrate`.
+
+#### 1. Import an administration hierarchy
+
+A freshly registered workspace has one level and one root unit and nothing
+below it. `administration_csv_seeder` imports the rest from a CSV, creating
+both the `Levels` and the `Administration` rows in one step:
+
+```bash
+./dc.sh exec backend python manage.py administration_csv_seeder \
+    --source=administrations/indonesia.csv --tenant=acme --dry-run
+
+./dc.sh exec backend python manage.py administration_csv_seeder \
+    --source=administrations/indonesia.csv --tenant=acme
+```
+
+| Flag | Purpose |
+|---|---|
+| `--source=<path>` | **Required.** CSV to import, resolved against `STORAGE_PATH` first, then as a literal path |
+| `--tenant=<subdomain>` | **Required.** Workspace to import into |
+| `--dry-run` | Validate the whole file and roll back, writing nothing |
+| `--rename-root` | Allow the level-0 column to rename the workspace's existing root unit |
+
+Run `--dry-run` first. `STORAGE_PATH` is bind-mounted from the repo's
+`storage/` directory — country files are operator data and are gitignored
+there.
+
+The CSV header is `{level}_{Label}` for names and `{level}_Code` for codes:
+
+```csv
+0_National,0_Code,1_Province,1_Code,2_Regency,2_Code
+Indonesia,IDN,Aceh,IDN.1_1,Aceh Barat,IDN.1.2_1
+```
+
+The `Label` half becomes `Levels.name` and shows up throughout the app, so use
+the word the workspace should see ("Province", not "name").
+
+To produce that CSV from boundary data, use the notebook in
+[`scripts/administration_csv_generator/`](scripts/administration_csv_generator/README.md).
+It previews the GeoJSON's properties, maps them to levels through a
+`config.json`, and validates every rule the seeder enforces before writing.
+
+Boundary files for any country can be downloaded from
+[GADM](https://gadm.org/download_country.html) — pick the country, then the
+GeoJSON format at the administrative level you need. GADM's property naming
+(`COUNTRY`/`GID_0`, `NAME_1`/`GID_1`, …) is what the notebook's suggestion step
+recognises, so its mapping is filled in for you.
+
+If the workspace already has a root under a different name the import stops and
+names both rather than guessing; pass `--rename-root` to accept the file's
+value.
+
+#### 2. Create the default roles
+
+Roles are defined **per level**, so a new workspace has none until its
+hierarchy exists — which is why this runs after step 1 and not before:
+
+```bash
+./dc.sh exec backend python manage.py default_roles_seeder
+```
+
+That creates an Admin, Submitter and Approver role for every level. It takes
+no `--tenant`: it walks all levels, and `Role.save()` derives each role's
+workspace from the level it belongs to, so the rows land in the right place
+regardless. It is idempotent, so re-running after adding a level is the way to
+fill in the gap.
+
+Skipping this step makes step 4 fail — the data seeder needs a role with
+submit access to attach its generated users to.
+
+#### 3. Give the workspace forms
+
+There is nothing to submit against until the workspace has at least one
+registration form. Build one in the Form Builder
+(`/control-center/master-data/forms`), import one, or seed the bundled
+examples:
+
+```bash
+./dc.sh exec backend python manage.py form_seeder --tenant=acme
+```
+
+| Flag | Purpose |
+|---|---|
+| `--tenant=<subdomain>` | Workspace the forms belong to. Optional — omitting it leaves them unowned, the pre-workspace behaviour |
+| `--test` | Seed only the bundled `example-*` fixtures |
+| `--source=<dir>` | Read definitions from another directory (default `./source/forms/`) |
+| `--file=<name>` | Seed a single `<name>.prod.json` |
+
+`--tenant` is optional here; omitting it keeps the pre-workspace behaviour and
+leaves the forms unowned. Note that form ids come from the definition files and
+are the primary key, so the **same file cannot be seeded into two workspaces** —
+the command refuses rather than silently reassigning another workspace's form.
+
+#### 4. Generate submissions
+
+```bash
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme \
+    --bbox="95.0,-11.0,141.0,6.0" \
+    --repeat=10 \
+    --monitoring=3 \
+    --approved=true
+```
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--tenant=<subdomain>` | — | **Required.** Workspace to seed into |
+| `--bbox=<minLng,minLat,maxLng,maxLat>` | — | **Required.** Box the generated map points fall inside |
+| `--repeat=<n>` | `5` | Registrations per form |
+| `--monitoring=<n>` | `2` | Monitoring submissions per registration |
+| `--approved=<bool>` | `true` | `true` gives approved submissions only — nothing pending, no approver accounts. `false` leaves half of each form's rows pending and builds an approver tree |
+| `--draft=<bool>` | `false` | Also create drafts. Contradicts `--approved=true`, so it requires `--approved=false` |
+| `--depth=<n>` | `2` | Tiers of throwaway hierarchy generated when the workspace has none |
+| `--fanout=<n>` | `4` | Children per generated administration |
+| `--clean` | off | Delete instead of seeding — see step 5 |
+| `--test=<bool>` | `false` | Use the bundled fixture instead of a workspace; exempt from `--tenant` and `--bbox` |
+
+`--bbox` has **no default** on purpose: every workspace is a different country,
+and a silent default would put every pin in the wrong hemisphere. Note that a
+bounding box around an archipelago is mostly ocean — for Indonesia roughly 84%
+of the box is sea, so pins are scattered rather than tied to their unit.
+
+If the workspace has no administrations below its root, the command generates a
+disposable `DUMMY-` hierarchy so there is something to attach datapoints to.
+Run step 1 first if you want a real one.
+
+#### 5. Remove it again
+
+Every generated row is prefixed `DUMMY-` — datapoints, drafts, monitoring
+children, mobile assignments, and `dummy-…@test.com` accounts — so you can tell
+generated data from real data at a glance, and so it can be removed:
+
+```bash
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme --clean
+```
+
+`--clean` is terminal: it deletes and exits, seeding nothing, so it needs no
+`--bbox`. To reset, chain the two commands:
+
+```bash
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme --clean && \
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme --bbox="95.0,-11.0,141.0,6.0" --repeat=10 --approved=true
+```
+
+The delete is a hard delete scoped to one workspace, keyed on the `DUMMY-`
+prefix and never on the creating user — the seeder reuses an existing submitter
+when one matches, which on a shared workspace is a real person's account. It is
+refused when `DEBUG` is `False`.
+
+Data seeded before this convention existed carries no prefix and is invisible
+to `--clean`.
+
+Design docs:
+[SEED-001](doc/design/SEED-001-fake-data-prefix-and-clean.md) (prefix and
+teardown), [SEED-002](doc/design/SEED-002-administration-csv-seeder.md) (CSV
+import).
+
+Default fake user password: `Test#123`
 
 ### Akvo Flow
 

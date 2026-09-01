@@ -13,6 +13,20 @@ the platform stores administrative units as a name/code tree, not as shapes.
 
 ---
 
+## Where to get boundary data
+
+[GADM](https://gadm.org/download_country.html) publishes free administrative
+boundaries for every country. Pick the country, choose the **GeoJSON** format,
+and take the administrative level you need — level 3 gives roughly
+country → province → regency → sub-district.
+
+GADM's property naming (`COUNTRY`/`GID_0`, `NAME_1`/`GID_1`, `NAME_2`/`GID_2`,
+…) is exactly what the suggestion cell in Step 1 recognises, so for a GADM file
+the mapping is filled in for you and only the labels need editing.
+
+Any other source works too — the suggestion cell only knows GADM's
+conventions, but `properties` accepts arbitrary property names.
+
 ## Quick start
 
 ```bash
@@ -176,16 +190,14 @@ different parents distinct. That is a one-off cost per workspace.
 
 ## Adding another country
 
-1. Drop the GeoJSON in `geojson/`.
+1. Download it from [GADM](https://gadm.org/download_country.html) and drop the
+   GeoJSON in `geojson/`.
 2. Point `input` at it and `output` at `storage/administrations/<country>.csv`.
 3. Run Step 1, paste the suggested block into `config.json`, replace the
    placeholder labels with the words that country actually uses
    (`Governorate`, `District`, `Ward`, …).
 4. Run the rest. Fix anything Step 3 reports.
 5. Import with `--dry-run` first.
-
-Non-GADM sources work the same way — the suggestion cell only knows GADM's
-conventions, but `properties` accepts any property names.
 
 ---
 
