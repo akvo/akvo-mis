@@ -6,12 +6,20 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 from django.test.utils import override_settings
 
+from api.v1.v1_profile.bbox import get_bbox_attribute, resolve_bbox
+from api.v1.v1_profile.constants import BBOX_ATTRIBUTE_NAME
 from api.v1.v1_profile.management.commands.administration_csv_seeder import (
     build_row_data,
+    parse_attribute_headers,
     parse_headers,
     resolve_source,
 )
-from api.v1.v1_profile.models import Administration, Levels
+from api.v1.v1_profile.models import (
+    Administration,
+    AdministrationAttribute,
+    AdministrationAttributeValue,
+    Levels,
+)
 from api.v1.v1_users.models import Tenant
 
 THREE_TIER = (
@@ -456,4 +464,167 @@ class BuildRowDataTest(CsvSeederMixin, TestCase):
         self.assertEqual(
             [(item[1], item[2]) for item in data],
             [("Indonesia", None), ("Central Java", "CJ")],
+        )
+
+
+THREE_TIER_WITH_BBOX = (
+    "0_National,0_Code,1_Province,1_Code,2_District,2_Code,"
+    "attr_Bounding Box\n"
+    "Indonesia,ID,Central Java,CJ,Semarang,CJ-SMG,"
+    '"110.2,-7.1,110.5,-6.9"\n'
+    "Indonesia,ID,Central Java,CJ,Solo,CJ-SLO,"
+    '"110.7,-7.7,110.9,-7.5"\n'
+    "Indonesia,ID,Yogyakarta,YK,Sleman,YK-SLM,"
+    '"110.3,-7.8,110.5,-7.6"\n'
+)
+
+
+class ParseAttributeHeadersTest(TestCase):
+    """`attr_` columns are the hook SEED-002 left for exactly this."""
+
+    def test_recognises_an_attribute_column(self):
+        self.assertEqual(
+            parse_attribute_headers(["0_National", "attr_Bounding Box"]),
+            {"attr_Bounding Box": "Bounding Box"},
+        )
+
+    def test_ignores_files_without_any(self):
+        self.assertEqual(parse_attribute_headers(["0_National"]), {})
+
+    def test_rejects_an_empty_name(self):
+        with self.assertRaisesMessage(CommandError, "no attribute name"):
+            parse_attribute_headers(["attr_"])
+
+    def test_rejects_two_columns_for_one_attribute(self):
+        with self.assertRaisesMessage(CommandError, "Two columns"):
+            parse_attribute_headers(["attr_Population", "attr_Population "])
+
+    def test_level_columns_are_not_attributes(self):
+        self.assertEqual(parse_attribute_headers(["0_National", "0_Code"]),
+                         {})
+
+
+@override_settings(TEST_ENV=True)
+class AttributeImportTest(CsvSeederMixin, TestCase):
+    def setUp(self):
+        self.tenant = self.make_tenant("acme")
+        self.configure(self.tenant, "National", "Indonesia")
+
+    def leaf(self, name):
+        return Administration.objects.get(name=name, tenant=self.tenant)
+
+    def test_creates_the_attribute_once(self):
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant)
+        self.assertEqual(
+            AdministrationAttribute.objects.filter(
+                name=BBOX_ATTRIBUTE_NAME, tenant=self.tenant
+            ).count(),
+            1,
+        )
+
+    def test_stores_a_value_on_the_deepest_unit_only(self):
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant)
+        attribute = get_bbox_attribute(self.tenant)
+        with_value = AdministrationAttributeValue.objects.filter(
+            attribute=attribute
+        )
+        # Three leaves, and nothing on the provinces or the root.
+        self.assertEqual(with_value.count(), 3)
+        self.assertEqual(
+            set(with_value.values_list("administration__name", flat=True)),
+            {"Semarang", "Solo", "Sleman"},
+        )
+
+    def test_the_stored_box_round_trips(self):
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant)
+        attribute = get_bbox_attribute(self.tenant)
+        self.assertEqual(
+            resolve_bbox(self.leaf("Semarang"), attribute),
+            (110.2, -7.1, 110.5, -6.9),
+        )
+
+    def test_reimport_upserts_rather_than_duplicating(self):
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant)
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant)
+        self.assertEqual(
+            AdministrationAttributeValue.objects.count(), 3
+        )
+        self.assertEqual(
+            AdministrationAttribute.objects.filter(
+                name=BBOX_ATTRIBUTE_NAME
+            ).count(),
+            1,
+        )
+
+    def test_a_file_without_attributes_still_imports(self):
+        # Every CSV written before SEED-003.
+        self.seed(THREE_TIER, self.tenant)
+        self.assertEqual(
+            Administration.objects.filter(tenant=self.tenant).count(), 6
+        )
+        self.assertEqual(AdministrationAttributeValue.objects.count(), 0)
+
+    def test_a_malformed_box_names_the_row_and_rolls_back(self):
+        broken = THREE_TIER_WITH_BBOX.replace(
+            '"110.7,-7.7,110.9,-7.5"', '"110.7,-7.7"'
+        )
+        with self.assertRaisesMessage(CommandError, "Row 3"):
+            self.seed(broken, self.tenant)
+        self.assertEqual(
+            Administration.objects.filter(tenant=self.tenant).count(), 1
+        )
+
+    def test_an_inverted_box_is_rejected(self):
+        broken = THREE_TIER_WITH_BBOX.replace(
+            '"110.2,-7.1,110.5,-6.9"', '"110.5,-6.9,110.2,-7.1"'
+        )
+        with self.assertRaisesMessage(CommandError, "min < max"):
+            self.seed(broken, self.tenant)
+
+    def test_a_blank_cell_writes_nothing(self):
+        partial = THREE_TIER_WITH_BBOX.replace(
+            '"110.7,-7.7,110.9,-7.5"', ""
+        )
+        self.seed(partial, self.tenant)
+        self.assertEqual(AdministrationAttributeValue.objects.count(), 2)
+
+    def test_dry_run_writes_no_attributes(self):
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant, dry_run=True)
+        self.assertEqual(AdministrationAttribute.objects.count(), 0)
+        self.assertEqual(AdministrationAttributeValue.objects.count(), 0)
+
+    def test_two_workspaces_get_separate_attributes(self):
+        # Attribute names are not globally unique; an unscoped lookup would
+        # hand one workspace the other's definition.
+        beta = self.make_tenant("beta")
+        self.configure(beta, "National", "Indonesia")
+        self.seed(THREE_TIER_WITH_BBOX, self.tenant)
+        self.seed(THREE_TIER_WITH_BBOX, beta)
+        self.assertEqual(
+            AdministrationAttribute.objects.filter(
+                name=BBOX_ATTRIBUTE_NAME
+            ).count(),
+            2,
+        )
+        self.assertNotEqual(
+            get_bbox_attribute(self.tenant).id, get_bbox_attribute(beta).id
+        )
+
+    def test_a_non_bbox_attribute_is_stored_too(self):
+        content = THREE_TIER_WITH_BBOX.replace(
+            "attr_Bounding Box", "attr_Bounding Box,attr_Population"
+        ).replace('-6.9"\n', '-6.9",120\n').replace(
+            '-7.5"\n', '-7.5",340\n'
+        ).replace('-7.6"\n', '-7.6",560\n')
+        self.seed(content, self.tenant)
+        population = AdministrationAttribute.objects.get(
+            name="Population", tenant=self.tenant
+        )
+        self.assertEqual(population.type,
+                         AdministrationAttribute.Type.VALUE)
+        self.assertEqual(
+            AdministrationAttributeValue.objects.filter(
+                attribute=population
+            ).count(),
+            3,
         )

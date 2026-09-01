@@ -12,21 +12,35 @@ from api.v1.v1_data.constants import (
 )
 from api.v1.v1_data.management.commands.fake_complete_data_seeder import (
     mark_as_dummy,
-    parse_bbox,
-    random_point_in,
 )
 from api.v1.v1_data.models import Answers, FormData
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_mobile.models import MobileAssignment
-from api.v1.v1_profile.constants import DataAccessTypes
-from api.v1.v1_profile.models import Administration, Levels, Role
+from api.v1.v1_profile.bbox import (
+    BboxError,
+    get_bbox_attribute,
+    parse_bbox,
+    random_point_in,
+)
+from api.v1.v1_profile.constants import BBOX_ATTRIBUTE_NAME, DataAccessTypes
+from api.v1.v1_profile.models import (
+    Administration,
+    AdministrationAttributeValue,
+    Levels,
+    Role,
+)
 from api.v1.v1_users.models import Organisation, SystemUser, Tenant
 
 FIJI_BBOX = "177.0,-18.3,180.0,-16.1"
 
 
 class BboxTest(TestCase):
-    """There is deliberately no default bbox; a bad one must not seed."""
+    """A box is rejected rather than repaired.
+
+    An inverted or out-of-range box is far more likely to be columns swapped
+    at generation time than a real place, and a silently corrected one puts
+    pins somewhere plausible-looking and wrong.
+    """
 
     def test_parses_four_numbers(self):
         self.assertEqual(
@@ -35,20 +49,24 @@ class BboxTest(TestCase):
         )
 
     def test_rejects_wrong_arity(self):
-        with self.assertRaisesMessage(CommandError, "minLng,minLat"):
+        with self.assertRaisesMessage(BboxError, "four numbers"):
             parse_bbox("177.0,-18.3,180.0")
 
     def test_rejects_non_numeric(self):
-        with self.assertRaisesMessage(CommandError, "not four numbers"):
+        with self.assertRaisesMessage(BboxError, "not four numbers"):
             parse_bbox("a,b,c,d")
 
     def test_rejects_inverted_box(self):
-        with self.assertRaisesMessage(CommandError, "min < max"):
+        with self.assertRaisesMessage(BboxError, "min < max"):
             parse_bbox("180.0,-16.1,177.0,-18.3")
 
     def test_rejects_out_of_range_latitude(self):
-        with self.assertRaisesMessage(CommandError, "latitudes"):
+        with self.assertRaisesMessage(BboxError, "latitudes"):
             parse_bbox("177.0,-95.0,180.0,-16.1")
+
+    def test_rejects_empty(self):
+        with self.assertRaisesMessage(BboxError, "four numbers"):
+            parse_bbox("")
 
     def test_point_is_inside_the_box_and_lat_first(self):
         bbox = parse_bbox(FIJI_BBOX)
@@ -331,7 +349,7 @@ class ApprovedOnlyTest(SeederTestModeMixin, TestCase):
 
 
 class RequiredArgumentsTest(TestCase):
-    """Outside --test, the workspace and the bbox must both be named."""
+    """Outside --test the workspace must be named, and must have geography."""
 
     def setUp(self):
         call_command("administration_seeder", "--test")
@@ -348,29 +366,47 @@ class RequiredArgumentsTest(TestCase):
 
     def test_tenant_is_required_without_test(self):
         with self.assertRaisesMessage(CommandError, "--tenant is required"):
-            self.seed("-r", 1, "--bbox", FIJI_BBOX)
+            self.seed("-r", 1)
 
     def test_unknown_tenant_is_rejected(self):
         Tenant.objects.create(subdomain="acme")
         with self.assertRaisesMessage(CommandError, "No workspace with"):
-            self.seed("-r", 1, "--tenant", "ghost", "--bbox", FIJI_BBOX)
+            self.seed("-r", 1, "--tenant", "ghost")
 
-    def test_bbox_is_required_without_test(self):
+    def test_bbox_argument_no_longer_exists(self):
+        # Coordinates come from the hierarchy now. A leftover --bbox in a
+        # script must fail loudly rather than be silently ignored.
         Tenant.objects.create(subdomain="acme")
-        with self.assertRaisesMessage(CommandError, "--bbox is required"):
+        with self.assertRaises(CommandError):
+            self.seed("-r", 1, "--tenant", "acme", "--bbox", FIJI_BBOX)
+
+    def test_workspace_without_a_hierarchy_is_rejected(self):
+        tenant = Tenant.objects.create(subdomain="acme")
+        level = Levels.objects.create(name="National", level=0,
+                                      tenant=tenant)
+        Administration.objects.create(
+            parent=None, level=level, name="Acme", tenant=tenant
+        )
+        with self.assertRaisesMessage(
+            CommandError, "administration_csv_seeder"
+        ):
             self.seed("-r", 1, "--tenant", "acme")
 
     @override_settings(DEBUG=True)
-    def test_clean_needs_no_bbox(self):
-        # A clean generates no points, so demanding a bounding box for it
-        # was pure friction.
+    def test_clean_needs_only_a_tenant(self):
+        # A clean generates no points, so it must not be blocked by the
+        # geography checks that seeding needs.
         Tenant.objects.create(subdomain="acme")
         self.seed("--tenant", "acme", "--clean=true")
 
-    def test_test_mode_needs_neither(self):
-        # The 34 existing callers rely on this exemption.
+    def test_test_mode_needs_no_tenant(self):
+        # The 34 existing callers rely on this exemption, and TEST_GEO_DATA
+        # carries its own coordinates.
         self.seed("-r", 1, "--test=true")
         self.assertTrue(FormData.objects.exists())
+        self.assertTrue(
+            all(row.geo for row in FormData.objects.all())
+        )
 
 
 class TenantWorkspaceMixin:
@@ -411,12 +447,37 @@ class TenantWorkspaceMixin:
         )
         return tenant
 
+    def attach_bboxes(self, tenant):
+        """A distinct box per unit, so a pin can be traced back to one.
+
+        Deliberately not one shared box: a shared box would pass even if the
+        seeder ignored the administration entirely, which is the bug this
+        feature exists to fix.
+        """
+        attribute = get_bbox_attribute(tenant, create=True)
+        boxes = {}
+        units = Administration.objects.filter(
+            tenant=tenant, parent__isnull=False
+        ).order_by("id")
+        for offset, unit in enumerate(units):
+            min_lng = 170.0 + offset * 0.5
+            min_lat = -18.0 + offset * 0.5
+            raw = (
+                f"{min_lng},{min_lat},{min_lng + 0.1},{min_lat + 0.1}"
+            )
+            AdministrationAttributeValue.objects.create(
+                administration=unit,
+                attribute=attribute,
+                value={"value": raw},
+            )
+            boxes[unit.id] = parse_bbox(raw)
+        return attribute, boxes
+
     def seed(self, tenant, *args, **kwargs):
         out = StringIO()
         call_command(
             "fake_complete_data_seeder",
             "--tenant", tenant.subdomain,
-            "--bbox", FIJI_BBOX,
             *args,
             stdout=out,
             stderr=StringIO(),
@@ -426,91 +487,139 @@ class TenantWorkspaceMixin:
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True, DEBUG=True)
-class GeneratedHierarchyTest(TenantWorkspaceMixin, TestCase):
-    """A freshly-registered workspace has a root and nothing below it."""
+class GeoFromHierarchyTest(TenantWorkspaceMixin, TestCase):
+    """Every generated pin comes from its own unit's bounding box."""
 
-    def test_generates_a_throwaway_hierarchy(self):
-        tenant = self.make_workspace("acme")
-        self.seed(tenant, "-r", 2, "--depth", 2, "--fanout", 4)
-
-        generated = Administration.objects.filter(
-            tenant=tenant, name__startswith=DUMMY_PREFIX
-        )
-        # depth 2, fanout 4 -> 4 + 16
-        self.assertEqual(generated.count(), 20)
-        deepest = generated.filter(level__level=2)
-        self.assertEqual(deepest.count(), 16)
-
-    def test_generated_units_have_a_path(self):
-        # `path` is what every visualization administration filter reads.
-        tenant = self.make_workspace("acme")
-        self.seed(tenant, "-r", 2, "--depth", 2, "--fanout", 2)
-        for unit in Administration.objects.filter(
-            tenant=tenant, name__startswith=DUMMY_PREFIX
-        ):
-            self.assertTrue(unit.path)
-
-    def test_generated_levels_are_prefixed(self):
-        tenant = self.make_workspace("acme")
-        self.seed(tenant, "-r", 1, "--depth", 2, "--fanout", 2)
-        generated = Levels.objects.filter(
-            tenant=tenant, name__startswith=DUMMY_PREFIX
-        )
-        self.assertEqual(generated.count(), 2)
-
-    def test_existing_hierarchy_is_reused_not_regenerated(self):
-        tenant = self.make_workspace("beta", with_hierarchy=True)
-        self.seed(tenant, "-r", 2)
-        self.assertEqual(
-            Administration.objects.filter(
-                tenant=tenant, name__startswith=DUMMY_PREFIX
-            ).count(),
-            0,
-        )
-
-    def test_geo_points_land_inside_the_bbox(self):
-        tenant = self.make_workspace("acme")
+    def test_every_row_has_a_geo(self):
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        self.attach_bboxes(tenant)
         self.seed(tenant, "-r", 3)
-        min_lng, min_lat, max_lng, max_lat = parse_bbox(FIJI_BBOX)
-        rows = FormData.objects.filter(geo__isnull=False)
+        rows = FormData.objects.filter(form__tenant=tenant)
+        self.assertTrue(rows.exists())
+        self.assertFalse(rows.filter(geo__isnull=True).exists())
+
+    def test_pin_falls_inside_its_own_administrations_box(self):
+        # The whole point of SEED-003. Each unit has a different box, so a
+        # seeder that ignored the administration would land outside.
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        _attribute, boxes = self.attach_bboxes(tenant)
+        self.seed(tenant, "-r", 4)
+        rows = FormData.objects.filter(form__tenant=tenant)
+        self.assertTrue(rows.exists())
+        for row in rows:
+            min_lng, min_lat, max_lng, max_lat = boxes[row.administration_id]
+            lat, lng = row.geo
+            self.assertTrue(
+                min_lat <= lat <= max_lat and min_lng <= lng <= max_lng,
+                f"{row.name!r} at {row.geo} is outside the box of "
+                f"{row.administration.name}",
+            )
+
+    def test_monitoring_children_inherit_the_parents_pin(self):
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        _attribute, boxes = self.attach_bboxes(tenant)
+        self.seed(tenant, "-r", 2)
+        for row in FormData.objects.filter(
+            form__tenant=tenant, parent__isnull=False
+        ):
+            self.assertEqual(row.geo, row.parent.geo)
+
+    def test_pins_are_not_all_identical(self):
+        # A box scatters; a stored point would stack every datapoint in a
+        # unit on one pixel, which is why D-1 stores a box.
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        self.attach_bboxes(tenant)
+        self.seed(tenant, "-r", 6)
+        pins = {
+            tuple(row.geo)
+            for row in FormData.objects.filter(form__tenant=tenant)
+        }
+        self.assertGreater(len(pins), 1)
+
+    def test_ancestor_box_is_used_when_the_leaf_has_none(self):
+        # Boxes are attached to the deepest unit of a CSV row (D-6), so a
+        # workspace that later gains a tier has targets below the boxes.
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        attribute = get_bbox_attribute(tenant, create=True)
+        deepest = Administration.objects.filter(
+            tenant=tenant, parent__isnull=False
+        ).order_by("-level__level").first().level.level
+        raw = "170.0,-18.0,170.5,-17.5"
+        for unit in Administration.objects.filter(
+            tenant=tenant, parent__isnull=False
+        ).exclude(level__level=deepest):
+            AdministrationAttributeValue.objects.create(
+                administration=unit, attribute=attribute,
+                value={"value": raw},
+            )
+        self.seed(tenant, "-r", 2)
+        min_lng, min_lat, max_lng, max_lat = parse_bbox(raw)
+        rows = FormData.objects.filter(form__tenant=tenant)
         self.assertTrue(rows.exists())
         for row in rows:
             lat, lng = row.geo
             self.assertTrue(min_lat <= lat <= max_lat)
             self.assertTrue(min_lng <= lng <= max_lng)
 
-    def test_clean_removes_generated_units_and_levels(self):
+    def test_a_corrupt_box_falls_through_instead_of_crashing(self):
+        # Attributes are editable in the UI (D-3/Q2), so nonsense can
+        # arrive. It must degrade to the ancestor, not fail the run.
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        attribute = get_bbox_attribute(tenant, create=True)
+        units = list(
+            Administration.objects.filter(
+                tenant=tenant, parent__isnull=False
+            ).order_by("level__level")
+        )
+        for unit in units:
+            raw = (
+                "not a box" if unit is units[-1]
+                else "170.0,-18.0,170.5,-17.5"
+            )
+            AdministrationAttributeValue.objects.create(
+                administration=unit, attribute=attribute,
+                value={"value": raw},
+            )
+        self.seed(tenant, "-r", 2)
+        self.assertTrue(
+            FormData.objects.filter(form__tenant=tenant).exists()
+        )
+
+    def test_seeding_without_any_box_is_refused(self):
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        with self.assertRaisesMessage(
+            CommandError, BBOX_ATTRIBUTE_NAME
+        ):
+            self.seed(tenant, "-r", 2)
+        self.assertFalse(
+            FormData.objects.filter(form__tenant=tenant).exists()
+        )
+
+    def test_workspace_with_only_a_root_is_refused(self):
+        # This is where ensure_hierarchy used to invent a throwaway tree.
+        # It could only ever produce datapoints without coordinates.
         tenant = self.make_workspace("acme")
-        self.seed(tenant, "-r", 2, "--depth", 2, "--fanout", 2)
-        self.assertTrue(
-            Administration.objects.filter(
-                tenant=tenant, name__startswith=DUMMY_PREFIX
-            ).exists()
-        )
+        with self.assertRaisesMessage(
+            CommandError, "administration_csv_seeder"
+        ):
+            self.seed(tenant, "-r", 2)
 
+    def test_clean_keeps_the_boxes(self):
+        # Boxes belong to the hierarchy, not to the generated data, and
+        # carry no DUMMY- prefix -- so a clean must leave them behind.
+        tenant = self.make_workspace("acme", with_hierarchy=True)
+        self.attach_bboxes(tenant)
+        before = AdministrationAttributeValue.objects.count()
+        self.seed(tenant, "-r", 2)
         self.seed(tenant, "--clean=true")
-
         self.assertEqual(
-            Administration.objects.filter(
-                tenant=tenant, name__startswith=DUMMY_PREFIX
-            ).count(),
-            0,
+            AdministrationAttributeValue.objects.count(), before
         )
-        self.assertEqual(
-            Levels.objects.filter(
-                tenant=tenant, name__startswith=DUMMY_PREFIX
-            ).count(),
-            0,
-        )
-        # The real root and its level survive.
-        self.assertTrue(
-            Administration.objects.filter(
-                tenant=tenant, parent__isnull=True
-            ).exists()
-        )
+        self.assertIsNotNone(get_bbox_attribute(tenant))
 
     def test_clean_keeps_a_real_hierarchy(self):
         tenant = self.make_workspace("beta", with_hierarchy=True)
+        self.attach_bboxes(tenant)
         before = Administration.objects.filter(tenant=tenant).count()
         self.seed(tenant, "-r", 2)
         self.seed(tenant, "--clean=true")
@@ -532,8 +641,16 @@ class CleanTenantScopeTest(TenantWorkspaceMixin, TestCase):
         level = Levels.objects.create(
             name="National", level=0, tenant=tenant
         )
-        Administration.objects.create(
+        root = Administration.objects.create(
             parent=None, level=level, name=subdomain, tenant=tenant
+        )
+        # A child tier, because datapoints only ever attach below the root.
+        child_level = Levels.objects.create(
+            name="Province", level=1, tenant=tenant
+        )
+        Administration.objects.create(
+            parent=root, level=child_level, name=f"{subdomain} province",
+            tenant=tenant,
         )
         role = Role.objects.create(
             name=f"{subdomain} submitter", administration_level=level
@@ -541,10 +658,12 @@ class CleanTenantScopeTest(TenantWorkspaceMixin, TestCase):
         role.role_role_access.create(data_access=DataAccessTypes.submit)
         Forms.objects.create(name=f"{subdomain} form", tenant=tenant)
         Organisation.objects.create(name=f"{subdomain} org", tenant=tenant)
+        self.attach_bboxes(tenant)
         return tenant
 
     def test_clean_leaves_another_workspace_alone(self):
         acme = self.make_workspace("acme", with_hierarchy=True)
+        self.attach_bboxes(acme)
         beta = self.make_bare_workspace("beta")
 
         self.seed(acme, "-r", 2)

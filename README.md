@@ -400,7 +400,7 @@ flowchart TD
     notebook["administration_csv_generator<br/><i>notebook</i>"]
     csv[/"storage/administrations/*.csv"/]
     admseeder["<b>1</b> · administration_csv_seeder"]
-    hierarchy(["hierarchy<br/><i>levels + units</i>"])
+    hierarchy(["hierarchy<br/><i>levels + units<br/>+ bounding boxes</i>"])
 
     roleseeder["<b>2</b> · default_roles_seeder"]
     roles(["roles<br/><i>Admin / Submitter / Approver<br/>per level</i>"])
@@ -408,7 +408,7 @@ flowchart TD
     formseeder["<b>3</b> · form_seeder<br/><i>or the Form Builder</i>"]
     forms(["forms"])
 
-    dataseeder["<b>4</b> · fake_complete_data_seeder<br/><code>--bbox</code>"]
+    dataseeder["<b>4</b> · fake_complete_data_seeder"]
     data(["datapoints + users<br/><b>DUMMY-</b> prefixed"])
 
     clean["<b>5</b> · fake_complete_data_seeder<br/><code>--clean</code>"]
@@ -421,6 +421,7 @@ flowchart TD
 
     roles --> dataseeder
     forms --> dataseeder
+    hierarchy -- "map coordinates" --> dataseeder
     dataseeder --> data
     data --> clean
     clean -. "back to an empty workspace" .-> workspace
@@ -480,12 +481,19 @@ there.
 The CSV header is `{level}_{Label}` for names and `{level}_Code` for codes:
 
 ```csv
-0_National,0_Code,1_Province,1_Code,2_Regency,2_Code
-Indonesia,IDN,Aceh,IDN.1_1,Aceh Barat,IDN.1.2_1
+0_National,0_Code,1_Province,1_Code,2_Regency,2_Code,attr_Bounding Box
+Indonesia,IDN,Aceh,IDN.1_1,Aceh Barat,IDN.1.2_1,"95.9,4.0,96.5,4.6"
 ```
 
 The `Label` half becomes `Levels.name` and shows up throughout the app, so use
 the word the workspace should see ("Province", not "name").
+
+Any column named `attr_<Name>` becomes an administration attribute on the
+row's deepest unit. `attr_Bounding Box` is the one the platform reads: it holds
+`minLng,minLat,maxLng,maxLat` and is what lets step 4 put a generated
+datapoint's pin inside the unit it belongs to. The notebook writes it by
+default. Attribute columns are optional — a CSV without them imports exactly as
+before.
 
 To produce that CSV from boundary data, use the notebook in
 [`scripts/administration_csv_generator/`](scripts/administration_csv_generator/README.md).
@@ -548,7 +556,6 @@ the command refuses rather than silently reassigning another workspace's form.
 ```bash
 ./dc.sh exec backend python manage.py fake_complete_data_seeder \
     --tenant=acme \
-    --bbox="95.0,-11.0,141.0,6.0" \
     --repeat=10 \
     --monitoring=3 \
     --approved=true
@@ -557,24 +564,34 @@ the command refuses rather than silently reassigning another workspace's form.
 | Flag | Default | Purpose |
 |---|---|---|
 | `--tenant=<subdomain>` | — | **Required.** Workspace to seed into |
-| `--bbox=<minLng,minLat,maxLng,maxLat>` | — | **Required.** Box the generated map points fall inside |
 | `--repeat=<n>` | `5` | Registrations per form |
 | `--monitoring=<n>` | `2` | Monitoring submissions per registration |
 | `--approved=<bool>` | `true` | `true` gives approved submissions only — nothing pending, no approver accounts. `false` leaves half of each form's rows pending and builds an approver tree |
 | `--draft=<bool>` | `false` | Also create drafts. Contradicts `--approved=true`, so it requires `--approved=false` |
-| `--depth=<n>` | `2` | Tiers of throwaway hierarchy generated when the workspace has none |
-| `--fanout=<n>` | `4` | Children per generated administration |
 | `--clean` | off | Delete instead of seeding — see step 5 |
-| `--test=<bool>` | `false` | Use the bundled fixture instead of a workspace; exempt from `--tenant` and `--bbox` |
+| `--test=<bool>` | `false` | Use the bundled fixture instead of a workspace; exempt from `--tenant` |
 
-`--bbox` has **no default** on purpose: every workspace is a different country,
-and a silent default would put every pin in the wrong hemisphere. Note that a
-bounding box around an archipelago is mostly ocean — for Indonesia roughly 84%
-of the box is sea, so pins are scattered rather than tied to their unit.
+**There is no `--bbox`.** Map coordinates come from the hierarchy: step 1
+imports a `Bounding Box` attribute alongside each unit, and the seeder draws a
+random point inside the box of the administration a datapoint actually belongs
+to. A pin therefore lands in — or immediately beside — the unit its datapoint
+names, rather than anywhere inside a country-sized rectangle.
 
-If the workspace has no administrations below its root, the command generates a
-disposable `DUMMY-` hierarchy so there is something to attach datapoints to.
-Run step 1 first if you want a real one.
+The seeder **refuses to run** if it cannot resolve a box, rather than writing
+submissions with no coordinates. Two cases hit that:
+
+- *The workspace has nothing below its root.* Run step 1.
+- *The hierarchy was imported without boxes* — an older CSV, a spreadsheet
+  upload, or the bundled sample. Re-import from a CSV carrying an
+  `attr_Bounding Box` column; the
+  [generator notebook](scripts/administration_csv_generator/README.md) writes
+  one by default.
+
+The error message names the command to run in both cases.
+
+Boxes are not polygons, so a pin can still land just outside its own unit —
+typically in a neighbouring one. Step 8 of the notebook measures the rate for
+your country and prints it.
 
 #### 5. Remove it again
 
@@ -587,14 +604,15 @@ generated data from real data at a glance, and so it can be removed:
     --tenant=acme --clean
 ```
 
-`--clean` is terminal: it deletes and exits, seeding nothing, so it needs no
-`--bbox`. To reset, chain the two commands:
+`--clean` is terminal: it deletes and exits, seeding nothing. Bounding boxes
+are left alone — they belong to the hierarchy, not to the generated data, and
+carry no `DUMMY-` prefix. To reset, chain the two commands:
 
 ```bash
 ./dc.sh exec backend python manage.py fake_complete_data_seeder \
     --tenant=acme --clean && \
 ./dc.sh exec backend python manage.py fake_complete_data_seeder \
-    --tenant=acme --bbox="95.0,-11.0,141.0,6.0" --repeat=10 --approved=true
+    --tenant=acme --repeat=10 --approved=true
 ```
 
 The delete is a hard delete scoped to one workspace, keyed on the `DUMMY-`
@@ -605,10 +623,9 @@ refused when `DEBUG` is `False`.
 Data seeded before this convention existed carries no prefix and is invisible
 to `--clean`.
 
-Design docs:
-[SEED-001](doc/design/SEED-001-fake-data-prefix-and-clean.md) (prefix and
-teardown), [SEED-002](doc/design/SEED-002-administration-csv-seeder.md) (CSV
-import).
+Design doc:
+[Tenant-aware seeders](doc/design/SEED-tenant-aware-seeders.md) — the `DUMMY-` prefix and
+teardown, the CSV import, and the bounding boxes that place generated pins.
 
 Default fake user password: `Test#123`
 

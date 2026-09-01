@@ -3,7 +3,7 @@
 Unlike `administration_seeder`, this command targets one workspace and
 builds both the Levels and the Administration rows from a file the
 operator authored by hand. See
-doc/design/SEED-002-administration-csv-seeder.md.
+doc/design/SEED-tenant-aware-seeders.md.
 """
 import csv
 import os
@@ -13,14 +13,34 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from api.v1.v1_jobs.administrations_bulk_upload import seed_administrations
-from api.v1.v1_profile.models import Administration, Levels
+from api.v1.v1_jobs.administrations_bulk_upload import (
+    seed_administrations,
+    seed_attributes,
+)
+from api.v1.v1_profile.bbox import BboxError, parse_bbox
+from api.v1.v1_profile.constants import (
+    ATTRIBUTE_COLUMN_PREFIX,
+    BBOX_ATTRIBUTE_NAME,
+)
+from api.v1.v1_profile.models import (
+    Administration,
+    AdministrationAttribute,
+    Levels,
+)
 from utils.tenant_command import resolve_tenant
 
 # `{level}_{Alias}` — level FIRST, so an alias containing an underscore or
 # ending in a digit still parses. The suffix form used by the topojson
 # seeder splits on the last underscore and silently misreads those.
 LEVEL_HEADER = re.compile(r"^(\d+)_(.+)$")
+
+# `attr_{Name}` names an administration attribute. The Excel path keys its
+# attribute columns as `{id}|{Name}` and looks them up by primary key
+# (administrations_bulk_upload.map_column_model); a notebook has no database
+# ids, so the CSV path is name-keyed instead.
+ATTRIBUTE_HEADER = re.compile(
+    r"^" + re.escape(ATTRIBUTE_COLUMN_PREFIX) + r"(.*)$"
+)
 
 CODE_ALIAS = "code"
 
@@ -66,6 +86,59 @@ def parse_headers(columns):
         depth: (col, alias, codes.get(depth))
         for depth, (col, alias) in levels.items()
     }
+
+
+def parse_attribute_headers(columns):
+    """Map column -> attribute name, for every `attr_` column.
+
+    Returns {} when the file carries none, which is every CSV written before
+    SEED-003 -- those import exactly as they always did.
+    """
+    attributes = {}
+    for col in columns:
+        matched = ATTRIBUTE_HEADER.match((col or "").strip())
+        if not matched:
+            continue
+        name = matched.group(1).strip()
+        if not name:
+            raise CommandError(
+                f"Column '{col}' has the '{ATTRIBUTE_COLUMN_PREFIX}' prefix "
+                f"but no attribute name after it."
+            )
+        if name in attributes.values():
+            raise CommandError(
+                f"Two columns name the attribute '{name}'. Each attribute "
+                f"needs exactly one column."
+            )
+        attributes[col] = name
+    return attributes
+
+
+def apply_attributes(administration, row, attribute_map, row_number):
+    """Write this row's attribute cells onto the unit it created.
+
+    Delegates to `seed_attributes`, the same upsert the Excel upload uses, so
+    the two import paths cannot drift on how a value is stored. Only the
+    bounding box is special-cased, and only to validate it: a malformed box
+    must fail here, naming the row, rather than at seed time with a stack
+    trace several commands later.
+    """
+    pending = []
+    for column, attribute in attribute_map.items():
+        raw = row.get(column, "")
+        if not raw:
+            continue
+        if attribute.name == BBOX_ATTRIBUTE_NAME:
+            try:
+                parse_bbox(raw)
+            except BboxError as error:
+                raise CommandError(
+                    f"Row {row_number}, column '{column}': {error}."
+                )
+        pending.append((attribute, raw, column))
+    if pending:
+        seed_attributes(administration, pending)
+    return len(pending)
 
 
 def resolve_source(source):
@@ -236,6 +309,7 @@ class Command(BaseCommand):
         self.stdout.write(f"-- Validating {path}")
         columns, rows = read_rows(path)
         header_map = parse_headers(columns)
+        attr_headers = parse_attribute_headers(columns)
         validate_rows(header_map, rows)
 
         detected = ", ".join(
@@ -243,6 +317,10 @@ class Command(BaseCommand):
             for depth in sorted(header_map)
         )
         self.stdout.write(f"   Levels detected: {detected}")
+        if attr_headers:
+            self.stdout.write(
+                f"   Attributes detected: {', '.join(attr_headers.values())}"
+            )
         self.stdout.write(f"   Rows: {len(rows)}")
 
         with transaction.atomic():
@@ -258,10 +336,20 @@ class Command(BaseCommand):
             if rename_note:
                 notes.append(rename_note)
 
-            for row in rows:
+            attribute_map = self._ensure_attributes(attr_headers, tenant)
+            values_written = 0
+            for index, row in enumerate(rows, start=2):
                 row_data = build_row_data(header_map, row, levels)
-                if row_data:
-                    seed_administrations(row_data, tenant=tenant)
+                if not row_data:
+                    continue
+                # seed_administrations returns the row's deepest unit, which
+                # is where attributes belong (D-6): a datapoint only ever
+                # attaches to a leaf, so that is the only tier that needs one.
+                unit = seed_administrations(row_data, tenant=tenant)
+                if unit and attribute_map:
+                    values_written += apply_attributes(
+                        unit, row, attribute_map, index
+                    )
 
             levels_created = (
                 Levels.objects.filter(tenant=tenant).count() - levels_before
@@ -279,6 +367,10 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"-- Administrations: {admins_created} created"
             )
+            if attribute_map:
+                self.stdout.write(
+                    f"-- Attribute values: {values_written} written"
+                )
             if dry_run:
                 transaction.set_rollback(True)
                 self.stdout.write(
@@ -286,6 +378,25 @@ class Command(BaseCommand):
                 )
                 return
         self.stdout.write(self.style.SUCCESS("-- Done"))
+
+    def _ensure_attributes(self, attr_headers, tenant):
+        """column -> AdministrationAttribute, created on demand.
+
+        New attributes are Type.VALUE; an attribute the workspace already
+        defines keeps its own type, so a file can carry values for an
+        existing OPTION attribute without redefining it.
+        """
+        attributes = {}
+        for column, name in attr_headers.items():
+            attribute, created = AdministrationAttribute.objects.get_or_create(
+                name=name,
+                tenant=tenant,
+                defaults={"type": AdministrationAttribute.Type.VALUE},
+            )
+            attributes[column] = attribute
+            if created:
+                self.stdout.write(f"   attribute '{name}' created")
+        return attributes
 
     def _ensure_levels(self, header_map, tenant):
         """ensure_levels, with the divergence notes split out."""

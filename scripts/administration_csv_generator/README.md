@@ -8,8 +8,11 @@ hierarchy in one command.
 GeoJSON  ->  this notebook  ->  storage/administrations/*.csv  ->  seeder  ->  workspace
 ```
 
-Only `properties` is read from the GeoJSON. Geometry is ignored entirely —
-the platform stores administrative units as a name/code tree, not as shapes.
+`properties` supplies the names and codes. `geometry` is read for one thing
+only — a bounding box per unit, written as an `attr_Bounding Box` column —
+which is what lets the fake data seeder put a datapoint's pin inside the unit
+it belongs to. Full shapes are not stored; the platform holds administrative
+units as a name/code tree.
 
 ---
 
@@ -60,8 +63,8 @@ committed.
 
 ```json
 {
-  "input": "scripts/administration_csv_generator/geojson/Indonesia_Level_3.geojson",
-  "output": "storage/administrations/indonesia.csv",
+  "input": "Indonesia_Level_3.geojson",
+  "output": "indonesia.csv",
   "labels": {
     "0": "National",
     "1": "Province",
@@ -87,8 +90,8 @@ committed.
 
 | Field | Meaning |
 |---|---|
-| `input` | GeoJSON to read. **Relative to the repo root.** |
-| `output` | CSV to write. Relative to the repo root, and must be under `storage/` (see below). |
+| `input` | GeoJSON to read. A bare filename is looked up in `geojson/`. |
+| `output` | CSV to write. A bare filename lands in `storage/administrations/`, which is where the backend container can read it. |
 | `labels` | `"<level>"` → what that tier is *called*. See the next section — this is not just a column heading. |
 | `properties` | `"<level>_name"` / `"<level>_code"` → the GeoJSON property supplying it. `_code` is optional; omit the key to drop the column. |
 | `options.na_values` | Values treated as empty. GADM writes the literal string `"NA"`, not null. |
@@ -98,9 +101,20 @@ Levels must run contiguously from 0. `0_name` is required; the seeder
 refuses a file whose level-0 column is blank or holds more than one value,
 because a workspace has exactly one root.
 
-Both paths resolve from the repo root, which the notebook locates by walking
-up to the directory containing `dc.sh`. That way the same `output` value
-works whether you launch Jupyter from this directory or from the repo root.
+**Path resolution.** Each path has a default directory, so the common case is
+a bare filename:
+
+| Value | Resolves to |
+|---|---|
+| `indonesia.geojson` | `scripts/administration_csv_generator/geojson/indonesia.geojson` |
+| `indonesia.csv` | `storage/administrations/indonesia.csv` |
+| `tmp/scratch.csv` | repo root — anything containing `/` escapes the default |
+| `/data/x.geojson` | used as-is |
+
+The repo root is found by walking up to the directory containing `dc.sh`, so
+the same config works whether you launch Jupyter from here or from the repo
+root. Step 7 still warns if the output lands outside `storage/`, where the
+backend container cannot see it.
 
 ---
 
@@ -145,13 +159,63 @@ import will succeed.
 | 3 | Levels contiguous from 0; labels unique; no label spelled `Code` |
 | 3 | Every mapped property actually exists in the file |
 | 3 | No feature with a hole in its path — a blank tier above a non-blank one |
-| 5 | Exactly one root value |
-| 5 | Leaf names shared across parents (informational — handled correctly) |
-| 5 | **Case-insensitive sibling collisions** (these silently merge — see below) |
+| 4 | Features with no usable geometry, which get no bounding box |
+| 6 | Exactly one root value |
+| 6 | Leaf names shared across parents (informational — handled correctly) |
+| 6 | **Case-insensitive sibling collisions** (these silently merge — see below) |
+| 8 | How often a pin drawn from a stored box lands inside its own unit |
 
-Step 6 refuses to write if Step 3 found problems.
+Step 7 refuses to write if Step 3 found problems.
 
----
+## Bounding boxes
+
+Step 4 writes one column the seeder depends on:
+
+```csv
+0_National,0_Code,1_Province,1_Code,attr_Bounding Box
+Fiji,FJI,Central,FJI.1_1,"177.976,-18.0804,178.54,-17.5786"
+```
+
+`administration_csv_seeder` turns that into an ordinary administration
+attribute named "Bounding Box" on each row's deepest unit, and
+`fake_complete_data_seeder` draws a random point inside the box of whichever
+unit a datapoint belongs to. That replaces the old `--bbox` flag, which
+scattered every pin across one country-sized rectangle.
+
+**The box comes from each feature's largest ring, by area.** Two reasons, both
+measured rather than assumed:
+
+- **A ring never crosses the antimeridian.** Fiji's Lau and Cakaudrove
+  provinces span 359.9° and 360.0° of longitude across all their rings — the
+  whole globe — because a min/max cannot tell "wraps around 180" from "very
+  wide". Over their largest ring: 0.13° and 1.04°. Points drawn from the
+  all-rings box score **0%** containment for both.
+- **Area, not vertex count.** Vertex count measures how finely a coastline was
+  digitised, not how big the island is, so a heavily surveyed islet can
+  outvote the mainland.
+
+### How accurate is it?
+
+A box is not a polygon. Step 8 measures the gap for your file and prints it:
+
+```
+3000 points across 300 units:
+  inside own unit    49%
+  on land anywhere   96%
+```
+
+Roughly what to expect:
+
+| Shape of country | Inside own unit | On land |
+|---|---|---|
+| Contiguous landmass (India, 676 districts) | ~51% | ~96% |
+| Fragmented archipelago (Fiji, 15 provinces) | ~44% | ~70% |
+
+The pins that miss their own unit land in an adjoining one — tens of
+kilometres out, not thousands. An archipelago scores lower because a rectangle
+around an island is mostly ocean; that is a property of the shape, not a bug.
+Step 8 also lists the units that miss most often, so an odd-looking map has an
+explanation before someone files it as a defect.
 
 ## Gotchas
 
@@ -165,18 +229,18 @@ unspaced one. Step 2 prints a sample so you can judge before committing.
 
 **Case-insensitive siblings merge.** The seeder matches units on
 `name__iexact` within a parent, so `SetiaBudi` and `Setiabudi` under the
-same regency become one unit. Step 5 lists every such pair. In the bundled
+same regency become one unit. Step 6 lists every such pair. In the bundled
 Indonesia file there are two, which is why 6695 CSV rows produce 6693
 level-3 units.
 
 **Duplicate names across different parents are fine.** 273 sub-district
 names in the Indonesia file appear under more than one parent — `Hutan`
 under 14. The seeder keys on `(name, level, parent, tenant)`, so these stay
-distinct. Step 5 reports the count as reassurance, not as a warning.
+distinct. Step 6 reports the count as reassurance, not as a warning.
 
 **`output` must be under `storage/`.** The backend container reads
 `STORAGE_PATH`, which is bind-mounted from the repo's `storage/` directory,
-and the seeder takes a storage-relative path. Step 6 prints the exact
+and the seeder takes a storage-relative path. Step 7 prints the exact
 `--source` value to use, or warns if the output landed somewhere the
 container cannot see. `storage/.gitignore` ignores `*.csv`, so nothing you
 generate can be committed by accident.
@@ -203,7 +267,7 @@ different parents distinct. That is a one-off cost per workspace.
 
 ## Related
 
-- `doc/design/SEED-002-administration-csv-seeder.md` — the CSV contract and
-  the import rules
-- `doc/design/SEED-001-fake-data-prefix-and-clean.md` — generating
-  submissions once the hierarchy exists
+- `doc/design/SEED-tenant-aware-seeders.md` — the plan behind this
+  script: the CSV contract and import rules (Part 2), the `attr_Bounding Box`
+  column and how the data seeder consumes it (Part 3), and the `DUMMY-` marking
+  of the submissions it generates (Part 1)

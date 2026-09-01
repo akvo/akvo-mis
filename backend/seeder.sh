@@ -58,9 +58,10 @@ if [[ "${seed_administration}" == 'y' || "${seed_administration}" == 'Y' ]]; the
     echo "  Leave blank to seed the small bundled sample instead."
     read -r admin_csv
     if [[ "${admin_csv}" == '' ]]; then
-        # The bundled sample is two Indonesian paths and is not
-        # workspace-scoped -- enough to click around, not enough to
-        # demo. A real hierarchy comes from a CSV.
+        # The bundled sample is two Indonesian paths, is not
+        # workspace-scoped and carries no coordinates -- enough to click
+        # around, not enough to demo, and the fake data seeder will not
+        # run against it. A real hierarchy comes from a CSV.
         python manage.py administration_seeder
         python manage.py resetsequence v1_profile
     else
@@ -166,22 +167,11 @@ else
             draft_data=false
         fi
 
-        # Required, with no default: every workspace is a different
-        # country, and a silent default puts every generated pin in the
-        # wrong place.
-        echo "Bounding box for generated map points?"
-        echo "  Format: minLng,minLat,maxLng,maxLat"
-        echo "  Fiji:      177.0,-18.3,180.0,-16.1"
-        echo "  Indonesia: 95.0,-11.0,141.0,6.0"
-        read -r bbox
-        while [[ "${bbox}" == '' ]]; do
-            echo "A bounding box is required. Please enter one:"
-            read -r bbox
-        done
-
+        # Map coordinates come from the hierarchy: each unit carries a
+        # "Bounding Box" attribute, imported alongside it by
+        # administration_csv_seeder. Nothing to ask for here.
         python manage.py fake_complete_data_seeder \
             --tenant="${tenant}" \
-            --bbox="${bbox}" \
             --repeat="${fake_data_count}" \
             --monitoring="${monitoring_data_count}" \
             --approved="${approved}" \

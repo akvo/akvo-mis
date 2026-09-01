@@ -2,12 +2,11 @@
 
 Every row this command writes carries DUMMY_PREFIX so a human can tell
 generated data from real data at a glance, and so `--clean` can remove it
-again. See doc/design/SEED-001-fake-data-prefix-and-clean.md.
+again. See doc/design/SEED-tenant-aware-seeders.md.
 """
 import re
 import time as time_module
 from datetime import datetime, timedelta, time
-from random import uniform
 
 from django.conf import settings
 from django.core.management import BaseCommand
@@ -25,6 +24,11 @@ from api.v1.v1_data.constants import (
 from api.v1.v1_data.models import FormData
 from api.v1.v1_data.functions import add_fake_answers
 from api.v1.v1_forms.models import Forms
+from api.v1.v1_profile.bbox import (
+    get_bbox_attribute,
+    random_point_in,
+    resolve_bbox,
+)
 from api.v1.v1_profile.models import (
     Administration,
     DataAccessTypes,
@@ -34,51 +38,13 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_users.models import SystemUser, Organisation
 from api.v1.v1_mobile.models import MobileAssignment
-from api.v1.v1_profile.constants import TEST_GEO_DATA
+from api.v1.v1_profile.constants import BBOX_ATTRIBUTE_NAME, TEST_GEO_DATA
 from api.v1.v1_visualization.functions import refresh_materialized_data
 from utils.tenant_command import resolve_tenant
 
 fake = Faker()
 
 DEFAULT_PASSWORD = "Test#123"
-
-
-def parse_bbox(raw):
-    """'minLng,minLat,maxLng,maxLat' -> (floats), validated.
-
-    There is deliberately no default: every workspace is a different
-    country, and a silent default puts every pin in the wrong hemisphere.
-    """
-    parts = [p.strip() for p in (raw or "").split(",")]
-    if len(parts) != 4:
-        raise CommandError(
-            "--bbox must be 'minLng,minLat,maxLng,maxLat'. "
-            "Example for Fiji: --bbox '177.0,-18.3,180.0,-16.1'"
-        )
-    try:
-        min_lng, min_lat, max_lng, max_lat = [float(p) for p in parts]
-    except ValueError:
-        raise CommandError(f"--bbox '{raw}' is not four numbers.")
-    if min_lng >= max_lng or min_lat >= max_lat:
-        raise CommandError(
-            "--bbox needs min < max on both axes; got "
-            f"lng {min_lng}..{max_lng}, lat {min_lat}..{max_lat}."
-        )
-    if not (-180 <= min_lng <= 180 and -180 <= max_lng <= 180):
-        raise CommandError("--bbox longitudes must be within -180..180.")
-    if not (-90 <= min_lat <= 90 and -90 <= max_lat <= 90):
-        raise CommandError("--bbox latitudes must be within -90..90.")
-    return min_lng, min_lat, max_lng, max_lat
-
-
-def random_point_in(bbox):
-    """A [lat, lng] inside the bbox, in the order FormData.geo expects.
-
-    Latitude first: the map widgets read geo[0] as latitude, so the order
-    is load-bearing rather than cosmetic.
-    """
-    min_lng, min_lat, max_lng, max_lat = bbox
-    return [uniform(min_lat, max_lat), uniform(min_lng, max_lng)]
 
 
 def mark_as_dummy(form_data):
@@ -127,57 +93,41 @@ def pick_target_administrations(tenant):
     return list(qs.filter(level__level=deepest).order_by("id"))
 
 
-def ensure_hierarchy(tenant, depth, fanout, stdout):
-    """Existing units, or a DUMMY- throwaway hierarchy under the root.
+def require_targets_with_bbox(tenant):
+    """The leaf units to seed onto, guaranteed to resolve a bounding box.
 
-    A workspace configured through registration has one level and one root
-    and nothing below it. Seeding every datapoint onto that single root
-    makes administration filters and the map degenerate, so a disposable
-    hierarchy is generated instead. Reuses any Levels the workspace
-    already defines and only mints DUMMY- levels to reach `depth`.
+    Every row this command writes carries a `geo`, so the check runs before
+    the transaction opens rather than leaving pinless rows behind (D-9).
+    Returns (targets, attribute, cache) -- the cache is shared with the seed
+    loop so each unit's box is read once.
     """
-    existing = pick_target_administrations(tenant)
-    if existing:
-        return existing
-
-    root = Administration.objects.filter(
-        tenant=tenant, parent__isnull=True
-    ).first()
-    if not root:
+    targets = pick_target_administrations(tenant)
+    if not targets:
         raise CommandError(
-            "This workspace has no root administration. Configure it "
-            "first, or import a hierarchy with administration_csv_seeder."
+            "This workspace has no administration hierarchy below its root, "
+            "so there is nothing to attach datapoints to. Import one first:\n"
+            "  python manage.py administration_csv_seeder "
+            "--source=administrations/<file>.csv --tenant=<subdomain>"
         )
 
-    parents = [root]
-    for level_depth in range(1, depth + 1):
-        level, _ = Levels.objects.get_or_create(
-            tenant=tenant,
-            level=level_depth,
-            defaults={"name": f"{DUMMY_PREFIX}Level {level_depth}"},
+    attribute = get_bbox_attribute(tenant)
+    cache = {}
+    with_bbox = [
+        adm for adm in targets
+        if resolve_bbox(adm, attribute, cache) is not None
+    ]
+    if not with_bbox:
+        raise CommandError(
+            "None of this workspace's administrations carry a "
+            f"'{BBOX_ATTRIBUTE_NAME}' attribute, so generated datapoints "
+            "would have no map coordinates.\n"
+            "Re-import the hierarchy from a CSV carrying an "
+            "'attr_Bounding Box' column -- the notebook in "
+            "scripts/administration_csv_generator/ writes one by default:\n"
+            "  python manage.py administration_csv_seeder "
+            "--source=administrations/<file>.csv --tenant=<subdomain>"
         )
-        children = []
-        for parent in parents:
-            for i in range(fanout):
-                # parent is set, so the pre_save receiver populates
-                # `path` -- which every visualization administration
-                # filter reads.
-                children.append(
-                    Administration.objects.create(
-                        name=(
-                            f"{DUMMY_PREFIX}{level.name} "
-                            f"{parent.id}-{i + 1}"
-                        ),
-                        parent=parent,
-                        level=level,
-                        tenant=tenant,
-                    )
-                )
-        parents = children
-    stdout.write(
-        f"-- Generated {len(parents)} throwaway administrations"
-    )
-    return parents
+    return with_bbox, attribute, cache
 
 
 def clean_dummy_data(tenant, stdout):
@@ -401,8 +351,8 @@ class Command(BaseCommand):
             type=boolean,
             default=False,
             help=(
-                "Use the bundled TEST_GEO_DATA fixture. Exempt from "
-                "--tenant and --bbox."
+                "Use the bundled TEST_GEO_DATA fixture, which carries its "
+                "own coordinates. Exempt from --tenant."
             ),
         )
         parser.add_argument(
@@ -413,26 +363,6 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
-            "--bbox", type=str, default=None,
-            help=(
-                "Bounding box for generated geo points, as "
-                "'minLng,minLat,maxLng,maxLat'. Required unless --test. "
-                "There is deliberately no default: every workspace is a "
-                "different country."
-            ),
-        )
-        parser.add_argument(
-            "--depth", type=int, default=2,
-            help=(
-                "Levels of throwaway hierarchy to generate when the "
-                "workspace has none below its root."
-            ),
-        )
-        parser.add_argument(
-            "--fanout", type=int, default=4,
-            help="Children per generated administration.",
-        )
-        parser.add_argument(
             "--clean",
             nargs="?",
             const=True,
@@ -440,8 +370,9 @@ class Command(BaseCommand):
             default=False,
             help=(
                 "Hard-delete every DUMMY- row this workspace owns, then "
-                "exit. Seeds nothing, so --bbox is not needed. To reset, "
-                "run this and then a normal seed."
+                "exit. Seeds nothing. To reset, run this and then a normal "
+                "seed. Bounding boxes are left alone -- they belong to the "
+                "hierarchy, not to the generated data."
             ),
         )
 
@@ -471,15 +402,6 @@ class Command(BaseCommand):
         tenant = resolve_tenant(
             options.get("tenant"), required=not is_test
         )
-        bbox = None
-        if not is_test and not clean:
-            if not options.get("bbox"):
-                raise CommandError(
-                    "--bbox is required. Example for Fiji: "
-                    "--bbox '177.0,-18.3,180.0,-16.1'"
-                )
-            bbox = parse_bbox(options["bbox"])
-
         if clean:
             # Terminal, not a prelude to seeding. `--clean` reads as an
             # imperative, so a run that quietly repopulated afterwards
@@ -497,6 +419,8 @@ class Command(BaseCommand):
         base_created = datetime.combine(base_created, time.min)
         base_created = make_aware(base_created)
 
+        bbox_attribute = None
+        bbox_cache = {}
         if is_test:
             last_level_obj = Levels.objects.filter(
                 tenant=tenant
@@ -508,18 +432,17 @@ class Command(BaseCommand):
             ]
             geos = [[geo["Y"], geo["X"]] for geo in TEST_GEO_DATA]
             targets = [adm for adm in targets if adm is not None]
+            if not targets:
+                raise CommandError(
+                    "No administrations available to attach datapoints to."
+                )
         else:
-            targets = ensure_hierarchy(
-                tenant,
-                options["depth"],
-                options["fanout"],
-                self.stdout,
+            targets, bbox_attribute, bbox_cache = require_targets_with_bbox(
+                tenant
             )
             geos = None
-
-        if not targets:
-            raise CommandError(
-                "No administrations available to attach datapoints to."
+            self.stdout.write(
+                f"-- {len(targets)} administrations with a bounding box"
             )
 
         da = DataAccessTypes.approve
@@ -558,10 +481,14 @@ class Command(BaseCommand):
                     if index >= total_points:
                         index = 0
                     adm = targets[index]
-                    geo_value = (
-                        geos[index % len(geos)] if geos
-                        else random_point_in(bbox)
-                    )
+                    if geos:
+                        geo_value = geos[index % len(geos)]
+                    else:
+                        # require_targets_with_bbox filtered `targets` to
+                        # units that resolve, so this cannot be None.
+                        geo_value = random_point_in(
+                            resolve_bbox(adm, bbox_attribute, bbox_cache)
+                        )
                     parent_adm = adm.ancestors.exclude(
                         parent__isnull=True
                     ).first() if adm.path else None

@@ -1,6 +1,6 @@
 {
-  "input": "scripts/administration_csv_generator/geojson/example.geojson",
-  "output": "storage/administrations/example.csv",
+  "input": "example.geojson",
+  "output": "example.csv",
   "labels": {
     "0": "National",
     "1": "Province",

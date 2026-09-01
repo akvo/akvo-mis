@@ -159,3 +159,15 @@ TEST_GEO_DATA = [
     {"name": "Yogyakarta", "X": 110.4170, "Y": -7.7326},
     {"name": "Indonesia", "X": 106.8456, "Y": -6.2088},
 ]
+
+
+# SEED-003. The administration attribute carrying a unit's bounding box, as
+# "minLng,minLat,maxLng,maxLat". The name is user-visible: it appears in the
+# attribute manager alongside real attributes like "Population".
+BBOX_ATTRIBUTE_NAME = "Bounding Box"
+
+# CSV column prefix that names an administration attribute. The Excel path
+# keys columns as "<id>|<Name>" and looks them up by primary key, which a
+# notebook cannot do -- it has no database ids -- so the CSV path is
+# name-keyed instead.
+ATTRIBUTE_COLUMN_PREFIX = "attr_"
