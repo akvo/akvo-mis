@@ -42,6 +42,7 @@ PGADMIN_LISTEN_PORT="5050"
 IP_ADDRESS="http://<your_ip_address>:3000/api/v1/device"
 APK_UPLOAD_SECRET="123456789AU"
 STORAGE_PATH="./storage"
+BASE_DOMAIN=
 SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
 SENTRY_MOBILE_DSN="<<your_sentry_mobile_DSN>>"
@@ -50,6 +51,98 @@ SENTRY_MOBILE_AUTH_TOKEN="<<your_sentry_mobile_auth_token>>"
 
 
 You can generate a Sentry auth token by following [this official Sentry documentation](https://docs.sentry.io/account/auth-tokens/).
+
+#### Workspaces (multi-tenancy)
+
+The app is multi-tenant. Every workspace owns its own administrative
+hierarchy, forms, users and data, and nothing is shared between them.
+
+`BASE_DOMAIN` decides whether workspaces get their own hosts:
+
+| `BASE_DOMAIN` | Behaviour |
+|---|---|
+| empty (**default**) | Single host. Every request is the base domain, no host resolves to a workspace, and the app behaves as it did before workspaces existed. |
+| e.g. `localapp.test` | Each workspace lives at `<subdomain>.<BASE_DOMAIN>`, and a session is only valid on its own workspace's host. |
+
+Leave it empty unless you are working on subdomain routing — see
+[Subdomain routing locally](#subdomain-routing-locally) below.
+
+A migrated database always has one workspace called `default`, created by
+the tenant backfill migration, so the seeders have something to target
+before anyone registers. Commands that write workspace-owned rows take
+`--tenant=<subdomain>`.
+
+#### Subdomain routing locally
+
+`/etc/hosts` stands in for the wildcard DNS that production uses, and the
+flow you get is the same one production has. Full walkthrough:
+[`doc/notes/subdomain-local-dev.md`](doc/notes/subdomain-local-dev.md).
+
+**One-time setup**
+
+1. Pick a base domain you do not own on the real internet — `.test` is
+   reserved for exactly this by RFC 2606 — and set it in `.env`:
+
+   ```bash
+   BASE_DOMAIN=localapp.test
+   ```
+
+2. Add it to `/etc/hosts`:
+
+   ```
+   127.0.0.1  localapp.test
+   ```
+
+3. Restart so the backend and worker pick up the variable and the frontend
+   bakes it into `config.js`:
+
+   ```bash
+   ./dc.sh up -d --force-recreate backend worker frontend
+   ```
+
+`http://localapp.test:3000` is now the main site: registration and a
+find-workspace field, no login.
+
+**Per workspace**
+
+`/etc/hosts` has no wildcard, so every workspace needs its own line. This
+is the only repeated step.
+
+1. Register at `http://localapp.test:3000/register`, say `new-tenant`.
+2. Add its host:
+
+   ```
+   127.0.0.1  new-tenant.localapp.test
+   ```
+
+3. Read the activation email at [localhost:8025](http://localhost:8025)
+   (Mailpit). The link already points at
+   `http://new-tenant.localapp.test:3000/activate/...`, because activation
+   hands back a session and that session is only valid there.
+4. Follow it, complete the configuration form, and use the app on that host.
+
+**Four things that will bite you**
+
+- **The base domain and the workspace hosts must share a suffix.** The
+  resolver strips `BASE_DOMAIN` off the host and looks up what is left, so
+  `BASE_DOMAIN=localapp.test` with a browser on `acme.localhost` resolves to
+  nothing and answers 404.
+- **`ALLOWED_HOSTS` must accept the subdomains.** It is `["*"]` today. If
+  that is ever tightened, Django's leading-dot form is the subdomain
+  wildcard: `.localapp.test`.
+- **The dev proxy must forward the browser's Host.** `setupProxy.js` sets
+  `changeOrigin: false` for this reason — with it on, every request reaches
+  Django as `127.0.0.1:8000` and no workspace ever resolves.
+- **The port is part of the local address.** The resolver strips it, but
+  redirects and emailed links carry it, so `http://acme.localapp.test`
+  without `:3000` reaches nothing.
+
+**Without hosts entries:** `curl -H "Host: acme.localapp.test" ...` reaches a
+workspace from a shell. Only the browser needs `/etc/hosts`, because only the
+browser resolves the name. Tests need nothing at all — the Django test client
+takes the host as an argument, and `BASE_DOMAIN` is forced empty under
+`manage.py test`, so a test that wants host routing opts in with
+`override_settings`.
 
 #### Start
 
@@ -127,10 +220,10 @@ rather than a prompt.
 
 The script then asks whether to run each step:
 
-- seed administrative data
+- seed administrative data (a CSV import, or the small bundled sample)
 - seed forms
 - add a new super admin
-- seed organisations, entities and administration attributes
+- seed organisations and administration attributes
 - seed default roles
 - seed fake data
 
@@ -351,10 +444,9 @@ the configuration form — it asks for the top tier's name ("National") and the
 unit at it ("Indonesia"), which are two different things.
 
 If you are working on subdomain routing, each workspace also needs an
-`/etc/hosts` line; the full walkthrough and the four things that commonly break
-it are in [`doc/notes/subdomain-local-dev.md`](doc/notes/subdomain-local-dev.md).
-With `BASE_DOMAIN` empty — the default — host routing is inert and you can skip
-that.
+`/etc/hosts` line — see
+[Subdomain routing locally](#subdomain-routing-locally). With `BASE_DOMAIN`
+empty, the default, host routing is inert and you can skip that.
 
 **Or skip registration entirely:** a migrated database already has a `default`
 workspace (created by the tenant backfill migration), which is what a
