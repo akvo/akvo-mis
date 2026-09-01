@@ -101,11 +101,9 @@ describe("expandMeasure", () => {
 
 const SRC = path.join(__dirname, "..", "..");
 
-const ALLOWED = [
-  "util/dashboardMeasure.js",
-  // Deleted with the legacy renderer in VIZ-009 (#313).
-  "components/dashboard/DashboardMap/useMapByParent.js",
-];
+// VIZ-009 (#313) deleted the legacy renderer, so the expansion now has the
+// single writer VIZ-008 specified — nothing else may join this list.
+const ALLOWED = ["util/dashboardMeasure.js"];
 
 // `monitoring:` in an object literal, or `monitoring=` in a query string.
 // `include_monitoring` is a different parameter on a different endpoint

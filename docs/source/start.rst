@@ -75,9 +75,9 @@ User access in Akvo MIS is managed through roles and permissions. Each user can 
 
 - **Invite Users**: Administrators can invite new users to join the system by sending them an invitation email. The invited user will need to set up their account by creating a password.
 
-  .. note::
+   .. note::
 
-     **One account per workspace.** An email address can belong to only one workspace. If the address is already registered elsewhere — as an owner, a member, or a pending invitation — it cannot be invited into a second workspace. Ask the person to use a different email address, or contact support if you need help.
+      **Per-workspace account scoping.** An email address is scoped per workspace. A person can belong to multiple workspaces with the same email address, with independent passwords and role-based permissions in each workspace. Inviting an address that already belongs to your workspace will be flagged as a duplicate.
 
 
 .. _manage_roles:

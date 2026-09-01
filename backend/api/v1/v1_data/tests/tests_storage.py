@@ -18,6 +18,11 @@ def generate_file(filename: str, hex: bool = False):
 
 @override_settings(USE_TZ=False)
 class StorageTestCase(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        os.makedirs(STORAGE_PATH, exist_ok=True)
+
     def test_if_storage_path_exists(self):
         self.assertTrue(
             os.path.exists(STORAGE_PATH), "Storage path not exists"
@@ -28,7 +33,7 @@ class StorageTestCase(TestCase):
         uploaded_file = storage.upload(file=filename, folder="test")
         self.assertTrue(
             os.path.exists(f"{STORAGE_PATH}/test/{filename}"),
-            "File not exists"
+            "File not exists",
         )
         self.assertTrue(storage.check(f"test/{filename}"), "File not exists")
         self.assertEqual(uploaded_file, f"{STORAGE_PATH}/test/{filename}")

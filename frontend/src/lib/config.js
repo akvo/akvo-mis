@@ -660,7 +660,7 @@ const config = {
       },
     },
   ],
-  allowedGlobal: ["/dashboard/", "/glaas/"],
+  allowedGlobal: [],
   fn: {
     administration: (id, withchildren = true) => {
       return new Promise((resolve, reject) => {

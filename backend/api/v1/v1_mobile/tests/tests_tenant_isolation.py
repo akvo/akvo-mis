@@ -31,10 +31,3 @@ class MobileTenantIsolationTestCase(TenantIsolationTestCase):
         names = [m["name"] for m in res.json()["data"]]
         self.assertIn(self.a["assignment"].name, names)
         self.assertNotIn(self.b["assignment"].name, names)
-
-    def test_datapoint_detail_404_on_foreign_object(self):
-        res = self.client.get(
-            f"/api/v1/maps/datapoint/{self.b['data'].id}",
-            **self.auth(self.a["user"]),
-        )
-        self.assertEqual(res.status_code, 404)

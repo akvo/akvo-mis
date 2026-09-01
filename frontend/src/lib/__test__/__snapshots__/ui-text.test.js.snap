@@ -13,7 +13,7 @@ Object {
     "accountDisclaimer": "The user is accountable for his/her account and in case there are any changes (Transfers, retirement, any kind of leave, resignation etc) this should be communicated to the County Administrator or National Super Admin who might be able to assign the roles to the new officer.",
     "actionColumn": "Action",
     "addAdmDesc": <React.Fragment>
-      This page allows you to add administration to the
+      This page allows you to add administration to the 
       Test App
        platform.
     </React.Fragment>,
@@ -21,7 +21,7 @@ Object {
     "addAttachment": "Add Attachment",
     "addAttachmentDesc": "Add a new attachment to the batch",
     "addAttributeDesc": <React.Fragment>
-      This page allows you to add attribute to the
+      This page allows you to add attribute to the 
       Test App
        platform.
     </React.Fragment>,
@@ -30,12 +30,12 @@ Object {
     "addEntity": "Add New",
     "addEntityData": "Add New",
     "addEntityDesc": <React.Fragment>
-      This page allows you to add entity to the
+      This page allows you to add entity to the 
       Test App
        platform.
     </React.Fragment>,
     "addEntityTypeDesc": <React.Fragment>
-      This page allows you to add entity type to the
+      This page allows you to add entity type to the 
       Test App
        platform.
     </React.Fragment>,
@@ -45,7 +45,7 @@ Object {
     "addNewUser": "Add new user",
     "addOptionButton": "Add option",
     "addOrgDesc": <React.Fragment>
-      This page allows you to add organisations to the
+      This page allows you to add organisations to the 
       Test App
        platform.
     </React.Fragment>,
@@ -54,7 +54,7 @@ Object {
     "addRoleDescription": [Function],
     "addUser": "Add User",
     "addUserDescription": <React.Fragment>
-      This page allows you to add users to the
+      This page allows you to add users to the 
       Test App
        platform. You will only be able to add users for regions under your jurisdisction.
       <br />
@@ -260,7 +260,7 @@ Object {
     "deleteOrganisationTitle": "You are about to delete the organization",
     "deleteText": "Delete",
     "deleteUserDesc": <React.Fragment>
-      The User will no longer be able to access the
+      The User will no longer be able to access the 
       Test App
        platform as an Enumrator/Admin etc
     </React.Fragment>,
@@ -268,13 +268,13 @@ Object {
     "deleteUserTitle": "You are about to delete the user",
     "download": "Download",
     "downloadAppText": <React.Fragment>
-      Download
+      Download 
       Test App
        App
     </React.Fragment>,
     "downloadAppsLinkText": "or download using the links below:",
     "downloadAppsQRText": <React.Fragment>
-      Download the
+      Download the 
       <b>
         Test App
          App
@@ -299,7 +299,7 @@ Object {
     "draftFormSaveSuccess": "Draft saved successfully",
     "dropFile": "Drop your file here",
     "editAdmDesc": <React.Fragment>
-      This page allows you to edit administration to the
+      This page allows you to edit administration to the 
       Test App
        platform.
     </React.Fragment>,
@@ -308,7 +308,7 @@ Object {
     "editAttachment": "Edit Attachment",
     "editAttachmentDesc": "Replace the existing attachment with a new one",
     "editAttributeDesc": <React.Fragment>
-      This page allows you to edit attribute to the
+      This page allows you to edit attribute to the 
       Test App
        platform.
     </React.Fragment>,
@@ -318,17 +318,17 @@ Object {
     "editEntity": "Edit Entity",
     "editEntityData": "Edit data",
     "editEntityDesc": <React.Fragment>
-      This page allows you to edit entity to the
+      This page allows you to edit entity to the 
       Test App
        platform.
     </React.Fragment>,
     "editEntityTypeDesc": <React.Fragment>
-      This page allows you to edit entity type to the
+      This page allows you to edit entity type to the 
       Test App
        platform.
     </React.Fragment>,
     "editOrgDesc": <React.Fragment>
-      This page allows you to edit organisations to the
+      This page allows you to edit organisations to the 
       Test App
        platform.
     </React.Fragment>,
@@ -364,9 +364,9 @@ Object {
     "errorPageNA": "Oops, this page is not available",
     "errorSomething": "Something went wrong",
     "errorURL": <React.Fragment>
-      Please check the URL again or let us take you back to the
+      Please check the URL again or let us take you back to the 
       Test App
-
+       
       homepage
     </React.Fragment>,
     "errorUnknown": "An unknown error occurred",
@@ -461,13 +461,13 @@ Object {
     "formBuilderImportFailed": "Import failed",
     "formBuilderImportFileTooLarge": [Function],
     "formBuilderImportFormLabel": "Form",
-    "formBuilderImportFormatJson": "JSON (Native)",
-    "formBuilderImportFormatLabel": "Format",
-    "formBuilderImportFormatXlsform": "XLSForm (.xlsx)",
     "formBuilderImportFormTypeLabel": "Form Type",
     "formBuilderImportFormTypeMonitoring": "Monitoring",
     "formBuilderImportFormTypeRegistration": "Registration",
     "formBuilderImportFormTypeRequired": "Please select a form type",
+    "formBuilderImportFormatJson": "JSON (Native)",
+    "formBuilderImportFormatLabel": "Format",
+    "formBuilderImportFormatXlsform": "XLSForm (.xlsx)",
     "formBuilderImportGroupsLabel": "Groups",
     "formBuilderImportInProgress": "Importing form…",
     "formBuilderImportInvalidFile": "Only .json files are supported",
@@ -553,7 +553,7 @@ Object {
        is a comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation. It serves as a centralised hub for evidence-based reporting and efficient resource allocation.
     </React.Fragment>,
     "homeFooterAboutTitle": <React.Fragment>
-      About
+      About 
       Test App
     </React.Fragment>,
     "homeFooterContactAddress": Array [
@@ -592,7 +592,7 @@ Object {
       Test App
     </React.Fragment>,
     "homeKeyRolesHeadline": <React.Fragment>
-      Policy, oversight and
+      Policy, oversight and 
       <span
         className="accent"
       >
@@ -633,7 +633,7 @@ Object {
     "homeKeyRolesText": "The key roles and responsibilities of the organisation include policy and legislation development, technical and policy advisory, compliance monitoring, and service delivery oversight.",
     "homeKeyRolesTitle": "Key Roles and Responsibilities",
     "homeMandateHeadline": <React.Fragment>
-      Ensuring a
+      Ensuring a 
       <span
         className="accent"
       >
@@ -663,7 +663,7 @@ Object {
         "href": "/app",
         "isPage": false,
         "text": <React.Fragment>
-          Download
+          Download 
           Test App
            App
         </React.Fragment>,
@@ -676,7 +676,7 @@ Object {
     "homeStructureText": "Replace this text with a description of your organisation structure. This section can be updated in ui-text.js or configured via a content management system.",
     "homeStructureTitle": "Organisation Structure",
     "homeVideoHeadline": <React.Fragment>
-      See
+      See 
       <span
         className="accent"
       >
@@ -891,16 +891,16 @@ Object {
     "mobileLevelRequired": "Level is required",
     "mobileNameRequired": "Name is required",
     "mobilePanelAddDesc": <React.Fragment>
-      This page allows you to add mobile data collectors to the
+      This page allows you to add mobile data collectors to the 
       Test App
-
+       
       platform.
     </React.Fragment>,
     "mobilePanelButton": "Manage Data Collectors",
     "mobilePanelEditDesc": <React.Fragment>
-      This page allows you to edit mobile data collectors to the
+      This page allows you to edit mobile data collectors to the 
       Test App
-
+       
       platform.
     </React.Fragment>,
     "mobilePanelText": <React.Fragment>
@@ -979,7 +979,7 @@ Object {
       This is where you :
       <ul>
         <li>
-          View pending data approvals awaiting your approval
+          View pending data approvals awaiting your approval 
         </li>
         <li>
           View pending approvals by your subordinate approvers
@@ -1163,7 +1163,7 @@ Object {
     "viewText": "View",
     "webformText": "Webform",
     "welcomeShort": <React.Fragment>
-      Welcome to the
+      Welcome to the 
       <b>
         Test App
       </b>
