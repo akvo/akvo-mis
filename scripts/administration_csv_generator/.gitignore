@@ -1,0 +1,3 @@
+config.json
+geojson/*.json
+geojson/*.geojson

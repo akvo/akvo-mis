@@ -96,7 +96,8 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
         repeat = 4
         output = self.call_command(
             "--repeat=%d" % repeat,
-            "--draft=true"
+            "--draft=true",
+            "--approved=false",
         )
         for form in Forms.objects.filter(
             parent__isnull=True
@@ -170,7 +171,8 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
         repeat = 2
         self.call_command(
             "--repeat=%d" % repeat,
-            "--draft=true"
+            "--draft=true",
+            "--approved=false",
         )
         # Verify each FormData entry
         # Each FormData should have a draft status

@@ -18,16 +18,25 @@ from api.v1.v1_forms.models import (
     QuestionAttribute as QA)
 from api.v1.v1_data.models import (
     Answers, AnswerHistory, FormData)
+from utils.tenant_command import resolve_tenant
 
 
-def migrate_question_answers(question, target_form_id):
+def migrate_question_answers(question, target_form_id, tenant=None):
     """Migrate answers from source form data to target monitoring form data.
 
     When a question moves from registration to monitoring form,
     redistribute its answers to the corresponding monitoring FormData
     children. If no children exist, keep the answer on the source data.
+
+    Scoped by tenant: the target id comes from the file, and moving
+    answers towards another workspace's form would be a silent
+    cross-tenant write. Defaults to None -- the tenant-less space -- so
+    the helper keeps its original two-argument signature for callers
+    that predate workspaces.
     """
-    target_form = Forms.objects.filter(id=target_form_id).first()
+    target_form = Forms.objects.filter(
+        id=target_form_id, tenant=tenant
+    ).first()
     if not target_form:
         return
 
@@ -119,9 +128,20 @@ class Command(BaseCommand):
                             nargs="?",
                             default=None,
                             type=str)
+        # No short flag: -t is already --test on this command, and two
+        # flags one keystroke apart is how a form id ends up in --tenant.
+        parser.add_argument("--tenant",
+                            default=None,
+                            type=str,
+                            help=("Workspace subdomain to seed the forms "
+                                  "into. Omit to seed into the "
+                                  "tenant-less space."))
 
     def handle(self, *args, **options):
         TEST = options.get("test")
+        # Optional: omitting it seeds into the tenant-less space, which
+        # is how seeder.sh, reset_forms and 138 test call sites run.
+        tenant = resolve_tenant(options.get("tenant"))
         JSON_FILE = options.get("file")
         # Form source. Overridable via --source so tests can point the
         # seeder at an isolated copy of the fixtures instead of mutating
@@ -202,13 +222,47 @@ class Command(BaseCommand):
                     failed_sources.append(source)
                     continue
 
-                form = Forms.objects.filter(id=norm["form_id"]).first()
+                # Scope by tenant only when one was named. Omitting
+                # --tenant means "behave as before workspaces existed":
+                # find the form by id whatever it belongs to, and update
+                # it in place. Scoping unconditionally would treat every
+                # already-owned form as new and then refuse to create it.
+                matches = Forms.objects.filter(id=norm["form_id"])
+                if tenant is not None:
+                    matches = matches.filter(tenant=tenant)
+                form = matches.first()
                 created = form is None
+
+                if created and tenant is not None:
+                    # Form ids come from the file and `id` IS the primary
+                    # key, so the same definition cannot be seeded into two
+                    # workspaces. Without this check the unscoped lookup
+                    # this replaced would find the other tenant's row and
+                    # silently rewrite it -- handing their form to whoever
+                    # ran the seeder last. objects_with_deleted because a
+                    # soft-deleted form still occupies its id.
+                    clash = Forms.objects_with_deleted.filter(
+                        id=norm["form_id"]
+                    ).first()
+                    if clash is not None:
+                        owner = (
+                            clash.tenant.subdomain if clash.tenant
+                            else "the tenant-less space"
+                        )
+                        raise CommandError(
+                            f"{source}: form id {norm['form_id']} already "
+                            f"belongs to {owner}. Form ids are global, so "
+                            "a definition can only be seeded once per "
+                            "install -- give this file its own id."
+                        )
 
                 parent = None
                 hint = norm.get("parent_hint")
                 if hint and hint.get("id"):
-                    parent = Forms.objects.filter(id=hint["id"]).first()
+                    parents_qs = Forms.objects.filter(id=hint["id"])
+                    if tenant is not None:
+                        parents_qs = parents_qs.filter(tenant=tenant)
+                    parent = parents_qs.first()
 
                 if created:
                     # The shared import path creates drafts (FR-11); the
@@ -225,6 +279,12 @@ class Command(BaseCommand):
                         type=norm.get("type"),
                         status=FormStatus.published,
                         parent=parent,
+                        # import_form_definition stamps tenant from the
+                        # `user` it is given, and the seeder has none. The
+                        # row is pre-created here anyway, and the update
+                        # path's explicit update_fields never include
+                        # tenant, so setting it once here is permanent.
+                        tenant=tenant,
                     )
                     # A form that did not exist has nothing to compare
                     # against; it is new, so its version stands at 1.
@@ -270,7 +330,9 @@ class Command(BaseCommand):
                 for question in removed_qs:
                     target_form_id = question_target_map.get(question.id)
                     if target_form_id and target_form_id != form.id:
-                        migrate_question_answers(question, target_form_id)
+                        migrate_question_answers(
+                            question, target_form_id, tenant
+                        )
 
                 # Shared write path (D-8): groups/questions/options upsert
                 # by exported id; cross-form moves claimed by PK so answers

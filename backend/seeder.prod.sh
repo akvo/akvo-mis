@@ -10,7 +10,14 @@ fi
 echo "Seed Form? [y/n]"
 read -r seed_form
 if [[ "${seed_form}" == 'y' || "${seed_form}" == 'Y' ]]; then
-    python manage.py form_seeder
+    echo "Which workspace (subdomain) do these forms belong to?"
+    echo "  Leave blank for a single-host install (no workspace)."
+    read -r form_subdomain
+    form_tenant_arg=()
+    if [[ "${form_subdomain}" != '' ]]; then
+        form_tenant_arg=(--tenant="${form_subdomain}")
+    fi
+    python manage.py form_seeder "${form_tenant_arg[@]}"
     python manage.py generate_config
 fi
 

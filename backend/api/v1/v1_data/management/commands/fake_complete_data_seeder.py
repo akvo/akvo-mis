@@ -1,21 +1,34 @@
-import pandas as pd
+"""Generate marked, disposable submission data (SEED-001).
+
+Every row this command writes carries DUMMY_PREFIX so a human can tell
+generated data from real data at a glance, and so `--clean` can remove it
+again. See doc/design/SEED-001-fake-data-prefix-and-clean.md.
+"""
 import re
 import time as time_module
 from datetime import datetime, timedelta, time
+from random import uniform
 
+from django.conf import settings
 from django.core.management import BaseCommand
+from django.core.management.base import CommandError
 from django.utils.timezone import make_aware
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Max, Q
 from faker import Faker
 
-from mis.settings import COUNTRY_NAME
+from api.v1.v1_data.constants import (
+    DUMMY_EMAIL_DOMAIN,
+    DUMMY_EMAIL_PREFIX,
+    DUMMY_PREFIX,
+)
 from api.v1.v1_data.models import FormData
 from api.v1.v1_data.functions import add_fake_answers
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import (
     Administration,
     DataAccessTypes,
+    EntityData,
     Levels,
     Role,
 )
@@ -23,31 +36,270 @@ from api.v1.v1_users.models import SystemUser, Organisation
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.constants import TEST_GEO_DATA
 from api.v1.v1_visualization.functions import refresh_materialized_data
+from utils.tenant_command import resolve_tenant
 
 fake = Faker()
 
 DEFAULT_PASSWORD = "Test#123"
 
 
-def find_administration(name, level):
+def parse_bbox(raw):
+    """'minLng,minLat,maxLng,maxLat' -> (floats), validated.
+
+    There is deliberately no default: every workspace is a different
+    country, and a silent default puts every pin in the wrong hemisphere.
+    """
+    parts = [p.strip() for p in (raw or "").split(",")]
+    if len(parts) != 4:
+        raise CommandError(
+            "--bbox must be 'minLng,minLat,maxLng,maxLat'. "
+            "Example for Fiji: --bbox '177.0,-18.3,180.0,-16.1'"
+        )
+    try:
+        min_lng, min_lat, max_lng, max_lat = [float(p) for p in parts]
+    except ValueError:
+        raise CommandError(f"--bbox '{raw}' is not four numbers.")
+    if min_lng >= max_lng or min_lat >= max_lat:
+        raise CommandError(
+            "--bbox needs min < max on both axes; got "
+            f"lng {min_lng}..{max_lng}, lat {min_lat}..{max_lat}."
+        )
+    if not (-180 <= min_lng <= 180 and -180 <= max_lng <= 180):
+        raise CommandError("--bbox longitudes must be within -180..180.")
+    if not (-90 <= min_lat <= 90 and -90 <= max_lat <= 90):
+        raise CommandError("--bbox latitudes must be within -90..90.")
+    return min_lng, min_lat, max_lng, max_lat
+
+
+def random_point_in(bbox):
+    """A [lat, lng] inside the bbox, in the order FormData.geo expects.
+
+    Latitude first: the map widgets read geo[0] as latitude, so the order
+    is load-bearing rather than cosmetic.
+    """
+    min_lng, min_lat, max_lng, max_lat = bbox
+    return [uniform(min_lat, max_lat), uniform(min_lng, max_lng)]
+
+
+def mark_as_dummy(form_data):
+    """Stamp the fake-data prefix, idempotently.
+
+    MUST be called after add_fake_answers(), which rebuilds `name` from
+    the form's meta questions and would otherwise discard the prefix, and
+    before `save_to_file`, which serialises the name into the storage blob
+    that mobile debugging reads.
+    """
+    if form_data.name.startswith(DUMMY_PREFIX):
+        return form_data
+    form_data.name = f"{DUMMY_PREFIX}{form_data.name}"
+    form_data.save(update_fields=["name"])
+    return form_data
+
+
+def find_administration(name, level, tenant):
+    """Name-matched lookup, walking up until a tier matches.
+
+    Only used by --test, whose TEST_GEO_DATA names line up with
+    DEFAULT_ADMINISTRATION_DATA. The normal path takes administrations
+    from the database instead (pick_target_administrations), because no
+    real workspace is named after a bundled fixture.
+    """
     if level < 0:
         return None
-    adm = Administration.objects.filter(name=name, level__level=level).first()
+    adm = Administration.objects.filter(
+        name=name, level__level=level, tenant=tenant
+    ).first()
     if adm is None:
-        adm = find_administration(name, level - 1)
+        adm = find_administration(name, level - 1, tenant)
     return adm
 
 
-def create_approver_user(
-    administration: Administration,
-    org: Organisation,
-):
-    da = DataAccessTypes.approve
+def pick_target_administrations(tenant):
+    """The leaf-most administrations datapoints may attach to."""
+    qs = Administration.objects.filter(
+        parent__isnull=False, tenant=tenant
+    )
+    if not qs.exists():
+        return []
+    # Deepest level present in THIS workspace. An install-wide max would
+    # read across every tenant.
+    deepest = qs.aggregate(m=Max("level__level"))["m"]
+    return list(qs.filter(level__level=deepest).order_by("id"))
+
+
+def ensure_hierarchy(tenant, depth, fanout, stdout):
+    """Existing units, or a DUMMY- throwaway hierarchy under the root.
+
+    A workspace configured through registration has one level and one root
+    and nothing below it. Seeding every datapoint onto that single root
+    makes administration filters and the map degenerate, so a disposable
+    hierarchy is generated instead. Reuses any Levels the workspace
+    already defines and only mints DUMMY- levels to reach `depth`.
+    """
+    existing = pick_target_administrations(tenant)
+    if existing:
+        return existing
+
+    root = Administration.objects.filter(
+        tenant=tenant, parent__isnull=True
+    ).first()
+    if not root:
+        raise CommandError(
+            "This workspace has no root administration. Configure it "
+            "first, or import a hierarchy with administration_csv_seeder."
+        )
+
+    parents = [root]
+    for level_depth in range(1, depth + 1):
+        level, _ = Levels.objects.get_or_create(
+            tenant=tenant,
+            level=level_depth,
+            defaults={"name": f"{DUMMY_PREFIX}Level {level_depth}"},
+        )
+        children = []
+        for parent in parents:
+            for i in range(fanout):
+                # parent is set, so the pre_save receiver populates
+                # `path` -- which every visualization administration
+                # filter reads.
+                children.append(
+                    Administration.objects.create(
+                        name=(
+                            f"{DUMMY_PREFIX}{level.name} "
+                            f"{parent.id}-{i + 1}"
+                        ),
+                        parent=parent,
+                        level=level,
+                        tenant=tenant,
+                    )
+                )
+        parents = children
+    stdout.write(
+        f"-- Generated {len(parents)} throwaway administrations"
+    )
+    return parents
+
+
+def clean_dummy_data(tenant, stdout):
+    """Hard-delete everything carrying DUMMY_PREFIX, in dependency order.
+
+    The delete key is the prefix, never `created_by`: the seeder reuses an
+    existing submitter when one matches, which on a shared workspace is a
+    real person's account, and cascading from it would destroy their
+    genuine submissions.
+    """
+    counts = {}
+
+    def scoped(qs, path="tenant"):
+        return qs.filter(**{path: tenant}) if tenant is not None else qs
+
+    # Tier 1 -- datapoints. objects_with_deleted, not objects: the default
+    # manager hides soft-deleted rows, so fake rows soft-deleted by an
+    # earlier run would survive every subsequent --clean. Drafts are
+    # included in the same queryset. Monitoring children cascade via
+    # FormData.parent; Answers and AnswerHistory via their `data` FK.
+    fake_data = scoped(
+        FormData.objects_with_deleted.filter(
+            name__startswith=DUMMY_PREFIX
+        ),
+        "form__tenant",
+    )
+    counts["FormData"] = fake_data.count()
+    fake_data.hard_delete()
+
+    # Tier 2 -- mobile assignments. Deleting them before their users keeps
+    # the reported counts honest and covers assignments attached to a
+    # REUSED real user, which tier 3 must not touch.
+    assignments = scoped(
+        MobileAssignment.objects.filter(name__startswith=DUMMY_PREFIX),
+        "user__tenant",
+    )
+    counts["MobileAssignment"] = assignments.count()
+    assignments.delete()
+
+    # Tier 3 -- seeded accounts, guarded. Only accounts the seeder minted,
+    # and only those with no surviving FormData.
+    orphaned = scoped(
+        SystemUser.objects_with_deleted.filter(
+            email__startswith=DUMMY_EMAIL_PREFIX,
+            email__endswith=DUMMY_EMAIL_DOMAIN,
+        ).exclude(form_data_created__isnull=False)
+    )
+    counts["SystemUser"] = orphaned.count()
+    orphaned.hard_delete()
+
+    # The materialized view carries a PROTECT on its administration FK,
+    # and still holds rows for the datapoints tier 1 just removed. Refresh
+    # it here so tier 4 is not blocked by a stale view -- and so the view
+    # stops serving deleted datapoints, which it must not do regardless.
+    refresh_materialized_data()
+
+    # Tier 4 -- generated administrations, deepest level first: the
+    # self-referential PROTECT on Administration.parent means a parent
+    # cannot go before its children.
+    fake_admins = scoped(
+        Administration.objects.filter(name__startswith=DUMMY_PREFIX)
+    )
+    counts["Administration"] = fake_admins.count()
+    if counts["Administration"]:
+        # EntityData PROTECTs its administration, and entity-cascade
+        # answers create rows against whichever unit the datapoint used.
+        # These belong to units being removed, so they go too -- unlike
+        # entity data attached to real administrations, which is kept.
+        EntityData.objects.filter(administration__in=fake_admins).delete()
+        depths = sorted(
+            fake_admins.values_list("level__level", flat=True).distinct(),
+            reverse=True,
+        )
+        for level_depth in depths:
+            fake_admins.filter(level__level=level_depth).delete()
+
+    # Tier 5 -- generated levels, only once nothing is left at them.
+    # Levels CASCADE to Administration, so an unguarded delete here would
+    # silently take real units with it.
+    fake_levels = scoped(
+        Levels.objects.filter(name__startswith=DUMMY_PREFIX)
+    ).exclude(administrator_level__isnull=False)
+    counts["Levels"] = fake_levels.count()
+    fake_levels.delete()
+
+    stdout.write("-- Cleaning fake data")
+    for label, count in counts.items():
+        stdout.write(f"   {label:<20} {count}")
+    return counts
+
+
+def pick_role(data_access, level, tenant):
+    """A role at this level, or any role with the same access.
+
+    UserRole.role is not nullable, so returning None here is an
+    IntegrityError several frames later. Generated hierarchies (D-10)
+    create levels that default_roles_seeder never saw, so the level-exact
+    lookup legitimately misses and the fallback carries it.
+    """
+    base = Role.objects.filter(
+        role_role_access__data_access=data_access, tenant=tenant
+    )
+    role = base.filter(administration_level=level).order_by("?").first()
+    if role:
+        return role
+    role = base.order_by("?").first()
+    if role:
+        return role
+    raise CommandError(
+        "This workspace has no role granting "
+        f"'{DataAccessTypes.FieldStr.get(data_access, data_access)}' "
+        "access. Run default_roles_seeder first."
+    )
+
+
+def create_approver_user(administration, org, tenant):
     """Create a new approver user for the given administration."""
+    da = DataAccessTypes.approve
     adm_name = re.sub(r"[^A-Za-z0-9]+", ".", administration.name.lower())
     fake_digit = fake.random_digit_not_null()
-    approver_email = "approver.{0}{1}@test.com".format(
-        adm_name, fake_digit
+    approver_email = "{0}approver.{1}{2}{3}".format(
+        DUMMY_EMAIL_PREFIX, adm_name, fake_digit, DUMMY_EMAIL_DOMAIN
     )
     approver = SystemUser.objects.filter(
         Q(
@@ -61,30 +313,24 @@ def create_approver_user(
             email=approver_email
         ).first()
         if approver:
-            # Restore the deleted user
             approver.restore()
             return
-    # Create a new user
     approver = SystemUser.objects.create_user(
         email=approver_email,
         first_name=fake.first_name(),
         last_name=fake.last_name(),
         phone_number=fake.phone_number()[:15],
         organisation=org,
+        tenant=tenant,
     )
     approver.set_password(DEFAULT_PASSWORD)
     approver.save()
-    # Assign all forms to the approver
-    forms = Forms.objects.filter(parent__isnull=True).all()
+    forms = Forms.objects.filter(parent__isnull=True, tenant=tenant)
     for form in forms:
         approver.user_form.create(form=form)
     approver.save()
 
-    # Assign the approver to the administration
-    role = Role.objects.filter(
-        role_role_access__data_access=da,
-        administration_level=administration.level,
-    ).order_by("?").first()
+    role = pick_role(da, administration.level, tenant)
     approver.user_user_role.create(
         role=role,
         administration=administration,
@@ -92,33 +338,38 @@ def create_approver_user(
 
 
 def create_approvers_recursively(
-    administration: Administration,
-    org: Organisation,
+    administration,
+    org,
+    tenant,
     max_depth: int = 3,
     current_depth: int = 0,
 ):
-    """
-    Recursively create approver users for the given administration
-    and its child administrations up to max_depth levels.
-    """
+    """Create approvers for an administration and its descendants."""
     if current_depth >= max_depth:
         return
-    # Create approver for current administration
-    create_approver_user(administration=administration, org=org)
-    # Recursively create approvers for child administrations
+    create_approver_user(
+        administration=administration, org=org, tenant=tenant
+    )
     if administration.parent_administration.exists():
         child_admin = administration.parent_administration\
             .order_by("?").first()
         create_approvers_recursively(
             administration=child_admin,
             org=org,
+            tenant=tenant,
             max_depth=max_depth,
             current_depth=current_depth + 1,
         )
 
 
 class Command(BaseCommand):
+    help = (
+        "Generate DUMMY- prefixed submission data for one workspace. "
+        "Use --clean to remove everything a previous run created."
+    )
+
     def add_arguments(self, parser):
+        boolean = lambda x: x.lower() in ('true', '1', 'yes', 'on')  # noqa: E731,E501
         parser.add_argument(
             "-r", "--repeat", nargs="?", const=5, default=5, type=int
         )
@@ -127,21 +378,71 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--approved",
-            type=lambda x: x.lower() in ('true', '1', 'yes', 'on'),
+            type=boolean,
             default=True,
-            help="Create approved data (true/false)",
+            help=(
+                "true (default): every row is approved -- no pending "
+                "rows, no approver accounts created. false: half the "
+                "rows per form are left pending and an approver tree is "
+                "built for them."
+            ),
         )
         parser.add_argument(
             "--draft",
-            type=lambda x: x.lower() in ('true', '1', 'yes', 'on'),
+            type=boolean,
             default=False,
-            help="Create draft data (true/false)",
+            help=(
+                "Also create draft submissions. Contradicts "
+                "--approved true."
+            ),
         )
         parser.add_argument(
             "--test",
-            type=lambda x: x.lower() in ('true', '1', 'yes', 'on'),
+            type=boolean,
             default=False,
-            help="Use test data instead of CSV file (true/false)",
+            help=(
+                "Use the bundled TEST_GEO_DATA fixture. Exempt from "
+                "--tenant and --bbox."
+            ),
+        )
+        parser.add_argument(
+            "-t", "--tenant", type=str, default=None,
+            help=(
+                "Workspace subdomain to seed into. Required unless "
+                "--test. 'default' exists on any migrated database."
+            ),
+        )
+        parser.add_argument(
+            "--bbox", type=str, default=None,
+            help=(
+                "Bounding box for generated geo points, as "
+                "'minLng,minLat,maxLng,maxLat'. Required unless --test. "
+                "There is deliberately no default: every workspace is a "
+                "different country."
+            ),
+        )
+        parser.add_argument(
+            "--depth", type=int, default=2,
+            help=(
+                "Levels of throwaway hierarchy to generate when the "
+                "workspace has none below its root."
+            ),
+        )
+        parser.add_argument(
+            "--fanout", type=int, default=4,
+            help="Children per generated administration.",
+        )
+        parser.add_argument(
+            "--clean",
+            nargs="?",
+            const=True,
+            type=boolean,
+            default=False,
+            help=(
+                "Hard-delete every DUMMY- row this workspace owns, then "
+                "exit. Seeds nothing, so --bbox is not needed. To reset, "
+                "run this and then a normal seed."
+            ),
         )
 
     def handle(self, *args, **options):
@@ -150,25 +451,76 @@ class Command(BaseCommand):
         is_approved = options.get("approved", True)
         is_draft = options.get("draft", False)
         is_test = options.get("test", False)
-        csv_path = f"./source/{COUNTRY_NAME}_random_points.csv"
-        fake_geo = pd.read_csv(csv_path)
-        fake_geo = fake_geo.sample(frac=1).reset_index(drop=True)
-        fake_geo_data = fake_geo.to_dict('records')
-        if is_test:
-            # Use static test data instead of CSV
-            fake_geo_data = TEST_GEO_DATA
+        clean = options.get("clean", False)
+
+        if is_approved and is_draft:
+            raise CommandError(
+                "--draft true contradicts --approved true: approved data "
+                "has no drafts. Pass --approved false to seed a mixed "
+                "workflow."
+            )
+        if clean and not settings.DEBUG:
+            raise CommandError(
+                "--clean is refused when DEBUG=False. This hard-deletes "
+                "rows and is a development tool; it must never run "
+                "against a production configuration."
+            )
+
+        # --test drives a closed fixture seeded with tenant=None, which
+        # is how all 34 existing callers invoke this command.
+        tenant = resolve_tenant(
+            options.get("tenant"), required=not is_test
+        )
+        bbox = None
+        if not is_test and not clean:
+            if not options.get("bbox"):
+                raise CommandError(
+                    "--bbox is required. Example for Fiji: "
+                    "--bbox '177.0,-18.3,180.0,-16.1'"
+                )
+            bbox = parse_bbox(options["bbox"])
+
+        if clean:
+            # Terminal, not a prelude to seeding. `--clean` reads as an
+            # imperative, so a run that quietly repopulated afterwards
+            # looked exactly like a clean that had failed.
+            with transaction.atomic():
+                clean_dummy_data(tenant, self.stdout)
+            refresh_materialized_data()
+            self.stdout.write(self.style.SUCCESS("-- Fake data cleared"))
+            return
+
         now_date = datetime.now()
         start_date = now_date - timedelta(days=5 * 365)
-        end_date = now_date - timedelta(days=30)  # End at least 30 days ago
+        end_date = now_date - timedelta(days=30)
         base_created = fake.date_between(start_date, end_date)
         base_created = datetime.combine(base_created, time.min)
-        # Make base_created timezone-aware
         base_created = make_aware(base_created)
-        # total number of fake_geo points
-        total_points = len(fake_geo_data)
-        index = 0
-        last_level_obj = Levels.objects.order_by("-level").first()
-        last_level = last_level_obj.level if last_level_obj else 0
+
+        if is_test:
+            last_level_obj = Levels.objects.filter(
+                tenant=tenant
+            ).order_by("-level").first()
+            last_level = last_level_obj.level if last_level_obj else 0
+            targets = [
+                find_administration(geo["name"], last_level, tenant)
+                for geo in TEST_GEO_DATA
+            ]
+            geos = [[geo["Y"], geo["X"]] for geo in TEST_GEO_DATA]
+            targets = [adm for adm in targets if adm is not None]
+        else:
+            targets = ensure_hierarchy(
+                tenant,
+                options["depth"],
+                options["fanout"],
+                self.stdout,
+            )
+            geos = None
+
+        if not targets:
+            raise CommandError(
+                "No administrations available to attach datapoints to."
+            )
 
         da = DataAccessTypes.approve
         ds = DataAccessTypes.submit
@@ -179,55 +531,59 @@ class Command(BaseCommand):
             "user_user_role__role__role_role_access__data_access": da,
         }
 
-        # Initialize counters for output messages
         form_data_counts = {}
         form_monitoring_counts = {}
         form_pending_counts = {}
         form_draft_counts = {}
 
-        # Initialize incremental creation date
         current_created = base_created
+        total_points = len(targets)
+        index = 0
 
         existing_data_count = FormData.objects.filter(
             is_pending=False,
             is_draft=False,
+            name__startswith=DUMMY_PREFIX,
         ).count()
         if existing_data_count > 0:
-            # If there are existing data, start from the next index
             index = existing_data_count % total_points
+
+        root_forms = Forms.objects.filter(
+            parent__isnull=True, tenant=tenant
+        )
 
         try:
             with transaction.atomic():
                 for r in range(repeat):
                     if index >= total_points:
-                        # reset the index if we run out of points
                         index = 0
-                    geo = fake_geo_data[index]
-                    geo_value = [geo["Y"], geo["X"]]
-                    adm = find_administration(geo["name"], last_level)
-                    # find or create a user
-                    st = DataAccessTypes.submit
+                    adm = targets[index]
+                    geo_value = (
+                        geos[index % len(geos)] if geos
+                        else random_point_in(bbox)
+                    )
                     parent_adm = adm.ancestors.exclude(
                         parent__isnull=True
-                    ).first()
-
-                    # If no parent administration found, use the current one
+                    ).first() if adm.path else None
                     if not parent_adm:
                         parent_adm = adm
-                    org = Organisation.objects.order_by("?").first()
+                    org = Organisation.objects.filter(
+                        tenant=tenant
+                    ).order_by("?").first()
                     user = SystemUser.objects.filter(
                         **filter_submitter,
                         user_user_role__administration=parent_adm,
+                        tenant=tenant,
                     ) \
                         .exclude(password__exact="") \
                         .order_by("?").first()
                     if not user:
-                        # create a new user. Append a nanosecond timestamp so
-                        # repeated calls within the same seeder run never
-                        # collide on Faker's finite user_name() pool.
+                        # Append a nanosecond timestamp so repeated calls
+                        # within the same run never collide on Faker's
+                        # finite user_name() pool.
                         email = (
-                            f"user.{time_module.time_ns()}"
-                            "@test.com"
+                            f"{DUMMY_EMAIL_PREFIX}user."
+                            f"{time_module.time_ns()}{DUMMY_EMAIL_DOMAIN}"
                         )
                         user = SystemUser.objects.create_user(
                             email=email,
@@ -235,77 +591,69 @@ class Command(BaseCommand):
                             last_name=fake.last_name(),
                             phone_number=fake.phone_number()[:15],
                             organisation=org,
+                            tenant=tenant,
                         )
                         user.set_password(DEFAULT_PASSWORD)
 
-                        role = Role.objects.filter(
-                            role_role_access__data_access=st,
-                            administration_level=parent_adm.level,
-                        ).order_by("?").first()
+                        role = pick_role(ds, parent_adm.level, tenant)
                         user.user_user_role.create(
                             role=role,
                             administration=parent_adm,
                         )
 
                     if not user.user_form.exists():
-                        # Assign all forms to the user
-                        forms = Forms.objects.filter(
-                            parent__isnull=True
-                        ).all()
-                        for form in forms:
+                        for form in root_forms:
                             user.user_form.create(form=form)
                         user.save()
-                    # Submitter
+
                     p = f"{parent_adm.path}{parent_adm.id}."
                     mobile_user = user.mobile_assignments \
-                        .filter(
-                            administrations__path__startswith=p
-                        ) \
+                        .filter(administrations__path__startswith=p) \
                         .order_by("?").first()
                     if not mobile_user:
-                        uname = f"{adm.name.lower()}.{fake.user_name()}"
+                        uname = (
+                            f"{DUMMY_PREFIX}{adm.name.lower()}."
+                            f"{fake.user_name()}"
+                        )
                         mobile_user = MobileAssignment.objects \
                             .create_assignment(
                                 user=user,
                                 name=uname,
                                 passcode=fake.lexify('????????'),
                             )
-                    # Assign child administrations to the mobile assignment
                     adm_children = parent_adm.parent_administration \
                         .order_by("?").first()
-                    mobile_user.administrations.set(
-                        adm_children.parent_administration.all()
-                    )
-                    # Assign form to the mobile assignment
+                    if adm_children:
+                        mobile_user.administrations.set(
+                            adm_children.parent_administration.all()
+                            or [adm_children]
+                        )
+                    else:
+                        mobile_user.administrations.set([parent_adm])
                     mobile_user.forms.set(
-                        [
-                            uf.form
-                            for uf in user.user_form.all()
-                        ]
+                        [uf.form for uf in user.user_form.all()]
                     )
                     mobile_user.save()
 
                     if not is_approved:
-                        # find approver user
                         approver = SystemUser.objects.filter(
                             **filter_approver,
                             user_user_role__administration=parent_adm,
+                            tenant=tenant,
                         ).order_by("?").first()
                         if not approver:
-                            # Create approvers recursively
                             create_approvers_recursively(
                                 administration=parent_adm,
                                 org=org,
+                                tenant=tenant,
                                 max_depth=3,
                                 current_depth=0,
                             )
 
-                    for f in Forms.objects.filter(parent__isnull=True).all():
-                        # check if the user have access to the form
+                    for f in root_forms:
                         if not user.user_form.filter(form=f).exists():
                             continue
 
-                        # Initialize counters for this form
                         if f.name not in form_data_counts:
                             form_data_counts[f.name] = 0
                             form_monitoring_counts[f.name] = 0
@@ -313,7 +661,6 @@ class Command(BaseCommand):
                             form_draft_counts[f.name] = 0
 
                         name = f"{adm.full_name} - {fake.sentence(nb_words=3)}"
-                        # Determine draft/pending status
                         data_is_draft = is_draft and (
                             form_data_counts[f.name] % 2 == 1
                         )
@@ -322,7 +669,6 @@ class Command(BaseCommand):
                             (form_data_counts[f.name] % 2 == 1)
                         )
 
-                        # Increment the creation date for each form_data entry
                         current_created += timedelta(days=1)
 
                         form_data = FormData.objects.create(
@@ -339,14 +685,17 @@ class Command(BaseCommand):
                         form_data.updated = current_created
                         form_data.save()
                         add_fake_answers(form_data)
+                        # After add_fake_answers, which rebuilds `name`
+                        # from meta questions and would discard the
+                        # prefix; before save_to_file, which serialises
+                        # the name into the storage blob.
+                        mark_as_dummy(form_data)
 
-                        # Update counters
                         form_data_counts[f.name] += 1
                         if data_is_pending:
                             form_pending_counts[f.name] += 1
                         if data_is_draft:
                             form_draft_counts[f.name] += 1
-                            # Create a new draft entry
                             draft_data = FormData.objects.create(
                                 uuid=fake.uuid4(),
                                 name=f"{fake.sentence(nb_words=3)} - Draft",
@@ -362,39 +711,36 @@ class Command(BaseCommand):
                             draft_data.save()
 
                             add_fake_answers(draft_data)
+                            mark_as_dummy(draft_data)
 
                             if draft_data.has_approval:
                                 draft_data.is_pending = True
                                 draft_data.save()
 
-                            # Remove some answers for draft
                             draft_data.data_answer.filter(
                                 question__required=True
                             ).delete()
 
-                        # Save the form data
                         if (not is_test and not form_data.is_pending):
                             form_data.save_to_file
 
-                        # Create monitoring data if not draft
                         if not form_data.is_draft:
                             submitter = None
                             if mobile_user.name and r % 2 == 0:
                                 submitter = mobile_user.name
-                            # Start from the parent form's created date
                             last_date = form_data.created
-                            # Ensure last_date is timezone-aware
                             if last_date.tzinfo is None:
                                 last_date = make_aware(last_date)
                             for child_form in f.children.all():
                                 for m in range(monitoring):
-                                    # Increment date for each monitoring entry
                                     last_date += timedelta(days=1)
                                     ld_f1 = last_date.strftime('%Y-%m-%d')
                                     ld_f2 = last_date.strftime(
                                         '%a %b %d %Y %H:%M:%S'
                                     )
-                                    curr_time = (f"{ld_f1} - {ld_f2} GMT+0700")
+                                    curr_time = (
+                                        f"{ld_f1} - {ld_f2} GMT+0700"
+                                    )
                                     s_name = submitter \
                                         if m % 2 == 0 and submitter else None
                                     child_data = form_data.children.create(
@@ -414,9 +760,9 @@ class Command(BaseCommand):
                                     child_data.updated = last_date
                                     child_data.save()
                                     add_fake_answers(child_data)
+                                    mark_as_dummy(child_data)
                                     form_monitoring_counts[f.name] += 1
                     index += 1
-                # Output success messages
                 for form_name, count in form_data_counts.items():
                     self.stdout.write(
                         f"Created {count} data entries for form {form_name}"
@@ -439,7 +785,6 @@ class Command(BaseCommand):
                             f"Created {count} draft data entries "
                             f"for form {form_name}"
                         )
-            # Refresh materialized view after all data is created
             refresh_materialized_data()
             self.stdout.write(
                 self.style.SUCCESS(
