@@ -6,7 +6,21 @@ from django.test.utils import override_settings
 
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_data.functions import add_fake_answers
+from api.v1.v1_profile.models import Administration, Levels
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+
+
+def administration_label(administration):
+    """What ListFormDataSerializer should render for a unit.
+
+    Deliberately expressed as "ancestors minus the root, then the unit"
+    rather than by re-splitting full_name -- the string split is the bug
+    these assertions used to encode.
+    """
+    ancestors = list(administration.ancestors or [])
+    return " - ".join(
+        [a.name for a in ancestors[1:]] + [administration.name]
+    )
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
@@ -85,7 +99,7 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
         data = response.json()
         self.assertGreater(data["total"], 0)
         self.assertIn(
-            " - ".join(adm.full_name.split("-")[1:]),
+            administration_label(adm),
             [
                 item["administration"] for item in data["data"]
             ]
@@ -353,3 +367,76 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
         data = response.json()
         self.assertEqual(data["total"], 1)
         self.assertEqual(data["data"][0]["id"], search_data.id)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class AdministrationLabelTestCase(TestCase, ProfileTestHelperMixin):
+    """The Region column must not shred names that contain a hyphen.
+
+    The old implementation split full_name on the bare "-" instead of the
+    " - " separator, so "KwaZulu-Natal" came back as two tiers and every
+    part kept its surrounding spaces.
+    """
+
+    def setUp(self):
+        super().setUp()
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        call_command("default_roles_seeder", "--test", 1)
+
+        root = Administration.objects.filter(parent__isnull=True).first()
+        level_1 = Levels.objects.get(level=1)
+        level_2 = Levels.objects.get(level=2)
+        self.province = Administration.objects.create(
+            name="KwaZulu-Natal", parent=root, level=level_1
+        )
+        self.district = Administration.objects.create(
+            name="Umgungundlovu-West", parent=self.province, level=level_2
+        )
+
+        self.user = self.create_user(
+            email="hyphen@akvo.org", role_level=self.IS_SUPER_ADMIN
+        )
+        self.user.set_password("test")
+        self.user.save()
+        self.token = self.get_auth_token(self.user.email, "test")
+
+        self.form = Forms.objects.get(pk=1)
+        self.datapoint = self.form.form_form_data.create(
+            name="Hyphen test",
+            administration=self.district,
+            geo=[0, 0],
+            created_by=self.user,
+        )
+
+    def test_hyphenated_names_survive_intact(self):
+        response = self.client.get(
+            f"/api/v1/form-data/{self.form.id}"
+            f"?administration={self.district.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        labels = [row["administration"] for row in response.json()["data"]]
+        self.assertIn("KwaZulu-Natal - Umgungundlovu-West", labels)
+
+    def test_label_has_no_stray_whitespace(self):
+        response = self.client.get(
+            f"/api/v1/form-data/{self.form.id}"
+            f"?administration={self.district.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        for label in [r["administration"] for r in response.json()["data"]]:
+            self.assertEqual(label, label.strip())
+            self.assertNotIn("  ", label)
+
+    def test_root_is_dropped(self):
+        # The list is already scoped to one workspace, so the country
+        # adds nothing to every row.
+        response = self.client.get(
+            f"/api/v1/form-data/{self.form.id}"
+            f"?administration={self.district.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        root = Administration.objects.filter(parent__isnull=True).first()
+        for label in [r["administration"] for r in response.json()["data"]]:
+            self.assertFalse(label.startswith(root.name))

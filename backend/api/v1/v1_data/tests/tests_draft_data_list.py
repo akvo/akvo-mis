@@ -7,6 +7,19 @@ from api.v1.v1_data.models import FormData
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 
 
+def administration_label(administration):
+    """What ListFormDataSerializer should render for a unit.
+
+    Deliberately expressed as "ancestors minus the root, then the unit"
+    rather than by re-splitting full_name -- the string split is the bug
+    these assertions used to encode.
+    """
+    ancestors = list(administration.ancestors or [])
+    return " - ".join(
+        [a.name for a in ancestors[1:]] + [administration.name]
+    )
+
+
 @override_settings(USE_TZ=False, TEST_ENV=True)
 class DraftFormDataListTestCase(TestCase, ProfileTestHelperMixin):
     def call_command(self, *args, **kwargs):
@@ -26,7 +39,7 @@ class DraftFormDataListTestCase(TestCase, ProfileTestHelperMixin):
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
-        self.call_command(repeat=2, draft=True)
+        self.call_command(repeat=2, draft=True, approved=False)
         form_data = FormData.objects_draft.order_by("?").first()
         self.data = form_data
         self.user = form_data.created_by
@@ -83,7 +96,7 @@ class DraftFormDataListTestCase(TestCase, ProfileTestHelperMixin):
             response.json()["total"], 0
         )
         self.assertIn(
-            " - ".join(self.administration.full_name.split("-")[1:]),
+            administration_label(self.administration),
             [
                 data["administration"]
                 for data in response.json()["data"]
