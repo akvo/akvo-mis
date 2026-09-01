@@ -14,17 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🗄️  Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - name: 🧰 Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: 22.x
 
       - name: 🏗  Setup EAS
-        uses: expo/expo-github-action@v8
+        uses: expo/expo-github-action@v9
         with:
           eas-version: latest
+          packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📦 Install dependencies
