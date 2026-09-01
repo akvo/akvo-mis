@@ -18,7 +18,13 @@ export const SUBMISSION_TYPES = {
 
 export const DATABASE_NAME = 'app.db';
 
-export const DATABASE_VERSION = 9;
+export const BYTES_PER_MB = 1024 * 1024;
+
+// Below this Android itself starts failing writes and killing background work.
+export const LOW_STORAGE_THRESHOLD = 200 * BYTES_PER_MB; // warn
+export const LOW_STORAGE_CLEAR_THRESHOLD = 250 * BYTES_PER_MB; // stand down
+
+export const DATABASE_VERSION = 10;
 
 // How long the automatic update dialog stays suppressed after "Later".
 export const SKIP_UPDATE_DURATION_MS = 24 * 60 * 60 * 1000;

@@ -13,7 +13,7 @@ import Navigation, { reactNavigationIntegration } from './src/navigation';
 import { UIState, AuthState, UserState, BuildParamsState } from './src/store';
 import { crudUsers, crudConfig, crudDataPoints } from './src/database/crud';
 import { api } from './src/lib';
-import { NetworkStatusBar, SyncService } from './src/components';
+import { StatusBanner, SyncService } from './src/components';
 import backgroundTask, {
   defineSyncFormVersionTask,
   defineSyncDatapointBackgroundTask,
@@ -29,8 +29,9 @@ import {
   jobStatus,
 } from './src/lib/constants';
 import { tables, openDatabase } from './src/database';
+import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -116,167 +117,195 @@ Sentry.init({
   integrations: [reactNavigationIntegration],
 });
 
+// Declared at module scope so their identity never changes. SQLiteProvider keys its
+// setup effect on `onInit` and its cleanup closes the database, so a function
+// recreated on every render tears the connection down mid-session and every screen
+// holding it from useSQLiteContext() throws on its next write.
+const handleInitConfig = async (db) => {
+  // Read imperatively rather than subscribing: a subscription re-renders App, which
+  // changes the onInit identity and triggers exactly that teardown.
+  const {
+    serverURL: serverURLState,
+    dataSyncInterval: syncValue,
+    gpsThreshold,
+    gpsAccuracyLevel,
+    geoLocationTimeout,
+    imageQuality,
+    saveToGallery,
+    appVersion,
+  } = BuildParamsState.getRawState();
+  const configExist = await crudConfig.getConfig(db);
+  const serverURL = configExist?.serverURL || serverURLState;
+  const syncInterval = configExist?.syncInterval || syncValue;
+  if (!configExist) {
+    await crudConfig.addConfig(db, {
+      appVersion,
+      serverURL,
+      syncInterval,
+      gpsThreshold,
+      gpsAccuracyLevel,
+      geoLocationTimeout,
+      imageQuality,
+      saveToGallery,
+    });
+  }
+  if (serverURL) {
+    BuildParamsState.update((s) => {
+      s.serverURL = serverURL;
+    });
+    api.setServerURL(serverURL);
+  }
+  if (configExist) {
+    /**
+     * Update settings values from database
+     */
+    BuildParamsState.update((s) => {
+      s.dataSyncInterval = configExist.syncInterval;
+      s.gpsThreshold = configExist.gpsThreshold;
+      s.gpsAccuracyLevel = configExist.gpsAccuracyLevel;
+      s.geoLocationTimeout = configExist.geoLocationTimeout;
+      s.imageQuality = configExist.imageQuality || 'low';
+      s.saveToGallery = configExist.saveToGallery || 0;
+    });
+
+    UserState.update((s) => {
+      s.syncWifiOnly = configExist?.syncWifiOnly;
+    });
+  }
+};
+
+const handleCheckSession = async (db) => {
+  // check users exist
+  const user = await crudUsers.getActiveUser(db);
+  if (!user) {
+    UIState.update((s) => {
+      s.currentPage = 'GetStarted';
+    });
+    return;
+  }
+  if (user.token) {
+    api.setToken(user.token);
+    UserState.update((s) => {
+      s.id = user.id;
+      s.name = user.name;
+      s.password = user.password;
+    });
+    AuthState.update((s) => {
+      s.token = user.token;
+      s.authenticationCode = user.password;
+    });
+    UIState.update((s) => {
+      s.currentPage = 'Home';
+    });
+  }
+};
+
+// Runs on every launch, migration or not: config, session, then any submission that
+// had to fall back to a file because SQLite refused it last time.
+const finishInit = async (db) => {
+  await handleInitConfig(db);
+  await handleCheckSession(db);
+  await recoverPendingSubmissions(db);
+  await refreshStorageWarning();
+};
+
+const migrateDbIfNeeded = async (db) => {
+  // Connection-level pragma: wait up to 5s for a concurrent writer instead of
+  // failing immediately with "database is locked" (SQLITE_BUSY).
+  await db.execAsync('PRAGMA busy_timeout = 5000;');
+  let { user_version: currentDbVersion } = await db.getFirstAsync('PRAGMA user_version');
+  if (currentDbVersion >= DATABASE_VERSION) {
+    await finishInit(db);
+    return;
+  }
+
+  // WAL mode must be set outside a transaction — it is a connection-level pragma.
+  // user_version = 1 is set immediately after so a crash here is safely retried.
+  if (currentDbVersion === 0) {
+    await db.execAsync(`PRAGMA journal_mode = 'wal';`);
+    await db.execAsync('PRAGMA user_version = 1');
+    currentDbVersion = 1;
+  }
+
+  // Each subsequent step is wrapped in a transaction that sets user_version atomically.
+  // If the migration throws, the transaction rolls back and user_version stays at the
+  // previous value, so the same step is retried on next launch. Every migration's up()
+  // function must be idempotent (addNewColumn / createTable already check for existence).
+  if (currentDbVersion === 1) {
+    await sql.withTransaction(db, async (txDb) => {
+      await tables.reduce(async (prev, t) => {
+        await prev;
+        await sql.createTable(txDb, t.name, t.fields);
+      }, Promise.resolve());
+      await txDb.execAsync('PRAGMA user_version = 2');
+    });
+    currentDbVersion = 2;
+  }
+  if (currentDbVersion === 2) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m03.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 3');
+    });
+    currentDbVersion = 3;
+  }
+  if (currentDbVersion === 3) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m04.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 4');
+    });
+    currentDbVersion = 4;
+  }
+  if (currentDbVersion === 4) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m05.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 5');
+    });
+    currentDbVersion = 5;
+  }
+  if (currentDbVersion === 5) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m06.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 6');
+    });
+    currentDbVersion = 6;
+  }
+  if (currentDbVersion === 6) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m07.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 7');
+    });
+    currentDbVersion = 7;
+  }
+  if (currentDbVersion === 7) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m08.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 8');
+    });
+    currentDbVersion = 8;
+  }
+  if (currentDbVersion === 8) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m09.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 9');
+    });
+    currentDbVersion = 9;
+  }
+  if (currentDbVersion === 9) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m10.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 10');
+    });
+    currentDbVersion = 10;
+  }
+
+  // Every DATABASE_VERSION bump sends exactly one launch down this path. Without
+  // this, the upgrade launch never sets the server URL, token or user id, and the
+  // app looks logged out until it is restarted.
+  await finishInit(db);
+};
+
 const App = () => {
-  const serverURLState = BuildParamsState.useState((s) => s.serverURL);
-  const syncValue = BuildParamsState.useState((s) => s.dataSyncInterval);
-  const gpsThreshold = BuildParamsState.useState((s) => s.gpsThreshold);
-  const gpsAccuracyLevel = BuildParamsState.useState((s) => s.gpsAccuracyLevel);
-  const geoLocationTimeout = BuildParamsState.useState((s) => s.geoLocationTimeout);
-  const imageQuality = BuildParamsState.useState((s) => s.imageQuality);
-  const saveToGallery = BuildParamsState.useState((s) => s.saveToGallery);
-  const appVersion = BuildParamsState.useState((s) => s.appVersion);
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
-
-  const handleInitConfig = async (db) => {
-    const configExist = await crudConfig.getConfig(db);
-    const serverURL = configExist?.serverURL || serverURLState;
-    const syncInterval = configExist?.syncInterval || syncValue;
-    if (!configExist) {
-      await crudConfig.addConfig(db, {
-        appVersion,
-        serverURL,
-        syncInterval,
-        gpsThreshold,
-        gpsAccuracyLevel,
-        geoLocationTimeout,
-        imageQuality,
-        saveToGallery,
-      });
-    }
-    if (serverURL) {
-      BuildParamsState.update((s) => {
-        s.serverURL = serverURL;
-      });
-      api.setServerURL(serverURL);
-    }
-    if (configExist) {
-      /**
-       * Update settings values from database
-       */
-      BuildParamsState.update((s) => {
-        s.dataSyncInterval = configExist.syncInterval;
-        s.gpsThreshold = configExist.gpsThreshold;
-        s.gpsAccuracyLevel = configExist.gpsAccuracyLevel;
-        s.geoLocationTimeout = configExist.geoLocationTimeout;
-        s.imageQuality = configExist.imageQuality || 'low';
-        s.saveToGallery = configExist.saveToGallery || 0;
-      });
-
-      UserState.update((s) => {
-        s.syncWifiOnly = configExist?.syncWifiOnly;
-      });
-    }
-  };
-
-  const handleCheckSession = async (db) => {
-    // check users exist
-    const user = await crudUsers.getActiveUser(db);
-    if (!user) {
-      UIState.update((s) => {
-        s.currentPage = 'GetStarted';
-      });
-      return;
-    }
-    if (user.token) {
-      api.setToken(user.token);
-      UserState.update((s) => {
-        s.id = user.id;
-        s.name = user.name;
-        s.password = user.password;
-      });
-      AuthState.update((s) => {
-        s.token = user.token;
-        s.authenticationCode = user.password;
-      });
-      UIState.update((s) => {
-        s.currentPage = 'Home';
-      });
-    }
-  };
-
-  const migrateDbIfNeeded = async (db) => {
-    // Connection-level pragma: wait up to 5s for a concurrent writer instead of
-    // failing immediately with "database is locked" (SQLITE_BUSY).
-    await db.execAsync('PRAGMA busy_timeout = 5000;');
-    let { user_version: currentDbVersion } = await db.getFirstAsync('PRAGMA user_version');
-    if (currentDbVersion >= DATABASE_VERSION) {
-      await handleInitConfig(db);
-      await handleCheckSession(db);
-      return;
-    }
-
-    // WAL mode must be set outside a transaction — it is a connection-level pragma.
-    // user_version = 1 is set immediately after so a crash here is safely retried.
-    if (currentDbVersion === 0) {
-      await db.execAsync(`PRAGMA journal_mode = 'wal';`);
-      await db.execAsync('PRAGMA user_version = 1');
-      currentDbVersion = 1;
-    }
-
-    // Each subsequent step is wrapped in a transaction that sets user_version atomically.
-    // If the migration throws, the transaction rolls back and user_version stays at the
-    // previous value, so the same step is retried on next launch. Every migration's up()
-    // function must be idempotent (addNewColumn / createTable already check for existence).
-    if (currentDbVersion === 1) {
-      await sql.withTransaction(db, async (txDb) => {
-        await tables.reduce(async (prev, t) => {
-          await prev;
-          await sql.createTable(txDb, t.name, t.fields);
-        }, Promise.resolve());
-        await txDb.execAsync('PRAGMA user_version = 2');
-      });
-      currentDbVersion = 2;
-    }
-    if (currentDbVersion === 2) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m03.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 3');
-      });
-      currentDbVersion = 3;
-    }
-    if (currentDbVersion === 3) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m04.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 4');
-      });
-      currentDbVersion = 4;
-    }
-    if (currentDbVersion === 4) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m05.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 5');
-      });
-      currentDbVersion = 5;
-    }
-    if (currentDbVersion === 5) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m06.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 6');
-      });
-      currentDbVersion = 6;
-    }
-    if (currentDbVersion === 6) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m07.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 7');
-      });
-      currentDbVersion = 7;
-    }
-    if (currentDbVersion === 7) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m08.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 8');
-      });
-      currentDbVersion = 8;
-    }
-    if (currentDbVersion === 8) {
-      await sql.withTransaction(db, async (txDb) => {
-        await m09.up(txDb);
-        await txDb.execAsync('PRAGMA user_version = 9');
-      });
-      currentDbVersion = 9;
-    }
-  };
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -337,7 +366,7 @@ const App = () => {
       <Suspense fallback={null}>
         <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
           <Navigation />
-          <NetworkStatusBar />
+          <StatusBanner />
           <SyncService />
         </SQLiteProvider>
       </Suspense>
