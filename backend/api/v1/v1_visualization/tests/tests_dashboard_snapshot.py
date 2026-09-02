@@ -204,9 +204,26 @@ class AnnotateBrokenTestCase(TestCase, ProfileTestHelperMixin):
         # form a real tenant so this test can only pass by actually
         # filtering on it, not by coincidence. Questions.TENANT_PATH
         # is "form__tenant", so this covers the question too.
+        #
+        # A same-tenant widget passing is not, by itself, proof of
+        # tenant filtering: deleting the `filter(**{TENANT_PATH:
+        # tenant})` line in annotate_broken would leave both forms
+        # live and this half of the assertion still true. Form 6002 on
+        # a DIFFERENT tenant is what makes that regression fail — it
+        # must read as broken precisely because it is excluded by
+        # tenant, not by being deleted or missing.
         tenant = Tenant.objects.create(subdomain="viz-annotate")
+        other_tenant = Tenant.objects.create(
+            subdomain="viz-annotate-other"
+        )
         Forms.objects.filter(pk=6001).update(tenant=tenant)
-        widgets = [{"form": 6001, "question": 600102}]
+        Forms.objects.filter(pk=6002).update(tenant=other_tenant)
+        widgets = [
+            {"form": 6001, "question": 600102},
+            {"form": 6002, "question": 600203},
+        ]
         annotated = annotate_broken(widgets, tenant)
         self.assertFalse(annotated[0]["is_broken"])
         self.assertIsNone(annotated[0]["broken_reason"])
+        self.assertTrue(annotated[1]["is_broken"])
+        self.assertEqual(annotated[1]["broken_reason"], "form_deleted")

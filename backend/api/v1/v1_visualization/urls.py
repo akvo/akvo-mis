@@ -77,7 +77,7 @@ urlpatterns = [
             {"get": "list", "post": "create"}
         ),
     ),
-    # The authenticated read namespace (slug before collection)
+    # The anonymous-capable read namespace (slug before collection)
     re_path(
         r"^(?P<version>(v1))/dashboards/(?P<slug>[-a-z0-9]+)$",
         DashboardReadViewSet.as_view({"get": "retrieve"}),

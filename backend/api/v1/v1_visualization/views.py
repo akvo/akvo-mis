@@ -35,7 +35,6 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
-# from rest_framework.permissions import IsAuthenticated
 from utils.custom_serializer_fields import validate_serializers_message
 
 
@@ -262,7 +261,6 @@ def monitoring_stats(request, version):
 
 
 class GeolocationListView(APIView):
-    # permission_classes = [IsAuthenticated]
 
     @extend_schema(
         responses=GeoLocationListSerializer,

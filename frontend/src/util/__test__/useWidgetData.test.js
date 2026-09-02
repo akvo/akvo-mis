@@ -268,7 +268,13 @@ describe("dashboard_slug", () => {
           columns: [{ key: "site", source: "parent_name" }],
         },
       }),
-      widget({ type: "map", config: {} }),
+      // status_colors is what makes buildStatusRequest fire its own
+      // request (see below) on top of the map's geolocation request --
+      // an empty config, as used above, asks for neither bucket.
+      widget({
+        type: "map",
+        config: { status_colors: { Operational: "#64A73B" } },
+      }),
     ];
 
     const probes = cases.map((w) =>
@@ -282,7 +288,19 @@ describe("dashboard_slug", () => {
     await Promise.all(probes.map((probe) => settle(probe)));
 
     const calls = axios.mock.calls.map((c) => c[0]);
-    expect(calls.length).toBeGreaterThan(0);
+    // All four request builders, proven by endpoint rather than by count:
+    // values (bar), escalation (table), geolocation and formula (the map's
+    // two requests, geo points plus buildStatusRequest's status join).
+    expect(calls.some((c) => c.url.includes("visualization/values"))).toBe(
+      true
+    );
+    expect(calls.some((c) => c.url.includes("visualization/escalation"))).toBe(
+      true
+    );
+    expect(calls.some((c) => c.url.includes("maps/geolocation"))).toBe(true);
+    expect(
+      calls.some((c) => c.url.includes("visualization/values/formula"))
+    ).toBe(true);
     calls.forEach((call) => {
       expect(call.params.dashboard_slug).toBe("water-points");
     });

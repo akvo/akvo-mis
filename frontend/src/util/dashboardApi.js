@@ -11,8 +11,7 @@ const PUBLIC = "dashboards";
 // response. It cannot survive that slice: 404 is now the
 // tenant-isolation answer for an unknown or foreign dashboard id, and
 // a fallback cannot tell "the backend is not built" from "that
-// dashboard is not yours". publish, unpublish and duplicate are still
-// unimplemented server-side and now surface as errors until VIZ-007.
+// dashboard is not yours".
 const dashboardApi = {
   list: () => api.get(MANAGE),
 

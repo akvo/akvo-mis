@@ -181,6 +181,13 @@ def visualization_values(request, version):
     # existence is still probed by the serializer's own validators
     # above, before this runs -- this only bounds what a caller who
     # has already named a dashboard may then ask about.
+    #
+    # administration_id is absent too, and not an oversight:
+    # resolve_default_administration_id() below returns it unchecked
+    # against the dashboard's tenant. That is safe only because it
+    # narrows a queryset already rooted at this tenant-scoped form, so
+    # a foreign id can subtract rows, never widen the read -- see D-6
+    # in the design doc. Do not assume it is guarded here.
     # criteria is read from the raw query params, not validated: its
     # validate_criteria hook replaces the string with a parsed
     # structure, and question_ids_in_criteria expects the string
@@ -359,6 +366,8 @@ def visualization_escalation(request, form_id, version):
     # filter_criteria: validate_criteria/validate_columns replace the
     # string with a parsed structure, and the extractors expect the
     # string (see the identical fix in visualization_values above).
+    # administration_id is deliberately unchecked here too -- see the
+    # comment above visualization_values's check_ids call.
     check_ids(
         allowed,
         form_ids=[form_id, validated["monitoring_form_id"]],

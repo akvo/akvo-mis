@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Dropdown } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
@@ -21,7 +21,7 @@ import dashboardApi from "../../util/dashboardApi";
 
 const PublicDashboardMenu = () => {
   const { language, isLoggedIn } = store.useState((s) => s);
-  const text = useMemo(() => uiText[language.active], [language.active]);
+  const text = uiText[language.active];
   const [dashboards, setDashboards] = useState([]);
 
   useEffect(() => {

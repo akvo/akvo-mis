@@ -176,11 +176,7 @@
      lifecycle badge, and two green badges would read as one axis at two
      intensities rather than the two independent axes they are. */
   .dashboard-visibility-badge {
-    display: inline-block;
-    padding: 1px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
+    @extend .dashboard-card-badge;
 
     &--public {
       color: #1651b6;

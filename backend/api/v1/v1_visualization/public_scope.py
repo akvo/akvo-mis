@@ -7,9 +7,13 @@
 # names one dashboard, and may ask only about the ids that dashboard's
 # own published snapshot already names.
 #
-# Everything that decides what an anonymous request may see lives in
-# this module. Nothing else in the codebase should be reading
-# `request.user.is_anonymous` to make a scoping decision.
+# What an anonymous request may see, once it has a tenant, lives in
+# this module: which dashboard, and which of that dashboard's ids. The
+# anonymous TENANT decision does not live here -- that is
+# `utils/tenant_host.py:public_tenant`, which this module calls rather
+# than reimplements. And this module is not anonymous-only: its
+# `has_any_dashboard_access` decides what an AUTHENTICATED caller may
+# see in the private dashboard dropdown.
 
 import json
 from typing import NamedTuple, Optional, Set
@@ -70,28 +74,21 @@ def allowlist_from(dashboard):
 
         widget_config = widget.get("config") or {}
 
-        # Criteria narrow a widget's datapoints and carry their own
-        # question ids, in both the chart and the table grammars. A
-        # criterion's question is author-entered and never validated
-        # against being numeric (validate_dashboard_payload does not
-        # check it), so a malformed one must narrow the allowlist
-        # rather than crash every public view of the dashboard.
-        for criterion in widget_config.get("criteria") or []:
-            if not isinstance(criterion, dict):
-                continue
-            qid = _as_id(criterion.get("question"))
-            if qid is not None:
-                questions.add(qid)
-
-        # Table columns of source `answer`, `parent_answer` and
-        # `latest_date` name a question; `parent_name` and
-        # `administration` do not.
-        for column in widget_config.get("columns") or []:
-            if not isinstance(column, dict):
-                continue
-            qid = _as_id(column.get("question"))
-            if qid is not None:
-                questions.add(qid)
+        # Both carry author-entered question ids under the same key:
+        # criteria narrow a widget's datapoints, and table columns of
+        # source `answer`, `parent_answer` or `latest_date` name one
+        # (`parent_name` and `administration` do not, and simply have
+        # nothing to collect). Neither is validated as numeric —
+        # validate_dashboard_payload does not check it — so a malformed
+        # entry must narrow the allowlist rather than crash every public
+        # view of the dashboard.
+        for key in ("criteria", "columns"):
+            for entry in widget_config.get(key) or []:
+                if not isinstance(entry, dict):
+                    continue
+                qid = _as_id(entry.get("question"))
+                if qid is not None:
+                    questions.add(qid)
 
     # The date filter's question reaches the endpoints as
     # `date_question_id`, and it lives on the dashboard rather than on
@@ -121,19 +118,13 @@ def _as_id(value):
 
 
 def _ints(values):
-    """Every value that is an integer id, quietly dropping the rest.
+    """Every value that parses as an id, dropping the rest.
 
-    Malformed input is the serializer's 400 to give. Yielding nothing
-    from it here is not leniency: an id that cannot be parsed is an id
-    that was not extracted, and an unextracted id is one the caller
-    never gets checked for — so anything unparseable must also be
-    unusable downstream, which the serializers guarantee.
+    Malformed input is the serializer's 400 to give. Dropping it here is
+    not leniency: an id that cannot be parsed is one that cannot be used
+    downstream either, which the serializers guarantee.
     """
-    for value in values:
-        try:
-            yield int(value)
-        except (TypeError, ValueError):
-            continue
+    return [i for i in map(_as_id, values) if i is not None]
 
 
 def question_ids_in_criteria(value):
@@ -160,8 +151,6 @@ def question_ids_in_criteria(value):
     ids = []
     for clause in (value or "").split(","):
         parts = clause.strip().split(":")
-        if len(parts) < 2:
-            continue
         span = parts[1:3] if parts[0] == "overdue" else parts[1:2]
         ids.extend(_ints(span))
     return ids
@@ -182,8 +171,6 @@ def question_ids_in_columns(value):
     ids = []
     for clause in (value or "").split(","):
         parts = clause.strip().split(":")
-        if len(parts) < 3:
-            continue
         ids.extend(_ints(parts[2:]))
     return ids
 
@@ -200,10 +187,9 @@ def question_ids_in_formula(value):
     for bucket in parsed.get("buckets") or []:
         if not isinstance(bucket, dict):
             continue
-        for key in ("all_of", "any_of", "none_of"):
-            for clause in bucket.get(key) or []:
-                if isinstance(clause, dict):
-                    ids.extend(_ints([clause.get("question_id")]))
+        for clause in bucket.get("all_of") or []:
+            if isinstance(clause, dict):
+                ids.extend(_ints([clause.get("question_id")]))
     return ids
 
 

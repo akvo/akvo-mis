@@ -26,7 +26,7 @@ const EMPTY_FILTERS = {
 const DashboardViewer = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { language } = store.useState((s) => s);
+  const { language, isLoggedIn } = store.useState((s) => s);
   const text = useMemo(() => uiText[language.active], [language.active]);
 
   const [loading, setLoading] = useState(true);
@@ -96,15 +96,22 @@ const DashboardViewer = () => {
           every card and the header repeats the name directly below, so the
           page's widest row was chrome for one button. Fixed rather than
           scrolled away, because "back" is wanted most at the bottom of a
-          long dashboard. */}
-      <button
-        className="dashboard-view-back"
-        title={text.backBtn}
-        aria-label={text.backBtn}
-        onClick={() => navigate("/control-center/dashboard")}
-      >
-        <ArrowLeftOutlined />
-      </button>
+          long dashboard.
+
+          Signed-in only: it targets /control-center/dashboard, a Private
+          route. An anonymous visitor who clicked it would land on a login
+          wall instead of going back to anything, so they simply get no
+          control here. */}
+      {isLoggedIn && (
+        <button
+          className="dashboard-view-back"
+          title={text.backBtn}
+          aria-label={text.backBtn}
+          onClick={() => navigate("/control-center/dashboard")}
+        >
+          <ArrowLeftOutlined />
+        </button>
+      )}
 
       <div className="dashboard-view-content">
         <div className="dashboard-view-header">

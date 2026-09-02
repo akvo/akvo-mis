@@ -63,6 +63,7 @@ const PAYLOAD = {
 const setUser = (user) => {
   store.update((s) => {
     s.user = user;
+    s.isLoggedIn = Boolean(user);
   });
 };
 
@@ -177,6 +178,27 @@ describe("the top bar is a back button and nothing else", () => {
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     screen.getByRole("button", { name: /back/i }).click();
     expect(mockNavigate).toHaveBeenCalledWith("/control-center/dashboard");
+  });
+
+  test("an anonymous visitor sees no back control", async () => {
+    // /control-center/dashboard is a Private route: sending an anonymous
+    // visitor there is a login wall, not a way back to anything.
+    setUser(null);
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(
+      screen.queryByRole("button", { name: /back/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test("a signed-in visitor sees the back control", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /back/i })).toBeInTheDocument();
   });
 
   test("the name is shown once, by the header", async () => {

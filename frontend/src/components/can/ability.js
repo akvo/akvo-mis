@@ -68,8 +68,7 @@ const defineAbilityFor = (user) => {
       roles.filter((r) => r?.can_dashboard_edit).length > 0;
     const can_dashboard_delete =
       roles.filter((r) => r?.can_dashboard_delete).length > 0;
-    const can_dashboard_publish =
-      roles.filter((r) => r?.can_dashboard_publish).length > 0;
+    const can_dashboard_publish = roles.some((r) => r?.can_dashboard_publish);
 
     if (can_dashboard_create) {
       can("create", "dashboard");
