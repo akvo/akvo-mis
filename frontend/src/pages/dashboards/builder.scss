@@ -471,6 +471,18 @@
   margin-bottom: 6px;
 }
 
+.builder-inspector-q-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+
+  svg {
+    flex: none;
+    color: #8c8c8c;
+  }
+}
+
 .builder-inspector-switch-row {
   display: flex;
   align-items: center;

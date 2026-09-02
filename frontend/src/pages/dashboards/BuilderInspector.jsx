@@ -29,6 +29,73 @@ import {
 
 const { TextArea } = Input;
 
+/* IBM Carbon-style icons, same as akvo-react-form's svgIcons.js */
+const ICON_SIZE = 16;
+
+const IconNumber = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="2 8 28 18">
+    <path
+      fill="currentColor"
+      d="M26 12h-4v2h4v2h-3v2h3v2h-4v2h4a2.003 2.003 0 0 0 2-2v-6a2.002 2.002 0 0 0-2-2zm-7 10h-6v-4a2.002 2.002 0 0 1 2-2h2v-2h-4v-2h4a2.002 2.002 0 0 1 2 2v2a2.002 2.002 0 0 1-2 2h-2v2h4zM8 20v-8H6v1H4v2h2v5H4v2h6v-2H8z"
+    />
+  </svg>
+);
+
+const IconText = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 6 32 18">
+    <path
+      fill="currentColor"
+      d="M29 22h-5a2.003 2.003 0 0 1-2-2v-6a2.002 2.002 0 0 1 2-2h5v2h-5v6h5zM18 12h-4V8h-2v14h6a2.003 2.003 0 0 0 2-2v-6a2.002 2.002 0 0 0-2-2zm-4 8v-6h4v6zm-6-8H3v2h5v2H4a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h6v-8a2.002 2.002 0 0 0-2-2zm0 8H4v-2h4z"
+    />
+  </svg>
+);
+
+const IconOption = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 32 32">
+    <path
+      fill="currentColor"
+      d="M16 2a14 14 0 1 0 14 14A14 14 0 0 0 16 2zm0 26a12 12 0 1 1 12-12 12 12 0 0 1-12 12z"
+    />
+    <circle cx="16" cy="16" r="6" fill="currentColor" />
+  </svg>
+);
+
+const IconCheckbox = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 32 32">
+    <path
+      fill="currentColor"
+      d="M26 4H6a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM6 26V6h20v20z"
+    />
+    <path
+      fill="currentColor"
+      d="m14 21.5-5-4.96 1.59-1.57L14 18.35 21.41 11 23 12.58l-9 8.92z"
+    />
+  </svg>
+);
+
+const IconDate = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 32 32">
+    <path
+      fill="currentColor"
+      d="M26 4h-4V2h-2v2h-8V2h-2v2H6a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 22H6V12h20zm0-16H6V6h4v2h2V6h8v2h2V6h4z"
+    />
+  </svg>
+);
+
+const QUESTION_TYPE_ICON = {
+  number: <IconNumber />,
+  option: <IconOption />,
+  multiple_option: <IconCheckbox />,
+  date: <IconDate />,
+};
+
+const QuestionLabel = ({ label, type }) => (
+  <span className="builder-inspector-q-label">
+    {QUESTION_TYPE_ICON[type] || <IconText />}
+    {label}
+  </span>
+);
+
 const BuilderInspector = ({
   widget,
   sources,
@@ -231,6 +298,24 @@ const BuilderInspector = ({
           </div>
         )}
 
+        {/* Variant (pie only) */}
+        {wType === "pie" && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Variant</label>
+            <Select
+              value={wConfig.variant || "pie"}
+              onChange={(val) => updateConfig("variant", val)}
+              style={{ width: "100%" }}
+            >
+              {VALID_PIE_VARIANT.map((v) => (
+                <Select.Option key={v.value} value={v.value}>
+                  {v.label}
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         {/* Data source (form) */}
         {showForm && (
           <div className="builder-inspector-field">
@@ -330,10 +415,15 @@ const BuilderInspector = ({
               placeholder="Select a question"
               style={{ width: "100%" }}
               allowClear
+              optionLabelProp="label"
             >
               {questions.map((q) => (
-                <Select.Option key={q.id} value={q.id}>
-                  {q.label}
+                <Select.Option
+                  key={q.id}
+                  value={q.id}
+                  label={<QuestionLabel label={q.label} type={q.type} />}
+                >
+                  <QuestionLabel label={q.label} type={q.type} />
                 </Select.Option>
               ))}
             </Select>
@@ -448,24 +538,6 @@ const BuilderInspector = ({
               {VALID_ORIENTATION.map((o) => (
                 <Select.Option key={o.value} value={o.value}>
                   {o.label}
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-        )}
-
-        {/* Variant (pie only) */}
-        {wType === "pie" && (
-          <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Variant</label>
-            <Select
-              value={wConfig.variant || "pie"}
-              onChange={(val) => updateConfig("variant", val)}
-              style={{ width: "100%" }}
-            >
-              {VALID_PIE_VARIANT.map((v) => (
-                <Select.Option key={v.value} value={v.value}>
-                  {v.label}
                 </Select.Option>
               ))}
             </Select>
