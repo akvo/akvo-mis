@@ -11,7 +11,7 @@ config_path = "source/config/config.min.js"
 @override_settings(USE_TZ=False)
 class ConfigJS(TestCase):
     def test_config_generation(self):
-        administration_seeder.seed_administration_prod()
+        administration_seeder.seed_administration_test()
         if Path(config_path).exists():
             os.remove(config_path)
         self.assertFalse(Path(config_path).exists())

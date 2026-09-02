@@ -42,6 +42,7 @@ PGADMIN_LISTEN_PORT="5050"
 IP_ADDRESS="http://<your_ip_address>:3000/api/v1/device"
 APK_UPLOAD_SECRET="123456789AU"
 STORAGE_PATH="./storage"
+BASE_DOMAIN=
 SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
 SENTRY_MOBILE_DSN="<<your_sentry_mobile_DSN>>"
@@ -50,6 +51,98 @@ SENTRY_MOBILE_AUTH_TOKEN="<<your_sentry_mobile_auth_token>>"
 
 
 You can generate a Sentry auth token by following [this official Sentry documentation](https://docs.sentry.io/account/auth-tokens/).
+
+#### Workspaces (multi-tenancy)
+
+The app is multi-tenant. Every workspace owns its own administrative
+hierarchy, forms, users and data, and nothing is shared between them.
+
+`BASE_DOMAIN` decides whether workspaces get their own hosts:
+
+| `BASE_DOMAIN` | Behaviour |
+|---|---|
+| empty (**default**) | Single host. Every request is the base domain, no host resolves to a workspace, and the app behaves as it did before workspaces existed. |
+| e.g. `localapp.test` | Each workspace lives at `<subdomain>.<BASE_DOMAIN>`, and a session is only valid on its own workspace's host. |
+
+Leave it empty unless you are working on subdomain routing — see
+[Subdomain routing locally](#subdomain-routing-locally) below.
+
+A migrated database always has one workspace called `default`, created by
+the tenant backfill migration, so the seeders have something to target
+before anyone registers. Commands that write workspace-owned rows take
+`--tenant=<subdomain>`.
+
+#### Subdomain routing locally
+
+`/etc/hosts` stands in for the wildcard DNS that production uses, and the
+flow you get is the same one production has. Full walkthrough:
+[`doc/notes/subdomain-local-dev.md`](doc/notes/subdomain-local-dev.md).
+
+**One-time setup**
+
+1. Pick a base domain you do not own on the real internet — `.test` is
+   reserved for exactly this by RFC 2606 — and set it in `.env`:
+
+   ```bash
+   BASE_DOMAIN=localapp.test
+   ```
+
+2. Add it to `/etc/hosts`:
+
+   ```
+   127.0.0.1  localapp.test
+   ```
+
+3. Restart so the backend and worker pick up the variable and the frontend
+   bakes it into `config.js`:
+
+   ```bash
+   ./dc.sh up -d --force-recreate backend worker frontend
+   ```
+
+`http://localapp.test:3000` is now the main site: registration and a
+find-workspace field, no login.
+
+**Per workspace**
+
+`/etc/hosts` has no wildcard, so every workspace needs its own line. This
+is the only repeated step.
+
+1. Register at `http://localapp.test:3000/register`, say `new-tenant`.
+2. Add its host:
+
+   ```
+   127.0.0.1  new-tenant.localapp.test
+   ```
+
+3. Read the activation email at [localhost:8025](http://localhost:8025)
+   (Mailpit). The link already points at
+   `http://new-tenant.localapp.test:3000/activate/...`, because activation
+   hands back a session and that session is only valid there.
+4. Follow it, complete the configuration form, and use the app on that host.
+
+**Four things that will bite you**
+
+- **The base domain and the workspace hosts must share a suffix.** The
+  resolver strips `BASE_DOMAIN` off the host and looks up what is left, so
+  `BASE_DOMAIN=localapp.test` with a browser on `acme.localhost` resolves to
+  nothing and answers 404.
+- **`ALLOWED_HOSTS` must accept the subdomains.** It is `["*"]` today. If
+  that is ever tightened, Django's leading-dot form is the subdomain
+  wildcard: `.localapp.test`.
+- **The dev proxy must forward the browser's Host.** `setupProxy.js` sets
+  `changeOrigin: false` for this reason — with it on, every request reaches
+  Django as `127.0.0.1:8000` and no workspace ever resolves.
+- **The port is part of the local address.** The resolver strips it, but
+  redirects and emailed links carry it, so `http://acme.localapp.test`
+  without `:3000` reaches nothing.
+
+**Without hosts entries:** `curl -H "Host: acme.localapp.test" ...` reaches a
+workspace from a shell. Only the browser needs `/etc/hosts`, because only the
+browser resolves the name. Tests need nothing at all — the Django test client
+takes the host as an argument, and `BASE_DOMAIN` is forced empty under
+`manage.py test`, so a test that wants host routing opts in with
+`override_settings`.
 
 #### Start
 
@@ -117,17 +210,28 @@ Add New User and Seed Master Data:
 Once the containers are up and running, you can seed the necessary data by running the following command:
 
 ```bash
-./dc.sh exec backend ./seeder.sh
+./dc.sh exec backend ./seeder.sh --tenant=default
 ```
 
-The script will prompt you for various actions related to data seeding such as:
+`--tenant` is required. It names the workspace the forms and generated data
+belong to; `default` exists on any migrated database. Every tenant-aware
+command in the script reuses that one value, which is why it is an argument
+rather than a prompt.
 
-- seed administrative data
-- add a new super admin
-- seed fake users
+The script then asks whether to run each step:
+
+- seed administrative data (a CSV import, or the small bundled sample)
 - seed forms
+- add a new super admin
+- seed organisations and administration attributes
+- seed default roles
+- seed fake data
 
-Answer each prompt by entering 'y' or 'n' followed by the Enter key.
+Answer each prompt by entering 'y' or 'n' followed by the Enter key. The fake
+data step asks for nothing beyond counts — map coordinates come from the
+hierarchy imported in the first step. See
+[Fake Data (Development)](#fake-data-development) for running each seeder on
+its own.
 
 Default Fake User's password: `Test#123`
 
@@ -279,6 +383,249 @@ covers the data model, widget config schema and the `measure` semantics;
 > have, so there was no mechanical path from one to the other.
 
 ## Data Seeder
+
+### Fake Data (Development)
+
+Building a workspace up from nothing. Every command below is tenant-aware and
+takes `--tenant <subdomain>`.
+
+```mermaid
+flowchart TD
+    register["<b>0</b> · register<br/><code>POST /api/v1/register</code>"]
+    workspace(["workspace<br/><i>root unit only</i>"])
+
+    geojson[/"GeoJSON<br/><i>gadm.org</i>"/]
+    notebook["administration_csv_generator<br/><i>notebook</i>"]
+    csv[/"storage/administrations/*.csv"/]
+    admseeder["<b>1</b> · administration_csv_seeder"]
+    hierarchy(["hierarchy<br/><i>levels + units<br/>+ bounding boxes</i>"])
+
+    roleseeder["<b>2</b> · default_roles_seeder"]
+    roles(["roles<br/><i>Admin / Submitter / Approver<br/>per level</i>"])
+
+    formseeder["<b>3</b> · form_seeder<br/><i>or the Form Builder</i>"]
+    forms(["forms"])
+
+    dataseeder["<b>4</b> · fake_complete_data_seeder"]
+    data(["datapoints + users<br/><b>DUMMY-</b> prefixed"])
+
+    clean["<b>5</b> · fake_complete_data_seeder<br/><code>--clean</code>"]
+
+    register --> workspace
+    geojson --> notebook --> csv --> admseeder
+    workspace --> admseeder --> hierarchy
+    hierarchy --> roleseeder --> roles
+    workspace --> formseeder --> forms
+
+    roles --> dataseeder
+    forms --> dataseeder
+    hierarchy -- "map coordinates" --> dataseeder
+    dataseeder --> data
+    data --> clean
+    clean -. "back to an empty workspace" .-> workspace
+```
+
+#### 0. Create a workspace
+
+Registration is the only thing that creates one. It is a two-phase flow: sign
+up claims the subdomain, then a configuration form names the top tier and its
+root unit.
+
+```bash
+curl -X POST http://localhost:3000/api/v1/register \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"you@example.org","password":"Secret#Pass123","subdomain":"acme"}'
+```
+
+The account starts inactive. Read the activation email at
+[localhost:8025](http://localhost:8025) (Mailpit), follow the link, and fill in
+the configuration form — it asks for the top tier's name ("National") and the
+unit at it ("Indonesia"), which are two different things.
+
+If you are working on subdomain routing, each workspace also needs an
+`/etc/hosts` line — see
+[Subdomain routing locally](#subdomain-routing-locally). With `BASE_DOMAIN`
+empty, the default, host routing is inert and you can skip that.
+
+**Or skip registration entirely:** a migrated database already has a `default`
+workspace (created by the tenant backfill migration), which is what a
+single-host install uses. `--tenant default` works immediately after `migrate`.
+
+#### 1. Import an administration hierarchy
+
+A freshly registered workspace has one level and one root unit and nothing
+below it. `administration_csv_seeder` imports the rest from a CSV, creating
+both the `Levels` and the `Administration` rows in one step:
+
+```bash
+./dc.sh exec backend python manage.py administration_csv_seeder \
+    --source=administrations/indonesia.csv --tenant=acme --dry-run
+
+./dc.sh exec backend python manage.py administration_csv_seeder \
+    --source=administrations/indonesia.csv --tenant=acme
+```
+
+| Flag | Purpose |
+|---|---|
+| `--source=<path>` | **Required.** CSV to import, resolved against `STORAGE_PATH` first, then as a literal path |
+| `--tenant=<subdomain>` | **Required.** Workspace to import into |
+| `--dry-run` | Validate the whole file and roll back, writing nothing |
+| `--rename-root` | Allow the level-0 column to rename the workspace's existing root unit |
+
+Run `--dry-run` first. `STORAGE_PATH` is bind-mounted from the repo's
+`storage/` directory — country files are operator data and are gitignored
+there.
+
+The CSV header is `{level}_{Label}` for names and `{level}_Code` for codes:
+
+```csv
+0_National,0_Code,1_Province,1_Code,2_Regency,2_Code,attr_Bounding Box
+Indonesia,IDN,Aceh,IDN.1_1,Aceh Barat,IDN.1.2_1,"95.9,4.0,96.5,4.6"
+```
+
+The `Label` half becomes `Levels.name` and shows up throughout the app, so use
+the word the workspace should see ("Province", not "name").
+
+Any column named `attr_<Name>` becomes an administration attribute on the
+row's deepest unit. `attr_Bounding Box` is the one the platform reads: it holds
+`minLng,minLat,maxLng,maxLat` and is what lets step 4 put a generated
+datapoint's pin inside the unit it belongs to. The notebook writes it by
+default. Attribute columns are optional — a CSV without them imports exactly as
+before.
+
+To produce that CSV from boundary data, use the notebook in
+[`scripts/administration_csv_generator/`](scripts/administration_csv_generator/README.md).
+It previews the GeoJSON's properties, maps them to levels through a
+`config.json`, and validates every rule the seeder enforces before writing.
+
+Boundary files for any country can be downloaded from
+[GADM](https://gadm.org/download_country.html) — pick the country, then the
+GeoJSON format at the administrative level you need. GADM's property naming
+(`COUNTRY`/`GID_0`, `NAME_1`/`GID_1`, …) is what the notebook's suggestion step
+recognises, so its mapping is filled in for you.
+
+If the workspace already has a root under a different name the import stops and
+names both rather than guessing; pass `--rename-root` to accept the file's
+value.
+
+#### 2. Create the default roles
+
+Roles are defined **per level**, so a new workspace has none until its
+hierarchy exists — which is why this runs after step 1 and not before:
+
+```bash
+./dc.sh exec backend python manage.py default_roles_seeder
+```
+
+That creates an Admin, Submitter and Approver role for every level. It takes
+no `--tenant`: it walks all levels, and `Role.save()` derives each role's
+workspace from the level it belongs to, so the rows land in the right place
+regardless. It is idempotent, so re-running after adding a level is the way to
+fill in the gap.
+
+Skipping this step makes step 4 fail — the data seeder needs a role with
+submit access to attach its generated users to.
+
+#### 3. Give the workspace forms
+
+There is nothing to submit against until the workspace has at least one
+registration form. Build one in the Form Builder
+(`/control-center/master-data/forms`), import one, or seed the bundled
+examples:
+
+```bash
+./dc.sh exec backend python manage.py form_seeder --tenant=acme
+```
+
+| Flag | Purpose |
+|---|---|
+| `--tenant=<subdomain>` | Workspace the forms belong to. Optional — omitting it leaves them unowned, the pre-workspace behaviour |
+| `--test` | Seed only the bundled `example-*` fixtures |
+| `--source=<dir>` | Read definitions from another directory (default `./source/forms/`) |
+| `--file=<name>` | Seed a single `<name>.prod.json` |
+
+`--tenant` is optional here; omitting it keeps the pre-workspace behaviour and
+leaves the forms unowned. Note that form ids come from the definition files and
+are the primary key, so the **same file cannot be seeded into two workspaces** —
+the command refuses rather than silently reassigning another workspace's form.
+
+#### 4. Generate submissions
+
+```bash
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme \
+    --repeat=10 \
+    --monitoring=3 \
+    --approved=true
+```
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--tenant=<subdomain>` | — | **Required.** Workspace to seed into |
+| `--repeat=<n>` | `5` | Registrations per form |
+| `--monitoring=<n>` | `2` | Monitoring submissions per registration |
+| `--approved=<bool>` | `true` | `true` gives approved submissions only — nothing pending, no approver accounts. `false` leaves half of each form's rows pending and builds an approver tree |
+| `--draft=<bool>` | `false` | Also create drafts. Contradicts `--approved=true`, so it requires `--approved=false` |
+| `--clean` | off | Delete instead of seeding — see step 5 |
+| `--test=<bool>` | `false` | Use the bundled fixture instead of a workspace; exempt from `--tenant` |
+
+**There is no `--bbox`.** Map coordinates come from the hierarchy: step 1
+imports a `Bounding Box` attribute alongside each unit, and the seeder draws a
+random point inside the box of the administration a datapoint actually belongs
+to. A pin therefore lands in — or immediately beside — the unit its datapoint
+names, rather than anywhere inside a country-sized rectangle.
+
+The seeder **refuses to run** if it cannot resolve a box, rather than writing
+submissions with no coordinates. Two cases hit that:
+
+- *The workspace has nothing below its root.* Run step 1.
+- *The hierarchy was imported without boxes* — an older CSV, a spreadsheet
+  upload, or the bundled sample. Re-import from a CSV carrying an
+  `attr_Bounding Box` column; the
+  [generator notebook](scripts/administration_csv_generator/README.md) writes
+  one by default.
+
+The error message names the command to run in both cases.
+
+Boxes are not polygons, so a pin can still land just outside its own unit —
+typically in a neighbouring one. Step 8 of the notebook measures the rate for
+your country and prints it.
+
+#### 5. Remove it again
+
+Every generated row is prefixed `DUMMY-` — datapoints, drafts, monitoring
+children, mobile assignments, and `dummy-…@test.com` accounts — so you can tell
+generated data from real data at a glance, and so it can be removed:
+
+```bash
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme --clean
+```
+
+`--clean` is terminal: it deletes and exits, seeding nothing. Bounding boxes
+are left alone — they belong to the hierarchy, not to the generated data, and
+carry no `DUMMY-` prefix. To reset, chain the two commands:
+
+```bash
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme --clean && \
+./dc.sh exec backend python manage.py fake_complete_data_seeder \
+    --tenant=acme --repeat=10 --approved=true
+```
+
+The delete is a hard delete scoped to one workspace, keyed on the `DUMMY-`
+prefix and never on the creating user — the seeder reuses an existing submitter
+when one matches, which on a shared workspace is a real person's account. That
+bound is what makes it safe, so it runs in any environment.
+
+Data seeded before this convention existed carries no prefix and is invisible
+to `--clean`.
+
+Design doc:
+[Tenant-aware seeders](doc/design/SEED-tenant-aware-seeders.md) — the `DUMMY-` prefix and
+teardown, the CSV import, and the bounding boxes that place generated pins.
+
+Default fake user password: `Test#123`
 
 ### Akvo Flow
 

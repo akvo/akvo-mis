@@ -26,7 +26,7 @@ class DraftFormDataDetailsTestCase(TestCase, ProfileTestHelperMixin):
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
-        self.call_command(repeat=2, draft=True)
+        self.call_command(repeat=2, draft=True, approved=False)
         form_data = FormData.objects_draft.filter(
             form__pk=1,
         ).order_by("?").first()

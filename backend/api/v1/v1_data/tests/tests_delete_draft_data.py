@@ -26,7 +26,7 @@ class DeleteDraftFormDataTestCase(TestCase, ProfileTestHelperMixin):
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
-        self.call_command(repeat=2, draft=True)
+        self.call_command(repeat=2, draft=True, approved=False)
         form_data = FormData.objects_draft.order_by("?").first()
         self.data = form_data
         self.user = form_data.created_by

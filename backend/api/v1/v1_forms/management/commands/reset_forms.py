@@ -20,6 +20,13 @@ class Command(BaseCommand):
             default=False,
             type=int
         )
+        # Forwarded to form_seeder, which requires it outside --test.
+        parser.add_argument(
+            "--tenant",
+            default=None,
+            type=str,
+            help="Workspace subdomain to reseed the forms into.",
+        )
 
     # This command destroys every Forms row before it repopulates them
     # (hard_delete below cascades to submissions), so a failure partway
@@ -52,19 +59,17 @@ class Command(BaseCommand):
             form.hard_delete()
         # Call form_seeder command to repopulate the forms
         test = options.get("test", False)
-        if test:
-            call_command(
-                "form_seeder",
-                "--test",
-                stdout=self.stdout,
-                stderr=self.stderr,
-            )
-        else:
-            call_command(
-                "form_seeder",
-                stdout=self.stdout,
-                stderr=self.stderr,
-            )
+        seeder_args = ["--test"] if test else []
+        seeder_kwargs = {}
+        if options.get("tenant"):
+            seeder_kwargs["tenant"] = options["tenant"]
+        call_command(
+            "form_seeder",
+            *seeder_args,
+            stdout=self.stdout,
+            stderr=self.stderr,
+            **seeder_kwargs,
+        )
         # Reset user form assignments
         test_users = SystemUser.objects.filter(
             email__contains="@test.com"

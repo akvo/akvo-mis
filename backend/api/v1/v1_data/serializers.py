@@ -448,8 +448,24 @@ class ListFormDataSerializer(serializers.ModelSerializer):
             }
         return None
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_administration(self, instance: FormData):
-        return " - ".join(instance.administration.full_name.split("-")[1:])
+        """The unit's path without the root, e.g. "Aceh - Barat - Bubon".
+
+        Walks the ancestor rows rather than splitting `full_name` on "-".
+        The old string split cut on the bare hyphen instead of the " - "
+        separator, so every part kept its surrounding spaces (" Aceh  -  "
+        ...) and, worse, any unit whose own name contains a hyphen was
+        torn in two: "KwaZulu-Natal" rendered as two tiers, "KwaZulu" and
+        "Natal".
+
+        The root is dropped because the list is already scoped to one
+        workspace, so repeating the country on every row says nothing.
+        """
+        administration = instance.administration
+        ancestors = list(administration.ancestors or [])
+        names = [a.name for a in ancestors[1:]] + [administration.name]
+        return " - ".join(names)
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_total_children(self, instance: FormData):

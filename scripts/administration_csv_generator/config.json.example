@@ -1,0 +1,21 @@
+{
+  "input": "example.geojson",
+  "output": "example.csv",
+  "labels": {
+    "0": "National",
+    "1": "Province",
+    "2": "Regency"
+  },
+  "properties": {
+    "0_name": "COUNTRY",
+    "0_code": "GID_0",
+    "1_name": "NAME_1",
+    "1_code": "GID_1",
+    "2_name": "NAME_2",
+    "2_code": "GID_2"
+  },
+  "options": {
+    "na_values": ["NA", "N/A", "NULL", ""],
+    "split_camel_case": false
+  }
+}
