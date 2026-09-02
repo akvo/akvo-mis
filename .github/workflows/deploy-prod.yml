@@ -44,7 +44,10 @@ jobs:
           services: "frontend backend worker"
           source-tag: ${{ steps.vars.outputs.sha }}
           cluster-name: production
-          version-tag: ${{ github.ref_name }}
+          # k8s-rollout sets the image to <ref_name>.<full_sha>, so promote must
+          # create that exact immutable tag (not just <ref_name>) or the rollout
+          # pulls a non-existent tag.
+          version-tag: ${{ github.ref_name }}.${{ github.sha }}
           gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_REGISTRY }}
 
   rollout:
