@@ -96,3 +96,26 @@ In the standalone `akvo-react-form-editor` library demo website, an extra "JSON"
 - **Version History Drawer (`VersionHistoryDrawer`)**:
   - Displays chronological list of published version snapshots (e.g. Version 1, Version 2).
   - Provides **Preview** (read-only inspection) and **Restore / Activate** actions (source: `frontend/src/pages/form-builder/FormBuilderEdit.jsx#L441-L460`).
+
+---
+
+## 7. Importing Forms & Interoperability (KoboToolbox, ODK & XLSForm)
+
+Source: `frontend/src/pages/form-builder/FormBuilderList.jsx`, `frontend/src/pages/form-builder/components/ImportFormModal.jsx`, `docs/source/formBuilder.rst`
+
+Akvo MIS provides native tools for moving forms into and out of the platform:
+
+### 1. Import Form Modal (`/control-center/form-builder`)
+On the Form Builder List page, click the **Import Form** button in the header toolbar to open the `ImportFormModal`. Two import formats are supported:
+1. **JSON (`.json`)**: Imports a complete Akvo MIS form schema previously exported from another Akvo MIS tenant or deployment.
+2. **XLSForm (`.xlsx` / `.xls`)**: Imports standard spreadsheet questionnaires authored externally in tools like **KoboToolbox**, **ODK Build**, or Microsoft Excel.
+
+### 2. Working with Forms from KoboToolbox or ODK
+- **Direct Web Builder Embed**: **Not supported**. You cannot directly embed or run Kobo's web builder inside Akvo MIS.
+- **XLSForm Transition Path**: **Fully supported**. If you created a form in KoboToolbox or ODK:
+  1. In KoboToolbox / ODK, export your form definition as an **XLSForm (`.xlsx`)**.
+  2. In Akvo MIS, go to **Control Centre > Form Builder** and click **Import Form**.
+  3. Select **XLSForm (.xlsx)**, choose whether the form is a **Registration** or **Monitoring** form, and upload the `.xlsx` file.
+  4. Akvo MIS runs preflight checks to validate question types, choices, skip-logic dependencies, and multi-language translations (`label::*`), then creates a native draft form in the Form Builder.
+  5. Open the form in the Form Builder to review question layout and publish when ready.
+

@@ -67,3 +67,23 @@ This document provides quick answers to common questions and explicit boundaries
 ### Q: What operator is used to combine multiple skip logic rules?
 
 - The `dependency_rule` property controls multiple rules: `"AND"` (default: all must be true) or `"OR"` (at least one must be true) (source: `akvo-react-form/README.md#dependency-rule-logic`).
+
+### Q: Can the form builder on Kobo (or forms created in KoboToolbox / ODK) be used in Akvo MIS?
+
+- **Direct Web Builder Embed**: **No**. You cannot directly embed or run Kobo's web form builder inside Akvo MIS.
+- **Importing Kobo Forms**: **Yes, fully supported**. You can transition forms created in KoboToolbox or ODK into Akvo MIS by exporting them as standard **XLSForm (`.xlsx`)** files from Kobo, and then using the **"Import Form"** feature in Akvo MIS.
+- **How to Import**:
+  1. In KoboToolbox or ODK, export your questionnaire as an **XLSForm (.xlsx)**.
+  2. In Akvo MIS, go to **Control Centre > Form Builder** (`/control-center/form-builder`).
+  3. Click the **Import Form** button in the top action toolbar.
+  4. Select **XLSForm (.xlsx)** and specify whether the form is a **Registration** or **Monitoring** form.
+  5. Upload your `.xlsx` file. Akvo MIS parses standard questions, choices, multi-language translations (`label::*`), and skip logic, creating a new native draft form in the Form Builder (source: `frontend/src/pages/form-builder/components/ImportFormModal.jsx`, `docs/source/formBuilder.rst`).
+
+### Q: How do I import an existing form (JSON or XLSForm) into Akvo MIS?
+
+- On the Form Builder List page (**Control Centre > Form Builder**), click the **`Import Form`** button.
+- Choose your import format:
+  - **JSON (`.json`)**: For form schemas exported from another Akvo MIS instance.
+  - **XLSForm (`.xlsx` / `.xls`)**: For spreadsheets authored in KoboToolbox, ODK Build, or Excel.
+- Select the form type (Registration or Monitoring), upload your file, review preflight compatibility notes, and open the generated draft in the Form Builder.
+
