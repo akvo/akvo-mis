@@ -17,6 +17,7 @@ jest.mock("../../../components/dashboard/DashboardGrid", () => {
       data-widget-count={props.widgets.length}
       data-root-form={props.rootFormId}
       data-filters={JSON.stringify(props.filters)}
+      data-dashboard-slug={props.dashboardSlug}
     />
   );
   MockGrid.displayName = "DashboardGrid";
@@ -103,6 +104,13 @@ describe("loading a published dashboard", () => {
     // root_form arrives as {id, name}; the grid needs the bare id for the
     // escalation path segment.
     expect(grid).toHaveAttribute("data-root-form", "6001");
+    // The slug from the route, passed straight through: every widget
+    // request needs it so the anonymous-caller endpoints (Tasks 7, 8, 10)
+    // can tell what an unauthenticated reader may ask about.
+    expect(grid).toHaveAttribute(
+      "data-dashboard-slug",
+      "water-points-overview"
+    );
   });
 
   test("passes default_filters through to the filter bar", async () => {

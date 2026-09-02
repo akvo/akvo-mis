@@ -126,6 +126,7 @@ const DashboardViewer = () => {
           widgets={dashboard.widgets}
           filters={filters}
           rootFormId={dashboard.root_form?.id}
+          dashboardSlug={slug}
         />
       </div>
     </div>

@@ -358,10 +358,11 @@ const RouteList = () => {
         path="/control-center/dashboard/:slug"
         element={<Private element={DashboardBuilder} alias="dashboard" />}
       />
-      <Route
-        path="/dashboards/:slug"
-        element={<Private element={DashboardViewer} alias="dashboard" />}
-      />
+      {/* Not wrapped in Private: a public dashboard is readable without
+          a session, and the viewer already collapses "unpublished,
+          deleted, another tenant's, private, server error" into one
+          not-found screen. */}
+      <Route path="/dashboards/:slug" element={<DashboardViewer />} />
       <Route
         path="/downloads"
         element={<Private element={Downloads} alias="downloads" />}
