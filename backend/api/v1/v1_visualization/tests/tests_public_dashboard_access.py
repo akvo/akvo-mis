@@ -5,12 +5,19 @@ from django.test import TestCase
 from django.test.utils import override_settings
 
 from api.v1.v1_forms.constants import QuestionTypes
-from api.v1.v1_forms.models import Forms, Questions
-from api.v1.v1_profile.models import Administration
+from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
+from api.v1.v1_profile.constants import FeatureAccessTypes, FeatureTypes
+from api.v1.v1_profile.models import (
+    Administration,
+    Role,
+    RoleFeatureAccess,
+    UserRole,
+)
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
-from api.v1.v1_users.models import Tenant
+from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
+from utils.tenant_test_case import TenantIsolationTestCase
 
 
 @override_settings(USE_TZ=False)
@@ -327,4 +334,312 @@ class PublicEndpointAccessTestCase(TestCase, ProfileTestHelperMixin):
 
     def test_geolocation_with_an_empty_monitoring_form_id_is_404(self):
         res = self.geo(6001, monitoring_form_id="")
+        self.assertEqual(res.status_code, 404)
+
+
+@override_settings(USE_TZ=False)
+class ReadNamespaceTierTestCase(TestCase, ProfileTestHelperMixin):
+    """Anonymous, plain, and dashboard-holding callers (spec D-3)."""
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.owner = self.create_user(
+            email="viz_tiers@akvo.org", role_level=self.IS_SUPER_ADMIN
+        )
+        # create_user() never assigns a tenant (see the identical note
+        # in PublicEndpointAccessTestCase above). Anonymous requests
+        # resolve to the single seeded Tenant row through
+        # public_tenant(); without this, self.owner.tenant is None and
+        # the dashboards below would sit on a different "tenant" than
+        # the one anonymous callers are ever scoped to.
+        self.owner.tenant = Tenant.objects.get()
+        self.owner.save()
+        root = Forms.objects.get(pk=6001)
+        common = {
+            "root_form": root,
+            "tenant": self.owner.tenant,
+            "created_by": self.owner,
+            "status": DashboardStatus.published,
+            "published_config": {"default_filters": {}, "widgets": []},
+        }
+        self.public = Dashboard.objects.create(
+            name="Public", slug="public-one", is_public=True, **common
+        )
+        self.private = Dashboard.objects.create(
+            name="Private", slug="private-one", is_public=False, **common
+        )
+
+    def slugs(self, **headers):
+        res = self.client.get("/api/v1/dashboards", **headers)
+        self.assertEqual(res.status_code, 200)
+        return {row["slug"] for row in res.json()}
+
+    def test_anonymous_sees_only_public(self):
+        self.assertEqual(self.slugs(), {"public-one"})
+
+    def test_anonymous_can_open_a_public_dashboard(self):
+        res = self.client.get("/api/v1/dashboards/public-one")
+        self.assertEqual(res.status_code, 200)
+
+    def test_anonymous_cannot_open_a_private_dashboard(self):
+        res = self.client.get("/api/v1/dashboards/private-one")
+        self.assertEqual(res.status_code, 404)
+
+    def test_a_dashboard_holder_sees_both(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        token = RefreshToken.for_user(self.owner).access_token
+        header = {"HTTP_AUTHORIZATION": "Bearer {0}".format(token)}
+        self.assertEqual(
+            self.slugs(**header), {"public-one", "private-one"}
+        )
+
+    def test_a_draft_is_never_listed(self):
+        self.public.status = DashboardStatus.draft
+        self.public.save()
+        self.assertEqual(self.slugs(), set())
+
+
+@override_settings(USE_TZ=False, BASE_DOMAIN="app.com")
+class AnonymousHostBoundaryTestCase(TenantIsolationTestCase):
+    """The anonymous branch's two guards, proven at the viewset layer.
+
+    Fix round 1, Important 1 and 2: a deleted throwaway test proved the
+    tenant filter caught a cross-tenant leak, but nothing committed
+    replaced it; and the `tenant is None -> rows.none()` branch had no
+    coverage at all, only Task 4's coverage of `public_tenant` itself.
+    Both tenants share one dashboard slug on purpose — a guessable slug
+    is the case that matters, not a coincidence.
+    """
+
+    def setUp(self):
+        super().setUp()
+        common = dict(
+            slug="shared",
+            status=DashboardStatus.published,
+            is_public=True,
+            published_config={"default_filters": {}, "widgets": []},
+        )
+        self.a_dashboard = Dashboard.objects.create(
+            name="Acme dashboard",
+            root_form=self.a["form"],
+            tenant=self.a["tenant"],
+            **common,
+        )
+        self.b_dashboard = Dashboard.objects.create(
+            name="Beta dashboard",
+            root_form=self.b["form"],
+            tenant=self.b["tenant"],
+            **common,
+        )
+        # A tenant-less row, the way pre-MT-002 data or a stray test
+        # fixture would leave one. Only visible from here if the
+        # `tenant is None` branch ever degrades to a `tenant=None`
+        # filter instead of `rows.none()`.
+        self.orphan_dashboard = Dashboard.objects.create(
+            name="Orphan dashboard",
+            slug="orphan",
+            root_form=self.a["form"],
+            tenant=None,
+            status=DashboardStatus.published,
+            is_public=True,
+            published_config={"default_filters": {}, "widgets": []},
+        )
+
+    def test_each_host_lists_only_its_own_tenant(self):
+        for fixture, other_name in (
+            (self.a, "Beta dashboard"),
+            (self.b, "Acme dashboard"),
+        ):
+            sub = fixture["tenant"].subdomain
+            res = self.client.get(
+                "/api/v1/dashboards", HTTP_HOST="{0}.app.com".format(sub)
+            )
+            self.assertEqual(res.status_code, 200)
+            names = {row["name"] for row in res.json()}
+            self.assertEqual(len(names), 1)
+            self.assertNotIn(other_name, names)
+
+    def test_each_host_resolves_its_own_dashboard_by_the_shared_slug(self):
+        for fixture, expected_name in (
+            (self.a, "Acme dashboard"),
+            (self.b, "Beta dashboard"),
+        ):
+            sub = fixture["tenant"].subdomain
+            res = self.client.get(
+                "/api/v1/dashboards/shared",
+                HTTP_HOST="{0}.app.com".format(sub),
+            )
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json()["name"], expected_name)
+
+    def test_bare_base_domain_lists_nothing(self):
+        res = self.client.get("/api/v1/dashboards", HTTP_HOST="app.com")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), [])
+
+    def test_bare_base_domain_slug_is_404(self):
+        res = self.client.get(
+            "/api/v1/dashboards/orphan", HTTP_HOST="app.com"
+        )
+        self.assertEqual(res.status_code, 404)
+
+
+@override_settings(USE_TZ=False)
+class NonSuperuserDashboardHolderTestCase(TenantIsolationTestCase):
+    """`has_any_dashboard_access` proven against the real ORM traversal.
+
+    Fix round 1, Minor: `test_a_dashboard_holder_sees_both` authenticates
+    as a superuser, which short-circuits the helper before its
+    `user_user_role` traversal ever runs. This holds a plain account
+    with `dashboard_edit` — not `dashboard_view` — to prove the
+    traversal itself resolves True, and that any access on the feature
+    is enough (spec: Edit-but-not-View must still be able to open what
+    it built).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.private = Dashboard.objects.create(
+            name="Acme private",
+            slug="acme-private-holder",
+            root_form=self.a["form"],
+            tenant=self.a["tenant"],
+            status=DashboardStatus.published,
+            is_public=False,
+            published_config={"default_filters": {}, "widgets": []},
+        )
+        self.holder = SystemUser.objects.create_user(
+            email="holder@acme.org",
+            password="Secret#Pass123",
+            first_name="Hold",
+            last_name="Er",
+            tenant=self.a["tenant"],
+        )
+        role = Role.objects.create(
+            name="Dashboard editor", administration_level=self.a["level"]
+        )
+        RoleFeatureAccess.objects.create(
+            role=role,
+            type=FeatureTypes.dashboard_builder,
+            access=FeatureAccessTypes.dashboard_edit,
+        )
+        UserRole.objects.create(
+            user=self.holder, role=role, administration=self.a["root"]
+        )
+
+    def test_a_non_superuser_holder_reads_a_private_dashboard(self):
+        res = self.client.get(
+            "/api/v1/dashboards/acme-private-holder",
+            **self.auth(self.holder),
+        )
+        self.assertEqual(res.status_code, 200)
+
+
+@override_settings(USE_TZ=False, BASE_DOMAIN="app.com")
+class CrossTenantIdEscalationTestCase(TenantIsolationTestCase):
+    """CLEANUP-001's attack, replayed: can A walk B's ids by number?
+
+    Every "foreign id is 404" test above (PublicEndpointAccessTestCase)
+    reuses off_dashboard_form/off_dashboard_question from the SAME
+    tenant as the dashboard, so it only proves the allowlist
+    (check_ids) rejects an id the dashboard's own snapshot never named.
+    It says nothing about a caller who holds a real, valid dashboard on
+    tenant A's host and then names an id that belongs to tenant B —
+    the previous public dashboard feature was deleted from this
+    codebase for exactly that gap (doc/design/CLEANUP-001-remove-
+    public-dashboard.md).
+
+    That gap is closed twice over here: check_ids refuses any id
+    outside the dashboard's own allowlist regardless of tenant, and
+    tenant_scoped_forms/get_object_or_404 would refuse tenant B's form
+    even if check_ids let it through. Each test below is proven
+    against both guards independently (see task-16-report.md for the
+    neuter/widen experiments) rather than assumed from reading the
+    code.
+    """
+
+    def setUp(self):
+        super().setUp()
+        for fixture in (self.a, self.b):
+            group = QuestionGroup.objects.create(
+                form=fixture["form"], name="Group", order=1,
+            )
+            fixture["question"] = Questions.objects.create(
+                form=fixture["form"],
+                question_group=group,
+                order=1,
+                label="Metric",
+                name="metric",
+                type=QuestionTypes.number,
+            )
+        common = dict(
+            status=DashboardStatus.published,
+            is_public=True,
+            published_config={"default_filters": {}, "widgets": []},
+        )
+        self.a_dashboard = Dashboard.objects.create(
+            name="Acme dashboard",
+            slug="acme-view",
+            root_form=self.a["form"],
+            tenant=self.a["tenant"],
+            **common,
+        )
+        self.b_dashboard = Dashboard.objects.create(
+            name="Beta dashboard",
+            slug="beta-view",
+            root_form=self.b["form"],
+            tenant=self.b["tenant"],
+            **common,
+        )
+
+    def get(self, path, **params):
+        params.setdefault("dashboard_slug", "acme-view")
+        return self.client.get(
+            path, params, HTTP_HOST="acme.app.com",
+        )
+
+    def test_a_foreign_forms_id_on_values_is_404(self):
+        # B's form is real and published, just not on A's dashboard
+        # (whose own allowlist names only A's form). No question_id:
+        # ValuesFilterSerializer.validate() requires question_id to
+        # belong to form_id, so pairing B's form with no question is
+        # what keeps this a pure form-id probe rather than a 400.
+        res = self.get(
+            "/api/v1/visualization/values", form_id=self.b["form"].id,
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_a_foreign_questions_id_on_values_is_404(self):
+        # Same serializer constraint forces question_id to be paired
+        # with its own form_id (B's), so this necessarily also names
+        # a foreign form_id -- see task-16-report.md for why the
+        # question branch of check_ids cannot be isolated from the
+        # form branch on this endpoint.
+        res = self.get(
+            "/api/v1/visualization/values",
+            form_id=self.b["form"].id,
+            question_id=self.b["question"].id,
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_a_foreign_monitoring_form_id_on_geolocation_is_404(self):
+        # form_id in the path is A's own, on A's dashboard -- only
+        # monitoring_form_id is foreign. monitoring_form_id never
+        # reaches a database lookup (see the identical case in
+        # PublicEndpointAccessTestCase above), so check_ids is the
+        # only guard that can reject it.
+        res = self.get(
+            "/api/v1/maps/geolocation/{0}".format(self.a["form"].id),
+            monitoring_form_id=self.b["form"].id,
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_the_other_tenants_slug_is_404_on_this_host(self):
+        # A slug is resolved by (slug, tenant) together, never by
+        # slug alone -- Beta's own real, published, public slug
+        # simply is not a row Acme's host can ever match.
+        res = self.client.get(
+            "/api/v1/dashboards/beta-view", HTTP_HOST="acme.app.com",
+        )
         self.assertEqual(res.status_code, 404)

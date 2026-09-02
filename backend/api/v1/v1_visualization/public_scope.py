@@ -16,6 +16,7 @@ from typing import NamedTuple, Optional, Set
 
 from django.http import Http404
 
+from api.v1.v1_profile.constants import FeatureTypes
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.functions import resolve_request_tenant
 from api.v1.v1_visualization.models import Dashboard
@@ -224,6 +225,23 @@ def check_ids(allowed, form_ids=(), question_ids=()):
             continue
         if not allowed.permits_question(question_id):
             raise Http404("question is not on this dashboard")
+
+
+def has_any_dashboard_access(user):
+    """Does this account hold any dashboard feature access at all?
+
+    The gate for private published dashboards. `dashboard_view` is the
+    one you would grant a pure consumer, but Create, Edit, Publish and
+    Delete each imply being able to look at what you are working on, so
+    the question is about the feature and not about one access type.
+    """
+    if user.is_superuser:
+        return True
+    return user.user_user_role.filter(
+        role__role_role_feature_access__type=(
+            FeatureTypes.dashboard_builder
+        ),
+    ).exists()
 
 
 def resolve_view_scope(request):
