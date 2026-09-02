@@ -29,10 +29,14 @@ class Allowlist(NamedTuple):
     questions: Optional[Set[int]]
 
     def permits_form(self, form_id):
-        return self.forms is None or int(form_id) in self.forms
+        if self.forms is None:
+            return True
+        return _as_id(form_id) in self.forms
 
     def permits_question(self, question_id):
-        return self.questions is None or int(question_id) in self.questions
+        if self.questions is None:
+            return True
+        return _as_id(question_id) in self.questions
 
 
 # What an authenticated caller gets. Their scoping is the tenant, exactly
@@ -56,34 +60,63 @@ def allowlist_from(dashboard):
     questions = set()
 
     for widget in widgets:
-        if widget.get("form"):
-            forms.add(int(widget["form"]))
-        if widget.get("question"):
-            questions.add(int(widget["question"]))
+        form_id = _as_id(widget.get("form"))
+        if form_id is not None:
+            forms.add(form_id)
+        question_id = _as_id(widget.get("question"))
+        if question_id is not None:
+            questions.add(question_id)
 
         widget_config = widget.get("config") or {}
 
         # Criteria narrow a widget's datapoints and carry their own
-        # question ids, in both the chart and the table grammars.
+        # question ids, in both the chart and the table grammars. A
+        # criterion's question is author-entered and never validated
+        # against being numeric (validate_dashboard_payload does not
+        # check it), so a malformed one must narrow the allowlist
+        # rather than crash every public view of the dashboard.
         for criterion in widget_config.get("criteria") or []:
-            if isinstance(criterion, dict) and criterion.get("question"):
-                questions.add(int(criterion["question"]))
+            if not isinstance(criterion, dict):
+                continue
+            qid = _as_id(criterion.get("question"))
+            if qid is not None:
+                questions.add(qid)
 
         # Table columns of source `answer`, `parent_answer` and
         # `latest_date` name a question; `parent_name` and
         # `administration` do not.
         for column in widget_config.get("columns") or []:
-            if isinstance(column, dict) and column.get("question"):
-                questions.add(int(column["question"]))
+            if not isinstance(column, dict):
+                continue
+            qid = _as_id(column.get("question"))
+            if qid is not None:
+                questions.add(qid)
 
     # The date filter's question reaches the endpoints as
     # `date_question_id`, and it lives on the dashboard rather than on
     # any widget.
     date_filter = (config.get("default_filters") or {}).get("date") or {}
-    if date_filter.get("date_question"):
-        questions.add(int(date_filter["date_question"]))
+    date_qid = _as_id(date_filter.get("date_question"))
+    if date_qid is not None:
+        questions.add(date_qid)
 
     return Allowlist(forms=forms, questions=questions)
+
+
+def _as_id(value):
+    """An id as an int, or None when it is not one at all.
+
+    Callers hand these methods values straight off a query string,
+    where an id can be anything a client typed. An unparseable id
+    cannot be on any dashboard, so it must be refused -- `None` is
+    never in an allowlist set, which is exactly the answer we want.
+    Raising here would turn a hand-crafted request into a 500 on a
+    public page.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _ints(values):

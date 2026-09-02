@@ -19,10 +19,17 @@ from api.v1.v1_visualization.models import (
 )
 from api.v1.v1_visualization.functions import (
     apply_criteria_to_monitoring_qs,
+    tenant_scoped_forms,
 )
 from api.v1.v1_visualization.formula import (
     evaluate as formula_evaluate,
     pick_latest_repeat,
+)
+from api.v1.v1_visualization.public_scope import (
+    check_ids,
+    question_ids_in_criteria,
+    question_ids_in_formula,
+    resolve_view_scope,
 )
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -315,6 +322,23 @@ class GeolocationListView(APIView):
         summary="To get list of geolocations for a form",
     )
     def get(self, request, form_id, version):
+        # Scope and check_ids both run before the serializer, on
+        # purpose: this view answers an invalid serializer with an
+        # empty 200 rather than a 400, so a check placed after it
+        # would be skipped by any request that was also malformed.
+        # administration is an administration id, not a form or
+        # question, so it never reaches check_ids.
+        tenant, allowed = resolve_view_scope(request)
+        check_ids(
+            allowed,
+            form_ids=[
+                form_id,
+                request.query_params.get("monitoring_form_id"),
+            ],
+            question_ids=question_ids_in_criteria(
+                request.query_params.get("criteria")
+            ),
+        )
         serializer = GeoLocationFilterSerializer(
             data=request.GET, context={"form_id": form_id}
         )
@@ -325,7 +349,7 @@ class GeolocationListView(APIView):
                 status=status.HTTP_200_OK,
             )
         form = get_object_or_404(
-            Forms.objects.for_user(request.user), pk=form_id
+            tenant_scoped_forms(tenant), pk=form_id
         )
         queryset = form.form_form_data.filter(
             is_pending=False,
@@ -476,6 +500,15 @@ def visualization_values_formula(request, version):
     Both cases produce {group: datapoint_id, label: bucket_value} so
     the frontend's byParent[point.id] lookup works identically.
     """
+    # Scope first, matching the other three aggregation endpoints
+    # (visualization_values, visualization_escalation,
+    # GeolocationListView.get). FormulaValuesSerializer itself queries
+    # nothing tenant-unscoped today, but tying the ordering to that
+    # fact would make the anonymous 404 depend on the serializer
+    # staying query-free -- resolving scope first keeps it correct
+    # regardless of what the serializer does later.
+    tenant, allowed = resolve_view_scope(request)
+
     serializer = FormulaValuesSerializer(data=request.query_params)
     if not serializer.is_valid():
         return Response(
@@ -484,8 +517,24 @@ def visualization_values_formula(request, version):
         )
 
     validated = serializer.validated_data
+    # formula and criteria are read from the raw query params, not
+    # validated: validate_formula and validate_criteria replace both
+    # strings with parsed structures, and question_ids_in_formula /
+    # question_ids_in_criteria expect the raw strings.
+    check_ids(
+        allowed,
+        form_ids=[validated["form_id"]],
+        question_ids=[
+            *question_ids_in_formula(
+                request.query_params.get("formula")
+            ),
+            *question_ids_in_criteria(
+                request.query_params.get("criteria")
+            ),
+        ],
+    )
     form = get_object_or_404(
-        Forms.objects.for_user(request.user), pk=validated["form_id"]
+        tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
     formula = validated["formula"]
     criteria = validated.get("criteria")

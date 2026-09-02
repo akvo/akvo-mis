@@ -153,6 +153,48 @@ class AllowlistTestCase(TestCase):
         self.assertTrue(allowed.permits_form("6002"))
         self.assertFalse(allowed.permits_form("9999"))
 
+    def test_unparseable_form_ids_are_refused_not_raised(self):
+        # Fix round 1: geolocation passes monitoring_form_id straight
+        # off the query string with no int() upstream, so "abc", ""
+        # and None must all be refused as ids rather than blow up
+        # int() and 500 a public page.
+        allowed = self.build([
+            {"form": 6002, "question": 600201, "config": {}},
+        ])
+        self.assertFalse(allowed.permits_form("abc"))
+        self.assertFalse(allowed.permits_form(""))
+        self.assertFalse(allowed.permits_form(None))
+        self.assertTrue(ALLOW_ANY.permits_form("abc"))
+        self.assertTrue(ALLOW_ANY.permits_form(""))
+        self.assertTrue(ALLOW_ANY.permits_form(None))
+
+    def test_unparseable_question_ids_are_refused_not_raised(self):
+        allowed = self.build([
+            {"form": 6002, "question": 600201, "config": {}},
+        ])
+        self.assertFalse(allowed.permits_question("abc"))
+        self.assertFalse(allowed.permits_question(""))
+        self.assertFalse(allowed.permits_question(None))
+        self.assertTrue(ALLOW_ANY.permits_question("abc"))
+        self.assertTrue(ALLOW_ANY.permits_question(""))
+        self.assertTrue(ALLOW_ANY.permits_question(None))
+
+    def test_a_non_numeric_criterion_question_is_dropped_not_raised(self):
+        # allowlist_from itself calls int() while building the
+        # allowlist. validate_dashboard_payload never checks that a
+        # criterion's question is numeric, so a saved, published
+        # widget can carry a garbage one -- it must narrow the
+        # allowlist, not 500 every public view of the dashboard.
+        allowed = self.build([
+            {"form": 6002, "question": None, "config": {
+                "criteria": [
+                    {"type": "option_equals", "question": "abc",
+                     "value": "Yes"},
+                ],
+            }},
+        ])
+        self.assertEqual(allowed.questions, set())
+
 
 class IdExtractionTestCase(TestCase):
     """Question ids hide inside three different grammars (spec D-6)."""

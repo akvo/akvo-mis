@@ -1,3 +1,5 @@
+import json
+
 from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -125,6 +127,33 @@ class PublicEndpointAccessTestCase(TestCase, ProfileTestHelperMixin):
             "/api/v1/visualization/escalation/6001", params
         )
 
+    def formula(self, **params):
+        params.setdefault("dashboard_slug", "water-points")
+        params.setdefault("group_by", "parent_id")
+        return self.client.get(
+            "/api/v1/visualization/values/formula", params
+        )
+
+    def geo(self, form_id, **params):
+        params.setdefault("dashboard_slug", "water-points")
+        return self.client.get(
+            "/api/v1/maps/geolocation/{0}".format(form_id), params
+        )
+
+    def bucket_formula(self, question_id):
+        return json.dumps({
+            "buckets": [{
+                "value": "Yes",
+                "label": "Yes",
+                "all_of": [{
+                    "question_id": question_id,
+                    "op": "option_equals",
+                    "value": "Yes",
+                }],
+            }],
+            "default": {"value": "_no_info", "label": "_no_info"},
+        })
+
     def test_an_allowed_form_and_question_answer(self):
         res = self.values(form_id=6001, question_id=600102)
         self.assertEqual(res.status_code, 200)
@@ -223,4 +252,79 @@ class PublicEndpointAccessTestCase(TestCase, ProfileTestHelperMixin):
         self.dashboard.status = DashboardStatus.draft
         self.dashboard.save()
         res = self.values(form_id=6001, question_id=600102)
+        self.assertEqual(res.status_code, 404)
+
+    def test_formula_with_an_allowed_question(self):
+        res = self.formula(
+            form_id=6001, formula=self.bucket_formula(600102)
+        )
+        self.assertEqual(res.status_code, 200)
+
+    def test_formula_smuggling_a_foreign_question_is_404(self):
+        res = self.formula(
+            form_id=6001, formula=self.bucket_formula(600199)
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_formula_on_a_foreign_form_is_404(self):
+        # off_dashboard_form (id 5) is real and tenant-scoped to
+        # this test's tenant (see setUp), so a check_ids regression
+        # would still reach tenant_scoped_forms and 404 there
+        # instead -- a bogus id like 9999 would make that
+        # indistinguishable. 6002 cannot be used here either: it is
+        # already on this dashboard's snapshot (the escalation
+        # widget names it), so check_ids would permit it.
+        res = self.formula(
+            form_id=self.off_dashboard_form.id,
+            formula=self.bucket_formula(600102),
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_geolocation_on_the_allowed_form(self):
+        self.assertEqual(self.geo(6001).status_code, 200)
+
+    def test_geolocation_on_a_foreign_form_is_404(self):
+        # Same reasoning as test_formula_on_a_foreign_form_is_404.
+        self.assertEqual(
+            self.geo(self.off_dashboard_form.id).status_code, 404
+        )
+
+    def test_geolocation_with_a_foreign_monitoring_form_is_404(self):
+        # monitoring_form_id only reaches a query filter when
+        # from_date or to_date is also set, so it is never looked up
+        # against the database either way -- check_ids is the only
+        # thing that can reject it, and a bogus id proves that just
+        # as well as a real off-dashboard one. 6002 is on this
+        # dashboard's snapshot, so 9999 is used instead.
+        res = self.geo(
+            6001, include_monitoring="true", monitoring_form_id=9999
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_geolocation_with_no_slug_is_404(self):
+        # test_no_slug_is_404 covers /values only. The geolocation
+        # endpoint has its own view with its own scope check ordered
+        # before its serializer (GeolocationListView.get), so it
+        # needs its own regression rather than inheriting /values'.
+        res = self.client.get(
+            "/api/v1/maps/geolocation/6001", {}
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_geolocation_with_an_unparseable_monitoring_form_id_is_404(
+        self,
+    ):
+        # Fix round 1: Allowlist.permits_form used to do a bare
+        # int(form_id), and monitoring_form_id is the one id in this
+        # module that reaches check_ids straight off the query string
+        # with no serializer or int() coercion upstream (form_id is a
+        # path int; the others are all validated fields). A
+        # hand-crafted monitoring_form_id=abc raised ValueError and
+        # 500'd a public page instead of 404ing like any other id
+        # that is not on the dashboard.
+        res = self.geo(6001, monitoring_form_id="abc")
+        self.assertEqual(res.status_code, 404)
+
+    def test_geolocation_with_an_empty_monitoring_form_id_is_404(self):
+        res = self.geo(6001, monitoring_form_id="")
         self.assertEqual(res.status_code, 404)

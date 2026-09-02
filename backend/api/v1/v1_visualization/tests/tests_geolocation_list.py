@@ -132,13 +132,27 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_get_geolocation_list_with_unauthenticated_user(self):
+    def test_get_geolocation_list_with_an_authenticated_request(self):
         """
-            Test that an unauthenticated user cannot
-            access the geolocation list.
+            Test that an authenticated request to the geolocation
+            list succeeds.
         """
+        # Formerly "with_unauthenticated_user": this class uses plain
+        # django.test.TestCase, so self.client has no .credentials()
+        # (that's DRF APIClient-only, see VisualizationValuesTestMixin
+        # .setUp); the per-request header every other test in this
+        # file already passes is used here too. #352's anonymous path
+        # now requires a dashboard_slug this request never supplies,
+        # so this authenticates the same way the rest of the file
+        # does rather than testing a request shape the endpoint no
+        # longer answers with 200. The genuinely anonymous case --
+        # no dashboard_slug returns 404 -- is covered next to
+        # test_no_slug_is_404 in tests_public_dashboard_access.py's
+        # PublicEndpointAccessTestCase, which owns the anonymous
+        # boundary's regression tests.
         response = self.client.get(
             f"/api/v1/maps/geolocation/{self.form.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
         )
         self.assertEqual(response.status_code, 200)
 
