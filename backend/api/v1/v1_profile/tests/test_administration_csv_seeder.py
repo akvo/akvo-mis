@@ -628,3 +628,53 @@ class AttributeImportTest(CsvSeederMixin, TestCase):
             ).count(),
             3,
         )
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class BundledExampleCsvTestCase(TestCase, CsvSeederMixin):
+    """The example seeder.sh imports when its prompt is left blank.
+
+    It is the only hierarchy an operator can get without downloading
+    boundary data, so it has to stay importable and has to keep the
+    bounding boxes the fake data seeder needs to place a pin.
+    """
+
+    EXAMPLE = "./source/administrations/example.csv"
+
+    def test_the_shipped_example_imports(self):
+        tenant = self.make_tenant("acme")
+        call_command(
+            "administration_csv_seeder",
+            f"--source={self.EXAMPLE}",
+            f"--tenant={tenant.subdomain}",
+        )
+        levels = Levels.objects.filter(tenant=tenant).order_by("level")
+        self.assertEqual(
+            [level.name for level in levels],
+            ["National", "Province", "District", "Village"],
+        )
+        self.assertEqual(
+            Administration.objects.filter(tenant=tenant).count(), 9
+        )
+
+    def test_every_leaf_carries_a_resolvable_bounding_box(self):
+        # fake_complete_data_seeder targets the deepest tier only, and
+        # refuses to run when none of those units resolves a box.
+        tenant = self.make_tenant("acme")
+        call_command(
+            "administration_csv_seeder",
+            f"--source={self.EXAMPLE}",
+            f"--tenant={tenant.subdomain}",
+        )
+        attribute = get_bbox_attribute(tenant)
+        self.assertIsNotNone(attribute)
+        deepest = Levels.objects.filter(tenant=tenant).order_by("-level")[0]
+        leaves = Administration.objects.filter(
+            tenant=tenant, level=deepest
+        )
+        self.assertEqual(leaves.count(), 4)
+        for leaf in leaves:
+            self.assertIsNotNone(
+                resolve_bbox(leaf, attribute, {}),
+                f"{leaf.name} has no usable bounding box",
+            )

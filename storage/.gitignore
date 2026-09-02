@@ -12,3 +12,9 @@ akvo-flow/*
 !akvo-flow/caddisfly/.gitignore
 !akvo-flow/invalid_values/
 !akvo-flow/invalid_values/.gitignore
+
+# The directory administration_csv_seeder names in its errors, kept in
+# the tree so that path exists on a fresh clone. Its CSVs stay ignored.
+!administrations/
+administrations/*
+!administrations/.gitignore

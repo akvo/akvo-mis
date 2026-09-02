@@ -476,6 +476,21 @@ Run `--dry-run` first. `STORAGE_PATH` is bind-mounted from the repo's
 `storage/` directory — country files are operator data and are gitignored
 there.
 
+A four-tier example ships with the repo, so a workspace can be given a working
+hierarchy without downloading anything:
+
+```bash
+./dc.sh exec backend python manage.py administration_csv_seeder \
+    --source=./source/administrations/example.csv --tenant=acme
+```
+
+It is Indonesia → Jakarta/Yogyakarta → East Jakarta/Sleman → four villages,
+with approximate bounding boxes on the leaves — enough for the fake data
+seeder to place pins, not a source of reference geography. It lives in
+`backend/source/` rather than in storage because `storage/.gitignore` ignores
+its own CSVs. `seeder.sh` imports it when the administration prompt is left
+blank.
+
 The CSV header is `{level}_{Label}` for names and `{level}_Code` for codes:
 
 ```csv
