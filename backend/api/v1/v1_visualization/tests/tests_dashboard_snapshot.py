@@ -5,6 +5,7 @@ from django.test.utils import CaptureQueriesContext, override_settings
 
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_users.models import Tenant
 from api.v1.v1_visualization.dashboard_functions import (
     validate_dashboard_payload,
 )
@@ -145,7 +146,7 @@ class AnnotateBrokenTestCase(TestCase, ProfileTestHelperMixin):
     def test_healthy_widgets_carry_is_broken_false(self):
         # False, not absent: VIZ-008 must never have to tell "healthy"
         # apart from "this API version does not annotate".
-        rows = annotate_broken(self.widgets(2), self.user)
+        rows = annotate_broken(self.widgets(2), self.user.tenant)
         for row in rows:
             self.assertIs(row["is_broken"], False)
             self.assertIsNone(row["broken_reason"])
@@ -155,7 +156,7 @@ class AnnotateBrokenTestCase(TestCase, ProfileTestHelperMixin):
         self.widgets(3, form_id=6002, question_id=600203)
         rows = build_snapshot(self.dashboard)["widgets"]
         Questions.objects.get(pk=600102).delete()
-        annotated = annotate_broken(rows, self.user)
+        annotated = annotate_broken(rows, self.user.tenant)
         flagged = [r for r in annotated if r["is_broken"]]
         healthy = [r for r in annotated if not r["is_broken"]]
         self.assertEqual(len(flagged), 2)
@@ -168,7 +169,7 @@ class AnnotateBrokenTestCase(TestCase, ProfileTestHelperMixin):
         # send the author looking in the wrong place.
         rows = self.widgets(1, form_id=6002, question_id=600203)
         Forms.objects.get(pk=6002).delete()
-        annotated = annotate_broken(rows, self.user)
+        annotated = annotate_broken(rows, self.user.tenant)
         self.assertEqual(
             annotated[0]["broken_reason"], "form_deleted"
         )
@@ -176,22 +177,36 @@ class AnnotateBrokenTestCase(TestCase, ProfileTestHelperMixin):
     def test_a_widget_with_no_form_or_question_is_never_broken(self):
         # section_title carries neither.
         rows = self.widgets(1, type=7, form_id=None, question_id=None)
-        annotated = annotate_broken(rows, self.user)
+        annotated = annotate_broken(rows, self.user.tenant)
         self.assertIs(annotated[0]["is_broken"], False)
 
     def test_annotation_does_not_mutate_its_input(self):
         rows = self.widgets(1)
-        annotate_broken(rows, self.user)
+        annotate_broken(rows, self.user.tenant)
         self.assertNotIn("is_broken", rows[0])
 
     def test_query_count_does_not_grow_with_widget_count(self):
         small_rows = self.widgets(2)
         with CaptureQueriesContext(connection) as small:
-            annotate_broken(small_rows, self.user)
+            annotate_broken(small_rows, self.user.tenant)
         self.dashboard.widgets.all().delete()
         large_rows = self.widgets(12)
         with CaptureQueriesContext(connection) as large:
-            annotate_broken(large_rows, self.user)
+            annotate_broken(large_rows, self.user.tenant)
         self.assertEqual(
             len(small.captured_queries), len(large.captured_queries)
         )
+
+    def test_annotating_by_tenant_needs_no_user(self):
+        # The fixtures form_seeder builds are tenant-less, so a widget
+        # referencing them would read as live under an unscoped filter
+        # regardless of which axis annotate_broken checks. Give the
+        # form a real tenant so this test can only pass by actually
+        # filtering on it, not by coincidence. Questions.TENANT_PATH
+        # is "form__tenant", so this covers the question too.
+        tenant = Tenant.objects.create(subdomain="viz-annotate")
+        Forms.objects.filter(pk=6001).update(tenant=tenant)
+        widgets = [{"form": 6001, "question": 600102}]
+        annotated = annotate_broken(widgets, tenant)
+        self.assertFalse(annotated[0]["is_broken"])
+        self.assertIsNone(annotated[0]["broken_reason"])

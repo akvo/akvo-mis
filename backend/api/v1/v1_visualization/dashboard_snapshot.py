@@ -37,12 +37,12 @@ def build_snapshot(dashboard):
     }
 
 
-def annotate_broken(widgets, user):
+def annotate_broken(widgets, tenant):
     """Copy each widget with `is_broken` / `broken_reason` set.
 
     Spec D-5. The obvious query here is
     `filter(deleted_at__isnull=False)`. This does the inverse: it asks
-    which referenced ids are *live and visible to this caller*, and
+    which referenced ids are *live and belong to this tenant*, and
     treats everything else as broken. That catches three failure modes
     where the obvious one catches a single case — soft-deleted (the
     common case), hard-deleted (no row left to read `deleted_at` from),
@@ -51,17 +51,22 @@ def annotate_broken(widgets, user):
     snapshot is a copy taken at a point in time and this is the one
     place where such a copy meets live rows.
 
+    Scoped by tenant rather than by user because this runs for
+    anonymous readers too. `for_user` would hand an anonymous caller
+    the tenant-less queryset, mark every widget on a public dashboard
+    broken, and render the whole page as an error — a failure that
+    looks like data loss rather than like a missing permission.
+
     Two queries, both flat in widget count. The result is a new list;
     the caller's snapshot is never mutated, because it is a row from
     the database that nobody meant to write back.
     """
     def live(model, key):
         ids = {w.get(key) for w in widgets if w.get(key)}
-        return set(
-            model.objects.for_user(user)
-            .filter(id__in=ids)
-            .values_list("id", flat=True)
-        )
+        query = model.objects.filter(id__in=ids)
+        if tenant is not None:
+            query = query.filter(**{model.TENANT_PATH: tenant})
+        return set(query.values_list("id", flat=True))
 
     live_forms = live(Forms, "form")
     live_questions = live(Questions, "question")

@@ -168,6 +168,6 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
         # question can be deleted at any point afterwards, and a stale
         # is_broken: false would be worse than no annotation at all.
         row["widgets"] = annotate_broken(
-            snapshot["widgets"], request.user
+            snapshot["widgets"], dashboard.tenant
         )
         return Response(row)
