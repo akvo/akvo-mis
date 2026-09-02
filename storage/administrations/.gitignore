@@ -1,0 +1,5 @@
+# Country files are operator data: often large, often not ours to
+# publish. The directory is tracked so the path the seeder names exists;
+# its contents are not.
+*
+!.gitignore

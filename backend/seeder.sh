@@ -19,10 +19,16 @@ Usage: ./seeder.sh --tenant=<subdomain>
                         'default' exists on any migrated database.
   -h, --help            Show this message.
 
-Organisations, administration attributes and roles are not
-workspace-scoped and ignore this value.
+Administration attributes and roles ignore this value: attributes are
+install-wide, and a role takes its workspace from the level it belongs to.
 EOF
 }
+
+# Four tiers of Indonesia with bounding boxes, carried in the repo
+# rather than in storage/ -- storage ignores its own *.csv, because
+# real country files are operator data. Resolved by the seeder's
+# literal-path fallback, STORAGE_PATH having no copy of it.
+EXAMPLE_ADMINISTRATION_CSV="./source/administrations/example.csv"
 
 tenant=""
 while [[ $# -gt 0 ]]; do
@@ -54,22 +60,27 @@ echo "Seed Administration? [y/n]"
 read -r seed_administration
 if [[ "${seed_administration}" == 'y' || "${seed_administration}" == 'Y' ]]; then
     echo "Path to an administration CSV, relative to STORAGE_PATH?"
-    echo "  e.g. administrations/indonesia.csv"
-    echo "  Leave blank to seed the small bundled sample instead."
+    echo "  Put your own country file in storage/administrations/ and"
+    echo "  pass e.g. administrations/indonesia.csv. Produce one from"
+    echo "  boundary data with scripts/administration_csv_generator/;"
+    echo "  README.md documents the header format."
+    echo "  Leave blank to import the bundled example instead:"
+    echo "  ${EXAMPLE_ADMINISTRATION_CSV}"
     read -r admin_csv
     if [[ "${admin_csv}" == '' ]]; then
-        # The bundled sample is two Indonesian paths, is not
-        # workspace-scoped and carries no coordinates -- enough to click
-        # around, not enough to demo, and the fake data seeder will not
-        # run against it. A real hierarchy comes from a CSV.
-        python manage.py administration_seeder
-        python manage.py resetsequence v1_profile
-    else
-        python manage.py administration_csv_seeder \
-            --source="${admin_csv}" \
-            --tenant="${tenant}" \
-            || { echo "Administration import failed — aborting."; exit 1; }
+        # The example goes through the same tenant-aware importer as a
+        # real country file. administration_seeder used to serve this
+        # slot and cannot: it writes tenant=None levels and units, which
+        # every later step filters out, so a --tenant run that took the
+        # blank answer failed at the fake data step with nothing to
+        # attach a datapoint to.
+        admin_csv="${EXAMPLE_ADMINISTRATION_CSV}"
+        echo "Importing the bundled example: ${admin_csv}"
     fi
+    python manage.py administration_csv_seeder \
+        --source="${admin_csv}" \
+        --tenant="${tenant}" \
+        || { echo "Administration import failed — aborting."; exit 1; }
 fi
 
 echo "Seed Form? [y/n]"
@@ -87,15 +98,20 @@ if [[ "${add_account}" == 'y' || "${add_account}" == 'Y' ]]; then
     echo "Please type email address"
     read -r email_address
     if [[ "${email_address}" != '' ]]; then
-        python manage.py createsuperuser --email "${email_address}"
-        python manage.py assign_forms "${email_address}"
+        python manage.py createsuperuser \
+            --email "${email_address}" \
+            --tenant="${tenant}" \
+            || { echo "Super admin creation failed — aborting."; exit 1; }
+        python manage.py assign_forms "${email_address}" \
+            --tenant="${tenant}" \
+            || { echo "Form assignment failed — aborting."; exit 1; }
     fi
 fi
 
 echo "Seed Organisation? [y/n]"
 read -r seed_organization
 if [[ "${seed_organization}" == 'y' || "${seed_organization}" == 'Y' ]]; then
-    python manage.py organisation_seeder
+    python manage.py organisation_seeder --tenant="${tenant}"
 fi
 
 echo "Seed Administration Attribute? [y/n]"
