@@ -10,6 +10,7 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
 
   return (
     <Dialog visible={visible} testID="save-dialog-menu" overlayStyle={styles.dialogMenuContainer}>
+      <Dialog.Title title={trans.unsavedChangesTitle} />
       <Dialog.Button
         type="solid"
         title={trans.buttonSaveNExit}
@@ -17,6 +18,16 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
         onPress={() => {
           if (handleOnSaveAndExit) {
             handleOnSaveAndExit();
+          }
+        }}
+      />
+      <Dialog.Button
+        type="outline"
+        title={trans.buttonSaveNSendToWeb}
+        testID="save-and-send-to-web-button"
+        onPress={() => {
+          if (handleOnSaveAndExit) {
+            handleOnSaveAndExit({ sendToWeb: true });
           }
         }}
       />
@@ -32,8 +43,13 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
           }
         }}
       />
+      {/*
+        Clear, not outline: Cancel is the way out, not a fifth thing to weigh. As an
+        outline button it read with the same weight as "Save and send to web
+        dashboard" directly above it.
+      */}
       <Dialog.Button
-        type="outline"
+        type="clear"
         title={trans.buttonCancel}
         testID="cancel-button"
         onPress={() => {
@@ -45,7 +61,16 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
 };
 
 const styles = StyleSheet.create({
-  dialogMenuContainer: { flex: 0.2, flexDirection: 'column', justifyContent: 'space-around' },
+  dialogMenuContainer: {
+    // Sized by its contents. `flex: 0.2` pinned the overlay to a fifth of the screen
+    // regardless of how many buttons it held, so the last one was clipped as soon as
+    // a fourth was added.
+    flexDirection: 'column',
+    gap: 10,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderRadius: 0,
+  },
   buttonDanger: {
     borderColor: '#D63D39',
   },

@@ -6,18 +6,15 @@ from drf_spectacular.utils import (
 )
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.generics import get_object_or_404
-from api.v1.v1_forms.models import Forms
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_visualization.dashboard_serializers import (
     ValuesFilterSerializer,
     ValuesResponseSerializer,
     EscalationResponseSerializer,
-    ProgressResponseSerializer,
 )
 from api.v1.v1_visualization.dashboard_examples import (
     VALUES_EXAMPLES,
     ESCALATION_EXAMPLES,
-    PROGRESS_EXAMPLES,
 )
 from api.v1.v1_visualization.values_functions import (
     handle_count_mode,
@@ -27,16 +24,13 @@ from api.v1.v1_visualization.values_functions import (
 from api.v1.v1_visualization.escalation_functions import (
     handle_escalation,
 )
-from api.v1.v1_visualization.progress_functions import (
-    handle_progress,
-)
 from api.v1.v1_visualization.functions import (
     resolve_default_administration_id,
-    split_criteria_by_form,
+    resolve_request_tenant,
+    tenant_scoped_forms,
 )
 from api.v1.v1_visualization.dashboard_serializers import (
     EscalationFilterSerializer,
-    ProgressFilterSerializer,
 )
 from utils.custom_serializer_fields import (
     validate_serializers_message,
@@ -168,8 +162,9 @@ def visualization_values(request, version):
         )
 
     validated = serializer.validated_data
+    tenant = resolve_request_tenant(request)
     form = get_object_or_404(
-        Forms, pk=validated["form_id"]
+        tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
     question = validated.get("question")
 
@@ -192,7 +187,7 @@ def visualization_values(request, version):
             "date_question_id"
         ),
         "administration_id": resolve_default_administration_id(
-            validated.get("administration_id"),
+            validated.get("administration_id"), tenant,
         ),
         "option_value": validated.get("option_value"),
         "criteria": validated.get("criteria"),
@@ -312,7 +307,10 @@ def visualization_values(request, version):
 @api_view(["GET"])
 def visualization_escalation(request, form_id, version):
     """Escalation table with query-param-driven criteria."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
+    tenant = resolve_request_tenant(request)
+    parent_form = get_object_or_404(
+        tenant_scoped_forms(tenant), pk=form_id
+    )
 
     serializer = EscalationFilterSerializer(
         data=request.query_params
@@ -335,7 +333,7 @@ def visualization_escalation(request, form_id, version):
             "page": validated.get("page", 1),
             "page_size": validated.get("page_size", 20),
             "administration_id": resolve_default_administration_id(
-                validated.get("administration_id"),
+                validated.get("administration_id"), tenant,
             ),
             "from_date": validated.get("from_date"),
             "to_date": validated.get("to_date"),
@@ -348,139 +346,6 @@ def visualization_escalation(request, form_id, version):
                 for k, values in request.query_params.lists()
                 for v in values
             ],
-        },
-    )
-    return Response(result, status=status.HTTP_200_OK)
-
-
-@extend_schema(
-    description="Progress computation with configurable formulas",
-    tags=["Visualization"],
-    responses={
-        200: OpenApiResponse(
-            response=ProgressResponseSerializer,
-            description=(
-                "Progress computation result. Shape depends on "
-                "requested components and formula. See examples."
-            ),
-        ),
-        400: OpenApiResponse(
-            description="Invalid query parameters.",
-        ),
-        404: OpenApiResponse(
-            description="form_id not found.",
-        ),
-    },
-    examples=PROGRESS_EXAMPLES,
-    parameters=[
-        OpenApiParameter(
-            name="monitoring_form_id", required=True,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="components", required=True,
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="filter_question_id", required=False,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="filter_option_value", required=False,
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="scope_question_id", required=False,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-            description=(
-                "Question whose answer determines which "
-                "components apply per datapoint (e.g. "
-                "project type). Components with "
-                "applicable_types are filtered to match."
-            ),
-        ),
-        OpenApiParameter(
-            name="administration_id", required=False,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="from_date", required=False,
-            type=OpenApiTypes.DATE,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="to_date", required=False,
-            type=OpenApiTypes.DATE,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="date_question_id", required=False,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="criteria", required=False,
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-            description=(
-                "AND-joined multi-criteria filter "
-                "(same grammar as /values)."
-            ),
-        ),
-    ],
-)
-@api_view(["GET"])
-def visualization_progress(request, form_id, version):
-    """Progress computation endpoint."""
-    parent_form = get_object_or_404(Forms, pk=form_id)
-
-    serializer = ProgressFilterSerializer(
-        data=request.query_params
-    )
-    if not serializer.is_valid():
-        return Response(
-            {"message": validate_serializers_message(
-                serializer.errors
-            )},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    validated = serializer.validated_data
-    mon_criteria, parent_criteria = split_criteria_by_form(
-        validated.get("criteria"),
-        validated["monitoring_form_id"],
-        parent_form.id,
-    )
-    result = handle_progress(
-        parent_form=parent_form,
-        monitoring_form_id=validated["monitoring_form_id"],
-        components=validated["components"],
-        params={
-            "filter_question_id": validated.get(
-                "filter_question_id"
-            ),
-            "filter_option_value": validated.get(
-                "filter_option_value"
-            ),
-            "scope_question_id": validated.get(
-                "scope_question_id"
-            ),
-            "administration_id": resolve_default_administration_id(
-                validated.get("administration_id"),
-            ),
-            "from_date": validated.get("from_date"),
-            "to_date": validated.get("to_date"),
-            "date_question_id": validated.get(
-                "date_question_id"
-            ),
-            "criteria": mon_criteria,
-            "parent_criteria": parent_criteria,
         },
     )
     return Response(result, status=status.HTTP_200_OK)

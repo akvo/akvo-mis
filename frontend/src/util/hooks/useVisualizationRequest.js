@@ -48,8 +48,10 @@ const sendRequest = (endpoint, params) =>
   api.get(endpoint, { params }).then((res) => res.data);
 
 /**
- * Generic visualization fetch hook. Reused by useDashboardValues,
- * useDashboardEscalation, useDashboardProgress.
+ * Generic visualization fetch hook. Endpoint-and-params generic, with a
+ * module-level LRU cache and in-flight request sharing, so a page of
+ * widgets costs far fewer than one round trip per widget. `useWidgetData`
+ * is its caller.
  *
  * @param {string|null} endpoint  e.g. "visualization/values". null skips the fetch.
  * @param {object}       params   Plain object serialized into query string.

@@ -59,6 +59,18 @@ const SaveDropdownMenu = ({ anchor, visible, setVisible, handleOnSaveAndExit, ha
         </MenuItem>
         <MenuItem
           onPress={() => {
+            if (handleOnSaveAndExit) {
+              // Not a third action: this is how you save this one. The lab-test case
+              // is known here, in the form, not later in a list of hundreds.
+              handleOnSaveAndExit({ sendToWeb: true });
+            }
+          }}
+          testID="save-and-send-to-web-menu-item"
+        >
+          {trans.buttonSaveNSendToWeb}
+        </MenuItem>
+        <MenuItem
+          onPress={() => {
             if (handleOnExit) {
               handleOnExit();
             }

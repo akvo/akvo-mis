@@ -12,12 +12,16 @@ class UserActivity(object):
     def __call__(self, request):
         response = self.get_response(request)
         try:
-            # auth_header = request.headers.get('Authorization')
             # get user detail
-            user = SystemUser.objects.get(email=request.user)
-            # update last login here
-            user.last_login = timezone.now()
-            user.save()
+            if (
+                getattr(request, "user", None)
+                and request.user.is_authenticated
+            ):
+                user = SystemUser.objects.filter(pk=request.user.pk).first()
+                if user:
+                    # update last login here
+                    user.last_login = timezone.now()
+                    user.save(update_fields=["last_login"])
             return response
-        except SystemUser.DoesNotExist:
+        except Exception:
             return response

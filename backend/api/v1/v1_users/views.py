@@ -64,7 +64,7 @@ from api.v1.v1_users.serializers import (
     ConfigureSerializer,
     tenant_is_configured,
 )
-from mis.settings import REST_FRAMEWORK, WEBDOMAIN
+from mis.settings import REST_FRAMEWORK
 from utils.custom_permissions import AddUserAccess, IsSuperAdmin
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
@@ -250,8 +250,10 @@ def login(request, version):
         )
 
     user = authenticate(
+        request=request,
         email=serializer.validated_data["email"],
         password=serializer.validated_data["password"],
+        tenant=getattr(request, "tenant", None),
     )
 
     if user:
@@ -272,11 +274,15 @@ def login(request, version):
     # registrant staring at "invalid credentials". It does make login an
     # account-existence oracle, but only for accounts that never activated,
     # and /register already answers "this email is taken" by design.
-    unverified = SystemUser.objects.filter(
+    unverified_qs = SystemUser.objects.filter(
         email=serializer.validated_data["email"],
         is_active=False,
         deleted_at=None,
-    ).first()
+    )
+    tenant = getattr(request, "tenant", None)
+    if tenant is not None:
+        unverified_qs = unverified_qs.filter(tenant=tenant)
+    unverified = unverified_qs.first()
     if (
         unverified
         and unverified.check_password(serializer.validated_data["password"])
@@ -382,9 +388,9 @@ def register(request, version):
         # sign-ups would both pass it and one would still lose here. The
         # rolled-back transaction lets us name the field that lost.
         taken = (
-            "Email"
-            if SystemUser.objects.filter(email=validated["email"]).exists()
-            else "Subdomain"
+            "Subdomain"
+            if Tenant.objects.filter(subdomain=validated["subdomain"]).exists()
+            else "Email"
         )
         return Response(
             {"message": f"{taken} is already registered"},
@@ -443,9 +449,15 @@ def activate_account(request, version):
 )
 @api_view(["POST"])
 def resend_activation(request, version):
-    user = SystemUser.objects.filter(
-        email=request.data.get("email"), is_active=False, deleted_at=None
-    ).first()
+    tenant = getattr(request, "tenant", None)
+    qs = SystemUser.objects.filter(
+        email=request.data.get("email"),
+        is_active=False,
+        deleted_at=None,
+    )
+    if tenant is not None:
+        qs = qs.filter(tenant=tenant)
+    user = qs.first()
     if user:
         send_activation_email(user)
     # Always the same 200, whether or not anything was sent, so this cannot
@@ -517,7 +529,7 @@ def configure_project(request, version):
 def get_profile(request, version):
     # check user activity
     user = SystemUser.objects.filter(
-        email=request.user, deleted_at=None
+        pk=request.user.pk, deleted_at=None
     ).first()
     if not user:
         return Response(
@@ -950,7 +962,7 @@ class UserEditDeleteView(APIView):
         summary="To delete user",
     )
     def delete(self, request, user_id, version):
-        login_user = SystemUser.objects.get(email=request.user)
+        login_user = request.user
         instance = get_object_or_404(
             SystemUser.objects.for_user(request.user), pk=user_id
         )
@@ -1007,14 +1019,17 @@ class UserEditDeleteView(APIView):
 )
 @api_view(["POST"])
 def forgot_password(request, version):
-    serializer = ForgotPasswordSerializer(data=request.data)
+    serializer = ForgotPasswordSerializer(
+        data=request.data,
+        context={"tenant": getattr(request, "tenant", None)},
+    )
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},
             status=status.HTTP_400_BAD_REQUEST,
         )
     user: SystemUser = serializer.validated_data.get("email")
-    url = f"{WEBDOMAIN}/login/{signing.dumps(user.pk)}"
+    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
     data = {"button_url": url, "send_to": [user.email]}
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(

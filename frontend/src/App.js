@@ -27,7 +27,6 @@ import {
   Settings,
   Organisations,
   AddOrganisation,
-  Dashboard,
   MobileAssignment,
   AddAssignment,
   Levels,
@@ -162,7 +161,6 @@ const RouteList = () => {
           cases. */}
       <Route exact path="/configure" element={<Configure />} />
       <Route exact path="/data" element={<Home />} />
-      <Route exact path="/dashboard/:slug" element={<Dashboard />} />
       <Route
         path="/control-center"
         element={

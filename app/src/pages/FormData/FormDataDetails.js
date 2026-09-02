@@ -216,6 +216,7 @@ const FormDataDetails = ({ navigation, route }) => {
           missingText={trans.attachmentMissingText}
           reattachLabel={trans.buttonReattachFile}
           openLabel={trans.openFileButton}
+          openFailedText={trans.openFileFailedText}
           onReattach={canRetake ? () => handleReattach(q.id, q.rule) : null}
           isReattaching={retakingKey === q.id}
           processingLabel={trans.compressingImage}

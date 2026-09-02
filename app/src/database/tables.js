@@ -62,6 +62,7 @@ const tables = [
       repeats: 'TEXT',
       locallyCreated: 'TINYINT DEFAULT 0',
       submissionKey: 'TEXT',
+      sendToWeb: 'TINYINT DEFAULT 0',
     },
   },
   {

@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Alert, ActivityIndicator, Platform, ToastAndroid } from 'react-native';
 import { Button } from '@rneui/themed';
 import * as Linking from 'expo-linking';
 import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sentry from '@sentry/react-native';
+import MIME_TYPES from '../../lib/mime_types';
 import styles from './styles';
 
 const AttachmentView = ({
@@ -13,6 +16,7 @@ const AttachmentView = ({
   missingText = '',
   reattachLabel = '',
   openLabel = '',
+  openFailedText = '',
   isReattaching = false,
   processingLabel = '',
 }) => {
@@ -43,11 +47,35 @@ const AttachmentView = ({
   }, [uri]);
 
   const openFileManager = async () => {
-    const supported = await Linking.canOpenURL(uri);
-    if (supported) {
-      await Linking.openURL(uri);
-    } else {
-      Alert.alert("Don't know how to open this URL:", uri);
+    try {
+      // Server-hosted file: the browser downloads or displays it.
+      if (!uri.startsWith('file://') || Platform.OS !== 'android') {
+        await Linking.openURL(uri);
+        return;
+      }
+      // A raw file:// uri cannot cross an app boundary on Android (API 24+) — it
+      // raises FileUriExposedException. getContentUriAsync wraps it in a
+      // FileProvider content:// uri, and the read-permission flag lets the
+      // receiving app actually open it.
+      const contentUri = await FileSystem.getContentUriAsync(uri);
+      const extension = uri.split('/').pop().split('.').pop().toLowerCase();
+      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+        data: contentUri,
+        flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+        // Without an explicit type Android often resolves no activity at all,
+        // even when a capable app is installed.
+        type: MIME_TYPES[extension] || 'application/octet-stream',
+      });
+    } catch (error) {
+      // Thrown when no installed app can handle the type — a dead end for the user
+      // either way, so say so instead of failing silently.
+      Sentry.captureMessage(`[AttachmentView] no handler for attachment: ${uri}`);
+      Sentry.captureException(error);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(openFailedText, ToastAndroid.LONG);
+      } else {
+        Alert.alert(openFailedText);
+      }
     }
   };
 

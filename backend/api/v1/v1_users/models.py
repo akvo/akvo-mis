@@ -63,7 +63,7 @@ class Tenant(models.Model):
 
 class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
     TENANT_PATH = "tenant"
-    email = models.EmailField(max_length=254, unique=True)
+    email = models.EmailField(max_length=254)
     date_joined = models.DateTimeField(auto_now_add=True)
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
@@ -124,3 +124,9 @@ class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
 
     class Meta:
         db_table = "system_user"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["email", "tenant"],
+                name="unique_email_per_tenant",
+            )
+        ]
