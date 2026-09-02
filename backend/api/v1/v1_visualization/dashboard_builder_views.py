@@ -151,13 +151,25 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
     # One access type per action. FormBuilderViewSet spells the same
     # mapping out as full permission lists; this is the same rule in the
     # form that cannot drift between two near-identical entries.
+    #
+    # Opening the builder needs any of the four building accesses.
+    # dashboard_view is deliberately not among them: after this change
+    # it means "may read private published dashboards", which is a
+    # consumer's permission and not a builder's.
+    BUILDER_ACCESS = (
+        FeatureAccessTypes.dashboard_create,
+        FeatureAccessTypes.dashboard_edit,
+        FeatureAccessTypes.dashboard_publish,
+        FeatureAccessTypes.dashboard_delete,
+    )
+
     ACCESS_PER_ACTION = {
-        "list": FeatureAccessTypes.dashboard_view,
+        "list": BUILDER_ACCESS,
         "create": FeatureAccessTypes.dashboard_create,
-        "retrieve": FeatureAccessTypes.dashboard_view,
+        "retrieve": BUILDER_ACCESS,
         "update": FeatureAccessTypes.dashboard_edit,
         "destroy": FeatureAccessTypes.dashboard_delete,
-        "sources": FeatureAccessTypes.dashboard_view,
+        "sources": BUILDER_ACCESS,
         "publish": FeatureAccessTypes.dashboard_publish,
         "unpublish": FeatureAccessTypes.dashboard_publish,
         "visibility": FeatureAccessTypes.dashboard_publish,

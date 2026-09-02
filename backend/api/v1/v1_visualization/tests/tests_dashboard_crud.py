@@ -354,9 +354,14 @@ class DashboardPermissionTestCase(TestCase):
             )
         return getattr(self.client, method)(url, **kwargs)
 
-    def test_list_needs_dashboard_view(self):
+    def test_list_needs_a_builder_access_not_view(self):
+        # dashboard_view alone no longer opens the builder namespace: a
+        # View-only role is a consumer, who reads dashboards through
+        # the public/read namespace, not this manage one.
         self.assertEqual(self.call("get", BASE_URL).status_code, 403)
         self.grant(FeatureAccessTypes.dashboard_view)
+        self.assertEqual(self.call("get", BASE_URL).status_code, 403)
+        self.grant(FeatureAccessTypes.dashboard_edit)
         self.assertEqual(self.call("get", BASE_URL).status_code, 200)
 
     def test_create_needs_dashboard_create(self):
@@ -369,10 +374,14 @@ class DashboardPermissionTestCase(TestCase):
             self.call("post", BASE_URL, body).status_code, 201
         )
 
-    def test_retrieve_needs_dashboard_view(self):
+    def test_retrieve_needs_a_builder_access_not_view(self):
+        # Same contract change as list above: retrieve is a builder
+        # action, so it needs one of the four building accesses.
         url = "{0}/{1}".format(BASE_URL, self.dashboard.id)
         self.assertEqual(self.call("get", url).status_code, 403)
         self.grant(FeatureAccessTypes.dashboard_view)
+        self.assertEqual(self.call("get", url).status_code, 403)
+        self.grant(FeatureAccessTypes.dashboard_edit)
         self.assertEqual(self.call("get", url).status_code, 200)
 
     def test_delete_needs_dashboard_delete_not_view(self):
@@ -390,10 +399,14 @@ class DashboardPermissionTestCase(TestCase):
         self.grant(FeatureAccessTypes.dashboard_edit)
         self.assertEqual(self.call("put", url, body).status_code, 200)
 
-    def test_sources_needs_dashboard_view(self):
+    def test_sources_needs_a_builder_access_not_view(self):
+        # Same contract change as list above: sources is a builder
+        # action, so it needs one of the four building accesses.
         url = "{0}/{1}/sources".format(BASE_URL, self.dashboard.id)
         self.assertEqual(self.call("get", url).status_code, 403)
         self.grant(FeatureAccessTypes.dashboard_view)
+        self.assertEqual(self.call("get", url).status_code, 403)
+        self.grant(FeatureAccessTypes.dashboard_edit)
         self.assertEqual(self.call("get", url).status_code, 200)
 
 

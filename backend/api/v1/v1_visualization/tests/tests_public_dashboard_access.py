@@ -399,6 +399,27 @@ class ReadNamespaceTierTestCase(TestCase, ProfileTestHelperMixin):
         self.public.save()
         self.assertEqual(self.slugs(), set())
 
+    def test_a_plain_signed_in_user_sees_only_public(self):
+        # IS_ADMIN carries no dashboard_builder feature access (no
+        # "<level> Admin" role is seeded here) and is not a superuser,
+        # so this is the middle tier: signed in, but holding no access
+        # on the feature at all. Deferred from Task 10 because the
+        # View-only-is-a-consumer semantics this proves did not exist
+        # until dashboard_view stopped implying builder access.
+        from rest_framework_simplejwt.tokens import RefreshToken
+        plain = self.create_user(
+            email="viz_plain@akvo.org", role_level=self.IS_ADMIN
+        )
+        # create_user() never assigns a tenant either (see the same
+        # note on self.owner above) — without this, for_user(plain)
+        # filters on tenant IS NULL and matches nothing at all, proving
+        # nothing about the View-only/no-access tier this test targets.
+        plain.tenant = self.owner.tenant
+        plain.save()
+        token = RefreshToken.for_user(plain).access_token
+        header = {"HTTP_AUTHORIZATION": "Bearer {0}".format(token)}
+        self.assertEqual(self.slugs(**header), {"public-one"})
+
 
 @override_settings(USE_TZ=False, BASE_DOMAIN="app.com")
 class AnonymousHostBoundaryTestCase(TenantIsolationTestCase):
