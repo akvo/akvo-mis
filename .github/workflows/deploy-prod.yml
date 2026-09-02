@@ -45,7 +45,7 @@ jobs:
           source-tag: ${{ steps.vars.outputs.sha }}
           cluster-name: production
           version-tag: ${{ github.ref_name }}
-          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT }}
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_REGISTRY }}
 
   rollout:
     name: Rollout to production
@@ -68,7 +68,7 @@ jobs:
           container-name: frontend
           cluster-name: production
           namespace-name: akvo-mis-namespace
-          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT }}
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_K8S }}
 
       - name: Rollout Backend
         uses: ./composite-actions/.github/actions/k8s-rollout
@@ -78,7 +78,7 @@ jobs:
           container-name: backend
           cluster-name: production
           namespace-name: akvo-mis-namespace
-          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT }}
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_K8S }}
 
       - name: Rollout Worker
         uses: ./composite-actions/.github/actions/k8s-rollout
@@ -88,7 +88,7 @@ jobs:
           container-name: worker
           cluster-name: production
           namespace-name: akvo-mis-namespace
-          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT }}
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_K8S }}
 
   build-mobile:
     name: Build and upload production APK
