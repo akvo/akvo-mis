@@ -142,3 +142,120 @@ class ChatbotTestCase(TestCase):
         self.assertEqual(clean_citation_sources(sample_text), expected)
         self.assertEqual(clean_citation_sources(""), "")
         self.assertEqual(clean_citation_sources(None), "")
+
+    @override_settings(
+        OPENAI_API_KEY="test-key",
+        OPENAI_VECTOR_STORE_ID="vs_test_123",
+    )
+    def test_chatbot_temperature_zero_enforced(self):
+        """Assert temperature=0.0 is enforced on OpenAI Responses API calls."""
+        from unittest.mock import MagicMock, patch
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.type = "output_text"
+        mock_content.text = "Grounded response about Akvo MIS."
+        mock_output = MagicMock()
+        mock_output.type = "message"
+        mock_output.content = [mock_content]
+        mock_response.output = [mock_output]
+        mock_response.id = "resp_12345"
+
+        mock_client.responses.create.return_value = mock_response
+
+        with patch("openai.OpenAI", return_value=mock_client):
+            self.client.force_authenticate(user=self.user)
+            response = self.client.post(
+                "/api/v1/chatbot/message",
+                {
+                    "message": "Can I use Kobo form builder here?",
+                    "page_url": "/control-center/form-builder",
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200)
+
+            # Assert responses.create was called with temperature=0.0
+            mock_client.responses.create.assert_called_once()
+            _, kwargs = mock_client.responses.create.call_args
+            self.assertEqual(kwargs.get("temperature"), 0.0)
+            self.assertEqual(kwargs.get("model"), "gpt-4o-mini")
+
+    @override_settings(
+        OPENAI_API_KEY="test-key",
+        OPENAI_VECTOR_STORE_ID="vs_test_123",
+    )
+    def test_chatbot_multi_tenant_consistency(self):
+        """Assert multi-tenant requests produce consistent responses."""
+        from unittest.mock import MagicMock, patch
+        from api.v1.v1_users.models import Tenant
+
+        # Create two distinct tenants
+        tenant_a, _ = Tenant.objects.get_or_create(subdomain="tenant-a")
+        tenant_b, _ = Tenant.objects.get_or_create(subdomain="tenant-b")
+
+        user_a = SystemUser.objects.create_user(
+            email="user_a@tenant-a.org",
+            first_name="User",
+            last_name="A",
+            password="testpassword123",
+            tenant=tenant_a,
+        )
+        user_b = SystemUser.objects.create_user(
+            email="user_b@tenant-b.org",
+            first_name="User",
+            last_name="B",
+            password="testpassword123",
+            tenant=tenant_b,
+        )
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.type = "output_text"
+        mock_content.text = (
+            "You cannot directly embed Kobo, but you can import an "
+            "XLSForm (.xlsx) via Control Centre > Form Builder > Import Form."
+        )
+        mock_output = MagicMock()
+        mock_output.type = "message"
+        mock_output.content = [mock_content]
+        mock_response.output = [mock_output]
+        mock_response.id = "resp_fixed"
+        mock_client.responses.create.return_value = mock_response
+
+        with patch("openai.OpenAI", return_value=mock_client):
+            client_a = APIClient()
+            client_a.force_authenticate(user=user_a)
+            res_a = client_a.post(
+                "/api/v1/chatbot/message",
+                {
+                    "message": "the form builder on kobo can be used here?",
+                    "page_url": "/control-center",
+                },
+                format="json",
+                HTTP_HOST="tenant-a.localhost",
+            )
+            self.assertEqual(res_a.status_code, 200)
+
+            client_b = APIClient()
+            client_b.force_authenticate(user=user_b)
+            res_b = client_b.post(
+                "/api/v1/chatbot/message",
+                {
+                    "message": "the form builder on kobo can be used here?",
+                    "page_url": "/control-center",
+                },
+                format="json",
+                HTTP_HOST="tenant-b.localhost",
+            )
+            self.assertEqual(res_b.status_code, 200)
+
+            # Assert identical output across tenants
+            self.assertEqual(
+                res_a.json()["response"],
+                res_b.json()["response"],
+            )
+            self.assertIn("XLSForm", res_a.json()["response"])
+            self.assertIn("Import Form", res_a.json()["response"])
