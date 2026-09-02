@@ -54,7 +54,8 @@ jobs:
     name: Rollout to production
     needs: promote
     runs-on: ubuntu-latest
-    environment: Production
+    # No environment gate here: it needs `promote` (which IS gated), so a single
+    # approval on promote already gates the whole pipeline (one approval total).
     steps:
       - name: Checkout Akvo composite actions
         uses: actions/checkout@v4
@@ -97,15 +98,16 @@ jobs:
     name: Build and upload production APK
     needs: rollout
     runs-on: ubuntu-latest
-    environment: Production
+    # No environment gate here (see rollout): promote's approval already gates it.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup node
+        # eas-cli (latest) requires Node >= 22.
         uses: actions/setup-node@v3
         with:
-          node-version: 20.x
+          node-version: 22.x
 
       - name: Setup EAS
         uses: expo/expo-github-action@v8
