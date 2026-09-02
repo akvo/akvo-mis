@@ -42,7 +42,9 @@ const ChatbotMessages = ({
   const suggestions = getSuggestions(pageLabel);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (typeof bottomRef.current?.scrollIntoView === "function") {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, loading]);
 
   return (
