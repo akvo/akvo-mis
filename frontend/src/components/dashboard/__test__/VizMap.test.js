@@ -18,10 +18,10 @@ const widget = (config = {}) => ({
   id: 1,
   type: "map",
   title: "Sites",
-  color: "#64A73B",
+  color: null,
   form: 6002,
   question: 600203,
-  config,
+  config: { chart_colors: ["#64A73B"], ...config },
 });
 
 const POINTS = [

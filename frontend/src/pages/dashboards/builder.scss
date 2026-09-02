@@ -527,6 +527,45 @@
   }
 }
 
+.builder-inspector-schemes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.builder-scheme {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d6dbe1;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+
+  &:hover {
+    background: #f6f8fb;
+  }
+
+  &--active {
+    border-color: #1651b6;
+    background: #eef2fb;
+  }
+}
+
+.builder-scheme-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.builder-scheme-label {
+  font-size: 12px;
+  color: #5b6472;
+  margin-left: 4px;
+}
+
 .builder-inspector-widths {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

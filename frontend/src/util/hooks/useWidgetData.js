@@ -278,9 +278,17 @@ const normalize = (widget, response, statusResponse) => {
     };
   }
 
+  // When chart_colors is set (via colour scheme), cycle the palette
+  // across rows so each bar/slice gets a different colour.
+  const chartColors = widget?.config?.chart_colors;
+  if (chartColors && chartColors.length > 0) {
+    return {
+      data: rows.map((row) => ({ label: row.label, value: row.value })),
+      color: rows.map((_, i) => chartColors[i % chartColors.length]),
+    };
+  }
+
   return {
-    // Project away `group` and `color`: akvo-charts derives its series from
-    // the object's keys, so either would be plotted as an extra series.
     data: rows.map((row) => ({ label: row.label, value: row.value })),
     color:
       config.group_by === "option" && rows.some((row) => row.color)

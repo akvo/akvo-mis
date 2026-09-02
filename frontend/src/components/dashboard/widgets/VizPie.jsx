@@ -3,24 +3,19 @@ import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import { Pie, Doughnut } from "akvo-charts";
 
+const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
+
 const VizPie = ({ config, data }) => {
   const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const isDoughnut = widgetConfig.variant === "doughnut";
   const Component = isDoughnut ? Doughnut : Pie;
 
-  const chartConfig = {
-    title: "",
-    // An array arrives when the hook lifted per-option colours off a
-    // group_by=option response; a string is the widget's own accent.
-    // Wrapping an array would hand ECharts [[...]], and ECharts cycles a
-    // one-colour palette — so without this every slice of a pie grouped
-    // by option comes out the same blue.
-    color: Array.isArray(config?.color)
-      ? config.color
-      : [config?.color || "#1890ff"],
-  };
+  const colors = Array.isArray(config?.color)
+    ? config.color
+    : widgetConfig.chart_colors || DEFAULT_COLORS;
 
+  const chartConfig = { title: "", color: colors };
   const chartData = Array.isArray(data) ? data : [];
 
   if (chartData.length === 0) {

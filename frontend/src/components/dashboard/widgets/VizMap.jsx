@@ -4,33 +4,7 @@ import { MapCluster } from "akvo-charts";
 import "leaflet/dist/leaflet.css";
 import { geo } from "../../../lib";
 
-// =========================================================
-// The map widget — akvo-charts MapCluster over Leaflet
-// =========================================================
-//
-// VIZ-006 shipped this as a hand-drawn SVG with six hardcoded pin
-// positions, standing in until the data layer existed. It placed points at
-// fixed percentages of the container and silently dropped everything past
-// the sixth, which is wrong in a way a viewer cannot detect.
-//
-// Two integration details the package does not handle:
-//
-//  - `type="circle"` rather than the default cluster type. The default
-//    renders leaflet.markercluster's own icons, whose stylesheet lives in
-//    akvo-charts' nested node_modules and does not resolve from
-//    application code. The circle type draws a self-contained inline SVG
-//    donut segmented by `groupKey` — dependency-free, and closer to the
-//    mockup, where a cluster should show its status mix.
-//  - `.custom-marker` gets its rules from viewer.scss. MapCluster's
-//    default marker is an empty <span> carrying only an inline
-//    background-color and border; the package ships no rule for the class
-//    it puts on it.
-//
-// The imported leaflet.css is the app's own 1.7.1 while MapCluster runs
-// its nested 1.9.4. The container, pane and control rules this needs are
-// unchanged between the two.
-
-const DEFAULT_COLOR = "#64A73B";
+const DEFAULT_COLOR = "#1890ff";
 const NO_STATUS_COLOR = "#999";
 
 const OSM_TILE = {
@@ -43,11 +17,12 @@ const VizMap = ({ config, data }) => {
   // Memoised, not just destructured: `|| {}` mints a fresh object on every
   // render, which would make the points memo below recompute every time and
   // hand MapCluster a new data array — remounting every marker.
+  const widgetConfig = config?.config || {};
   const statusColors = useMemo(
-    () => config?.config?.status_colors || {},
-    [config]
+    () => widgetConfig.status_colors || {},
+    [widgetConfig.status_colors]
   );
-  const fallback = config?.color || DEFAULT_COLOR;
+  const fallback = (widgetConfig.chart_colors || [])[0] || DEFAULT_COLOR;
 
   const points = useMemo(() => {
     const rows = Array.isArray(data) ? data : [];

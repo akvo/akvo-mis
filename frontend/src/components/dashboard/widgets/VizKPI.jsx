@@ -1,6 +1,8 @@
 import React from "react";
 import PropTypes from "prop-types";
 
+const DEFAULT_COLOR = "#1890ff";
+
 // The title is rendered here rather than by the caller because the mockup
 // puts it inside the body in view mode (12px, above the value) and in the
 // card header on the builder canvas. The canvas hides this copy in CSS
@@ -8,8 +10,9 @@ import PropTypes from "prop-types";
 // builder.scss. Sizes live there too, for the same reason.
 const VizKPI = ({ config, data }) => {
   const raw = data?.value;
-  const color = config?.color || "#1890ff";
-  const suffix = config?.config?.value_type === "percentage" ? "%" : "";
+  const widgetConfig = config?.config || {};
+  const color = (widgetConfig.chart_colors || [])[0] || DEFAULT_COLOR;
+  const suffix = widgetConfig.value_type === "percentage" ? "%" : "";
 
   const missing = raw === null || typeof raw === "undefined";
   // Thousands separators: an unformatted "12480" on a dashboard reads as a
