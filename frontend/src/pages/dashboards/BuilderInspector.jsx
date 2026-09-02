@@ -111,10 +111,10 @@ const BuilderInspector = ({
               Default filters
             </div>
             <label className="builder-inspector-filter-row">
-              Monitoring period
+              Date
               <Switch
                 size="small"
-                checked={defaultFilters?.date?.enabled !== false}
+                checked={Boolean(defaultFilters?.date?.enabled)}
                 onChange={(checked) => {
                   onDashboardChange("default_filters", {
                     ...defaultFilters,
@@ -127,7 +127,7 @@ const BuilderInspector = ({
               Location (administration)
               <Switch
                 size="small"
-                checked={defaultFilters?.administration?.enabled !== false}
+                checked={Boolean(defaultFilters?.administration?.enabled)}
                 onChange={(checked) => {
                   onDashboardChange("default_filters", {
                     ...defaultFilters,

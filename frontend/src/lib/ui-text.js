@@ -77,7 +77,7 @@ const uiText = {
     dashboardWidgetRetry: "Retry",
     dashboardWidgetQuestionGone: "This widget's question no longer exists.",
     dashboardWidgetFormGone: "This widget's form no longer exists.",
-    dashboardFilterPeriod: "Monitoring period",
+    dashboardFilterPeriod: "Date",
     dashboardFilterAllLocations: "All locations",
     preview: "Preview",
     publish: "Publish",

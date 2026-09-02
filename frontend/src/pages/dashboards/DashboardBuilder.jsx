@@ -214,10 +214,7 @@ const DashboardBuilder = () => {
     return {
       name: dashboard?.name,
       description: dashboard?.description || null,
-      default_filters: dashboard?.default_filters || {
-        date: { enabled: true },
-        administration: { enabled: true },
-      },
+      default_filters: dashboard?.default_filters || {},
       widgets: orderedWidgets,
     };
   }, [widgets, dashboard]);
