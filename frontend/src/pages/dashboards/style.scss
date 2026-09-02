@@ -171,6 +171,30 @@
     }
   }
 
+  /* Visibility badge — same shape as .dashboard-card-badge above so the two
+     sit together, but blue/slate rather than green: green is already the
+     lifecycle badge, and two green badges would read as one axis at two
+     intensities rather than the two independent axes they are. */
+  .dashboard-visibility-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+
+    &--public {
+      color: #1651b6;
+      background: #eaf0fb;
+      border: 1px solid #c5d4ed;
+    }
+
+    &--private {
+      color: #4a5568;
+      background: #f4f6f9;
+      border: 1px solid #dfe3e9;
+    }
+  }
+
   /* Destructive, and permanent — it sits apart from the two actions you
      reach for routinely rather than one tab-stop away from Edit. */
   .dashboard-card-delete {

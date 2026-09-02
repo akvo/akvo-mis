@@ -744,3 +744,30 @@
     color: #081c40;
   }
 }
+
+/* Visibility switch, set apart with its own border because it writes
+   immediately rather than joining the dirty state Save flushes. */
+.builder-inspector-visibility {
+  border: 1px solid #e7eaee;
+  border-radius: 8px;
+  padding: 12px 13px 13px;
+  background: #fcfdfe;
+
+  &--live {
+    border-color: #c5d4ed;
+    background: #f8fbff;
+  }
+}
+
+.builder-inspector-visibility-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.builder-inspector-visibility-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #081c40;
+}

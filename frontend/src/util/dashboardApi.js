@@ -33,6 +33,11 @@ const dashboardApi = {
   sources: (id) => api.get(`${MANAGE}/${id}/sources`),
 
   getPublished: (slug) => api.get(`${PUBLIC}/${slug}`),
+
+  listPublished: () => api.get(PUBLIC),
+
+  setVisibility: (id, isPublic) =>
+    api.post(`${MANAGE}/${id}/visibility`, { is_public: isPublic }),
 };
 
 export default dashboardApi;

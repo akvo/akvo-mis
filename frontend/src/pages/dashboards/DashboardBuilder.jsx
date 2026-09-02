@@ -306,6 +306,57 @@ const DashboardBuilder = () => {
     }
   }, [dirty, buildPayload, dashboard?.status, text]);
 
+  // Visibility
+  //
+  // This writes through its own endpoint rather than folding into
+  // `dashboard` state and waiting for Save — see BuilderInspector's
+  // visibility block for why that distinction has to be visible to the
+  // author. Going private is instant and reversible, so it skips the
+  // confirmation that going public requires.
+  const handleVisibility = useCallback(
+    (nextPublic) => {
+      const id = dashboardIdRef.current;
+      if (!id) {
+        return;
+      }
+      const apply = () => {
+        dashboardApi
+          .setVisibility(id, nextPublic)
+          .then(() => {
+            setDashboard((prev) => ({ ...prev, is_public: nextPublic }));
+            message.success(
+              nextPublic ? text.dashboardMadePublic : text.dashboardMadePrivate
+            );
+          })
+          .catch(() => {
+            message.error(text.dashboardForbidden);
+          });
+      };
+      if (!nextPublic) {
+        // Going private is instantly reversible and reduces exposure.
+        // Confirming it would train authors to click through the one
+        // dialog that matters.
+        apply();
+        return;
+      }
+      // `dashboard.widgets` is only ever the snapshot from the initial
+      // load (line ~82) — every add/delete/reorder updates the separate
+      // `widgets` state instead, which is what actually gets saved and
+      // published. Reading `dashboard.widgets` here would freeze this
+      // check at whatever the dashboard held when the builder opened.
+      const hasRawData = widgets.some((w) => ["table", "map"].includes(w.type));
+      Modal.confirm({
+        title: text.dashboardMakePublicTitle,
+        content: hasRawData
+          ? `${text.dashboardMakePublicBody} ${text.dashboardMakePublicRawData}`
+          : text.dashboardMakePublicBody,
+        okText: text.dashboardMakePublicOk,
+        onOk: apply,
+      });
+    },
+    [widgets, text]
+  );
+
   // Preview
   //
   // This used to open /dashboards/:slug in a new tab, which showed the
@@ -480,8 +531,11 @@ const DashboardBuilder = () => {
             dashboardName={dashboard.name}
             dashboardDesc={dashboard.description || ""}
             defaultFilters={dashboard.default_filters}
+            isPublic={Boolean(dashboard?.is_public)}
+            isPublished={dashboard?.status === "published"}
             onWidgetChange={handleWidgetChange}
             onDashboardChange={handleDashboardChange}
+            onVisibilityChange={handleVisibility}
             errorMessage={widgetError}
           />
         </div>

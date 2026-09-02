@@ -95,6 +95,40 @@ describe("a dashboard can still be reached from the list", () => {
   });
 });
 
+describe("visibility is reported as a badge, not a control", () => {
+  test("badges each dashboard's visibility", async () => {
+    dashboardApi.list.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          name: "Public one",
+          slug: "public-one",
+          status: "published",
+          is_public: true,
+          widgets: [],
+        },
+        {
+          id: 2,
+          name: "Private one",
+          slug: "private-one",
+          status: "published",
+          is_public: false,
+          widgets: [],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <AbilityContext.Provider value={ability}>
+          <DashboardList />
+        </AbilityContext.Provider>
+      </MemoryRouter>
+    );
+    expect(await screen.findByText("Public")).toBeVisible();
+    expect(await screen.findByText("Private")).toBeVisible();
+  });
+});
+
 describe("delete sits in the card's corner, away from the routine actions", () => {
   test("it is not inside the footer's action group", async () => {
     const { container } = await draw();

@@ -253,6 +253,20 @@ const DashboardList = () => {
                         ? text.published || "Published"
                         : text.draft || "Draft"}
                     </span>
+                    {/* Reports visibility only — the switch that sets it lives
+                        in the settings panel (Task 11). Blue rather than
+                        green: green is already the lifecycle badge above, and
+                        two green badges would read as one axis, not two. */}
+                    <span
+                      className={`dashboard-visibility-badge dashboard-visibility-badge--${
+                        d.is_public ? "public" : "private"
+                      }`}
+                      aria-label={text.dashboardVisibilityTitle}
+                    >
+                      {d.is_public
+                        ? text.dashboardVisibilityPublic
+                        : text.dashboardVisibilityPrivate}
+                    </span>
                   </div>
                   <div className="dashboard-card-desc">{d.description}</div>
                 </div>
