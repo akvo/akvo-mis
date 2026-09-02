@@ -110,12 +110,18 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Install dependencies (inject production URLs)
+      - name: Install dependencies (inject production URLs + Sentry)
+        env:
+          SENTRY_DSN: ${{ secrets.AKVO_MIS_PROD_SENTRY_MOBILE_DSN }}
         run: |
           cd ./app/
           cp ./src/build.prod.js ./src/build.js
           sed -i "s|serverURL: ''|serverURL: 'https://mis.akvo.org/api/v1/device'|" ./src/build.js
           sed -i "s|apkURL: ''|apkURL: 'https://mis.akvo.org/app'|" ./src/build.js
+          # Runtime Sentry DSN is read from a .env file via react-native-dotenv
+          # (@env). Written here (not the shared EAS env var) so the prod build
+          # reports to the prod Sentry project without affecting test builds.
+          printf 'SENTRY_DSN=%s\nSENTRY_ENV=production\n' "${SENTRY_DSN}" > ./.env
           npm install --legacy-peer-deps
 
       - name: Build APK (production profile)
