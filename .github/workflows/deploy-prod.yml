@@ -1,0 +1,152 @@
+name: Akvo MIS Deploy to Production
+
+# Promote model: main CI builds and tests every commit and pushes
+# eu.gcr.io/akvo-lumen/akvo-mis/<svc>:<short-sha> (+ :latest-test). Publishing a
+# GitHub Release retags that already-tested image to :latest-production and rolls
+# out to the production cluster. No rebuild — prod runs the exact tested bytes.
+# Every deploy step is gated by the "Production" GitHub environment (approval).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: akvo-mis-deploy-to-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote tested images to production
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Checkout (for the release commit SHA)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tested image tag (short SHA, matches main CI)
+        id: vars
+        run: echo "sha=$(git rev-parse --short ${{ github.sha }})" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Akvo composite actions
+        uses: actions/checkout@v4
+        with:
+          repository: akvo/composite-actions
+          ref: 0.0.11
+          path: composite-actions
+
+      - name: Promote images (retag tested -> latest-production)
+        uses: ./composite-actions/.github/actions/promote
+        with:
+          app-name: akvo-mis
+          services: "frontend backend worker"
+          source-tag: ${{ steps.vars.outputs.sha }}
+          cluster-name: production
+          version-tag: ${{ github.ref_name }}
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_REGISTRY }}
+
+  rollout:
+    name: Rollout to production
+    needs: promote
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Checkout Akvo composite actions
+        uses: actions/checkout@v4
+        with:
+          repository: akvo/composite-actions
+          ref: 0.0.11
+          path: composite-actions
+
+      - name: Rollout Frontend
+        uses: ./composite-actions/.github/actions/k8s-rollout
+        with:
+          app-name: akvo-mis
+          deployment-name: frontend-deployment
+          container-name: frontend
+          cluster-name: production
+          namespace-name: akvo-mis-namespace
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_K8S }}
+
+      - name: Rollout Backend
+        uses: ./composite-actions/.github/actions/k8s-rollout
+        with:
+          app-name: akvo-mis
+          deployment-name: backend-deployment
+          container-name: backend
+          cluster-name: production
+          namespace-name: akvo-mis-namespace
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_K8S }}
+
+      - name: Rollout Worker
+        uses: ./composite-actions/.github/actions/k8s-rollout
+        with:
+          app-name: akvo-mis
+          deployment-name: worker-deployment
+          container-name: worker
+          cluster-name: production
+          namespace-name: akvo-mis-namespace
+          gcloud-sa: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_K8S }}
+
+  build-mobile:
+    name: Build and upload production APK
+    needs: rollout
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.x
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies (inject production URLs + Sentry)
+        env:
+          SENTRY_DSN: ${{ secrets.AKVO_MIS_PROD_SENTRY_MOBILE_DSN }}
+        run: |
+          cd ./app/
+          cp ./src/build.prod.js ./src/build.js
+          sed -i "s|serverURL: ''|serverURL: 'https://mis.akvo.org/api/v1/device'|" ./src/build.js
+          sed -i "s|apkURL: ''|apkURL: 'https://mis.akvo.org/app'|" ./src/build.js
+          # Runtime Sentry DSN is read from a .env file via react-native-dotenv
+          # (@env). Written here (not the shared EAS env var) so the prod build
+          # reports to the prod Sentry project without affecting test builds.
+          printf 'SENTRY_DSN=%s\nSENTRY_ENV=production\n' "${SENTRY_DSN}" > ./.env
+          npm install --legacy-peer-deps
+
+      - name: Build APK (production profile)
+        working-directory: ./app
+        run: |
+          eas build --platform=android --profile=production --non-interactive > output.txt
+          cat output.txt
+          echo "APK_URL=$(tail -n 1 output.txt)" >> "$GITHUB_ENV"
+
+      - name: Get app version
+        run: |
+          cd app
+          apk_version=$(grep '"version":' package.json | sed -E 's/.*"version": *"([^"]+)".*/\1/')
+          echo "APK_VERSION=$apk_version" >> "$GITHUB_ENV"
+
+      - name: Upload APK to production
+        env:
+          SECRET: ${{ secrets.AKVO_MIS_PROD_APK_UPLOAD_SECRET }}
+        run: |
+          curl -X 'POST' \
+            "https://mis.akvo.org/api/v1/device/apk/upload" \
+            -H 'accept: */*' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "apk_url": "'"$APK_URL"'",
+              "apk_version": "'"$APK_VERSION"'",
+              "secret": "'"$SECRET"'"
+            }'
