@@ -307,3 +307,10 @@ class FakeUserSeederTenantTestCase(TestCase, TenantHierarchyMixin):
             call_command(
                 "fake_user_seeder", "--repeat", 1, "--test", 1, tenant="nope"
             )
+
+    def test_requires_workspace_hierarchy(self):
+        Tenant.objects.create(subdomain="acme")
+        with self.assertRaises(CommandError):
+            call_command(
+                "fake_user_seeder", "--repeat", 1, "--test", 1, tenant="acme"
+            )

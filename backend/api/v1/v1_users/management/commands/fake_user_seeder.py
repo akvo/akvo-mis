@@ -2,7 +2,7 @@ import random
 import re
 import uuid
 
-from django.core.management import BaseCommand
+from django.core.management import BaseCommand, CommandError
 from faker import Faker
 
 from api.v1.v1_profile.constants import OrganisationTypes
@@ -138,6 +138,10 @@ class Command(BaseCommand):
         national_adm = Administration.objects.filter(
             parent__isnull=True, tenant=tenant
         ).order_by("?").first()
+        if not national_adm:
+            raise CommandError(
+                "No root administration found for the selected workspace."
+            )
         parent_adm = national_adm
         for _ in range(repeat):
             if level > total_levels:

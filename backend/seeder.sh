@@ -100,9 +100,11 @@ if [[ "${add_account}" == 'y' || "${add_account}" == 'Y' ]]; then
     if [[ "${email_address}" != '' ]]; then
         python manage.py createsuperuser \
             --email "${email_address}" \
-            --tenant="${tenant}"
+            --tenant="${tenant}" \
+            || { echo "Super admin creation failed — aborting."; exit 1; }
         python manage.py assign_forms "${email_address}" \
-            --tenant="${tenant}"
+            --tenant="${tenant}" \
+            || { echo "Form assignment failed — aborting."; exit 1; }
     fi
 fi
 

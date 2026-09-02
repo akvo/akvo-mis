@@ -2,6 +2,7 @@ from io import StringIO
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_users.models import SystemUser
 
@@ -38,3 +39,7 @@ class AssignFormsCommandTestCase(TestCase):
             ),
             output.getvalue()
         )
+
+    def test_command_fails_for_missing_user(self):
+        with self.assertRaises(CommandError):
+            call_command("assign_forms", "missing@example.test")

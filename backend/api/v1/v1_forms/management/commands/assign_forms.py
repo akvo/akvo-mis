@@ -1,4 +1,4 @@
-from django.core.management import BaseCommand
+from django.core.management import BaseCommand, CommandError
 from api.v1.v1_users.models import SystemUser
 from api.v1.v1_forms.models import Forms
 from utils.tenant_command import resolve_tenant
@@ -28,8 +28,7 @@ class Command(BaseCommand):
             users = users.filter(tenant=tenant)
         user = users.first()
         if not user:
-            self.stdout.write("User doesn't exist")
-            exit()
+            raise CommandError("User doesn't exist")
         # Scoped to the account's own workspace rather than to --tenant:
         # the two agree when both are given, and deriving it means a
         # tenant-less invocation still cannot hand somebody another
