@@ -110,6 +110,7 @@ class ChatMessageView(APIView):
                         "model": "gpt-4o-mini",
                         "input": augmented_message,
                         "instructions": DEFAULT_INSTRUCTIONS,
+                        "temperature": 0.0,
                         "tools": [
                             {
                                 "type": "file_search",
@@ -265,6 +266,7 @@ class ChatMessageView(APIView):
                     {"role": "system", "content": FALLBACK_INSTRUCTIONS},
                     {"role": "user", "content": augmented_message},
                 ],
+                temperature=0.0,
             )
             reply = chat_resp.choices[0].message.content or ""
             return Response(
