@@ -14,6 +14,7 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_users.models import SystemUser, Organisation
 from api.v1.v1_forms.models import Forms, UserForms
+from utils.tenant_command import resolve_tenant
 
 fake = Faker()
 
@@ -24,8 +25,15 @@ def create_user(
     administration: Administration,
     is_superuser: bool = False,
     test: bool = False,
-    is_approver: bool = False
+    is_approver: bool = False,
+    tenant=None,
 ) -> SystemUser:
+    """One fake user, owned by `tenant`.
+
+    Every lookup below is scoped the same way. `tenant=None` filters on
+    `tenant IS NULL`, which on a tenant-less install matches everything
+    it used to match unscoped -- the same rule `for_user` applies.
+    """
     first_name = fake.first_name()
     last_name = fake.last_name()
     email = (
@@ -33,8 +41,13 @@ def create_user(
         re.sub("[^A-Za-z0-9]+", "", first_name.lower()),
         str(uuid.uuid4())[:4]
     )
+    # `...attribute=<int>` compared the related row's primary key, not its
+    # type, so this matched only while the attribute sequence happened to
+    # start at OrganisationTypes.member -- and returned nothing, leaving
+    # every seeded user org-less, once it had moved on.
     organisation = Organisation.objects.filter(
-        organisation_organisation_attribute=OrganisationTypes.member
+        organisation_organisation_attribute__type=OrganisationTypes.member,
+        tenant=tenant,
     ).order_by("?").first()
     user = SystemUser.objects.create(
         email=email,
@@ -42,6 +55,7 @@ def create_user(
         last_name=last_name,
         phone_number=fake.msisdn(),
         is_superuser=is_superuser,
+        tenant=tenant,
     )
     if organisation:
         user.organisation = organisation
@@ -56,6 +70,7 @@ def create_user(
     role_name = "Approver" if is_approver else "Submitter"
     role = Role.objects.filter(
         administration_level=administration.level,
+        tenant=tenant,
         name="{0} {1}".format(
             administration.level.name,
             role_name
@@ -69,7 +84,7 @@ def create_user(
             role=role
         )
 
-    forms = Forms.objects.filter(parent__isnull=True).all()
+    forms = Forms.objects.filter(parent__isnull=True, tenant=tenant).all()
     for form in forms:
         UserForms.objects.get_or_create(
             user=user,
@@ -79,6 +94,8 @@ def create_user(
 
 
 class Command(BaseCommand):
+    help = "Generate fake users, optionally for one workspace."
+
     def add_arguments(self, parser):
         parser.add_argument(
             "-r",
@@ -96,14 +113,30 @@ class Command(BaseCommand):
             default=False,
             type=bool
         )
+        parser.add_argument(
+            "--tenant",
+            default=None,
+            type=str,
+            help=(
+                "Workspace subdomain the users belong to. Omit to seed "
+                "into the tenant-less space, which is how single-host "
+                "installs and the test suite run."
+            ),
+        )
 
     def handle(self, *args, **options):
         repeat = options.get("repeat")
         test = options.get("test")
+        tenant = resolve_tenant(options.get("tenant"))
         level = 0
-        total_levels = Levels.objects.count() - 1
+        # Both counted within the workspace. Unscoped, the level total ran
+        # across every workspace on the install and the root was picked at
+        # random from whichever one the ordering happened to surface, so a
+        # --tenant run could hang its users off another workspace's
+        # hierarchy entirely.
+        total_levels = Levels.objects.filter(tenant=tenant).count() - 1
         national_adm = Administration.objects.filter(
-            parent__isnull=True
+            parent__isnull=True, tenant=tenant
         ).order_by("?").first()
         parent_adm = national_adm
         for _ in range(repeat):
@@ -112,16 +145,17 @@ class Command(BaseCommand):
                 parent_adm = national_adm
             if level > 0:
                 administration = Administration.objects.filter(
-                    level__level=level
+                    level__level=level, tenant=tenant
                 ).order_by("?").first()
                 if not parent_adm.path:
                     parent_adm = administration
 
-                if parent_adm.path:
-                    administration = Administration.objects.filter(
-                        level__level=level,
-                        path__startswith=parent_adm.path
-                    ).first()
+            if parent_adm.path:
+                administration = Administration.objects.filter(
+                    level__level=level,
+                    path__startswith=parent_adm.path,
+                    tenant=tenant,
+                ).first()
             else:
                 administration = national_adm
             level += 1
@@ -131,7 +165,8 @@ class Command(BaseCommand):
                 administration=administration,
                 is_superuser=is_superuser,
                 is_approver=is_approver,
-                test=test
+                test=test,
+                tenant=tenant,
             )
 
         if not test:

@@ -19,8 +19,8 @@ Usage: ./seeder.sh --tenant=<subdomain>
                         'default' exists on any migrated database.
   -h, --help            Show this message.
 
-Organisations, administration attributes and roles are not
-workspace-scoped and ignore this value.
+Administration attributes and roles ignore this value: attributes are
+install-wide, and a role takes its workspace from the level it belongs to.
 EOF
 }
 
@@ -87,15 +87,18 @@ if [[ "${add_account}" == 'y' || "${add_account}" == 'Y' ]]; then
     echo "Please type email address"
     read -r email_address
     if [[ "${email_address}" != '' ]]; then
-        python manage.py createsuperuser --email "${email_address}"
-        python manage.py assign_forms "${email_address}"
+        python manage.py createsuperuser \
+            --email "${email_address}" \
+            --tenant="${tenant}"
+        python manage.py assign_forms "${email_address}" \
+            --tenant="${tenant}"
     fi
 fi
 
 echo "Seed Organisation? [y/n]"
 read -r seed_organization
 if [[ "${seed_organization}" == 'y' || "${seed_organization}" == 'Y' ]]; then
-    python manage.py organisation_seeder
+    python manage.py organisation_seeder --tenant="${tenant}"
 fi
 
 echo "Seed Administration Attribute? [y/n]"

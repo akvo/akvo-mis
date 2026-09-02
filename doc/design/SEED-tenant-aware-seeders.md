@@ -1191,7 +1191,25 @@ latitude. Nothing new should reorder either.
 | `form_seeder` | `--tenant` added, optional — omitting it keeps the pre-workspace behaviour |
 | `default_roles_seeder` | unchanged; takes no `--tenant` (it derives each role's workspace from its level) |
 | `administration_attribute_seeder` | unchanged |
+| `createsuperuser` | **overridden** in `v1_users`; `--tenant` added, optional. Requires `api.v1.v1_users` to precede `django.contrib.auth` in `INSTALLED_APPS` |
+| `assign_forms` | `--tenant` added to disambiguate the account; the form list is scoped to that account's own workspace |
+| `organisation_seeder` | `--tenant` added, optional; keyed on `(name, workspace)` when one is named, because the fixture's primary keys can only belong to one workspace |
+| `fake_organisation_seeder` | `--tenant` added, optional; tenant participates in the `update_or_create` lookup |
+| `fake_user_seeder` | `--tenant` added, optional; stamps the user and scopes its Levels/Administration/Role/Forms/Organisation lookups |
 | `seeder.sh` | `--tenant` is now a required argument, not a prompt; `seeder.prod.sh` merged in and deleted; entities step dropped; bounding-box prompt removed; the `DEBUG` gate on the fake-data step removed with the `--clean` gate it mirrored (R-4) |
+
+**Addendum (follow-up to the original delivery).** The five rows above were
+not in the first pass, and the gap was not cosmetic: `createsuperuser` has no
+`--tenant` of its own, so `seeder.sh --tenant=<sub>` produced a `tenant=NULL`
+superadmin. `TenantAwareBackend.authenticate` filters on `tenant=`, so that
+account could not sign in at its workspace host, and login on the base domain
+is refused outright — with `BASE_DOMAIN` set it could sign in nowhere. Two
+sibling defects surfaced with it: `assign_forms` resolved the account by email
+alone (not unique across workspaces) and handed out every workspace's forms,
+and `fake_user_seeder`'s organisation lookup compared a related row's primary
+key rather than its `type`, so seeded users came out org-less once the
+attribute sequence had moved past `OrganisationTypes.member`.
+
 
 ---
 

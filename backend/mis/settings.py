@@ -115,7 +115,16 @@ API_APPS = [
     "api.sentry_test",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + API_APPS + EXTERNAL_APPS
+# When two apps define a management command of the same name the one
+# listed first here wins, so api.v1.v1_users precedes django.contrib.auth:
+# its `createsuperuser` is the one that understands --tenant, and without
+# this ordering the seeded superadmin lands in the tenant-less space.
+INSTALLED_APPS = (
+    ["api.v1.v1_users"]
+    + DJANGO_APPS
+    + [app for app in API_APPS if app != "api.v1.v1_users"]
+    + EXTERNAL_APPS
+)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
