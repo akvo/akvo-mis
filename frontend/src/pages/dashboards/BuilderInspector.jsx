@@ -327,7 +327,24 @@ const BuilderInspector = ({
             </label>
             <Select
               value={widget.question || null}
-              onChange={(val) => updateWidget("question", val)}
+              onChange={(val) => {
+                if (wType === "map" && val) {
+                  const q = questions.find((qq) => qq.id === val);
+                  const sc =
+                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
+                  const auto = {};
+                  (q?.options || []).forEach((opt, idx) => {
+                    auto[opt.value] = sc.colors[idx % sc.colors.length];
+                  });
+                  onWidgetChange({
+                    ...widget,
+                    question: val,
+                    config: { ...widget.config, status_colors: auto },
+                  });
+                } else {
+                  updateWidget("question", val);
+                }
+              }}
               placeholder="Select a question"
               style={{ width: "100%" }}
               allowClear
@@ -681,14 +698,21 @@ const BuilderInspector = ({
                   }`}
                   title={scheme.label}
                   onClick={() => {
-                    onWidgetChange({
-                      ...widget,
-                      config: {
-                        ...widget.config,
-                        color_scheme: key,
-                        chart_colors: scheme.colors,
-                      },
-                    });
+                    const next = {
+                      ...widget.config,
+                      color_scheme: key,
+                      chart_colors: scheme.colors,
+                    };
+                    if (wType === "map" && widget.question) {
+                      const opts = selectedQuestion?.options || [];
+                      const auto = {};
+                      opts.forEach((opt, idx) => {
+                        auto[opt.value] =
+                          scheme.colors[idx % scheme.colors.length];
+                      });
+                      next.status_colors = auto;
+                    }
+                    onWidgetChange({ ...widget, config: next });
                   }}
                 >
                   {scheme.colors.map((c) => (
@@ -704,6 +728,41 @@ const BuilderInspector = ({
             </div>
           </div>
         )}
+
+        {/* Per-category colours (bar/pie/line with option question) */}
+        {hasOptionQuestion &&
+          ["bar", "pie", "line"].includes(wType) &&
+          wConfig.group_by === "option" && (
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">
+                Category colours
+              </label>
+              {(selectedQuestion?.options || []).map((opt, idx) => {
+                const overrides = wConfig.option_colors || {};
+                const scheme =
+                  COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
+                const defaultColor = scheme.colors[idx % scheme.colors.length];
+                return (
+                  <div
+                    key={opt.value}
+                    className="builder-inspector-status-color-row"
+                  >
+                    <span>{opt.label}</span>
+                    <input
+                      type="color"
+                      value={overrides[opt.label] || defaultColor}
+                      onChange={(e) => {
+                        updateConfig("option_colors", {
+                          ...overrides,
+                          [opt.label]: e.target.value,
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
         {/* Map status colours */}
         {wType === "map" && widget.question && (

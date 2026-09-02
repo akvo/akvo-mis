@@ -14,42 +14,53 @@ const OSM_TILE = {
 };
 
 const VizMap = ({ config, data }) => {
-  // Memoised, not just destructured: `|| {}` mints a fresh object on every
-  // render, which would make the points memo below recompute every time and
-  // hand MapCluster a new data array — remounting every marker.
   const widgetConfig = config?.config || {};
   const statusColors = useMemo(
     () => widgetConfig.status_colors || {},
     [widgetConfig.status_colors]
   );
-  const fallback = (widgetConfig.chart_colors || [])[0] || DEFAULT_COLOR;
+  const chartColors = useMemo(
+    () => widgetConfig.chart_colors || [],
+    [widgetConfig.chart_colors]
+  );
+  const fallback = chartColors[0] || DEFAULT_COLOR;
+
+  const colorForStatus = useMemo(() => {
+    const rows = Array.isArray(data) ? data : [];
+    const statuses = [...new Set(rows.map((r) => r.status).filter(Boolean))];
+    const lookup = {};
+    statuses.forEach((s, i) => {
+      lookup[s] =
+        statusColors[s] || chartColors[i % chartColors.length] || fallback;
+    });
+    return lookup;
+  }, [data, statusColors, chartColors, fallback]);
 
   const points = useMemo(() => {
     const rows = Array.isArray(data) ? data : [];
-    return (
-      rows
-        // A datapoint with no geo is not a point. Rendering it at [0, 0]
-        // would put a site in the Gulf of Guinea.
-        .filter((row) => Array.isArray(row?.geo) && row.geo.length === 2)
-        .map((row) => ({
-          id: row.id,
-          // /maps/geolocation returns geo as [lat, lng], which is what
-          // Leaflet wants — no reordering.
-          point: row.geo,
-          label: row.name,
-          status: row.status,
-          color: row.status ? statusColors[row.status] || fallback : fallback,
-        }))
-    );
-  }, [data, statusColors, fallback]);
+    return rows
+      .filter((row) => Array.isArray(row?.geo) && row.geo.length === 2)
+      .map((row) => ({
+        id: row.id,
+        point: row.geo,
+        label: row.name,
+        status: row.status,
+        color: row.status ? colorForStatus[row.status] || fallback : fallback,
+      }));
+  }, [data, colorForStatus, fallback]);
 
   const center = useMemo(() => geo?.defaultPos?.()?.coordinates || [0, 0], []);
 
-  const legend = Object.keys(statusColors);
+  const legendEntries = Object.keys(colorForStatus);
+  const uniqueColors = new Set(Object.values(colorForStatus));
+  const showLegend = legendEntries.length > 0 && uniqueColors.size > 1;
+
+  const colorKey = Object.values(statusColors).join(",") + fallback;
 
   return (
     <div className="dashboard-view-map">
       <MapCluster
+        key={colorKey}
         data={points}
         groupKey="status"
         type="circle"
@@ -57,16 +68,14 @@ const VizMap = ({ config, data }) => {
         tile={OSM_TILE}
         renderPopup={(point) => point?.label}
       />
-      {/* Overlaid rather than drawn inside the chart, which is why it is
-          this component's job and not akvo-charts'. */}
-      {legend.length > 0 && (
+      {showLegend && (
         <div className="dashboard-view-map-legend">
-          {legend.map((status) => (
+          {legendEntries.map((status) => (
             <span key={status} className="dashboard-view-map-legend-item">
               <span
                 className="dashboard-view-map-legend-dot"
                 style={{
-                  background: statusColors[status] || NO_STATUS_COLOR,
+                  background: colorForStatus[status] || NO_STATUS_COLOR,
                 }}
               />
               {status}

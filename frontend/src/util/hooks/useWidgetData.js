@@ -278,13 +278,17 @@ const normalize = (widget, response, statusResponse) => {
     };
   }
 
-  // When chart_colors is set (via colour scheme), cycle the palette
-  // across rows so each bar/slice gets a different colour.
   const chartColors = widget?.config?.chart_colors;
+  const optionColors = widget?.config?.option_colors;
   if (chartColors && chartColors.length > 0) {
     return {
       data: rows.map((row) => ({ label: row.label, value: row.value })),
-      color: rows.map((_, i) => chartColors[i % chartColors.length]),
+      color: rows.map((row, i) => {
+        if (optionColors && optionColors[row.label]) {
+          return optionColors[row.label];
+        }
+        return chartColors[i % chartColors.length];
+      }),
     };
   }
 
