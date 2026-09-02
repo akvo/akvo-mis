@@ -59,6 +59,7 @@ class DashboardListSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "status",
+            "is_public",
             "root_form",
             "created",
             "updated",

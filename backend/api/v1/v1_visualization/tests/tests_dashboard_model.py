@@ -194,3 +194,11 @@ class DashboardModelTestCase(TestCase):
         self.assertIsNotNone(
             Questions.objects_deleted.get(pk=self.question.pk).deleted_at
         )
+
+    def test_a_new_dashboard_is_private(self):
+        dashboard = Dashboard.objects.create(
+            name="Coverage",
+            slug="coverage",
+            root_form=self.acme_form,
+        )
+        self.assertFalse(dashboard.is_public)

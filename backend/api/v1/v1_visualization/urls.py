@@ -57,6 +57,11 @@ urlpatterns = [
     ),
     re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"visibility$",
+        DashboardBuilderViewSet.as_view({"post": "visibility"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
         r"duplicate$",
         DashboardBuilderViewSet.as_view({"post": "duplicate"}),
     ),
