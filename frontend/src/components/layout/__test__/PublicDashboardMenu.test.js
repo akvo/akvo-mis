@@ -99,6 +99,26 @@ describe("PublicDashboardMenu", () => {
     });
   });
 
+  it("rebuilds the list when a dashboard is written to", async () => {
+    // Publishing, deleting or flipping visibility changes what belongs
+    // in this menu, and none of them touch the session it keys on.
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(1);
+    });
+    act(() => {
+      store.update((s) => {
+        s.dashboardsVersion += 1;
+      });
+    });
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("is a menu button whose chevron is not the avatar circle", async () => {
     dashboardApi.listPublished.mockResolvedValue({
       data: [{ id: 1, name: "Water points", slug: "water-points" }],

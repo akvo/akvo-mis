@@ -26,7 +26,8 @@ import dashboardApi from "../../util/dashboardApi";
 // place rather than mirroring it into a class name.
 
 const PublicDashboardMenu = () => {
-  const { language, isLoggedIn, authSettled } = store.useState((s) => s);
+  const { language, isLoggedIn, authSettled, dashboardsVersion } =
+    store.useState((s) => s);
   const text = uiText[language.active];
   const [dashboards, setDashboards] = useState([]);
   const [open, setOpen] = useState(false);
@@ -56,9 +57,10 @@ const PublicDashboardMenu = () => {
     return () => {
       cancelled = true;
     };
-    // Refetched on sign-in and sign-out: the endpoint widens with the
-    // session, so the list has to be rebuilt once we know who is asking.
-  }, [isLoggedIn, authSettled]);
+    // Refetched on sign-in and sign-out, because the endpoint widens with
+    // the session; and on any dashboard write, because publishing one or
+    // making it public is exactly when this list stops being true.
+  }, [isLoggedIn, authSettled, dashboardsVersion]);
 
   if (dashboards.length === 0) {
     return null;

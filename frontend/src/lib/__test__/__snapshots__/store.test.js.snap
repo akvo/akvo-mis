@@ -22,6 +22,7 @@ Object {
     },
   ],
   "authSettled": false,
+  "dashboardsVersion": 0,
   "dateRange": null,
   "filters": Object {
     "attributeType": null,
