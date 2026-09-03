@@ -43,28 +43,50 @@ export const WIDGET_TYPES = [
   },
 ];
 
+const DEFAULT_CHART_COLORS = [
+  "#1890ff",
+  "#64A73B",
+  "#F5A623",
+  "#e41a1c",
+  "#9b59b6",
+];
+
 export const WIDGET_DEFAULTS = {
   kpi: {
     col_span: 6,
-    color: "#1890ff",
-    config: { value_type: "number" },
+    color: null,
+    config: {
+      value_type: "number",
+      color_scheme: "categorical",
+      chart_colors: DEFAULT_CHART_COLORS,
+    },
   },
   bar: {
     col_span: 12,
-    color: "#1890ff",
-    config: { group_by: "option" },
+    color: null,
+    config: {
+      group_by: "option",
+      color_scheme: "categorical",
+      chart_colors: DEFAULT_CHART_COLORS,
+    },
   },
   line: {
     col_span: 12,
-    color: "#1651b6",
-    config: { group_by: "month" },
+    color: null,
+    config: {
+      group_by: "month",
+      color_scheme: "categorical",
+      chart_colors: DEFAULT_CHART_COLORS,
+    },
   },
   pie: {
     col_span: 8,
-    color: "#64A73B",
+    color: null,
     config: {
       group_by: "option",
       variant: "pie",
+      color_scheme: "categorical",
+      chart_colors: DEFAULT_CHART_COLORS,
     },
   },
   table: {
@@ -75,7 +97,10 @@ export const WIDGET_DEFAULTS = {
   map: {
     col_span: 24,
     color: null,
-    config: {},
+    config: {
+      color_scheme: "categorical",
+      chart_colors: DEFAULT_CHART_COLORS,
+    },
   },
   section_title: {
     col_span: 24,
@@ -148,6 +173,33 @@ export const COLOR_SWATCHES = [
   "#00bcd4",
   "#795548",
 ];
+
+// ColorBrewer-derived palettes — 5 colours each, 5 palettes.
+// Reference: https://colorbrewer2.org/
+export const COLOR_SCHEMES = {
+  categorical: {
+    label: "Categorical",
+    colors: ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"],
+  },
+  blues: {
+    label: "Blue shades",
+    colors: ["#084594", "#2171b5", "#4292c6", "#6baed6", "#9ecae1"],
+  },
+  greens: {
+    label: "Green shades",
+    colors: ["#006d2c", "#31a354", "#74c476", "#a1d99b", "#c7e9c0"],
+  },
+  pastel: {
+    label: "Pastel",
+    colors: ["#b3cde3", "#ccebc5", "#decbe4", "#fed9a6", "#fbb4ae"],
+  },
+  warm: {
+    label: "Warm",
+    colors: ["#bd0026", "#f03b20", "#fd8d3c", "#fecc5c", "#ffffb2"],
+  },
+};
+
+export const DEFAULT_COLOR_SCHEME = "categorical";
 
 export const NEEDS_FORM = new Set([
   "kpi",

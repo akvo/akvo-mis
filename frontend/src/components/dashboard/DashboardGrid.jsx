@@ -5,6 +5,7 @@ import WidgetRenderer from "./widgets/WidgetRenderer";
 import useWidgetData from "../../util/hooks/useWidgetData";
 import { WIDGET_BODY_HEIGHT } from "./widgetLayout";
 import { store, uiText } from "../../lib";
+const DEFAULT_KPI_COLOR = "#1890ff";
 
 // =========================================================
 // The dashboard renderer, shared by the viewer and the preview
@@ -40,10 +41,10 @@ const DashboardWidgetCell = ({ widget, filters, rootFormId, text }) => {
   const height = WIDGET_BODY_HEIGHT[type];
 
   const cellStyle = { gridColumn: `span ${widget.col_span || 24}` };
-  // The only place a widget's accent colour appears as chrome rather than
-  // as data.
-  if (type === "kpi" && widget.color) {
-    cellStyle.borderTop = `3px solid ${widget.color}`;
+  if (type === "kpi") {
+    const kpiColor =
+      (widget.config?.chart_colors || [])[0] || DEFAULT_KPI_COLOR;
+    cellStyle.borderTop = `3px solid ${kpiColor}`;
   }
 
   const bodyStyle = { padding: BODY_PADDING[type] ?? 16 };

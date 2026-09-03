@@ -18,10 +18,10 @@ const widget = (config = {}) => ({
   id: 1,
   type: "map",
   title: "Sites",
-  color: "#64A73B",
+  color: null,
   form: 6002,
   question: 600203,
-  config,
+  config: { chart_colors: ["#64A73B"], ...config },
 });
 
 const POINTS = [
@@ -117,9 +117,17 @@ describe("legend", () => {
     ).toHaveLength(2);
   });
 
-  test("no legend when nothing is coloured", () => {
+  test("scheme colours produce a legend when palette has multiple colours", () => {
+    const multiColor = widget({
+      chart_colors: ["#1890ff", "#64A73B", "#F5A623"],
+    });
+    render(<VizMap config={multiColor} data={POINTS} />);
+    expect(screen.getByText("operational")).toBeInTheDocument();
+    expect(screen.getByText("issue")).toBeInTheDocument();
+  });
+
+  test("no legend when all pins share one colour", () => {
     render(<VizMap config={widget()} data={POINTS} />);
-    // A one-entry legend for a single-colour map is noise.
     expect(document.querySelector(".dashboard-view-map-legend")).toBeNull();
   });
 });

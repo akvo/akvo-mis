@@ -19,7 +19,8 @@ import {
   VALID_MEASURE,
   VALID_CRITERIA_TYPES,
   WIDTH_PRESETS,
-  COLOR_SWATCHES,
+  COLOR_SCHEMES,
+  DEFAULT_COLOR_SCHEME,
   TYPE_LABELS,
   defaultMeasure,
   pruneConfigForForm,
@@ -411,7 +412,24 @@ const BuilderInspector = ({
             </label>
             <Select
               value={widget.question || null}
-              onChange={(val) => updateWidget("question", val)}
+              onChange={(val) => {
+                if (wType === "map" && val) {
+                  const q = questions.find((qq) => qq.id === val);
+                  const sc =
+                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
+                  const auto = {};
+                  (q?.options || []).forEach((opt, idx) => {
+                    auto[opt.value] = sc.colors[idx % sc.colors.length];
+                  });
+                  onWidgetChange({
+                    ...widget,
+                    question: val,
+                    config: { ...widget.config, status_colors: auto },
+                  });
+                } else {
+                  updateWidget("question", val);
+                }
+              }}
               placeholder="Select a question"
               style={{ width: "100%" }}
               allowClear
@@ -737,12 +755,96 @@ const BuilderInspector = ({
           </div>
         )}
 
+        {/* Colour scheme */}
+        {NEEDS_COLOR.has(wType) && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Colour scheme</label>
+            <div className="builder-inspector-schemes">
+              {Object.entries(COLOR_SCHEMES).map(([key, scheme]) => (
+                <button
+                  key={key}
+                  className={`builder-scheme${
+                    (wConfig.color_scheme || DEFAULT_COLOR_SCHEME) === key
+                      ? " builder-scheme--active"
+                      : ""
+                  }`}
+                  title={scheme.label}
+                  onClick={() => {
+                    const next = {
+                      ...widget.config,
+                      color_scheme: key,
+                      chart_colors: scheme.colors,
+                    };
+                    if (wType === "map" && widget.question) {
+                      const opts = selectedQuestion?.options || [];
+                      const auto = {};
+                      opts.forEach((opt, idx) => {
+                        auto[opt.value] =
+                          scheme.colors[idx % scheme.colors.length];
+                      });
+                      next.status_colors = auto;
+                    }
+                    onWidgetChange({ ...widget, config: next });
+                  }}
+                >
+                  {scheme.colors.map((c) => (
+                    <span
+                      key={c}
+                      className="builder-scheme-dot"
+                      style={{ background: c }}
+                    />
+                  ))}
+                  <span className="builder-scheme-label">{scheme.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Per-category colours (bar/pie/line with option question) */}
+        {hasOptionQuestion &&
+          ["bar", "pie", "line"].includes(wType) &&
+          wConfig.group_by === "option" && (
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">
+                Category colours
+              </label>
+              {(selectedQuestion?.options || []).map((opt, idx) => {
+                const overrides = wConfig.option_colors || {};
+                const scheme =
+                  COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
+                const defaultColor = scheme.colors[idx % scheme.colors.length];
+                return (
+                  <div
+                    key={opt.value}
+                    className="builder-inspector-status-color-row"
+                  >
+                    <span>{opt.label}</span>
+                    <input
+                      type="color"
+                      value={overrides[opt.label] || defaultColor}
+                      onChange={(e) => {
+                        updateConfig("option_colors", {
+                          ...overrides,
+                          [opt.label]: e.target.value,
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
         {/* Map status colours */}
         {wType === "map" && widget.question && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">Status colours</label>
-            {(selectedQuestion?.options || []).map((opt) => {
+            {(selectedQuestion?.options || []).map((opt, idx) => {
               const colors = wConfig.status_colors || {};
+              const scheme =
+                COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
+              const defaultColor = scheme.colors[idx % scheme.colors.length];
               return (
                 <div
                   key={opt.value}
@@ -751,7 +853,7 @@ const BuilderInspector = ({
                   <span>{opt.label}</span>
                   <input
                     type="color"
-                    value={colors[opt.value] || "#64A73B"}
+                    value={colors[opt.value] || defaultColor}
                     onChange={(e) => {
                       updateConfig("status_colors", {
                         ...colors,
@@ -762,25 +864,6 @@ const BuilderInspector = ({
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Accent colour */}
-        {NEEDS_COLOR.has(wType) && (
-          <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Accent colour</label>
-            <div className="builder-inspector-swatches">
-              {COLOR_SWATCHES.map((c) => (
-                <button
-                  key={c}
-                  className={`builder-swatch${
-                    widget.color === c ? " builder-swatch--active" : ""
-                  }`}
-                  style={{ background: c }}
-                  onClick={() => updateWidget("color", c)}
-                />
-              ))}
-            </div>
           </div>
         )}
 

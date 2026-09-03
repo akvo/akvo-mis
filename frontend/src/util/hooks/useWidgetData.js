@@ -278,9 +278,21 @@ const normalize = (widget, response, statusResponse) => {
     };
   }
 
+  const chartColors = widget?.config?.chart_colors;
+  const optionColors = widget?.config?.option_colors;
+  if (chartColors && chartColors.length > 0) {
+    return {
+      data: rows.map((row) => ({ label: row.label, value: row.value })),
+      color: rows.map((row, i) => {
+        if (optionColors && optionColors[row.label]) {
+          return optionColors[row.label];
+        }
+        return chartColors[i % chartColors.length];
+      }),
+    };
+  }
+
   return {
-    // Project away `group` and `color`: akvo-charts derives its series from
-    // the object's keys, so either would be plotted as an extra series.
     data: rows.map((row) => ({ label: row.label, value: row.value })),
     color:
       config.group_by === "option" && rows.some((row) => row.color)

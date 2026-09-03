@@ -110,8 +110,14 @@ describe("mockup chrome", () => {
     expect(Boolean(header)).toBe(expected);
   });
 
-  test("a kpi carries the accent colour as a top border", () => {
-    renderGrid([w({ type: "kpi", title: "Ops", color: "#64A73B" })]);
+  test("a kpi carries the scheme colour as a top border", () => {
+    renderGrid([
+      w({
+        type: "kpi",
+        title: "Ops",
+        config: { chart_colors: ["#64A73B", "#1890ff"] },
+      }),
+    ]);
     expect(cellFor("Ops")).toHaveStyle("border-top: 3px solid #64A73B");
   });
 
