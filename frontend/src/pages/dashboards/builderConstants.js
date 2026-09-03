@@ -224,7 +224,14 @@ export const NEEDS_FORM = new Set([
   "map",
   "scatter",
 ]);
-export const NEEDS_QUESTION = new Set(["kpi", "bar", "line", "pie", "map"]);
+export const NEEDS_QUESTION = new Set([
+  "kpi",
+  "bar",
+  "line",
+  "pie",
+  "map",
+  "scatter",
+]);
 export const NEEDS_GROUP_BY = new Set(["bar", "line", "pie"]);
 export const NEEDS_STACK_BY = new Set(["bar", "line"]);
 export const NEEDS_VALUE_TYPE = new Set(["kpi", "bar", "line", "pie"]);
@@ -248,7 +255,7 @@ export const NEEDS_MEASURE = new Set([
   "map",
   "scatter",
 ]);
-export const NEEDS_SCATTER_AXES = new Set(["scatter"]);
+export const NEEDS_SCATTER_Y = new Set(["scatter"]);
 
 /**
  * The measure a widget should carry for the form it is bound to, or null.

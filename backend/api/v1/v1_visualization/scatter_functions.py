@@ -5,33 +5,28 @@ from api.v1.v1_visualization.functions import (
 )
 
 
+def _answer_map(data_ids, question):
+    """Map data_id -> numeric value for one question."""
+    return dict(
+        Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=question.id,
+            value__isnull=False,
+        ).values_list("data_id", "value")
+    )
+
+
 def handle_scatter(form, question_x, question_y, params):
     """Return per-datapoint X/Y values for a scatter chart.
 
-    Each point is one datapoint (or one latest monitoring submission),
-    with the numeric answer to question_x as x and question_y as y.
-    Points missing either answer are dropped.
+    Either axis question can be None, meaning "number of datapoints"
+    (each point gets value 1 on that axis).
+    Points missing the non-null axis answer are dropped.
     """
     qs, is_latest, _ = get_base_monitoring_qs(
         form, form.id, params
     )
     data_ids = get_monitoring_data_ids(qs, is_latest)
-
-    x_map = dict(
-        Answers.objects.filter(
-            data_id__in=data_ids,
-            question_id=question_x.id,
-            value__isnull=False,
-        ).values_list("data_id", "value")
-    )
-
-    y_map = dict(
-        Answers.objects.filter(
-            data_id__in=data_ids,
-            question_id=question_y.id,
-            value__isnull=False,
-        ).values_list("data_id", "value")
-    )
 
     if is_latest:
         name_map = dict(qs.values_list("latest_id", "name"))
@@ -41,6 +36,16 @@ def handle_scatter(form, question_x, question_y, params):
                 id__in=data_ids,
             ).values_list("id", "name")
         )
+
+    if question_x:
+        x_map = _answer_map(data_ids, question_x)
+    else:
+        x_map = {did: 1 for did in data_ids}
+
+    if question_y:
+        y_map = _answer_map(data_ids, question_y)
+    else:
+        y_map = {did: 1 for did in data_ids}
 
     common_ids = set(x_map.keys()) & set(y_map.keys())
     data = [

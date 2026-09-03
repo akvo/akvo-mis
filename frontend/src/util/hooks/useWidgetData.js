@@ -93,21 +93,16 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
   }
 
   if (type === "scatter") {
-    const qx = config.question_x;
-    const qy = config.question_y;
-    if (!widget.form || !qx || !qy) {
+    if (!widget.form || (!widget.question && !config.question_y)) {
       return null;
     }
-    const isMonitoring = Boolean(
-      widget.form && rootFormId && widget.form !== rootFormId
-    );
     return {
-      endpoint: "visualization/scatter",
+      endpoint: "visualization/values",
       params: compact({
         form_id: widget.form,
-        question_x: qx,
-        question_y: qy,
-        monitoring: isMonitoring ? MONITORING_LATEST : null,
+        question_id: widget.question,
+        question_y: config.question_y,
+        ...expandMeasure(widget, rootFormId),
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
         dashboard_slug: dashboardSlug,

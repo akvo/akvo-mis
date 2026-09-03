@@ -10,8 +10,8 @@ const VizScatter = ({ config, data }) => {
   const widgetConfig = config?.config || {};
   const colors = widgetConfig.chart_colors || DEFAULT_COLORS;
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
-  const xLabel = widgetConfig.x_axis_label || "X";
-  const yLabel = widgetConfig.y_axis_label || "Y";
+  const xLabel = widgetConfig.x_axis_label || "Number of datapoints";
+  const yLabel = widgetConfig.y_axis_label || "Number of datapoints";
 
   const option = useMemo(() => {
     if (chartData.length === 0) {

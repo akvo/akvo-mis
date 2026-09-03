@@ -8,7 +8,6 @@ from api.v1.v1_visualization.views import (
 from api.v1.v1_visualization.dashboard_views import (
     visualization_values,
     visualization_escalation,
-    visualization_scatter,
 )
 from api.v1.v1_visualization.dashboard_builder_views import (
     DashboardBuilderViewSet,
@@ -33,10 +32,6 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/visualization/values/formula$",
         visualization_values_formula,
-    ),
-    re_path(
-        r"^(?P<version>(v1))/visualization/scatter$",
-        visualization_scatter,
     ),
     re_path(
         r"^(?P<version>(v1))/visualization/values",

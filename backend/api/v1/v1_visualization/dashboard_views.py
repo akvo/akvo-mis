@@ -11,8 +11,6 @@ from api.v1.v1_visualization.dashboard_serializers import (
     ValuesFilterSerializer,
     ValuesResponseSerializer,
     EscalationResponseSerializer,
-    ScatterFilterSerializer,
-    ScatterResponseSerializer,
 )
 from api.v1.v1_visualization.dashboard_examples import (
     VALUES_EXAMPLES,
@@ -203,6 +201,7 @@ def visualization_values(request, version):
         form_ids=[validated["form_id"]],
         question_ids=[
             validated.get("question_id"),
+            validated.get("question_y"),
             validated.get("date_question_id"),
             *question_ids_in_criteria(
                 request.query_params.get("criteria")
@@ -245,6 +244,14 @@ def visualization_values(request, version):
             "include_empty", False
         ),
     }
+
+    # Scatter mode: question_y present
+    question_y_obj = validated.get("question_y_obj")
+    if question_y_obj is not None:
+        data = handle_scatter(
+            form, question, question_y_obj, params,
+        )
+        return Response(data, status=status.HTTP_200_OK)
 
     # Route to handler
     if not question:
@@ -417,101 +424,3 @@ def visualization_escalation(request, form_id, version):
         },
     )
     return Response(result, status=status.HTTP_200_OK)
-
-
-@extend_schema(
-    description="Scatter plot: per-datapoint X/Y values",
-    tags=["Visualization"],
-    responses={
-        200: OpenApiResponse(
-            response=ScatterResponseSerializer(many=True),
-            description="One entry per datapoint with x and y.",
-        ),
-        400: OpenApiResponse(
-            description="Invalid query parameters.",
-        ),
-    },
-    parameters=[
-        OpenApiParameter(
-            name="form_id", required=True,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="question_x", required=True,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="question_y", required=True,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="from_date", required=False,
-            type=OpenApiTypes.DATE,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="to_date", required=False,
-            type=OpenApiTypes.DATE,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="administration_id", required=False,
-            type=OpenApiTypes.INT,
-            location=OpenApiParameter.QUERY,
-        ),
-    ],
-)
-@api_view(["GET"])
-def visualization_scatter(request, version):
-    """Scatter plot endpoint: raw X/Y values per datapoint."""
-    tenant, allowed = resolve_view_scope(request)
-
-    serializer = ScatterFilterSerializer(
-        data=request.query_params
-    )
-    if not serializer.is_valid():
-        return Response(
-            {"message": validate_serializers_message(
-                serializer.errors
-            )},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    validated = serializer.validated_data
-    check_ids(
-        allowed,
-        form_ids=[validated["form_id"]],
-        question_ids=[
-            validated["question_x"],
-            validated["question_y"],
-            validated.get("date_question_id"),
-        ],
-    )
-    form = get_object_or_404(
-        tenant_scoped_forms(tenant), pk=validated["form_id"]
-    )
-
-    params = {
-        "monitoring": validated.get(
-            "monitoring", "latest"
-        ),
-        "from_date": validated.get("from_date"),
-        "to_date": validated.get("to_date"),
-        "date_question_id": validated.get(
-            "date_question_id"
-        ),
-        "administration_id": resolve_default_administration_id(
-            validated.get("administration_id"), tenant,
-        ),
-    }
-
-    data = handle_scatter(
-        form,
-        validated["question_x_obj"],
-        validated["question_y_obj"],
-        params,
-    )
-    return Response(data, status=status.HTTP_200_OK)

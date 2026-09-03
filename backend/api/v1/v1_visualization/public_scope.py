@@ -74,11 +74,11 @@ def allowlist_from(dashboard):
 
         widget_config = widget.get("config") or {}
 
-        # Scatter widgets carry two question ids in their config.
-        for axis_key in ("question_x", "question_y"):
-            axis_qid = _as_id(widget_config.get(axis_key))
-            if axis_qid is not None:
-                questions.add(axis_qid)
+        # Scatter Y axis lives in config; X axis uses widget.question
+        # (already collected above).
+        axis_qid = _as_id(widget_config.get("question_y"))
+        if axis_qid is not None:
+            questions.add(axis_qid)
 
         # Both carry author-entered question ids under the same key:
         # criteria narrow a widget's datapoints, and table columns of
