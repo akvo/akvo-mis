@@ -2,6 +2,12 @@ import { Store } from "pullstate";
 
 const defaultUIState = {
   isLoggedIn: false,
+  // Has the cookie session been resolved — restored, refused, or found
+  // absent? `isLoggedIn` cannot answer that: it is false both before the
+  // question is asked and after the answer turns out to be "nobody".
+  // Anything tenant-scoped that fetches on bootstrap waits for this, or
+  // it runs once as an anonymous caller and again as the real one.
+  authSettled: false,
   user: null,
   filters: {
     trained: null,

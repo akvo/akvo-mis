@@ -21,6 +21,7 @@ Object {
       "version": 1,
     },
   ],
+  "authSettled": false,
   "dateRange": null,
   "filters": Object {
     "attributeType": null,

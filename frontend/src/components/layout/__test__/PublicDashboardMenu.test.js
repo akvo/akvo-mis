@@ -1,8 +1,15 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import PublicDashboardMenu from "../PublicDashboardMenu";
 import dashboardApi from "../../../util/dashboardApi";
+import { store } from "../../../lib";
 
 jest.mock("../../../util/dashboardApi");
 
@@ -14,6 +21,14 @@ const renderMenu = () =>
   );
 
 describe("PublicDashboardMenu", () => {
+  beforeEach(() => {
+    store.update((s) => {
+      s.isLoggedIn = false;
+      s.authSettled = true;
+    });
+    jest.clearAllMocks();
+  });
+
   it("renders nothing when there are no public dashboards", async () => {
     dashboardApi.listPublished.mockResolvedValue({ data: [] });
     const { container } = renderMenu();
@@ -38,6 +53,50 @@ describe("PublicDashboardMenu", () => {
     });
     renderMenu();
     expect(await screen.findByText(/dashboard/i)).toBeVisible();
+  });
+
+  it("asks nothing until the session question is answered", async () => {
+    // Firing before the session resolves would get the anonymous list
+    // and force a second request the moment it lands.
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    act(() => {
+      store.update((s) => {
+        s.authSettled = false;
+      });
+    });
+    renderMenu();
+    expect(dashboardApi.listPublished).not.toHaveBeenCalled();
+    act(() => {
+      store.update((s) => {
+        s.isLoggedIn = true;
+        s.authSettled = true;
+      });
+    });
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("refetches when the session changes", async () => {
+    // The endpoint widens with the caller, so signing in has to rebuild
+    // the list. Nothing else in this suite proves the effect re-runs.
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(1);
+    });
+    act(() => {
+      store.update((s) => {
+        s.isLoggedIn = true;
+      });
+    });
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("is a menu button whose chevron is not the avatar circle", async () => {

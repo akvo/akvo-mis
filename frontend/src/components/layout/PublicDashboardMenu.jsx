@@ -26,12 +26,18 @@ import dashboardApi from "../../util/dashboardApi";
 // place rather than mirroring it into a class name.
 
 const PublicDashboardMenu = () => {
-  const { language, isLoggedIn } = store.useState((s) => s);
+  const { language, isLoggedIn, authSettled } = store.useState((s) => s);
   const text = uiText[language.active];
   const [dashboards, setDashboards] = useState([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // Wait for the session question to be answered. Asking before that
+    // gets the anonymous list, which then has to be thrown away and
+    // asked for again the moment the session lands.
+    if (!authSettled) {
+      return () => {};
+    }
     let cancelled = false;
     dashboardApi
       .listPublished()
@@ -52,7 +58,7 @@ const PublicDashboardMenu = () => {
     };
     // Refetched on sign-in and sign-out: the endpoint widens with the
     // session, so the list has to be rebuilt once we know who is asking.
-  }, [isLoggedIn]);
+  }, [isLoggedIn, authSettled]);
 
   if (dashboards.length === 0) {
     return null;
