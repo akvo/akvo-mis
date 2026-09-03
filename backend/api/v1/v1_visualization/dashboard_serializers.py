@@ -11,6 +11,7 @@ from api.v1.v1_visualization.constants import (
     SUPPORTED_QUESTION_TYPES,
 )
 from api.v1.v1_visualization.functions import parse_criteria_string
+from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 
 
@@ -156,6 +157,63 @@ class ValuesFilterSerializer(serializers.Serializer):
                 })
 
         return data
+
+
+class ScatterFilterSerializer(serializers.Serializer):
+    """Validates query parameters for /visualization/scatter."""
+
+    form_id = serializers.IntegerField(required=True)
+    question_x = serializers.IntegerField(required=True)
+    question_y = serializers.IntegerField(required=True)
+    monitoring = serializers.ChoiceField(
+        choices=list(VALID_MONITORING),
+        default="latest",
+    )
+    from_date = serializers.DateField(required=False)
+    to_date = serializers.DateField(required=False)
+    date_question_id = serializers.IntegerField(required=False)
+    administration_id = serializers.IntegerField(required=False)
+
+    def validate_form_id(self, value):
+        if not Forms.objects.filter(pk=value).exists():
+            raise serializers.ValidationError(
+                f"Form {value} not found."
+            )
+        return value
+
+    def validate(self, data):
+        form_id = data.get("form_id")
+        for field in ("question_x", "question_y"):
+            qid = data.get(field)
+            if not qid:
+                continue
+            question = Questions.objects.filter(
+                pk=qid, form_id=form_id,
+            ).first()
+            if not question:
+                raise serializers.ValidationError({
+                    field: (
+                        f"Question {qid} not found"
+                        f" on form {form_id}."
+                    ),
+                })
+            if question.type != QuestionTypes.number:
+                raise serializers.ValidationError({
+                    field: (
+                        f"Question {qid} must be a number"
+                        " type for scatter plots."
+                    ),
+                })
+            data[f"{field}_obj"] = question
+        return data
+
+
+class ScatterResponseSerializer(serializers.Serializer):
+    """/visualization/scatter response."""
+
+    name = serializers.CharField()
+    x = serializers.FloatField()
+    y = serializers.FloatField()
 
 
 class EscalationFilterSerializer(serializers.Serializer):

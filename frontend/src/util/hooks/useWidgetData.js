@@ -92,6 +92,29 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
     return null;
   }
 
+  if (type === "scatter") {
+    const qx = config.question_x;
+    const qy = config.question_y;
+    if (!widget.form || !qx || !qy) {
+      return null;
+    }
+    const isMonitoring = Boolean(
+      widget.form && rootFormId && widget.form !== rootFormId
+    );
+    return {
+      endpoint: "visualization/scatter",
+      params: compact({
+        form_id: widget.form,
+        question_x: qx,
+        question_y: qy,
+        monitoring: isMonitoring ? MONITORING_LATEST : null,
+        administration_id: filters?.administration_id,
+        ...dateFilters(filters),
+        dashboard_slug: dashboardSlug,
+      }),
+    };
+  }
+
   if (type === "table") {
     // Columns are still `required=True` on EscalationFilterSerializer, so
     // a table with none is a guaranteed 400 — re-issued on every filter
@@ -245,6 +268,10 @@ const normalize = (widget, response, statusResponse) => {
   if (type === "kpi") {
     const rows = response.data || [];
     return { data: { value: rows.length ? rows[0].value : null } };
+  }
+
+  if (type === "scatter") {
+    return { data: Array.isArray(response) ? response : [] };
   }
 
   if (type === "table") {

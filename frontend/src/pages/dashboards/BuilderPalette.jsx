@@ -80,6 +80,15 @@ const typeIcons = {
       <circle cx="12" cy="9" r="2.4" stroke="#64A73B" strokeWidth="1.7" />
     </svg>
   ),
+  scatter: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+      <circle cx="6" cy="16" r="2" fill="#1651b6" />
+      <circle cx="10" cy="10" r="2" fill="#1651b6" />
+      <circle cx="15" cy="13" r="2" fill="#1651b6" />
+      <circle cx="18" cy="7" r="2" fill="#1651b6" />
+      <circle cx="12" cy="17" r="2" fill="#1651b6" />
+    </svg>
+  ),
   section_title: (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
       <path

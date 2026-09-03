@@ -23,6 +23,7 @@ import {
   COLOR_SCHEMES,
   DEFAULT_COLOR_SCHEME,
   TYPE_LABELS,
+  NEEDS_SCATTER_AXES,
   defaultMeasure,
   pruneConfigForForm,
   tableColumnOptions,
@@ -384,16 +385,23 @@ const BuilderInspector = ({
                       }))
                     : questionsForForm(val)
                 );
+                const nextConfig = {
+                  ...pruned,
+                  measure: supported
+                    ? widget.config?.measure || supported
+                    : null,
+                };
+                if (wType === "scatter") {
+                  nextConfig.question_x = null;
+                  nextConfig.question_y = null;
+                  nextConfig.x_axis_label = null;
+                  nextConfig.y_axis_label = null;
+                }
                 onWidgetChange({
                   ...widget,
                   form: val,
                   question: null,
-                  config: {
-                    ...pruned,
-                    measure: supported
-                      ? widget.config?.measure || supported
-                      : null,
-                  },
+                  config: nextConfig,
                 });
               }}
               placeholder="Select a form"
@@ -486,6 +494,85 @@ const BuilderInspector = ({
             </Select>
           </div>
         )}
+
+        {/* Scatter axes (X and Y number questions) */}
+        {NEEDS_SCATTER_AXES.has(wType) &&
+          widget.form &&
+          (() => {
+            const numQs = questionsForForm(widget.form).filter(
+              (q) => q.type === "number"
+            );
+            return (
+              <>
+                <div className="builder-inspector-field">
+                  <label className="builder-inspector-label">
+                    X axis (number question)
+                  </label>
+                  <Select
+                    value={wConfig.question_x || null}
+                    onChange={(val) => {
+                      const q = numQs.find((qq) => qq.id === val);
+                      onWidgetChange({
+                        ...widget,
+                        config: {
+                          ...widget.config,
+                          question_x: val,
+                          x_axis_label: q?.label || "X",
+                        },
+                      });
+                    }}
+                    placeholder="Select X axis question"
+                    style={{ width: "100%" }}
+                    allowClear
+                    optionLabelProp="label"
+                  >
+                    {numQs.map((q) => (
+                      <Select.Option
+                        key={q.id}
+                        value={q.id}
+                        label={<QuestionLabel label={q.label} type={q.type} />}
+                      >
+                        <QuestionLabel label={q.label} type={q.type} />
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="builder-inspector-field">
+                  <label className="builder-inspector-label">
+                    Y axis (number question)
+                  </label>
+                  <Select
+                    value={wConfig.question_y || null}
+                    onChange={(val) => {
+                      const q = numQs.find((qq) => qq.id === val);
+                      onWidgetChange({
+                        ...widget,
+                        config: {
+                          ...widget.config,
+                          question_y: val,
+                          y_axis_label: q?.label || "Y",
+                        },
+                      });
+                    }}
+                    placeholder="Select Y axis question"
+                    style={{ width: "100%" }}
+                    allowClear
+                    optionLabelProp="label"
+                  >
+                    {numQs.map((q) => (
+                      <Select.Option
+                        key={q.id}
+                        value={q.id}
+                        label={<QuestionLabel label={q.label} type={q.type} />}
+                      >
+                        <QuestionLabel label={q.label} type={q.type} />
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+              </>
+            );
+          })()}
 
         {/* Group by */}
         {NEEDS_GROUP_BY.has(wType) && (

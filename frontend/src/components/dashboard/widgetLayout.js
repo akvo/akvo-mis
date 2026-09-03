@@ -25,6 +25,7 @@ export const WIDGET_BODY_HEIGHT = {
   bar: 380,
   line: 380,
   pie: 380,
+  scatter: 380,
   map: 380,
 };
 
