@@ -218,6 +218,45 @@
             line-height: 1;
           }
         }
+
+        /* A menu trigger, not an avatar. `.icon` above draws the circular
+           badge the user menu wants around its person glyph; a chevron is
+           a direction, so it sits inline and turns over instead. The open
+           state is read from aria-expanded rather than mirrored into a
+           class, so there is one source of truth for it. */
+        .public-dashboard-menu {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0;
+          border: 0;
+          background: none;
+          color: $color-dark;
+          font: inherit;
+          line-height: inherit;
+          cursor: pointer;
+
+          &:focus-visible {
+            outline: 2px solid $blue;
+            outline-offset: 3px;
+            border-radius: 2px;
+          }
+
+          &[aria-expanded="true"] .public-dashboard-menu-chevron {
+            transform: rotate(180deg);
+          }
+        }
+
+        .public-dashboard-menu-chevron {
+          font-size: 12px;
+          transition: transform 0.2s ease;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .public-dashboard-menu-chevron {
+            transition: none;
+          }
+        }
       }
     }
 

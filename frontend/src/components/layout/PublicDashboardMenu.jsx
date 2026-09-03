@@ -18,11 +18,18 @@ import dashboardApi from "../../util/dashboardApi";
 // A workspace with no public dashboards, and the base domain of a SaaS
 // deployment (which names no workspace, so the list is always empty),
 // both get no chrome rather than a dead control.
+//
+// The trigger is a real <button> rather than the header's <a>: it opens
+// a menu instead of going somewhere, so it carries aria-haspopup and an
+// aria-expanded that tracks the open state. That attribute is also what
+// the stylesheet turns the chevron on, which keeps the open state in one
+// place rather than mirroring it into a class name.
 
 const PublicDashboardMenu = () => {
   const { language, isLoggedIn } = store.useState((s) => s);
   const text = uiText[language.active];
   const [dashboards, setDashboards] = useState([]);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,18 +68,22 @@ const PublicDashboardMenu = () => {
   }));
 
   return (
-    <Dropdown menu={{ items }}>
-      <a
-        className="ant-dropdown-link public-dashboard-menu"
-        onClick={(e) => {
-          e.preventDefault();
-        }}
+    <Dropdown
+      menu={{ items }}
+      trigger={["click"]}
+      placement="bottomRight"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <button
+        type="button"
+        className="public-dashboard-menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         {text?.menuDashboards}
-        <span className="icon">
-          <DownOutlined />
-        </span>
-      </a>
+        <DownOutlined className="public-dashboard-menu-chevron" />
+      </button>
     </Dropdown>
   );
 };
