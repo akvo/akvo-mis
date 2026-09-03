@@ -39,6 +39,7 @@ const DashboardViewFilters = ({
   value,
   onChange,
   disabled = false,
+  rootAdministrationId = null,
 }) => {
   const { language } = store.useState((s) => s);
   const text = uiText[language.active];
@@ -90,6 +91,7 @@ const DashboardViewFilters = ({
             <AdministrationDropdownLocal
               onChange={handleAdministrationChange}
               loading={disabled}
+              rootAdministrationId={rootAdministrationId}
             />
           )}
         </Space>
@@ -102,11 +104,8 @@ DashboardViewFilters.propTypes = {
   defaultFilters: PropTypes.object,
   value: PropTypes.object.isRequired,
   onChange: PropTypes.func.isRequired,
-  // The builder canvas shows the bar so the author can see what viewers
-  // will get, but the canvas is unfiltered by design — the controls are
-  // rendered inert rather than redrawn as look-alikes, which is what let
-  // the two surfaces drift apart in the first place.
   disabled: PropTypes.bool,
+  rootAdministrationId: PropTypes.number,
 };
 
 export default DashboardViewFilters;

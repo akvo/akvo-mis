@@ -127,6 +127,7 @@ const DashboardViewer = () => {
           defaultFilters={dashboard.default_filters}
           value={filters}
           onChange={setFilters}
+          rootAdministrationId={dashboard.root_administration_id}
         />
 
         <DashboardGrid

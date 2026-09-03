@@ -23,6 +23,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from api.v1.v1_profile.models import Administration
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
 from api.v1.v1_visualization.models import Dashboard
@@ -187,6 +188,10 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
         snapshot = read_snapshot(dashboard)
         row = serialize_identity(dashboard)
         row["default_filters"] = snapshot["default_filters"]
+        root_admin = Administration.objects.filter(
+            tenant=dashboard.tenant, parent__isnull=True,
+        ).values_list("id", flat=True).first()
+        row["root_administration_id"] = root_admin
         # Annotated as it is served, never baked in at publish time: a
         # question can be deleted at any point afterwards, and a stale
         # is_broken: false would be worse than no annotation at all.

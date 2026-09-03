@@ -38,11 +38,14 @@ const AdministrationDropdownLocal = ({
   onChange,
   width = 160,
   loading = false,
+  rootAdministrationId = null,
 }) => {
   const user = store.useState((s) => s.user);
 
   const [levels, setLevels] = useState([]);
   const mountedRef = useRef(true);
+
+  const seedId = user?.administration?.id || rootAdministrationId;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -52,15 +55,13 @@ const AdministrationDropdownLocal = ({
   }, []);
 
   useEffect(() => {
-    if (!user?.administration?.id) {
+    if (!seedId) {
       return () => {};
     }
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await api.get(
-          `administration/${user.administration.id}`
-        );
+        const { data } = await api.get(`administration/${seedId}`);
         if (cancelled || !mountedRef.current) {
           return;
         }
@@ -73,7 +74,7 @@ const AdministrationDropdownLocal = ({
     return () => {
       cancelled = true;
     };
-  }, [user?.administration?.id]);
+  }, [seedId]);
 
   // Replicates the role-based child filter from AdministrationDropdown.js
   // so non-superusers only see admin units inside their assigned roles.
@@ -173,6 +174,7 @@ AdministrationDropdownLocal.propTypes = {
   onChange: PropTypes.func.isRequired,
   width: PropTypes.number,
   loading: PropTypes.bool,
+  rootAdministrationId: PropTypes.number,
 };
 
 export default AdministrationDropdownLocal;
