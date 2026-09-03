@@ -81,6 +81,16 @@ const DashboardViewer = () => {
   if (notFound || !dashboard) {
     return (
       <div className="dashboard-view-shell">
+        {isLoggedIn && (
+          <button
+            className="dashboard-view-back"
+            title={text.backBtn}
+            aria-label={text.backBtn}
+            onClick={() => navigate("/control-center/dashboard")}
+          >
+            <ArrowLeftOutlined />
+          </button>
+        )}
         <div className="dashboard-view-empty">
           <h2>{text.dashboardNotFound}</h2>
           <p>{text.dashboardNotFoundHint}</p>
