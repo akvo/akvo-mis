@@ -21,6 +21,7 @@ const VizScatter = ({ config, data }) => {
       color: colors,
       tooltip: {
         trigger: "item",
+        appendToBody: true,
         formatter: (params) => {
           const d = params.data;
           return [
