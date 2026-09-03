@@ -9,7 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
-from api.v1.v1_users.models import SystemUser
+from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
 from utils.tenant_test_case import TenantIsolationTestCase
@@ -169,12 +169,35 @@ class DashboardReadTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(res.status_code, 404)
 
-    def test_an_anonymous_caller_is_refused(self):
-        self.make("alpha")
-        self.assertEqual(self.client.get(READ_URL).status_code, 401)
+    def test_an_anonymous_caller_sees_only_public_dashboards(self):
+        # Superseded by spec D-3: VIZ-001 D-7's "no anonymous dashboard
+        # access" is the read namespace this feature reopens on
+        # purpose. An anonymous caller is scoped to the host's tenant
+        # (single-tenant fallback here — see public_tenant()) and to
+        # is_public rows only; neither dashboard has a tenant unless
+        # told to, so both are stamped onto the one seeded Tenant row
+        # or an anonymous request would resolve to a different
+        # workspace than the one they were created in.
+        tenant = Tenant.objects.get()
+        self.make("alpha", is_public=True, tenant=tenant)
+        self.make("hidden", is_public=False, tenant=tenant)
+
+        res = self.client.get(READ_URL)
+        self.assertEqual(res.status_code, 200)
         self.assertEqual(
-            self.client.get("{0}/alpha".format(READ_URL)).status_code,
-            401,
+            {row["slug"] for row in res.json()}, {"alpha"}
+        )
+        self.assertEqual(
+            self.client.get(
+                "{0}/alpha".format(READ_URL)
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(
+                "{0}/hidden".format(READ_URL)
+            ).status_code,
+            404,
         )
 
     def test_a_null_snapshot_degrades_to_an_empty_dashboard(self):
@@ -386,15 +409,27 @@ class DashboardReadTenantIsolationTestCase(TenantIsolationTestCase):
 
 @override_settings(USE_TZ=False)
 class DashboardReadPermissionTestCase(TenantIsolationTestCase):
-    """Publication is to the tenant: a token is the whole requirement."""
+    """A token places you in the tenant; it is not itself an all-access
+    pass. Spec D-3 tier 2: signed in with no dashboard feature access
+    reads exactly what an anonymous caller in that tenant would."""
 
-    def test_a_user_with_no_dashboard_access_can_read(self):
+    def test_a_user_with_no_dashboard_access_reads_only_public(self):
         Dashboard.objects.create(
-            name="Acme dashboard",
-            slug="acme-dashboard",
+            name="Acme public dashboard",
+            slug="acme-public",
             root_form=self.a["form"],
             tenant=self.a["tenant"],
             status=DashboardStatus.published,
+            is_public=True,
+            published_config={"default_filters": {}, "widgets": []},
+        )
+        Dashboard.objects.create(
+            name="Acme private dashboard",
+            slug="acme-private",
+            root_form=self.a["form"],
+            tenant=self.a["tenant"],
+            status=DashboardStatus.published,
+            is_public=False,
             published_config={"default_filters": {}, "widgets": []},
         )
         plain = SystemUser.objects.create_user(
@@ -407,13 +442,13 @@ class DashboardReadPermissionTestCase(TenantIsolationTestCase):
         header = self.auth(plain)
         self.assertEqual(
             self.client.get(
-                "/api/v1/dashboards", **header
+                "/api/v1/dashboards/acme-public", **header
             ).status_code,
             200,
         )
         self.assertEqual(
             self.client.get(
-                "/api/v1/dashboards/acme-dashboard", **header
+                "/api/v1/dashboards/acme-private", **header
             ).status_code,
-            200,
+            404,
         )

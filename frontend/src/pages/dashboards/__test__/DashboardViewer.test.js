@@ -17,6 +17,7 @@ jest.mock("../../../components/dashboard/DashboardGrid", () => {
       data-widget-count={props.widgets.length}
       data-root-form={props.rootFormId}
       data-filters={JSON.stringify(props.filters)}
+      data-dashboard-slug={props.dashboardSlug}
     />
   );
   MockGrid.displayName = "DashboardGrid";
@@ -62,6 +63,7 @@ const PAYLOAD = {
 const setUser = (user) => {
   store.update((s) => {
     s.user = user;
+    s.isLoggedIn = Boolean(user);
   });
 };
 
@@ -103,6 +105,13 @@ describe("loading a published dashboard", () => {
     // root_form arrives as {id, name}; the grid needs the bare id for the
     // escalation path segment.
     expect(grid).toHaveAttribute("data-root-form", "6001");
+    // The slug from the route, passed straight through: every widget
+    // request needs it so the anonymous-caller endpoints (Tasks 7, 8, 10)
+    // can tell what an unauthenticated reader may ask about.
+    expect(grid).toHaveAttribute(
+      "data-dashboard-slug",
+      "water-points-overview"
+    );
   });
 
   test("passes default_filters through to the filter bar", async () => {
@@ -169,6 +178,27 @@ describe("the top bar is a back button and nothing else", () => {
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     screen.getByRole("button", { name: /back/i }).click();
     expect(mockNavigate).toHaveBeenCalledWith("/control-center/dashboard");
+  });
+
+  test("an anonymous visitor sees no back control", async () => {
+    // /control-center/dashboard is a Private route: sending an anonymous
+    // visitor there is a login wall, not a way back to anything.
+    setUser(null);
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(
+      screen.queryByRole("button", { name: /back/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test("a signed-in visitor sees the back control", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /back/i })).toBeInTheDocument();
   });
 
   test("the name is shown once, by the header", async () => {

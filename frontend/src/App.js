@@ -358,10 +358,11 @@ const RouteList = () => {
         path="/control-center/dashboard/:slug"
         element={<Private element={DashboardBuilder} alias="dashboard" />}
       />
-      <Route
-        path="/dashboards/:slug"
-        element={<Private element={DashboardViewer} alias="dashboard" />}
-      />
+      {/* Not wrapped in Private: a public dashboard is readable without
+          a session, and the viewer already collapses "unpublished,
+          deleted, another tenant's, private, server error" into one
+          not-found screen. */}
+      <Route path="/dashboards/:slug" element={<DashboardViewer />} />
       <Route
         path="/downloads"
         element={<Private element={Downloads} alias="downloads" />}
@@ -422,23 +423,57 @@ const App = () => {
   // bootstrap call made before sign-in returns nothing and the list has to
   // be rebuilt for the tenant once we know who is asking.
   useEffect(() => {
+    // Nothing here can answer correctly until we know who is asking. All
+    // three endpoints are tenant-scoped, so running them against a
+    // session still being restored returns the anonymous answer and
+    // guarantees a second pass — which is what this used to do.
+    if (loading) {
+      return;
+    }
     // Re-gate on every refetch, not just the bootstrap one: without this the
     // post-login pass leaves the old (empty, pre-tenant) list on screen while
     // the tenant-scoped request is in flight.
     setFormsLoading(true);
-    fetchLevels();
     // Which workspace this host is, resolved under the same gate as the
     // forms: no route decision may be made before the answer arrives, or
     // the base domain renders /login for a moment before redirecting to
-    // find-workspace.
-    Promise.all([fetchTenant(), fetchPublishedForms()])
+    // find-workspace. Everyone needs this one — an anonymous visitor on a
+    // public dashboard has to be told "no such workspace" too.
+    const pending = [fetchTenant()];
+    // Levels and published forms feed signed-in screens only: the form
+    // dropdowns, data entry, the builders. Every consumer of either store
+    // sits behind Private. An anonymous visitor is on a public dashboard
+    // or a sign-in page and uses neither, so asking spends two requests
+    // to fill stores nothing on screen will read — and `forms/published`
+    // answers an anonymous caller with every tenant-less form's full
+    // definition, questions and options included.
+    if (isLoggedIn) {
+      pending.push(fetchLevels(), fetchPublishedForms());
+    }
+    Promise.all(pending)
       .catch((err) => {
         console.error(err);
       })
       .finally(() => {
+        // Cleared on every path, including the signed-out one that
+        // fetched almost nothing: this gate hides the whole route tree,
+        // and a public dashboard page would sit on "Initializing" for
+        // ever if a branch forgot it.
         setFormsLoading(false);
       });
-  }, [isLoggedIn]);
+  }, [isLoggedIn, loading]);
+
+  // `loading` is local state, and the header renders outside the loader
+  // below — so the public dashboard menu, which lives in the header and
+  // widens its list for a signed-in caller, cannot see it. Publishing it
+  // once here is what stops that menu firing its own anonymous first
+  // pass. Derived from `loading` rather than set beside each
+  // `setLoading(false)`, so the two cannot fall out of step.
+  useEffect(() => {
+    store.update((s) => {
+      s.authSettled = !loading;
+    });
+  }, [loading]);
 
   useEffect(() => {
     if (!location.pathname.includes("/login")) {
@@ -448,12 +483,20 @@ const App = () => {
             headers: { Authorization: `Bearer ${cookies.AUTH_TOKEN}` },
           })
           .then((res) => {
+            // Token first, then announce the session — the order the
+            // login and activation paths already use. `store.update`
+            // wakes every component watching `isLoggedIn`, and any of
+            // them that refetches on sign-in would otherwise race ahead
+            // of `api.token` and send an anonymous request. That is not
+            // hypothetical: the public dashboard menu widens its list
+            // for a signed-in caller, and with the token set last it
+            // came back public-only on every page refresh.
+            api.setToken(cookies.AUTH_TOKEN);
             store.update((s) => {
               s.isLoggedIn = true;
               s.user = res.data;
             });
             reloadData(res.data);
-            api.setToken(cookies.AUTH_TOKEN);
             setLoading(false);
           })
           .catch((err) => {

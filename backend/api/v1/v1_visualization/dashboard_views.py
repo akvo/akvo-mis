@@ -26,11 +26,16 @@ from api.v1.v1_visualization.escalation_functions import (
 )
 from api.v1.v1_visualization.functions import (
     resolve_default_administration_id,
-    resolve_request_tenant,
     tenant_scoped_forms,
 )
 from api.v1.v1_visualization.dashboard_serializers import (
     EscalationFilterSerializer,
+)
+from api.v1.v1_visualization.public_scope import (
+    check_ids,
+    question_ids_in_columns,
+    question_ids_in_criteria,
+    resolve_view_scope,
 )
 from utils.custom_serializer_fields import (
     validate_serializers_message,
@@ -150,6 +155,13 @@ def visualization_values(request, version):
     Returns aggregated data for charts, KPIs, and tables.
     All configuration via query parameters.
     """
+    # Scope first, exactly as visualization_escalation does. The
+    # serializer's own validators run tenant-unscoped existence
+    # queries, so resolving scope after them would let an anonymous
+    # caller with no dashboard tell "form not found" from "no public
+    # dashboard", and probe another workspace's schema by id.
+    tenant, allowed = resolve_view_scope(request)
+
     serializer = ValuesFilterSerializer(
         data=request.query_params
     )
@@ -162,7 +174,36 @@ def visualization_values(request, version):
         )
 
     validated = serializer.validated_data
-    tenant = resolve_request_tenant(request)
+    # Every id the caller supplied, checked before any data query
+    # runs. group_by and stack_by are absent on purpose: both are
+    # choice fields over closed vocabularies and cannot name a
+    # question. Note that with a VALID dashboard_slug, form/question
+    # existence is still probed by the serializer's own validators
+    # above, before this runs -- this only bounds what a caller who
+    # has already named a dashboard may then ask about.
+    #
+    # administration_id is absent too, and not an oversight:
+    # resolve_default_administration_id() below returns it unchecked
+    # against the dashboard's tenant. That is safe only because it
+    # narrows a queryset already rooted at this tenant-scoped form, so
+    # a foreign id can subtract rows, never widen the read -- see D-6
+    # in the design doc. Do not assume it is guarded here.
+    # criteria is read from the raw query params, not validated: its
+    # validate_criteria hook replaces the string with a parsed
+    # structure, and question_ids_in_criteria expects the string
+    # (same reasoning as filter_criteria below, in the escalation
+    # view).
+    check_ids(
+        allowed,
+        form_ids=[validated["form_id"]],
+        question_ids=[
+            validated.get("question_id"),
+            validated.get("date_question_id"),
+            *question_ids_in_criteria(
+                request.query_params.get("criteria")
+            ),
+        ],
+    )
     form = get_object_or_404(
         tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
@@ -307,10 +348,7 @@ def visualization_values(request, version):
 @api_view(["GET"])
 def visualization_escalation(request, form_id, version):
     """Escalation table with query-param-driven criteria."""
-    tenant = resolve_request_tenant(request)
-    parent_form = get_object_or_404(
-        tenant_scoped_forms(tenant), pk=form_id
-    )
+    tenant, allowed = resolve_view_scope(request)
 
     serializer = EscalationFilterSerializer(
         data=request.query_params
@@ -324,6 +362,31 @@ def visualization_escalation(request, form_id, version):
         )
 
     validated = serializer.validated_data
+    # criteria and columns are read raw too, for the same reason as
+    # filter_criteria: validate_criteria/validate_columns replace the
+    # string with a parsed structure, and the extractors expect the
+    # string (see the identical fix in visualization_values above).
+    # administration_id is deliberately unchecked here too -- see the
+    # comment above visualization_values's check_ids call.
+    check_ids(
+        allowed,
+        form_ids=[form_id, validated["monitoring_form_id"]],
+        question_ids=[
+            validated.get("date_question_id"),
+            *question_ids_in_criteria(
+                request.query_params.get("criteria")
+            ),
+            *question_ids_in_columns(
+                request.query_params.get("columns")
+            ),
+            *question_ids_in_criteria(
+                request.query_params.get("filter_criteria")
+            ),
+        ],
+    )
+    parent_form = get_object_or_404(
+        tenant_scoped_forms(tenant), pk=form_id
+    )
     result = handle_escalation(
         parent_form=parent_form,
         monitoring_form_id=validated["monitoring_form_id"],

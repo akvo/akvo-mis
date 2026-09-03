@@ -5,6 +5,7 @@ import { UserOutlined } from "@ant-design/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { config, store, uiText } from "../../lib";
 import { eraseCookieFromAllPaths } from "../../util/date";
+import PublicDashboardMenu from "./PublicDashboardMenu";
 
 const Header = ({ className = "header", ...props }) => {
   const { isLoggedIn, user } = store.useState();
@@ -92,6 +93,7 @@ const Header = ({ className = "header", ...props }) => {
       {!location.pathname.includes("/report/") && (
         <Col>
           <div className="account">
+            <PublicDashboardMenu />
             {isLoggedIn ? (
               <Dropdown menu={{ items: accessUserMenu }}>
                 <a

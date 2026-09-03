@@ -62,18 +62,14 @@ const defineAbilityFor = (user) => {
       can("publish", "form-builder");
     }
 
-    const can_dashboard_view =
-      roles.filter((r) => r?.can_dashboard_view).length > 0;
     const can_dashboard_create =
       roles.filter((r) => r?.can_dashboard_create).length > 0;
     const can_dashboard_edit =
       roles.filter((r) => r?.can_dashboard_edit).length > 0;
     const can_dashboard_delete =
       roles.filter((r) => r?.can_dashboard_delete).length > 0;
+    const can_dashboard_publish = roles.some((r) => r?.can_dashboard_publish);
 
-    if (can_dashboard_view) {
-      can("read", "dashboard");
-    }
     if (can_dashboard_create) {
       can("create", "dashboard");
     }
@@ -82,6 +78,20 @@ const defineAbilityFor = (user) => {
     }
     if (can_dashboard_delete) {
       can("delete", "dashboard");
+    }
+
+    // "read dashboard" is what gates the builder: the sidebar menu and
+    // the /control-center/dashboard route both hang off it. It is
+    // deliberately not `can_dashboard_view` any more — a role with only
+    // View is a consumer, who reads dashboards through the header menu
+    // and never opens the builder.
+    if (
+      can_dashboard_create ||
+      can_dashboard_edit ||
+      can_dashboard_publish ||
+      can_dashboard_delete
+    ) {
+      can("read", "dashboard");
     }
 
     can("read", "data");

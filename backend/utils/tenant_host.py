@@ -70,3 +70,25 @@ def tenant_web_url(tenant):
     return (
         f"{parsed.scheme}://{tenant.subdomain}.{settings.BASE_DOMAIN}{port}"
     )
+
+
+def public_tenant(request):
+    """The workspace an anonymous reader is looking at.
+
+    `None` means serve nothing — an empty queryset, never a filter on
+    `tenant IS NULL`. The two are not the same: tenant-less rows exist
+    in the test suite and in any database predating the MT-002
+    backfill, and filtering on NULL would quietly serve those to
+    anonymous callers on the base domain.
+
+    With BASE_DOMAIN set the host names the workspace or nothing does.
+    With it unset — mohhs, unicef-fsm, the test suite — no host can,
+    but the deployment IS one workspace, so the sole Tenant row is it.
+    Two or more rows means a dev or test database that no host can
+    disambiguate: an anonymous reader seeing an empty menu is a bug
+    report, one seeing another tenant's dashboard is an incident.
+    """
+    if settings.BASE_DOMAIN:
+        return getattr(request, "tenant", None)
+    tenants = list(Tenant.objects.all()[:2])
+    return tenants[0] if len(tenants) == 1 else None

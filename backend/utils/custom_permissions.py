@@ -75,17 +75,29 @@ class IsSuperAdminOrFormUser(BasePermission):
 
 
 def FeatureAccess(feature_type, required_access):
-    """Return a permission class for one feature's granular access type."""
+    """Return a permission class for one feature's granular access.
+
+    `required_access` is one access type, or a tuple of them, in which
+    case holding any one is enough. Opening the dashboard builder needs
+    that: four different accesses each imply being able to list what
+    you are about to work on.
+    """
     # Both lookups stay inside one filter(): they must be satisfied by the
     # same role_feature_access row. Chained filter() calls join the table
     # twice and would let a role holding the halves on different rows pass.
+    wanted = (
+        required_access
+        if isinstance(required_access, (tuple, list))
+        else (required_access,)
+    )
+
     class _Permission(BasePermission):
         def has_permission(self, request, view):
             if request.user.is_superuser:
                 return True
             return request.user.user_user_role.filter(
                 role__role_role_feature_access__type=feature_type,
-                role__role_role_feature_access__access=required_access,
+                role__role_role_feature_access__access__in=wanted,
             ).exists()
     return _Permission
 

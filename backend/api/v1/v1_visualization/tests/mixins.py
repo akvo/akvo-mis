@@ -1,6 +1,7 @@
 from django.core.management import call_command
 from django.utils.timezone import make_aware
 from datetime import datetime
+from rest_framework_simplejwt.tokens import RefreshToken
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_data.models import FormData, Answers
@@ -52,6 +53,22 @@ class VisualizationValuesTestMixin(ProfileTestHelperMixin):
         self.user = self.create_user(
             email="viz_test@akvo.org",
             role_level=self.IS_SUPER_ADMIN,
+        )
+
+        # These endpoints no longer answer an unauthenticated caller
+        # that has not named a public dashboard (#352). Setting the
+        # credential once here keeps the modules that use this mixin
+        # unchanged, so their assertions remain the regression gate
+        # they were written to be.
+        #
+        # The token is minted directly rather than via
+        # ProfileTestHelperMixin.get_auth_token(): that helper posts a
+        # dict body with an explicit content_type, which DRF's
+        # APIClient stringifies rather than JSON-encodes, so the login
+        # view receives invalid JSON.
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self.token}"
         )
 
         # Load seeded forms

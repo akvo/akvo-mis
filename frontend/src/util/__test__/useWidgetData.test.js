@@ -248,6 +248,65 @@ describe("endpoint selection", () => {
   });
 });
 
+// The server needs `dashboard_slug` on every widget request to decide what
+// an anonymous caller may see (VIZ-011 Tasks 7, 8, 10). It goes out
+// unconditionally — not only when signed out — because the server ignores
+// it for an authenticated caller, and one always-present parameter is
+// cheaper to get right than a public-mode flag threaded through three
+// components.
+describe("dashboard_slug", () => {
+  test("is sent on every request the hook builds", async () => {
+    axios.mockResolvedValue({ data: { data: [], count: 0, results: [] } });
+
+    const cases = [
+      widget({ type: "bar", config: { measure: "current_state" } }),
+      widget({
+        type: "table",
+        question: null,
+        config: {
+          criteria: [],
+          columns: [{ key: "site", source: "parent_name" }],
+        },
+      }),
+      // status_colors is what makes buildStatusRequest fire its own
+      // request (see below) on top of the map's geolocation request --
+      // an empty config, as used above, asks for neither bucket.
+      widget({
+        type: "map",
+        config: { status_colors: { Operational: "#64A73B" } },
+      }),
+    ];
+
+    const probes = cases.map((w) =>
+      mount(() =>
+        useWidgetData(w, NO_FILTERS, {
+          rootFormId: ROOT,
+          dashboardSlug: "water-points",
+        })
+      )
+    );
+    await Promise.all(probes.map((probe) => settle(probe)));
+
+    const calls = axios.mock.calls.map((c) => c[0]);
+    // All four request builders, proven by endpoint rather than by count:
+    // values (bar), escalation (table), geolocation and formula (the map's
+    // two requests, geo points plus buildStatusRequest's status join).
+    expect(calls.some((c) => c.url.includes("visualization/values"))).toBe(
+      true
+    );
+    expect(calls.some((c) => c.url.includes("visualization/escalation"))).toBe(
+      true
+    );
+    expect(calls.some((c) => c.url.includes("maps/geolocation"))).toBe(true);
+    expect(
+      calls.some((c) => c.url.includes("visualization/values/formula"))
+    ).toBe(true);
+    calls.forEach((call) => {
+      expect(call.params.dashboard_slug).toBe("water-points");
+    });
+  });
+});
+
 describe("entries the backend would reject are dropped, not sent", () => {
   test("a latest_date column with no question id is skipped", async () => {
     axios.mockResolvedValue({ data: { count: 0, results: [] } });

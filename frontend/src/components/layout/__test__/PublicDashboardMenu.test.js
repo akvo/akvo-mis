@@ -1,0 +1,151 @@
+import React from "react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import PublicDashboardMenu from "../PublicDashboardMenu";
+import dashboardApi from "../../../util/dashboardApi";
+import { store } from "../../../lib";
+
+jest.mock("../../../util/dashboardApi");
+
+const renderMenu = () =>
+  render(
+    <MemoryRouter>
+      <PublicDashboardMenu />
+    </MemoryRouter>
+  );
+
+describe("PublicDashboardMenu", () => {
+  beforeEach(() => {
+    store.update((s) => {
+      s.isLoggedIn = false;
+      s.authSettled = true;
+    });
+    jest.clearAllMocks();
+  });
+
+  it("renders nothing when there are no public dashboards", async () => {
+    dashboardApi.listPublished.mockResolvedValue({ data: [] });
+    const { container } = renderMenu();
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalled();
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders nothing when the request fails", async () => {
+    dashboardApi.listPublished.mockRejectedValue(new Error("nope"));
+    const { container } = renderMenu();
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalled();
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows the trigger when dashboards exist", async () => {
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    expect(await screen.findByText(/dashboard/i)).toBeVisible();
+  });
+
+  it("asks nothing until the session question is answered", async () => {
+    // Firing before the session resolves would get the anonymous list
+    // and force a second request the moment it lands.
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    act(() => {
+      store.update((s) => {
+        s.authSettled = false;
+      });
+    });
+    renderMenu();
+    expect(dashboardApi.listPublished).not.toHaveBeenCalled();
+    act(() => {
+      store.update((s) => {
+        s.isLoggedIn = true;
+        s.authSettled = true;
+      });
+    });
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("refetches when the session changes", async () => {
+    // The endpoint widens with the caller, so signing in has to rebuild
+    // the list. Nothing else in this suite proves the effect re-runs.
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(1);
+    });
+    act(() => {
+      store.update((s) => {
+        s.isLoggedIn = true;
+      });
+    });
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("rebuilds the list when a dashboard is written to", async () => {
+    // Publishing, deleting or flipping visibility changes what belongs
+    // in this menu, and none of them touch the session it keys on.
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(1);
+    });
+    act(() => {
+      store.update((s) => {
+        s.dashboardsVersion += 1;
+      });
+    });
+    await waitFor(() => {
+      expect(dashboardApi.listPublished).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("is a menu button whose chevron is not the avatar circle", async () => {
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    const trigger = await screen.findByRole("button", { name: /dashboard/i });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    // `.icon` is the header's circular avatar badge. A direction glyph
+    // must not be wearing it.
+    expect(trigger.querySelector(".icon")).toBeNull();
+    expect(
+      trigger.querySelector(".public-dashboard-menu-chevron")
+    ).not.toBeNull();
+  });
+
+  it("turns the chevron over while the menu is open", async () => {
+    dashboardApi.listPublished.mockResolvedValue({
+      data: [{ id: 1, name: "Water points", slug: "water-points" }],
+    });
+    renderMenu();
+    const trigger = await screen.findByRole("button", { name: /dashboard/i });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger);
+    // The stylesheet rotates the chevron off aria-expanded, so the
+    // attribute is the behaviour worth asserting.
+    await waitFor(() => {
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+    });
+  });
+});

@@ -11,19 +11,23 @@
 # readable: one queryset, unconditionally narrowed, with no action able
 # to widen it.
 #
-# Authenticated, unlike /api/v1/forms. There is no anonymous dashboard
-# surface — that is the CLEANUP-001 fix, and the reason the legacy
-# /dashboard/:slug route goes away in VIZ-009.
+# Anonymous readers are the point of this namespace (spec D-3), CLEANUP-
+# 001 notwithstanding: that removal was of the previous public
+# dashboard, which let an anonymous caller name any form id it liked.
+# get_queryset() below is the boundary that replaces it — narrowed to
+# published rows unconditionally, and widened only by who is asking.
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
 from api.v1.v1_visualization.models import Dashboard
+from api.v1.v1_visualization.public_scope import has_any_dashboard_access
+from utils.tenant_host import public_tenant
 
 # REST_FRAMEWORK.DATETIME_FORMAT is "%d-%m-%Y %H:%M:%S" project-wide,
 # and a ModelSerializer honours it — so the builder's endpoints render
@@ -90,24 +94,43 @@ READ = "Dashboards"
 
 
 class DashboardReadViewSet(viewsets.GenericViewSet):
-    # A dashboard is published *to the tenant*, so a token is the whole
-    # requirement — no dashboard feature access on top of it.
-    permission_classes = [IsAuthenticated]
+    # Anonymous readers are the point of this namespace now (spec D-3).
+    # The queryset below is narrowed unconditionally and widened only
+    # by who is asking; no action can widen it further.
+    permission_classes = [AllowAny]
     # Bare array, same reason as the builder list (VIZ-005 D-1): the
     # merged client does Array.isArray(res.data) ? res.data : [].
     pagination_class = None
     lookup_field = "slug"
 
     def get_queryset(self):
-        # Three filters, none of them optional: the soft-deletes manager
-        # drops deleted rows, for_user applies the tenant, and status
-        # applies publication. Unpublishing takes effect here rather
-        # than by clearing published_config.
-        return (
-            Dashboard.objects.for_user(self.request.user)
-            .filter(status=DashboardStatus.published)
-            .select_related("root_form")
-            .order_by("-published_at", "-id")
+        # status=published and the soft-deletes manager (which drops
+        # deleted rows outright) apply to every branch below — the
+        # three tiers only ever widen who else's published rows are
+        # visible, never what "visible" means.
+        user = self.request.user
+        rows = Dashboard.objects.filter(
+            status=DashboardStatus.published
+        ).select_related("root_form")
+
+        if user and user.is_authenticated:
+            rows = rows.for_user(user)
+            # Any dashboard feature access at all, not `dashboard_view`
+            # alone: a role hand-configured with Edit but not View
+            # could otherwise build a private dashboard and be unable
+            # to open it, which an administrator will create by
+            # accident and report as a bug.
+            if not has_any_dashboard_access(user):
+                rows = rows.filter(is_public=True)
+            return rows.order_by("-published_at", "-id")
+
+        tenant = public_tenant(self.request)
+        if tenant is None:
+            # Serve nothing. Filtering on `tenant IS NULL` would hand
+            # tenant-less rows to anonymous callers on the base domain.
+            return rows.none()
+        return rows.filter(tenant=tenant, is_public=True).order_by(
+            "-published_at", "-id"
         )
 
     @extend_schema(
@@ -168,6 +191,6 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
         # question can be deleted at any point afterwards, and a stale
         # is_broken: false would be worse than no annotation at all.
         row["widgets"] = annotate_broken(
-            snapshot["widgets"], request.user
+            snapshot["widgets"], dashboard.tenant
         )
         return Response(row)

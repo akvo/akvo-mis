@@ -8,6 +8,8 @@ from api.v1.v1_forms.models import (
 )
 from api.v1.v1_profile.models import Administration, Levels
 from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.models import Dashboard
 from utils.tenant_test_case import TenantIsolationTestCase
 
 
@@ -65,10 +67,29 @@ class ValuesTenantScopeTestCase(TenantIsolationTestCase):
             options=["borehole"],
             created_by=fixture["user"],
         )
+        # An anonymous caller must now name a public dashboard (#352)
+        # rather than resolving purely off the host, so every fixture
+        # gets one that names this form and question.
+        dashboard = Dashboard.objects.create(
+            name=f"{sub}-dashboard",
+            slug=f"{sub}-dashboard",
+            root_form=form,
+            tenant=tenant,
+            created_by=fixture["user"],
+            status=DashboardStatus.published,
+            is_public=True,
+            published_config={
+                "default_filters": {},
+                "widgets": [
+                    {"form": form.id, "question": question.id},
+                ],
+            },
+        )
         fixture.update({
             "reg_form": form,
             "question": question,
             "datapoint": datapoint,
+            "dashboard": dashboard,
         })
         return fixture
 
@@ -112,16 +133,20 @@ class ValuesTenantScopeTestCase(TenantIsolationTestCase):
     def test_host_resolves_the_root_for_an_anonymous_caller(self):
         """The workspace host scopes the fallback with no token at all.
 
-        These endpoints are reachable anonymously, so the user's tenant
-        cannot be the only source — a public dashboard on a workspace
-        host has to resolve the same root a logged-in reader does.
+        These endpoints are reachable anonymously, but only for a
+        caller that names a public dashboard (#352) — the host alone
+        is no longer enough. A public dashboard on a workspace host
+        still has to resolve the same root a logged-in reader does.
         """
         for fixture in (self.a, self.b):
             sub = fixture["tenant"].subdomain
             with self.subTest(tenant=sub):
                 response = APIClient().get(
                     self.BASE_URL,
-                    self.values_params(fixture),
+                    {
+                        **self.values_params(fixture),
+                        "dashboard_slug": fixture["dashboard"].slug,
+                    },
                     HTTP_HOST=f"{sub}.app.com",
                 )
                 self.assertEqual(

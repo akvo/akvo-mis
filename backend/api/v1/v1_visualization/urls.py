@@ -57,6 +57,11 @@ urlpatterns = [
     ),
     re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"visibility$",
+        DashboardBuilderViewSet.as_view({"post": "visibility"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
         r"duplicate$",
         DashboardBuilderViewSet.as_view({"post": "duplicate"}),
     ),
@@ -72,7 +77,7 @@ urlpatterns = [
             {"get": "list", "post": "create"}
         ),
     ),
-    # The authenticated read namespace (slug before collection)
+    # The anonymous-capable read namespace (slug before collection)
     re_path(
         r"^(?P<version>(v1))/dashboards/(?P<slug>[-a-z0-9]+)$",
         DashboardReadViewSet.as_view({"get": "retrieve"}),

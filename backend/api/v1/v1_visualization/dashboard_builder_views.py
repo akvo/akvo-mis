@@ -151,15 +151,28 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
     # One access type per action. FormBuilderViewSet spells the same
     # mapping out as full permission lists; this is the same rule in the
     # form that cannot drift between two near-identical entries.
+    #
+    # Opening the builder needs any of the four building accesses.
+    # dashboard_view is deliberately not among them: after this change
+    # it means "may read private published dashboards", which is a
+    # consumer's permission and not a builder's.
+    BUILDER_ACCESS = (
+        FeatureAccessTypes.dashboard_create,
+        FeatureAccessTypes.dashboard_edit,
+        FeatureAccessTypes.dashboard_publish,
+        FeatureAccessTypes.dashboard_delete,
+    )
+
     ACCESS_PER_ACTION = {
-        "list": FeatureAccessTypes.dashboard_view,
+        "list": BUILDER_ACCESS,
         "create": FeatureAccessTypes.dashboard_create,
-        "retrieve": FeatureAccessTypes.dashboard_view,
+        "retrieve": BUILDER_ACCESS,
         "update": FeatureAccessTypes.dashboard_edit,
         "destroy": FeatureAccessTypes.dashboard_delete,
-        "sources": FeatureAccessTypes.dashboard_view,
+        "sources": BUILDER_ACCESS,
         "publish": FeatureAccessTypes.dashboard_publish,
         "unpublish": FeatureAccessTypes.dashboard_publish,
+        "visibility": FeatureAccessTypes.dashboard_publish,
         "duplicate": FeatureAccessTypes.dashboard_create,
     }
 
@@ -339,7 +352,47 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # record of what was last live without changing what any caller
         # can reach.
         dashboard.status = DashboardStatus.draft
-        dashboard.save(update_fields=["status"])
+        # Visibility goes with it. Without this, unpublishing a public
+        # dashboard to fix a widget and republishing it would put it
+        # back on the public web with nobody having decided to.
+        dashboard.is_public = False
+        dashboard.save(update_fields=["status", "is_public"])
+        return Response(
+            DashboardDetailSerializer(instance=dashboard).data
+        )
+
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Set whether a dashboard is publicly readable",
+        description=(
+            "Public dashboards are readable without a token on this "
+            "workspace's host. Only a published dashboard can be made "
+            "public: on a draft the flag would have no observable "
+            "effect, and allowing it would make Publish the button "
+            "that exposes a dashboard to the internet."
+        ),
+        request=None,
+        parameters=[DASHBOARD_PK],
+        responses=DashboardDetailSerializer,
+    )
+    def visibility(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        is_public = request.data.get("is_public")
+        if not isinstance(is_public, bool):
+            return Response(
+                {"message": "is_public must be true or false"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Going private is never refused, even when it changes nothing.
+        # The one action whose purpose is reducing exposure must not
+        # fail on a technicality.
+        if is_public and dashboard.status != DashboardStatus.published:
+            return Response(
+                {"message": "Publish the dashboard before making it public"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        dashboard.is_public = is_public
+        dashboard.save(update_fields=["is_public"])
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
         )

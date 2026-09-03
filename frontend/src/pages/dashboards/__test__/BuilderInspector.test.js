@@ -245,3 +245,59 @@ describe("monitoringForms", () => {
     expect(monitoringForms(FORMS).map((f) => f.id)).toEqual([6002]);
   });
 });
+
+// =========================================================
+// The visibility switch
+// =========================================================
+//
+// Unlike every other field in the settings panel, this one writes
+// immediately through its own endpoint rather than joining the dirty
+// state the Save button flushes. These tests pin both halves of that:
+// a draft cannot be made public at all, and a flip never reaches
+// onDashboardChange.
+
+describe("visibility switch", () => {
+  it("disables the visibility switch on a draft", () => {
+    render(
+      <BuilderInspector
+        widget={null}
+        sources={{ forms: [] }}
+        dashboardName="Coverage"
+        dashboardDesc=""
+        defaultFilters={{}}
+        isPublic={false}
+        isPublished={false}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+        onVisibilityChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Publish this dashboard first/i)).toBeVisible();
+    expect(
+      screen.getByRole("switch", { name: /public dashboard/i })
+    ).toBeDisabled();
+  });
+
+  it("reports a flip without touching dashboard state", () => {
+    const onVisibilityChange = jest.fn();
+    const onDashboardChange = jest.fn();
+    render(
+      <BuilderInspector
+        widget={null}
+        sources={{ forms: [] }}
+        dashboardName="Coverage"
+        dashboardDesc=""
+        defaultFilters={{}}
+        isPublic={false}
+        isPublished={true}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={onDashboardChange}
+        onVisibilityChange={onVisibilityChange}
+      />
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /public dashboard/i }));
+    expect(onVisibilityChange).toHaveBeenCalledWith(true);
+    // The switch is not dirty state: it must never reach the Save payload.
+    expect(onDashboardChange).not.toHaveBeenCalled();
+  });
+});

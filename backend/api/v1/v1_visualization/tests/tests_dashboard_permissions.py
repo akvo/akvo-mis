@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase, TestCase
 from django.test.utils import override_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_profile.constants import (
     FeatureAccessTypes,
@@ -16,6 +17,11 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_users.models import SystemUser, Tenant
 from utils.custom_permissions import DashboardAccess
+
+
+def auth(user):
+    token = RefreshToken.for_user(user).access_token
+    return {"HTTP_AUTHORIZATION": "Bearer {0}".format(token)}
 
 
 DASHBOARD_ACCESSES = [
@@ -210,3 +216,66 @@ class DashboardAccessPermissionTestCase(TestCase):
         self.assertTrue(
             self.check(superuser, FeatureAccessTypes.dashboard_delete)
         )
+
+
+@override_settings(USE_TZ=False)
+class DashboardBuilderNamespaceAccessTestCase(TestCase):
+    """dashboard_view alone must not open /api/v1/manage/dashboards.
+
+    dashboard_view now means "may read published dashboards", a
+    consumer's permission read through the public/read namespace, not
+    the builder's. Opening the builder needs one of the four building
+    accesses instead (see BUILDER_ACCESS in dashboard_builder_views.py).
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="acme-builder")
+        self.level = Levels.objects.create(
+            name="National", level=0, tenant=self.tenant
+        )
+        self.administration = Administration.objects.create(
+            parent=None, level=self.level, name="Acme", tenant=self.tenant
+        )
+
+    def user_with_dashboard_access(self, accesses):
+        user = SystemUser.objects.create_user(
+            email="builder-{0}@akvo.org".format(
+                "-".join(str(a) for a in accesses)
+            ),
+            password="Secret#Pass123",
+            first_name="Build",
+            last_name="Er",
+            tenant=self.tenant,
+        )
+        role = Role.objects.create(
+            name="Role {0}".format(accesses),
+            administration_level=self.level,
+        )
+        for access in accesses:
+            RoleFeatureAccess.objects.create(
+                role=role,
+                type=FeatureTypes.dashboard_builder,
+                access=access,
+            )
+        UserRole.objects.create(
+            user=user, role=role, administration=self.administration
+        )
+        return user
+
+    def test_view_only_cannot_open_the_builder_namespace(self):
+        user = self.user_with_dashboard_access(
+            [FeatureAccessTypes.dashboard_view]
+        )
+        res = self.client.get(
+            "/api/v1/manage/dashboards", **auth(user)
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_edit_only_can_open_the_builder_namespace(self):
+        user = self.user_with_dashboard_access(
+            [FeatureAccessTypes.dashboard_edit]
+        )
+        res = self.client.get(
+            "/api/v1/manage/dashboards", **auth(user)
+        )
+        self.assertEqual(res.status_code, 200)

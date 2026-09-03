@@ -2,6 +2,17 @@ import { Store } from "pullstate";
 
 const defaultUIState = {
   isLoggedIn: false,
+  // Has the cookie session been resolved — restored, refused, or found
+  // absent? `isLoggedIn` cannot answer that: it is false both before the
+  // question is asked and after the answer turns out to be "nobody".
+  // Anything tenant-scoped that fetches on bootstrap waits for this, or
+  // it runs once as an anonymous caller and again as the real one.
+  authSettled: false,
+  // Bumped by every dashboard write (see util/dashboardApi). The header
+  // menu lists published dashboards and has no other way to learn that
+  // one was published, renamed, deleted or made public — its own fetch
+  // is keyed on the session, which a dashboard edit does not change.
+  dashboardsVersion: 0,
   user: null,
   filters: {
     trained: null,

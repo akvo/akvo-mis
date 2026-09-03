@@ -71,6 +71,13 @@ class Dashboard(SoftDeletes):
         choices=DashboardStatus.FieldStr.items(),
         default=DashboardStatus.draft,
     )
+    # Audience, not lifecycle. Kept separate from `status` because the
+    # two must move independently: Make-private keeps a dashboard
+    # visible to colleagues, Unpublish hides it from everyone. The
+    # implication runs one way only — is_public is true only while
+    # status is published (spec D-1), enforced in the visibility
+    # action and in unpublish.
+    is_public = models.BooleanField(default=False)
     # Snapshot of the widget rows, written by publish (VIZ-007). Viewers
     # read this; the builder edits the rows. Null while draft.
     published_config = models.JSONField(null=True, default=None)

@@ -84,7 +84,7 @@ const dateFilters = (filters) => ({
  * accepted and silently dropped rather than rejected. Each divergence is
  * commented where it happens.
  */
-const buildRequest = (widget, filters, rootFormId, page = 1) => {
+const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
   const config = widget?.config || {};
   const type = widget?.type;
 
@@ -119,6 +119,7 @@ const buildRequest = (widget, filters, rootFormId, page = 1) => {
         page_size: config.page_size || 20,
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
+        dashboard_slug: dashboardSlug,
       }),
     };
   }
@@ -149,6 +150,7 @@ const buildRequest = (widget, filters, rootFormId, page = 1) => {
         // include_monitoring + monitoring_form_id instead.
         include_monitoring: isMonitoringForm ? true : null,
         monitoring_form_id: isMonitoringForm ? widget.form : null,
+        dashboard_slug: dashboardSlug,
       }),
     };
   }
@@ -177,6 +179,7 @@ const buildRequest = (widget, filters, rootFormId, page = 1) => {
       option_value: config.option_value,
       administration_id: filters?.administration_id,
       ...dateFilters(filters),
+      dashboard_slug: dashboardSlug,
     }),
   };
 };
@@ -190,7 +193,7 @@ const buildRequest = (widget, filters, rootFormId, page = 1) => {
  * exactly what the formula needs — so no form metadata has to be fetched
  * or read out of the published-forms store.
  */
-const buildStatusRequest = (widget, filters) => {
+const buildStatusRequest = (widget, filters, dashboardSlug) => {
   const config = widget?.config || {};
   const values = Object.keys(config.status_colors || {});
   if (
@@ -224,6 +227,7 @@ const buildStatusRequest = (widget, filters) => {
       }),
       from_date: filters?.from_date,
       to_date: filters?.to_date,
+      dashboard_slug: dashboardSlug,
     }),
   };
 };
@@ -306,10 +310,14 @@ const normalize = (widget, response, statusResponse) => {
 /**
  * @param {object} widget      One widget from published_config or builder state.
  * @param {object} filters     {from_date, to_date, date_question_id, administration_id}
- * @param {object} options     {rootFormId}
+ * @param {object} options     {rootFormId, dashboardSlug}
  * @returns {{data, renderWidget, loading, error, refetch, pagination}}
  */
-export const useWidgetData = (widget, filters, { rootFormId } = {}) => {
+export const useWidgetData = (
+  widget,
+  filters,
+  { rootFormId, dashboardSlug } = {}
+) => {
   // /escalation pages on the server: it reports `count` for the whole set
   // and returns one page of `results`. The page therefore has to live here,
   // where the request is built — the renderer only ever sees one page and
@@ -324,12 +332,12 @@ export const useWidgetData = (widget, filters, { rootFormId } = {}) => {
   }, [widget?.id, widget?.form, filters, pageSize]);
 
   const request = useMemo(
-    () => buildRequest(widget, filters, rootFormId, page),
-    [widget, filters, rootFormId, page]
+    () => buildRequest(widget, filters, rootFormId, dashboardSlug, page),
+    [widget, filters, rootFormId, dashboardSlug, page]
   );
   const statusRequest = useMemo(
-    () => buildStatusRequest(widget, filters),
-    [widget, filters]
+    () => buildStatusRequest(widget, filters, dashboardSlug),
+    [widget, filters, dashboardSlug]
   );
 
   // Both called unconditionally, with a null endpoint when the widget needs

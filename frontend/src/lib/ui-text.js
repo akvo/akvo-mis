@@ -79,6 +79,22 @@ const uiText = {
     dashboardWidgetFormGone: "This widget's form no longer exists.",
     dashboardFilterPeriod: "Date",
     dashboardFilterAllLocations: "All locations",
+    // Visibility (VIZ-011)
+    dashboardVisibilityTitle: "Public dashboard",
+    dashboardVisibilityHintOn:
+      "Anyone can open this without signing in, and it is listed in the Dashboard menu for every visitor. Takes effect immediately — no need to save.",
+    dashboardVisibilityHintDraft:
+      "Publish this dashboard first. Only a published dashboard can be made public.",
+    dashboardMakePublicTitle: "Make this dashboard public?",
+    dashboardMakePublicBody:
+      "Anyone with the link will be able to open this dashboard without signing in, and it will be listed in the Dashboard menu for every visitor to this workspace.",
+    dashboardMakePublicRawData:
+      "This dashboard includes a table and a map. Public visitors will see individual submission rows and the location of every registered point, not only the totals.",
+    dashboardMakePublicOk: "Make public",
+    dashboardMadePublic: "Dashboard is now public",
+    dashboardMadePrivate: "Dashboard is now private",
+    dashboardVisibilityPublic: "Public",
+    dashboardVisibilityPrivate: "Private",
     preview: "Preview",
     publish: "Publish",
     published: "Published",
