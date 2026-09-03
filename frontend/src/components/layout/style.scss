@@ -233,7 +233,6 @@
           background: none;
           color: $color-dark;
           font: inherit;
-          line-height: inherit;
           cursor: pointer;
 
           &:focus-visible {
@@ -249,12 +248,9 @@
 
         .public-dashboard-menu-chevron {
           font-size: 12px;
-          transition: transform 0.2s ease;
-        }
 
-        @media (prefers-reduced-motion: reduce) {
-          .public-dashboard-menu-chevron {
-            transition: none;
+          @media (prefers-reduced-motion: no-preference) {
+            transition: transform 0.2s ease;
           }
         }
       }

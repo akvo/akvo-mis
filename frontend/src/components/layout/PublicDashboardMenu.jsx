@@ -33,27 +33,26 @@ const PublicDashboardMenu = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     // Wait for the session question to be answered. Asking before that
     // gets the anonymous list, which then has to be thrown away and
     // asked for again the moment the session lands.
-    if (!authSettled) {
-      return () => {};
+    if (authSettled) {
+      dashboardApi
+        .listPublished()
+        .then((res) => {
+          if (!cancelled) {
+            setDashboards(Array.isArray(res.data) ? res.data : []);
+          }
+        })
+        .catch(() => {
+          // No menu is the right answer for every failure here: no
+          // workspace on this host, a network error, a server fault.
+          if (!cancelled) {
+            setDashboards([]);
+          }
+        });
     }
-    let cancelled = false;
-    dashboardApi
-      .listPublished()
-      .then((res) => {
-        if (!cancelled) {
-          setDashboards(Array.isArray(res.data) ? res.data : []);
-        }
-      })
-      .catch(() => {
-        // No menu is the right answer for every failure here: no
-        // workspace on this host, a network error, a server fault.
-        if (!cancelled) {
-          setDashboards([]);
-        }
-      });
     return () => {
       cancelled = true;
     };

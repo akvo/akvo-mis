@@ -448,8 +448,7 @@ const App = () => {
     // answers an anonymous caller with every tenant-less form's full
     // definition, questions and options included.
     if (isLoggedIn) {
-      fetchLevels();
-      pending.push(fetchPublishedForms());
+      pending.push(fetchLevels(), fetchPublishedForms());
     }
     Promise.all(pending)
       .catch((err) => {
