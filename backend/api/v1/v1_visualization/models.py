@@ -5,6 +5,7 @@ from api.v1.v1_data.models import FormData
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.models import SystemUser
 from api.v1.v1_visualization.constants import (
+    DashboardKind,
     DashboardStatus,
     WidgetTypes,
 )
@@ -59,11 +60,25 @@ class Dashboard(SoftDeletes):
     TENANT_PATH = "tenant"
 
     tenant = tenant_fk("dashboards")
+    # What this dashboard's content is (spec D-1). Immutable after
+    # creation: switching would orphan either the widget rows or the
+    # snippet, and neither has a defensible automatic resolution.
+    kind = models.IntegerField(
+        choices=DashboardKind.FieldStr.items(),
+        default=DashboardKind.widgets,
+    )
     root_form = models.ForeignKey(
         to=Forms,
         on_delete=models.PROTECT,
         related_name="dashboards",
+        null=True,
+        default=None,
     )
+    # The author's embed code, stored exactly as pasted (spec D-4). It
+    # is never parsed, rewritten, or validated for shape -- only for
+    # being non-empty and under EMBED_SNIPPET_MAX. A TextField rather
+    # than a URLField because what is stored is markup, not a URL.
+    embed_snippet = models.TextField(null=True, default=None)
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255)
     description = models.TextField(null=True, default=None)
@@ -104,7 +119,32 @@ class Dashboard(SoftDeletes):
                 fields=["tenant", "slug"],
                 condition=models.Q(deleted_at__isnull=True),
                 name="unique_active_tenant_dashboard_slug",
-            )
+            ),
+            # The tagged union of D-2, in the database rather than only
+            # in validate_dashboard_payload: the validator guards one
+            # path, and duplicate(), a data migration and a shell
+            # session all write rows without it.
+            models.CheckConstraint(
+                check=(
+                    models.Q(
+                        kind=DashboardKind.widgets,
+                        root_form__isnull=False,
+                        embed_snippet__isnull=True,
+                    )
+                    | (
+                        models.Q(
+                            kind=DashboardKind.embed,
+                            root_form__isnull=True,
+                            embed_snippet__isnull=False,
+                        )
+                        # '' is not excluded by NOT NULL, and an embed
+                        # holding one renders as an empty frame with
+                        # nothing wrong anywhere in the logs.
+                        & ~models.Q(embed_snippet="")
+                    )
+                ),
+                name="dashboard_kind_matches_source",
+            ),
         ]
         db_table = "dashboard"
 

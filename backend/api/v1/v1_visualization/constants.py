@@ -77,6 +77,32 @@ class DashboardStatus:
     }
 
 
+class DashboardKind:
+    """What a dashboard's content *is*.
+
+    `widgets` is built here from DashboardWidget rows against a
+    root_form. `embed` is rendered by an external tool from a stored
+    snippet. The two are mutually exclusive, enforced by the
+    `dashboard_kind_matches_source` check constraint.
+    """
+
+    widgets = 1
+    embed = 2
+
+    FieldStr = {
+        widgets: "widgets",
+        embed: "embed",
+    }
+
+
+# Upper bound on a stored embed snippet. Deliberately NOT a column
+# limit -- embed_snippet is a TextField -- but a payload bound checked
+# in validation, so an oversized paste is a 400 naming the field rather
+# than a database error. It is a bound on storage, not an opinion about
+# content (spec D-4).
+EMBED_SNIPPET_MAX = 20000
+
+
 class WidgetTypes:
     kpi = 1
     bar = 2

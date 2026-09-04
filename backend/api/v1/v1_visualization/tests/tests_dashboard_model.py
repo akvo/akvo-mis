@@ -1,3 +1,4 @@
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.test import TestCase
@@ -6,7 +7,7 @@ from django.test.utils import override_settings
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
 from api.v1.v1_users.models import SystemUser, Tenant
-from api.v1.v1_visualization.constants import WidgetTypes
+from api.v1.v1_visualization.constants import DashboardKind, WidgetTypes
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 
 
@@ -202,3 +203,80 @@ class DashboardModelTestCase(TestCase):
             root_form=self.acme_form,
         )
         self.assertFalse(dashboard.is_public)
+
+
+class DashboardKindConstraintTestCase(TestCase):
+    """`dashboard_kind_matches_source` — spec D-2.
+
+    The constraint is in the database rather than only in
+    validate_dashboard_payload because the validator guards one path:
+    duplicate() writes rows without it, and so does a shell session.
+    """
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.root = Forms.objects.get(pk=6001)
+
+    def create(self, **kwargs):
+        fields = {"name": "D", "slug": "d"}
+        fields.update(kwargs)
+        with transaction.atomic():
+            return Dashboard.objects.create(**fields)
+
+    def test_a_widgets_dashboard_needs_a_root_form(self):
+        with self.assertRaises(IntegrityError):
+            self.create(kind=DashboardKind.widgets, root_form=None)
+
+    def test_a_widgets_dashboard_may_not_carry_a_snippet(self):
+        with self.assertRaises(IntegrityError):
+            self.create(
+                kind=DashboardKind.widgets,
+                root_form=self.root,
+                embed_snippet="<iframe src='https://x/'></iframe>",
+            )
+
+    def test_an_embed_may_not_carry_a_root_form(self):
+        with self.assertRaises(IntegrityError):
+            self.create(
+                kind=DashboardKind.embed,
+                root_form=self.root,
+                embed_snippet="<iframe src='https://x/'></iframe>",
+            )
+
+    def test_an_embed_needs_a_snippet(self):
+        with self.assertRaises(IntegrityError):
+            self.create(
+                kind=DashboardKind.embed,
+                root_form=None,
+                embed_snippet=None,
+            )
+
+    def test_an_embed_may_not_carry_an_empty_snippet(self):
+        # TextField accepts '' happily, and an embed holding one renders
+        # as an empty frame with nothing wrong in any log. NOT NULL
+        # alone does not exclude it.
+        with self.assertRaises(IntegrityError):
+            self.create(
+                kind=DashboardKind.embed,
+                root_form=None,
+                embed_snippet="",
+            )
+
+    def test_both_valid_arms_are_writable(self):
+        widgets = self.create(
+            slug="w", kind=DashboardKind.widgets, root_form=self.root
+        )
+        embed = self.create(
+            slug="e",
+            kind=DashboardKind.embed,
+            root_form=None,
+            embed_snippet="<iframe src='https://x/'></iframe>",
+        )
+        self.assertEqual(widgets.kind, DashboardKind.widgets)
+        self.assertEqual(embed.kind, DashboardKind.embed)
+
+    def test_kind_defaults_to_widgets(self):
+        self.assertEqual(
+            self.create(root_form=self.root).kind, DashboardKind.widgets
+        )
