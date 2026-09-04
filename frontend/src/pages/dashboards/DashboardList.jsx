@@ -272,7 +272,14 @@ const DashboardList = () => {
                 </div>
                 <div className="dashboard-card-footer">
                   <div className="dashboard-card-meta">
-                    {(d.widgets || []).length} {text.widgets || "widgets"}{" "}
+                    {d.kind === "embed" ? (
+                      /* "0 widgets" would be true and useless. */
+                      <span>{text.dashboardEmbedBadge}</span>
+                    ) : (
+                      <>
+                        {(d.widgets || []).length} {text.widgets || "widgets"}{" "}
+                      </>
+                    )}
                     &middot; {formatDate(d.updated || d.created)}
                   </div>
                   <div className="dashboard-card-actions">
