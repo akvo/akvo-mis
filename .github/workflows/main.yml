@@ -15,10 +15,7 @@ on:
 # protect a *pending* run — GitHub keeps only the newest pending per group, which
 # is exactly why a shared/constant group cancelled runs before.
 concurrency:
-  group: >-
-    ${{ github.ref == 'refs/heads/main'
-        && 'akvo-mis-test-deploy'
-        || format('{0}-{1}', github.workflow, github.run_id) }}
+  group: ${{ github.ref == 'refs/heads/main' && 'akvo-mis-test-deploy' || format('{0}-{1}', github.workflow, github.run_id) }}
   cancel-in-progress: false
 
 jobs:
