@@ -67,9 +67,9 @@ const uiText = {
     dashboardPublished: "Dashboard published",
     // Viewer and preview (VIZ-008)
     dashboardViewEmpty: "This dashboard has no widgets yet.",
-    dashboardNotFound: "Dashboard not found",
+    dashboardNotFound: "Dashboard is empty",
     dashboardNotFoundHint:
-      "It may have been unpublished or deleted, or you may not have access to it.",
+      "This dashboard has not been published yet, or it may have been deleted.",
     dashboardEdit: "Edit dashboard",
     dashboardPreview: "Preview",
     dashboardBackToEditing: "Back to editing",

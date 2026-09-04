@@ -26,7 +26,7 @@ const EMPTY_FILTERS = {
 const DashboardViewer = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { language, isLoggedIn } = store.useState((s) => s);
+  const { language } = store.useState((s) => s);
   const text = useMemo(() => uiText[language.active], [language.active]);
 
   const [loading, setLoading] = useState(true);
@@ -81,6 +81,14 @@ const DashboardViewer = () => {
   if (notFound || !dashboard) {
     return (
       <div className="dashboard-view-shell">
+        <button
+          className="dashboard-view-back"
+          title={text.backBtn}
+          aria-label={text.backBtn}
+          onClick={() => navigate(-1)}
+        >
+          <ArrowLeftOutlined />
+        </button>
         <div className="dashboard-view-empty">
           <h2>{text.dashboardNotFound}</h2>
           <p>{text.dashboardNotFoundHint}</p>
@@ -91,27 +99,14 @@ const DashboardViewer = () => {
 
   return (
     <div className="dashboard-view-shell">
-      {/* Fixed, and on its own. The bar that held it also held Edit and a
-          copy of the dashboard's name; the list already offers Edit on
-          every card and the header repeats the name directly below, so the
-          page's widest row was chrome for one button. Fixed rather than
-          scrolled away, because "back" is wanted most at the bottom of a
-          long dashboard.
-
-          Signed-in only: it targets /control-center/dashboard, a Private
-          route. An anonymous visitor who clicked it would land on a login
-          wall instead of going back to anything, so they simply get no
-          control here. */}
-      {isLoggedIn && (
-        <button
-          className="dashboard-view-back"
-          title={text.backBtn}
-          aria-label={text.backBtn}
-          onClick={() => navigate("/control-center/dashboard")}
-        >
-          <ArrowLeftOutlined />
-        </button>
-      )}
+      <button
+        className="dashboard-view-back"
+        title={text.backBtn}
+        aria-label={text.backBtn}
+        onClick={() => navigate(-1)}
+      >
+        <ArrowLeftOutlined />
+      </button>
 
       <div className="dashboard-view-content">
         <div className="dashboard-view-header">
