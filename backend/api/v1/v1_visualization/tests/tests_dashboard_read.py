@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import SystemUser, Tenant
-from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -452,3 +452,74 @@ class DashboardReadPermissionTestCase(TenantIsolationTestCase):
             ).status_code,
             404,
         )
+
+
+@override_settings(USE_TZ=False)
+class EmbedReadTestCase(TestCase, ProfileTestHelperMixin):
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.user = self.create_user(
+            email="viz_embed_read@akvo.org",
+            role_level=self.IS_SUPER_ADMIN,
+        )
+        self.user.tenant = Tenant.objects.get()
+        self.user.save()
+        self.published = "<iframe src='https://app.powerbi.com/view?r=1'>" \
+                         "</iframe>"
+        self.dashboard = Dashboard.objects.create(
+            name="Sales",
+            slug="sales",
+            kind=DashboardKind.embed,
+            root_form=None,
+            embed_snippet="<iframe src='https://edited-since/'></iframe>",
+            tenant=self.user.tenant,
+            created_by=self.user,
+            status=DashboardStatus.published,
+            is_public=True,
+            published_config={"embed_snippet": self.published},
+        )
+
+    @override_settings(EMBED_HOST="http://embed.example.com")
+    def test_retrieve_serves_an_embed_url_not_the_markup(self):
+        # The markup itself never reaches the viewer's page: it is served
+        # as its own document on EMBED_HOST, so a snippet's scripts can
+        # never run in this application's origin (VIZ-019 D-4a).
+        res = self.client.get("/api/v1/dashboards/sales")
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["kind"], "embed")
+        self.assertNotIn("embed_snippet", body)
+        self.assertTrue(
+            body["embed_url"].startswith(
+                "http://embed.example.com/api/v1/embed/"
+            ),
+            body["embed_url"],
+        )
+        self.assertEqual(body["widgets"], [])
+        self.assertIsNone(body["root_form"])
+
+    @override_settings(EMBED_HOST="")
+    def test_retrieve_has_no_embed_url_when_unconfigured(self):
+        # No URL rather than a same-origin fallback: rendering the markup
+        # here is the one thing this design must never do.
+        res = self.client.get("/api/v1/dashboards/sales")
+        self.assertIsNone(res.json()["embed_url"])
+
+    def test_name_is_served_live(self):
+        self.dashboard.name = "Renamed"
+        self.dashboard.save()
+        res = self.client.get("/api/v1/dashboards/sales")
+        self.assertEqual(res.json()["name"], "Renamed")
+
+    def test_list_includes_the_embed_with_its_kind(self):
+        # Anonymous, deliberately: this is what proves the guard sits
+        # in serialize_identity itself. `list` calls it over every
+        # published row in the tenant, so one public embed with a null
+        # root_form would 500 the whole anonymous list if the guard
+        # were only in `retrieve`.
+        res = self.client.get("/api/v1/dashboards")
+        rows = [r for r in res.json() if r["slug"] == "sales"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["kind"], "embed")
+        self.assertIsNone(rows[0]["root_form"])
