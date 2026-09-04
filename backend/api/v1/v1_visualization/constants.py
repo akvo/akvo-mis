@@ -96,4 +96,5 @@ class WidgetTypes:
         map: "map",
         section_title: "section_title",
         scatter: "scatter",
+        scatter: "scatter",
     }
