@@ -24,6 +24,12 @@ export const WIDGET_TYPES = [
     iconBg: "#eaf5e6",
   },
   {
+    type: "scatter",
+    label: "Scatter plot",
+    desc: "X/Y correlation",
+    iconBg: "#eef2fb",
+  },
+  {
     type: "table",
     label: "Table",
     desc: "Rows of records",
@@ -34,12 +40,6 @@ export const WIDGET_TYPES = [
     label: "Map",
     desc: "Geographic points",
     iconBg: "#eaf5e6",
-  },
-  {
-    type: "scatter",
-    label: "Scatter plot",
-    desc: "X/Y correlation",
-    iconBg: "#eef2fb",
   },
   {
     type: "section_title",
