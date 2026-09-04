@@ -21,7 +21,10 @@ from typing import NamedTuple, Optional, Set
 from django.http import Http404
 
 from api.v1.v1_profile.constants import FeatureTypes
-from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    DashboardStatus,
+)
 from api.v1.v1_visualization.functions import resolve_request_tenant
 from api.v1.v1_visualization.models import Dashboard
 from utils.tenant_host import public_tenant
@@ -58,10 +61,23 @@ def allowlist_from(dashboard):
     republished has not yet narrowed what the public dashboard shows,
     and must not have narrowed what it may query either.
     """
+    if dashboard.kind == DashboardKind.embed:
+        # An embedded dashboard queries none of our data endpoints, so
+        # the correct set of ids it may name is empty and every data
+        # endpoint 404s for a caller holding this slug (spec D-6).
+        return Allowlist(forms=set(), questions=set())
+
     config = dashboard.published_config or {}
     widgets = config.get("widgets") or []
 
-    forms = {dashboard.root_form_id}
+    # `- {None}` is load-bearing, not tidiness. `root_form` is nullable
+    # since VIZ-019, and `permits_form` resolves an unparseable id to
+    # None through `_as_id` -- so a set containing None would make
+    # `None in self.forms` true and let a garbage `form_id` through.
+    # The guard lives here, in the function that builds the set, so
+    # both kinds are safe by construction rather than by the embed
+    # branch above never falling through.
+    forms = {dashboard.root_form_id} - {None}
     questions = set()
 
     for widget in widgets:
