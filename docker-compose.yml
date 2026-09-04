@@ -23,6 +23,7 @@ services:
       - STORAGE_PATH
       - SENTRY_DSN
       - BASE_DOMAIN
+      - EMBED_HOST
     depends_on:
       - db
   worker:
@@ -46,6 +47,7 @@ services:
       # The worker sends mail too, and an emailed link has to name the
       # recipient's own workspace host.
       - BASE_DOMAIN
+      - EMBED_HOST
     depends_on:
       - backend
   frontend:

@@ -75,6 +75,16 @@ TESTING = sys.argv[1:2] == ["test"]
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
+# Origin that serves embedded dashboards' author markup, e.g.
+# "https://embed.example.com". It MUST NOT be this application's origin:
+# the whole point is that a pasted snippet runs somewhere its scripts
+# cannot reach our DOM or the AUTH_TOKEN cookie (which is host-only, and
+# readable from JavaScript). Unset means embedding is not configured for
+# this deployment, and the viewer says so rather than falling back to
+# serving the markup here -- that fallback would be the cross-site
+# scripting hole the separate origin exists to prevent.
+EMBED_HOST = environ.get("EMBED_HOST", "")
+
 
 ALLOWED_HOSTS = ["*"]
 
