@@ -5,11 +5,20 @@ on:
   pull_request:
     types: [synchronize]
 
-# Serialize CI so a run waits for the previous one to finish before starting
-# (prevents overlapping test-cluster deploys). cancel-in-progress: false = queue,
-# don't cancel the running one.
+# Concurrency split by ref:
+#  - main: one shared lane ("akvo-mis-test-deploy") so test-cluster deploys run
+#    serially (no overlapping deploys).
+#  - any other ref (branches, PRs, and each event): a unique per-run group, so
+#    runs never queue behind each other and every push is validated (nothing is
+#    dropped by the "only one pending per group" rule).
+# Note: cancel-in-progress: false keeps the in-progress run alive; it does NOT
+# protect a *pending* run — GitHub keeps only the newest pending per group, which
+# is exactly why a shared/constant group cancelled runs before.
 concurrency:
-  group: test-only
+  group: >-
+    ${{ github.ref == 'refs/heads/main'
+        && 'akvo-mis-test-deploy'
+        || format('{0}-{1}', github.workflow, github.run_id) }}
   cancel-in-progress: false
 
 jobs:
