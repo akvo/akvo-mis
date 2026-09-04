@@ -92,6 +92,25 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
     return null;
   }
 
+  if (type === "scatter") {
+    if (!widget.form) {
+      return null;
+    }
+    return {
+      endpoint: "visualization/values",
+      params: compact({
+        form_id: widget.form,
+        mode: "scatter",
+        question_id: widget.question,
+        question_y: config.question_y,
+        ...expandMeasure(widget, rootFormId),
+        administration_id: filters?.administration_id,
+        ...dateFilters(filters),
+        dashboard_slug: dashboardSlug,
+      }),
+    };
+  }
+
   if (type === "table") {
     // Columns are still `required=True` on EscalationFilterSerializer, so
     // a table with none is a guaranteed 400 — re-issued on every filter
@@ -245,6 +264,10 @@ const normalize = (widget, response, statusResponse) => {
   if (type === "kpi") {
     const rows = response.data || [];
     return { data: { value: rows.length ? rows[0].value : null } };
+  }
+
+  if (type === "scatter") {
+    return { data: Array.isArray(response) ? response : [] };
   }
 
   if (type === "table") {
