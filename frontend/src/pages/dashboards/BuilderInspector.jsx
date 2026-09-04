@@ -23,6 +23,7 @@ import {
   COLOR_SCHEMES,
   DEFAULT_COLOR_SCHEME,
   TYPE_LABELS,
+  NEEDS_SCATTER_Y,
   defaultMeasure,
   pruneConfigForForm,
   tableColumnOptions,
@@ -256,8 +257,12 @@ const BuilderInspector = ({
   const showForm = NEEDS_FORM.has(wType);
   const showQuestion = NEEDS_QUESTION.has(wType);
   const isMonitoring = showForm && isMonitoringForm(widget.form);
-  const questions = showQuestion ? questionsForForm(widget.form) : [];
-  const selectedQuestion = questions.find((q) => q.id === widget.question);
+  const allQuestions = showQuestion ? questionsForForm(widget.form) : [];
+  const questions =
+    wType === "scatter"
+      ? allQuestions.filter((q) => q.type === "number")
+      : allQuestions;
+  const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
   const hasOptionQuestion =
     selectedQuestion?.type === "option" ||
     selectedQuestion?.type === "multiple_option";
@@ -355,16 +360,22 @@ const BuilderInspector = ({
                       }))
                     : questionsForForm(val)
                 );
+                const nextConfig = {
+                  ...pruned,
+                  measure: supported
+                    ? widget.config?.measure || supported
+                    : null,
+                };
+                if (wType === "scatter") {
+                  nextConfig.question_y = null;
+                  nextConfig.x_axis_label = null;
+                  nextConfig.y_axis_label = null;
+                }
                 onWidgetChange({
                   ...widget,
                   form: val,
                   question: null,
-                  config: {
-                    ...pruned,
-                    measure: supported
-                      ? widget.config?.measure || supported
-                      : null,
-                  },
+                  config: nextConfig,
                 });
               }}
               placeholder="Select a form"
@@ -418,7 +429,11 @@ const BuilderInspector = ({
         {showQuestion && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              {wType === "map" ? "Status question" : "Question"}
+              {wType === "map"
+                ? "Status question"
+                : wType === "scatter"
+                ? "X axis (number question)"
+                : "Question"}
             </label>
             <Select
               value={widget.question || null}
@@ -436,11 +451,25 @@ const BuilderInspector = ({
                     question: val,
                     config: { ...widget.config, status_colors: auto },
                   });
+                } else if (wType === "scatter") {
+                  const q = questions.find((qq) => qq.id === val);
+                  onWidgetChange({
+                    ...widget,
+                    question: val || null,
+                    config: {
+                      ...widget.config,
+                      x_axis_label: q?.label || null,
+                    },
+                  });
                 } else {
                   updateWidget("question", val);
                 }
               }}
-              placeholder="Select a question"
+              placeholder={
+                wType === "scatter"
+                  ? "Number of datapoints"
+                  : "Select a question"
+              }
               style={{ width: "100%" }}
               allowClear
               optionLabelProp="label"
@@ -455,6 +484,53 @@ const BuilderInspector = ({
                 </Select.Option>
               ))}
             </Select>
+            {wType === "scatter" && !widget.question && (
+              <div className="builder-inspector-hint">
+                Default: each datapoint counts as 1
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Scatter Y axis */}
+        {NEEDS_SCATTER_Y.has(wType) && widget.form && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">
+              Y axis (number question)
+            </label>
+            <Select
+              value={wConfig.question_y || null}
+              onChange={(val) => {
+                const q = questions.find((qq) => qq.id === val);
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    question_y: val || null,
+                    y_axis_label: q?.label || null,
+                  },
+                });
+              }}
+              placeholder="Number of datapoints"
+              style={{ width: "100%" }}
+              allowClear
+              optionLabelProp="label"
+            >
+              {questions.map((q) => (
+                <Select.Option
+                  key={q.id}
+                  value={q.id}
+                  label={<QuestionLabel label={q.label} type={q.type} />}
+                >
+                  <QuestionLabel label={q.label} type={q.type} />
+                </Select.Option>
+              ))}
+            </Select>
+            {!wConfig.question_y && (
+              <div className="builder-inspector-hint">
+                Default: each datapoint counts as 1
+              </div>
+            )}
           </div>
         )}
 

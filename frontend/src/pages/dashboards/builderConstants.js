@@ -24,6 +24,12 @@ export const WIDGET_TYPES = [
     iconBg: "#eaf5e6",
   },
   {
+    type: "scatter",
+    label: "Scatter plot",
+    desc: "X/Y correlation",
+    iconBg: "#eef2fb",
+  },
+  {
     type: "table",
     label: "Table",
     desc: "Rows of records",
@@ -96,6 +102,14 @@ export const WIDGET_DEFAULTS = {
   },
   map: {
     col_span: 24,
+    color: null,
+    config: {
+      color_scheme: "categorical",
+      chart_colors: DEFAULT_CHART_COLORS,
+    },
+  },
+  scatter: {
+    col_span: 12,
     color: null,
     config: {
       color_scheme: "categorical",
@@ -208,17 +222,40 @@ export const NEEDS_FORM = new Set([
   "pie",
   "table",
   "map",
+  "scatter",
 ]);
-export const NEEDS_QUESTION = new Set(["kpi", "bar", "line", "pie", "map"]);
+export const NEEDS_QUESTION = new Set([
+  "kpi",
+  "bar",
+  "line",
+  "pie",
+  "map",
+  "scatter",
+]);
 export const NEEDS_GROUP_BY = new Set(["bar", "line", "pie"]);
 export const NEEDS_STACK_BY = new Set(["bar", "line"]);
 export const NEEDS_VALUE_TYPE = new Set(["kpi", "bar", "line", "pie"]);
 export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar", "line"]);
-export const NEEDS_COLOR = new Set(["kpi", "bar", "line", "pie", "map"]);
+export const NEEDS_COLOR = new Set([
+  "kpi",
+  "bar",
+  "line",
+  "pie",
+  "map",
+  "scatter",
+]);
 
 // Every widget type that can carry a measure — a table's rows are already
 // "latest per site" by construction, and a section title has no data.
-export const NEEDS_MEASURE = new Set(["kpi", "bar", "line", "pie", "map"]);
+export const NEEDS_MEASURE = new Set([
+  "kpi",
+  "bar",
+  "line",
+  "pie",
+  "map",
+  "scatter",
+]);
+export const NEEDS_SCATTER_Y = new Set(["scatter"]);
 
 /**
  * The measure a widget should carry for the form it is bound to, or null.
@@ -304,6 +341,7 @@ export const TYPE_LABELS = {
   bar: "Bar",
   line: "Line",
   pie: "Pie",
+  scatter: "Scatter",
   table: "Table",
   map: "Map",
   section_title: "Text",

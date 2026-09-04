@@ -24,6 +24,9 @@ from api.v1.v1_visualization.values_functions import (
 from api.v1.v1_visualization.escalation_functions import (
     handle_escalation,
 )
+from api.v1.v1_visualization.scatter_functions import (
+    handle_scatter,
+)
 from api.v1.v1_visualization.functions import (
     resolve_default_administration_id,
     tenant_scoped_forms,
@@ -198,6 +201,7 @@ def visualization_values(request, version):
         form_ids=[validated["form_id"]],
         question_ids=[
             validated.get("question_id"),
+            validated.get("question_y"),
             validated.get("date_question_id"),
             *question_ids_in_criteria(
                 request.query_params.get("criteria")
@@ -240,6 +244,14 @@ def visualization_values(request, version):
             "include_empty", False
         ),
     }
+
+    # Scatter mode
+    if validated.get("mode") == "scatter":
+        data = handle_scatter(
+            form, question,
+            validated.get("question_y_obj"), params,
+        )
+        return Response(data, status=status.HTTP_200_OK)
 
     # Route to handler
     if not question:

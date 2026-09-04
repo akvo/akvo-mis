@@ -111,6 +111,7 @@ class WidgetTypes:
     table = 5
     map = 6
     section_title = 7
+    scatter = 8
 
     FieldStr = {
         kpi: "kpi",
@@ -120,4 +121,5 @@ class WidgetTypes:
         table: "table",
         map: "map",
         section_title: "section_title",
+        scatter: "scatter",
     }

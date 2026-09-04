@@ -90,6 +90,12 @@ def allowlist_from(dashboard):
 
         widget_config = widget.get("config") or {}
 
+        # Scatter Y axis lives in config; X axis uses widget.question
+        # (already collected above).
+        axis_qid = _as_id(widget_config.get("question_y"))
+        if axis_qid is not None:
+            questions.add(axis_qid)
+
         # Both carry author-entered question ids under the same key:
         # criteria narrow a widget's datapoints, and table columns of
         # source `answer`, `parent_answer` or `latest_date` name one

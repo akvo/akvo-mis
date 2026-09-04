@@ -28,7 +28,7 @@ const DEFAULT_KPI_COLOR = "#1890ff";
 
 // In view mode only these five carry a card header. A KPI shows its title
 // inside the body instead, and a section title is not a card at all.
-const HEADER_TYPES = ["bar", "line", "pie", "table", "map"];
+const HEADER_TYPES = ["bar", "line", "pie", "scatter", "table", "map"];
 
 // Everything else is 16.
 const BODY_PADDING = { table: 0, map: 12 };

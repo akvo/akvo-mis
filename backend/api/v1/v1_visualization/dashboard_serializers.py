@@ -11,6 +11,7 @@ from api.v1.v1_visualization.constants import (
     SUPPORTED_QUESTION_TYPES,
 )
 from api.v1.v1_visualization.functions import parse_criteria_string
+from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 
 
@@ -50,6 +51,10 @@ class ValuesFilterSerializer(serializers.Serializer):
     to_date = serializers.DateField(required=False)
     date_question_id = serializers.IntegerField(required=False)
     administration_id = serializers.IntegerField(required=False)
+    mode = serializers.ChoiceField(
+        choices=["scatter"], required=False,
+    )
+    question_y = serializers.IntegerField(required=False)
     option_value = serializers.CharField(required=False)
     criteria = serializers.CharField(required=False)
     include_unanswered = serializers.BooleanField(
@@ -103,6 +108,29 @@ class ValuesFilterSerializer(serializers.Serializer):
                     ),
                 })
             data["question"] = question
+
+        # Validate question_y for scatter mode
+        question_y_id = data.get("question_y")
+        if question_y_id:
+            question_y = Questions.objects.filter(
+                pk=question_y_id,
+                form_id=form_id,
+            ).first()
+            if not question_y:
+                raise serializers.ValidationError({
+                    "question_y": (
+                        f"Question {question_y_id} not found"
+                        f" on form {form_id}."
+                    ),
+                })
+            if question_y.type != QuestionTypes.number:
+                raise serializers.ValidationError({
+                    "question_y": (
+                        f"Question {question_y_id} must be"
+                        " a number type for scatter plots."
+                    ),
+                })
+            data["question_y_obj"] = question_y
 
         # Split criteria into same-form and parent-form buckets.
         # qids on form_id → criteria; qids on parent form → parent_criteria.

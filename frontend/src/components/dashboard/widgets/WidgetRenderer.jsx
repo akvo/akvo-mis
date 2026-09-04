@@ -14,6 +14,7 @@ import VizLine from "./VizLine";
 import VizPie from "./VizPie";
 import VizTable from "./VizTable";
 import VizMap from "./VizMap";
+import VizScatter from "./VizScatter";
 import VizSectionTitle from "./VizSectionTitle";
 
 const RENDERERS = {
@@ -21,6 +22,7 @@ const RENDERERS = {
   bar: VizBar,
   line: VizLine,
   pie: VizPie,
+  scatter: VizScatter,
   table: VizTable,
   map: VizMap,
   section_title: VizSectionTitle,
