@@ -258,7 +258,17 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
         "LOCATION": "/var/tmp/cache",
-    }
+    },
+    # Embed previews live here rather than in `default`, which
+    # v1_forms.signals clears wholesale on any form change. Sharing it
+    # would mean an author's preview dying because somebody else edited a
+    # form — and, under `manage.py test --parallel`, another process's
+    # form seeding racing a preview to 404. The default cache's own
+    # comment asks unrelated callers to do exactly this.
+    "embed": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": "/var/tmp/cache-embed",
+    },
 }
 CACHE_FOLDER = "/tmp/cache/"
 

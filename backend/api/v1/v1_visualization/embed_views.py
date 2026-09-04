@@ -27,7 +27,7 @@
 
 from django.conf import settings
 from django.core import signing
-from django.core.cache import cache
+from django.core.cache import caches
 from django.http import Http404, HttpResponse
 from django.utils.crypto import get_random_string
 from django.views.decorators.clickjacking import xframe_options_exempt
@@ -48,6 +48,9 @@ MAX_AGE = 60 * 60
 # Preview carries unsaved markup, so it lives in the cache rather than in
 # the token — a snippet can be 20k characters and a URL cannot.
 PREVIEW_MAX_AGE = 60 * 15
+# Its own cache alias, not `default`: that one is cleared in full whenever
+# a form changes, which would take a pending preview with it.
+PREVIEW_CACHE = "embed"
 
 
 def _absolute(token):
@@ -74,7 +77,7 @@ def preview_url_for(snippet):
     cross-origin frame reports nothing back to us.
     """
     key = "embed-preview:" + get_random_string(40)
-    cache.set(key, snippet, PREVIEW_MAX_AGE)
+    caches[PREVIEW_CACHE].set(key, snippet, PREVIEW_MAX_AGE)
     return _absolute(signing.dumps({"p": key}, salt=SALT))
 
 
@@ -92,7 +95,7 @@ def _snippet_from(payload):
     """The markup a valid token names, or None."""
     key = payload.get("p")
     if key:
-        return cache.get(key)
+        return caches[PREVIEW_CACHE].get(key)
 
     dashboard = Dashboard.objects.filter(
         pk=payload.get("d"),

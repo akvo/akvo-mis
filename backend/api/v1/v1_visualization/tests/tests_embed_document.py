@@ -10,11 +10,12 @@ reach its storage through an inherited sandbox).
 import json
 
 from django.core import signing
-from django.core.cache import cache
+from django.core.cache import caches
 from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 
+from api.v1.v1_forms.constants import FormStatus, FormTypes
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import Tenant
@@ -173,7 +174,7 @@ class EmbedPreviewTestCase(TestCase, ProfileTestHelperMixin):
     """Preview must show what a viewer sees, including unsaved markup."""
 
     def setUp(self):
-        cache.clear()
+        caches["embed"].clear()
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")
         self.user = self.create_user(
@@ -207,6 +208,32 @@ class EmbedPreviewTestCase(TestCase, ProfileTestHelperMixin):
             url.replace(EMBED_ORIGIN, ""), HTTP_HOST=EMBED_HOSTNAME
         )
         self.assertEqual(doc.status_code, 200)
+        self.assertIn(draft, doc.content.decode())
+
+    def test_a_form_change_does_not_invalidate_a_preview(self):
+        """A preview must not be collateral damage of an unrelated edit.
+
+        `v1_forms.signals` clears the whole default cache on any Forms,
+        QuestionGroup, Questions or QuestionOptions save, and test setUps
+        across the suite clear it too. A preview URL parked in that cache
+        is destroyed by either, which under `--parallel` is a race and in
+        production is an author's preview dying because somebody else
+        edited a form.
+        """
+        draft = "<iframe src='https://public.tableau.com/unsaved'></iframe>"
+        url = self.preview(self.embed, draft).json()["embed_url"]
+
+        Forms.objects.create(
+            name="Something unrelated",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+            version=1,
+        )
+
+        doc = self.client.get(
+            url.replace(EMBED_ORIGIN, ""), HTTP_HOST=EMBED_HOSTNAME
+        )
+        self.assertEqual(doc.status_code, 200, doc.content)
         self.assertIn(draft, doc.content.decode())
 
     def test_an_empty_snippet_is_refused(self):
