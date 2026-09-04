@@ -245,11 +245,11 @@ def visualization_values(request, version):
         ),
     }
 
-    # Scatter mode: question_y present
-    question_y_obj = validated.get("question_y_obj")
-    if question_y_obj is not None:
+    # Scatter mode
+    if validated.get("mode") == "scatter":
         data = handle_scatter(
-            form, question, question_y_obj, params,
+            form, question,
+            validated.get("question_y_obj"), params,
         )
         return Response(data, status=status.HTTP_200_OK)
 

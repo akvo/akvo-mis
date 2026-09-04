@@ -93,13 +93,14 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
   }
 
   if (type === "scatter") {
-    if (!widget.form || (!widget.question && !config.question_y)) {
+    if (!widget.form) {
       return null;
     }
     return {
       endpoint: "visualization/values",
       params: compact({
         form_id: widget.form,
+        mode: "scatter",
         question_id: widget.question,
         question_y: config.question_y,
         ...expandMeasure(widget, rootFormId),

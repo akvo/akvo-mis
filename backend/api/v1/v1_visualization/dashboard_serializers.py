@@ -51,6 +51,9 @@ class ValuesFilterSerializer(serializers.Serializer):
     to_date = serializers.DateField(required=False)
     date_question_id = serializers.IntegerField(required=False)
     administration_id = serializers.IntegerField(required=False)
+    mode = serializers.ChoiceField(
+        choices=["scatter"], required=False,
+    )
     question_y = serializers.IntegerField(required=False)
     option_value = serializers.CharField(required=False)
     criteria = serializers.CharField(required=False)
