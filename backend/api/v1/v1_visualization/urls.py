@@ -15,6 +15,7 @@ from api.v1.v1_visualization.dashboard_builder_views import (
 from api.v1.v1_visualization.dashboard_read_views import (
     DashboardReadViewSet,
 )
+from api.v1.v1_visualization.embed_views import serve_embed
 
 urlpatterns = [
     re_path(
@@ -66,6 +67,11 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view({"post": "duplicate"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/"
+        r"embed-preview$",
+        DashboardBuilderViewSet.as_view({"post": "embed_preview"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)$",
         DashboardBuilderViewSet.as_view(
             {"get": "retrieve", "put": "update", "delete": "destroy"}
@@ -76,6 +82,12 @@ urlpatterns = [
         DashboardBuilderViewSet.as_view(
             {"get": "list", "post": "create"}
         ),
+    ),
+    # The embed document, served on EMBED_HOST only. `[^/]+` rather than a
+    # character class: a Django signing token carries ":" separators.
+    re_path(
+        r"^(?P<version>(v1))/embed/(?P<token>[^/]+)$",
+        serve_embed,
     ),
     # The anonymous-capable read namespace (slug before collection)
     re_path(

@@ -10,13 +10,14 @@
 # touches a request or a response.
 
 from api.v1.v1_forms.models import Forms, Questions
+from api.v1.v1_visualization.constants import DashboardKind
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardWidgetSerializer,
 )
 
 
 def build_snapshot(dashboard):
-    """Live widget rows -> the dict stored in `published_config`.
+    """Live content -> the dict stored in `published_config`.
 
     `default_filters` travels with the widgets (spec D-1). The rule is
     "does editing this change the picture?": retuning the filter bar
@@ -30,6 +31,11 @@ def build_snapshot(dashboard):
     and its order must not depend on a Meta attribute a later change
     could quietly reorder.
     """
+    if dashboard.kind == DashboardKind.embed:
+        # No widgets and no filters: the snippet is the whole of an
+        # embed's content, and there is nothing of ours to filter.
+        return {"embed_snippet": dashboard.embed_snippet}
+
     widgets = dashboard.widgets.order_by("order", "id")
     return {
         "default_filters": dashboard.default_filters or {},

@@ -13,7 +13,10 @@ from api.v1.v1_forms.models import (
 )
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import Tenant
-from api.v1.v1_visualization.constants import SUPPORTED_QUESTION_TYPES
+from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    SUPPORTED_QUESTION_TYPES,
+)
 from api.v1.v1_visualization.models import Dashboard
 
 
@@ -212,3 +215,23 @@ class DashboardSourcesTestCase(TestCase, ProfileTestHelperMixin):
                 QuestionTypes.date,
             },
         )
+
+    def test_sources_refuses_an_embedded_dashboard(self):
+        # Spec D-7. Not {"forms": []} -- an empty collection reads as
+        # "this workspace has no forms", which is a sentence about the
+        # workspace rather than about the request, and sends whoever
+        # hits it to debug the wrong thing.
+        embed = Dashboard.objects.create(
+            name="Sales",
+            slug="sales-embed",
+            kind=DashboardKind.embed,
+            root_form=None,
+            embed_snippet="<iframe src='https://x/'></iframe>",
+            tenant=getattr(self.user, "tenant", None),
+            created_by=self.user,
+        )
+        res = self.client.get(
+            "/api/v1/manage/dashboards/{0}/sources".format(embed.id),
+            **self.header
+        )
+        self.assertEqual(res.status_code, 400)
