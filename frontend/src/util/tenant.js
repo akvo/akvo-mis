@@ -9,6 +9,16 @@ import { api, store } from "../lib";
 // two need opposite behaviour from the login route.
 export const baseDomain = () => window?.appConfig?.baseDomain || "";
 
+// Can this deployment render an embedded dashboard?
+//
+// False when EMBED_HOST is unset, which is the default. Embedding needs
+// an origin of its own — the snippet is third-party markup and must not
+// run on ours — and no such origin exists unless somebody configured
+// one. The create dialog reads this so it does not offer a kind of
+// dashboard that could never be displayed; embedded dashboards that
+// already exist stay listed and editable either way.
+export const embedEnabled = () => Boolean(window?.appConfig?.embedEnabled);
+
 // Is the browser on the main site itself, rather than on a workspace?
 //
 // Read off the address bar, and deliberately not off the tenant lookup:

@@ -4,6 +4,7 @@ from django.core.management import BaseCommand
 from jsmin import jsmin
 
 from mis.settings import (
+    EMBED_HOST,
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
@@ -81,6 +82,14 @@ class Command(BaseCommand):
                         # tenant-info answers 204 in both cases, so the
                         # app cannot tell them apart without this.
                         "baseDomain": BASE_DOMAIN,
+                        # A boolean, not the host: the frontend never
+                        # builds an embed URL — those arrive in API
+                        # responses — it only needs to know whether to
+                        # offer embedding at all. Without this the create
+                        # dialog would offer a kind of dashboard the
+                        # deployment cannot render, and the author would
+                        # only find out after publishing it.
+                        "embedEnabled": bool(EMBED_HOST),
                     }),
                     ";",
                     "var roleFeatures=",

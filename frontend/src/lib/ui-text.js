@@ -95,6 +95,23 @@ const uiText = {
     dashboardMadePrivate: "Dashboard is now private",
     dashboardVisibilityPublic: "Public",
     dashboardVisibilityPrivate: "Private",
+    // Embedded dashboards (VIZ-019)
+    dashboardKindLabel: "What is this dashboard?",
+    dashboardKindWidgets: "Build it here",
+    dashboardKindWidgetsHint:
+      "Compose charts and tables from your own form data.",
+    dashboardKindEmbed: "Embed an external dashboard",
+    dashboardKindEmbedHint:
+      "Show a report published by Power BI, Tableau, Looker Studio or another tool.",
+    dashboardEmbedLabel: "Embed code",
+    dashboardEmbedPlaceholder:
+      "Paste the embed code from your reporting tool's Share dialog",
+    dashboardEmbedRequired: "Please paste the embed code",
+    dashboardEmbedHint:
+      "Pasted exactly as given. A snippet with no width of its own stretches to fill the page; give it a width and height to have it centred instead. If the report requires signing in, visitors will see a login screen even though it looks correct to you.",
+    dashboardEmbedBadge: "External",
+    dashboardEmbedUnavailable:
+      "This dashboard's external content cannot be shown, because embedding is not configured for this deployment.",
     preview: "Preview",
     publish: "Publish",
     published: "Published",

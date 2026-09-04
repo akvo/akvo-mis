@@ -223,6 +223,36 @@
   padding: 22px 26px 80px;
 }
 
+/* The embed editor replaces the palette/canvas/inspector trio, so it owns
+   the whole body row on its own. Without these it was an unstyled flex
+   item: content-width, flush against the left edge, with no scroll of its
+   own.
+
+   Same two-element shape as .builder-canvas above — the outer element
+   scrolls the full width, the inner one is a centred column — so the two
+   editing surfaces behave identically. The column is narrower than the
+   canvas's 1080px because this is a form rather than a dashboard layout,
+   and a single-line text input stretched that wide is unpleasant to read
+   and to scan back along. */
+.builder-embed-editor {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: #f0f2f5;
+}
+
+.builder-embed-editor-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 22px 26px 80px;
+
+  /* Below the tablet breakpoint the column is already narrower than its
+     max-width, so the generous side padding is just lost measure. */
+  @media screen and (max-width: $screen-regular) {
+    padding: 16px 16px 48px;
+  }
+}
+
 // The viewer's filter bar, re-proportioned for the canvas: same controls,
 // same component, but the viewer's full-width page padding would be absurd
 // inside a 1080px editing column.

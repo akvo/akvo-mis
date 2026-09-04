@@ -50,6 +50,14 @@ const dashboardApi = {
 
   sources: (id) => api.get(`${MANAGE}/${id}/sources`),
 
+  // Preview must show what a viewer sees, and a viewer sees the
+  // snippet running on the embed host. Unsaved markup has no published
+  // snapshot to serve, so the server parks it briefly and hands back a
+  // URL. Not a list-invalidating write: nothing about the dashboard
+  // changes.
+  embedPreview: (id, snippet) =>
+    api.post(`${MANAGE}/${id}/embed-preview`, { embed_snippet: snippet }),
+
   getPublished: (slug) => api.get(`${PUBLIC}/${slug}`),
 
   listPublished: () => api.get(PUBLIC),
