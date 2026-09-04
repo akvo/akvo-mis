@@ -187,6 +187,94 @@ describe("viewer and preview are the same renderer", () => {
   });
 });
 
+// ── Embedded dashboards (VIZ-019) ──
+//
+// Spec D-9 makes Preview the entire mitigation for an embed whose failure
+// to load we cannot detect: the author is told to check it there because
+// "Preview renders the frame exactly as the viewer will". That promise is
+// carried by one class. `.dashboard-view-content` is `flex: 1;
+// overflow-y: auto` with no `display: flex`, so without the -embed
+// modifier `.dashboard-embed-frame { flex: 1 1 auto }` never applies and
+// the frame sits at its 480px min-height while the published page fills
+// the column. Same class on both sides, or the author is sizing their
+// vendor report against a page nobody else sees.
+
+const EMBED = {
+  id: 13,
+  name: "Regional Sales",
+  slug: "regional-sales",
+  description: "Published from Power BI",
+  kind: "embed",
+  root_form: null,
+  embed_snippet: "<iframe src='https://app.powerbi.com/view?r=1'></iframe>",
+  embed_url: "http://embed.example.com/api/v1/embed/tok",
+  status: "published",
+  is_public: true,
+  default_filters: {},
+  widgets: [],
+};
+
+const contentClass = () =>
+  document.querySelector(".dashboard-view-content").className;
+
+describe("an embed previews at the height it publishes at", () => {
+  const renderEmbedViewer = async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: EMBED });
+    const utils = render(
+      <MemoryRouter initialEntries={["/dashboards/regional-sales"]}>
+        <Routes>
+          <Route path="/dashboards/:slug" element={<DashboardViewer />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await screen.findByTitle(EMBED.name);
+    return utils;
+  };
+
+  const renderEmbedPreview = async () => {
+    dashboardApi.list.mockResolvedValue({ data: [EMBED] });
+    dashboardApi.get.mockResolvedValue({ data: EMBED });
+    // Preview mints its own URL; parity here is about the column the
+    // frame sits in, not about which token the URL carries.
+    dashboardApi.embedPreview.mockResolvedValue({
+      data: { embed_url: EMBED.embed_url },
+    });
+    const utils = render(
+      <MemoryRouter
+        initialEntries={["/control-center/dashboard/regional-sales"]}
+      >
+        <Routes>
+          <Route
+            path="/control-center/dashboard/:slug"
+            element={<DashboardBuilder />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /preview/i })
+      ).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: /preview/i }));
+    await screen.findByTitle(EMBED.name);
+    return utils;
+  };
+
+  test("both give the content column the same class", async () => {
+    const viewer = await renderEmbedViewer();
+    const viewerClass = contentClass();
+    viewer.unmount();
+
+    const preview = await renderEmbedPreview();
+    const previewClass = contentClass();
+    preview.unmount();
+
+    expect(previewClass).toBe(viewerClass);
+    expect(previewClass).toContain("dashboard-view-content-embed");
+  });
+});
+
 describe("preview is a mode, not a new tab", () => {
   test("it hides the palette and the inspector, and restores them", async () => {
     const openSpy = jest.spyOn(window, "open").mockImplementation(() => null);

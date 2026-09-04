@@ -69,9 +69,9 @@ const setUser = (user) => {
 
 const SUPERUSER = { id: 1, name: "Admin", is_superuser: true, roles: [] };
 
-const renderViewer = () =>
+const renderViewer = (slug = "water-points-overview") =>
   render(
-    <MemoryRouter initialEntries={["/dashboards/water-points-overview"]}>
+    <MemoryRouter initialEntries={[`/dashboards/${slug}`]}>
       <Routes>
         <Route path="/dashboards/:slug" element={<DashboardViewer />} />
       </Routes>
@@ -208,5 +208,70 @@ describe("the top bar is a back button and nothing else", () => {
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     expect(container.querySelector(".dashboard-view-topbar-name")).toBeNull();
     expect(screen.getAllByText(PAYLOAD.name)).toHaveLength(1);
+  });
+});
+
+// ── Embedded dashboards (VIZ-019) ──
+
+const EMBED_PAYLOAD = {
+  id: 13,
+  name: "Regional Sales",
+  slug: "regional-sales",
+  description: "Published from Power BI",
+  kind: "embed",
+  root_form: null,
+  // A URL on the embed host, not markup: the snippet is served as its
+  // own cross-origin document and never parsed in this page.
+  embed_url: "http://embed.example.com/api/v1/embed/tok",
+  published_at: "03-09-2026 09:00:00",
+  default_filters: {},
+  widgets: [],
+};
+
+describe("DashboardViewer with an embedded dashboard", () => {
+  beforeEach(() => {
+    dashboardApi.getPublished.mockResolvedValue({ data: EMBED_PAYLOAD });
+  });
+
+  it("renders the embed frame and not the grid", async () => {
+    renderViewer("regional-sales");
+    expect(await screen.findByTitle("Regional Sales")).toBeInTheDocument();
+    expect(screen.queryByTestId("grid")).not.toBeInTheDocument();
+  });
+
+  it("shows no filter bar — an embed has no data of ours to filter", async () => {
+    renderViewer("regional-sales");
+    await screen.findByTitle("Regional Sales");
+    expect(screen.queryByTestId("filters")).not.toBeInTheDocument();
+  });
+
+  it("frames the embed host URL the API supplied", async () => {
+    renderViewer("regional-sales");
+    const frame = await screen.findByTitle("Regional Sales");
+    expect(frame).toHaveAttribute("src", EMBED_PAYLOAD.embed_url);
+  });
+});
+
+describe("the content column is a flex context only for an embed", () => {
+  // The wrapper's own `flex: 1 1 auto` is inert in a block container, so
+  // the modifier is what actually gives the frame its height. The grid
+  // shares this element and must not be relaid out to fix the embed.
+  it("marks the content column on the embed branch", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: EMBED_PAYLOAD });
+    const { container } = renderViewer("regional-sales");
+
+    await screen.findByTitle("Regional Sales");
+    expect(
+      container.querySelector(".dashboard-view-content-embed")
+    ).not.toBeNull();
+  });
+
+  it("leaves the widgets branch unmarked", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    const { container } = renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(container.querySelector(".dashboard-view-content")).not.toBeNull();
+    expect(container.querySelector(".dashboard-view-content-embed")).toBeNull();
   });
 });
