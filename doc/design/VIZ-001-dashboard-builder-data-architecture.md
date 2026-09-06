@@ -912,6 +912,36 @@ builder. AI-assisted dashboard generation is a separate, unscheduled epic —
 `doc/design/VIZ-AI-001-ai-dashboard-suggestion.md` — designed against this
 document's §4 schema but depended on by nothing in VIZ-002 … VIZ-009.
 
+### After the epic
+
+Work continued past VIZ-009 as follow-ups rather than as new phases. Each
+has its own design doc; the table records what is actually on `main`.
+
+| Task | Doc | Status |
+|---|---|---|
+| VIZ-010 Workflow completion | `VIZ-010-dashboard-workflow-completion.md` | Shipped (PR #335 / #337) |
+| VIZ-011 Test plan | `VIZ-011-dashboard-test-plan.md` | Not started |
+| VIZ-012 Widget config usability | `VIZ-012-widget-configuration-usability.md` | Shipped (PR #351) |
+| VIZ-013 Colour schemes | `VIZ-013-widget-colour-schemes.md` | Shipped (PR #354) |
+| VIZ-014 KPI improvements | `VIZ-014-kpi-widget-improvements.md` | Partly delivered |
+| VIZ-015 Stack by question | `VIZ-015-bar-chart-stacking-by-question.md` | Not started |
+| VIZ-016 Scatter plot | `VIZ-016-scatter-plot-widget.md` | Shipped (PR #365) |
+| VIZ-017 Default filters | `VIZ-017-dashboard-default-filters.md` | Shipped (PR #348) |
+| VIZ-018 Public visibility | `VIZ-018-public-dashboard-visibility.md` | Shipped (PR #360) |
+| VIZ-019 Embedded dashboards | `VIZ-019-embedded-external-dashboards.md` | PR #366 in review |
+| VIZ-020 Visualization quick wins | `VIZ-020-visualization-quick-wins.md` | Planning only |
+
+Two decisions in this document were superseded by that work:
+
+- **D-7 (no anonymous dashboard access) is reversed.** VIZ-018 reopened a
+  public surface, bounded by a per-dashboard id allowlist derived from the
+  published snapshot rather than by authentication.
+- **VIZ-003's `IsAuthenticated`-everywhere plan was not what shipped.** The
+  visualization endpoints resolve scope through
+  `public_scope.resolve_view_scope` instead: authenticated callers keep the
+  tenant they always had, anonymous callers must name a published public
+  dashboard and may query only the ids it names.
+
 ---
 
 ## 12. Open Questions

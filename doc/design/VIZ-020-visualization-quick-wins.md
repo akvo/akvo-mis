@@ -1,5 +1,7 @@
 # Visualization layer quick wins: design
 
+**Status:** planning only. No GitHub issue, no branch, no code. The four slices below are scoped but unscheduled.
+
 ## Problem
 
 We looked at GeoLibre (an open-source GIS platform) for ideas on where the
