@@ -147,3 +147,34 @@ describe("delete sits in the card's corner, away from the routine actions", () =
     expect(dashboardApi.destroy).not.toHaveBeenCalled();
   });
 });
+
+describe("DashboardList with an embedded dashboard", () => {
+  const EMBED = {
+    id: 31,
+    name: "Regional Sales",
+    slug: "regional-sales",
+    kind: "embed",
+    root_form: null,
+    status: "published",
+    is_public: true,
+    widgets: [],
+    description: "Sales by region",
+    created: "2026-09-01T10:00:00Z",
+    updated: "2026-09-02T10:00:00Z",
+  };
+
+  it("badges it as external instead of counting widgets", async () => {
+    dashboardApi.list.mockResolvedValue({ data: [EMBED] });
+    render(
+      <MemoryRouter>
+        <AbilityContext.Provider value={ability}>
+          <DashboardList />
+        </AbilityContext.Provider>
+      </MemoryRouter>
+    );
+    await screen.findByText("Regional Sales");
+    expect(screen.getByText("External")).toBeInTheDocument();
+    // "0 widgets" would be true and useless.
+    expect(screen.queryByText(/0 widgets/)).not.toBeInTheDocument();
+  });
+});

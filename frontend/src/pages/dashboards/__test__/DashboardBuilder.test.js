@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import DashboardBuilder from "../DashboardBuilder";
@@ -188,5 +189,110 @@ describe("a new table binds to a monitoring form", () => {
     const payload = await save();
 
     expect(payload.widgets[0].form).toBeNull();
+  });
+});
+
+describe("DashboardBuilder with an embedded dashboard", () => {
+  const EMBED = {
+    id: 21,
+    name: "Regional Sales",
+    slug: "regional-sales",
+    kind: "embed",
+    root_form: null,
+    embed_snippet: "<iframe src='https://app.powerbi.com/view?r=1'></iframe>",
+    status: "draft",
+    is_public: false,
+    description: "",
+    default_filters: {},
+    widgets: [],
+  };
+
+  const renderEmbedBuilder = async () => {
+    dashboardApi.list.mockResolvedValue({ data: [EMBED] });
+    dashboardApi.get.mockResolvedValue({ data: EMBED });
+
+    const utils = render(
+      <MemoryRouter
+        initialEntries={["/control-center/dashboard/regional-sales"]}
+      >
+        <Routes>
+          <Route
+            path="/control-center/dashboard/:slug"
+            element={<DashboardBuilder />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /preview/i })
+      ).toBeInTheDocument()
+    );
+    return utils;
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    dashboardApi.list.mockResolvedValue({ data: [EMBED] });
+    dashboardApi.get.mockResolvedValue({ data: EMBED });
+  });
+
+  it("never asks for form sources", async () => {
+    await renderEmbedBuilder();
+    await screen.findByDisplayValue(EMBED.embed_snippet);
+    // /sources answers 400 for an embed; asking would land the load
+    // effect in its catch and render nothing.
+    expect(dashboardApi.sources).not.toHaveBeenCalled();
+  });
+
+  it("shows the embed editor instead of the canvas", async () => {
+    await renderEmbedBuilder();
+    expect(
+      await screen.findByDisplayValue(EMBED.embed_snippet)
+    ).toBeInTheDocument();
+    // BuilderCanvas carries no data-testid; the class is what exists.
+    expect(document.querySelector(".builder-canvas")).toBeNull();
+  });
+
+  it("previews the unsaved snippet through the embed host", async () => {
+    // The markup never renders in this page, so previewing it means
+    // asking the server to serve the *unsaved* snippet from the embed
+    // host and framing that. Preview is the only warning an author gets
+    // that an embed is broken, so it has to go the whole way round.
+    const previewUrl = "http://embed.example.com/api/v1/embed/preview-tok";
+    dashboardApi.embedPreview.mockResolvedValue({
+      data: { embed_url: previewUrl },
+    });
+    await renderEmbedBuilder();
+    const field = await screen.findByDisplayValue(EMBED.embed_snippet);
+    const edited = "<iframe src='https://public.tableau.com/x'></iframe>";
+    await userEvent.clear(field);
+    await userEvent.type(field, edited);
+    await userEvent.click(screen.getByText("Preview"));
+
+    await waitFor(() =>
+      expect(dashboardApi.embedPreview).toHaveBeenCalledWith(EMBED.id, edited)
+    );
+    await waitFor(() =>
+      expect(screen.getByTitle("Regional Sales")).toHaveAttribute(
+        "src",
+        previewUrl
+      )
+    );
+  });
+
+  it("shows no frame when the deployment cannot serve embeds", async () => {
+    // A 503 from embed-preview means EMBED_HOST is unconfigured. The
+    // honest result is the "cannot be shown" notice, never a fallback
+    // that renders the markup in this origin.
+    dashboardApi.embedPreview.mockRejectedValue({
+      response: { status: 503 },
+    });
+    await renderEmbedBuilder();
+    await screen.findByDisplayValue(EMBED.embed_snippet);
+    await userEvent.click(screen.getByText("Preview"));
+    await waitFor(() =>
+      expect(screen.queryByTitle("Regional Sales")).not.toBeInTheDocument()
+    );
   });
 });

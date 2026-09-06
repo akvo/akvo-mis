@@ -19,6 +19,8 @@ import dashboardApi from "../../util/dashboardApi";
 import BuilderPalette from "./BuilderPalette";
 import BuilderCanvas from "./BuilderCanvas";
 import BuilderInspector from "./BuilderInspector";
+import EmbedEditor from "./EmbedEditor";
+import EmbedFrame from "../../components/dashboard/EmbedFrame";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import { WIDGET_DEFAULTS, defaultMeasure } from "./builderConstants";
@@ -53,6 +55,9 @@ const DashboardBuilder = () => {
   // Preview is a mode of this screen, not a different screen. See below.
   const [previewing, setPreviewing] = useState(false);
   const [previewFilters, setPreviewFilters] = useState(EMPTY_FILTERS);
+  // Minted per preview, because the markup being previewed is unsaved:
+  // there is no published snapshot for the embed host to serve.
+  const [previewEmbedUrl, setPreviewEmbedUrl] = useState(null);
 
   const dashboardIdRef = useRef(null);
 
@@ -73,7 +78,11 @@ const DashboardBuilder = () => {
         dashboardIdRef.current = found.id;
         return Promise.all([
           dashboardApi.get(found.id),
-          dashboardApi.sources(found.id),
+          // /sources answers 400 for an embed — it has no form family
+          // (spec D-7) — so an embed must not ask for one.
+          found.kind === "embed"
+            ? Promise.resolve({ data: null })
+            : dashboardApi.sources(found.id),
         ]);
       })
       .then(([detailRes, sourcesRes]) => {
@@ -200,6 +209,14 @@ const DashboardBuilder = () => {
 
   // Build PUT payload
   const buildPayload = useCallback(() => {
+    if (dashboard?.kind === "embed") {
+      return {
+        name: dashboard?.name,
+        description: dashboard?.description || null,
+        kind: "embed",
+        embed_snippet: dashboard?.embed_snippet,
+      };
+    }
     const orderedWidgets = widgets.map((w, i) => ({
       id: w.id < 0 ? null : w.id,
       order: i + 1,
@@ -368,10 +385,24 @@ const DashboardBuilder = () => {
   // unsaved local state. Same component tree, two entry points — which is
   // what makes "viewer and preview render identically" testable rather
   // than merely asserted.
+  // An embed preview has to render through the embed host, exactly as the
+  // viewer will (spec D-9) — that frame is the only warning an author gets
+  // that a snippet is broken, since a cross-origin frame tells us nothing.
+  // The URL is cleared either way, so an edited snippet is never previewed
+  // through a stale one, and a failure leaves the frame in its "cannot be
+  // shown" state, which is the honest report.
   const handlePreview = useCallback(() => {
-    setPreviewing((prev) => !prev);
+    const next = !previewing;
     setSelectedId(null);
-  }, []);
+    setPreviewing(next);
+    setPreviewEmbedUrl(null);
+    if (next && dashboard?.kind === "embed" && dashboardIdRef.current) {
+      dashboardApi
+        .embedPreview(dashboardIdRef.current, dashboard.embed_snippet || "")
+        .then((res) => setPreviewEmbedUrl(res.data.embed_url))
+        .catch(() => {});
+    }
+  }, [previewing, dashboard]);
 
   // Unsaved changes prompt
   useEffect(() => {
@@ -399,6 +430,8 @@ const DashboardBuilder = () => {
   if (!dashboard) {
     return null;
   }
+
+  const isEmbed = dashboard?.kind === "embed";
 
   const statusLabel =
     dashboard.status === "published"
@@ -477,7 +510,18 @@ const DashboardBuilder = () => {
 
       {/* Body — the editing surface, or the viewer's own renderer */}
       {previewing ? (
-        <div className="dashboard-view-content">
+        /* The embed modifier has to match DashboardViewer's exactly.
+           Without it this element is `flex: 1; overflow-y: auto` with no
+           `display: flex`, so `.dashboard-embed-frame { flex: 1 1 auto }`
+           never applies and the frame collapses to its 480px min-height.
+           Spec D-9 makes Preview the whole mitigation for an embed we
+           cannot verify loaded, so an author sizing a vendor report here
+           must be looking at the published page's height, not another. */
+        <div
+          className={`dashboard-view-content${
+            isEmbed ? " dashboard-view-content-embed" : ""
+          }`}
+        >
           <div className="dashboard-view-header">
             <div className="dashboard-view-header-inner">
               <div className="dashboard-view-title">{dashboard.name}</div>
@@ -489,55 +533,78 @@ const DashboardBuilder = () => {
             </div>
           </div>
 
-          <DashboardViewFilters
-            defaultFilters={dashboard.default_filters}
-            value={previewFilters}
-            onChange={setPreviewFilters}
-          />
+          {isEmbed ? (
+            <EmbedFrame
+              src={previewEmbedUrl}
+              title={dashboard.name || "Embedded dashboard"}
+            />
+          ) : (
+            <>
+              <DashboardViewFilters
+                defaultFilters={dashboard.default_filters}
+                value={previewFilters}
+                onChange={setPreviewFilters}
+              />
 
-          {/* Local, unsaved widgets — the whole point of a preview. The
-              same component the viewer renders, with no prop telling it
-              which caller it has. */}
-          <DashboardGrid
-            widgets={widgets}
-            filters={previewFilters}
-            rootFormId={dashboard.root_form?.id}
-          />
+              {/* Local, unsaved widgets — the whole point of a preview. The
+                  same component the viewer renders, with no prop telling it
+                  which caller it has. */}
+              <DashboardGrid
+                widgets={widgets}
+                filters={previewFilters}
+                rootFormId={dashboard.root_form?.id}
+              />
+            </>
+          )}
         </div>
       ) : (
         <div className="builder-body">
-          <BuilderPalette onAdd={handleAdd} />
-          <BuilderCanvas
-            widgets={widgets}
-            selectedId={selectedId}
-            dashboardName={dashboard.name}
-            dashboardDesc={dashboard.description || ""}
-            // The canvas is unfiltered on purpose: the chips above it are
-            // not controls, and an author sizing a widget wants the whole
-            // family, not a slice of it. Preview is where the filter bar
-            // becomes real.
-            filters={EMPTY_FILTERS}
-            rootFormId={dashboard.root_form?.id}
-            defaultFilters={dashboard.default_filters}
-            onSelect={handleSelect}
-            onDeselect={handleDeselect}
-            onMove={handleMove}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
-          />
-          <BuilderInspector
-            widget={selectedWidget}
-            sources={sources}
-            dashboardName={dashboard.name}
-            dashboardDesc={dashboard.description || ""}
-            defaultFilters={dashboard.default_filters}
-            isPublic={Boolean(dashboard?.is_public)}
-            isPublished={dashboard?.status === "published"}
-            onWidgetChange={handleWidgetChange}
-            onDashboardChange={handleDashboardChange}
-            onVisibilityChange={handleVisibility}
-            errorMessage={widgetError}
-          />
+          {isEmbed ? (
+            <EmbedEditor
+              name={dashboard.name}
+              description={dashboard.description || ""}
+              snippet={dashboard.embed_snippet}
+              isPublic={Boolean(dashboard?.is_public)}
+              isPublished={dashboard?.status === "published"}
+              onDashboardChange={handleDashboardChange}
+              onVisibilityChange={handleVisibility}
+            />
+          ) : (
+            <>
+              <BuilderPalette onAdd={handleAdd} />
+              <BuilderCanvas
+                widgets={widgets}
+                selectedId={selectedId}
+                dashboardName={dashboard.name}
+                dashboardDesc={dashboard.description || ""}
+                // The canvas is unfiltered on purpose: the chips above it are
+                // not controls, and an author sizing a widget wants the whole
+                // family, not a slice of it. Preview is where the filter bar
+                // becomes real.
+                filters={EMPTY_FILTERS}
+                rootFormId={dashboard.root_form?.id}
+                defaultFilters={dashboard.default_filters}
+                onSelect={handleSelect}
+                onDeselect={handleDeselect}
+                onMove={handleMove}
+                onDelete={handleDelete}
+                onReorder={handleReorder}
+              />
+              <BuilderInspector
+                widget={selectedWidget}
+                sources={sources}
+                dashboardName={dashboard.name}
+                dashboardDesc={dashboard.description || ""}
+                defaultFilters={dashboard.default_filters}
+                isPublic={Boolean(dashboard?.is_public)}
+                isPublished={dashboard?.status === "published"}
+                onWidgetChange={handleWidgetChange}
+                onDashboardChange={handleDashboardChange}
+                onVisibilityChange={handleVisibility}
+                errorMessage={widgetError}
+              />
+            </>
+          )}
         </div>
       )}
     </div>

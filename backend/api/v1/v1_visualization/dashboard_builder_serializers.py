@@ -17,6 +17,7 @@ from rest_framework import serializers
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms, QuestionOptions
 from api.v1.v1_visualization.constants import (
+    DashboardKind,
     DashboardStatus,
     SUPPORTED_QUESTION_TYPES,
     WidgetTypes,
@@ -46,6 +47,7 @@ class DashboardWidgetSerializer(serializers.ModelSerializer):
 
 
 class DashboardListSerializer(serializers.ModelSerializer):
+    kind = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     root_form = serializers.SerializerMethodField()
     created_by = serializers.SerializerMethodField()
@@ -58,6 +60,7 @@ class DashboardListSerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "description",
+            "kind",
             "status",
             "is_public",
             "root_form",
@@ -67,11 +70,17 @@ class DashboardListSerializer(serializers.ModelSerializer):
             "widgets",
         ]
 
+    def get_kind(self, instance):
+        return DashboardKind.FieldStr.get(instance.kind)
+
     def get_status(self, instance):
         return DashboardStatus.FieldStr.get(instance.status)
 
     def get_root_form(self, instance):
         form = instance.root_form
+        # None for an embed: it has no root_form to describe.
+        if form is None:
+            return None
         return {"id": form.id, "name": form.name}
 
     def get_created_by(self, instance):
@@ -96,7 +105,12 @@ class DashboardDetailSerializer(DashboardListSerializer):
     widgets = DashboardWidgetSerializer(many=True, read_only=True)
 
     class Meta(DashboardListSerializer.Meta):
+        # embed_snippet lives here rather than on the list: it is up to
+        # 20KB a row and the list has no reader for it — DashboardList
+        # and the builder's slug lookup both use `kind` alone, and the
+        # builder fetches this detail before it needs the snippet.
         fields = DashboardListSerializer.Meta.fields + [
+            "embed_snippet",
             "default_filters",
             "published_at",
         ]

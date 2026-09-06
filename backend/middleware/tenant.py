@@ -47,7 +47,19 @@ from utils.tenant_host import is_base_domain, resolve_tenant_from_host
 # never by being listed — holds for both: neither is an API endpoint.
 # Liveness answers "is this process up"; config.js is a static asset that
 # happens to be served by Django. Both have no tenant by construction.
-EXEMPT_PATHS = ("/api/v1/health/check", "/api/v1/config.js")
+# `embed/`: the embedded-dashboard document (VIZ-019). It is served on
+# EMBED_HOST, a host deliberately outside the workspace namespace, so
+# `resolve_tenant_from_host` finds nothing and the 404 above would refuse
+# every embed before its view ran. It belongs here for the same reason as
+# the two above rather than as the start of a list: it is not an API
+# endpoint but a document, and it has no tenant by construction — the
+# authorisation happened when its signed URL was minted by an endpoint
+# that did know the caller, and the signature is what travels with it.
+EXEMPT_PATHS = (
+    "/api/v1/health/check",
+    "/api/v1/config.js",
+    "/api/v1/embed/",
+)
 
 
 class TenantMiddleware:

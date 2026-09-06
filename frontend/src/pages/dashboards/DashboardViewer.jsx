@@ -5,6 +5,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import dashboardApi from "../../util/dashboardApi";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
+import EmbedFrame from "../../components/dashboard/EmbedFrame";
 import { store, uiText } from "../../lib";
 import "./viewer.scss";
 
@@ -108,7 +109,14 @@ const DashboardViewer = () => {
         <ArrowLeftOutlined />
       </button>
 
-      <div className="dashboard-view-content">
+      {/* The embed branch needs a flex column to hand the frame the
+          height it fills; the modifier keeps that off the widget grid,
+          which shares this element. */}
+      <div
+        className={`dashboard-view-content${
+          dashboard.kind === "embed" ? " dashboard-view-content-embed" : ""
+        }`}
+      >
         <div className="dashboard-view-header">
           <div className="dashboard-view-header-inner">
             <div className="dashboard-view-title">{dashboard.name}</div>
@@ -118,18 +126,26 @@ const DashboardViewer = () => {
           </div>
         </div>
 
-        <DashboardViewFilters
-          defaultFilters={dashboard.default_filters}
-          value={filters}
-          onChange={setFilters}
-        />
+        {dashboard.kind === "embed" ? (
+          /* No filter bar: an embed has no data of ours to filter, and
+             a control that changes nothing is worse than no control. */
+          <EmbedFrame src={dashboard.embed_url} title={dashboard.name} />
+        ) : (
+          <>
+            <DashboardViewFilters
+              defaultFilters={dashboard.default_filters}
+              value={filters}
+              onChange={setFilters}
+            />
 
-        <DashboardGrid
-          widgets={dashboard.widgets}
-          filters={filters}
-          rootFormId={dashboard.root_form?.id}
-          dashboardSlug={slug}
-        />
+            <DashboardGrid
+              widgets={dashboard.widgets}
+              filters={filters}
+              rootFormId={dashboard.root_form?.id}
+              dashboardSlug={slug}
+            />
+          </>
+        )}
       </div>
     </div>
   );

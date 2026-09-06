@@ -75,6 +75,16 @@ TESTING = sys.argv[1:2] == ["test"]
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
+# Origin that serves embedded dashboards' author markup, e.g.
+# "https://embed.example.com". It MUST NOT be this application's origin:
+# the whole point is that a pasted snippet runs somewhere its scripts
+# cannot reach our DOM or the AUTH_TOKEN cookie (which is host-only, and
+# readable from JavaScript). Unset means embedding is not configured for
+# this deployment, and the viewer says so rather than falling back to
+# serving the markup here -- that fallback would be the cross-site
+# scripting hole the separate origin exists to prevent.
+EMBED_HOST = environ.get("EMBED_HOST", "")
+
 
 ALLOWED_HOSTS = ["*"]
 
@@ -248,7 +258,17 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
         "LOCATION": "/var/tmp/cache",
-    }
+    },
+    # Embed previews live here rather than in `default`, which
+    # v1_forms.signals clears wholesale on any form change. Sharing it
+    # would mean an author's preview dying because somebody else edited a
+    # form — and, under `manage.py test --parallel`, another process's
+    # form seeding racing a preview to 404. The default cache's own
+    # comment asks unrelated callers to do exactly this.
+    "embed": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": "/var/tmp/cache-embed",
+    },
 }
 CACHE_FOLDER = "/tmp/cache/"
 

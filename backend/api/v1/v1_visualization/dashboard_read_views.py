@@ -23,8 +23,9 @@ from rest_framework import serializers, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
+from api.v1.v1_visualization.embed_views import embed_url_for
 from api.v1.v1_visualization.models import Dashboard
 from api.v1.v1_visualization.public_scope import has_any_dashboard_access
 from utils.tenant_host import public_tenant
@@ -60,16 +61,25 @@ def serialize_identity(dashboard):
     Spec D-1: renaming a published dashboard reaches viewers at once,
     because a corrected typo should not require re-publishing work that
     is not finished.
+
+    `root_form` is guarded here, in the one function both `list` and
+    `retrieve` call, rather than at either call site: `list` runs this
+    over every published row in a tenant, so an unguarded lookup would
+    500 the whole anonymous list the moment one public embed (whose
+    `root_form` is null by construction) appeared in it.
     """
+    form = dashboard.root_form
     return {
         "id": dashboard.id,
         "name": dashboard.name,
         "slug": dashboard.slug,
         "description": dashboard.description,
-        "root_form": {
-            "id": dashboard.root_form_id,
-            "name": dashboard.root_form.name,
-        },
+        "kind": DashboardKind.FieldStr.get(dashboard.kind),
+        # None for an embed, which has no form family.
+        "root_form": (
+            None if form is None
+            else {"id": form.id, "name": form.name}
+        ),
         # None passes straight through: DateTimeField.to_representation
         # short-circuits on a falsy value.
         "published_at": DATETIME.to_representation(
@@ -187,6 +197,10 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
         snapshot = read_snapshot(dashboard)
         row = serialize_identity(dashboard)
         row["default_filters"] = snapshot["default_filters"]
+        # A URL on the embed host, not the markup itself: viewers
+        # never run a snippet in this origin (VIZ-019 D-4a). None
+        # when EMBED_HOST is unconfigured, which the viewer reports.
+        row["embed_url"] = embed_url_for(dashboard)
         # Annotated as it is served, never baked in at publish time: a
         # question can be deleted at any point afterwards, and a stale
         # is_broken: false would be worse than no annotation at all.

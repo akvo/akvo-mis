@@ -5,6 +5,10 @@ from django.test.utils import override_settings
 from api.v1.v1_forms.constants import FormStatus, FormTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    EMBED_SNIPPET_MAX,
+)
 from api.v1.v1_visualization.dashboard_functions import (
     SLUG_PATTERN,
     validate_dashboard_payload,
@@ -412,4 +416,169 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
                     config={},
                 )
             )
+        )
+
+
+SNIPPET = (
+    "<script type=\"module\" "
+    "src=\"https://public.tableau.com/javascripts/api/"
+    "tableau.embedding.3.latest.min.js\"></script>\n"
+    "<tableau-viz id='tableauViz' "
+    "src='https://public.tableau.com/views/Superstore/Overview' "
+    "toolbar=\"bottom\" hide-tabs></tableau-viz>"
+)
+
+
+class EmbedValidationTestCase(TestCase, ProfileTestHelperMixin):
+    """The embed arm of validate_dashboard_payload (spec D-3, D-4)."""
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.user = self.create_user(
+            email="viz_embed_validation@akvo.org",
+            role_level=self.IS_SUPER_ADMIN,
+        )
+        self.root = Forms.objects.get(pk=6001)
+
+    def check(self, data, dashboard=None):
+        return validate_dashboard_payload(data, self.user, dashboard)
+
+    # ── the snippet is stored verbatim, never inspected ──
+
+    def test_a_snippet_with_a_script_tag_is_accepted(self):
+        # Spec D-4: content is never inspected. A <script> tag, single
+        # quotes and a custom element are all ordinary input here.
+        self.assertIsNone(
+            self.check(
+                {"name": "Sales", "kind": "embed", "embed_snippet": SNIPPET}
+            )
+        )
+
+    def test_a_javascript_url_in_the_snippet_is_accepted(self):
+        # Deliberately not refused. We never build an element from an
+        # author-supplied URL, and anything inside the snippet runs in
+        # the opaque origin of the srcdoc sandbox (D-4a/D-4b). The
+        # sandbox is the boundary, not a validator.
+        self.assertIsNone(
+            self.check(
+                {
+                    "name": "Odd",
+                    "kind": "embed",
+                    "embed_snippet": "<a href='javascript:alert(1)'>x</a>",
+                }
+            )
+        )
+
+    # ── the only two bounds ──
+
+    def test_a_missing_snippet_is_refused(self):
+        error = self.check({"name": "Sales", "kind": "embed"})
+        self.assertEqual(error["field"], "embed_snippet")
+
+    def test_a_blank_snippet_is_refused(self):
+        error = self.check(
+            {"name": "Sales", "kind": "embed", "embed_snippet": "   "}
+        )
+        self.assertEqual(error["field"], "embed_snippet")
+
+    def test_a_non_string_snippet_is_refused(self):
+        error = self.check(
+            {"name": "Sales", "kind": "embed", "embed_snippet": 12}
+        )
+        self.assertEqual(error["field"], "embed_snippet")
+
+    def test_an_oversized_snippet_is_refused(self):
+        error = self.check(
+            {
+                "name": "Sales",
+                "kind": "embed",
+                "embed_snippet": "x" * (EMBED_SNIPPET_MAX + 1),
+            }
+        )
+        self.assertEqual(error["field"], "embed_snippet")
+
+    def test_a_snippet_at_the_limit_is_accepted(self):
+        self.assertIsNone(
+            self.check(
+                {
+                    "name": "Sales",
+                    "kind": "embed",
+                    "embed_snippet": "x" * EMBED_SNIPPET_MAX,
+                }
+            )
+        )
+
+    # ── an embed has no forms and no widgets ──
+
+    def test_an_embed_with_a_root_form_is_refused(self):
+        error = self.check(
+            {
+                "name": "Sales",
+                "kind": "embed",
+                "embed_snippet": SNIPPET,
+                "root_form": self.root.id,
+            }
+        )
+        self.assertEqual(error["field"], "root_form")
+
+    def test_an_embed_with_widgets_is_refused(self):
+        error = self.check(
+            {
+                "name": "Sales",
+                "kind": "embed",
+                "embed_snippet": SNIPPET,
+                "widgets": [{"type": "kpi"}],
+            }
+        )
+        self.assertEqual(error["field"], "widgets")
+
+    # ── kind ──
+
+    def test_an_unknown_kind_is_refused(self):
+        error = self.check({"name": "Sales", "kind": "spreadsheet"})
+        self.assertEqual(error["field"], "kind")
+
+    def test_a_non_string_kind_is_refused_rather_than_crashing(self):
+        # A list is unhashable, so an unguarded `raw not in KIND_IDS`
+        # raises TypeError and the request 500s. Ordinary bad input has
+        # to come back as the same 400 shape as any other bad field.
+        for raw in ([], {}, 7):
+            error = self.check({"name": "Sales", "kind": raw})
+            self.assertEqual(error["field"], "kind", raw)
+
+    def test_kind_defaults_to_widgets_when_absent(self):
+        # The widgets arm still demands a root_form, which is how we
+        # know the default was applied rather than the embed arm taken.
+        error = self.check({"name": "Sales"})
+        self.assertEqual(error["field"], "root_form")
+
+    def test_kind_cannot_be_changed_on_update(self):
+        dashboard = Dashboard.objects.create(
+            name="Sales",
+            slug="sales",
+            kind=DashboardKind.embed,
+            root_form=None,
+            embed_snippet=SNIPPET,
+        )
+        error = self.check(
+            {"name": "Sales", "kind": "widgets"}, dashboard=dashboard
+        )
+        self.assertEqual(error["field"], "kind")
+
+    def test_an_update_omitting_the_snippet_keeps_the_stored_one(self):
+        dashboard = Dashboard.objects.create(
+            name="Sales",
+            slug="sales-2",
+            kind=DashboardKind.embed,
+            root_form=None,
+            embed_snippet=SNIPPET,
+        )
+        self.assertIsNone(
+            self.check({"name": "Renamed"}, dashboard=dashboard)
+        )
+
+    def test_the_widgets_arm_is_unchanged(self):
+        self.assertIsNone(
+            self.check({"name": "Sales", "root_form": self.root.id})
         )

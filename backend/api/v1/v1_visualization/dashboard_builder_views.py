@@ -24,13 +24,17 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from api.v1.v1_profile.constants import FeatureAccessTypes
-from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    DashboardStatus,
+)
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardDetailSerializer,
     DashboardListSerializer,
     serialize_sources,
 )
 from api.v1.v1_visualization.dashboard_functions import (
+    KIND_IDS,
     SLUG_PATTERN,
     apply_widgets,
     copy_name,
@@ -40,6 +44,7 @@ from api.v1.v1_visualization.dashboard_functions import (
     validate_dashboard_payload,
 )
 from api.v1.v1_visualization.dashboard_snapshot import build_snapshot
+from api.v1.v1_visualization.embed_views import preview_url_for
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 from utils.custom_permissions import DashboardAccess
 
@@ -174,6 +179,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "unpublish": FeatureAccessTypes.dashboard_publish,
         "visibility": FeatureAccessTypes.dashboard_publish,
         "duplicate": FeatureAccessTypes.dashboard_create,
+        "embed_preview": FeatureAccessTypes.dashboard_edit,
     }
 
     def get_permissions(self):
@@ -232,6 +238,10 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        kind = KIND_IDS.get(
+            request.data.get("kind"), DashboardKind.widgets
+        )
+        is_embed = kind == DashboardKind.embed
         dashboard = Dashboard.objects.create(
             name=name.strip(),
             slug=slug,
@@ -240,9 +250,20 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # authenticated user, so a caller cannot plant a row in
             # someone else's workspace (MT-004).
             tenant=getattr(request.user, "tenant", None),
-            root_form_id=request.data.get("root_form"),
+            kind=kind,
+            root_form_id=(
+                None if is_embed else request.data.get("root_form")
+            ),
+            embed_snippet=(
+                request.data.get("embed_snippet") if is_embed else None
+            ),
             created_by=request.user,
-            default_filters=request.data.get("default_filters") or {},
+            # An embed has no data of ours to filter, so a stored filter
+            # would be a setting with no effect.
+            default_filters=(
+                {} if is_embed
+                else request.data.get("default_filters") or {}
+            ),
         )
         return Response(
             DashboardDetailSerializer(instance=dashboard).data,
@@ -266,12 +287,21 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
                 # URL and renaming is a cosmetic edit.
                 dashboard.name = name.strip()
             dashboard.description = request.data.get("description")
-            dashboard.default_filters = (
-                request.data.get("default_filters") or {}
-            )
+            if dashboard.kind == DashboardKind.embed:
+                snippet = request.data.get("embed_snippet")
+                if snippet is not None:
+                    dashboard.embed_snippet = snippet
+                dashboard.default_filters = {}
+            else:
+                dashboard.default_filters = (
+                    request.data.get("default_filters") or {}
+                )
             dashboard.updated = timezone.now()
             dashboard.save()
-            apply_widgets(dashboard, request.data.get("widgets") or [])
+            if dashboard.kind == DashboardKind.widgets:
+                apply_widgets(
+                    dashboard, request.data.get("widgets") or []
+                )
 
         return Response(
             DashboardDetailSerializer(instance=dashboard).data
@@ -300,10 +330,11 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # validator rather than writing a stored-rows twin is what keeps
         # the two from drifting; tests_dashboard_snapshot pins the shape
         # compatibility that makes it possible.
+        payload = {"name": dashboard.name}
+        if dashboard.kind == DashboardKind.widgets:
+            payload["widgets"] = snapshot["widgets"]
         error = validate_dashboard_payload(
-            {"name": dashboard.name, "widgets": snapshot["widgets"]},
-            request.user,
-            dashboard=dashboard,
+            payload, request.user, dashboard=dashboard
         )
         if error:
             # Nothing written: status, published_config and
@@ -421,7 +452,9 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
                 # duplicate must not be able to move a dashboard into
                 # another workspace (MT-004).
                 tenant=getattr(request.user, "tenant", None),
+                kind=source.kind,
                 root_form=source.root_form,
+                embed_snippet=source.embed_snippet,
                 created_by=request.user,
                 # Copied, not shared: the source's dict must not become
                 # reachable through two rows.
@@ -457,6 +490,43 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=[MANAGE],
+        summary="Mint an embed URL for unsaved markup",
+        description=(
+            "Preview has to show what a viewer will see, and a viewer "
+            "sees the snippet running on EMBED_HOST rather than in this "
+            "application's origin. Unsaved markup has no published "
+            "snapshot to serve, so it is parked in the cache behind a "
+            "single-use key and the signed URL names that key. 503 when "
+            "EMBED_HOST is unconfigured, because there is nowhere safe "
+            "to render it."
+        ),
+        parameters=[DASHBOARD_PK],
+    )
+    def embed_preview(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        if dashboard.kind != DashboardKind.embed:
+            return Response(
+                {"message": "not an embedded dashboard"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        snippet = request.data.get("embed_snippet")
+        if not isinstance(snippet, str) or not snippet.strip():
+            return Response(
+                {"message": "embed_snippet is required",
+                 "field": "embed_snippet"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        url = preview_url_for(snippet)
+        if url is None:
+            return Response(
+                {"message": "Embedding is not configured for this "
+                            "deployment"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"embed_url": url})
+
+    @extend_schema(
+        tags=[MANAGE],
         summary="Forms and questions a widget here may bind to",
         description=(
             "The family boundary as the builder sees it: the root "
@@ -466,9 +536,18 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         parameters=[DASHBOARD_PK],
     )
     def sources(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        if dashboard.kind == DashboardKind.embed:
+            # Spec D-7: an embed has no form family, and there is
+            # nothing truthful to put in the response. Not
+            # {"forms": []} -- an empty collection reads as "this
+            # workspace has no forms" and sends the reader to debug the
+            # wrong thing.
+            return Response(
+                {"message": "an embedded dashboard has no form sources"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # This endpoint IS the family boundary as the UI sees it: if a
         # form is not here the builder cannot offer it, and if it
         # somehow does, validate_dashboard_payload rejects it on save.
-        return Response(
-            serialize_sources(self.get_object(), request.user)
-        )
+        return Response(serialize_sources(dashboard, request.user))

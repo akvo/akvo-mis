@@ -34,6 +34,23 @@ def is_base_domain(host):
     return _normalize(host) in (base, f"www.{base}")
 
 
+def embed_hostname():
+    """Hostname of the origin that serves embedded content, or "".
+
+    `EMBED_HOST` is configured as a full origin because that is what the
+    frontend needs; everything host-shaped derives from here so the two
+    readings cannot drift. Empty means embedding is unconfigured, and
+    every caller treats that as "off" rather than "anything goes".
+    """
+    return (urlparse(settings.EMBED_HOST or "").hostname or "").lower()
+
+
+def is_embed_host(host):
+    """Does this host serve embedded content rather than the app?"""
+    configured = embed_hostname()
+    return bool(configured) and _normalize(host) == configured
+
+
 def resolve_tenant_from_host(host):
     """The tenant this host belongs to, or None if it belongs to none."""
     if is_base_domain(host):

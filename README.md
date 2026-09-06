@@ -43,6 +43,7 @@ IP_ADDRESS="http://<your_ip_address>:3000/api/v1/device"
 APK_UPLOAD_SECRET="123456789AU"
 STORAGE_PATH="./storage"
 BASE_DOMAIN=
+EMBED_HOST=
 SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
 SENTRY_MOBILE_DSN="<<your_sentry_mobile_DSN>>"
@@ -71,6 +72,77 @@ A migrated database always has one workspace called `default`, created by
 the tenant backfill migration, so the seeders have something to target
 before anyone registers. Commands that write workspace-owned rows take
 `--tenant=<subdomain>`.
+
+#### Embedded dashboards
+
+A dashboard can show a report built in an external tool — Power BI,
+Tableau, Looker Studio. The author pastes in the embed snippet the
+vendor's Share dialog gives them, which is HTML with `<script>` tags that
+we did not write and cannot vet.
+
+**`EMBED_HOST` exists because that snippet has to run somewhere, and
+there are only three candidates.**
+
+*In the app's own page.* Then it is JavaScript running in our origin, on
+a page anonymous visitors can load. It can read the DOM, and it can read
+`AUTH_TOKEN` out of `document.cookie` — that cookie is not `HttpOnly` —
+so a snippet could take over the session of any administrator who opens
+the dashboard. This is not an option, however convenient.
+
+*In a sandboxed frame with no origin of its own* (`srcdoc` without
+`allow-same-origin`). Properly isolated, and the vendors do not work
+there: the document's origin is the string `"null"`, so Tableau's API
+requests are refused by CORS and Power BI cannot reach its own storage.
+Tried, measured, abandoned.
+
+*On a host of its own.* The snippet gets a real origin, so the vendors
+behave normally, and it is not our origin, so the same-origin policy
+keeps it away from our page exactly as it does any third-party iframe.
+That host is `EMBED_HOST`, and this is the whole reason the setting
+exists.
+
+| `EMBED_HOST` | Behaviour |
+|---|---|
+| empty (**default**) | Embedding is off. The create dialog does not offer it, the embed route answers 404, and any embedded dashboards that already exist stay listed and editable while reporting that their content cannot be shown. Every other kind of dashboard is unaffected. |
+| e.g. `https://embed.example.com` | Embedded dashboards render. The host must resolve, serve TLS, and route `/api` to the backend the way the app's own host does. |
+
+**Leaving it empty is a supported state**, not a broken one. Set it only
+for deployments that want embedded dashboards.
+
+**Choosing a value.** Any hostname that is not the app's own will do.
+With `BASE_DOMAIN` set, a name one level under it — `embed.<BASE_DOMAIN>`
+— is covered by the existing wildcard certificate. Without one
+(single-tenant and legacy deployments) the rule is the same, but the
+certificate is its own piece of work since there is no wildcard to lean
+on. It must never be the app's own origin: the backend refuses to serve
+the document to a request whose `Host` is not `EMBED_HOST`, the frontend
+refuses to frame a URL on its own origin, and registration refuses a
+workspace whose host would equal it, but the first line of defence is
+not pointing it there.
+
+There is deliberately **no derived default** such as `embed.<BASE_DOMAIN>`.
+Deriving a name does not create the DNS record or the certificate, and a
+cross-origin frame reports nothing back to us — so a plausible-but-wrong
+default produces a blank panel and nothing in any log, where an empty
+value produces a sentence on screen.
+
+A sibling subdomain is enough because this app sets no domain-wide
+cookies (`AUTH_TOKEN` is host-only; `SESSION_COOKIE_DOMAIN` and
+`CSRF_COOKIE_DOMAIN` are unset). If one is ever introduced, `EMBED_HOST`
+has to move to a separate registrable domain.
+
+**Locally**, add a host entry as for any workspace and point the variable
+at the backend's port, since Django serves the document:
+
+```
+127.0.0.1  embed.localapp.test
+```
+
+```bash
+EMBED_HOST=http://embed.localapp.test:8000
+```
+
+Then `./dc.sh up -d --force-recreate backend worker`.
 
 #### Subdomain routing locally
 
@@ -353,9 +425,12 @@ Screens:
 | `/control-center/dashboard/:slug` | Builder — drag widgets onto a 24-column grid | `dashboard_edit` |
 | `/dashboards/:slug` | Viewer — what colleagues see | `dashboard_view` |
 
-To add a dashboard: open `/control-center/dashboard`, click Create, pick a name
-and a root registration form (which fixes the dashboard's data universe and
-cannot be changed later), then add widgets and press Publish.
+To add a dashboard: open `/control-center/dashboard` and click Create. A
+dashboard is either built here — pick a name and a root registration form,
+which fixes its data universe and cannot be changed later, then add widgets
+— or it embeds a report from an external tool, in which case you paste that
+tool's embed snippet instead. Either way, press Publish. The embed option
+appears only where [`EMBED_HOST`](#embedded-dashboards) is configured.
 
 Widget types are `kpi`, `bar`, `line`, `pie`, `table`, `map` and
 `section_title`. Every chart is rendered by [akvo-charts](https://akvo.github.io/akvo-charts);
@@ -366,11 +441,16 @@ snapshot (`published_config`) until Publish is pressed again. A widget whose
 question was deleted in the form builder renders a placeholder in its own grid
 cell rather than failing the page.
 
-Two API namespaces, both authenticated — there is no anonymous dashboard
-surface:
+Three API namespaces:
 
-- `/api/v1/manage/dashboards` — authoring (Swagger tag **Manage Dashboards**)
-- `/api/v1/dashboards` — published reads (Swagger tag **Dashboards**)
+- `/api/v1/manage/dashboards` — authoring, authenticated (Swagger tag
+  **Manage Dashboards**)
+- `/api/v1/dashboards` — published reads (Swagger tag **Dashboards**).
+  Anonymous callers reach the dashboards a workspace has marked public;
+  everything else needs a session.
+- `/api/v1/embed/<token>` — one embedded dashboard's external markup,
+  served only on `EMBED_HOST` (see
+  [Embedded dashboards](#embedded-dashboards))
 
 Design docs: [VIZ-001](doc/design/VIZ-001-dashboard-builder-data-architecture.md)
 covers the data model, widget config schema and the `measure` semantics;

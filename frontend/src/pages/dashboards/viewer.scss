@@ -354,3 +354,43 @@ $view-gutter: 50px;
   justify-content: center;
   padding: 80px 0;
 }
+
+/* The embed is the whole page, so the frame takes what is left below
+   the header. `.dashboard-view-shell` is already a flex column with
+   `min-height: calc(100vh - $header-height)`, so filling it costs one
+   `flex` and the `min-height: 0` that lets a flex child actually shrink.
+
+   Layout *inside* the frame is the snippet's business and is not
+   promised: vendor embed codes hardcode pixel sizes, and because the
+   snippet is stored verbatim an author who wants fluid behaviour can
+   edit those attributes themselves. */
+.dashboard-embed-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+
+  iframe {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 480px;
+    border: 0;
+  }
+}
+
+/* Only on the embed branch: `.dashboard-view-content` is shared with
+   the widget grid, and making that a flex column would relayout every
+   dashboard in the product to fix one.
+
+   This supersedes the `flex` on `.dashboard-embed-frame` above being
+   inert: that wrapper sat in a block container, so its `flex: 1 1 auto`
+   did nothing and the iframe settled at its 480px floor. The column
+   here is what makes it live. */
+.dashboard-view-content-embed {
+  display: flex;
+  flex-direction: column;
+
+  /* So a short viewport squeezes the frame, never the title. */
+  .dashboard-view-header {
+    flex: none;
+  }
+}

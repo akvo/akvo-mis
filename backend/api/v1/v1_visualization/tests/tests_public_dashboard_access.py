@@ -15,8 +15,12 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import SystemUser, Tenant
-from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    DashboardStatus,
+)
 from api.v1.v1_visualization.models import Dashboard
+from api.v1.v1_visualization.public_scope import allowlist_from
 from utils.tenant_test_case import TenantIsolationTestCase
 
 
@@ -664,3 +668,120 @@ class CrossTenantIdEscalationTestCase(TenantIsolationTestCase):
             "/api/v1/dashboards/beta-view", HTTP_HOST="acme.app.com",
         )
         self.assertEqual(res.status_code, 404)
+
+
+@override_settings(USE_TZ=False)
+class PublicEmbedDashboardTestCase(TestCase, ProfileTestHelperMixin):
+    """An embed's allowlist is empty — spec D-6.
+
+    An embedded dashboard queries none of our data endpoints, so the
+    set of ids an anonymous caller holding its slug may name is the
+    empty set. Every data endpoint must refuse.
+    """
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.user = self.create_user(
+            email="viz_public_embed@akvo.org",
+            role_level=self.IS_SUPER_ADMIN,
+        )
+        # As in PublicEndpointAccessTestCase: the anonymous path
+        # resolves the single-host tenant through public_tenant(), so
+        # the dashboard has to sit on that same row.
+        self.user.tenant = Tenant.objects.get()
+        self.user.save()
+        self.root = Forms.objects.get(pk=6001)
+        self.root.tenant = self.user.tenant
+        self.root.save()
+        Administration.objects.filter(parent__isnull=True).update(
+            tenant=self.user.tenant
+        )
+        self.dashboard = Dashboard.objects.create(
+            name="Sales",
+            slug="sales",
+            kind=DashboardKind.embed,
+            root_form=None,
+            embed_snippet="<iframe src='https://app.powerbi.com/view?r=x'>"
+                          "</iframe>",
+            tenant=self.user.tenant,
+            created_by=self.user,
+            status=DashboardStatus.published,
+            is_public=True,
+            published_config={
+                "embed_snippet": "<iframe src='https://app.powerbi.com/"
+                                 "view?r=x'></iframe>"
+            },
+        )
+
+    def test_values_is_404(self):
+        res = self.client.get(
+            "/api/v1/visualization/values",
+            {"dashboard_slug": "sales", "form_id": 6001},
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_escalation_is_404(self):
+        # monitoring_form_id and columns are required by
+        # EscalationFilterSerializer, which runs before check_ids --
+        # without them the endpoint answers 400 and the allowlist is
+        # never consulted, so the test would pass for the wrong reason.
+        res = self.client.get(
+            "/api/v1/visualization/escalation/6001",
+            {
+                "dashboard_slug": "sales",
+                "monitoring_form_id": 6002,
+                "columns": "name:parent_name",
+            },
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_formula_is_404(self):
+        res = self.client.get(
+            "/api/v1/visualization/values/formula",
+            {
+                "dashboard_slug": "sales",
+                "form_id": 6001,
+                "group_by": "parent_id",
+                # Required by FormulaValuesSerializer, which runs
+                # before check_ids -- same reason as the escalation
+                # case above.
+                "formula": json.dumps({
+                    "buckets": [{
+                        "value": "Yes",
+                        "label": "Yes",
+                        "all_of": [{
+                            "question_id": 600102,
+                            "op": "option_equals",
+                            "value": "Yes",
+                        }],
+                    }],
+                    "default": {
+                        "value": "_no_info", "label": "_no_info",
+                    },
+                }),
+            },
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_geolocation_is_404(self):
+        res = self.client.get(
+            "/api/v1/maps/geolocation/6001", {"dashboard_slug": "sales"}
+        )
+        self.assertEqual(res.status_code, 404)
+
+    def test_a_null_root_form_admits_no_garbage_form_id(self):
+        # The widgets branch builds its form set from root_form_id, and
+        # `permits_form` resolves an unparseable id to None through
+        # `_as_id` -- so a set that still contained None would answer
+        # True for any garbage a caller typed. The
+        # `dashboard_kind_matches_source` constraint keeps such a row
+        # out of the database, so this is asserted against an unsaved
+        # instance: the guard has to hold in the function that builds
+        # the set, not by luck of what the table happens to allow.
+        naked = Dashboard(
+            kind=DashboardKind.widgets,
+            root_form=None,
+            published_config={},
+        )
+        self.assertFalse(allowlist_from(naked).permits_form("garbage"))

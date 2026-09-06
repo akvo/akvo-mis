@@ -16,6 +16,8 @@ from django.utils.text import slugify
 from api.v1.v1_forms.constants import FormTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    EMBED_SNIPPET_MAX,
     SUPPORTED_QUESTION_TYPES,
     VALID_COLUMN_SOURCES,
     VALID_CRITERIA_TYPES,
@@ -39,6 +41,8 @@ SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*\Z")
 WIDGET_TYPE_IDS = {
     name: value for value, name in WidgetTypes.FieldStr.items()
 }
+
+KIND_IDS = {name: value for value, name in DashboardKind.FieldStr.items()}
 
 
 def _error(message, widget_index=None, field=None):
@@ -142,6 +146,74 @@ def copy_slug(slug, queryset):
 # =========================================================
 
 
+def _resolve_kind(data, dashboard):
+    """(kind, error) for this payload.
+
+    Immutable after creation (spec D-3): switching kind would strand
+    either the widget rows or the snippet, and neither has a defensible
+    automatic resolution. Membership is checked before the immutability
+    comparison so that garbage reports "unknown kind" rather than the
+    misleading "cannot be changed".
+    """
+    raw = data.get("kind")
+    # isinstance first: KIND_IDS is a dict, so `[] not in KIND_IDS`
+    # raises TypeError: unhashable type, and a merely malformed payload
+    # would come back as a 500 rather than the 400 this function exists
+    # to produce.
+    if raw is not None and (not isinstance(raw, str) or raw not in KIND_IDS):
+        return None, _error(
+            "kind must be one of: widgets, embed", field="kind"
+        )
+    if dashboard is not None:
+        if raw is not None and KIND_IDS[raw] != dashboard.kind:
+            return None, _error(
+                "kind cannot be changed after creation", field="kind"
+            )
+        return dashboard.kind, None
+    if raw is None:
+        return DashboardKind.widgets, None
+    return KIND_IDS[raw], None
+
+
+def _validate_embed(data, dashboard):
+    """The embed arm. The snippet's *content* is never inspected.
+
+    Spec D-4: we do not parse, rewrite, or shape-check the snippet, and
+    there is deliberately no URL scheme check. We never construct an
+    element from an author-supplied URL, and everything inside the
+    snippet executes in the opaque origin of the srcdoc sandbox — the
+    sandbox is the boundary, not a validator.
+
+    The two bounds below are bounds on storage, not opinions about
+    content.
+    """
+    snippet = data.get("embed_snippet")
+    if snippet is None and dashboard is not None:
+        # An update that renames but does not touch the snippet keeps
+        # the stored one rather than failing as though it were absent.
+        snippet = dashboard.embed_snippet
+    if not isinstance(snippet, str) or not snippet.strip():
+        return _error(
+            "embed_snippet is required", field="embed_snippet"
+        )
+    if len(snippet) > EMBED_SNIPPET_MAX:
+        return _error(
+            "embed_snippet must be {0} characters or fewer".format(
+                EMBED_SNIPPET_MAX
+            ),
+            field="embed_snippet",
+        )
+    if data.get("root_form") is not None:
+        return _error(
+            "an embedded dashboard has no root_form", field="root_form"
+        )
+    if data.get("widgets"):
+        return _error(
+            "an embedded dashboard has no widgets", field="widgets"
+        )
+    return None
+
+
 def validate_dashboard_payload(data, user, dashboard=None):
     """Return None when the payload is safe to store, else an error.
 
@@ -175,6 +247,14 @@ def validate_dashboard_payload(data, user, dashboard=None):
     widgets = data.get("widgets")
     if widgets is not None and not isinstance(widgets, list):
         return _error("widgets must be a list")
+
+    kind, error = _resolve_kind(data, dashboard)
+    if error:
+        return error
+    if kind == DashboardKind.embed:
+        # An embed has no root_form, no widget family and no filters, so
+        # none of the rules below apply to it.
+        return _validate_embed(data, dashboard)
 
     if dashboard is None:
         root_form = forms.filter(pk=_as_int(data.get("root_form"))).first()

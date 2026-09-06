@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
-import { store, uiText } from "../../lib";
+import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
 import {
   NEEDS_FORM,
   NEEDS_QUESTION,
@@ -112,10 +112,6 @@ const BuilderInspector = ({
   onVisibilityChange,
   errorMessage,
 }) => {
-  const { language } = store.useState((s) => s);
-  const { active: activeLang } = language;
-  const text = useMemo(() => uiText[activeLang], [activeLang]);
-
   const forms = useMemo(() => sources?.forms || [], [sources]);
 
   const isMonitoringForm = useCallback(
@@ -218,36 +214,11 @@ const BuilderInspector = ({
             </label>
           </div>
 
-          {/* Visibility. Set apart from everything above it because it
-              writes immediately rather than joining the dirty state the
-              Save button flushes — without that distinction an author
-              would reasonably expect Cancel to undo it. */}
-          <div
-            className={`builder-inspector-visibility${
-              isPublic ? " builder-inspector-visibility--live" : ""
-            }`}
-          >
-            <div className="builder-inspector-visibility-top">
-              <span className="builder-inspector-visibility-title">
-                {text.dashboardVisibilityTitle}
-              </span>
-              <Switch
-                size="small"
-                role="switch"
-                aria-label={text.dashboardVisibilityTitle}
-                checked={isPublic}
-                disabled={!isPublished}
-                onChange={(checked) => {
-                  onVisibilityChange(checked);
-                }}
-              />
-            </div>
-            <div className="builder-inspector-hint">
-              {isPublished
-                ? text.dashboardVisibilityHintOn
-                : text.dashboardVisibilityHintDraft}
-            </div>
-          </div>
+          <DashboardVisibilityToggle
+            isPublic={isPublic}
+            isPublished={isPublished}
+            onChange={onVisibilityChange}
+          />
 
           <div className="builder-inspector-info">
             <svg

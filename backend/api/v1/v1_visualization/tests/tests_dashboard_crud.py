@@ -21,6 +21,7 @@ from api.v1.v1_profile.models import (
 )
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -608,3 +609,147 @@ class DashboardUpdateTestCase(TestCase, ProfileTestHelperMixin):
         # "not found", not "outside the family": the second message
         # would confirm the id exists in another workspace.
         self.assertIn("not found", res.json()["message"])
+
+
+# The three things the spec's Testing section names, in one string: a
+# <script> tag, single-quoted attributes alongside double-quoted ones,
+# and an &amp; entity. Nothing on the write path may normalise any of
+# them, so the round-trip assertions below are worth only as much as
+# this fixture puts at risk.
+EMBED_SNIPPET = (
+    "<iframe title=\"Sales\" width=\"800\" height=\"600\" "
+    "src=\"https://app.powerbi.com/view?r=abc&amp;def\" "
+    "frameborder=\"0\" allowFullScreen=\"true\"></iframe>"
+    "<script src='https://app.powerbi.com/embed.js' "
+    "data-report='sales&amp;q1'></script>"
+)
+
+
+@override_settings(USE_TZ=False)
+class EmbedDashboardCrudTestCase(TestCase, ProfileTestHelperMixin):
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        self.user = self.create_user(
+            email="viz_embed_crud@akvo.org",
+            role_level=self.IS_SUPER_ADMIN,
+        )
+        self.header = auth(self.user)
+
+    def post(self, payload):
+        return self.client.post(
+            BASE_URL,
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header
+        )
+
+    def put(self, pk, payload):
+        return self.client.put(
+            "{0}/{1}".format(BASE_URL, pk),
+            json.dumps(payload),
+            content_type="application/json",
+            **self.header
+        )
+
+    def create_embed(self, name="Sales", snippet=EMBED_SNIPPET):
+        res = self.post(
+            {"name": name, "kind": "embed", "embed_snippet": snippet}
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        return res.json()
+
+    def test_create_stores_the_snippet_byte_for_byte(self):
+        body = self.create_embed()
+        self.assertEqual(body["kind"], "embed")
+        self.assertEqual(body["embed_snippet"], EMBED_SNIPPET)
+        self.assertIsNone(body["root_form"])
+        self.assertEqual(body["status"], "draft")
+        # The &amp; entity, the single/double quote mix and the script
+        # tag survive untouched: nothing parses this value.
+        stored = Dashboard.objects.get(pk=body["id"])
+        self.assertEqual(stored.embed_snippet, EMBED_SNIPPET)
+
+    def test_create_forces_empty_default_filters(self):
+        body = self.create_embed()
+        stored = Dashboard.objects.get(pk=body["id"])
+        self.assertEqual(stored.default_filters, {})
+
+    def test_update_replaces_the_snippet(self):
+        body = self.create_embed()
+        replacement = "<iframe src='https://public.tableau.com/x'></iframe>"
+        res = self.put(
+            body["id"],
+            {
+                "name": "Sales",
+                "kind": "embed",
+                "embed_snippet": replacement,
+            },
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()["embed_snippet"], replacement)
+
+    def test_publish_snapshots_the_snippet(self):
+        body = self.create_embed()
+        res = self.client.post(
+            "{0}/{1}/publish".format(BASE_URL, body["id"]), **self.header
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        stored = Dashboard.objects.get(pk=body["id"])
+        self.assertEqual(
+            stored.published_config, {"embed_snippet": EMBED_SNIPPET}
+        )
+
+    def test_an_edit_after_publish_does_not_change_the_snapshot(self):
+        # Spec D-5: content is snapshotted, identity is live.
+        body = self.create_embed()
+        self.client.post(
+            "{0}/{1}/publish".format(BASE_URL, body["id"]), **self.header
+        )
+        self.put(
+            body["id"],
+            {
+                "name": "Sales",
+                "kind": "embed",
+                "embed_snippet": "<iframe src='https://later/'></iframe>",
+            },
+        )
+        stored = Dashboard.objects.get(pk=body["id"])
+        self.assertEqual(
+            stored.published_config["embed_snippet"], EMBED_SNIPPET
+        )
+
+    def test_duplicate_copies_kind_and_snippet_as_a_draft(self):
+        body = self.create_embed()
+        res = self.client.post(
+            "{0}/{1}/duplicate".format(BASE_URL, body["id"]), **self.header
+        )
+        self.assertEqual(res.status_code, 201, res.content)
+        clone = Dashboard.objects.get(pk=res.json()["id"])
+        self.assertEqual(clone.kind, DashboardKind.embed)
+        self.assertEqual(clone.embed_snippet, EMBED_SNIPPET)
+        self.assertIsNone(clone.root_form_id)
+        self.assertEqual(clone.status, DashboardStatus.draft)
+        self.assertEqual(clone.widgets.count(), 0)
+
+    def test_unpublish_and_visibility_are_unchanged_for_an_embed(self):
+        body = self.create_embed()
+        pk = body["id"]
+        self.client.post(
+            "{0}/{1}/publish".format(BASE_URL, pk), **self.header
+        )
+        res = self.client.post(
+            "{0}/{1}/visibility".format(BASE_URL, pk),
+            json.dumps({"is_public": True}),
+            content_type="application/json",
+            **self.header
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(Dashboard.objects.get(pk=pk).is_public)
+        res = self.client.post(
+            "{0}/{1}/unpublish".format(BASE_URL, pk), **self.header
+        )
+        self.assertEqual(res.status_code, 200, res.content)
+        stored = Dashboard.objects.get(pk=pk)
+        self.assertEqual(stored.status, DashboardStatus.draft)
+        self.assertFalse(stored.is_public)

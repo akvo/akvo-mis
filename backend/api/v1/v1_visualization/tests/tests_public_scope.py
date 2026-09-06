@@ -5,7 +5,10 @@ from rest_framework.request import Request
 
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_users.models import Tenant
-from api.v1.v1_visualization.constants import DashboardStatus
+from api.v1.v1_visualization.constants import (
+    DashboardKind,
+    DashboardStatus,
+)
 from api.v1.v1_visualization.models import Dashboard
 from api.v1.v1_visualization.public_scope import (
     ALLOW_ANY,
@@ -67,6 +70,10 @@ class AllowlistTestCase(TestCase):
 
     def build(self, widgets, default_filters=None):
         class FakeDashboard:
+            # These cases are all about the widgets branch, so the
+            # stub has to say so: allowlist_from returns the empty
+            # allowlist for an embed before it reads any of this.
+            kind = DashboardKind.widgets
             root_form_id = 6001
             published_config = {
                 "default_filters": default_filters or {},
