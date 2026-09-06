@@ -1,6 +1,18 @@
 # Visualization layer quick wins: design
 
-**Status:** planning only. No GitHub issue, no branch, no code. The four slices below are scoped but unscheduled.
+**Status:** planning. No GitHub issue, no branch, no code. The four
+slices below are scoped and have been broken into three Asana tasks:
+
+| Task | Slices | Asana |
+|---|---|---|
+| VIZ-021 Map rendering consolidation and clustering | QW-1 + QW-2 | `1218226404614661` |
+| VIZ-022 Graduated colour legends for map widgets | QW-3 | `1218222099871802` |
+| VIZ-023 Export dashboard to PNG / PDF | QW-4 | `1218225058102973` |
+
+QW-1 and QW-2 ship together because QW-2 builds on the shared tile and
+geo-point plumbing QW-1 extracts; splitting them would mean writing the
+clustering slice against three divergent map components. All three sit in
+Backlog, unassigned and unestimated.
 
 ## Problem
 
