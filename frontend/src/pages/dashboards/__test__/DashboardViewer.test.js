@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import DashboardViewer from "../DashboardViewer";
 import dashboardApi from "../../../util/dashboardApi";
-import { store } from "../../../lib";
+import { store, uiText } from "../../../lib";
 
 jest.mock("../../../util/dashboardApi");
 
@@ -146,7 +146,9 @@ describe("not found", () => {
       renderViewer();
 
       await waitFor(() =>
-        expect(screen.getByText(/dashboard not found/i)).toBeInTheDocument()
+        expect(
+          screen.getByText(uiText.en.dashboardNotFound)
+        ).toBeInTheDocument()
       );
       // Unpublished, deleted and another tenant's are indistinguishable by
       // design, so the screen does not speculate about which.
@@ -171,26 +173,28 @@ describe("the top bar is a back button and nothing else", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("back still returns to the list", async () => {
+  test("back returns to the previous page", async () => {
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     screen.getByRole("button", { name: /back/i }).click();
-    expect(mockNavigate).toHaveBeenCalledWith("/control-center/dashboard");
+    // History, not a route. A published dashboard is reachable by people
+    // who cannot open /control-center/dashboard at all, so the control
+    // has to mean "where you came from" rather than a fixed destination.
+    expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 
-  test("an anonymous visitor sees no back control", async () => {
-    // /control-center/dashboard is a Private route: sending an anonymous
-    // visitor there is a login wall, not a way back to anything.
+  test("an anonymous visitor still gets a back control", async () => {
+    // It was hidden while it pointed at a Private route. Going back one
+    // history entry is something an anonymous visitor can do, so the
+    // gate came off with the destination (VIZ-019).
     setUser(null);
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
-    expect(
-      screen.queryByRole("button", { name: /back/i })
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /back/i })).toBeInTheDocument();
   });
 
   test("a signed-in visitor sees the back control", async () => {
