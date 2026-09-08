@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Spin } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
+import { Button, Dropdown, Spin, message } from "antd";
+import { ArrowLeftOutlined, DownloadOutlined } from "@ant-design/icons";
 import dashboardApi from "../../util/dashboardApi";
+import { exportDashboard } from "../../util/dashboardExport";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import EmbedFrame from "../../components/dashboard/EmbedFrame";
@@ -34,6 +35,13 @@ const DashboardViewer = () => {
   const [dashboard, setDashboard] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+
+  // The element html2canvas photographs. It wraps the header, the filter
+  // bar and the grid — but NOT `.dashboard-view-content`, which is the
+  // scrolling box: capturing that would capture a viewport-sized window
+  // onto the dashboard rather than the dashboard.
+  const captureRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +77,23 @@ const DashboardViewer = () => {
     };
   }, [slug]);
 
+  const handleExport = async ({ key }) => {
+    setExporting(true);
+    try {
+      await exportDashboard(captureRef.current, {
+        format: key,
+        name: dashboard.name,
+      });
+    } catch {
+      // Nothing actionable to tell them apart: a tainted canvas, an
+      // out-of-memory canvas and a browser that refused the download all
+      // arrive here, and none of them is the visitor's to fix.
+      message.error(text.dashboardExportFailed);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="dashboard-view-shell">
@@ -98,6 +123,47 @@ const DashboardViewer = () => {
     );
   }
 
+  const isEmbed = dashboard.kind === "embed";
+
+  const header = (
+    <div className="dashboard-view-header">
+      <div className="dashboard-view-header-inner">
+        <div className="dashboard-view-header-text">
+          <div className="dashboard-view-title">{dashboard.name}</div>
+          {dashboard.description && (
+            <div className="dashboard-view-desc">{dashboard.description}</div>
+          )}
+        </div>
+        {/* No Export for an embed: the frame is another origin's
+            document, so the capture would be an empty box where the
+            report is. The external tool has its own export. */}
+        {!isEmbed && (
+          <div
+            className="dashboard-view-header-actions"
+            data-html2canvas-ignore
+          >
+            <Dropdown
+              trigger={["click"]}
+              placement="bottomRight"
+              disabled={exporting}
+              menu={{
+                onClick: handleExport,
+                items: [
+                  { key: "png", label: text.dashboardExportPng },
+                  { key: "pdf", label: text.dashboardExportPdf },
+                ],
+              }}
+            >
+              <Button icon={<DownloadOutlined />} loading={exporting}>
+                {text.dashboardExport}
+              </Button>
+            </Dropdown>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="dashboard-view-shell">
       <button
@@ -114,24 +180,20 @@ const DashboardViewer = () => {
           which shares this element. */}
       <div
         className={`dashboard-view-content${
-          dashboard.kind === "embed" ? " dashboard-view-content-embed" : ""
+          isEmbed ? " dashboard-view-content-embed" : ""
         }`}
       >
-        <div className="dashboard-view-header">
-          <div className="dashboard-view-header-inner">
-            <div className="dashboard-view-title">{dashboard.name}</div>
-            {dashboard.description && (
-              <div className="dashboard-view-desc">{dashboard.description}</div>
-            )}
-          </div>
-        </div>
-
-        {dashboard.kind === "embed" ? (
-          /* No filter bar: an embed has no data of ours to filter, and
-             a control that changes nothing is worse than no control. */
-          <EmbedFrame src={dashboard.embed_url} title={dashboard.name} />
-        ) : (
+        {isEmbed ? (
           <>
+            {header}
+            {/* No filter bar: an embed has no data of ours to filter, and
+                a control that changes nothing is worse than no control. */}
+            <EmbedFrame src={dashboard.embed_url} title={dashboard.name} />
+          </>
+        ) : (
+          <div className="dashboard-view-capture" ref={captureRef}>
+            {header}
+
             <DashboardViewFilters
               defaultFilters={dashboard.default_filters}
               value={filters}
@@ -144,7 +206,7 @@ const DashboardViewer = () => {
               rootFormId={dashboard.root_form?.id}
               dashboardSlug={slug}
             />
-          </>
+          </div>
         )}
       </div>
     </div>

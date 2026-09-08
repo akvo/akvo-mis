@@ -107,6 +107,24 @@ $view-gutter: 50px;
   padding: 20px 0 4px;
 }
 
+/* A row since Export joined the title (VIZ-023). The column width and
+   the gutters are untouched — they come from the shared rule above — so
+   the button's right edge lands on the cards' right edge rather than
+   somewhere near it. */
+.dashboard-view-header-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Lets a long dashboard name wrap instead of shoving the button out of
+   the column: a flex item's min-width is auto, which refuses to shrink
+   below its content. */
+.dashboard-view-header-text {
+  min-width: 0;
+}
+
 .dashboard-view-title {
   font-size: 20px;
   font-weight: 600;
