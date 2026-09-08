@@ -11,6 +11,12 @@ const OSM_TILE = {
   url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  // Leaflet puts this on the tile <img> elements, which is what lets
+  // html2canvas read them back out instead of tainting the export
+  // canvas. akvo-charts spreads this object into L.tileLayer's options,
+  // so the key reaches Leaflet untouched. Safe because the tile host
+  // answers with access-control-allow-origin: * — verified, not assumed.
+  crossOrigin: "anonymous",
 };
 
 const VizMap = ({ config, data }) => {
