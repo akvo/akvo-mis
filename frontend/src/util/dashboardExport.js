@@ -72,8 +72,12 @@ export const paginate = (breaks, totalHeight, pageHeight) => {
 //
 // The failure mode is the dangerous one: no exception, just a blank
 // canvas and an empty file. So the scale is computed to fit under the
-// ceiling rather than fixed, and a very long dashboard exports slightly
-// soft instead of exporting nothing.
+// ceiling rather than fixed.
+//
+// There is deliberately no lower bound. A dashboard tall enough to force
+// the scale below 0.5 exports soft, and that is the right way to lose —
+// a floor would put the area back over the ceiling and produce nothing
+// at all, which is the failure this whole calculation exists to avoid.
 //
 // The number is empirical rather than specified — browsers do not expose
 // their own limit, and this is the lowest figure that holds across the
@@ -83,7 +87,7 @@ const MAX_CANVAS_AREA = 16000000;
 
 const captureScale = (width, height) => {
   const areaFit = Math.sqrt(MAX_CANVAS_AREA / (width * height));
-  return Math.max(0.5, Math.min(window.devicePixelRatio || 1, areaFit));
+  return Math.min(window.devicePixelRatio || 1, areaFit);
 };
 
 // `<dashboard-name>-<date>.<ext>`, with anything unsafe collapsed to a
