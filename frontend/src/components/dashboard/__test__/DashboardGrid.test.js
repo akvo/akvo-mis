@@ -288,3 +288,50 @@ describe("filters", () => {
     expect(screen.getByText("Heading")).toBeInTheDocument();
   });
 });
+
+describe("re-rendering", () => {
+  test("identical props do not re-render the widgets", () => {
+    // Regression guard for a defect that reached real exports. The
+    // viewer sets an `exporting` flag on itself while an export runs.
+    // Before this grid was memoised that re-rendered every widget, and
+    // because each `Viz*` builds its ECharts option object as an inline
+    // literal, ECharts replayed each chart's entry animation — into the
+    // very canvas html2canvas was about to copy. Exports came out with
+    // axes, gridlines and legends but no bars, lines or slices, since
+    // those grow from zero.
+    resolveAll();
+    const widgets = [w({ id: 1, type: "bar" }), w({ id: 2, type: "pie" })];
+    const filters = {};
+    const props = {
+      widgets,
+      filters,
+      rootFormId: ROOT,
+      dashboardSlug: "water-points",
+    };
+    const { rerender } = render(<DashboardGrid {...props} />);
+    const callsAfterMount = useWidgetData.mock.calls.length;
+    expect(callsAfterMount).toBeGreaterThan(0);
+
+    rerender(<DashboardGrid {...props} />);
+
+    expect(useWidgetData.mock.calls.length).toBe(callsAfterMount);
+  });
+
+  test("changed filters still re-render the widgets", () => {
+    // The memo must not be so aggressive that a filter change stops
+    // reaching the grid — that is the whole point of the filter bar.
+    resolveAll();
+    const widgets = [w({ id: 1, type: "bar" })];
+    const base = {
+      widgets,
+      rootFormId: ROOT,
+      dashboardSlug: "water-points",
+    };
+    const { rerender } = render(<DashboardGrid {...base} filters={{}} />);
+    const callsAfterMount = useWidgetData.mock.calls.length;
+
+    rerender(<DashboardGrid {...base} filters={{ administration_id: 7 }} />);
+
+    expect(useWidgetData.mock.calls.length).toBeGreaterThan(callsAfterMount);
+  });
+});

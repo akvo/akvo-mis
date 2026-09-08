@@ -132,9 +132,31 @@ const downloadBlob = (blob, filename) => {
 // here, so a static import would put all of it in the main bundle for
 // every visitor on every page — including everyone who never exports
 // anything. Same idiom as reportWebVitals.js.
+/**
+ * Stop the clone's CSS animations before it is rasterized.
+ *
+ * html2canvas renders a *copy* of the DOM in an offscreen iframe, and
+ * inserting that copy restarts every CSS animation in it. Widget cards
+ * carry `animation: dashFadeUp ... both` (viewer.scss), whose first
+ * keyframe is `opacity: 0` — so the render catches them at or near t=0
+ * and they come out faded, or missing altogether, while unanimated
+ * chrome like the title and filter bar renders fine. Nothing in a still
+ * image is meant to be mid-animation, so the whole clone is frozen.
+ *
+ * @param {Document} clonedDoc  html2canvas's cloned document.
+ */
+export const freezeAnimations = (clonedDoc) => {
+  const frozen = clonedDoc.createElement("style");
+  frozen.textContent =
+    "*, *::before, *::after { animation: none !important; " +
+    "transition: none !important; }";
+  clonedDoc.head.appendChild(frozen);
+};
+
 const capture = async (node, geometry) => {
   const { default: html2canvas } = await import("html2canvas-pro");
   return html2canvas(node, {
+    onclone: freezeAnimations,
     // The tile layer asks for CORS mode (VizMap), and this is the other
     // half of that arrangement: without it html2canvas re-fetches images
     // in no-CORS mode and taints the canvas anyway.

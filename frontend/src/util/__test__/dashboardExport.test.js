@@ -1,4 +1,4 @@
-import { paginate } from "../dashboardExport";
+import { freezeAnimations, paginate } from "../dashboardExport";
 
 // =========================================================
 // Page-break arithmetic
@@ -81,5 +81,35 @@ describe("paginate", () => {
     expect(() => paginate([300], 1000, 0)).toThrow(/positive/);
     expect(() => paginate([300], 1000, -50)).toThrow(/positive/);
     expect(() => paginate([300], 1000, NaN)).toThrow(/positive/);
+  });
+});
+
+describe("freezeAnimations", () => {
+  // The defect this guards against shipped once and was invisible to
+  // every code review: widget cards carry `animation: dashFadeUp ...
+  // both` whose first keyframe is `opacity: 0`, html2canvas restarts
+  // animations in the clone it rasterizes, and the cards came out faded
+  // or absent while the unanimated title and filter bar rendered fine.
+  test("neutralises animation and transition in the cloned document", () => {
+    const clone = document.implementation.createHTMLDocument("clone");
+
+    freezeAnimations(clone);
+
+    const injected = clone.head.querySelector("style");
+    expect(injected).not.toBeNull();
+    expect(injected.textContent).toContain("animation: none !important");
+    expect(injected.textContent).toContain("transition: none !important");
+  });
+
+  test("the rule reaches pseudo-elements too", () => {
+    // Card chrome is drawn with ::before/::after in places, and a rule
+    // that only matched real elements would leave those mid-animation.
+    const clone = document.implementation.createHTMLDocument("clone");
+
+    freezeAnimations(clone);
+
+    expect(clone.head.querySelector("style").textContent).toContain(
+      "*::before"
+    );
   });
 });
