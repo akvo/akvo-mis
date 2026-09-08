@@ -85,6 +85,14 @@ export const paginate = (breaks, totalHeight, pageHeight) => {
 // clamp entirely if this ever becomes desktop-only.
 const MAX_CANVAS_AREA = 16000000;
 
+// A4 portrait in millimetres, which is also jsPDF's unit below. The
+// content box is what is left after margins, and it fixes everything
+// else: fitting the capture's width to it decides the scale, and the
+// scale decides how much dashboard fits on a page.
+const MARGIN_MM = 10;
+const CONTENT_WIDTH_MM = 210 - MARGIN_MM * 2;
+const CONTENT_HEIGHT_MM = 297 - MARGIN_MM * 2;
+
 const captureScale = (width, height) => {
   const areaFit = Math.sqrt(MAX_CANVAS_AREA / (width * height));
   return Math.min(window.devicePixelRatio || 1, areaFit);
@@ -142,6 +150,80 @@ const toPng = (canvas, name) =>
     }, "image/png");
   });
 
+// The bottom edge of every widget card, in CSS pixels from the top of
+// the capture root. Read from the live DOM before rasterizing, because
+// afterwards there are only pixels and no way to tell where one card
+// ended and the next began.
+const cellBottoms = (node) => {
+  const top = node.getBoundingClientRect().top;
+  return Array.from(node.querySelectorAll(".dashboard-view-cell")).map(
+    (cell) => cell.getBoundingClientRect().bottom - top
+  );
+};
+
+const toPdf = async (canvas, node, name) => {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  // Width fixes the scale: the capture is made to span the content box,
+  // and everything else follows from that ratio.
+  const cssWidth = node.scrollWidth;
+  const mmPerPx = CONTENT_WIDTH_MM / cssWidth;
+  const pageHeightCss = CONTENT_HEIGHT_MM / mmPerPx;
+
+  // The master canvas was rendered at `captureScale`, so it is that many
+  // times larger than the CSS pixels the page breaks are expressed in.
+  // Derived from the canvas rather than recomputed, so the two cannot
+  // drift apart.
+  const pixelRatio = canvas.width / cssWidth;
+
+  const pages = paginate(cellBottoms(node), node.scrollHeight, pageHeightCss);
+
+  pages.forEach(([start, end], index) => {
+    const sliceHeight = Math.round((end - start) * pixelRatio);
+    const slice = document.createElement("canvas");
+    slice.width = canvas.width;
+    slice.height = sliceHeight;
+    slice
+      .getContext("2d")
+      .drawImage(
+        canvas,
+        0,
+        Math.round(start * pixelRatio),
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight
+      );
+
+    if (index > 0) {
+      pdf.addPage();
+    }
+
+    // PNG rather than JPEG: lossless, and JPEG ringing is plainly
+    // visible on thin axis lines and small chart labels. The cost is size — a
+    // long dashboard can run to several MB.
+    // If real exports come back too heavy to email, the switch is
+    // slice.toDataURL("image/jpeg", 0.9).
+    pdf.addImage(
+      slice.toDataURL("image/png"),
+      "PNG",
+      MARGIN_MM,
+      MARGIN_MM,
+      CONTENT_WIDTH_MM,
+      (end - start) * mmPerPx
+    );
+  });
+
+  pdf.save(exportFilename(name, "pdf"));
+};
+
 /**
  * Rasterize a dashboard and hand the visitor a file.
  *
@@ -154,5 +236,9 @@ const toPng = (canvas, name) =>
  */
 export const exportDashboard = async (node, { format, name }) => {
   const canvas = await capture(node);
+  if (format === "pdf") {
+    await toPdf(canvas, node, name);
+    return;
+  }
   await toPng(canvas, name);
 };
