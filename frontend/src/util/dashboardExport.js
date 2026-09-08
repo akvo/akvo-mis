@@ -12,6 +12,8 @@
 // arithmetic that decides where pages break lives in `paginate` below,
 // on its own, where it can be tested.
 
+import moment from "moment";
+
 /**
  * Split a dashboard's height into A4-sized pages that never cut a card.
  *
@@ -106,7 +108,9 @@ const exportFilename = (name, ext) => {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  const date = new Date().toISOString().slice(0, 10);
+  // Local date, not UTC: `toISOString` would file every export made
+  // before 07:00 in this product's UTC+7 deployment under yesterday's date.
+  const date = moment().format("YYYY-MM-DD");
   return `${slug || "dashboard"}-${date}.${ext}`;
 };
 
@@ -118,7 +122,9 @@ const downloadBlob = (blob, filename) => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Deferred a tick: Firefox has historically aborted the download when
+  // the object URL is revoked in the same tick as the click that starts it.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 // Loaded on demand, not imported at the top. html2canvas-pro and jspdf
@@ -126,7 +132,7 @@ const downloadBlob = (blob, filename) => {
 // here, so a static import would put all of it in the main bundle for
 // every visitor on every page — including everyone who never exports
 // anything. Same idiom as reportWebVitals.js.
-const capture = async (node) => {
+const capture = async (node, geometry) => {
   const { default: html2canvas } = await import("html2canvas-pro");
   return html2canvas(node, {
     // The tile layer asks for CORS mode (VizMap), and this is the other
@@ -137,31 +143,48 @@ const capture = async (node) => {
     // white one shows through every gap between cards, so the export
     // would not match the screen it is a picture of.
     backgroundColor: "#f0f2f5",
-    scale: captureScale(node.scrollWidth, node.scrollHeight),
+    scale: captureScale(geometry.width, geometry.height),
     logging: false,
   });
 };
 
 const toPng = (canvas, name) =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
+    // `toBlob` yields null rather than throwing when the encode fails,
+    // and a throw inside this callback would not reject the promise —
+    // the export would hang with the button spinning and nothing said.
     canvas.toBlob((blob) => {
-      downloadBlob(blob, exportFilename(name, "png"));
-      resolve();
+      if (!blob) {
+        reject(new Error("toBlob returned no blob"));
+        return;
+      }
+      try {
+        downloadBlob(blob, exportFilename(name, "png"));
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
     }, "image/png");
   });
 
-// The bottom edge of every widget card, in CSS pixels from the top of
-// the capture root. Read from the live DOM before rasterizing, because
-// afterwards there are only pixels and no way to tell where one card
-// ended and the next began.
-const cellBottoms = (node) => {
+// Measured once, before the capture, and passed to both halves. The
+// rasterization takes seconds, and reading the live DOM again afterwards
+// would let a window resize desynchronise the page geometry from the
+// canvas the pages are cut out of — silently, as drifting seams or a
+// blank final slice. `breaks` are the widget cards' bottom edges, which
+// can only be read while there is still a DOM rather than pixels.
+const measure = (node) => {
   const top = node.getBoundingClientRect().top;
-  return Array.from(node.querySelectorAll(".dashboard-view-cell")).map(
-    (cell) => cell.getBoundingClientRect().bottom - top
-  );
+  return {
+    width: node.scrollWidth,
+    height: node.scrollHeight,
+    breaks: Array.from(node.querySelectorAll(".dashboard-view-cell")).map(
+      (cell) => cell.getBoundingClientRect().bottom - top
+    ),
+  };
 };
 
-const toPdf = async (canvas, node, name) => {
+const toPdf = async (canvas, geometry, name) => {
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
     orientation: "portrait",
@@ -171,17 +194,16 @@ const toPdf = async (canvas, node, name) => {
 
   // Width fixes the scale: the capture is made to span the content box,
   // and everything else follows from that ratio.
-  const cssWidth = node.scrollWidth;
-  const mmPerPx = CONTENT_WIDTH_MM / cssWidth;
+  const mmPerPx = CONTENT_WIDTH_MM / geometry.width;
   const pageHeightCss = CONTENT_HEIGHT_MM / mmPerPx;
 
   // The master canvas was rendered at `captureScale`, so it is that many
   // times larger than the CSS pixels the page breaks are expressed in.
   // Derived from the canvas rather than recomputed, so the two cannot
   // drift apart.
-  const pixelRatio = canvas.width / cssWidth;
+  const pixelRatio = canvas.width / geometry.width;
 
-  const pages = paginate(cellBottoms(node), node.scrollHeight, pageHeightCss);
+  const pages = paginate(geometry.breaks, geometry.height, pageHeightCss);
 
   pages.forEach(([start, end], index) => {
     const sliceHeight = Math.round((end - start) * pixelRatio);
@@ -235,9 +257,10 @@ const toPdf = async (canvas, node, name) => {
  *                            owns telling the visitor.
  */
 export const exportDashboard = async (node, { format, name }) => {
-  const canvas = await capture(node);
+  const geometry = measure(node);
+  const canvas = await capture(node, geometry);
   if (format === "pdf") {
-    await toPdf(canvas, node, name);
+    await toPdf(canvas, geometry, name);
     return;
   }
   await toPng(canvas, name);
