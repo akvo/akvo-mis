@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
@@ -39,6 +39,7 @@ import {
   repeatAggOptions,
   tableColumnOptions,
   monitoringForms,
+  MAP_QUESTION_TYPES,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -189,6 +190,49 @@ const BuilderInspector = ({
     [widget, onWidgetChange]
   );
 
+  // Heal a stored `map_mode` that disagrees with the question — a map
+  // saved before the flag existed, or one whose question was swapped
+  // through a path that did not write it.
+  //
+  // ABOVE the early return below, and reading the widget directly
+  // rather than through the derived values further down, because those
+  // are computed after it: a hook placed there runs only when a widget
+  // is selected, and React counts hooks per render. Selecting the first
+  // widget then renders more hooks than the empty inspector did, which
+  // takes the whole page down with "Rendered more hooks than during the
+  // previous render."
+  //
+  // Narrow on purpose: `onWidgetChange` sets the builder's `dirty` flag,
+  // and a dirty dashboard prompts "You have unsaved changes" on the way
+  // out. The comparison is against what VizMap will actually DRAW, not
+  // against the string — VizMap draws quantity iff the flag reads
+  // "quantity", so an absent flag on an option map already draws
+  // correctly and writing "category" into it changes no pixel. Compared
+  // as strings, every map in every existing dashboard would raise that
+  // prompt for merely being clicked on.
+  useEffect(() => {
+    if (widget?.type !== "map" || !widget.question) {
+      return;
+    }
+    const picked = questionsForForm(widget.form).find(
+      (q) => q.id === widget.question
+    );
+    const isQuantity = picked?.type === "number";
+    if (isQuantity === ((widget.config || {}).map_mode === "quantity")) {
+      return;
+    }
+    onWidgetChange({
+      ...widget,
+      config: {
+        ...widget.config,
+        map_mode: isQuantity ? "quantity" : "category",
+        // A number question has no options, so colours left by a
+        // previous option question describe nothing.
+        ...(isQuantity ? { status_colors: {} } : {}),
+      },
+    });
+  }, [widget, questionsForForm, onWidgetChange]);
+
   if (!widget) {
     return (
       <div className="builder-inspector">
@@ -324,12 +368,26 @@ const BuilderInspector = ({
   const questions =
     wType === "scatter" || wType === "line"
       ? allQuestions.filter((q) => q.type === "number")
+      : wType === "map"
+      ? // A map reads its question one of two ways: colour by an option
+        // question's answer, or size by a number question's. /sources
+        // already narrows to the four aggregatable types, and `date` is
+        // the one of them a map can do neither with — it has no options
+        // to colour by and no magnitude to size by, so picking one drew
+        // a map of identical dots that ignored the choice.
+        allQuestions.filter((q) => MAP_QUESTION_TYPES.has(q.type))
       : allQuestions;
   const dateQuestions = allQuestions.filter((q) => q.type === "date");
   const optionQuestions = allQuestions.filter(
     (q) => q.type === "option" || q.type === "multiple_option"
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
+  // A map bound to a NUMBER question sizes its circles by the answer
+  // rather than colouring them by a status (#382). Derived from the
+  // question's type rather than read back from `config.map_mode`, so the
+  // controls can never disagree with the question actually picked; the
+  // stored flag exists for the viewer, which has no question types.
+  const isQuantityMap = wType === "map" && selectedQuestion?.type === "number";
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );
@@ -628,9 +686,7 @@ const BuilderInspector = ({
         {showQuestion && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              {wType === "map"
-                ? "Status question"
-                : wType === "scatter"
+              {wType === "scatter"
                 ? "X axis (number question)"
                 : wType === "line"
                 ? "Y axis (number question)"
@@ -641,17 +697,40 @@ const BuilderInspector = ({
               onChange={(val) => {
                 if (wType === "map" && val) {
                   const q = questions.find((qq) => qq.id === val);
-                  const sc =
-                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
-                  const auto = {};
-                  (q?.options || []).forEach((opt, idx) => {
-                    auto[opt.value] = sc.colors[idx % sc.colors.length];
-                  });
-                  onWidgetChange({
-                    ...widget,
-                    question: val,
-                    config: { ...widget.config, status_colors: auto },
-                  });
+                  // The mode follows the question's type; there is no
+                  // separate switch to leave inconsistent with it. A
+                  // number has no options, so the status colours left
+                  // behind by a previous option question are cleared
+                  // rather than kept as dead config.
+                  if (q?.type === "number") {
+                    onWidgetChange({
+                      ...widget,
+                      question: val,
+                      config: {
+                        ...widget.config,
+                        map_mode: "quantity",
+                        status_colors: {},
+                      },
+                    });
+                  } else {
+                    const sc =
+                      COLOR_SCHEMES[
+                        wConfig.color_scheme || DEFAULT_COLOR_SCHEME
+                      ];
+                    const auto = {};
+                    (q?.options || []).forEach((opt, idx) => {
+                      auto[opt.value] = sc.colors[idx % sc.colors.length];
+                    });
+                    onWidgetChange({
+                      ...widget,
+                      question: val,
+                      config: {
+                        ...widget.config,
+                        map_mode: "category",
+                        status_colors: auto,
+                      },
+                    });
+                  }
                 } else if (wType === "scatter") {
                   const q = questions.find((qq) => qq.id === val);
                   onWidgetChange({
@@ -1438,7 +1517,7 @@ const BuilderInspector = ({
                       color_scheme: key,
                       chart_colors: scheme.colors,
                     };
-                    if (wType === "map" && widget.question) {
+                    if (wType === "map" && widget.question && !isQuantityMap) {
                       const opts = selectedQuestion?.options || [];
                       const auto = {};
                       opts.forEach((opt, idx) => {
@@ -1543,10 +1622,12 @@ const BuilderInspector = ({
             </div>
           )}
 
-        {/* Map status colours */}
-        {wType === "map" && widget.question && (
+        {/* One colour per option, for a map that colours its points by
+            the answer. Never in quantity mode: a number question has no
+            options, so this rendered a heading over nothing. */}
+        {wType === "map" && widget.question && !isQuantityMap && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Status colours</label>
+            <label className="builder-inspector-label">Colours</label>
             {(selectedQuestion?.options || []).map((opt, idx) => {
               const colors = wConfig.status_colors || {};
               const scheme =

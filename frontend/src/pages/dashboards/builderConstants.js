@@ -108,6 +108,12 @@ export const WIDGET_DEFAULTS = {
     config: {
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      // "category" colours each point by an option question's answer;
+      // "quantity" sizes it by a number question's answer (#382). Not a
+      // control of its own — the inspector writes it from the type of
+      // the question the author picks — but it is what the viewer reads,
+      // and the viewer has no question types to derive it from.
+      map_mode: "category",
     },
   },
   scatter: {
@@ -166,6 +172,25 @@ export const STACK_QUESTION_TYPES = new Set(["option", "multiple_option"]);
 
 // Types whose grouping differs from the plain count of submissions.
 export const SUPPORTED_GROUP_QUESTION_TYPES = new Set([
+  "option",
+  "multiple_option",
+  "number",
+]);
+
+/**
+ * What a map widget can bind its question to.
+ *
+ * A map reads the answer one of two ways — colour the point by an
+ * option question's value, or size it by a number question's (#382) —
+ * and `date` supports neither: no options to colour by, no magnitude to
+ * size by. It reached the picker only because /sources narrows to the
+ * four types the backend can aggregate at all, which is a broader
+ * question than what a map can draw. Deliberately its own set rather
+ * than SUPPORTED_GROUP_QUESTION_TYPES: the members coincide today, but
+ * "what a bar can group by" and "what a map can encode" are different
+ * claims and should be free to diverge.
+ */
+export const MAP_QUESTION_TYPES = new Set([
   "option",
   "multiple_option",
   "number",

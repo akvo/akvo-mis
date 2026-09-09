@@ -799,6 +799,11 @@ def handle_number_question(form, question, params):
             question, data_ids, agg_func, value_type
         )
 
+    if group_by == "id":
+        return _number_group_by_id(
+            question, data_ids, agg_func, value_type
+        )
+
     if group_by == "date":
         return _number_group_by_date(
             question, data_ids, params
@@ -842,6 +847,61 @@ def _number_group_by_parent(
             "value": round(r["agg_value"], 2),
             "label": r["parent_name"],
             "group": str(r["parent_id"]),
+        }
+        for r in results
+    ]
+
+    if value_type == "percentage":
+        total = sum(d["value"] for d in data)
+        if total > 0:
+            for d in data:
+                d["value"] = round(
+                    d["value"] / total * 100, 2
+                )
+
+    labels = [d["label"] for d in data]
+    return data, labels
+
+
+def _number_group_by_id(
+    question, data_ids, agg_func, value_type
+):
+    """Number question grouped by the record the answer belongs to.
+
+    The counterpart of _count_group_by_id for a measured question, and
+    the only grouping that answers "this datapoint's own number" (#382).
+    _number_group_by_parent keys on `data__parent_id`, which is NULL for
+    every row of a registration form, so a number asked at registration
+    -- the form that also carries `geo` -- collapses into one
+    `group: "None"` row there and cannot be joined to a map's points.
+
+    `data_ids` has already resolved what "the record" means: the latest
+    monitoring submission per site under monitoring=latest, every
+    matching submission under monitoring=all, and the registration
+    submissions themselves for a registration form. Grouping on
+    `data_id` therefore needs no monitoring/registration branch of its
+    own, unlike _stack_option_by_parent.
+
+    Datapoints with no answer are absent rather than zero: the caller
+    knows which points it asked about and what a gap means there, and a
+    row invented here would be indistinguishable from a real zero.
+    """
+    results = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        value__isnull=False,
+    ).values(
+        "data_id",
+        data_name=F("data__name"),
+    ).annotate(
+        agg_value=agg_func("value"),
+    ).order_by("data_name")
+
+    data = [
+        {
+            "value": round(r["agg_value"], 2),
+            "label": r["data_name"],
+            "group": str(r["data_id"]),
         }
         for r in results
     ]
