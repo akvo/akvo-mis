@@ -126,6 +126,19 @@ describe("clustering is a choice, not the default (#387)", () => {
       .closest(".builder-inspector-switch-row")
       .querySelector("button");
 
+  test("picking a value question leaves clustering off", () => {
+    // The path an author actually takes. The heal effect covers widgets
+    // saved before map_mode existed; this is the one that runs when
+    // somebody builds a map today, and it must land on the default.
+    const onWidgetChange = draw(mapWidget(null));
+    fireEvent.mouseDown(
+      screen.getByText("Select a question").closest(".ant-select-selector")
+    );
+    fireEvent.click(screen.getByText("Population"));
+    const next = onWidgetChange.mock.calls.at(-1)[0];
+    expect(next.config.map_mode).toBe("range");
+  });
+
   test("the switch is offered for a value question", () => {
     draw(mapWidget(600202, { map_mode: "range" }));
     expect(screen.getByText(SWITCH)).toBeInTheDocument();

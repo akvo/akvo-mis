@@ -774,15 +774,23 @@ const BuilderInspector = ({
                   // behind by a previous option question are cleared
                   // rather than kept as dead config.
                   if (q?.type === "number") {
-                    onWidgetChange({
+                    // Ranges, not clustering (#387). Clustering answers
+                    // "how much in total here" and hides the sites; it
+                    // is opted into, never landed on by picking a
+                    // question.
+                    const next = {
                       ...widget,
                       question: val,
                       config: {
                         ...widget.config,
-                        map_mode: "quantity",
+                        map_mode: "range",
                         status_colors: {},
                       },
-                    });
+                    };
+                    onWidgetChange(next);
+                    if (!wConfig.value_ranges?.length) {
+                      seedValueRanges(next);
+                    }
                   } else {
                     const sc =
                       COLOR_SCHEMES[

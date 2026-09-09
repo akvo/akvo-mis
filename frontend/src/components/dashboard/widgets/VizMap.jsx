@@ -102,10 +102,16 @@ const VizMap = ({ config, data }) => {
   // MapCluster builds its Leaflet cluster group in an effect, and a
   // Leaflet object does not follow React prop updates — so the mode
   // belongs in the remount key alongside the colours.
+  // Everything a mounted Leaflet object cannot pick up on its own.
+  // MapCluster keys its cluster group on `type` and `cluster` only, and
+  // MarkerClusterGroup captures `iconCreateFunction` at mount by design —
+  // so a changed `aggregate` alone would leave the old closure summing,
+  // with nothing on screen to say the switch did nothing.
   const colorKey =
     Object.values(statusColors).join(",") +
     fallback +
     (widgetConfig.map_mode || "category") +
+    (widgetConfig.map_aggregate || "sum") +
     valueRanges.map((b) => `${b.to}:${b.color}`).join(",");
 
   return (

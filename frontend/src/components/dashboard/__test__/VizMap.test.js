@@ -7,12 +7,23 @@ import VizMap from "../widgets/VizMap";
 // props we hand MapCluster, not about tiles painting. Same stand-in
 // approach as ChartRenderer.test.js.
 let lastProps = null;
-jest.mock("akvo-charts", () => ({
-  MapCluster: (props) => {
-    lastProps = props;
-    return <div data-testid="map-cluster" />;
-  },
-}));
+// Mounts, not renders. A Leaflet cluster group is built in an effect and
+// captures its icon function there, so "did this remount?" is the only
+// honest way to ask whether a prop change reached the map at all — DOM
+// identity does not answer it reliably under rerender.
+let mountCount = 0;
+jest.mock("akvo-charts", () => {
+  const RealReact = require("react");
+  return {
+    MapCluster: (props) => {
+      lastProps = props;
+      RealReact.useEffect(() => {
+        mountCount += 1;
+      }, []);
+      return <div data-testid="map-cluster" />;
+    },
+  };
+});
 
 const widget = (config = {}) => ({
   id: 1,
@@ -38,6 +49,7 @@ const STATUS_COLORS = { operational: "#64A73B", issue: "#e41a1c" };
 
 beforeEach(() => {
   lastProps = null;
+  mountCount = 0;
 });
 
 describe("point mapping", () => {
@@ -251,9 +263,9 @@ describe("quantity mode", () => {
     // objects are created in an effect and do not follow React prop
     // updates, so a reused instance would keep drawing the old icons.
     const { rerender } = render(<VizMap config={widget()} data={POINTS} />);
-    const first = screen.getByTestId("map-cluster");
+    expect(mountCount).toBe(1);
     rerender(<VizMap config={quantityWidget()} data={VALUED} />);
-    expect(screen.getByTestId("map-cluster")).not.toBe(first);
+    expect(mountCount).toBe(2);
   });
 });
 
@@ -357,6 +369,30 @@ describe("quantity aggregation", () => {
       />
     );
     expect(lastProps.aggregate).toBe("average");
+  });
+
+  test("changing how a cluster combines remounts it", () => {
+    // MapCluster keys its Leaflet group on `type` and `cluster` only, and
+    // MarkerClusterGroup captures iconCreateFunction at mount by design
+    // ("a caller that needs a different closure is expected to remount
+    // this component"). Without the aggregate in OUR key, switching
+    // Sum -> Average leaves the old closure in place and every circle
+    // carries on summing, with nothing on screen to say so.
+    const { rerender } = render(
+      <VizMap
+        config={widget({ map_mode: "quantity", map_aggregate: "sum" })}
+        data={VALUED}
+      />
+    );
+    expect(mountCount).toBe(1);
+    rerender(
+      <VizMap
+        config={widget({ map_mode: "quantity", map_aggregate: "average" })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.aggregate).toBe("average");
+    expect(mountCount).toBe(2);
   });
 
   test("range mode passes no aggregate at all", () => {
