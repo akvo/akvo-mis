@@ -1795,6 +1795,11 @@ const BuilderInspector = ({
                   </span>
                 ) : (
                   <InputNumber
+                    // No steppers. They are absolutely positioned over
+                    // the right edge of the field and appear on hover,
+                    // so they sat on top of the digits — and stepping a
+                    // population threshold by one is no use to anybody.
+                    controls={false}
                     // Each editable row carries that band's UPPER bound,
                     // so the prefix is the same word on every one of
                     // them. A bare number does not say which side it
