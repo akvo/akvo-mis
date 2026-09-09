@@ -1214,9 +1214,21 @@ const BuilderInspector = ({
             <div className="builder-inspector-columns">
               {/* Built-in columns */}
               {[
-                { key: "parent_name", label: "Datapoint name" },
-                { key: "administration", label: "Administration" },
-                { key: "latest_date", label: "Last submission" },
+                {
+                  key: "parent_name",
+                  label: "Datapoint name",
+                  icon: <IconText />,
+                },
+                {
+                  key: "administration",
+                  label: "Administration",
+                  icon: <IconSite />,
+                },
+                {
+                  key: "latest_date",
+                  label: "Last submission",
+                  icon: <IconDate />,
+                },
               ].map((col) => {
                 const checked = (wConfig.columns || []).some(
                   (c) => c.key === col.key
@@ -1248,7 +1260,10 @@ const BuilderInspector = ({
                         }
                       }}
                     />
-                    {col.label}
+                    <span className="builder-inspector-q-label">
+                      {col.icon}
+                      {col.label}
+                    </span>
                   </label>
                 );
               })}
