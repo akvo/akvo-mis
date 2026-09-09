@@ -345,6 +345,34 @@ const BuilderInspector = ({
   // controls can never disagree with the question actually picked; the
   // stored flag exists for the viewer, which has no question types.
   const isQuantityMap = wType === "map" && selectedQuestion?.type === "number";
+
+  // Keep the stored `map_mode` in sync with the derived mode so widgets saved
+  // before `map_mode` existed don't remain stuck in category mode.
+  React.useEffect(() => {
+    if (wType !== "map" || !widget.question) {
+      return;
+    }
+    const desiredMode = isQuantityMap ? "quantity" : "category";
+    if ((widget.config || {}).map_mode === desiredMode) {
+      return;
+    }
+    onWidgetChange({
+      ...widget,
+      config: {
+        ...widget.config,
+        map_mode: desiredMode,
+        ...(isQuantityMap ? { status_colors: {} } : {}),
+      },
+    });
+  }, [
+    wType,
+    widget.id,
+    widget.question,
+    (widget.config || {}).map_mode,
+    isQuantityMap,
+    onWidgetChange,
+  ]);
+
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );
