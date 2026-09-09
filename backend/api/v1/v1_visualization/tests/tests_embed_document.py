@@ -94,6 +94,23 @@ class EmbedDocumentTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("justify-content:safe center", body)
         self.assertNotIn("justify-content:center", body)
 
+    def test_a_snippet_without_dimensions_fills_the_frame(self):
+        # A bare `<iframe src="...">` has no intrinsic size and renders
+        # at the HTML default of 300x150 (issue #378). The framing page
+        # cannot reach into a cross-origin document, so this stylesheet
+        # is the only place that can size it.
+        #
+        # The `:not()` guards are what this test exists to protect. A
+        # bare `iframe{width:100%}` would outrank the `width`/`height`
+        # attributes vendors emit and distort every sized report, so the
+        # rule must match only a frame that declares neither.
+        body = self.fetch(self.url()).content.decode()
+        self.assertIn(
+            "body>iframe:not([width]):not([height])"
+            "{width:100%;height:100%}",
+            body,
+        )
+
     def test_it_may_be_framed(self):
         # XFrameOptionsMiddleware would otherwise send SAMEORIGIN and the
         # browser would refuse to frame the one document that exists to

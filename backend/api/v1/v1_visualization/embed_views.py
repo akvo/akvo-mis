@@ -155,12 +155,34 @@ def _snippet_from(payload):
 #
 # `align-items: flex-start` avoids the identical trap vertically: a tall
 # report centred in a short frame would lose its top edge the same way.
+#
+# The last rule sizes a frame the author left unsized. A bare
+# `<iframe src="...">` has no intrinsic size, so it renders at the HTML
+# default of 300x150 — a postage stamp in the middle of a full-page
+# frame, which is what issue #378 reported. There is nowhere else to fix
+# it: the framing page cannot reach inside a cross-origin document, so
+# this stylesheet is the only thing that can give that frame a size.
+#
+# The two `:not()` guards are the whole design, and removing them breaks
+# every vendor snippet. A stylesheet rule outranks the `width` and
+# `height` *attributes* that Power BI and friends emit, so a bare
+# `iframe{width:100%}` would silently override an authored 600x373.5 and
+# distort the report. Matching only a frame that declares neither leaves
+# every sized snippet exactly as it was. Inline `style` needs no guard:
+# it already beats a stylesheet, so an author who sizes that way keeps
+# their size for free.
+#
+# Only `body>iframe`, deliberately, and not any unsized top-level
+# element: Tableau ships a `<div>` that its own script measures and
+# sizes, and stretching that would fight the vendor rather than help it.
 DOCUMENT = (
     '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
     '<meta name="robots" content="noindex">'
     "<style>html,body{height:100%}"
     "body{margin:0;display:flex;justify-content:safe center;"
-    "align-items:flex-start;overflow:auto;background:#fff}</style>"
+    "align-items:flex-start;overflow:auto;background:#fff}"
+    "body>iframe:not([width]):not([height]){width:100%;height:100%}"
+    "</style>"
     "</head><body>"
 )
 
