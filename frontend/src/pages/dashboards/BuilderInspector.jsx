@@ -39,6 +39,7 @@ import {
   repeatAggOptions,
   tableColumnOptions,
   monitoringForms,
+  MAP_QUESTION_TYPES,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -324,6 +325,14 @@ const BuilderInspector = ({
   const questions =
     wType === "scatter" || wType === "line"
       ? allQuestions.filter((q) => q.type === "number")
+      : wType === "map"
+      ? // A map reads its question one of two ways: colour by an option
+        // question's answer, or size by a number question's. /sources
+        // already narrows to the four aggregatable types, and `date` is
+        // the one of them a map can do neither with — it has no options
+        // to colour by and no magnitude to size by, so picking one drew
+        // a map of identical dots that ignored the choice.
+        allQuestions.filter((q) => MAP_QUESTION_TYPES.has(q.type))
       : allQuestions;
   const dateQuestions = allQuestions.filter((q) => q.type === "date");
   const optionQuestions = allQuestions.filter(
@@ -634,11 +643,7 @@ const BuilderInspector = ({
         {showQuestion && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              {wType === "map"
-                ? isQuantityMap
-                  ? "Value question (circle size)"
-                  : "Status question (circle colour)"
-                : wType === "scatter"
+              {wType === "scatter"
                 ? "X axis (number question)"
                 : wType === "line"
                 ? "Y axis (number question)"

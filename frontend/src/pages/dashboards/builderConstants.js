@@ -178,6 +178,25 @@ export const SUPPORTED_GROUP_QUESTION_TYPES = new Set([
 ]);
 
 /**
+ * What a map widget can bind its question to.
+ *
+ * A map reads the answer one of two ways — colour the point by an
+ * option question's value, or size it by a number question's (#382) —
+ * and `date` supports neither: no options to colour by, no magnitude to
+ * size by. It reached the picker only because /sources narrows to the
+ * four types the backend can aggregate at all, which is a broader
+ * question than what a map can draw. Deliberately its own set rather
+ * than SUPPORTED_GROUP_QUESTION_TYPES: the members coincide today, but
+ * "what a bar can group by" and "what a map can encode" are different
+ * claims and should be free to diverge.
+ */
+export const MAP_QUESTION_TYPES = new Set([
+  "option",
+  "multiple_option",
+  "number",
+]);
+
+/**
  * The "Stack by" choices that actually compute, given the rest of the
  * widget.
  *

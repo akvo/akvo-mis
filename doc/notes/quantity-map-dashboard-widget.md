@@ -163,6 +163,12 @@ Three things to get right here:
 - The inspector derives its own controls from `selectedQuestion.type` rather than
   from the stored flag; the flag exists for the *viewer*, which has no question
   types to derive it from.
+- The map's question picker drops `date`. `/sources` narrows to the four types
+  the backend can aggregate at all (`SUPPORTED_QUESTION_TYPES`), which is a
+  broader question than what a map can draw: a date has no options to colour by
+  and no magnitude to size by, so it was the one remaining type that reached the
+  dropdown and could not work. The label is just "Question" — the map reads
+  whichever type is picked, and saying "status" would be wrong half the time.
 
 ### 3. Backend — supply the number per point
 
