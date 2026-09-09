@@ -946,7 +946,6 @@ const BuilderInspector = ({
             <Select
               value={wConfig.map_aggregate || "sum"}
               onChange={(val) => updateConfig("map_aggregate", val)}
-              size="small"
               style={{ width: "100%" }}
             >
               <Select.Option value="sum">Sum</Select.Option>
