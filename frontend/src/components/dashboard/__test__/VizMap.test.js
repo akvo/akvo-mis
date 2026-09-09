@@ -441,6 +441,25 @@ describe("quantity aggregation", () => {
     expect(mountCount).toBe(2);
   });
 
+  test("a cluster label is rounded, not a repeating decimal", () => {
+    // Sums are whole, so the library's default never had to round; an
+    // average divides, and 11/3 rendered as 3.6666666666 inside a 40px
+    // circle.
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={VALUED} />);
+    expect(lastProps.formatValue(11 / 3)).toBe("3.67");
+    expect(lastProps.formatValue(2.5)).toBe("2.5");
+    expect(lastProps.formatValue(7)).toBe("7");
+  });
+
+  test("large numbers keep their compact form", () => {
+    // Rounding must not cost the K/M/B shorthand the circle relies on to
+    // fit a real population figure.
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={VALUED} />);
+    expect(lastProps.formatValue(12400)).toBe("12.4K");
+    expect(lastProps.formatValue(10562088)).toBe("10.6M");
+    expect(lastProps.formatValue(2.4e9)).toBe("2.4B");
+  });
+
   test("range mode passes no aggregate at all", () => {
     render(
       <VizMap

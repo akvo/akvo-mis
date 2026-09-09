@@ -17,6 +17,34 @@ const QUANTITY = "quantity";
 // the sites that a range map is read one at a time.
 const RANGE = "range";
 
+/**
+ * What a quantity circle prints inside itself.
+ *
+ * akvo-charts' default shortens thousands and up but returns anything
+ * under 1,000 verbatim — fine while a circle only ever held a sum, which
+ * is whole. `aggregate="average"` divides, so 11/3 arrived as
+ * 3.6666666666 inside a 40px circle.
+ *
+ * Two decimals, trailing zeros dropped by parseFloat, so 3.67 and 2.5
+ * and 7 all read as themselves. The K/M/B thresholds mirror the
+ * library's, because replacing formatValue replaces it wholesale —
+ * there is no way to keep the default for the range it gets right.
+ */
+const formatMapValue = (n) => {
+  const value = Number(n) || 0;
+  const abs = Math.abs(value);
+  if (abs >= 1e9) {
+    return `${parseFloat((value / 1e9).toFixed(1))}B`;
+  }
+  if (abs >= 1e6) {
+    return `${parseFloat((value / 1e6).toFixed(1))}M`;
+  }
+  if (abs >= 1e3) {
+    return `${parseFloat((value / 1e3).toFixed(1))}K`;
+  }
+  return `${parseFloat(value.toFixed(2))}`;
+};
+
 const VizMap = ({ config, data }) => {
   const widgetConfig = config?.config || {};
   // A map bound to a NUMBER question sizes its circles by the answer
@@ -133,6 +161,7 @@ const VizMap = ({ config, data }) => {
               // total and wrong for a rate — five sites at 50 l/p/d is
               // not 250 — so the author says which.
               aggregate: widgetConfig.map_aggregate || "sum",
+              formatValue: formatMapValue,
             }
           : { groupKey: "status" })}
         {...(isRange ? { cluster: false } : {})}
