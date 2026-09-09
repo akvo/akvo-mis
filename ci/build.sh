@@ -71,6 +71,7 @@ documentation_build() {
 frontend_build () {
 
     echo "PUBLIC_URL=/" > frontend/.env
+    echo "REACT_APP_CARTO_API_KEY=${REACT_APP_CARTO_API_KEY:-}" >> frontend/.env
 
     # Code Quality and Build Folder
     sed 's/"warn"/"error"/g' < frontend/.eslintrc.json > frontend/.eslintrc.prod.json

@@ -51,10 +51,9 @@ const MapView = ({ dataset, loading, position }) => {
     [getMarkerDisplayText]
   );
 
-  const disableScrollWheelZoom = useCallback(() => {
+  const initMapControls = useCallback(() => {
     const map = mapInstance.current?.getMap();
     if (map && !loading) {
-      map.scrollWheelZoom.disable();
       map.zoomControl.remove();
       lg.current = L.layerGroup().addTo(map);
     }
@@ -64,7 +63,7 @@ const MapView = ({ dataset, loading, position }) => {
     if (mapInstance.current && position?.bbox && !loading) {
       const map = mapInstance.current.getMap();
       if (map) {
-        map.fitBounds(position.bbox);
+        map.fitBounds(position.bbox, { maxZoom: 14, padding: [20, 20] });
       }
     }
   }, [position, loading]);
@@ -74,8 +73,8 @@ const MapView = ({ dataset, loading, position }) => {
   }, [fitToBounds]);
 
   useEffect(() => {
-    disableScrollWheelZoom();
-  }, [disableScrollWheelZoom]);
+    initMapControls();
+  }, [initMapControls]);
 
   useEffect(() => {
     if (lg.current && !loading) {
@@ -95,8 +94,7 @@ const MapView = ({ dataset, loading, position }) => {
       lg.current.clearLayers();
 
       const filteredDataset = dataset.filter(
-        (d) =>
-          !d?.hidden && d?.geo && Array.isArray(d.geo) && d.geo.length === 2
+        (d) => !d?.hidden && geo.hasValidPoint(d)
       );
 
       const offsets = buildOffsetCoordinates(filteredDataset);

@@ -8,9 +8,13 @@ import { scaleQuantize } from "d3-scale";
 // never depended on polygons: the tile config, colour scales, and
 // coordinate normalization around the antimeridian.
 
+const cartoKey = process.env.REACT_APP_CARTO_API_KEY || "";
 const tile = {
-  url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png",
-  attribution: "Tiles &copy; Esri &mdash; DeLorme, NAVTEQ, Esri",
+  url: cartoKey
+    ? `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${cartoKey}`
+    : "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
 };
 
 // Neutral world viewport. Keeps the legacy { coordinates, bbox } shape the
@@ -73,10 +77,13 @@ const fixCoordinates = (coords) => {
   return [lat, fixedLon];
 };
 
+const hasValidPoint = (row) => Array.isArray(row?.geo) && row.geo.length === 2;
+
 const geo = {
   tile,
   defaultPos,
   getColorScale,
+  hasValidPoint,
   normalizeLon,
   shiftLonPositive,
   fixCoordinates,
