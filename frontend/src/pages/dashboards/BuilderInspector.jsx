@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
@@ -190,6 +190,49 @@ const BuilderInspector = ({
     [widget, onWidgetChange]
   );
 
+  // Heal a stored `map_mode` that disagrees with the question — a map
+  // saved before the flag existed, or one whose question was swapped
+  // through a path that did not write it.
+  //
+  // ABOVE the early return below, and reading the widget directly
+  // rather than through the derived values further down, because those
+  // are computed after it: a hook placed there runs only when a widget
+  // is selected, and React counts hooks per render. Selecting the first
+  // widget then renders more hooks than the empty inspector did, which
+  // takes the whole page down with "Rendered more hooks than during the
+  // previous render."
+  //
+  // Narrow on purpose: `onWidgetChange` sets the builder's `dirty` flag,
+  // and a dirty dashboard prompts "You have unsaved changes" on the way
+  // out. The comparison is against what VizMap will actually DRAW, not
+  // against the string — VizMap draws quantity iff the flag reads
+  // "quantity", so an absent flag on an option map already draws
+  // correctly and writing "category" into it changes no pixel. Compared
+  // as strings, every map in every existing dashboard would raise that
+  // prompt for merely being clicked on.
+  useEffect(() => {
+    if (widget?.type !== "map" || !widget.question) {
+      return;
+    }
+    const picked = questionsForForm(widget.form).find(
+      (q) => q.id === widget.question
+    );
+    const isQuantity = picked?.type === "number";
+    if (isQuantity === ((widget.config || {}).map_mode === "quantity")) {
+      return;
+    }
+    onWidgetChange({
+      ...widget,
+      config: {
+        ...widget.config,
+        map_mode: isQuantity ? "quantity" : "category",
+        // A number question has no options, so colours left by a
+        // previous option question describe nothing.
+        ...(isQuantity ? { status_colors: {} } : {}),
+      },
+    });
+  }, [widget, questionsForForm, onWidgetChange]);
+
   if (!widget) {
     return (
       <div className="builder-inspector">
@@ -345,34 +388,6 @@ const BuilderInspector = ({
   // controls can never disagree with the question actually picked; the
   // stored flag exists for the viewer, which has no question types.
   const isQuantityMap = wType === "map" && selectedQuestion?.type === "number";
-
-  // Keep the stored `map_mode` in sync with the derived mode so widgets saved
-  // before `map_mode` existed don't remain stuck in category mode.
-  React.useEffect(() => {
-    if (wType !== "map" || !widget.question) {
-      return;
-    }
-    const desiredMode = isQuantityMap ? "quantity" : "category";
-    if ((widget.config || {}).map_mode === desiredMode) {
-      return;
-    }
-    onWidgetChange({
-      ...widget,
-      config: {
-        ...widget.config,
-        map_mode: desiredMode,
-        ...(isQuantityMap ? { status_colors: {} } : {}),
-      },
-    });
-  }, [
-    wType,
-    widget.id,
-    widget.question,
-    (widget.config || {}).map_mode,
-    isQuantityMap,
-    onWidgetChange,
-  ]);
-
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );

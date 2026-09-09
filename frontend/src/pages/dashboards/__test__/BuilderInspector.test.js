@@ -45,6 +45,8 @@ const SOURCES = {
       type: "monitoring",
       questions: [
         { id: 600203, label: "Status", name: "status", type: "option" },
+        { id: 600202, label: "Population", name: "population", type: "number" },
+        { id: 600201, label: "Inspected on", name: "inspected", type: "date" },
       ],
     },
   ],
@@ -83,6 +85,82 @@ const draw = (widget, onWidgetChange = jest.fn()) => {
   );
   return onWidgetChange;
 };
+
+// =========================================================
+// The map's stored `map_mode`
+// =========================================================
+//
+// VizMap reads `config.map_mode`; the inspector derives the same thing
+// from the picked question's type. Healing a widget saved before the
+// flag existed is worth doing — but only where the two actually
+// disagree about what gets drawn, because `onWidgetChange` sets the
+// builder's `dirty` flag, and a dirty dashboard prompts "You have
+// unsaved changes" on the way out. Writing a flag that changes nothing
+// would raise that prompt on every map in every existing dashboard, for
+// merely clicking one.
+
+const mapWidget = (question, config = {}) => ({
+  id: 1,
+  type: "map",
+  title: "Sites",
+  col_span: 24,
+  form: 6002,
+  question,
+  config,
+});
+
+describe("map_mode is healed only where it changes the drawing", () => {
+  test("a legacy map on a number question is switched to quantity", () => {
+    // The case that matters: saved before map_mode existed, so it reads
+    // as a category map and draws identical dots, ignoring the number.
+    const onWidgetChange = draw(mapWidget(600202));
+    expect(onWidgetChange).toHaveBeenCalledTimes(1);
+    const next = onWidgetChange.mock.calls[0][0];
+    expect(next.config.map_mode).toBe("quantity");
+    // A number question has no options, so any colours left by a
+    // previous option question describe nothing.
+    expect(next.config.status_colors).toEqual({});
+  });
+
+  test("a legacy map on an option question is left alone", () => {
+    // Absent already means category to VizMap, so writing "category"
+    // changes no pixel — and would mark the dashboard dirty for it.
+    const onWidgetChange = draw(mapWidget(600203));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a map already in the right mode is left alone", () => {
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a map with no question yet is left alone", () => {
+    const onWidgetChange = draw(mapWidget(null));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a map stuck in quantity after a swap to an option question", () => {
+    // The reverse heal, and it does change the drawing: quantity mode
+    // sizes by a value the option question cannot supply.
+    const onWidgetChange = draw(mapWidget(600203, { map_mode: "quantity" }));
+    expect(onWidgetChange).toHaveBeenCalledTimes(1);
+    expect(onWidgetChange.mock.calls[0][0].config.map_mode).toBe("category");
+  });
+});
+
+describe("the map question picker", () => {
+  test("offers no date question", () => {
+    // /sources narrows to the four aggregatable types, but a map can
+    // neither colour by a date nor size by one.
+    draw(mapWidget(null));
+    fireEvent.mouseDown(
+      screen.getByText("Select a question").closest(".ant-select-selector")
+    );
+    expect(screen.getByText("Population")).toBeInTheDocument();
+    expect(screen.getByText("Status")).toBeInTheDocument();
+    expect(screen.queryByText("Inspected on")).toBeNull();
+  });
+});
 
 describe("criteria rows can be removed", () => {
   test("every criterion offers a named remove control", () => {
