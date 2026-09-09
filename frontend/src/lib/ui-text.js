@@ -77,6 +77,11 @@ const uiText = {
     dashboardWidgetRetry: "Retry",
     dashboardWidgetQuestionGone: "This widget's question no longer exists.",
     dashboardWidgetFormGone: "This widget's form no longer exists.",
+    // Export (VIZ-023)
+    dashboardExport: "Export",
+    dashboardExportPng: "PNG image",
+    dashboardExportPdf: "PDF document",
+    dashboardExportFailed: "Couldn't export this dashboard",
     dashboardFilterPeriod: "Date",
     dashboardFilterAllLocations: "All locations",
     // Visibility (VIZ-011)

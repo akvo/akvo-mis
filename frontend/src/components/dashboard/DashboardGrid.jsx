@@ -155,4 +155,18 @@ DashboardGrid.propTypes = {
   dashboardSlug: PropTypes.string,
 };
 
-export default DashboardGrid;
+// Memoised so state changes on the viewer above — notably the Export
+// button's loading flag — do not re-render the widgets.
+//
+// This is not a performance tweak. Every `Viz*` builds its ECharts option
+// object as an inline literal, so a re-render hands ECharts a new config
+// and ECharts replays the chart's entry animation. Clicking Export sets
+// `exporting` on the viewer, which re-rendered this whole subtree and
+// restarted every chart's animation *into the canvas html2canvas was
+// about to copy* — exports came out with axes, gridlines and legends but
+// no bars, lines or slices, because those grow from zero.
+//
+// Safe because all four props are stable between renders: `widgets` and
+// `rootFormId` come from the fetched dashboard object, `filters` is state
+// only the filter bar changes, and `dashboardSlug` is a route param.
+export default React.memo(DashboardGrid);

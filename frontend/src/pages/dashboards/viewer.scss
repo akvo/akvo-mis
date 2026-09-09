@@ -90,6 +90,18 @@
 $view-column: 1120px;
 $view-gutter: 50px;
 
+/* The photographed element, capped to the same column as everything
+   inside it. Without this it spans the viewport: the 1120px column sits
+   centred within it and the export carries however much grey the
+   exporter's window happened to add — and `toPdf` scales that full width
+   down to the 190mm A4 content box, so a wide window silently shrinks the
+   dashboard to unreadable. No on-screen change: every child already caps
+   itself at this width and none of them paints a background. */
+.dashboard-view-capture {
+  max-width: $view-column;
+  margin: 0 auto;
+}
+
 .dashboard-view-header-inner,
 .dashboard-view-filters-inner,
 .dashboard-view-grid {
@@ -105,6 +117,24 @@ $view-gutter: 50px;
    two others. */
 .dashboard-view-header {
   padding: 20px 0 4px;
+}
+
+/* A row since Export joined the title (VIZ-023). The column width and
+   the gutters are untouched — they come from the shared rule above — so
+   the button's right edge lands on the cards' right edge rather than
+   somewhere near it. */
+.dashboard-view-header-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Lets a long dashboard name wrap instead of shoving the button out of
+   the column: a flex item's min-width is auto, which refuses to shrink
+   below its content. */
+.dashboard-view-header-text {
+  min-width: 0;
 }
 
 .dashboard-view-title {

@@ -1,12 +1,17 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import DashboardViewer from "../DashboardViewer";
 import dashboardApi from "../../../util/dashboardApi";
+import { exportDashboard } from "../../../util/dashboardExport";
 import { store, uiText } from "../../../lib";
 
 jest.mock("../../../util/dashboardApi");
+
+// The real one needs layout and a browser download; neither exists here.
+jest.mock("../../../util/dashboardExport");
 
 // The grid has its own suite; here we only care that the page hands it
 // the right widgets and filters.
@@ -282,5 +287,76 @@ describe("the content column is a flex context only for an embed", () => {
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     expect(container.querySelector(".dashboard-view-content")).not.toBeNull();
     expect(container.querySelector(".dashboard-view-content-embed")).toBeNull();
+  });
+});
+
+// ── Export (VIZ-023) ──
+
+describe("exporting the dashboard", () => {
+  test("a widgets dashboard offers Export", async () => {
+    // What the published endpoint actually sends: `kind` is always
+    // present on the payload (dashboard_read_views.py:77).
+    dashboardApi.getPublished.mockResolvedValue({
+      data: { ...PAYLOAD, kind: "widgets" },
+    });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+  });
+
+  test("an embedded dashboard offers no Export", async () => {
+    // The frame is another origin's document. Nothing in this page can
+    // read into it — not html2canvas, not anything — so the capture
+    // would come back as an empty box where the report should be.
+    dashboardApi.getPublished.mockResolvedValue({ data: EMBED_PAYLOAD });
+    renderViewer("regional-sales");
+
+    await screen.findByTitle("Regional Sales");
+    expect(
+      screen.queryByRole("button", { name: /export/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test("a payload with no kind still offers Export", async () => {
+    // The condition is `!== "embed"` rather than `=== "widgets"` on
+    // purpose: it has to agree with the branch that chose to render the
+    // grid, or a payload missing `kind` gets a dashboard it cannot
+    // export.
+    // PAYLOAD carries no `kind` at all, which is the whole point: this
+    // fixture predates the field and still has to work.
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
+  });
+
+  test("choosing PNG exports the capture root under the dashboard name", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    const { container } = renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    userEvent.click(screen.getByRole("button", { name: /export/i }));
+    userEvent.click(await screen.findByText("PNG image"));
+
+    await waitFor(() => expect(exportDashboard).toHaveBeenCalled());
+    const [node, options] = exportDashboard.mock.calls[0];
+    // The capture root, not the scrolling container: capturing the
+    // scroller would photograph a viewport instead of the dashboard.
+    expect(node).toBe(container.querySelector(".dashboard-view-capture"));
+    expect(options).toEqual({ format: "png", name: PAYLOAD.name });
+  });
+
+  test("a failed export says so instead of failing silently", async () => {
+    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+    exportDashboard.mockRejectedValueOnce(new Error("tainted canvas"));
+    renderViewer();
+
+    await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
+    userEvent.click(screen.getByRole("button", { name: /export/i }));
+    userEvent.click(await screen.findByText("PDF document"));
+
+    expect(await screen.findByText(/couldn't export/i)).toBeInTheDocument();
   });
 });

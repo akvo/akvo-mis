@@ -15,6 +15,15 @@ const tile = {
     : "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  // Leaflet puts this on the tile <img> elements, which is what lets
+  // html2canvas read them back out instead of tainting the export
+  // canvas (VIZ-023). akvo-charts spreads this object into L.tileLayer's
+  // options, so the key reaches Leaflet untouched. It lives here rather
+  // than on one widget's local tile config so every map exports the same
+  // way. Safe because basemaps.cartocdn.com answers with
+  // access-control-allow-origin: * — checked against the CARTO host this
+  // config now points at, not inherited from the OSM one it replaced.
+  crossOrigin: "anonymous",
 };
 
 // Neutral world viewport. Keeps the legacy { coordinates, bbox } shape the

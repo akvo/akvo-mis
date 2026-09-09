@@ -139,3 +139,14 @@ describe("empty", () => {
     expect(lastProps.data).toEqual([]);
   });
 });
+
+describe("tiles are readable by a canvas", () => {
+  test("the tile layer is requested in CORS mode", () => {
+    render(<VizMap config={widget()} data={POINTS} />);
+    // Without this, every tile taints the export canvas and the PNG or
+    // PDF comes back with the basemap missing (VIZ-023 D-4). The tile
+    // host sends access-control-allow-origin: *, so asking for CORS
+    // mode costs nothing and is what makes the pixels readable.
+    expect(lastProps.tile.crossOrigin).toBe("anonymous");
+  });
+});
