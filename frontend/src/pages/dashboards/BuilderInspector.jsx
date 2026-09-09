@@ -213,9 +213,15 @@ const BuilderInspector = ({
    *
    * A failed request is not an error state: `quantileRanges([])` returns
    * the single open band, which is a usable editor to type into.
+   *
+   * How MANY bands comes from the widget, not from here. Three is the
+   * opening guess for a map that has none; once the author has added
+   * rows, that count is a decision they made, and asking for fresh
+   * numbers must not throw their rows away to impose the default again.
    */
   const seedValueRanges = useCallback(
     async (target) => {
+      const count = target.config?.value_ranges?.length || 3;
       const root = (sources?.forms || []).find(
         (f) => f.type === "registration"
       );
@@ -238,7 +244,7 @@ const BuilderInspector = ({
         ...target,
         config: {
           ...target.config,
-          value_ranges: quantileRanges(values, palette, 3),
+          value_ranges: quantileRanges(values, palette, count),
         },
       });
     },

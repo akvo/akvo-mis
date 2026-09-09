@@ -363,6 +363,76 @@ describe("clustering is a choice, not the default (#387)", () => {
     expect(colors.every((c) => c !== "#000")).toBe(true);
   });
 
+  test("re-seeding keeps as many bands as the author has", async () => {
+    // Seeding three is the right FIRST guess, not a standing rule. An
+    // author who added two more bands and then asked for fresh numbers
+    // had three handed back, silently discarding the rows they made.
+    api.get.mockResolvedValue({
+      data: {
+        data: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => ({
+          group: String(v),
+          value: v,
+        })),
+      },
+    });
+    const five = [100, 200, 300, 400].map((to, i) => ({
+      to,
+      color: `#00000${i}`,
+    }));
+    five.push({ to: null, color: "#000005" });
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "range", value_ranges: five })
+    );
+    fireEvent.click(screen.getByText("Re-seed from data"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
+    expect(next).toHaveLength(5);
+    expect(next.at(-1).to).toBeNull();
+  });
+
+  test("but data that cannot fill them gives back fewer", async () => {
+    // The count is what to aim for, not a promise. Five bands over one
+    // repeated value would be four that no point can land in, and an
+    // empty band in a legend is worse than a missing one.
+    api.get.mockResolvedValue({
+      data: { data: [7, 7, 7, 7, 7].map((v) => ({ group: "x", value: v })) },
+    });
+    const five = [1, 2, 3, 4].map((to) => ({ to, color: "#000" }));
+    five.push({ to: null, color: "#111" });
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "range", value_ranges: five })
+    );
+    fireEvent.click(screen.getByText("Re-seed from data"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
+    expect(next).toEqual([{ to: null, color: expect.any(String) }]);
+  });
+
+  test("the first seed still guesses three", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        data: [1, 2, 3, 4, 5, 6].map((v) => ({ group: String(v), value: v })),
+      },
+    });
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    fireEvent.click(
+      screen
+        .getByText("Cluster and size by value")
+        .closest(".builder-inspector-switch-row")
+        .querySelector("button")
+    );
+    await waitFor(() =>
+      expect(
+        onWidgetChange.mock.calls.some((c) => c[0].config.value_ranges?.length)
+      ).toBe(true)
+    );
+    const seeded = onWidgetChange.mock.calls
+      .map((c) => c[0].config.value_ranges)
+      .filter(Boolean)
+      .at(-1);
+    expect(seeded).toHaveLength(3);
+  });
+
   test("Colours are offered only while NOT clustering", () => {
     // Every clustered circle is one colour; a palette would describe
     // nothing on screen.
