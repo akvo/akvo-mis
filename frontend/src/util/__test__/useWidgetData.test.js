@@ -585,6 +585,130 @@ describe("map status lookup", () => {
   });
 });
 
+// A map bound to a NUMBER question (#382). The question picker has
+// always offered number questions; before this the choice was silently
+// discarded — a number has no options, so `status_colors` stayed empty,
+// buildStatusRequest returned null, and every point drew the same.
+describe("map quantity lookup", () => {
+  const NUMBER_Q = 600202;
+
+  const quantityWidget = (overrides = {}) =>
+    widget({
+      type: "map",
+      question: NUMBER_Q,
+      config: { map_mode: "quantity" },
+      ...overrides,
+    });
+
+  // `callFor("visualization/values")` would also match
+  // `.../values/formula`, so the plain endpoint needs an anchored match.
+  const valuesCall = () =>
+    axios.mock.calls
+      .map((c) => c[0])
+      .find((c) => c.url && /visualization\/values$/.test(c.url));
+
+  const mockBoth = (points, values) => {
+    axios.mockImplementation((cfg) => {
+      if (cfg.url.includes("maps/geolocation")) {
+        return Promise.resolve({ data: points });
+      }
+      return Promise.resolve({ data: { data: values } });
+    });
+  };
+
+  test("a monitoring form groups by parent_id, pinned to latest", async () => {
+    mockBoth([], []);
+    const probe = run(quantityWidget());
+    await settle(probe);
+
+    const call = valuesCall();
+    expect(call.params.form_id).toBe(MONITORING);
+    expect(call.params.question_id).toBe(NUMBER_Q);
+    // A monitoring answer reaches its site through parent_id, and a
+    // point shows one current magnitude rather than every visit summed.
+    expect(call.params.group_by).toBe("parent_id");
+    expect(call.params.monitoring).toBe("latest");
+  });
+
+  test("a registration form groups by id instead", async () => {
+    mockBoth([], []);
+    const probe = run(quantityWidget({ form: ROOT }));
+    await settle(probe);
+
+    const call = valuesCall();
+    // group_by=parent_id here returns one row keyed "None" — a
+    // registration answer IS the site and has no parent — which joins
+    // to nothing and looks exactly like a form with no data.
+    expect(call.params.group_by).toBe("id");
+    expect(call.params.monitoring).toBeUndefined();
+  });
+
+  test("joins the number to points by datapoint id", async () => {
+    mockBoth(
+      [
+        { id: 1, name: "Nadi", geo: [-17.78, 177.94] },
+        { id: 2, name: "Ba", geo: [-17.53, 177.67] },
+      ],
+      [{ group: "1", value: 12000 }]
+    );
+    const probe = run(quantityWidget());
+    await settle(probe);
+
+    expect(probe.latest().data).toEqual([
+      {
+        id: 1,
+        name: "Nadi",
+        geo: [-17.78, 177.94],
+        status: null,
+        value: 12000,
+      },
+      {
+        id: 2,
+        name: "Ba",
+        geo: [-17.53, 177.67],
+        status: null,
+        value: null,
+      },
+    ]);
+  });
+
+  test("a category map asks for no number and grows no value key", async () => {
+    axios.mockResolvedValue({ data: [{ id: 1, name: "Nadi", geo: [1, 2] }] });
+    const probe = run(widget({ type: "map", config: {} }));
+    await settle(probe);
+
+    expect(valuesCall()).toBeUndefined();
+    // `status` has been there since the status join; `value` must not
+    // appear at all, so a category map's points keep the exact shape
+    // they had before #382.
+    expect(probe.latest().data).toEqual([
+      { id: 1, name: "Nadi", geo: [1, 2], status: null },
+    ]);
+  });
+
+  test("quantity mode with no form asks for nothing", async () => {
+    axios.mockResolvedValue({ data: [] });
+    const probe = run(quantityWidget({ form: null }));
+    await settle(probe);
+
+    // form_id is required=True on ValuesFilterSerializer: sending the
+    // request anyway is a 400 rendered as a network error, for a widget
+    // that is simply half-built.
+    expect(valuesCall()).toBeUndefined();
+  });
+
+  test("quantity mode with no question asks for nothing", async () => {
+    axios.mockResolvedValue({ data: [] });
+    const probe = run(
+      quantityWidget({ question: null, config: { map_mode: "quantity" } })
+    );
+    await settle(probe);
+
+    expect(valuesCall()).toBeUndefined();
+    expect(axios).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── Normalization to the renderers' input contract ───────────────────
 
 describe("normalization", () => {

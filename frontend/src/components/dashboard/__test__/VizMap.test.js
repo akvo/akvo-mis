@@ -150,3 +150,109 @@ describe("tiles are readable by a canvas", () => {
     expect(lastProps.tile.crossOrigin).toBe("anonymous");
   });
 });
+
+// A map bound to a number question (#382). The question dropdown has
+// always offered number questions; before this, picking one produced an
+// empty `status_colors`, no status request, and a map of identical dots
+// that ignored the question entirely.
+describe("quantity mode", () => {
+  const quantityWidget = (config = {}) =>
+    widget({ map_mode: "quantity", ...config });
+
+  const VALUED = [
+    { id: 1, name: "Nadi Central EPS", geo: [-17.78, 177.94], value: 12000 },
+    { id: 2, name: "Ba Riverside EPS", geo: [-17.53, 177.67], value: 3400 },
+  ];
+
+  test("the cluster switches to the quantity type", () => {
+    render(<VizMap config={quantityWidget()} data={VALUED} />);
+    expect(lastProps.type).toBe("quantity");
+    expect(lastProps.valueKey).toBe("value");
+  });
+
+  test("category mode is untouched by the new branch", () => {
+    render(<VizMap config={widget()} data={POINTS} />);
+    expect(lastProps.type).toBe("circle");
+    expect(lastProps.groupKey).toBe("status");
+  });
+
+  test("the joined number reaches the point as a number", () => {
+    render(<VizMap config={quantityWidget()} data={VALUED} />);
+    expect(lastProps.data.map((d) => d.value)).toEqual([12000, 3400]);
+  });
+
+  test("a point the join missed is zero, not NaN", () => {
+    // The library draws a zero as a small circle rather than dropping the
+    // point, which is the honest rendering for a site that did not answer
+    // the question. NaN would size it as garbage.
+    render(
+      <VizMap
+        config={quantityWidget()}
+        data={[...VALUED, { id: 3, name: "Lautoka", geo: [-17.6, 177.4] }]}
+      />
+    );
+    expect(lastProps.data[2].value).toBe(0);
+  });
+
+  test("a non-numeric answer is zero, not NaN", () => {
+    render(
+      <VizMap
+        config={quantityWidget()}
+        data={[{ id: 1, name: "Nadi", geo: [-17.7, 177.9], value: "n/a" }]}
+      />
+    );
+    expect(lastProps.data[0].value).toBe(0);
+  });
+
+  test("renderPopup is dropped so the library shows label and value", () => {
+    // MapCluster only renders its own label + exact value popup when
+    // renderPopup is absent; a function here overrides it and the number
+    // becomes unreadable — the circle shows a compact "12K" and nothing
+    // else tells you it is 12,000.
+    render(<VizMap config={quantityWidget()} data={VALUED} />);
+    expect(lastProps.renderPopup).toBeNull();
+  });
+
+  test("category mode keeps its label popup", () => {
+    render(<VizMap config={widget()} data={POINTS} />);
+    expect(typeof lastProps.renderPopup).toBe("function");
+    // The popup is handed a mapped point, whose `name` has already
+    // become `label` — not the raw row.
+    expect(lastProps.renderPopup(lastProps.data[0])).toBe("Nadi Central EPS");
+  });
+
+  test("circles take one colour rather than a status palette", () => {
+    render(
+      <VizMap
+        config={quantityWidget({ chart_colors: ["#64A73B"] })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.color).toBe("#64A73B");
+  });
+
+  test("the status legend is hidden — size carries the meaning", () => {
+    // A colour legend beside uniformly coloured circles describes
+    // nothing that is on screen.
+    render(
+      <VizMap
+        config={quantityWidget({ status_colors: STATUS_COLORS })}
+        data={[
+          { ...VALUED[0], status: "issue" },
+          { ...VALUED[1], status: "operational" },
+        ]}
+      />
+    );
+    expect(document.querySelector(".dashboard-view-map-legend")).toBeNull();
+  });
+
+  test("switching mode remounts the cluster rather than reusing it", () => {
+    // `key` is not observable through props, but its effect is: Leaflet
+    // objects are created in an effect and do not follow React prop
+    // updates, so a reused instance would keep drawing the old icons.
+    const { rerender } = render(<VizMap config={widget()} data={POINTS} />);
+    const first = screen.getByTestId("map-cluster");
+    rerender(<VizMap config={quantityWidget()} data={VALUED} />);
+    expect(screen.getByTestId("map-cluster")).not.toBe(first);
+  });
+});

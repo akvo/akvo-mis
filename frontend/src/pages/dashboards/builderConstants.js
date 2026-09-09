@@ -108,6 +108,12 @@ export const WIDGET_DEFAULTS = {
     config: {
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      // "category" colours each point by an option question's answer;
+      // "quantity" sizes it by a number question's answer (#382). Not a
+      // control of its own — the inspector writes it from the type of
+      // the question the author picks — but it is what the viewer reads,
+      // and the viewer has no question types to derive it from.
+      map_mode: "category",
     },
   },
   scatter: {

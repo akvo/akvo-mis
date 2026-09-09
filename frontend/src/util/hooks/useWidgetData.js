@@ -286,6 +286,66 @@ const buildStatusRequest = (widget, filters, dashboardSlug) => {
   };
 };
 
+// The map's `config.map_mode`. Absent means "category", which is every
+// map that existed before #382 and every map bound to an option question.
+const MAP_QUANTITY = "quantity";
+
+/**
+ * The map's magnitude request: one number per point, joined by id.
+ *
+ * A map bound to a NUMBER question has nothing to colour by — a number
+ * has no options, so `status_colors` is `{}`, buildStatusRequest returns
+ * null, and before #382 the question the author picked was simply
+ * ignored: every point drew the same size in the same colour. This is
+ * the request that makes it mean something.
+ *
+ * The grouping differs by form and it is not a preference. Both spellings
+ * key their rows on the REGISTRATION datapoint id, which is what
+ * /maps/geolocation numbers its points by, but they get there differently:
+ * a monitoring form's answers reach their site through `parent_id`, while
+ * a registration form's answers ARE the site and have no parent at all —
+ * `group_by=parent_id` there returns a single row keyed `"None"`, which
+ * joins to nothing and looks exactly like a form with no data.
+ */
+const buildValueRequest = (widget, filters, rootFormId, dashboardSlug) => {
+  const config = widget?.config || {};
+  if (
+    !widget ||
+    widget.is_broken ||
+    widget.type !== "map" ||
+    config.map_mode !== MAP_QUANTITY ||
+    // form_id is `required=True` on ValuesFilterSerializer, so either
+    // gap is a guaranteed 400 rather than an empty map — and the
+    // builder canvas renders half-built widgets as a matter of course.
+    !widget.form ||
+    !widget.question
+  ) {
+    return null;
+  }
+  const isMonitoringForm = Boolean(
+    widget.form && rootFormId && widget.form !== rootFormId
+  );
+  return {
+    endpoint: "visualization/values",
+    params: compact({
+      form_id: widget.form,
+      question_id: widget.question,
+      group_by: isMonitoringForm ? "parent_id" : "id",
+      // Always latest, whatever the widget's own measure says — the same
+      // reasoning as the status request: a point shows one current
+      // magnitude, not the sum of every visit ever made to it.
+      monitoring: isMonitoringForm ? MONITORING_LATEST : null,
+      // How REPEATS of the question collapse into one number, which is a
+      // different question from how submissions do. Null unless the
+      // author picked one, and compact() drops it.
+      repeat_agg: config.repeat_agg,
+      from_date: filters?.from_date,
+      to_date: filters?.to_date,
+      dashboard_slug: dashboardSlug,
+    }),
+  };
+};
+
 /**
  * Is this widget stacked by a question on a DIFFERENT form?
  *
@@ -353,7 +413,13 @@ const usableColors = (colors) =>
 
 // ── Reshaping the answer ─────────────────────────────────────────────
 
-const normalize = (widget, response, statusResponse, seriesResponse) => {
+const normalize = (
+  widget,
+  response,
+  statusResponse,
+  seriesResponse,
+  valueResponse
+) => {
   const config = widget?.config || {};
   const type = widget?.type;
   // Each branch returns only the keys it sets; the caller defaults the rest.
@@ -382,11 +448,20 @@ const normalize = (widget, response, statusResponse, seriesResponse) => {
       acc[row.group] = row.label;
       return acc;
     }, {});
+    // Same join, different source: `row.group` is the registration
+    // datapoint id on both endpoints. Only written when the magnitude
+    // was actually asked for, so a category map's points keep the exact
+    // shape they had before #382.
+    const byId = (valueResponse?.data || []).reduce((acc, row) => {
+      acc[row.group] = row.value;
+      return acc;
+    }, {});
     const points = Array.isArray(response) ? response : [];
     return {
       data: points.map((point) => ({
         ...point,
         status: byParent[point.id] ?? null,
+        ...(valueResponse ? { value: byId[point.id] ?? null } : {}),
       })),
     };
   }
@@ -519,8 +594,12 @@ export const useWidgetData = (
     () => buildSeriesRequest(widget, filters, dashboardSlug),
     [widget, filters, dashboardSlug]
   );
+  const valueRequest = useMemo(
+    () => buildValueRequest(widget, filters, rootFormId, dashboardSlug),
+    [widget, filters, rootFormId, dashboardSlug]
+  );
 
-  // All three called unconditionally, with a null endpoint when the widget
+  // All four called unconditionally, with a null endpoint when the widget
   // needs no request: hook order must not vary with widget type or state.
   const primary = useVisualizationRequest(
     request?.endpoint || null,
@@ -534,6 +613,10 @@ export const useWidgetData = (
     seriesRequest?.endpoint || null,
     seriesRequest?.params
   );
+  const value = useVisualizationRequest(
+    valueRequest?.endpoint || null,
+    valueRequest?.params
+  );
 
   const {
     data = null,
@@ -541,8 +624,8 @@ export const useWidgetData = (
     color = null,
     pagination = null,
   } = useMemo(
-    () => normalize(widget, primary.data, status.data, series.data),
-    [widget, primary.data, status.data, series.data]
+    () => normalize(widget, primary.data, status.data, series.data, value.data),
+    [widget, primary.data, status.data, series.data, value.data]
   );
 
   // The two derived values land at different depths — stackMapping inside
@@ -575,9 +658,12 @@ export const useWidgetData = (
       ? { ...pagination, current: page, pageSize, onChange }
       : null,
     // The series call counts toward both: a cross-form chart drawn from
-    // only half its data is a wrong chart, not a partial one.
-    loading: primary.loading || status.loading || series.loading,
-    error: primary.error || status.error || series.error,
+    // only half its data is a wrong chart, not a partial one. The value
+    // call is the same argument for a quantity map — circles sized off a
+    // half-arrived join are wrong sizes, not missing ones.
+    loading:
+      primary.loading || status.loading || series.loading || value.loading,
+    error: primary.error || status.error || series.error || value.error,
     refetch: primary.refetch,
   };
 };

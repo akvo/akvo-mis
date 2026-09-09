@@ -309,6 +309,12 @@ const BuilderInspector = ({
     (q) => q.type === "option" || q.type === "multiple_option"
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
+  // A map bound to a NUMBER question sizes its circles by the answer
+  // rather than colouring them by a status (#382). Derived from the
+  // question's type rather than read back from `config.map_mode`, so the
+  // controls can never disagree with the question actually picked; the
+  // stored flag exists for the viewer, which has no question types.
+  const isQuantityMap = wType === "map" && selectedQuestion?.type === "number";
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );
@@ -608,7 +614,9 @@ const BuilderInspector = ({
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
               {wType === "map"
-                ? "Status question"
+                ? isQuantityMap
+                  ? "Value question (circle size)"
+                  : "Status question (circle colour)"
                 : wType === "scatter"
                 ? "X axis (number question)"
                 : wType === "line"
@@ -620,17 +628,40 @@ const BuilderInspector = ({
               onChange={(val) => {
                 if (wType === "map" && val) {
                   const q = questions.find((qq) => qq.id === val);
-                  const sc =
-                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
-                  const auto = {};
-                  (q?.options || []).forEach((opt, idx) => {
-                    auto[opt.value] = sc.colors[idx % sc.colors.length];
-                  });
-                  onWidgetChange({
-                    ...widget,
-                    question: val,
-                    config: { ...widget.config, status_colors: auto },
-                  });
+                  // The mode follows the question's type; there is no
+                  // separate switch to leave inconsistent with it. A
+                  // number has no options, so the status colours left
+                  // behind by a previous option question are cleared
+                  // rather than kept as dead config.
+                  if (q?.type === "number") {
+                    onWidgetChange({
+                      ...widget,
+                      question: val,
+                      config: {
+                        ...widget.config,
+                        map_mode: "quantity",
+                        status_colors: {},
+                      },
+                    });
+                  } else {
+                    const sc =
+                      COLOR_SCHEMES[
+                        wConfig.color_scheme || DEFAULT_COLOR_SCHEME
+                      ];
+                    const auto = {};
+                    (q?.options || []).forEach((opt, idx) => {
+                      auto[opt.value] = sc.colors[idx % sc.colors.length];
+                    });
+                    onWidgetChange({
+                      ...widget,
+                      question: val,
+                      config: {
+                        ...widget.config,
+                        map_mode: "category",
+                        status_colors: auto,
+                      },
+                    });
+                  }
                 } else if (wType === "scatter") {
                   const q = questions.find((qq) => qq.id === val);
                   onWidgetChange({
@@ -1401,7 +1432,7 @@ const BuilderInspector = ({
                       color_scheme: key,
                       chart_colors: scheme.colors,
                     };
-                    if (wType === "map" && widget.question) {
+                    if (wType === "map" && widget.question && !isQuantityMap) {
                       const opts = selectedQuestion?.options || [];
                       const auto = {};
                       opts.forEach((opt, idx) => {
@@ -1506,8 +1537,9 @@ const BuilderInspector = ({
             </div>
           )}
 
-        {/* Map status colours */}
-        {wType === "map" && widget.question && (
+        {/* Map status colours. Never in quantity mode: a number question
+            has no options, so this rendered a heading over nothing. */}
+        {wType === "map" && widget.question && !isQuantityMap && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">Status colours</label>
             {(selectedQuestion?.options || []).map((opt, idx) => {

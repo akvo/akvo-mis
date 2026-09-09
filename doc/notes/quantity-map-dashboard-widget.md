@@ -1,6 +1,6 @@
 # Quantity maps for the dashboard map widget
 
-**Status:** proposal / implementation guide
+**Status:** implemented — [#382](https://github.com/akvo/akvo-mis/issues/382)
 **Date:** 2026-09-09
 **Upstream:** `akvo-charts@1.3.5` (published 2026-09-09), issue [akvo/akvo-charts#54](https://github.com/akvo/akvo-charts/issues/54), PR [#55](https://github.com/akvo/akvo-charts/pull/55)
 
@@ -153,32 +153,74 @@ Three things to get right here:
     },
   },
   ```
-- Add `map` to `NEEDS_VALUE_TYPE` (or introduce a map-specific control) so the builder can
-  ask *which* number question supplies the magnitude.
-- Constrain the question picker in quantity mode to `type === "number"`. There is an
-  existing pattern for this — `STACK_QUESTION_TYPES` and the filters around
-  `builderConstants.js:217-260` — follow it rather than inventing a new one.
+- **No second question control, and no user-facing mode switch.** The map's
+  question dropdown has always listed number questions — picking one just did
+  nothing — so the fix is to make that existing choice mean something. The mode
+  follows the question's *type*: the inspector writes `map_mode` when the author
+  picks, and the two can never disagree because there is nothing to disagree
+  with. `widget.question` stays the one binding, which is also what keeps
+  validation and public-dashboard scope unchanged (see §3).
+- The inspector derives its own controls from `selectedQuestion.type` rather than
+  from the stored flag; the flag exists for the *viewer*, which has no question
+  types to derive it from.
 
 ### 3. Backend — supply the number per point
 
-**This is the part I could not verify, and the part most likely to hold you up.**
+**Answered, 2026-09-09 (#382).** The original questions and what the code
+actually says:
 
-I searched `backend/api/v1/v1_visualization/` for a map-specific compute path
-(`dashboard_functions.py`, `dashboard_read_views.py`, `dashboard_serializers.py`,
-`dashboard_snapshot.py`) and found no branch on `WidgetTypes.map`. So the map widget appears
-to be fed by a shared row-shaped payload rather than a per-type aggregation — but I did not
-trace the endpoint end to end, and I am not going to guess at it.
+**Which view produces the rows, and do they carry arbitrary answers?**
+`GeolocationListView.get` (`views.py:263`), ending at `views.py:424` with
+`queryset.values("id", "name", "geo", "administration_id")` through
+`GeoLocationListSerializer` (`serializers.py:87-90`). Fixed shape, no answers.
 
-**Before writing frontend code, confirm:**
+But that is not the whole picture: `status` is not from that endpoint either.
+It is joined in the browser from a **second** request — `buildStatusRequest`
+(`useWidgetData.js`) asks `/visualization/values/formula` with
+`group_by=parent_id` and `normalize` merges it by `point.id`. So a per-point
+attribute join was already the established pattern, and the number follows it.
 
-1. Which serializer/view produces the rows `VizMap` receives, and whether they already carry
-   arbitrary question answers or only `{ id, geo, name, status }`.
-2. Whether the numeric answer can be added to that payload without a new endpoint.
-3. How the widget's bound question id reaches the backend, and whether validation needs to
-   accept a `number` question for `map` the way it currently does for grouping.
+**Can it be added without a new endpoint?** Yes, with one gap to fill.
+`/visualization/values` with a number question and `group_by=parent_id` already
+returns `{value, label, group}` where `group` is the registration datapoint id
+— exactly the join key. Verified against a dev database, monitoring form 6002:
 
-If the payload is fixed-shape, this becomes a backend change of similar size to the frontend
-one, and the guide above understates the work.
+```
+monitoring=latest -> [{'value': 49.0, 'label': 'DUMMY-Boyd Group…', 'group': '87'}, …]
+```
+
+The gap is the **registration** form — the one that actually carries `geo`, and
+the natural home for "population served". `_number_group_by_parent` groups on
+`data__parent_id`, which is NULL on every registration row, so it collapses the
+whole form into one unjoinable `group: "None"`:
+
+```
+group_by=parent_id -> [{'value': 33.0, 'label': None, 'group': 'None'}]
+group_by=id        -> [{'value': 33.0, 'label': 'Total'}]   # no 'group' at all
+```
+
+`group_by=id` was implemented for count mode only (`_count_group_by_id`); a
+number question fell through to the ungrouped "Total" aggregate. Filling that in
+— `_number_group_by_id`, one row per datapoint keyed by its own id — is the
+entire backend change. `"id"` was already in `VALID_GROUP_BY`.
+
+**Does validation need to accept a number question for a map?** No, and this is
+the part that shrank the task most. `_validate_widget` checks only
+`question.type not in SUPPORTED_QUESTION_TYPES` (`dashboard_functions.py:408`),
+that set already contains `number`, and the validator has no widget-type branch
+except `table`. A map bound to a number question already saved.
+
+That holds **only because the magnitude question is `widget.question`**. Routing
+it through `config.value_question` instead would have been refused —
+`dashboard_functions.py:552-559` requires an option question there — and would
+have needed a validation change. `widget.question` is also already in the
+public-dashboard allowlist (`public_scope.py:87-89`), so published dashboards
+needed nothing.
+
+**One inherited gap, not fixed here:** `annotate_broken`
+(`dashboard_snapshot.py:92-117`) watches `widget.question` for post-publish
+deletion, so a deleted magnitude question *is* flagged. It does not watch
+`config.value_question` — a pre-existing hole for VIZ-015.b bars.
 
 ## Testing
 
@@ -207,13 +249,17 @@ Both cost real debugging time in `akvo-charts`; both could bite here.
    reason the `key` prop above matters — and a good reminder that Leaflet objects created in
    an effect do not follow React's prop updates for free.
 
-## Suggested sequence
+## Sequence as built
 
-1. Answer the three backend questions above. They determine the shape of everything else.
-2. Backend: make the numeric answer available per point, plus validation for a `number`
-   question bound to a `map` widget.
-3. `builderConstants.js`: mode flag, value-question picker, question-type filter.
-4. `VizMap.jsx`: branch on mode, drop `renderPopup`, handle the legend.
-5. Tests at the props level, not the DOM level.
+1. `akvo-charts` 1.3.4 → 1.3.5. The range in `package.json` covered it but the
+   lockfile pinned 1.3.4, so nothing arrived without an explicit bump.
+2. Backend: `_number_group_by_id`. No validation change was needed.
+3. `useWidgetData`: a third request for the map, joined by id like the status one.
+4. `builderConstants` + `BuilderInspector`: `map_mode` written from the picked
+   question's type; status-colour controls hidden when it is a number.
+5. `VizMap`: branch on mode, `renderPopup={null}`, legend hidden.
+6. Tests at the props level, not the DOM level.
 
-Steps 3-5 are small. Step 2 is the unknown.
+Step 2 turned out smaller than feared — one aggregation branch, not an endpoint —
+and step 3 slightly larger, because the registration and monitoring cases need
+different groupings.
