@@ -801,3 +801,37 @@
   font-weight: 600;
   color: #081c40;
 }
+
+/* ── Data sources list ── */
+.builder-inspector-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.builder-inspector-source-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  background: #f6f8fb;
+  border-radius: 6px;
+}
+
+.builder-inspector-source-name {
+  font-size: 12.5px;
+  color: #081c40;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-inspector-source-type {
+  font-size: 10.5px;
+  color: #8a93a0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex: none;
+}
