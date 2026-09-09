@@ -218,6 +218,27 @@ const BuilderInspector = ({
             />
           </div>
 
+          {sources?.forms?.length > 0 && (
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">Data sources</label>
+              <div className="builder-inspector-sources">
+                {sources.forms.map((f) => (
+                  <div key={f.id} className="builder-inspector-source-item">
+                    <span
+                      className="builder-inspector-source-name"
+                      title={f.name}
+                    >
+                      {f.name}
+                    </span>
+                    <span className="builder-inspector-source-type">
+                      {f.type === "monitoring" ? "Monitoring" : "Registration"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="builder-inspector-field">
             <div
               className="builder-inspector-label"
@@ -1146,9 +1167,7 @@ const BuilderInspector = ({
         {NEEDS_REPEAT_AGG.has(wType) && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              {wConfig.value_question
-                ? "Combine values by"
-                : "Repeat aggregation"}
+              {wConfig.value_question ? "Combine values by" : "Aggregation"}
             </label>
             <Select
               value={wConfig.repeat_agg || "average"}
@@ -1226,9 +1245,21 @@ const BuilderInspector = ({
             <div className="builder-inspector-columns">
               {/* Built-in columns */}
               {[
-                { key: "parent_name", label: "Datapoint name" },
-                { key: "administration", label: "Administration" },
-                { key: "latest_date", label: "Last submission" },
+                {
+                  key: "parent_name",
+                  label: "Datapoint name",
+                  icon: <IconText />,
+                },
+                {
+                  key: "administration",
+                  label: "Administration",
+                  icon: <IconSite />,
+                },
+                {
+                  key: "latest_date",
+                  label: "Last submission",
+                  icon: <IconDate />,
+                },
               ].map((col) => {
                 const checked = (wConfig.columns || []).some(
                   (c) => c.key === col.key
@@ -1260,7 +1291,10 @@ const BuilderInspector = ({
                         }
                       }}
                     />
-                    {col.label}
+                    <span className="builder-inspector-q-label">
+                      {col.icon}
+                      {col.label}
+                    </span>
                   </label>
                 );
               })}
@@ -1294,7 +1328,10 @@ const BuilderInspector = ({
                       }}
                     />
                     <span>
-                      {opt.label}
+                      <span className="builder-inspector-q-label">
+                        {QUESTION_TYPE_ICON[opt.type] || <IconText />}
+                        {opt.label}
+                      </span>
                       <span className="builder-inspector-col-form">
                         {opt.formName}
                       </span>
@@ -1315,22 +1352,6 @@ const BuilderInspector = ({
             {(wConfig.criteria || []).map((crit, idx) => (
               <div key={idx} className="builder-inspector-criteria-row">
                 <Select
-                  value={crit.type || "option_equals"}
-                  onChange={(val) => {
-                    const updated = [...(wConfig.criteria || [])];
-                    updated[idx] = { ...updated[idx], type: val };
-                    updateConfig("criteria", updated);
-                  }}
-                  size="small"
-                  style={{ width: 130 }}
-                >
-                  {VALID_CRITERIA_TYPES.map((ct) => (
-                    <Select.Option key={ct.value} value={ct.value}>
-                      {ct.label}
-                    </Select.Option>
-                  ))}
-                </Select>
-                <Select
                   value={crit.question || null}
                   onChange={(val) => {
                     const updated = [...(wConfig.criteria || [])];
@@ -1345,6 +1366,22 @@ const BuilderInspector = ({
                   {questionsForForm(widget.form).map((q) => (
                     <Select.Option key={q.id} value={q.id}>
                       {q.label}
+                    </Select.Option>
+                  ))}
+                </Select>
+                <Select
+                  value={crit.type || "option_equals"}
+                  onChange={(val) => {
+                    const updated = [...(wConfig.criteria || [])];
+                    updated[idx] = { ...updated[idx], type: val };
+                    updateConfig("criteria", updated);
+                  }}
+                  size="small"
+                  style={{ width: 130 }}
+                >
+                  {VALID_CRITERIA_TYPES.map((ct) => (
+                    <Select.Option key={ct.value} value={ct.value}>
+                      {ct.label}
                     </Select.Option>
                   ))}
                 </Select>

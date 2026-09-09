@@ -142,7 +142,7 @@ export const VALID_GROUP_BY = [
 ];
 
 export const VALID_VALUE_TYPE = [
-  { value: "number", label: "Count" },
+  { value: "number", label: "Number" },
   { value: "percentage", label: "Percentage" },
 ];
 
@@ -638,8 +638,8 @@ export const VALID_PIE_VARIANT = [
 ];
 
 export const VALID_MEASURE = [
-  { value: "current_state", label: "Current status of each site" },
-  { value: "all_submissions", label: "Every submission over time" },
+  { value: "current_state", label: "Latest" },
+  { value: "all_submissions", label: "All" },
 ];
 
 export const VALID_CRITERIA_TYPES = [
@@ -784,6 +784,7 @@ export const tableColumnOptions = (forms = [], widgetFormId = null) => {
     (form?.questions || []).map((q) => ({
       key: `${source}_${q.id}`,
       label: q.label || q.name,
+      type: q.type,
       source,
       question: q.id,
       formName: form.name,
