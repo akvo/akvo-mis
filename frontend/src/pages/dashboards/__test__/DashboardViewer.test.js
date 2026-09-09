@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import DashboardViewer from "../DashboardViewer";
 import dashboardApi from "../../../util/dashboardApi";
-import { store } from "../../../lib";
+import { store, uiText } from "../../../lib";
 
 jest.mock("../../../util/dashboardApi");
 
@@ -145,8 +145,14 @@ describe("not found", () => {
       });
       renderViewer();
 
+      // Asserted against the copy itself, not a transcription of it: the
+      // literal /dashboard not found/i outlived the text it was quoting
+      // when #362 reworded the screen, and failed for a wording change
+      // rather than for a behaviour change.
       await waitFor(() =>
-        expect(screen.getByText(/dashboard not found/i)).toBeInTheDocument()
+        expect(
+          screen.getByText(uiText.en.dashboardNotFound)
+        ).toBeInTheDocument()
       );
       // Unpublished, deleted and another tenant's are indistinguishable by
       // design, so the screen does not speculate about which.
@@ -171,26 +177,29 @@ describe("the top bar is a back button and nothing else", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("back still returns to the list", async () => {
+  test("back returns to wherever the visitor came from", async () => {
+    // navigate(-1), not a route: #362 replaced the hardcoded hop to
+    // /control-center/dashboard, which was only ever right for someone
+    // who arrived from the list.
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     screen.getByRole("button", { name: /back/i }).click();
-    expect(mockNavigate).toHaveBeenCalledWith("/control-center/dashboard");
+    expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 
-  test("an anonymous visitor sees no back control", async () => {
-    // /control-center/dashboard is a Private route: sending an anonymous
-    // visitor there is a login wall, not a way back to anything.
+  test("an anonymous visitor sees the back control too", async () => {
+    // It used to be hidden from them because it led to
+    // /control-center/dashboard, a Private route — a login wall rather
+    // than a way back. Going back through history has no such problem,
+    // so hiding it now would strand an anonymous visitor on the page.
     setUser(null);
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
-    expect(
-      screen.queryByRole("button", { name: /back/i })
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /back/i })).toBeInTheDocument();
   });
 
   test("a signed-in visitor sees the back control", async () => {

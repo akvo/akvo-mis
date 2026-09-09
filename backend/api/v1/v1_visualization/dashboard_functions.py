@@ -13,7 +13,7 @@ import re
 
 from django.utils.text import slugify
 
-from api.v1.v1_forms.constants import FormTypes
+from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_visualization.constants import (
     DashboardKind,
@@ -25,6 +25,7 @@ from api.v1.v1_visualization.constants import (
     VALID_GROUP_BY,
     VALID_REPEAT_AGG,
     VALID_STACK_BY,
+    STACK_QUESTION_TYPES,
     VALID_VALUE_TYPE,
     WidgetTypes,
 )
@@ -393,6 +394,7 @@ def _validate_widget(
             )
 
     question_id = widget.get("question")
+    question = None
     if question_id is not None:
         question = questions.filter(pk=_as_int(question_id)).first()
         if question is None:
@@ -436,6 +438,189 @@ def _validate_widget(
             index,
             "config.stack_by",
         )
+
+    # The stacking question (VIZ-015). Rejected here in the same terms
+    # the values endpoint uses, so a config that saves always renders.
+    stack_question_id = config.get("stack_question")
+    # Bound unconditionally: the value-question rules below read it, and
+    # a name bound only inside a branch is how the first draft of this
+    # block shipped a NameError.
+    stack_question = None
+    if stack_question_id is not None:
+        if not config.get("stack_by"):
+            return _error(
+                "stack_question requires stack_by",
+                index,
+                "config.stack_question",
+            )
+        if config.get("stack_by") != "option":
+            return _error(
+                "stack_question requires stack_by=option",
+                index,
+                "config.stack_question",
+            )
+        # Which of the two stacking models this is. Same-form is a
+        # cross-tab of submissions under group_by=option; cross-form is a
+        # join of sites under group_by=parent_id (VIZ-015.a). They are
+        # mutually exclusive, so group_by alone tells a reader which a
+        # stored config uses, without comparing form ids.
+        stack_form_id = _as_int(config.get("stack_form"))
+        is_cross_form = (
+            stack_form_id is not None
+            and form is not None
+            and stack_form_id != form.id
+        )
+
+        if not is_cross_form and config.get("group_by") != "option":
+            # Cross-tab only: any other grouping makes the widget's own
+            # question contribute nothing, so the chart says something
+            # the configuration does not.
+            return _error(
+                "stack_question requires group_by=option",
+                index,
+                "config.stack_question",
+            )
+
+        stack_form = form
+        if is_cross_form:
+            stack_form = forms.filter(pk=stack_form_id).first()
+            if stack_form is None:
+                return _error(
+                    "stack form not found", index, "config.stack_form"
+                )
+            # The same family test widget.form already passes, so VIZ-001
+            # D-3 stays intact: a widget still cannot reach outside the
+            # registration form and its monitoring children.
+            if not (
+                stack_form.id == root_form.id
+                or stack_form.parent_id == root_form.id
+            ):
+                return _error(
+                    "stack form must be the dashboard's root form or one "
+                    "of its monitoring forms",
+                    index,
+                    "config.stack_form",
+                )
+            if config.get("group_by") != "parent_id":
+                # The join keys on the registration datapoint, which is
+                # only a key under parent_id. Refuse rather than override:
+                # a stored config must never describe a chart it does not
+                # draw.
+                return _error(
+                    "a cross-form stack requires group_by=parent_id",
+                    index,
+                    "config.stack_form",
+                )
+            if question is not None and (
+                question.type != QuestionTypes.option
+            ):
+                # The join takes one category answer per site, so a
+                # multi-select measured question would have every answer
+                # after the first dropped without a word.
+                return _error(
+                    "a cross-form stack requires a single-select question",
+                    index,
+                    "question",
+                )
+
+        # Reuses the queryset the widget's own question was checked
+        # against rather than issuing a second query.
+        stack_question = questions.filter(
+            pk=_as_int(stack_question_id),
+        ).first()
+        if stack_question is None or stack_form is None or (
+            stack_question.form_id != stack_form.id
+        ):
+            return _error(
+                "stack question must belong to the stack form"
+                if is_cross_form
+                else "stack question must belong to the widget's form",
+                index,
+                "config.stack_question",
+            )
+        if stack_question.type not in STACK_QUESTION_TYPES:
+            return _error(
+                "stack question must be an option or multiple_option"
+                " question",
+                index,
+                "config.stack_question",
+            )
+
+    # The value question (VIZ-015.b): the bar's height comes from a
+    # number question instead of a row count. Refused in the same terms
+    # the values endpoint uses, so a config that saves always renders.
+    value_question_id = config.get("value_question")
+    if value_question_id is not None:
+        if question is None or question.type not in STACK_QUESTION_TYPES:
+            return _error(
+                "value_question requires an option or multiple_option"
+                " question",
+                index,
+                "config.value_question",
+            )
+        if (
+            config.get("value_type") == "percentage"
+            and config.get("repeat_agg") != "sum"
+        ):
+            return _error(
+                "value_type=percentage requires repeat_agg=sum when a"
+                " value_question is given",
+                index,
+                "config.value_question",
+            )
+        if config.get("include_unmonitored"):
+            # Reaches /values as include_unanswered, which adds a "No
+            # information available" bucket counting PARENTS to a chart
+            # whose bars are sums of a number question — and makes the
+            # percentage denominator a parent count.
+            return _error(
+                "value_question cannot be combined with"
+                " include_unmonitored",
+                index,
+                "config.value_question",
+            )
+        if config.get("stack_form"):
+            # The cross-form join adds one per site in the browser;
+            # summing would need the value per site in the response and
+            # a rule for which submission a site contributes.
+            return _error(
+                "value_question cannot be combined with a cross-form"
+                " stack",
+                index,
+                "config.value_question",
+            )
+        value_question = questions.filter(
+            pk=_as_int(value_question_id),
+        ).first()
+        if value_question is None or form is None or (
+            value_question.form_id != form.id
+        ):
+            return _error(
+                "value question must belong to the widget's form",
+                index,
+                "config.value_question",
+            )
+        if value_question.type != QuestionTypes.number:
+            return _error(
+                "value question must be a number question",
+                index,
+                "config.value_question",
+            )
+        # The split is the stack question when there is one, and the
+        # measured question when the stack is its own options.
+        split = stack_question or question
+        stack_multi = split.type == QuestionTypes.multiple_option
+        if (
+            config.get("repeat_agg") == "sum"
+            and config.get("stack_by")
+            and stack_multi
+        ):
+            return _error(
+                "sum cannot be combined with a multiple_option split;"
+                " use average, max or min",
+                index,
+                "config.repeat_agg",
+            )
 
     # Vocabularies the values endpoint already enforces at render time.
     # Checking them here turns a broken dashboard into a refused save.

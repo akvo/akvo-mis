@@ -227,3 +227,142 @@ class AnnotateBrokenTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIsNone(annotated[0]["broken_reason"])
         self.assertTrue(annotated[1]["is_broken"])
         self.assertEqual(annotated[1]["broken_reason"], "form_deleted")
+
+    # ── config.stack_question (VIZ-015) ──
+
+    def test_a_deleted_stack_question_breaks_its_widget(self):
+        # Without this the widget keeps rendering and the viewer gets a
+        # 400 from /values with no explanation — the failure this
+        # function exists to turn into a visible broken widget.
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={"stack_by": "option", "stack_question": 600204},
+        )
+        Questions.objects.get(pk=600204).delete()
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertIs(annotated[0]["is_broken"], True)
+        self.assertEqual(
+            annotated[0]["broken_reason"], "stack_question_deleted"
+        )
+
+    def test_a_live_stack_question_leaves_the_widget_healthy(self):
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={"stack_by": "option", "stack_question": 600204},
+        )
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertIs(annotated[0]["is_broken"], False)
+        self.assertIsNone(annotated[0]["broken_reason"])
+
+    def test_the_measured_question_wins_over_the_stack_question(self):
+        # Both gone: blaming the stacking question would send the
+        # author to the smaller of the two problems.
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={"stack_by": "option", "stack_question": 600204},
+        )
+        Questions.objects.get(pk=600203).delete()
+        Questions.objects.get(pk=600204).delete()
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertEqual(
+            annotated[0]["broken_reason"], "question_deleted"
+        )
+
+    def test_a_deleted_form_wins_over_its_stack_question(self):
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={"stack_by": "option", "stack_question": 600204},
+        )
+        Forms.objects.get(pk=6002).delete()
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertEqual(annotated[0]["broken_reason"], "form_deleted")
+
+    # ── config.stack_form (VIZ-015.a) ──
+
+    def test_a_deleted_stack_form_breaks_its_widget(self):
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={
+                "stack_by": "option",
+                "group_by": "parent_id",
+                "stack_form": 6001,
+                "stack_question": 600102,
+            },
+        )
+        Forms.objects.get(pk=6001).delete()
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertIs(annotated[0]["is_broken"], True)
+        self.assertEqual(
+            annotated[0]["broken_reason"], "stack_form_deleted"
+        )
+
+    def test_a_deleted_stack_form_wins_over_its_own_question(self):
+        # Widest cause first: blaming the question a deleted form took
+        # down with it sends the author to the smaller problem.
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={
+                "stack_by": "option",
+                "group_by": "parent_id",
+                "stack_form": 6001,
+                "stack_question": 600102,
+            },
+        )
+        Questions.objects.get(pk=600102).delete()
+        Forms.objects.get(pk=6001).delete()
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertEqual(
+            annotated[0]["broken_reason"], "stack_form_deleted"
+        )
+
+    def test_the_widgets_own_form_still_wins_over_the_stack_form(self):
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={
+                "stack_by": "option",
+                "group_by": "parent_id",
+                "stack_form": 6001,
+                "stack_question": 600102,
+            },
+        )
+        Forms.objects.get(pk=6002).delete()
+        Forms.objects.get(pk=6001).delete()
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertEqual(annotated[0]["broken_reason"], "form_deleted")
+
+    def test_a_live_cross_form_widget_is_not_broken(self):
+        rows = self.widgets(
+            1,
+            type=2,
+            form_id=6002,
+            question_id=600203,
+            config={
+                "stack_by": "option",
+                "group_by": "parent_id",
+                "stack_form": 6001,
+                "stack_question": 600102,
+            },
+        )
+        annotated = annotate_broken(rows, self.user.tenant)
+        self.assertIs(annotated[0]["is_broken"], False)

@@ -93,6 +93,78 @@ class AllowlistTestCase(TestCase):
         self.assertEqual(allowed.forms, {6001, 6002})
         self.assertEqual(allowed.questions, {600201})
 
+    def test_a_stack_question_is_collected(self):
+        # A public dashboard would otherwise refuse to serve its own
+        # widget: the id reaches /values as stack_question_id, and
+        # check_ids rejects what the allowlist never collected.
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {
+                    "stack_by": "option",
+                    "stack_question": 600204,
+                },
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203, 600204})
+
+    def test_a_malformed_stack_question_narrows_rather_than_crashes(self):
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {
+                    "stack_by": "option",
+                    "stack_question": "not-an-id",
+                },
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203})
+
+    def test_a_cross_form_stack_contributes_a_form_and_a_question(self):
+        # The first config key ever to add a FORM id: until now `forms`
+        # held only the widgets' own `form` keys. Without it the second
+        # /values call is refused and the dashboard will not serve its
+        # own widget.
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {
+                    "stack_by": "option",
+                    "stack_form": 6001,
+                    "stack_question": 600102,
+                },
+            },
+        ])
+        self.assertEqual(allowed.forms, {6001, 6002})
+        self.assertEqual(allowed.questions, {600203, 600102})
+
+    def test_a_malformed_stack_form_narrows_rather_than_crashes(self):
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {
+                    "stack_by": "option",
+                    "stack_form": "not-an-id",
+                    "stack_question": 600102,
+                },
+            },
+        ])
+        self.assertEqual(allowed.forms, {6001, 6002})
+
+    def test_a_value_question_is_collected(self):
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {"value_question": 600202},
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203, 600202})
+
     def test_criteria_question_ids_are_collected(self):
         allowed = self.build([
             {"form": 6001, "question": None, "config": {

@@ -96,6 +96,26 @@ def allowlist_from(dashboard):
         if axis_qid is not None:
             questions.add(axis_qid)
 
+        # The stacking question (VIZ-015) lives in config too, and
+        # reaches the endpoint as `stack_question_id`. Without it a
+        # public dashboard would refuse to serve its own widget.
+        stack_qid = _as_id(widget_config.get("stack_question"))
+        if stack_qid is not None:
+            questions.add(stack_qid)
+
+        # A cross-form stack (VIZ-015.a) names a second FORM in config,
+        # which is new: until now `forms` held only the widgets' own
+        # `form` keys. Without this the second /values call is refused and
+        # a public dashboard will not serve its own widget.
+        stack_form_id = _as_id(widget_config.get("stack_form"))
+        if stack_form_id is not None:
+            forms.add(stack_form_id)
+
+        # The number question a bar is measured by (VIZ-015.b).
+        value_qid = _as_id(widget_config.get("value_question"))
+        if value_qid is not None:
+            questions.add(value_qid)
+
         # Both carry author-entered question ids under the same key:
         # criteria narrow a widget's datapoints, and table columns of
         # source `answer`, `parent_answer` or `latest_date` name one

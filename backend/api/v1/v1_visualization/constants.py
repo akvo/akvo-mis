@@ -29,6 +29,13 @@ SUPPORTED_QUESTION_TYPES = {
     QuestionTypes.multiple_option,
     QuestionTypes.date,
 }
+# A stacking question supplies the series of a stacked chart, so it must
+# have a bounded option set. A number or date question has none and would
+# produce a chart with zero series (VIZ-015).
+STACK_QUESTION_TYPES = {
+    QuestionTypes.option,
+    QuestionTypes.multiple_option,
+}
 AGG_FUNCS = {
     "average": Avg,
     "sum": Sum,

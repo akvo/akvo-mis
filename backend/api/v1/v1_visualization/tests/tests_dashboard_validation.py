@@ -39,6 +39,9 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
         self.q_option = Questions.objects.get(pk=600203)
         self.q_text = Questions.objects.get(pk=600205)
         self.q_reg_option = Questions.objects.get(pk=600102)
+        # multiple_option on the monitoring form: the type a cross-form
+        # chart refuses as its measured question.
+        self.q_multi = Questions.objects.get(pk=600204)
 
         # A second family, so "outside the family" has something to
         # point at that is still inside the tenant.
@@ -95,6 +98,330 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
 
     def test_a_valid_widget_returns_none(self):
         self.assertIsNone(self.check(self.widget()))
+
+    # ── §4.5: config.stack_question (VIZ-015) ──
+
+    def test_a_valid_stack_question_is_accepted(self):
+        self.assertIsNone(self.check(self.widget(
+            type="bar",
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_by": "option",
+                "stack_question": 600204,
+            },
+        )))
+
+    def test_stack_question_requires_stack_by(self):
+        err = self.check(self.widget(
+            type="bar",
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_question": 600204,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_question")
+
+    def test_stack_question_requires_stack_by_option(self):
+        err = self.check(self.widget(
+            type="bar",
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_by": "parent_id",
+                "stack_question": 600204,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_question")
+
+    def test_stack_question_requires_group_by_option(self):
+        # Any other grouping and the measured question contributes
+        # nothing, so the saved config describes a chart it does not
+        # draw.
+        for group_by in ("month", "date", "parent_id"):
+            err = self.check(self.widget(
+                type="bar",
+                config={
+                    "measure": "current_state",
+                    "group_by": group_by,
+                    "stack_by": "option",
+                    "stack_question": 600204,
+                },
+            ))
+            self.assertIsNotNone(err, group_by)
+            self.assertEqual(err["field"], "config.stack_question")
+
+    def test_stack_question_must_belong_to_the_widgets_form(self):
+        # 600102 is on the registration form; the widget is on 6002.
+        err = self.check(self.widget(
+            type="bar",
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_by": "option",
+                "stack_question": self.q_reg_option.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_question")
+
+    def test_stack_question_must_be_an_option_question(self):
+        err = self.check(self.widget(
+            type="bar",
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_by": "option",
+                "stack_question": self.q_text.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_question")
+
+    def test_stack_by_without_a_stack_question_still_saves(self):
+        # The self-stack, which is what stack_by=option has always
+        # meant. Every stored dashboard is this case.
+        self.assertIsNone(self.check(self.widget(
+            type="bar",
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_by": "option",
+            },
+        )))
+
+    # ── §4.5: config.stack_form — cross-form stacking (VIZ-015.a) ──
+
+    def test_a_valid_cross_form_stack_is_accepted(self):
+        self.assertIsNone(self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": self.root.id,
+                "stack_question": self.q_reg_option.id,
+            },
+        )))
+
+    def test_cross_form_stack_form_must_exist(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": 999999,
+                "stack_question": self.q_reg_option.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_form")
+
+    def test_cross_form_stack_form_must_be_in_the_family(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": self.other_root.id,
+                "stack_question": self.q_reg_option.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_form")
+
+    def test_cross_form_requires_group_by_parent_id(self):
+        # The join keys on the registration datapoint, which is only a
+        # key under parent_id. Refused, never silently overridden.
+        for group_by in ("option", "month", "date"):
+            err = self.check(self.widget(
+                type="bar",
+                question=self.q_option.id,
+                config={
+                    "measure": "current_state",
+                    "group_by": group_by,
+                    "stack_by": "option",
+                    "stack_form": self.root.id,
+                    "stack_question": self.q_reg_option.id,
+                },
+            ))
+            self.assertIsNotNone(err, group_by)
+            self.assertEqual(err["field"], "config.stack_form")
+
+    def test_cross_form_stack_question_must_be_on_the_stack_form(self):
+        # 600203 is on the widget's own form, not on the stack form.
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": self.root.id,
+                "stack_question": self.q_option.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_question")
+
+    def test_cross_form_requires_a_single_select_question(self):
+        # The join takes one category answer per site, so a multi-select
+        # would have everything after the first dropped without a word.
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_multi.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": self.root.id,
+                "stack_question": self.q_reg_option.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "question")
+
+    def test_stack_form_equal_to_the_widget_form_is_same_form(self):
+        # And is therefore judged by VIZ-015's rules, which want
+        # group_by=option rather than parent_id.
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": self.monitoring.id,
+                "stack_question": 600204,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.stack_question")
+
+    # ── §4.5: config.value_question (VIZ-015.b) ──
+
+    def test_a_valid_value_question_is_accepted(self):
+        self.assertIsNone(self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "value_question": 600202,
+                "repeat_agg": "sum",
+            },
+        )))
+
+    def test_value_question_requires_an_option_question(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=600202,
+            config={
+                "measure": "current_state",
+                "group_by": "month",
+                "value_question": 600202,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.value_question")
+
+    def test_value_question_must_be_a_number_question(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "value_question": self.q_multi.id,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.value_question")
+
+    def test_percentage_needs_sum_over_a_value_question(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "value_question": 600202,
+                "value_type": "percentage",
+                "repeat_agg": "average",
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.value_question")
+
+    def test_percentage_is_saved_over_a_summed_value(self):
+        """Two barriers, one rule: the same pairing /values accepts."""
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "value_question": 600202,
+                "value_type": "percentage",
+                "repeat_agg": "sum",
+            },
+        ))
+        self.assertIsNone(err)
+
+    def test_value_question_is_refused_with_include_unmonitored(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "value_question": 600202,
+                "repeat_agg": "sum",
+                "include_unmonitored": True,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.value_question")
+
+    def test_value_question_is_refused_with_a_cross_form_stack(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "parent_id",
+                "stack_by": "option",
+                "stack_form": self.root.id,
+                "stack_question": self.q_reg_option.id,
+                "value_question": 600202,
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.value_question")
+
+    def test_sum_is_refused_with_a_multi_choice_split(self):
+        err = self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "stack_by": "option",
+                "stack_question": self.q_multi.id,
+                "value_question": 600202,
+                "repeat_agg": "sum",
+            },
+        ))
+        self.assertIsNotNone(err)
+        self.assertEqual(err["field"], "config.repeat_agg")
 
     # ── §4.5: root_form ──
 
