@@ -1801,13 +1801,19 @@ const BuilderInspector = ({
                     // population threshold by one is no use to anybody.
                     controls={false}
                     // Each editable row carries that band's UPPER bound,
-                    // so the prefix is the same word on every one of
-                    // them. A bare number does not say which side it
-                    // bounds, and the rows only read as a ladder once it
-                    // does. The legend keeps interval labels instead —
-                    // "340 – 890" is the band's extent, which "Under
-                    // 890" would misstate.
-                    prefix="Under"
+                    // so the same word leads every one of them. A bare
+                    // number does not say which side it bounds, and the
+                    // rows only read as a ladder once it does. The
+                    // legend keeps interval labels instead — "340 – 890"
+                    // is the band's extent, which "Under 890" would
+                    // misstate.
+                    //
+                    // addonBefore, not prefix: antd's prefix is inline
+                    // text inside the field, so the word blended into
+                    // the number. The addon is the attached grey box
+                    // that reads as a label, and it comes with its own
+                    // background, border and radius.
+                    addonBefore="Under"
                     value={band.to}
                     placeholder="up to"
                     onChange={(val) => {

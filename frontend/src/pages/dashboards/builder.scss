@@ -723,12 +723,15 @@
 .builder-inspector-range-row {
   gap: 8px;
 
-  /* A prefix makes antd wrap the control: the flex child of this row is
-     the affix wrapper, and `.ant-input-number` is the inner div antd
-     already sets to width:100%. Sizing the inner one leaves the wrapper
-     at its default width, which is why the field stayed narrow. */
+  /* An addon makes antd wrap the control twice: the flex child of this
+     row is `-group-wrapper` (inline-block, no width of its own), inside
+     it a `display: table; width: 100%` group, and only then the input.
+     Sizing the inner one leaves the outer at its default width, which is
+     what kept the field narrow. All three are listed so the row survives
+     a change of affix. */
   .ant-input-number,
-  .ant-input-number-affix-wrapper {
+  .ant-input-number-affix-wrapper,
+  .ant-input-number-group-wrapper {
     flex: 1;
     min-width: 0;
   }

@@ -232,9 +232,9 @@ describe("clustering is a choice, not the default (#387)", () => {
         ],
       })
     );
-    expect(document.querySelectorAll(".ant-input-number-prefix")).toHaveLength(
-      2
-    );
+    expect(
+      document.querySelectorAll(".ant-input-number-group-addon")
+    ).toHaveLength(2);
     expect(screen.getAllByText("Under")).toHaveLength(2);
   });
 
