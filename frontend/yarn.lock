@@ -4565,10 +4565,10 @@
     "require-from-string" "^2.0.2"
     "uri-js" "^4.2.2"
 
-"akvo-charts@^1.3.5":
-  "integrity" "sha512-QXc4CtuBAR5sCkDht7N8uqx6K7NPVete011TnO+Es+ZQ4rDmtYoinEOTwkDpV0JRiWAbMnvTLkz30K9rdF1+Lw=="
-  "resolved" "https://registry.npmjs.org/akvo-charts/-/akvo-charts-1.3.5.tgz"
-  "version" "1.3.5"
+"akvo-charts@^1.3.7":
+  "integrity" "sha512-ccEn2B30ne6Glizjs8tNUJvxfjRPZMtuQxmtzMMYicoPr/Jqj8spL8sfg+qgFRiVqIdQ8idQcfhR744q4qIOpQ=="
+  "resolved" "https://registry.npmjs.org/akvo-charts/-/akvo-charts-1.3.7.tgz"
+  "version" "1.3.7"
   dependencies:
     "echarts" "^5.5.1"
     "leaflet" "^1.9.4"

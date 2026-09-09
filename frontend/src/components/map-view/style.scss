@@ -69,14 +69,19 @@
     align-items: center;
     justify-content: center;
     font-size: 12px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: all 0.2s ease;
   }
-  /* Hover effect for better identification */
+  /* No drop shadow. `custom-marker` is akvo-charts' class for every
+     non-quantity leaf marker, and this stylesheet is global — it reaches
+     the dashboard map too, where a field of unclustered points each cast
+     a second, offset dot. The white border already lifts a point off the
+     tiles, which is what the shadow was there to do. */
+
+  /* Hover still lifts, by size alone, so pointing at a dense cluster of
+     points tells you which one you are on. */
   &:hover span {
     transform: scale(1.1);
     z-index: 1000;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   }
   &.multiple-option {
     span {

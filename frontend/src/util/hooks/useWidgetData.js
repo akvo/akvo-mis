@@ -288,16 +288,18 @@ const buildStatusRequest = (widget, filters, dashboardSlug) => {
 
 // The map's `config.map_mode`. Absent means "category", which is every
 // map that existed before #382 and every map bound to an option question.
-const MAP_QUANTITY = "quantity";
+// Both of the others are bound to a VALUE question and need its number:
+// `quantity` sizes clustered circles by it, `range` colours individual
+// points by which band it falls in.
+const MAP_VALUE_MODES = ["quantity", "range"];
 
 /**
  * The map's magnitude request: one number per point, joined by id.
  *
- * A map bound to a NUMBER question has nothing to colour by — a number
- * has no options, so `status_colors` is `{}`, buildStatusRequest returns
- * null, and before #382 the question the author picked was simply
- * ignored: every point drew the same size in the same colour. This is
- * the request that makes it mean something.
+ * A map bound to a VALUE question has nothing to colour by from the
+ * status path — a number has no options, so `status_colors` is `{}` and
+ * buildStatusRequest returns null. This is the request that gives the
+ * question a meaning, whichever way the author chose to draw it.
  *
  * The grouping differs by form and it is not a preference. Both spellings
  * key their rows on the REGISTRATION datapoint id, which is what
@@ -307,13 +309,36 @@ const MAP_QUANTITY = "quantity";
  * `group_by=parent_id` there returns a single row keyed `"None"`, which
  * joins to nothing and looks exactly like a form with no data.
  */
+/**
+ * The form, question and grouping a map's value request is keyed by.
+ *
+ * Exported because the BUILDER needs the same four when it seeds value
+ * ranges from the data: the grouping rule below is the one place that
+ * knows a registration answer has no parent to group by, and a second
+ * copy of it in the inspector would be a second place to get it wrong.
+ */
+export const mapValueParams = (widget, rootFormId) => {
+  const isMonitoringForm = Boolean(
+    widget?.form && rootFormId && widget.form !== rootFormId
+  );
+  return {
+    form_id: widget?.form,
+    question_id: widget?.question,
+    group_by: isMonitoringForm ? "parent_id" : "id",
+    // Always latest, whatever the widget's own measure says — the same
+    // reasoning as the status request: a point shows one current
+    // magnitude, not the sum of every visit ever made to it.
+    monitoring: isMonitoringForm ? MONITORING_LATEST : null,
+  };
+};
+
 const buildValueRequest = (widget, filters, rootFormId, dashboardSlug) => {
   const config = widget?.config || {};
   if (
     !widget ||
     widget.is_broken ||
     widget.type !== "map" ||
-    config.map_mode !== MAP_QUANTITY ||
+    !MAP_VALUE_MODES.includes(config.map_mode) ||
     // form_id is `required=True` on ValuesFilterSerializer, so either
     // gap is a guaranteed 400 rather than an empty map — and the
     // builder canvas renders half-built widgets as a matter of course.
@@ -322,19 +347,10 @@ const buildValueRequest = (widget, filters, rootFormId, dashboardSlug) => {
   ) {
     return null;
   }
-  const isMonitoringForm = Boolean(
-    widget.form && rootFormId && widget.form !== rootFormId
-  );
   return {
     endpoint: "visualization/values",
     params: compact({
-      form_id: widget.form,
-      question_id: widget.question,
-      group_by: isMonitoringForm ? "parent_id" : "id",
-      // Always latest, whatever the widget's own measure says — the same
-      // reasoning as the status request: a point shows one current
-      // magnitude, not the sum of every visit ever made to it.
-      monitoring: isMonitoringForm ? MONITORING_LATEST : null,
+      ...mapValueParams(widget, rootFormId),
       // How REPEATS of the question collapse into one number, which is a
       // different question from how submissions do. Null unless the
       // author picked one, and compact() drops it.

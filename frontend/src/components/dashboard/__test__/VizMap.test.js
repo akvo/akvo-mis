@@ -7,12 +7,23 @@ import VizMap from "../widgets/VizMap";
 // props we hand MapCluster, not about tiles painting. Same stand-in
 // approach as ChartRenderer.test.js.
 let lastProps = null;
-jest.mock("akvo-charts", () => ({
-  MapCluster: (props) => {
-    lastProps = props;
-    return <div data-testid="map-cluster" />;
-  },
-}));
+// Mounts, not renders. A Leaflet cluster group is built in an effect and
+// captures its icon function there, so "did this remount?" is the only
+// honest way to ask whether a prop change reached the map at all — DOM
+// identity does not answer it reliably under rerender.
+let mountCount = 0;
+jest.mock("akvo-charts", () => {
+  const RealReact = require("react");
+  return {
+    MapCluster: (props) => {
+      lastProps = props;
+      RealReact.useEffect(() => {
+        mountCount += 1;
+      }, []);
+      return <div data-testid="map-cluster" />;
+    },
+  };
+});
 
 const widget = (config = {}) => ({
   id: 1,
@@ -38,6 +49,7 @@ const STATUS_COLORS = { operational: "#64A73B", issue: "#e41a1c" };
 
 beforeEach(() => {
   lastProps = null;
+  mountCount = 0;
 });
 
 describe("point mapping", () => {
@@ -181,24 +193,38 @@ describe("quantity mode", () => {
     expect(lastProps.data.map((d) => d.value)).toEqual([12000, 3400]);
   });
 
-  test("a point the join missed is zero, not NaN", () => {
-    // The library draws a zero as a small circle rather than dropping the
-    // point, which is the honest rendering for a site that did not answer
-    // the question. NaN would size it as garbage.
+  test("a point the join missed carries null, never a made-up zero", () => {
+    // MapCluster reads `Number(d[valueKey]) || 0`, so null still draws
+    // the small circle that honestly says "no number here" — without
+    // this component asserting a zero the data never contained. NaN
+    // would size the circle as garbage; null does not.
     render(
       <VizMap
         config={quantityWidget()}
         data={[...VALUED, { id: 3, name: "Lautoka", geo: [-17.6, 177.4] }]}
       />
     );
-    expect(lastProps.data[2].value).toBe(0);
+    expect(lastProps.data[2].value).toBeNull();
+    expect(Number(lastProps.data[2].value) || 0).toBe(0);
   });
 
-  test("a non-numeric answer is zero, not NaN", () => {
+  test("a non-numeric answer is null, not NaN and not zero", () => {
     render(
       <VizMap
         config={quantityWidget()}
         data={[{ id: 1, name: "Nadi", geo: [-17.7, 177.9], value: "n/a" }]}
+      />
+    );
+    expect(lastProps.data[0].value).toBeNull();
+  });
+
+  test("a real zero survives as a zero", () => {
+    // The distinction only means something if an actual 0 still reads
+    // as 0 rather than being folded in with the unanswered.
+    render(
+      <VizMap
+        config={quantityWidget()}
+        data={[{ id: 1, name: "Nadi", geo: [-17.7, 177.9], value: 0 }]}
       />
     );
     expect(lastProps.data[0].value).toBe(0);
@@ -251,8 +277,196 @@ describe("quantity mode", () => {
     // objects are created in an effect and do not follow React prop
     // updates, so a reused instance would keep drawing the old icons.
     const { rerender } = render(<VizMap config={widget()} data={POINTS} />);
-    const first = screen.getByTestId("map-cluster");
+    expect(mountCount).toBe(1);
     rerender(<VizMap config={quantityWidget()} data={VALUED} />);
-    expect(screen.getByTestId("map-cluster")).not.toBe(first);
+    expect(mountCount).toBe(2);
+  });
+});
+
+// A map bound to a value question, with clustering OFF (#387). This is
+// the default for a value question: the author sees individual sites
+// coloured by band, and opts into clustering when they want totals.
+describe("range mode", () => {
+  const RANGES = [
+    { to: 340, color: "#d73027" },
+    { to: 890, color: "#fee08b" },
+    { to: null, color: "#1a9850" },
+  ];
+
+  const rangeWidget = (config = {}) =>
+    widget({ map_mode: "range", value_ranges: RANGES, ...config });
+
+  const VALUED = [
+    { id: 1, name: "Nadi Central EPS", geo: [-17.78, 177.94], value: 120 },
+    { id: 2, name: "Ba Riverside EPS", geo: [-17.53, 177.67], value: 500 },
+    { id: 3, name: "Lautoka EPS", geo: [-17.6, 177.4], value: 12000 },
+  ];
+
+  test("points are not clustered", () => {
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(lastProps.cluster).toBe(false);
+  });
+
+  test("category and quantity maps stay clustered", () => {
+    render(<VizMap config={widget()} data={POINTS} />);
+    expect(lastProps.cluster).not.toBe(false);
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={POINTS} />);
+    expect(lastProps.cluster).not.toBe(false);
+  });
+
+  test("each point takes the colour of its band", () => {
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(lastProps.data.map((d) => d.color)).toEqual([
+      "#d73027",
+      "#fee08b",
+      "#1a9850",
+    ]);
+  });
+
+  test("a point with no answer falls back rather than reading as zero", () => {
+    // "not reported" and "nobody" are different facts; colouring the
+    // first as the lowest band asserts something the data never said.
+    render(
+      <VizMap
+        config={rangeWidget()}
+        data={[{ id: 9, name: "Unknown", geo: [-17.7, 177.9] }]}
+      />
+    );
+    expect(lastProps.data[0].color).toBe("#64A73B");
+  });
+
+  test("the legend names the bands, not the statuses", () => {
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(screen.getByText("under 340")).toBeInTheDocument();
+    expect(screen.getByText("340 – 890")).toBeInTheDocument();
+    expect(screen.getByText("890 and above")).toBeInTheDocument();
+  });
+
+  test("the popup carries the number, not just the name", () => {
+    // A coloured dot says which band; without this nothing on screen
+    // ever says which value.
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    const { container } = require("@testing-library/react").render(
+      <div>{lastProps.renderPopup(lastProps.data[2])}</div>
+    );
+    expect(container.textContent).toContain("Lautoka EPS");
+    expect(container.textContent).toContain("12,000");
+  });
+
+  test("an unanswered point says so, rather than claiming zero", () => {
+    // The colour already falls back for a missing answer; a popup
+    // reading "0" would tell the reader this site serves nobody, which
+    // is a different fact from nobody having reported.
+    render(
+      <VizMap
+        config={rangeWidget()}
+        data={[{ id: 9, name: "Unknown", geo: [-17.7, 177.9] }]}
+      />
+    );
+    const { container } = require("@testing-library/react").render(
+      <div>{lastProps.renderPopup(lastProps.data[0])}</div>
+    );
+    expect(container.textContent).toContain("Unknown");
+    expect(container.textContent).toContain("No value");
+    expect(container.textContent).not.toContain("0");
+  });
+
+  test("a site that really reported zero still shows zero", () => {
+    render(
+      <VizMap
+        config={rangeWidget()}
+        data={[{ id: 9, name: "Empty", geo: [-17.7, 177.9], value: 0 }]}
+      />
+    );
+    const { container } = require("@testing-library/react").render(
+      <div>{lastProps.renderPopup(lastProps.data[0])}</div>
+    );
+    expect(container.textContent).toContain("0");
+    expect(container.textContent).not.toContain("No value");
+  });
+
+  test("no bands configured yet still renders the map", () => {
+    // The seeding request can fail; the author gets an uncoloured map
+    // rather than a broken widget.
+    render(<VizMap config={rangeWidget({ value_ranges: [] })} data={VALUED} />);
+    expect(screen.getByTestId("map-cluster")).toBeInTheDocument();
+    expect(lastProps.data.every((d) => d.color === "#64A73B")).toBe(true);
+    expect(document.querySelector(".dashboard-view-map-legend")).toBeNull();
+  });
+});
+
+describe("quantity aggregation", () => {
+  const VALUED = [
+    { id: 1, name: "Nadi", geo: [-17.78, 177.94], value: 120 },
+    { id: 2, name: "Ba", geo: [-17.53, 177.67], value: 500 },
+  ];
+
+  test("sum is the default a cluster combines by", () => {
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={VALUED} />);
+    expect(lastProps.aggregate).toBe("sum");
+  });
+
+  test("the author's choice reaches the library", () => {
+    // Sum is wrong for a rate: five sites at 50 l/p/d is not 250.
+    render(
+      <VizMap
+        config={widget({ map_mode: "quantity", map_aggregate: "average" })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.aggregate).toBe("average");
+  });
+
+  test("changing how a cluster combines remounts it", () => {
+    // MapCluster keys its Leaflet group on `type` and `cluster` only, and
+    // MarkerClusterGroup captures iconCreateFunction at mount by design
+    // ("a caller that needs a different closure is expected to remount
+    // this component"). Without the aggregate in OUR key, switching
+    // Sum -> Average leaves the old closure in place and every circle
+    // carries on summing, with nothing on screen to say so.
+    const { rerender } = render(
+      <VizMap
+        config={widget({ map_mode: "quantity", map_aggregate: "sum" })}
+        data={VALUED}
+      />
+    );
+    expect(mountCount).toBe(1);
+    rerender(
+      <VizMap
+        config={widget({ map_mode: "quantity", map_aggregate: "average" })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.aggregate).toBe("average");
+    expect(mountCount).toBe(2);
+  });
+
+  test("a cluster label is rounded, not a repeating decimal", () => {
+    // Sums are whole, so the library's default never had to round; an
+    // average divides, and 11/3 rendered as 3.6666666666 inside a 40px
+    // circle.
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={VALUED} />);
+    expect(lastProps.formatValue(11 / 3)).toBe("3.67");
+    expect(lastProps.formatValue(2.5)).toBe("2.5");
+    expect(lastProps.formatValue(7)).toBe("7");
+  });
+
+  test("large numbers keep their compact form", () => {
+    // Rounding must not cost the K/M/B shorthand the circle relies on to
+    // fit a real population figure.
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={VALUED} />);
+    expect(lastProps.formatValue(12400)).toBe("12.4K");
+    expect(lastProps.formatValue(10562088)).toBe("10.6M");
+    expect(lastProps.formatValue(2.4e9)).toBe("2.4B");
+  });
+
+  test("range mode passes no aggregate at all", () => {
+    render(
+      <VizMap
+        config={widget({ map_mode: "range", value_ranges: [] })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.aggregate).toBeUndefined();
   });
 });
