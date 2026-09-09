@@ -5,6 +5,7 @@ from api.v1.v1_visualization.constants import (
     VALID_VALUE_TYPE,
     VALID_REPEAT_AGG,
     VALID_STACK_BY,
+    STACK_QUESTION_TYPES,
     VALID_CRITERIA_TYPES,
     VALID_VALUES_CRITERIA_TYPES,
     VALID_COLUMN_SOURCES,
@@ -34,6 +35,14 @@ class ValuesFilterSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
+    # The question whose options become the stacks. Absent means "the
+    # widget's own question", which is what stack_by=option has always
+    # meant, so every stored dashboard keeps its current behaviour.
+    stack_question_id = serializers.IntegerField(required=False)
+    # The number question whose aggregate becomes the bar height.
+    # Absent means "count rows", which is what every stored dashboard
+    # does (VIZ-015.b).
+    value_question_id = serializers.IntegerField(required=False)
     sum_by = serializers.ChoiceField(
         choices=["id", "parent_id"],
         required=False,
@@ -182,6 +191,148 @@ class ValuesFilterSerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     "stack_by": "stack_by requires question_id.",
                 })
+
+        stack_question_id = data.get("stack_question_id")
+        if stack_question_id and stack_question_id == question_id:
+            # The self-stack that plain stack_by=option already means.
+            # Normalised away first, and unconditionally: naming your own
+            # question is not the cross-tab, so none of the cross-tab's
+            # rules below should judge it.
+            data.pop("stack_question_id", None)
+            stack_question_id = None
+        if stack_question_id:
+            if stack_by != "option":
+                # stack_by=parent_id stacks by site, not by options.
+                # Ignoring the field would ship a chart that is not
+                # what the config says.
+                raise serializers.ValidationError({
+                    "stack_question_id": (
+                        "stack_question_id requires stack_by=option."
+                    ),
+                })
+            if group_by != "option":
+                # The cross-tab is the only shape where BOTH questions
+                # are read. Grouping by month or by site makes the
+                # measured question contribute nothing, so the chart is
+                # entirely about the stacking question -- which is the
+                # same chart as measuring that question directly, and
+                # leaves the Question control looking broken.
+                raise serializers.ValidationError({
+                    "stack_question_id": (
+                        "stack_question_id requires group_by=option."
+                    ),
+                })
+            if data.get("option_value"):
+                # handle_option_question returns from its option_value
+                # branches before it reaches the stack_by test, so the
+                # pair would silently drop the stacking.
+                raise serializers.ValidationError({
+                    "stack_question_id": (
+                        "option_value cannot be combined with"
+                        " stack_question_id."
+                    ),
+                })
+            stack_question = Questions.objects.filter(
+                pk=stack_question_id,
+                form_id=form_id,
+            ).first()
+            if not stack_question:
+                raise serializers.ValidationError({
+                    "stack_question_id": (
+                        f"Question {stack_question_id} not found"
+                        f" on form {form_id}."
+                    ),
+                })
+            if stack_question.type not in STACK_QUESTION_TYPES:
+                raise serializers.ValidationError({
+                    "stack_question_id": (
+                        "stack question must be an option or"
+                        " multiple_option question."
+                    ),
+                })
+            data["stack_question"] = stack_question
+
+        value_question_id = data.get("value_question_id")
+        if value_question_id:
+            if not question or question.type not in STACK_QUESTION_TYPES:
+                # The value supplies the HEIGHT; the measured question
+                # supplies the bars. With a number question there are no
+                # bars to give a height to, and the two would fight.
+                raise serializers.ValidationError({
+                    "value_question_id": (
+                        "value_question_id requires an option or"
+                        " multiple_option question_id."
+                    ),
+                })
+            if (
+                data.get("value_type") == "percentage"
+                and data.get("repeat_agg") != "sum"
+            ):
+                # A percentage needs a denominator that is a total of the
+                # same quantity. Under `sum` the bar's own total is one:
+                # "of the households this agency serves, 85% are under an
+                # approved plan". Under average/max/min/last there is no
+                # such total -- a sum of averages is not a quantity -- so
+                # the only honest denominators left are submission
+                # counts, which would divide money by rows (D-2).
+                raise serializers.ValidationError({
+                    "value_question_id": (
+                        "value_type=percentage requires repeat_agg=sum"
+                        " when a value_question_id is given."
+                    ),
+                })
+            if data.get("include_unanswered") or data.get("include_empty"):
+                # Both add a bucket of PARENTS -- "No information
+                # available" -- to a chart whose other bars are sums of a
+                # number question, and both make the percentage
+                # denominator a parent count. A row of sites cannot join
+                # a chart of households at any aggregation.
+                raise serializers.ValidationError({
+                    "value_question_id": (
+                        "value_question_id cannot be combined with"
+                        " include_unanswered or include_empty."
+                    ),
+                })
+            value_question = Questions.objects.filter(
+                pk=value_question_id,
+                form_id=form_id,
+            ).first()
+            if not value_question:
+                raise serializers.ValidationError({
+                    "value_question_id": (
+                        f"Question {value_question_id} not found"
+                        f" on form {form_id}."
+                    ),
+                })
+            if value_question.type != QuestionTypes.number:
+                raise serializers.ValidationError({
+                    "value_question_id": (
+                        "value question must be a number question."
+                    ),
+                })
+            stack_question = data.get("stack_question")
+            stack_is_multi = (
+                stack_question.type == QuestionTypes.multiple_option
+                if stack_question
+                else question.type == QuestionTypes.multiple_option
+            )
+            if (
+                data.get("repeat_agg") == "sum"
+                and stack_by
+                and stack_is_multi
+            ):
+                # A submission selecting three options contributes its
+                # full value to each, which is right for an average and
+                # wrong for a sum: the bar would total three times the
+                # money that exists, and a stacked bar reads as a
+                # partition of a whole (D-1).
+                raise serializers.ValidationError({
+                    "repeat_agg": (
+                        "sum cannot be combined with a multiple_option"
+                        " split; use average, max or min."
+                    ),
+                })
+            data["value_question"] = value_question
 
         return data
 

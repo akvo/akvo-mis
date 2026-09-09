@@ -58,6 +58,7 @@ services:
     environment:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
+      - REACT_APP_CARTO_API_KEY=$REACT_APP_CARTO_API_KEY
     volumes:
       - ./frontend:/app:delegated
     working_dir: /app

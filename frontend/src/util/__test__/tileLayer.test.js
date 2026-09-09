@@ -1,12 +1,9 @@
 import { tileLayer } from "../tileLayer";
+import geo from "../../lib/geo";
 
 describe("util/tileLayer", () => {
-  test("check the tileLayer objecr", () => {
-    expect(tileLayer).toEqual(
-      expect.objectContaining({
-        url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      })
-    );
-    expect(tileLayer).toMatchSnapshot();
+  test("re-exports geo.tile", () => {
+    expect(tileLayer).toBe(geo.tile);
+    expect(tileLayer.url).toContain("cartocdn.com");
   });
 });

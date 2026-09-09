@@ -414,7 +414,24 @@ const ManageDataMap = () => {
         "manage-data-map:geo"
       );
       const isFormSwitch = prevForm !== selectedForm;
-      const pos = geo.defaultPos();
+      const validPoints = (apiData || []).filter(geo.hasValidPoint);
+      let pos;
+      if (validPoints.length > 0) {
+        const lats = validPoints.map((d) => d.geo[0]);
+        const lons = validPoints.map((d) => d.geo[1]);
+        pos = {
+          coordinates: [
+            (Math.min(...lats) + Math.max(...lats)) / 2,
+            (Math.min(...lons) + Math.max(...lons)) / 2,
+          ],
+          bbox: [
+            [Math.min(...lats), Math.min(...lons)],
+            [Math.max(...lats), Math.max(...lons)],
+          ],
+        };
+      } else {
+        pos = geo.defaultPos();
+      }
       unstable_batchedUpdates(() => {
         if (isFormSwitch) {
           setPrevForm(selectedForm);

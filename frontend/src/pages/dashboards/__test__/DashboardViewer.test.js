@@ -150,6 +150,10 @@ describe("not found", () => {
       });
       renderViewer();
 
+      // Asserted against the copy itself, not a transcription of it: the
+      // literal /dashboard not found/i outlived the text it was quoting
+      // when #362 reworded the screen, and failed for a wording change
+      // rather than for a behaviour change.
       await waitFor(() =>
         expect(
           screen.getByText(uiText.en.dashboardNotFound)
@@ -178,22 +182,23 @@ describe("the top bar is a back button and nothing else", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("back returns to the previous page", async () => {
+  test("back returns to wherever the visitor came from", async () => {
+    // navigate(-1), not a route: #362 replaced the hardcoded hop to
+    // /control-center/dashboard, which was only ever right for someone
+    // who arrived from the list.
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
     screen.getByRole("button", { name: /back/i }).click();
-    // History, not a route. A published dashboard is reachable by people
-    // who cannot open /control-center/dashboard at all, so the control
-    // has to mean "where you came from" rather than a fixed destination.
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 
-  test("an anonymous visitor still gets a back control", async () => {
-    // It was hidden while it pointed at a Private route. Going back one
-    // history entry is something an anonymous visitor can do, so the
-    // gate came off with the destination (VIZ-019).
+  test("an anonymous visitor sees the back control too", async () => {
+    // It used to be hidden from them because it led to
+    // /control-center/dashboard, a Private route — a login wall rather
+    // than a way back. Going back through history has no such problem,
+    // so hiding it now would strand an anonymous visitor on the page.
     setUser(null);
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();

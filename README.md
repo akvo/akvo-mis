@@ -49,10 +49,32 @@ SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
 SENTRY_MOBILE_DSN="<<your_sentry_mobile_DSN>>"
 SENTRY_MOBILE_AUTH_TOKEN="<<your_sentry_mobile_auth_token>>"
+REACT_APP_CARTO_API_KEY="<<your CARTO basemap key, optional>>"
 ```
 
 
 You can generate a Sentry auth token by following [this official Sentry documentation](https://docs.sentry.io/account/auth-tokens/).
+
+#### Map tiles (`REACT_APP_CARTO_API_KEY`)
+
+Maps render CARTO Voyager basemap tiles. The variable is **optional**:
+leave it empty and the app uses CARTO's keyless public basemap, which is
+fine for local development but rate-limited in aggregate. Set it and the
+key is appended to the tile URL as `?key=`.
+
+Two things to know before setting it:
+
+- It is a `REACT_APP_*` variable, so Create React App inlines it into the
+  JavaScript bundle at build time. **Anyone who loads the app can read
+  it.** Use a CARTO basemap key restricted to your domains — never an
+  account API key with data scopes.
+- The frontend container writes its own `frontend/.env` from this variable
+  on start (`frontend/start.sh`), so editing `.env` alone changes nothing.
+  Restart the container: `./dc.sh restart frontend`.
+
+For deployed environments the value is read by [`ci/build.sh`](ci/build.sh)
+at image build time, so it has to be present in the CI environment — see
+the `REACT_APP_CARTO_API_KEY` secret in `.github/workflows/main.yml`.
 
 #### Workspaces (multi-tenancy)
 

@@ -138,6 +138,54 @@ VALUES_EXAMPLES = [
         response_only=True,
     ),
     OpenApiExample(
+        name="Cross-tab — stack_by=option + stack_question_id",
+        summary="One question's options split by another's",
+        description=(
+            "Request: ?form_id=6002&question_id=600203"
+            "&group_by=option&stack_by=option"
+            "&stack_question_id=600204&monitoring=all."
+            " Bars are the measured question's options, columns"
+            " the stacking question's. Bars are ordered by total"
+            " descending; `stack_labels` stays in the stacking"
+            " question's own option order, so the legend does not"
+            " move when the data does. Omitting"
+            " `stack_question_id` stacks by the measured"
+            " question's own options, which is the older"
+            " behaviour and unchanged."
+        ),
+        value={
+            "data": [
+                {
+                    "group": "active",
+                    "label": "Active",
+                    "Feature X": 1,
+                    "Feature Y": 2,
+                    "Feature Z": 1,
+                },
+                {
+                    "group": "pending",
+                    "label": "Pending",
+                    "Feature X": 1,
+                    "Feature Y": 1,
+                    "Feature Z": 1,
+                },
+                {
+                    "group": "inactive",
+                    "label": "Inactive",
+                    "Feature X": 1,
+                    "Feature Y": 0,
+                    "Feature Z": 1,
+                },
+            ],
+            "labels": ["Active", "Pending", "Inactive"],
+            "stack_labels": [
+                "Feature X", "Feature Y", "Feature Z",
+            ],
+            "colors": ["#1f77b4", "#ff7f0e", "#2ca02c"],
+        },
+        response_only=True,
+    ),
+    OpenApiExample(
         name="Multi-line — stack_by=parent_id",
         summary="Number question per parent over time",
         description=(

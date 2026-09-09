@@ -1,3 +1,3 @@
-export const tileLayer = {
-  url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-};
+import geo from "../lib/geo";
+
+export const tileLayer = geo.tile;

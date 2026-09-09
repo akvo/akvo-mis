@@ -7,18 +7,6 @@ import { geo } from "../../../lib";
 const DEFAULT_COLOR = "#1890ff";
 const NO_STATUS_COLOR = "#999";
 
-const OSM_TILE = {
-  url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  // Leaflet puts this on the tile <img> elements, which is what lets
-  // html2canvas read them back out instead of tainting the export
-  // canvas. akvo-charts spreads this object into L.tileLayer's options,
-  // so the key reaches Leaflet untouched. Safe because the tile host
-  // answers with access-control-allow-origin: * — verified, not assumed.
-  crossOrigin: "anonymous",
-};
-
 const VizMap = ({ config, data }) => {
   const widgetConfig = config?.config || {};
   const statusColors = useMemo(
@@ -44,15 +32,13 @@ const VizMap = ({ config, data }) => {
 
   const points = useMemo(() => {
     const rows = Array.isArray(data) ? data : [];
-    return rows
-      .filter((row) => Array.isArray(row?.geo) && row.geo.length === 2)
-      .map((row) => ({
-        id: row.id,
-        point: row.geo,
-        label: row.name,
-        status: row.status,
-        color: row.status ? colorForStatus[row.status] || fallback : fallback,
-      }));
+    return rows.filter(geo.hasValidPoint).map((row) => ({
+      id: row.id,
+      point: row.geo,
+      label: row.name,
+      status: row.status,
+      color: row.status ? colorForStatus[row.status] || fallback : fallback,
+    }));
   }, [data, colorForStatus, fallback]);
 
   const center = useMemo(() => geo?.defaultPos?.()?.coordinates || [0, 0], []);
@@ -71,7 +57,7 @@ const VizMap = ({ config, data }) => {
         groupKey="status"
         type="circle"
         config={{ center, zoom: 5, height: "100%", width: "100%" }}
-        tile={OSM_TILE}
+        tile={geo.tile}
         renderPopup={(point) => point?.label}
       />
       {showLegend && (

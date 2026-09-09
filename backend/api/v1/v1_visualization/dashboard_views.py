@@ -94,6 +94,25 @@ from utils.custom_serializer_fields import (
             enum=["option", "parent_id"],
         ),
         OpenApiParameter(
+            name="value_question_id", required=False,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "Number question whose aggregate becomes the bar"
+                " height. Omit to count submissions."
+            ),
+        ),
+        OpenApiParameter(
+            name="stack_question_id", required=False,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "Option question supplying the stacks; only with"
+                " stack_by=option. Omit to stack by the measured"
+                " question's own options."
+            ),
+        ),
+        OpenApiParameter(
             name="sum_by", required=False,
             type=OpenApiTypes.STR,
             location=OpenApiParameter.QUERY,
@@ -180,10 +199,11 @@ def visualization_values(request, version):
     # Every id the caller supplied, checked before any data query
     # runs. group_by and stack_by are absent on purpose: both are
     # choice fields over closed vocabularies and cannot name a
-    # question. Note that with a VALID dashboard_slug, form/question
-    # existence is still probed by the serializer's own validators
-    # above, before this runs -- this only bounds what a caller who
-    # has already named a dashboard may then ask about.
+    # question. stack_question_id is present for exactly the opposite
+    # reason -- it names one. Note that with a VALID dashboard_slug,
+    # form/question existence is still probed by the serializer's own
+    # validators above, before this runs -- this only bounds what a
+    # caller who has already named a dashboard may then ask about.
     #
     # administration_id is absent too, and not an oversight:
     # resolve_default_administration_id() below returns it unchecked
@@ -202,6 +222,8 @@ def visualization_values(request, version):
         question_ids=[
             validated.get("question_id"),
             validated.get("question_y"),
+            validated.get("stack_question_id"),
+            validated.get("value_question_id"),
             validated.get("date_question_id"),
             *question_ids_in_criteria(
                 request.query_params.get("criteria")
@@ -219,6 +241,8 @@ def visualization_values(request, version):
         ),
         "group_by": validated.get("group_by"),
         "stack_by": validated.get("stack_by"),
+        "stack_question": validated.get("stack_question"),
+        "value_question": validated.get("value_question"),
         "sum_by": validated.get("sum_by"),
         "value_type": validated.get(
             "value_type", "number"

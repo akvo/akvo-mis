@@ -21,6 +21,24 @@ const ENTRY = path.join(SRC, "pages", "dashboards", "DashboardViewer.jsx");
 const BANNED = /from\s+["'](echarts|echarts-for-react)(\/[^"']*)?["']/;
 const IMPORTS = /from\s+["'](\.[^"']*)["']/g;
 
+// The one file that breaks the ratchet, listed rather than ignored.
+//
+// It was VizScatter (#364), which drove ECharts inline. VIZ-013 extracted
+// that into `useEChartsOption` and put CategoryLine on it too, so the
+// direct import now sits in one shared hook instead of once per widget —
+// the debt moved and shrank rather than being paid off. akvo-charts still
+// exports a `ScatterPlot` and a `Line`, so the premise holds; what stops
+// the port is that akvo-charts derives `xAxis.type` from its `horizontal`
+// flag ('category' when false), so a numeric X axis needs `rawConfig`
+// overrides, and it has no tooltip formatter to match. That is a rewrite
+// of shipped widgets with a visible failure mode, so it wants its own
+// ticket.
+//
+// Naming the file keeps the guard live for every other component: a
+// second offender fails this test, and deleting the entry is how the
+// debt gets closed.
+const KNOWN_OFFENDERS = ["components/dashboard/widgets/useEChartsOption.js"];
+
 const resolve = (fromFile, spec) => {
   const base = path.resolve(path.dirname(fromFile), spec);
   const candidates = [
@@ -62,7 +80,17 @@ describe("the viewer path imports no charting library directly", () => {
     const offenders = [...reachableFrom(ENTRY)]
       .filter((file) => BANNED.test(fs.readFileSync(file, "utf8")))
       .map((file) => path.relative(SRC, file));
-    expect(offenders).toEqual([]);
+    expect(offenders).toEqual(KNOWN_OFFENDERS);
+  });
+
+  test("the known offender is still there to be fixed", () => {
+    // toEqual above is exact both ways, so this only states the intent
+    // out loud: the entry is a debt to remove, and once its callers move
+    // to akvo-charts this test is what tells you to delete it, rather
+    // than leaving a list that quietly means nothing.
+    KNOWN_OFFENDERS.forEach((offender) => {
+      expect(fs.existsSync(path.join(SRC, offender))).toBe(true);
+    });
   });
 
   test("the walk actually reaches the widget renderers", () => {

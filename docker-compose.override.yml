@@ -23,6 +23,7 @@ services:
     environment:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
+      - REACT_APP_CARTO_API_KEY=$REACT_APP_CARTO_API_KEY
   # Local mail sink. Deliberately NOT in mainnetwork's namespace: the worker
   # sends mail too and is on the default network, so a service with its own
   # name is reachable from both, the way db already is.

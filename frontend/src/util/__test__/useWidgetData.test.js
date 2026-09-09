@@ -660,6 +660,60 @@ describe("normalization", () => {
     expect(probe.latest().renderWidget.color).toEqual(["#64A73B", "#e41a1c"]);
   });
 
+  // The regression the projection introduced: `_stack_parent_by_month`
+  // and `_stack_parent_by_date` key their category `month`/`date`, not
+  // `label`, so a number question stacked by site drew a chart whose
+  // every bar was `undefined`.
+  test("a parent-stacked row keyed by date still finds its category", async () => {
+    axios.mockResolvedValue({
+      data: {
+        data: [
+          { date: "2026-07-10", "Site A": 12, "Site B": 5 },
+          { date: "2026-07-13", "Site A": 8, "Site B": 3 },
+        ],
+        labels: ["2026-07-10", "2026-07-13"],
+        stack_labels: ["Site A", "Site B"],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "current_state",
+          group_by: "date",
+          stack_by: "parent_id",
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().data).toEqual([
+      { label: "2026-07-10", "Site A": 12, "Site B": 5 },
+      { label: "2026-07-13", "Site A": 8, "Site B": 3 },
+    ]);
+  });
+
+  test("a parent-stacked row keyed by month does too", async () => {
+    axios.mockResolvedValue({
+      data: {
+        data: [{ month: "Jul 2026", "Site A": 12 }],
+        labels: ["Jul 2026"],
+        stack_labels: ["Site A"],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "current_state",
+          group_by: "month",
+          stack_by: "parent_id",
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().data).toEqual([{ label: "Jul 2026", "Site A": 12 }]);
+  });
+
   test("without group_by=option the widget colour is left alone", async () => {
     axios.mockResolvedValue({
       data: { data: [{ value: 5, label: "Jan" }], labels: ["Jan"] },
@@ -674,12 +728,12 @@ describe("normalization", () => {
     expect(probe.latest().renderWidget.color).toBe("#64A73B");
   });
 
-  test("stack_by derives stackMapping and passes rows through unprojected", async () => {
+  test("stack_by keeps the stack columns and drops everything else", async () => {
     axios.mockResolvedValue({
       data: {
         data: [
-          { label: "Nadi", Operational: 12, Issue: 3 },
-          { label: "Ba", Operational: 8, Issue: 1 },
+          { label: "Nadi", group: 7200, Operational: 12, Issue: 3 },
+          { label: "Ba", group: 7201, Operational: 8, Issue: 1 },
         ],
         labels: ["Nadi", "Ba"],
         stack_labels: ["Operational", "Issue"],
@@ -697,15 +751,39 @@ describe("normalization", () => {
     );
     await settle(probe);
 
-    // The builder never writes stackMapping, so stacked charts render with
-    // an empty mapping today. The per-stack columns ARE the data here, so
-    // the rows must not be projected down to {label, value}.
     expect(probe.latest().renderWidget.config.stackMapping).toEqual({
       stack: ["Operational", "Issue"],
     });
+    // `group` must not survive: akvo-charts makes a series of every key
+    // but the first, so leaving it in plotted the datapoint id as a bar
+    // — 7200 tall, next to stacks of 12 and 3.
     expect(probe.latest().data).toEqual([
       { label: "Nadi", Operational: 12, Issue: 3 },
       { label: "Ba", Operational: 8, Issue: 1 },
+    ]);
+  });
+
+  test("a stack column missing from a row becomes zero, not a hole", async () => {
+    axios.mockResolvedValue({
+      data: {
+        data: [{ label: "Nadi", group: 7200, Operational: 12 }],
+        labels: ["Nadi"],
+        stack_labels: ["Operational", "Issue"],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "current_state",
+          group_by: "parent_id",
+          stack_by: "option",
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().data).toEqual([
+      { label: "Nadi", Operational: 12, Issue: 0 },
     ]);
   });
 
@@ -845,5 +923,377 @@ describe("table pagination", () => {
     const probe = run(widget({ type: "bar" }));
     await settle(probe);
     expect(probe.latest().pagination).toBeNull();
+  });
+});
+
+// =========================================================
+// Stacking by another question (VIZ-015)
+// =========================================================
+
+describe("stack_question", () => {
+  test("reaches the request only when the author picked one", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "all_submissions",
+          group_by: "option",
+          stack_by: "option",
+          stack_question: 600204,
+        },
+      })
+    );
+    await settle(probe);
+    expect(axios.mock.calls[0][0].params.stack_question_id).toBe(600204);
+  });
+
+  test("an unstacked widget sends nothing new", async () => {
+    // compact() drops the null, so the request — and therefore the
+    // response — is byte-identical to what it was before this feature.
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: { measure: "all_submissions", group_by: "option" },
+      })
+    );
+    await settle(probe);
+    expect(axios.mock.calls[0][0].params).not.toHaveProperty(
+      "stack_question_id"
+    );
+  });
+
+  test("stack colours reach renderWidget when every option has one", async () => {
+    axios.mockResolvedValue({
+      data: {
+        data: [{ label: "Active", "Feature X": 1, "Feature Y": 2 }],
+        labels: ["Active"],
+        stack_labels: ["Feature X", "Feature Y"],
+        colors: ["#1f77b4", "#ff7f0e"],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "all_submissions",
+          group_by: "option",
+          stack_by: "option",
+          stack_question: 600204,
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().renderWidget.color).toEqual(["#1f77b4", "#ff7f0e"]);
+    expect(probe.latest().renderWidget.config.stackMapping).toEqual({
+      stack: ["Feature X", "Feature Y"],
+    });
+  });
+
+  test("a partly-coloured question falls back to the widget colour", async () => {
+    // QuestionOptions.color is nullable and nothing defaults it, so this
+    // is the normal shape on an author-built form. Passing the array on
+    // would colour one series and leave the rest to whatever the chart
+    // library does with a null — possibly a colour already in use.
+    axios.mockResolvedValue({
+      data: {
+        data: [{ label: "Active", "Feature X": 1, "Feature Y": 2 }],
+        labels: ["Active"],
+        stack_labels: ["Feature X", "Feature Y"],
+        colors: ["#1f77b4", null],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "all_submissions",
+          group_by: "option",
+          stack_by: "option",
+          stack_question: 600204,
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().renderWidget.color).toBe("#64A73B");
+  });
+
+  test("no colours at all falls back too", async () => {
+    axios.mockResolvedValue({
+      data: {
+        data: [{ label: "Active", "Feature X": 1 }],
+        labels: ["Active"],
+        stack_labels: ["Feature X"],
+        colors: [],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "all_submissions",
+          group_by: "option",
+          stack_by: "option",
+          stack_question: 600204,
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().renderWidget.color).toBe("#64A73B");
+  });
+});
+
+// =========================================================
+// Cross-form stacking (VIZ-015.a)
+// =========================================================
+//
+// Bars from the widget's form, stacks from another, joined on `group`.
+// Two requests where every other chart makes one.
+
+describe("cross-form stacking", () => {
+  const crossWidget = (overrides = {}) =>
+    widget({
+      type: "bar",
+      config: {
+        measure: "current_state",
+        group_by: "parent_id",
+        stack_by: "option",
+        stack_question: 600204,
+        stack_form: 6001,
+        ...overrides,
+      },
+    });
+
+  const CATEGORY = {
+    data: [{ label: "Nadi", group: 7, Surface: 1, Borehole: 0 }],
+    stack_labels: ["Surface", "Borehole"],
+    colors: ["#111111", "#222222"],
+  };
+  const SERIES = {
+    data: [{ label: "Nadi", group: 7, WAF: 0, MRD: 1 }],
+    stack_labels: ["WAF", "MRD"],
+    colors: ["#1f77b4", "#ff7f0e"],
+  };
+
+  const bySeriesForm = (config) =>
+    String(config.params?.form_id) === "6001" ? SERIES : CATEGORY;
+
+  test("no stack_form means one request, as before", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: { measure: "current_state", group_by: "option" },
+      })
+    );
+    await settle(probe);
+    expect(axios.mock.calls).toHaveLength(1);
+  });
+
+  test("a stack_form equal to the widget's form is not cross-form", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(crossWidget({ stack_form: MONITORING }));
+    await settle(probe);
+    expect(axios.mock.calls).toHaveLength(1);
+  });
+
+  test("a stack_form without a stack_question asks for nothing extra", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(crossWidget({ stack_question: null }));
+    await settle(probe);
+    expect(axios.mock.calls).toHaveLength(1);
+  });
+
+  test("a cross-form widget issues exactly two values calls", async () => {
+    axios.mockImplementation((config) =>
+      Promise.resolve({ data: bySeriesForm(config) })
+    );
+    const probe = run(crossWidget());
+    await settle(probe);
+    expect(axios.mock.calls).toHaveLength(2);
+  });
+
+  test("the primary call does not carry stack_question_id", async () => {
+    // It names a question on ANOTHER form, so sending it here is a 400
+    // twice over: not on form_id, and stack_question_id requires
+    // group_by=option while a cross-form chart is pinned to parent_id.
+    // Asserting only the call COUNT missed this entirely.
+    axios.mockImplementation((config) =>
+      Promise.resolve({ data: bySeriesForm(config) })
+    );
+    const probe = run(crossWidget());
+    await settle(probe);
+    const primary = axios.mock.calls
+      .map((c) => c[0])
+      .find((c) => String(c.params.form_id) === String(MONITORING));
+    expect(primary.params).not.toHaveProperty("stack_question_id");
+  });
+
+  test("a same-form stack still carries stack_question_id", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "current_state",
+          group_by: "option",
+          stack_by: "option",
+          stack_question: 600204,
+        },
+      })
+    );
+    await settle(probe);
+    expect(axios.mock.calls[0][0].params.stack_question_id).toBe(600204);
+  });
+
+  test("the series call pins group_by and stack_by", async () => {
+    // Not the author's to choose: the join keys on the registration
+    // datapoint, which is only a key under parent_id.
+    axios.mockImplementation((config) =>
+      Promise.resolve({ data: bySeriesForm(config) })
+    );
+    const probe = run(crossWidget());
+    await settle(probe);
+    const series = axios.mock.calls
+      .map((c) => c[0])
+      .find((c) => String(c.params.form_id) === "6001");
+    expect(series.params.group_by).toBe("parent_id");
+    expect(series.params.stack_by).toBe("option");
+    expect(series.params.question_id).toBe(600204);
+  });
+
+  test("the series call carries the dashboard filters", async () => {
+    // Otherwise the bars and the segments describe different populations,
+    // which reads as a data bug rather than a configuration one.
+    axios.mockImplementation((config) =>
+      Promise.resolve({ data: bySeriesForm(config) })
+    );
+    const probe = run(crossWidget(), {
+      from_date: "2025-01-01",
+      to_date: "2025-06-30",
+      administration_id: 42,
+    });
+    await settle(probe);
+    const series = axios.mock.calls
+      .map((c) => c[0])
+      .find((c) => String(c.params.form_id) === "6001");
+    expect(series.params.from_date).toBe("2025-01-01");
+    expect(series.params.to_date).toBe("2025-06-30");
+    expect(series.params.administration_id).toBe(42);
+  });
+
+  test("the join runs before the projection", async () => {
+    // The projection drops `group`, the join key. Reversed, the join
+    // matches nothing and the chart renders empty with no error anywhere.
+    axios.mockImplementation((config) =>
+      Promise.resolve({ data: bySeriesForm(config) })
+    );
+    const probe = run(crossWidget());
+    await settle(probe);
+    expect(probe.latest().data).toEqual([{ label: "Surface", WAF: 0, MRD: 1 }]);
+  });
+
+  test("the legend describes the series question, not the bars", async () => {
+    axios.mockImplementation((config) =>
+      Promise.resolve({ data: bySeriesForm(config) })
+    );
+    const probe = run(crossWidget());
+    await settle(probe);
+    expect(probe.latest().renderWidget.config.stackMapping).toEqual({
+      stack: ["WAF", "MRD"],
+    });
+    expect(probe.latest().renderWidget.color).toEqual(["#1f77b4", "#ff7f0e"]);
+  });
+
+  test("a partly-null series palette falls back to the widget colour", async () => {
+    axios.mockImplementation((config) =>
+      Promise.resolve({
+        data:
+          String(config.params?.form_id) === "6001"
+            ? { ...SERIES, colors: ["#1f77b4", null] }
+            : CATEGORY,
+      })
+    );
+    const probe = run(crossWidget());
+    await settle(probe);
+    expect(probe.latest().renderWidget.color).toBe("#64A73B");
+  });
+});
+
+describe("a stack the server declined to draw", () => {
+  test("falls back to the unstacked projection", async () => {
+    // Asked to cross-tab a question against itself, the backend returns
+    // the plain option breakdown — real rows, but no stack_labels.
+    // Trusting config.stack_by there threw all of them away and drew an
+    // empty chart with a bare axis.
+    axios.mockResolvedValue({
+      data: {
+        data: [
+          {
+            value: 6,
+            label: "Water Authority",
+            group: "waf",
+            color: "#1b9e77",
+          },
+          {
+            value: 4,
+            label: "Mineral Resources",
+            group: "mrd",
+            color: "#d95f02",
+          },
+        ],
+        labels: ["Water Authority", "Mineral Resources"],
+      },
+    });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "all_submissions",
+          group_by: "option",
+          stack_by: "option",
+        },
+      })
+    );
+    await settle(probe);
+    expect(probe.latest().data).toEqual([
+      { label: "Water Authority", value: 6 },
+      { label: "Mineral Resources", value: 4 },
+    ]);
+  });
+});
+
+describe("value question", () => {
+  test("reaches the request only when the author picked one", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: {
+          measure: "all_submissions",
+          group_by: "option",
+          value_question: 600202,
+          repeat_agg: "sum",
+        },
+      })
+    );
+    await settle(probe);
+    expect(axios.mock.calls[0][0].params.value_question_id).toBe(600202);
+    expect(axios.mock.calls[0][0].params.repeat_agg).toBe("sum");
+  });
+
+  test("a counting widget sends nothing new", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({
+        type: "bar",
+        config: { measure: "all_submissions", group_by: "option" },
+      })
+    );
+    await settle(probe);
+    expect(axios.mock.calls[0][0].params).not.toHaveProperty(
+      "value_question_id"
+    );
   });
 });

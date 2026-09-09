@@ -67,27 +67,54 @@ def annotate_broken(widgets, tenant):
     the caller's snapshot is never mutated, because it is a row from
     the database that nobody meant to write back.
     """
-    def live(model, key):
-        ids = {w.get(key) for w in widgets if w.get(key)}
-        query = model.objects.filter(id__in=ids)
+    def live(model, ids):
+        query = model.objects.filter(id__in={i for i in ids if i})
         if tenant is not None:
             query = query.filter(**{model.TENANT_PATH: tenant})
         return set(query.values_list("id", flat=True))
 
-    live_forms = live(Forms, "form")
-    live_questions = live(Questions, "question")
+    def stack_question(widget):
+        return (widget.get("config") or {}).get("stack_question")
+
+    def stack_form(widget):
+        return (widget.get("config") or {}).get("stack_form")
+
+    live_forms = live(
+        Forms,
+        [w.get("form") for w in widgets]
+        + [stack_form(w) for w in widgets],
+    )
+    # Both question references in one query: the widget's own, and the
+    # stacking question a bar may name in its config (VIZ-015). A stack
+    # question deleted after publish would otherwise 400 the viewer
+    # with no explanation — the exact failure this function exists to
+    # turn into a visible broken widget.
+    live_questions = live(
+        Questions,
+        [w.get("question") for w in widgets]
+        + [stack_question(w) for w in widgets],
+    )
 
     annotated = []
     for widget in widgets:
         row = dict(widget)
         form_id = row.get("form")
         question_id = row.get("question")
-        # Form first: a widget on a deleted form must not blame the
-        # question that went down with it.
+        stack_question_id = stack_question(row)
+        stack_form_id = stack_form(row)
+        # Widest cause first, all the way down: a widget on a deleted
+        # form must not blame the question that went down with it, and a
+        # deleted stack form must not blame its own question either.
         if form_id and form_id not in live_forms:
             reason = "form_deleted"
         elif question_id and question_id not in live_questions:
             reason = "question_deleted"
+        elif stack_form_id and stack_form_id not in live_forms:
+            reason = "stack_form_deleted"
+        elif stack_question_id and (
+            stack_question_id not in live_questions
+        ):
+            reason = "stack_question_deleted"
         else:
             reason = None
         row["is_broken"] = reason is not None

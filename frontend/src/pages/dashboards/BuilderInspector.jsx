@@ -11,10 +11,7 @@ import {
   NEEDS_VALUE_TYPE,
   NEEDS_REPEAT_AGG,
   NEEDS_COLOR,
-  VALID_GROUP_BY,
-  VALID_VALUE_TYPE,
-  VALID_REPEAT_AGG,
-  VALID_STACK_BY,
+  valueTypeOptions,
   VALID_ORIENTATION,
   VALID_PIE_VARIANT,
   VALID_MEASURE,
@@ -28,6 +25,18 @@ import {
   NEEDS_LINE_CATEGORY,
   defaultMeasure,
   pruneConfigForForm,
+  stackByOptions,
+  withValidStack,
+  stackValueOf,
+  stackChangeOf,
+  groupByOptions,
+  withValidGroupBy,
+  breakdownOptions,
+  breakdownValueOf,
+  breakdownChangeOf,
+  withValidBreakdown,
+  valueQuestionOptions,
+  repeatAggOptions,
   tableColumnOptions,
   monitoringForms,
 } from "./builderConstants";
@@ -87,12 +96,43 @@ const IconDate = () => (
   </svg>
 );
 
+const IconSite = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 32 32">
+    <path
+      fill="currentColor"
+      d="M16 18a5 5 0 1 1 5-5 5.006 5.006 0 0 1-5 5zm0-8a3 3 0 1 0 3 3 3.003 3.003 0 0 0-3-3z"
+    />
+    <path
+      fill="currentColor"
+      d="M16 30l-8.436-9.949a35.076 35.076 0 0 1-.348-.451A10.889 10.889 0 0 1 5 13a11 11 0 0 1 22 0 10.884 10.884 0 0 1-2.215 6.597l-.001.002s-.3.394-.345.447zm-7.191-11.6c.002 0 .232.305.284.373L16 26.888l6.915-8.153c.044-.055.276-.363.278-.365A8.901 8.901 0 0 0 25 13a9 9 0 1 0-18 0 8.905 8.905 0 0 0 1.809 5.4z"
+    />
+  </svg>
+);
+
+// The merged Break down by list mixes questions with fixed choices, so
+// the fixed ones carry a glyph of their own rather than sitting bare
+// beside icons.
+const BREAKDOWN_ICON = {
+  date: <IconDate />,
+  site: <IconSite />,
+};
+
 const QUESTION_TYPE_ICON = {
   number: <IconNumber />,
   option: <IconOption />,
   multiple_option: <IconCheckbox />,
   date: <IconDate />,
 };
+
+/** A fixed breakdown choice: its own glyph, or none for "None". */
+const BreakdownLabel = ({ choice }) => (
+  <span className="builder-inspector-q-label">
+    {choice.type
+      ? QUESTION_TYPE_ICON[choice.type] || <IconText />
+      : BREAKDOWN_ICON[choice.icon] || null}
+    {choice.label}
+  </span>
+);
 
 const QuestionLabel = ({ label, type }) => (
   <span className="builder-inspector-q-label">
@@ -272,6 +312,124 @@ const BuilderInspector = ({
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );
+  // Only bar offers the question entries. Nothing technical stops a line
+  // chart on an option question from stacking the same way — /values
+  // never sees the widget type — but the acceptance criteria name bar,
+  // so widening this is a separate decision, not an accident.
+  //
+  // The grouping is passed for every type all the same: a line chart on a
+  // number question stacks by site over month or date, and withholding
+  // the grouping would hide that working combination too.
+  const stackChoices = stackByOptions(
+    allQuestions,
+    widget.question,
+    wConfig.group_by || "option",
+    // The whole family, already in memory: /sources returns every form
+    // with its questions, so the cross-form picker costs no new request.
+    wType === "bar" ? forms : [],
+    widget.form
+  ).filter((s) => wType === "bar" || !String(s.value).startsWith("q:"));
+  // Cross-form joins per site, so the grouping is derived, not chosen.
+  const stackIsCrossForm = Boolean(wConfig.stack_form);
+
+  // The number questions this bar could be measured by, and the
+  // aggregations that stay honest for the split it carries.
+  const valueChoices = valueQuestionOptions(allQuestions, selectedQuestion);
+  const splitQuestion = wConfig.stack_question
+    ? allQuestions.find((q) => q.id === wConfig.stack_question)
+    : selectedQuestion;
+  const aggChoices = repeatAggOptions(
+    splitQuestion?.type === "multiple_option",
+    Boolean(wConfig.stack_by)
+  );
+
+  // Bar's single control (S-13). Line and pie keep the pair above: a
+  // line's request path fixes group_by=month and ignores the control,
+  // and a pie has no stack to merge with.
+  const breakdownChoices = breakdownOptions(
+    selectedQuestion,
+    allQuestions,
+    forms,
+    widget.form
+  );
+
+  // The list offers no question entries for a number question, because
+  // the compute layer has no path for one: `handle_number_question`
+  // routes on group_by and stack_by alone, and `stack_question_id` is
+  // refused unless the measured question is option-typed. The chart is
+  // not unavailable, though — it is spelled with the roles swapped, and
+  // saying so is the difference between a missing feature and a
+  // misunderstood one.
+  const breakdownHint = (() => {
+    if (breakdownChoices.length === 0) {
+      return "Pick a question first";
+    }
+    if (selectedQuestion?.type === "number") {
+      return (
+        "A number question is already the measure, so it can only be" +
+        " broken down by time or site. To split it by an option" +
+        " question, make that the Question and set this one as the Value."
+      );
+    }
+    return (
+      "The chart's second dimension: the axis for a time or a site," +
+      " the segments for another question."
+    );
+  })();
+
+  // Why Percentage is not in the list, when a Value question put it
+  // there. Two rules meet here and neither announces itself: a
+  // percentage needs a denominator that is a total of the same quantity,
+  // which only `sum` gives (D-2) — and `sum` is itself withheld from a
+  // multi-choice split (D-1). Together they can make Percentage
+  // UNREACHABLE, with the control simply one entry shorter and no way to
+  // find out why.
+  const percentageWithheld = (() => {
+    if (!wConfig.value_question || wConfig.repeat_agg === "sum") {
+      return null;
+    }
+    const splitIsMulti = splitQuestion?.type === "multiple_option";
+    if (splitIsMulti && wConfig.stack_by) {
+      return (
+        "Percentage needs a total to divide by, which only Sum gives —" +
+        " and Sum is unavailable while the segments come from a" +
+        " multi-choice question, because one submission counts in" +
+        " several segments at once."
+      );
+    }
+    return (
+      "Percentage needs Sum: each bar's segments divide by that bar's" +
+      " own total, and a total of averages is not a quantity."
+    );
+  })();
+
+  // Which groupings draw at all, given the question and the stack.
+  const groupChoices = groupByOptions(selectedQuestion, wConfig);
+  // Hidden when there was never a choice to make — an unstacked option
+  // question has exactly one way to draw, and a control with one entry
+  // teaches nothing. Distinct from the cross-form case below, which
+  // DISABLES rather than hides: there a choice was taken away by
+  // something the author did, and that needs saying.
+  //
+  // Still shown when the stored value is not among the valid ones, so a
+  // widget saved with a grouping that draws nothing stays repairable —
+  // one click, and then it hides.
+  const groupByIsForced =
+    // A cross-form stack keeps its control visible and disabled instead:
+    // there the author's own choice fixed the grouping, and that has a
+    // cause worth stating. Hiding is for when there was never a choice.
+    !stackIsCrossForm &&
+    groupChoices.length <= 1 &&
+    groupChoices.some((g) => g.value === (wConfig.group_by || "option"));
+  // Everything a cross-form stack needs is in place EXCEPT a single-choice
+  // measured question. Without saying so the entries simply are not there,
+  // which reads as the feature being missing rather than unavailable —
+  // the same invisible constraint D-5 was written about.
+  const crossFormWithheld =
+    wType === "bar" &&
+    (wConfig.group_by || "option") === "parent_id" &&
+    selectedQuestion?.type === "multiple_option" &&
+    forms.some((f) => f.id !== widget.form);
   const hasOptionQuestion =
     selectedQuestion?.type === "option" ||
     selectedQuestion?.type === "multiple_option";
@@ -430,11 +588,18 @@ const BuilderInspector = ({
               <Switch
                 size="small"
                 checked={wConfig.include_unmonitored === true}
+                disabled={Boolean(wConfig.value_question)}
                 onChange={(checked) => {
                   updateConfig("include_unmonitored", checked);
                 }}
               />
             </label>
+            {wConfig.value_question && (
+              <div className="builder-inspector-hint">
+                Unavailable while the bars carry a Value: the bucket counts
+                sites, and these bars are totals.
+              </div>
+            )}
           </div>
         )}
 
@@ -477,7 +642,58 @@ const BuilderInspector = ({
                     },
                   });
                 } else {
-                  updateWidget("question", val);
+                  // Which stacks are drawable depends on the question's
+                  // type, so changing it can strand the current choice —
+                  // clearing a number question's leftover option stack,
+                  // or a stack question that just became the measured
+                  // one. A stranded value is a guaranteed 400, not a
+                  // cosmetic slip.
+                  //
+                  // The grouping is snapped FIRST: an option question
+                  // swapped for a number one strands group_by=option,
+                  // which draws one "Total" bar rather than erroring.
+                  // The stack is then validated against the grouping
+                  // that survived, not the one being replaced.
+                  const nextQuestion = allQuestions.find((q) => q.id === val);
+                  if (wType === "bar") {
+                    // One control, so one snap: a breakdown the new
+                    // question cannot draw moves to the first that it
+                    // can, which for a number question means the
+                    // "None — this question's options" entry it no
+                    // longer has cannot survive as group_by=option.
+                    onWidgetChange({
+                      ...widget,
+                      question: val || null,
+                      config: withValidBreakdown(
+                        widget.config,
+                        breakdownOptions(
+                          nextQuestion,
+                          allQuestions,
+                          forms,
+                          widget.form
+                        )
+                      ),
+                    });
+                    return;
+                  }
+                  const grouped = withValidGroupBy(
+                    widget.config,
+                    groupByOptions(nextQuestion, wConfig)
+                  );
+                  onWidgetChange({
+                    ...widget,
+                    question: val || null,
+                    config: withValidStack(
+                      grouped,
+                      stackByOptions(
+                        allQuestions,
+                        val,
+                        grouped.group_by || "option",
+                        wType === "bar" ? forms : [],
+                        widget.form
+                      )
+                    ),
+                  });
                 }
               }}
               placeholder={
@@ -546,6 +762,61 @@ const BuilderInspector = ({
                 Default: each datapoint counts as 1
               </div>
             )}
+          </div>
+        )}
+
+        {/* Value — the bar's height, when it is not a count */}
+        {NEEDS_GROUP_BY.has(wType) && valueChoices.length > 0 && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Value</label>
+            <Select
+              value={wConfig.value_question || null}
+              onChange={(val) => {
+                // Percentage survives only where it still has a
+                // denominator: summed bars divide by the bar's own
+                // total (D-2). Under any other aggregation it would
+                // divide money by submissions, so it snaps to Count
+                // rather than leaving a config the endpoint refuses.
+                const keepPercentage =
+                  !val || widget.config?.repeat_agg === "sum";
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    value_question: val || null,
+                    value_type: keepPercentage
+                      ? widget.config?.value_type
+                      : "number",
+                    // Adds a bucket counting SITES to a chart of summed
+                    // households, and makes the percentage denominator a
+                    // site count. Cleared rather than disabled-in-place
+                    // because a stored `true` is a guaranteed 400.
+                    include_unmonitored: val
+                      ? false
+                      : widget.config?.include_unmonitored,
+                  },
+                });
+              }}
+              placeholder="Number of submissions"
+              style={{ width: "100%" }}
+              allowClear
+              optionLabelProp="label"
+            >
+              {valueChoices.map((q) => (
+                <Select.Option
+                  key={q.value}
+                  value={q.value}
+                  label={<QuestionLabel label={q.label} type={q.type} />}
+                >
+                  <QuestionLabel label={q.label} type={q.type} />
+                </Select.Option>
+              ))}
+            </Select>
+            <div className="builder-inspector-hint">
+              {wConfig.value_question
+                ? "Bars show this question's total, not a count."
+                : "Leave empty to count submissions."}
+            </div>
           </div>
         )}
 
@@ -637,39 +908,185 @@ const BuilderInspector = ({
           </div>
         )}
 
+        {/* Break down by — bar's merged Group by + Stack by (S-13) */}
+        {wType === "bar" && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Break down by</label>
+            <Select
+              value={breakdownValueOf(wConfig)}
+              onChange={(val) => {
+                // Every field in ONE update: two updateConfig calls each
+                // close over the same `widget`, so the second would write
+                // the first's field back to its stale value.
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    ...breakdownChangeOf(val, selectedQuestion),
+                  },
+                });
+              }}
+              style={{ width: "100%" }}
+              disabled={breakdownChoices.length === 0}
+              optionLabelProp="label"
+            >
+              {breakdownChoices.map((c) =>
+                c.options ? (
+                  <Select.OptGroup key={c.label} label={c.label}>
+                    {c.options.map((o) => (
+                      <Select.Option
+                        key={o.value}
+                        value={o.value}
+                        label={<QuestionLabel label={o.label} type={o.type} />}
+                      >
+                        <QuestionLabel label={o.label} type={o.type} />
+                      </Select.Option>
+                    ))}
+                  </Select.OptGroup>
+                ) : (
+                  <Select.Option
+                    key={c.value || "none"}
+                    value={c.value}
+                    label={<BreakdownLabel choice={c} />}
+                  >
+                    <BreakdownLabel choice={c} />
+                  </Select.Option>
+                )
+              )}
+            </Select>
+            <div className="builder-inspector-hint">{breakdownHint}</div>
+          </div>
+        )}
+
         {/* Group by */}
-        {NEEDS_GROUP_BY.has(wType) && (
+        {wType !== "bar" && NEEDS_GROUP_BY.has(wType) && !groupByIsForced && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">Group by</label>
             <Select
               value={wConfig.group_by || "option"}
-              onChange={(val) => updateConfig("group_by", val)}
+              onChange={(val) => {
+                // Regrouping can strand the stack choice too: another
+                // question's options are only drawable under
+                // group_by=option, and a number question stacks by site
+                // only over month or date.
+                onWidgetChange({
+                  ...widget,
+                  config: withValidStack(
+                    { ...widget.config, group_by: val },
+                    stackByOptions(
+                      allQuestions,
+                      widget.question,
+                      val,
+                      wType === "bar" ? forms : [],
+                      widget.form
+                    )
+                  ),
+                });
+              }}
               style={{ width: "100%" }}
+              // A cross-form stack joins two responses on the registration
+              // datapoint, which only exists as a key under parent_id.
+              // Disabled rather than hidden: an author who cannot see why
+              // the grouping is fixed will assume the control is broken.
+              disabled={stackIsCrossForm}
             >
-              {VALID_GROUP_BY.map((g) => (
+              {groupChoices.map((g) => (
                 <Select.Option key={g.value} value={g.value}>
                   {g.label}
                 </Select.Option>
               ))}
             </Select>
+            {stackIsCrossForm && (
+              <div className="builder-inspector-hint">
+                Fixed while stacking by another form: this chart counts
+                registration sites, one per bar.
+              </div>
+            )}
           </div>
         )}
 
         {/* Stack by */}
-        {NEEDS_STACK_BY.has(wType) && (
+        {wType !== "bar" && NEEDS_STACK_BY.has(wType) && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">Stack by</label>
             <Select
-              value={wConfig.stack_by || ""}
-              onChange={(val) => updateConfig("stack_by", val || null)}
+              value={stackValueOf(wConfig)}
+              onChange={(val) => {
+                // Every field in ONE update. Two updateConfig calls would
+                // each close over the same `widget`, so the second would
+                // write the first's field back to its stale value.
+                //
+                // The stack decides what the bars may be, so the grouping
+                // is snapped against the stack that just arrived: adding a
+                // self-stack rules out grouping by the same options, and
+                // removing one rules everything else back out.
+                const stacked = {
+                  ...widget.config,
+                  ...stackChangeOf(val, wConfig.group_by || "option"),
+                };
+                onWidgetChange({
+                  ...widget,
+                  config: withValidGroupBy(
+                    stacked,
+                    groupByOptions(selectedQuestion, stacked)
+                  ),
+                });
+              }}
               style={{ width: "100%" }}
+              disabled={stackChoices.length <= 1}
+              optionLabelProp="label"
             >
-              {VALID_STACK_BY.map((s) => (
-                <Select.Option key={s.value} value={s.value}>
-                  {s.label}
-                </Select.Option>
-              ))}
+              {stackChoices.map((s) =>
+                s.options ? (
+                  <Select.OptGroup key={s.label} label={s.label}>
+                    {s.options.map((o) => (
+                      <Select.Option
+                        key={o.value}
+                        value={o.value}
+                        label={<QuestionLabel label={o.label} type={o.type} />}
+                      >
+                        <QuestionLabel label={o.label} type={o.type} />
+                      </Select.Option>
+                    ))}
+                  </Select.OptGroup>
+                ) : (
+                  <Select.Option
+                    key={s.value}
+                    value={s.value}
+                    label={
+                      s.type ? (
+                        <QuestionLabel label={s.label} type={s.type} />
+                      ) : (
+                        s.label
+                      )
+                    }
+                  >
+                    {/* A question entry carries its type; the three fixed
+                        choices do not, and must not grow a stray icon. */}
+                    {s.type ? (
+                      <QuestionLabel label={s.label} type={s.type} />
+                    ) : (
+                      s.label
+                    )}
+                  </Select.Option>
+                )
+              )}
             </Select>
+            {stackChoices.length <= 1 && (
+              <div className="builder-inspector-hint">
+                {widget.question
+                  ? "This question and grouping cannot be stacked"
+                  : "Pick a question first"}
+              </div>
+            )}
+            {crossFormWithheld && (
+              <div className="builder-inspector-hint">
+                To stack by another form&apos;s question, pick a single-choice
+                question above. Stacking across forms counts one answer per
+                site, so a multi-choice question would lose every answer after
+                the first.
+              </div>
+            )}
           </div>
         )}
 
@@ -682,12 +1099,15 @@ const BuilderInspector = ({
               onChange={(val) => updateConfig("value_type", val)}
               style={{ width: "100%" }}
             >
-              {VALID_VALUE_TYPE.map((v) => (
+              {valueTypeOptions(wConfig).map((v) => (
                 <Select.Option key={v.value} value={v.value}>
                   {v.label}
                 </Select.Option>
               ))}
             </Select>
+            {percentageWithheld && (
+              <div className="builder-inspector-hint">{percentageWithheld}</div>
+            )}
           </div>
         )}
 
@@ -695,14 +1115,31 @@ const BuilderInspector = ({
         {NEEDS_REPEAT_AGG.has(wType) && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              Repeat aggregation
+              {wConfig.value_question
+                ? "Combine values by"
+                : "Repeat aggregation"}
             </label>
             <Select
               value={wConfig.repeat_agg || "average"}
-              onChange={(val) => updateConfig("repeat_agg", val)}
+              onChange={(val) => {
+                // Percentage is only defined here under `sum`, so
+                // moving off it takes the value type with it.
+                const strands =
+                  wConfig.value_question &&
+                  val !== "sum" &&
+                  wConfig.value_type === "percentage";
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    repeat_agg: val,
+                    ...(strands ? { value_type: "number" } : {}),
+                  },
+                });
+              }}
               style={{ width: "100%" }}
             >
-              {VALID_REPEAT_AGG.map((r) => (
+              {aggChoices.map((r) => (
                 <Select.Option key={r.value} value={r.value}>
                   {r.label}
                 </Select.Option>
