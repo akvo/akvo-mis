@@ -1657,6 +1657,20 @@ const BuilderInspector = ({
                       });
                       next.status_colors = auto;
                     }
+                    // A range map's bands carry their own colours, so a
+                    // new scheme has to reach them the same way it
+                    // reaches an option map's statuses — otherwise
+                    // picking one changes the swatches in the panel and
+                    // nothing on the map. The breaks are the author's
+                    // and stay exactly where they are.
+                    if (wConfig.value_ranges?.length) {
+                      next.value_ranges = wConfig.value_ranges.map(
+                        (band, idx) => ({
+                          ...band,
+                          color: scheme.colors[idx % scheme.colors.length],
+                        })
+                      );
+                    }
                     if (wType === "line" && wConfig.category_question_id) {
                       const catQ = allQuestions.find(
                         (q) => q.id === wConfig.category_question_id

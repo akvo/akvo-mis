@@ -277,6 +277,60 @@ describe("clustering is a choice, not the default (#387)", () => {
     expect(next.map((b) => b.to)).not.toContain(999);
   });
 
+  test("a new colour scheme recolours the bands, keeping the breaks", () => {
+    // The scheme reseeds an option map's status_colours and a line
+    // chart's category colours; a range map's bands were left behind, so
+    // picking a scheme visibly did nothing to the map.
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        color_scheme: "categorical",
+        value_ranges: [
+          { to: 340, color: "#1890ff" },
+          { to: 890, color: "#64A73B" },
+          { to: null, color: "#F5A623" },
+        ],
+      })
+    );
+    fireEvent.click(screen.getByTitle("Green shades"));
+    const next = onWidgetChange.mock.calls.at(-1)[0].config;
+    expect(next.value_ranges.map((b) => b.color)).toEqual([
+      "#006d2c",
+      "#31a354",
+      "#74c476",
+    ]);
+    // The numbers are the author's; a palette change must not move them.
+    expect(next.value_ranges.map((b) => b.to)).toEqual([340, 890, null]);
+  });
+
+  test("a clustered map has no bands to recolour", () => {
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "quantity", color_scheme: "categorical" })
+    );
+    fireEvent.click(screen.getByTitle("Warm"));
+    const next = onWidgetChange.mock.calls.at(-1)[0].config;
+    expect(next.value_ranges).toBeUndefined();
+    expect(next.chart_colors[0]).toBe("#bd0026");
+  });
+
+  test("more bands than the palette has colours still recolours", () => {
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [1, 2, 3, 4, 5, 6].map((n) => ({
+          to: n === 6 ? null : n * 10,
+          color: "#000",
+        })),
+      })
+    );
+    fireEvent.click(screen.getByTitle("Warm"));
+    const colors = onWidgetChange.mock.calls
+      .at(-1)[0]
+      .config.value_ranges.map((b) => b.color);
+    expect(colors).toHaveLength(6);
+    expect(colors.every((c) => c !== "#000")).toBe(true);
+  });
+
   test("Colours are offered only while NOT clustering", () => {
     // Every clustered circle is one colour; a palette would describe
     // nothing on screen.
