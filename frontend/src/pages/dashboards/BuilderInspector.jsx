@@ -1622,11 +1622,12 @@ const BuilderInspector = ({
             </div>
           )}
 
-        {/* Map status colours. Never in quantity mode: a number question
-            has no options, so this rendered a heading over nothing. */}
+        {/* One colour per option, for a map that colours its points by
+            the answer. Never in quantity mode: a number question has no
+            options, so this rendered a heading over nothing. */}
         {wType === "map" && widget.question && !isQuantityMap && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Status colours</label>
+            <label className="builder-inspector-label">Colours</label>
             {(selectedQuestion?.options || []).map((opt, idx) => {
               const colors = wConfig.status_colors || {};
               const scheme =
