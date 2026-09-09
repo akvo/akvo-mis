@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
 import api from "../../lib/api";
 import { mapValueParams } from "../../util/hooks/useWidgetData";
@@ -1773,7 +1777,20 @@ const BuilderInspector = ({
             "Add range" always inserts before it. */}
         {isValueMap && !isClustered && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Colours</label>
+            <div className="builder-inspector-label-row">
+              <label className="builder-inspector-label">Colours</label>
+              {/* Above the bands, because it REPLACES them: putting it
+                  under "Add range" made the two read as a pair when one
+                  appends a row and the other discards every number in
+                  the list. */}
+              <button
+                className="builder-inspector-inline-btn"
+                onClick={() => seedValueRanges(widget)}
+              >
+                <ReloadOutlined />
+                Re-seed from data
+              </button>
+            </div>
             {bands.map((band, idx) => (
               <div key={idx} className="builder-inspector-range-row">
                 <input
@@ -1847,35 +1864,28 @@ const BuilderInspector = ({
                 )}
               </div>
             ))}
-            <div className="builder-inspector-range-actions">
-              <button
-                className="builder-inspector-add-btn"
-                onClick={() => {
-                  const open = bands.at(-1);
-                  const previous = bands.length > 1 ? bands.at(-2)?.to : null;
-                  const next = [
-                    ...bands.slice(0, -1),
-                    {
-                      to: previous === null ? 0 : previous,
-                      color: open.color,
-                    },
-                    {
-                      ...open,
-                      color: scheme.colors[bands.length % scheme.colors.length],
-                    },
-                  ];
-                  updateConfig("value_ranges", next);
-                }}
-              >
-                Add range
-              </button>
-              <button
-                className="builder-inspector-add-btn"
-                onClick={() => seedValueRanges(widget)}
-              >
-                Re-seed from data
-              </button>
-            </div>
+            <button
+              className="builder-inspector-add-btn"
+              onClick={() => {
+                const open = bands.at(-1);
+                const previous = bands.length > 1 ? bands.at(-2)?.to : null;
+                const next = [
+                  ...bands.slice(0, -1),
+                  {
+                    to: previous === null ? 0 : previous,
+                    color: open.color,
+                  },
+                  {
+                    ...open,
+                    color: scheme.colors[bands.length % scheme.colors.length],
+                  },
+                ];
+                updateConfig("value_ranges", next);
+              }}
+            >
+              <PlusOutlined />
+              Add range
+            </button>
           </div>
         )}
 
