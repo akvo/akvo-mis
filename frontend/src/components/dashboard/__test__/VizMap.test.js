@@ -256,3 +256,116 @@ describe("quantity mode", () => {
     expect(screen.getByTestId("map-cluster")).not.toBe(first);
   });
 });
+
+// A map bound to a value question, with clustering OFF (#387). This is
+// the default for a value question: the author sees individual sites
+// coloured by band, and opts into clustering when they want totals.
+describe("range mode", () => {
+  const RANGES = [
+    { to: 340, color: "#d73027" },
+    { to: 890, color: "#fee08b" },
+    { to: null, color: "#1a9850" },
+  ];
+
+  const rangeWidget = (config = {}) =>
+    widget({ map_mode: "range", value_ranges: RANGES, ...config });
+
+  const VALUED = [
+    { id: 1, name: "Nadi Central EPS", geo: [-17.78, 177.94], value: 120 },
+    { id: 2, name: "Ba Riverside EPS", geo: [-17.53, 177.67], value: 500 },
+    { id: 3, name: "Lautoka EPS", geo: [-17.6, 177.4], value: 12000 },
+  ];
+
+  test("points are not clustered", () => {
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(lastProps.cluster).toBe(false);
+  });
+
+  test("category and quantity maps stay clustered", () => {
+    render(<VizMap config={widget()} data={POINTS} />);
+    expect(lastProps.cluster).not.toBe(false);
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={POINTS} />);
+    expect(lastProps.cluster).not.toBe(false);
+  });
+
+  test("each point takes the colour of its band", () => {
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(lastProps.data.map((d) => d.color)).toEqual([
+      "#d73027",
+      "#fee08b",
+      "#1a9850",
+    ]);
+  });
+
+  test("a point with no answer falls back rather than reading as zero", () => {
+    // "not reported" and "nobody" are different facts; colouring the
+    // first as the lowest band asserts something the data never said.
+    render(
+      <VizMap
+        config={rangeWidget()}
+        data={[{ id: 9, name: "Unknown", geo: [-17.7, 177.9] }]}
+      />
+    );
+    expect(lastProps.data[0].color).toBe("#64A73B");
+  });
+
+  test("the legend names the bands, not the statuses", () => {
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(screen.getByText("under 340")).toBeInTheDocument();
+    expect(screen.getByText("340 – 890")).toBeInTheDocument();
+    expect(screen.getByText("890 and above")).toBeInTheDocument();
+  });
+
+  test("the popup carries the number, not just the name", () => {
+    // A coloured dot says which band; without this nothing on screen
+    // ever says which value.
+    render(<VizMap config={rangeWidget()} data={VALUED} />);
+    const { container } = require("@testing-library/react").render(
+      <div>{lastProps.renderPopup(lastProps.data[2])}</div>
+    );
+    expect(container.textContent).toContain("Lautoka EPS");
+    expect(container.textContent).toContain("12,000");
+  });
+
+  test("no bands configured yet still renders the map", () => {
+    // The seeding request can fail; the author gets an uncoloured map
+    // rather than a broken widget.
+    render(<VizMap config={rangeWidget({ value_ranges: [] })} data={VALUED} />);
+    expect(screen.getByTestId("map-cluster")).toBeInTheDocument();
+    expect(lastProps.data.every((d) => d.color === "#64A73B")).toBe(true);
+    expect(document.querySelector(".dashboard-view-map-legend")).toBeNull();
+  });
+});
+
+describe("quantity aggregation", () => {
+  const VALUED = [
+    { id: 1, name: "Nadi", geo: [-17.78, 177.94], value: 120 },
+    { id: 2, name: "Ba", geo: [-17.53, 177.67], value: 500 },
+  ];
+
+  test("sum is the default a cluster combines by", () => {
+    render(<VizMap config={widget({ map_mode: "quantity" })} data={VALUED} />);
+    expect(lastProps.aggregate).toBe("sum");
+  });
+
+  test("the author's choice reaches the library", () => {
+    // Sum is wrong for a rate: five sites at 50 l/p/d is not 250.
+    render(
+      <VizMap
+        config={widget({ map_mode: "quantity", map_aggregate: "average" })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.aggregate).toBe("average");
+  });
+
+  test("range mode passes no aggregate at all", () => {
+    render(
+      <VizMap
+        config={widget({ map_mode: "range", value_ranges: [] })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.aggregate).toBeUndefined();
+  });
+});

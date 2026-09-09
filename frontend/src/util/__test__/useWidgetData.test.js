@@ -672,6 +672,20 @@ describe("map quantity lookup", () => {
     ]);
   });
 
+  test("range mode asks for the number too", async () => {
+    // The bands are useless without the values to put in them — the
+    // request is about needing the number, not about clustering.
+    mockBoth([], []);
+    const probe = run(
+      quantityWidget({ config: { map_mode: "range", value_ranges: [] } })
+    );
+    await settle(probe);
+
+    const call = valuesCall();
+    expect(call.params.question_id).toBe(NUMBER_Q);
+    expect(call.params.group_by).toBe("parent_id");
+  });
+
   test("a category map asks for no number and grows no value key", async () => {
     axios.mockResolvedValue({ data: [{ id: 1, name: "Nadi", geo: [1, 2] }] });
     const probe = run(widget({ type: "map", config: {} }));
