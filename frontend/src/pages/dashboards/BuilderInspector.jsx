@@ -1775,7 +1775,7 @@ const BuilderInspector = ({
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">Colours</label>
             {bands.map((band, idx) => (
-              <div key={idx} className="builder-inspector-status-color-row">
+              <div key={idx} className="builder-inspector-range-row">
                 <input
                   type="color"
                   aria-label={`Colour for ${rangeLabel(bands, idx)}`}
@@ -1795,7 +1795,6 @@ const BuilderInspector = ({
                   </span>
                 ) : (
                   <InputNumber
-                    size="small"
                     // Each editable row carries that band's UPPER bound,
                     // so the prefix is the same word on every one of
                     // them. A bare number does not say which side it

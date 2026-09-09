@@ -715,12 +715,24 @@
   }
 }
 
-/* The bands of a value map (#387). The open top has no number to edit,
-   so it reads as text where the others carry an input — same row, same
-   height, so the colour swatches stay in one column. */
+/* The bands of a value map (#387). Unlike the status rows this one holds
+   a real control, so the parts are spaced by a gap and the input takes
+   the room that is left — at the same height as every other input in the
+   panel, not the shorter `size="small"` that belongs to the criteria
+   rows' three-controls-per-line squeeze. */
+.builder-inspector-range-row {
+  gap: 8px;
+
+  .ant-input-number {
+    flex: 1;
+  }
+}
+
+/* The open top has no number to edit, so it reads as text where the
+   others carry an input — same row, same height, so the colour swatches
+   stay in one column. */
 .builder-inspector-range-open {
   flex: 1;
-  margin-left: 10px;
   color: #55606d;
 }
 
@@ -750,7 +762,8 @@
   }
 }
 
-.builder-inspector-status-color-row {
+.builder-inspector-status-color-row,
+.builder-inspector-range-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
