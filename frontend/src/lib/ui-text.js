@@ -113,7 +113,7 @@ const uiText = {
       "Paste the embed code from your reporting tool's Share dialog",
     dashboardEmbedRequired: "Please paste the embed code",
     dashboardEmbedHint:
-      "Pasted exactly as given. A snippet with no width of its own stretches to fill the page; give it a width and height to have it centred instead. If the report requires signing in, visitors will see a login screen even though it looks correct to you.",
+      "Pasted exactly as given, and the size comes from the snippet: give it a width and height to have it shown at that size, centred. A plain frame with neither fills the page instead. If the report requires signing in, visitors will see a login screen even though it looks correct to you.",
     dashboardEmbedBadge: "External",
     dashboardEmbedUnavailable:
       "This dashboard's external content cannot be shown, because embedded dashboards are not available here.",

@@ -104,7 +104,8 @@ $view-gutter: 50px;
 
 .dashboard-view-header-inner,
 .dashboard-view-filters-inner,
-.dashboard-view-grid {
+.dashboard-view-grid,
+.dashboard-embed-frame {
   max-width: $view-column;
   margin: 0 auto;
   padding-left: $view-gutter;
@@ -385,10 +386,16 @@ $view-gutter: 50px;
   padding: 80px 0;
 }
 
-/* The embed is the whole page, so the frame takes what is left below
-   the header. `.dashboard-view-shell` is already a flex column with
-   `min-height: calc(100vh - $header-height)`, so filling it costs one
-   `flex` and the `min-height: 0` that lets a flex child actually shrink.
+/* The embed is the page's one piece of content, so the frame takes the
+   height left below the header. `.dashboard-view-shell` is already a flex
+   column with `min-height: calc(100vh - $header-height)`, so filling it
+   costs one `flex` and the `min-height: 0` that lets a flex child
+   actually shrink.
+
+   Its *width* is the page column shared with the title, the filter bar
+   and the grid, not the whole viewport. Full-bleed made an embedded
+   dashboard the one page in the product whose content ran to the window
+   edge while its own title sat inboard of it.
 
    Layout *inside* the frame is the snippet's business and is not
    promised: vendor embed codes hardcode pixel sizes, and because the
@@ -399,11 +406,37 @@ $view-gutter: 50px;
   min-height: 0;
   display: flex;
 
+  /* Required, and only here. The other three members of the page column
+     are blocks in normal flow, where `margin: 0 auto` centres an
+     auto-width box for free. This one is a flex item, and an `auto`
+     cross-axis margin suppresses the stretch that would have given it a
+     width — without this it shrinks to the iframe's own 300px default
+     and sits in a 400px box in the middle of the page. */
+  width: 100%;
+
+  /* Left and right come from the shared page column above, so the frame's
+     edges line up with the title over it. Only the vertical padding is
+     this element's own, and 16px is the grid's inter-card gap rather than
+     the 60px tail the grid ends on: that tail exists so the last card
+     clears the fold on a page that scrolls, which a frame ending *at* the
+     fold does not need, and 60px of grey there is height taken off the
+     report. */
+  padding-top: 16px;
+  padding-bottom: 16px;
+
   iframe {
     flex: 1 1 auto;
     width: 100%;
     min-height: 480px;
     border: 0;
+
+    /* The widget cell's surface, on the iframe rather than the wrapper:
+       the wrapper carries the 50px gutters, so painting it white would
+       flood them. Square, because `.dashboard-view-cell` is square in
+       view mode — the 8px radius belongs to the canvas and the filter
+       card, not to the things being viewed. */
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
   }
 }
 
