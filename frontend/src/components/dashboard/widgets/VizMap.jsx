@@ -58,13 +58,18 @@ const VizMap = ({ config, data }) => {
       point: row.geo,
       label: row.name,
       status: row.status,
-      // Coerced here rather than left to the library. A site that did
-      // not answer the question joins to nothing, and `Number(null)` is
-      // 0 while `Number(undefined)` and `Number("n/a")` are NaN — which
-      // would size the circle as garbage instead of drawing the small
-      // circle that honestly says "no number here". Meaningless outside
-      // quantity mode, and ignored there.
-      value: Number(row.value) || 0,
+      // Parsed, but never invented. A site that did not answer joins to
+      // nothing, and this component must not turn that into a zero: the
+      // popup would then tell a reader the site serves nobody, which is
+      // a different fact from nobody having reported. MapCluster reads
+      // `Number(d[valueKey]) || 0` itself, so null still draws the small
+      // circle that says "no number here" — the coercion belongs there,
+      // where it is about drawing, not here, where it would be a claim
+      // about the data.
+      value:
+        Number.isFinite(Number(row.value)) && row.value !== null
+          ? Number(row.value)
+          : null,
       // A range map ignores status entirely — it has none to read, and
       // the band is the whole message. `colorForValue` falls back rather
       // than treating a missing answer as zero: on a map of population
@@ -145,7 +150,12 @@ const VizMap = ({ config, data }) => {
                 <>
                   {point?.label}
                   <br />
-                  <strong>{Number(point?.value || 0).toLocaleString()}</strong>
+                  <strong>
+                    {point?.value === null ||
+                    typeof point?.value === "undefined"
+                      ? "No value"
+                      : Number(point.value).toLocaleString()}
+                  </strong>
                 </>
               )
             : (point) => point?.label

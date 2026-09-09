@@ -229,8 +229,15 @@ const BuilderInspector = ({
       let values = [];
       try {
         const res = await api.get("visualization/values", {
+          // Same drop rule as useWidgetData's compact(): a half-built
+          // widget cannot reach here today — every caller runs behind a
+          // form and a question — but two filters with different rules
+          // for the same request is a difference waiting to matter.
           params: Object.fromEntries(
-            Object.entries(params).filter(([, v]) => v !== null)
+            Object.entries(params).filter(
+              ([, val]) =>
+                val !== null && typeof val !== "undefined" && val !== ""
+            )
           ),
         });
         values = (res?.data?.data || []).map((row) => row?.value);

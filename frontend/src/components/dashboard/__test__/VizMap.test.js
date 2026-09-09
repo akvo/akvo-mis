@@ -193,24 +193,38 @@ describe("quantity mode", () => {
     expect(lastProps.data.map((d) => d.value)).toEqual([12000, 3400]);
   });
 
-  test("a point the join missed is zero, not NaN", () => {
-    // The library draws a zero as a small circle rather than dropping the
-    // point, which is the honest rendering for a site that did not answer
-    // the question. NaN would size it as garbage.
+  test("a point the join missed carries null, never a made-up zero", () => {
+    // MapCluster reads `Number(d[valueKey]) || 0`, so null still draws
+    // the small circle that honestly says "no number here" — without
+    // this component asserting a zero the data never contained. NaN
+    // would size the circle as garbage; null does not.
     render(
       <VizMap
         config={quantityWidget()}
         data={[...VALUED, { id: 3, name: "Lautoka", geo: [-17.6, 177.4] }]}
       />
     );
-    expect(lastProps.data[2].value).toBe(0);
+    expect(lastProps.data[2].value).toBeNull();
+    expect(Number(lastProps.data[2].value) || 0).toBe(0);
   });
 
-  test("a non-numeric answer is zero, not NaN", () => {
+  test("a non-numeric answer is null, not NaN and not zero", () => {
     render(
       <VizMap
         config={quantityWidget()}
         data={[{ id: 1, name: "Nadi", geo: [-17.7, 177.9], value: "n/a" }]}
+      />
+    );
+    expect(lastProps.data[0].value).toBeNull();
+  });
+
+  test("a real zero survives as a zero", () => {
+    // The distinction only means something if an actual 0 still reads
+    // as 0 rather than being folded in with the unanswered.
+    render(
+      <VizMap
+        config={quantityWidget()}
+        data={[{ id: 1, name: "Nadi", geo: [-17.7, 177.9], value: 0 }]}
       />
     );
     expect(lastProps.data[0].value).toBe(0);
@@ -337,6 +351,38 @@ describe("range mode", () => {
     );
     expect(container.textContent).toContain("Lautoka EPS");
     expect(container.textContent).toContain("12,000");
+  });
+
+  test("an unanswered point says so, rather than claiming zero", () => {
+    // The colour already falls back for a missing answer; a popup
+    // reading "0" would tell the reader this site serves nobody, which
+    // is a different fact from nobody having reported.
+    render(
+      <VizMap
+        config={rangeWidget()}
+        data={[{ id: 9, name: "Unknown", geo: [-17.7, 177.9] }]}
+      />
+    );
+    const { container } = require("@testing-library/react").render(
+      <div>{lastProps.renderPopup(lastProps.data[0])}</div>
+    );
+    expect(container.textContent).toContain("Unknown");
+    expect(container.textContent).toContain("No value");
+    expect(container.textContent).not.toContain("0");
+  });
+
+  test("a site that really reported zero still shows zero", () => {
+    render(
+      <VizMap
+        config={rangeWidget()}
+        data={[{ id: 9, name: "Empty", geo: [-17.7, 177.9], value: 0 }]}
+      />
+    );
+    const { container } = require("@testing-library/react").render(
+      <div>{lastProps.renderPopup(lastProps.data[0])}</div>
+    );
+    expect(container.textContent).toContain("0");
+    expect(container.textContent).not.toContain("No value");
   });
 
   test("no bands configured yet still renders the map", () => {

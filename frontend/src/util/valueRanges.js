@@ -70,13 +70,21 @@ export const quantileRanges = (values = [], colors = [], count = 3) => {
     .filter((v) => Number.isFinite(v))
     .sort((a, b) => a - b);
 
+  // No numbers, no breaks. `quantileAt` is documented as needing a
+  // non-empty array; calling it anyway returned NaN and leaned on the
+  // guard below to drop it, which worked by accident and would stop
+  // working the moment that helper was tightened.
+  if (!sorted.length) {
+    return [{ to: null, color: at(0) }];
+  }
+
   const breaks = [];
   for (let i = 1; i < count; i += 1) {
     const value = Math.round(quantileAt(sorted, i / count) * 100) / 100;
     // Strictly ascending: ties in the data land two breaks on the same
     // number, and a band whose floor equals its ceiling can never hold a
     // point. Dropping it leaves fewer bands rather than empty ones.
-    if (sorted.length && value > (breaks[breaks.length - 1] ?? -Infinity)) {
+    if (value > (breaks[breaks.length - 1] ?? -Infinity)) {
       breaks.push(value);
     }
   }
