@@ -1,18 +1,20 @@
 # Visualization layer quick wins: design
 
-**Status:** planning. No GitHub issue, no branch, no code. The four
-slices below are scoped and have been broken into three Asana tasks:
+**Status:** partly delivered. QW-1 shipped in
+[VIZ-021](VIZ-021-map-rendering-consolidation-and-clustering.md) (PR #375,
+in review). QW-2 is void — it was scoped to `DashboardMap`, which VIZ-009
+had already deleted before this document was written. QW-3 and QW-4 are
+still planning only.
 
-| Task | Slices | Asana |
-|---|---|---|
-| VIZ-021 Map rendering consolidation and clustering | QW-1 + QW-2 | `1218226404614661` |
-| VIZ-022 Graduated colour legends for map widgets | QW-3 | `1218222099871802` |
-| VIZ-023 Export dashboard to PNG / PDF | QW-4 | `1218225058102973` |
+| Task | Slices | Asana | State |
+|---|---|---|---|
+| VIZ-021 Map rendering consolidation and clustering | QW-1 (+ QW-2, void) | `1218226404614661` | QW-1 in review; close on merge |
+| VIZ-022 Graduated colour legends for map widgets | QW-3 | `1218222099871802` | Backlog |
+| VIZ-023 Export dashboard to PNG / PDF | QW-4 | `1218225058102973` | Backlog |
 
-QW-1 and QW-2 ship together because QW-2 builds on the shared tile and
-geo-point plumbing QW-1 extracts; splitting them would mean writing the
-clustering slice against three divergent map components. All three sit in
-Backlog, unassigned and unestimated.
+QW-1 and QW-2 were bundled because QW-2 was thought to build on the shared
+tile and geo-point plumbing QW-1 extracts. With QW-2 void, VIZ-021 is QW-1
+alone. VIZ-022 and VIZ-023 sit in Backlog, unassigned and unestimated.
 
 ## Problem
 
@@ -22,6 +24,12 @@ to fix without touching the data model or adding new API surface.
 
 Three separate map components exist today, and they don't agree with each
 other:
+
+> **Correction (VIZ-021):** there are two, not three. `DashboardMap` was
+> deleted by [VIZ-009](VIZ-009-legacy-dashboard-removal.md) (#313,
+> `41cebba7`) as the legacy renderer, superseded by `widgets/VizMap.jsx` —
+> before this document was written. Everything below about `DashboardMap`
+> describes code that no longer exists, and QW-2 is void as a result.
 
 - [`VizMap`](../../frontend/src/components/dashboard/widgets/VizMap.jsx):
   the dashboard builder's `map` widget (`WidgetTypes.map`, [constants.py:94](../../backend/api/v1/v1_visualization/constants.py#L94)).
@@ -90,7 +98,12 @@ Done when:
   before. This is plumbing, not a behavior change, so a visual diff
   should show nothing.
 
-### QW-2: Cluster `DashboardMap`
+### QW-2: Cluster `DashboardMap` — VOID
+
+**This slice has no work in it.** `DashboardMap` was removed in VIZ-009
+(#313). Its replacement, `VizMap`, already renders through `MapCluster` —
+which is what this slice asked for — and `MapView` is excluded below on
+purpose. The rest of this section is kept for the record only.
 
 `DashboardMap` is the widget most likely to carry a lot of points. It's
 the general-purpose dashboard map, not scoped to one question the way

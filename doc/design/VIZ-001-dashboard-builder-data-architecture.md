@@ -929,7 +929,8 @@ has its own design doc; the table records what is actually on `main`.
 | VIZ-017 Default filters | `VIZ-017-dashboard-default-filters.md` | Shipped (PR #348) |
 | VIZ-018 Public visibility | `VIZ-018-public-dashboard-visibility.md` | Shipped (PR #360) |
 | VIZ-019 Embedded dashboards | `VIZ-019-embedded-external-dashboards.md` | PR #366 in review |
-| VIZ-020 Visualization quick wins | `VIZ-020-visualization-quick-wins.md` | Planning only |
+| VIZ-020 Visualization quick wins | `VIZ-020-visualization-quick-wins.md` | QW-1 delivered, rest planning |
+| VIZ-021 Map rendering consolidation | `VIZ-021-map-rendering-consolidation-and-clustering.md` | PR #375 in review |
 
 Two decisions in this document were superseded by that work:
 

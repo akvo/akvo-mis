@@ -84,6 +84,7 @@ jobs:
           DBDOCS_TOKEN: ${{ secrets.DBDOCS_TOKEN }}
           ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          REACT_APP_CARTO_API_KEY: ${{ secrets.REACT_APP_CARTO_API_KEY }}
         run: |
           export SERVICE_ACCOUNT="/home/runner/work/${{ secrets.APP_SHORT_NAME }}/credentials"
           ./ci/build.sh
