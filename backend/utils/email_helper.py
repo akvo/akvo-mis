@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from django.core.mail import EmailMultiAlternatives
@@ -5,6 +6,8 @@ from django.template.loader import render_to_string
 from rest_framework import serializers
 from utils.custom_serializer_fields import CustomChoiceField
 from mis.settings import EMAIL_FROM, WEBDOMAIN, APP_NAME
+
+logger = logging.getLogger(__name__)
 
 
 class EmailTypes:
@@ -341,6 +344,12 @@ def send_email(
     send=True,
     excel=None,
 ):
+    """Render and send one templated email.
+
+    Returns the rendered HTML when ``send`` is False (the preview path used
+    by the ``email_template`` view), otherwise True if the backend accepted
+    the message and False if it raised. Never raises: see the except branch.
+    """
     context = email_context(context=context, type=type)
     try:
 
@@ -361,9 +370,28 @@ def send_email(
             msg.attach(
                 excel["name"], excel["file"], "application/vnd.ms-excel"
             )
-        if send:
-            msg.send()
         if not send:
             return email_html_message
-    except Exception as ex:
-        print(ex)
+        msg.send()
+        # The provider's own identifier for the message, which is the only
+        # handle that makes a delivery traceable in the Mailjet dashboard
+        # afterwards. django-mailjet hangs it off the message; other backends
+        # do not set it at all, hence the getattr.
+        logger.info(
+            "sent %s email to %s (provider response: %s)",
+            type,
+            context.get("send_to"),
+            getattr(msg, "mailjet_response", None),
+        )
+        return True
+    except Exception:
+        # Deliberately does not re-raise. All seventeen call sites treat mail
+        # as fire-and-forget, and half of them run inside request handling
+        # where a failed notification must not turn into a 500. The bug this
+        # replaces was never the swallowing itself -- it was that the swallow
+        # left no trace, so a failed send and a successful one looked
+        # identical to everybody.
+        logger.exception(
+            "failed to send %s email to %s", type, context.get("send_to")
+        )
+        return False
