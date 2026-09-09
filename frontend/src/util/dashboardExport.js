@@ -161,10 +161,13 @@ const capture = async (node, geometry) => {
     // half of that arrangement: without it html2canvas re-fetches images
     // in no-CORS mode and taints the canvas anyway.
     useCORS: true,
-    // html2canvas defaults to white. The viewer's ground is grey, and a
-    // white one shows through every gap between cards, so the export
-    // would not match the screen it is a picture of.
-    backgroundColor: "#f0f2f5",
+    // White, not the viewer's grey ground. Matching the screen was the
+    // first instinct, but the capture root is inset 50px by the layout's
+    // gutters, so the grey came out as a band around the whole dashboard
+    // — sitting inside the PDF's own 10mm white page margin and framing
+    // the thing twice. On paper the margin is the frame; the widgets
+    // carry their own white and a box-shadow to separate them.
+    backgroundColor: "#ffffff",
     scale: captureScale(geometry.width, geometry.height),
     logging: false,
   });
