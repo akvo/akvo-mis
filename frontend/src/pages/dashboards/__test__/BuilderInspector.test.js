@@ -214,12 +214,44 @@ describe("clustering is a choice, not the default (#387)", () => {
       })
     );
     expect(screen.getByText("Colours")).toBeInTheDocument();
-    expect(screen.getByText("340 and above")).toBeInTheDocument();
+    // The editor names one bound per row; the legend keeps intervals.
+    expect(screen.getByText("Above 340")).toBeInTheDocument();
   });
 
-  test("a value question with no bands yet still offers one row", () => {
-    // The honest empty state: one open band claims no boundary the
-    // author never set.
+  test("every editable band says which side its number bounds", () => {
+    // A bare number in a row does not say whether it is that band's
+    // floor or its ceiling. Each editable row carries an upper bound, so
+    // each one reads "Under N".
+    draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: 890, color: "#fee08b" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    expect(document.querySelectorAll(".ant-input-number-prefix")).toHaveLength(
+      2
+    );
+    expect(screen.getAllByText("Under")).toHaveLength(2);
+  });
+
+  test("the open band reads as a floor, not a ceiling", () => {
+    draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    expect(screen.getByText("Above 340")).toBeInTheDocument();
+  });
+
+  test("a lone open band names no bound at all", () => {
     draw(mapWidget(600202, { map_mode: "range" }));
     expect(screen.getByText("All values")).toBeInTheDocument();
   });

@@ -109,7 +109,14 @@ export const colorForValue = (value, ranges = [], fallback = null) => {
   return (band || ranges[ranges.length - 1])?.color ?? fallback;
 };
 
-const readable = (n) => Number(n).toLocaleString();
+/**
+ * A band boundary as a reader sees it — grouped, never raw.
+ *
+ * Exported because the inspector labels the open band with it and the
+ * legend labels every band with it, and a boundary printed two ways in
+ * two places is a boundary a reader has to reconcile.
+ */
+export const readable = (n) => Number(n).toLocaleString();
 
 /**
  * How one band reads in the legend and the inspector.

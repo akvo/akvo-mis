@@ -5,7 +5,7 @@ import { DeleteOutlined } from "@ant-design/icons";
 import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
 import api from "../../lib/api";
 import { mapValueParams } from "../../util/hooks/useWidgetData";
-import { quantileRanges, rangeLabel } from "../../util/valueRanges";
+import { quantileRanges, rangeLabel, readable } from "../../util/valueRanges";
 import {
   NEEDS_FORM,
   NEEDS_QUESTION,
@@ -1789,11 +1789,21 @@ const BuilderInspector = ({
                 />
                 {band.to === null ? (
                   <span className="builder-inspector-range-open">
-                    {rangeLabel(bands, idx)}
+                    {idx === 0
+                      ? "All values"
+                      : `Above ${readable(bands[idx - 1]?.to)}`}
                   </span>
                 ) : (
                   <InputNumber
                     size="small"
+                    // Each editable row carries that band's UPPER bound,
+                    // so the prefix is the same word on every one of
+                    // them. A bare number does not say which side it
+                    // bounds, and the rows only read as a ladder once it
+                    // does. The legend keeps interval labels instead —
+                    // "340 – 890" is the band's extent, which "Under
+                    // 890" would misstate.
+                    prefix="Under"
                     value={band.to}
                     placeholder="up to"
                     onChange={(val) => {
