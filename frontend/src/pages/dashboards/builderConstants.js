@@ -759,10 +759,10 @@ export const NEEDS_QUESTION = new Set([
   "map",
   "scatter",
 ]);
-export const NEEDS_GROUP_BY = new Set(["bar", "pie"]);
+export const NEEDS_GROUP_BY = new Set(["bar", "pie", "line"]);
 export const NEEDS_STACK_BY = new Set(["bar"]);
 export const NEEDS_VALUE_TYPE = new Set(["kpi", "bar", "pie"]);
-export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar"]);
+export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar", "line"]);
 export const NEEDS_COLOR = new Set([
   "kpi",
   "bar",
