@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import { Pie, Doughnut } from "akvo-charts";
@@ -20,9 +20,16 @@ const VizPie = ({ config, data }) => {
   const chartConfig = {
     title: "",
     color: colors,
-    ...(toolbox ? { toolbox } : {}),
   };
-  const chartData = Array.isArray(data) ? data : [];
+  const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+
+  useEffect(() => {
+    if (chartRef.current && typeof chartRef.current.setOption === "function") {
+      chartRef.current.setOption({
+        toolbox: toolbox || { show: false },
+      });
+    }
+  }, [toolbox, chartData, config, chartRef]);
 
   if (chartData.length === 0) {
     return (

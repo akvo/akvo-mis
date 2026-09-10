@@ -1946,7 +1946,22 @@ const BuilderInspector = ({
                 size="small"
                 checked={wConfig.show_toolbox === true}
                 onChange={(checked) => {
-                  updateConfig("show_toolbox", checked);
+                  if (checked) {
+                    onWidgetChange({
+                      ...widget,
+                      config: {
+                        ...widget.config,
+                        show_toolbox: true,
+                        toolbox_position:
+                          widget.config?.toolbox_position || "top-right",
+                        toolbox_features: widget.config?.toolbox_features || {
+                          ...DEFAULT_TOOLBOX_FEATURES,
+                        },
+                      },
+                    });
+                  } else {
+                    updateConfig("show_toolbox", false);
+                  }
                 }}
               />
             </label>

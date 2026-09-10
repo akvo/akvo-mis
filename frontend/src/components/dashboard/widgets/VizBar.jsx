@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import { Bar, StackBar } from "akvo-charts";
@@ -16,7 +16,22 @@ const VizBar = ({ config, data }) => {
     ? config.color
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
-  const chartData = Array.isArray(data) ? data : [];
+  const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+
+  const horizontal = widgetConfig.orientation === "horizontal";
+  const toolbox = buildToolboxConfig(widgetConfig, "bar");
+
+  useEffect(() => {
+    if (
+      hasStack &&
+      chartRef.current &&
+      typeof chartRef.current.setOption === "function"
+    ) {
+      chartRef.current.setOption({
+        toolbox: toolbox || { show: false },
+      });
+    }
+  }, [hasStack, toolbox, chartData, config, chartRef]);
 
   if (chartData.length === 0) {
     return (
@@ -26,20 +41,17 @@ const VizBar = ({ config, data }) => {
     );
   }
 
-  const horizontal = widgetConfig.orientation === "horizontal";
-  const toolbox = buildToolboxConfig(widgetConfig, "bar");
-
   if (hasStack) {
     const chartConfig = {
       title: "",
       color: colors,
       horizontal,
-      ...(toolbox ? { toolbox } : {}),
     };
     const props = { config: chartConfig, data: chartData };
     if (widgetConfig.stackMapping) {
       props.stackMapping = widgetConfig.stackMapping;
     }
+
     return (
       <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
         <Component ref={chartRef} {...props} />
