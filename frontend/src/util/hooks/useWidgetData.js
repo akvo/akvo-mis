@@ -197,7 +197,8 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
           ? config.category_question_id
           : widget.question,
         ...expandMeasure(widget, rootFormId),
-        group_by: "month",
+        group_by: config.group_by || "month",
+        repeat_agg: config.repeat_agg,
         stack_by: hasCategory ? "option" : null,
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
