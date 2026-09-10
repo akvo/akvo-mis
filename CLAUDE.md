@@ -92,7 +92,7 @@ Located in `./backend/`
 #### Utilities
 Key utility modules in `backend/utils/`:
 - `custom_generator.py`: Dynamic data generation
-- `email_helper.py`: Email sending via Mailjet
+- `email_helper.py`: Email sending over SMTP
 - `export_form.py`: Form export functionality
 - `report_generator.py`: Report generation with Excel/DOCX
 - `storage.py`: Google Cloud Storage integration
@@ -496,7 +496,7 @@ Key variables in `.env`:
 - `DJANGO_SECRET`: Django secret key
 - `DEBUG`: Enable debug mode
 - `GOOGLE_APPLICATION_CREDENTIALS`: GCS credentials path
-- `MAILJET_*`: Email service credentials
+- `EMAIL_*`: SMTP host, port, credentials and TLS mode
 - `SENTRY_*`: Error tracking configuration
 - `EXPO_TOKEN`: Expo build token
 - `IP_ADDRESS`: Mobile device endpoint URL
