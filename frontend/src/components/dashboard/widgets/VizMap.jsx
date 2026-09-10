@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import { MapCluster } from "akvo-charts";
 import "leaflet/dist/leaflet.css";
@@ -110,7 +110,23 @@ const VizMap = ({ config, data }) => {
     }));
   }, [data, colorForStatus, fallback, isRange, valueRanges]);
 
-  const center = useMemo(() => geo?.defaultPos?.()?.coordinates || [0, 0], []);
+  const mapRef = useRef(null);
+
+  const pos = useMemo(
+    () => geo.boundsFromPoints(points.map((p) => p.point)),
+    [points]
+  );
+
+  const fitMap = useCallback(() => {
+    const map = mapRef.current?.getMap?.();
+    if (map && points.length > 0) {
+      map.fitBounds(pos.bbox, { maxZoom: 14, padding: [20, 20] });
+    }
+  }, [pos, points.length]);
+
+  useEffect(() => {
+    fitMap();
+  }, [fitMap]);
 
   // Two legends, one shape: a status name and its colour, or a band
   // label and its colour.
@@ -151,6 +167,7 @@ const VizMap = ({ config, data }) => {
     <div className="dashboard-view-map">
       <MapCluster
         key={colorKey}
+        ref={mapRef}
         data={points}
         type={isQuantity ? QUANTITY : "circle"}
         {...(isQuantity
@@ -165,7 +182,12 @@ const VizMap = ({ config, data }) => {
             }
           : { groupKey: "status" })}
         {...(isRange ? { cluster: false } : {})}
-        config={{ center, zoom: 5, height: "100%", width: "100%" }}
+        config={{
+          center: pos.coordinates,
+          zoom: 5,
+          height: "100%",
+          width: "100%",
+        }}
         tile={geo.tile}
         // Null, not a function: MapCluster renders its own popup —
         // the label plus the exact value, unrounded — only when
