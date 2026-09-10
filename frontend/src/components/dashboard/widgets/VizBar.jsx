@@ -1,11 +1,13 @@
 import React from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
+import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Bar, StackBar } from "akvo-charts";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
-const VizBar = ({ config, data }) => {
+const VizBar = ({ config, data, filters }) => {
+  const emptyMessage = useEmptyWidgetMessage(filters);
   const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const hasStack = Boolean(widgetConfig.stack_by);
@@ -20,7 +22,7 @@ const VizBar = ({ config, data }) => {
   if (chartData.length === 0) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        No data
+        {emptyMessage}
       </div>
     );
   }
@@ -40,7 +42,9 @@ const VizBar = ({ config, data }) => {
     );
   }
 
-  const categoryKey = Object.keys(chartData[0]).find((k) => k !== "value");
+  const firstItem = chartData[0] || {};
+  const categoryKey =
+    Object.keys(firstItem).find((k) => k !== "value") || "label";
   const rawConfig = {
     color: colors,
     tooltip: { trigger: "axis" },
@@ -73,6 +77,7 @@ const VizBar = ({ config, data }) => {
 VizBar.propTypes = {
   config: PropTypes.object.isRequired,
   data: PropTypes.array,
+  filters: PropTypes.object,
 };
 
 export default VizBar;

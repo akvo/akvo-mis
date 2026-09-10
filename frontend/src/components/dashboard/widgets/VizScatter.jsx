@@ -1,10 +1,12 @@
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useEChartsOption from "./useEChartsOption";
+import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
-const VizScatter = ({ config, data }) => {
+const VizScatter = ({ config, data, filters }) => {
+  const emptyMessage = useEmptyWidgetMessage(filters);
   const widgetConfig = config?.config || {};
   const colors = widgetConfig.chart_colors || DEFAULT_COLORS;
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
@@ -59,7 +61,7 @@ const VizScatter = ({ config, data }) => {
   if (chartData.length === 0) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        No data
+        {emptyMessage}
       </div>
     );
   }
@@ -70,6 +72,7 @@ const VizScatter = ({ config, data }) => {
 VizScatter.propTypes = {
   config: PropTypes.object.isRequired,
   data: PropTypes.array,
+  filters: PropTypes.object,
 };
 
 export default VizScatter;

@@ -262,6 +262,57 @@ describe("isolation", () => {
     expect(screen.getByTestId("chart-bar")).toBeInTheDocument();
     expect(screen.getByTestId("chart-pie")).toBeInTheDocument();
   });
+
+  test("one widget throwing a render exception is caught by error boundary and leaves other widgets rendered", () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    useWidgetData.mockImplementation((widget) =>
+      state({
+        renderWidget: widget,
+        data:
+          widget.id === 3
+            ? { not_an_array_and_causes_exception: true }
+            : [{ label: "A", value: 1 }],
+      })
+    );
+    renderGrid([
+      w({ id: 1, type: "kpi", title: "One" }),
+      w({ id: 2, type: "pie", title: "Two" }),
+      w({
+        id: 3,
+        type: "unknown_crash_type",
+        title: "Crashing widget",
+      }),
+    ]);
+
+    expect(screen.getByTestId("chart-pie")).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  test("empty visual displays 'No data available' when unfiltered", () => {
+    useWidgetData.mockImplementation((widget) =>
+      state({
+        renderWidget: widget,
+        data: [],
+      })
+    );
+    renderGrid([w({ id: 1, type: "bar", title: "Empty Bar" })], {});
+    expect(screen.getByText("No data available")).toBeInTheDocument();
+  });
+
+  test("empty visual displays 'No data found for current filters' when filtered", () => {
+    useWidgetData.mockImplementation((widget) =>
+      state({
+        renderWidget: widget,
+        data: [],
+      })
+    );
+    renderGrid([w({ id: 1, type: "bar", title: "Empty Bar" })], {
+      from_date: "2026-01-01",
+    });
+    expect(
+      screen.getByText("No data found for current filters")
+    ).toBeInTheDocument();
+  });
 });
 
 describe("filters", () => {
