@@ -312,21 +312,45 @@ FORM_IMPORT_MAX_FILE_SIZE = int(
 BUCKET_NAME = "mis"
 FAKE_STORAGE = False
 
-# Mailjet everywhere by default; local development overrides EMAIL_BACKEND to
-# Django's SMTP backend and points it at the Mailpit container, which accepts
-# any message and shows it in a web inbox. Registration is the reason this
-# matters: the activation link is the only way to finish signing up, so a
-# developer with no mail provider could not exercise the flow at all.
+# SMTP everywhere, through Django's own backend. The Mailjet REST backend
+# this replaces was an unmaintained third-party package that reported a
+# message as sent whether or not the provider had taken it, and exposed no
+# timeout, so a hung provider could hold a gunicorn worker open forever.
+#
+# The defaults point at the local Mailpit container, which accepts anything
+# and shows it in a web inbox. Registration is why that matters: the
+# activation link is the only way to finish signing up, so a developer with
+# no mail account could not otherwise exercise the flow at all. A deployment
+# that forgets to set EMAIL_HOST therefore fails to resolve "mailpit" and
+# logs the error rather than sending real mail somewhere unintended.
 EMAIL_BACKEND = environ.get(
-    "EMAIL_BACKEND", "django_mailjet.backends.MailjetBackend"
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
 )
-# Only consulted when EMAIL_BACKEND is an SMTP one; Mailjet ignores them.
-# The defaults are the local Mailpit container, so the compose override only
-# has to switch the backend.
 EMAIL_HOST = environ.get("EMAIL_HOST", "mailpit")
-EMAIL_PORT = int(environ.get("EMAIL_PORT", 1025))
-MAILJET_API_KEY = environ["MAILJET_APIKEY"]
-MAILJET_API_SECRET = environ["MAILJET_SECRET"]
+EMAIL_PORT = int(environ.get("EMAIL_PORT") or 1025)
+EMAIL_HOST_USER = environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = environ.get("EMAIL_HOST_PASSWORD", "")
+
+
+def _flag(name):
+    """Read a boolean env var, treating unset and empty as False.
+
+    Written out rather than inlined because getting it wrong is silent:
+    bool("false") is True, which would turn implicit SSL on for Mailpit
+    and hang every local send.
+    """
+    return environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
+# Mutually exclusive, and Django raises if both are set. Implicit SSL from
+# the first byte is port 465; STARTTLS on an initially plaintext connection
+# is 587. Mailpit wants neither, which is why both default to off.
+EMAIL_USE_SSL = _flag("EMAIL_USE_SSL")
+EMAIL_USE_TLS = _flag("EMAIL_USE_TLS")
+# Seconds. Without it a hung server holds the sending thread indefinitely,
+# and eight of the seventeen send sites run inside request handling against
+# six gunicorn workers.
+EMAIL_TIMEOUT = int(environ.get("EMAIL_TIMEOUT") or 10)
 EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")
 
 COUNTRY_NAME = "fiji"
