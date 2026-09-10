@@ -182,4 +182,21 @@ describe("AdministrationDropdownLocal", () => {
     expect(await screen.findByText("Jakarta")).toBeTruthy();
     expect(screen.queryByText("Bali")).toBeNull();
   });
+
+  test("fetches root admin from rootId prop when user is not logged in", async () => {
+    // store.user is null by default in beforeEach
+    api.get.mockImplementation((url) => {
+      if (url === "administration/1") {
+        return Promise.resolve({ data: ROOT_ADMIN });
+      }
+      return Promise.reject(new Error(`unexpected url: ${url}`));
+    });
+
+    render(<AdministrationDropdownLocal rootId={1} onChange={jest.fn()} />);
+
+    await waitFor(() => {
+      expect(api.get).toHaveBeenCalledWith("administration/1");
+    });
+    expect(await screen.findByRole("combobox")).toBeTruthy();
+  });
 });

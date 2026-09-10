@@ -36,6 +36,7 @@ jest.mock("../../../components/dashboard/DashboardViewFilters", () => {
       data-testid="filters"
       data-date={String(Boolean(props.defaultFilters?.date?.enabled))}
       data-adm={String(Boolean(props.defaultFilters?.administration?.enabled))}
+      data-root-adm={props.rootAdministrationId}
     />
   );
   MockFilters.displayName = "DashboardViewFilters";
@@ -119,8 +120,10 @@ describe("loading a published dashboard", () => {
     );
   });
 
-  test("passes default_filters through to the filter bar", async () => {
-    dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
+  test("passes default_filters and root_administration_id through to the filter bar", async () => {
+    dashboardApi.getPublished.mockResolvedValue({
+      data: { ...PAYLOAD, root_administration_id: 101 },
+    });
     renderViewer();
 
     await waitFor(() =>
@@ -128,6 +131,10 @@ describe("loading a published dashboard", () => {
     );
     expect(screen.getByTestId("filters")).toHaveAttribute("data-date", "true");
     expect(screen.getByTestId("filters")).toHaveAttribute("data-adm", "true");
+    expect(screen.getByTestId("filters")).toHaveAttribute(
+      "data-root-adm",
+      "101"
+    );
   });
 
   test("the published viewer shows no Preview badge", async () => {
