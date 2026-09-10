@@ -343,20 +343,31 @@ Q_CLUSTER = {
     "orm": "default",
 }
 
+# Application logs go to stderr, which is where a container's log collector
+# reads from. What was here before was the framework's placeholder: a file
+# handler wired to a logger literally named "your_app_name", so no logger in
+# this codebase had a handler and nothing it logged was ever written down.
+#
+# The handler is attached to the root logger rather than to named ones so
+# that every module's getLogger(__name__) is covered without a registry to
+# keep in step. Django's own console handler is gated behind
+# require_debug_true and so is silent in production; this one is not.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "file": {
-            "level": "WARNING",
-            "class": "logging.FileHandler",
-            "filename": f"{BASE_DIR}/logs/logfile.log",
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
         },
     },
-    "loggers": {
-        "your_app_name": {
-            "handlers": ["file"],
-            "level": "WARNING",
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
         },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": environ.get("LOG_LEVEL", "INFO"),
     },
 }
