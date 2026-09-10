@@ -1,7 +1,9 @@
 import logging
+from email.utils import make_msgid
 from pathlib import Path
 
 from django.core.mail import EmailMultiAlternatives
+from django.core.mail.utils import DNS_NAME
 from django.template.loader import render_to_string
 from rest_framework import serializers
 from utils.custom_serializer_fields import CustomChoiceField
@@ -372,16 +374,21 @@ def send_email(
             )
         if not send:
             return email_html_message
+        # Stamp our own Message-ID so this log line and the mail server's
+        # logs share one handle. Django generates one inside message() when
+        # the header is absent, but never reports which, leaving nothing to
+        # search for afterwards. setdefault so a caller that set its own wins.
+        # Provider-neutral by design: the previous version read an attribute
+        # that only one backend ever set.
+        message_id = msg.extra_headers.setdefault(
+            "Message-ID", make_msgid(domain=DNS_NAME)
+        )
         msg.send()
-        # The provider's own identifier for the message, which is the only
-        # handle that makes a delivery traceable in the Mailjet dashboard
-        # afterwards. django-mailjet hangs it off the message; other backends
-        # do not set it at all, hence the getattr.
         logger.info(
-            "sent %s email to %s (provider response: %s)",
+            "sent %s email to %s (message-id %s)",
             type,
             context.get("send_to"),
-            getattr(msg, "mailjet_response", None),
+            message_id,
         )
         return True
     except Exception:

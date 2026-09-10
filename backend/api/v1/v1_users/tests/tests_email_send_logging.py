@@ -1,3 +1,4 @@
+from django.core import mail
 from django.core.mail.backends.base import BaseEmailBackend
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
@@ -38,7 +39,16 @@ class SendEmailReportingTestCase(SimpleTestCase):
             )
 
         self.assertTrue(sent)
-        self.assertIn("sent user_activation email", "\n".join(logs.output))
+        output = "\n".join(logs.output)
+        self.assertIn("sent user_activation email", output)
+
+        # The logged handle must be the Message-ID the recipient's mail
+        # server will actually see, otherwise it is useless for tracing a
+        # message through that server's logs. Asserting they match is the
+        # whole point of stamping the header ourselves.
+        self.assertEqual(len(mail.outbox), 1)
+        message_id = mail.outbox[0].extra_headers["Message-ID"]
+        self.assertIn(message_id, output)
 
     @override_settings(EMAIL_BACKEND=f"{__name__}.ExplodingBackend")
     def test_returns_false_and_logs_traceback_when_the_backend_raises(self):
