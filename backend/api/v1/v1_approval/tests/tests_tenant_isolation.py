@@ -1,6 +1,9 @@
 from django.test.utils import override_settings
 
+from rest_framework.serializers import ValidationError
+
 from api.v1.v1_approval.models import DataBatch
+from api.v1.v1_approval.serializers import CreateBatchSerializer
 from utils.tenant_test_case import TenantIsolationTestCase
 
 # Every batch endpoint takes an id straight from the URL.
@@ -46,3 +49,21 @@ class ApprovalTenantIsolationTestCase(TenantIsolationTestCase):
         for path in BATCH_PATHS:
             with self.subTest(path=path):
                 self.assertEqual(self.get_batch(path, self.a).status_code, 200)
+
+    def test_two_tenants_can_use_the_same_batch_name(self):
+        # The name check queried every workspace's batches, so the first
+        # tenant to use a name locked it for all of them — and the refusal
+        # confirmed to the second that somebody, somewhere, holds it.
+        self.b["batch"].name = "September Review"
+        self.b["batch"].save()
+
+        serializer = CreateBatchSerializer(context={"user": self.a["user"]})
+        self.assertEqual(
+            serializer.validate_name("September Review"), "September Review"
+        )
+
+    def test_one_tenant_cannot_repeat_a_batch_name(self):
+        # The counterpart: within a workspace the name is still taken.
+        serializer = CreateBatchSerializer(context={"user": self.a["user"]})
+        with self.assertRaises(ValidationError):
+            serializer.validate_name(self.a["batch"].name)
