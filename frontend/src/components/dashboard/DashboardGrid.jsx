@@ -91,11 +91,12 @@ const DashboardWidgetCell = ({
     // sites never monitored are excluded unless include_unmonitored is
     // set, so empty is routine rather than a failure.
     return (
-      <WidgetErrorBoundary text={text}>
+      <WidgetErrorBoundary text={text} filters={filters}>
         <WidgetRenderer
           widget={renderWidget || widget}
           data={data}
           pagination={pagination}
+          filters={filters}
         />
       </WidgetErrorBoundary>
     );
