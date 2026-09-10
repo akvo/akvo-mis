@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import useEChartsOption from "./useEChartsOption";
@@ -64,7 +64,6 @@ const CategoryLine = ({ config, data }) => {
 };
 
 const VizLine = ({ config, data }) => {
-  const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const hasCategory = Boolean(widgetConfig.category_question_id);
   const hasStack = Boolean(widgetConfig.stack_by);
@@ -74,23 +73,13 @@ const VizLine = ({ config, data }) => {
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
   const toolbox = buildToolboxConfig(widgetConfig, "line");
+  const { chartRef, boxRef } = useChartResize(toolbox);
+
   const chartConfig = {
     title: "",
     color: colors,
   };
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
-
-  useEffect(() => {
-    if (
-      !hasCategory &&
-      chartRef.current &&
-      typeof chartRef.current.setOption === "function"
-    ) {
-      chartRef.current.setOption({
-        toolbox: toolbox || { show: false },
-      });
-    }
-  }, [hasCategory, toolbox, chartData, config, chartRef]);
 
   if (hasCategory) {
     return <CategoryLine config={config} data={data} />;
