@@ -2,14 +2,13 @@ import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import useEChartsOption from "./useEChartsOption";
+import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Line, StackLine } from "akvo-charts";
-import { store, uiText } from "../../../lib";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
-const CategoryLine = ({ config, data }) => {
-  const { language } = store.useState((s) => s);
-  const text = uiText[language?.active] || uiText.en;
+const CategoryLine = ({ config, data, filters }) => {
+  const emptyMessage = useEmptyWidgetMessage(filters);
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   const option = useMemo(() => {
@@ -55,7 +54,7 @@ const CategoryLine = ({ config, data }) => {
   if (chartData.length === 0) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        {text.dashboardWidgetNoData || "No data available"}
+        {emptyMessage}
       </div>
     );
   }
@@ -63,14 +62,21 @@ const CategoryLine = ({ config, data }) => {
   return <div ref={boxRef} style={{ width: "100%", height: "100%" }} />;
 };
 
-const VizLine = ({ config, data }) => {
+CategoryLine.propTypes = {
+  config: PropTypes.object.isRequired,
+  data: PropTypes.array,
+  filters: PropTypes.object,
+};
+
+const VizLine = ({ config, data, filters }) => {
+  const emptyMessage = useEmptyWidgetMessage(filters);
   const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const hasCategory = Boolean(widgetConfig.category_question_id);
   const hasStack = Boolean(widgetConfig.stack_by);
 
   if (hasCategory) {
-    return <CategoryLine config={config} data={data} />;
+    return <CategoryLine config={config} data={data} filters={filters} />;
   }
 
   const Component = hasStack ? StackLine : Line;
@@ -85,7 +91,7 @@ const VizLine = ({ config, data }) => {
   if (chartData.length === 0) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        No data
+        {emptyMessage}
       </div>
     );
   }
@@ -105,6 +111,7 @@ const VizLine = ({ config, data }) => {
 VizLine.propTypes = {
   config: PropTypes.object.isRequired,
   data: PropTypes.array,
+  filters: PropTypes.object,
 };
 
 export default VizLine;

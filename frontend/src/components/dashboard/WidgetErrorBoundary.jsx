@@ -1,5 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
+import { getEmptyWidgetMessage } from "./widgets/useEmptyWidgetMessage";
 
 class WidgetErrorBoundary extends React.Component {
   constructor(props) {
@@ -18,10 +19,11 @@ class WidgetErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      const { text } = this.props;
+      const { text, filters } = this.props;
+      const message = getEmptyWidgetMessage(filters, text);
       return (
         <div className="dashboard-view-cell-note">
-          <div>{text?.dashboardWidgetNoData || "No data available"}</div>
+          <div>{message}</div>
         </div>
       );
     }
@@ -32,6 +34,7 @@ class WidgetErrorBoundary extends React.Component {
 WidgetErrorBoundary.propTypes = {
   children: PropTypes.node,
   text: PropTypes.object,
+  filters: PropTypes.object,
 };
 
 export default WidgetErrorBoundary;

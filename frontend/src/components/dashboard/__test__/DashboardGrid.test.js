@@ -270,18 +270,48 @@ describe("isolation", () => {
         renderWidget: widget,
         data:
           widget.id === 3
-            ? { invalid_structure: true }
+            ? { not_an_array_and_causes_exception: true }
             : [{ label: "A", value: 1 }],
       })
     );
     renderGrid([
       w({ id: 1, type: "kpi", title: "One" }),
       w({ id: 2, type: "pie", title: "Two" }),
-      w({ id: 3, type: "section_title", title: null, config: null }),
+      w({
+        id: 3,
+        type: "unknown_crash_type",
+        title: "Crashing widget",
+      }),
     ]);
 
     expect(screen.getByTestId("chart-pie")).toBeInTheDocument();
     spy.mockRestore();
+  });
+
+  test("empty visual displays 'No data available' when unfiltered", () => {
+    useWidgetData.mockImplementation((widget) =>
+      state({
+        renderWidget: widget,
+        data: [],
+      })
+    );
+    renderGrid([w({ id: 1, type: "bar", title: "Empty Bar" })], {});
+    expect(screen.getByText("No data available")).toBeInTheDocument();
+  });
+
+  test("empty visual displays 'No data found for current filters' when filtered", () => {
+    useWidgetData.mockImplementation((widget) =>
+      state({
+        renderWidget: widget,
+        data: [],
+      })
+    );
+    renderGrid([w({ id: 1, type: "bar", title: "Empty Bar" })], {
+      from_date: "2026-01-01",
+    });
+    expect(
+      screen.getByText("No data found for current filters")
+    ).toBeInTheDocument();
   });
 });
 

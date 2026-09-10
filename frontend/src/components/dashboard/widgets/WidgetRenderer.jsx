@@ -28,7 +28,7 @@ const RENDERERS = {
   section_title: VizSectionTitle,
 };
 
-const WidgetRenderer = ({ widget, data, pagination }) => {
+const WidgetRenderer = ({ widget, data, pagination, filters }) => {
   const Renderer = RENDERERS[widget.type];
   if (!Renderer) {
     return (
@@ -37,7 +37,14 @@ const WidgetRenderer = ({ widget, data, pagination }) => {
       </div>
     );
   }
-  return <Renderer config={widget} data={data} pagination={pagination} />;
+  return (
+    <Renderer
+      config={widget}
+      data={data}
+      pagination={pagination}
+      filters={filters}
+    />
+  );
 };
 
 WidgetRenderer.propTypes = {
@@ -45,6 +52,7 @@ WidgetRenderer.propTypes = {
   data: PropTypes.any,
   // Only the table reads it; the others ignore the prop.
   pagination: PropTypes.object,
+  filters: PropTypes.object,
 };
 
 export default WidgetRenderer;

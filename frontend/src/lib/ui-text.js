@@ -76,6 +76,7 @@ const uiText = {
     dashboardWidgetError: "Couldn't load this widget",
     dashboardWidgetRetry: "Retry",
     dashboardWidgetNoData: "No data available",
+    dashboardWidgetNoDataFiltered: "No data found for current filters",
     dashboardWidgetQuestionGone: "This widget's question no longer exists.",
     dashboardWidgetFormGone: "This widget's form no longer exists.",
     // Export (VIZ-023)
