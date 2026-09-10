@@ -47,6 +47,8 @@ import {
   tableColumnOptions,
   monitoringForms,
   MAP_QUESTION_TYPES,
+  TOOLBOX_POSITION_PRESETS,
+  DEFAULT_TOOLBOX_FEATURES,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -1932,6 +1934,145 @@ const BuilderInspector = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Toolbox options (chart widgets) */}
+        {["bar", "line", "pie", "scatter"].includes(wType) && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-switch-row">
+              <span>Show toolbox</span>
+              <Switch
+                size="small"
+                checked={wConfig.show_toolbox === true}
+                onChange={(checked) => {
+                  updateConfig("show_toolbox", checked);
+                }}
+              />
+            </label>
+
+            {wConfig.show_toolbox === true && (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div
+                  className="builder-inspector-field"
+                  style={{ marginBottom: 4 }}
+                >
+                  <label className="builder-inspector-label">
+                    Toolbox position
+                  </label>
+                  <Select
+                    size="small"
+                    style={{ width: "100%" }}
+                    value={wConfig.toolbox_position || "top-right"}
+                    onChange={(val) => {
+                      updateConfig("toolbox_position", val);
+                    }}
+                  >
+                    {TOOLBOX_POSITION_PRESETS.map((pos) => (
+                      <Select.Option key={pos.value} value={pos.value}>
+                        {pos.label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div
+                  className="builder-inspector-field"
+                  style={{ marginBottom: 0 }}
+                >
+                  <label className="builder-inspector-label">
+                    Toolbox features
+                  </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={
+                          wConfig.toolbox_features?.saveAsImage !== false
+                        }
+                        onChange={(e) => {
+                          const current = wConfig.toolbox_features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          updateConfig("toolbox_features", {
+                            ...current,
+                            saveAsImage: e.target.checked,
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Save as image
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={wConfig.toolbox_features?.dataView !== false}
+                        onChange={(e) => {
+                          const current = wConfig.toolbox_features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          updateConfig("toolbox_features", {
+                            ...current,
+                            dataView: e.target.checked,
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Data view
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={wConfig.toolbox_features?.restore !== false}
+                        onChange={(e) => {
+                          const current = wConfig.toolbox_features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          updateConfig("toolbox_features", {
+                            ...current,
+                            restore: e.target.checked,
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Restore zoom/filters
+                      </span>
+                    </label>
+                    {wType !== "pie" && (
+                      <label className="builder-inspector-col-row">
+                        <Checkbox
+                          checked={wConfig.toolbox_features?.dataZoom !== false}
+                          onChange={(e) => {
+                            const current = wConfig.toolbox_features || {
+                              ...DEFAULT_TOOLBOX_FEATURES,
+                            };
+                            updateConfig("toolbox_features", {
+                              ...current,
+                              dataZoom: e.target.checked,
+                            });
+                          }}
+                        />
+                        <span className="builder-inspector-q-label">
+                          Data zoom
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

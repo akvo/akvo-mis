@@ -57,6 +57,20 @@ const DEFAULT_CHART_COLORS = [
   "#9b59b6",
 ];
 
+export const TOOLBOX_POSITION_PRESETS = [
+  { value: "top-right", label: "Top right" },
+  { value: "top-left", label: "Top left" },
+  { value: "bottom-right", label: "Bottom right" },
+  { value: "bottom-left", label: "Bottom left" },
+];
+
+export const DEFAULT_TOOLBOX_FEATURES = {
+  saveAsImage: true,
+  dataView: true,
+  restore: true,
+  dataZoom: true,
+};
+
 export const WIDGET_DEFAULTS = {
   kpi: {
     col_span: 6,
@@ -74,6 +88,9 @@ export const WIDGET_DEFAULTS = {
       group_by: "option",
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: { ...DEFAULT_TOOLBOX_FEATURES },
     },
   },
   line: {
@@ -85,6 +102,9 @@ export const WIDGET_DEFAULTS = {
       category_question_id: null,
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: { ...DEFAULT_TOOLBOX_FEATURES },
     },
   },
   pie: {
@@ -95,6 +115,13 @@ export const WIDGET_DEFAULTS = {
       variant: "pie",
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: {
+        saveAsImage: true,
+        dataView: true,
+        restore: true,
+      },
     },
   },
   table: {
@@ -122,6 +149,9 @@ export const WIDGET_DEFAULTS = {
     config: {
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: { ...DEFAULT_TOOLBOX_FEATURES },
     },
   },
   section_title: {
