@@ -262,6 +262,27 @@ describe("isolation", () => {
     expect(screen.getByTestId("chart-bar")).toBeInTheDocument();
     expect(screen.getByTestId("chart-pie")).toBeInTheDocument();
   });
+
+  test("one widget throwing a render exception is caught by error boundary and leaves other widgets rendered", () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    useWidgetData.mockImplementation((widget) =>
+      state({
+        renderWidget: widget,
+        data:
+          widget.id === 3
+            ? { invalid_structure: true }
+            : [{ label: "A", value: 1 }],
+      })
+    );
+    renderGrid([
+      w({ id: 1, type: "kpi", title: "One" }),
+      w({ id: 2, type: "pie", title: "Two" }),
+      w({ id: 3, type: "section_title", title: null, config: null }),
+    ]);
+
+    expect(screen.getByTestId("chart-pie")).toBeInTheDocument();
+    spy.mockRestore();
+  });
 });
 
 describe("filters", () => {
