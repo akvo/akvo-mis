@@ -64,7 +64,7 @@ const VizBar = ({ config, data }) => {
     color: colors,
     tooltip: { trigger: "axis" },
     legend: { show: false },
-    ...(toolbox ? { toolbox } : {}),
+    toolbox: toolbox || { show: false },
     grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
     xAxis: {
       type: horizontal ? "value" : "category",

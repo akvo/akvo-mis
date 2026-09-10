@@ -32,7 +32,7 @@ const CategoryLine = ({ config, data }) => {
         data: labels,
         bottom: 0,
       },
-      ...(toolbox ? { toolbox } : {}),
+      toolbox: toolbox || { show: false },
       grid: { top: 20, right: 20, bottom: 40, left: 40, containLabel: true },
       xAxis: {
         type: "category",

@@ -32,7 +32,7 @@ const VizScatter = ({ config, data }) => {
         },
       },
       legend: { show: false },
-      ...(toolbox ? { toolbox } : {}),
+      toolbox: toolbox || { show: false },
       grid: { top: 40, right: 20, bottom: 50, left: 60, containLabel: true },
       xAxis: {
         type: "value",

@@ -29,23 +29,24 @@ export const buildToolboxConfig = (widgetConfig, widgetType) => {
   const positionCoords =
     TOOLBOX_POSITIONS[positionKey] || TOOLBOX_POSITIONS["top-right"];
 
-  const feature = {};
+  const hasAnyFeature =
+    features.saveAsImage !== false ||
+    features.dataView !== false ||
+    features.restore !== false ||
+    (features.dataZoom !== false && widgetType !== "pie");
 
-  if (features.saveAsImage !== false) {
-    feature.saveAsImage = {};
-  }
-  if (features.dataView !== false) {
-    feature.dataView = { readOnly: false };
-  }
-  if (features.restore !== false) {
-    feature.restore = {};
-  }
-  if (features.dataZoom !== false && widgetType !== "pie") {
-    feature.dataZoom = {};
-  }
-
-  if (Object.keys(feature).length === 0) {
+  if (!hasAnyFeature) {
     return null;
+  }
+
+  const feature = {
+    saveAsImage: { show: features.saveAsImage !== false },
+    dataView: { show: features.dataView !== false, readOnly: false },
+    restore: { show: features.restore !== false },
+  };
+
+  if (widgetType !== "pie") {
+    feature.dataZoom = { show: features.dataZoom !== false };
   }
 
   return {

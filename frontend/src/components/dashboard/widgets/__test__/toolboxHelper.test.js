@@ -18,10 +18,10 @@ describe("toolboxHelper - buildToolboxConfig", () => {
       top: 0,
       orient: "horizontal",
       feature: {
-        saveAsImage: {},
-        dataView: { readOnly: false },
-        restore: {},
-        dataZoom: {},
+        saveAsImage: { show: true },
+        dataView: { show: true, readOnly: false },
+        restore: { show: true },
+        dataZoom: { show: true },
       },
     });
   });
@@ -63,9 +63,9 @@ describe("toolboxHelper - buildToolboxConfig", () => {
     };
     const toolbox = buildToolboxConfig(widgetConfig, "pie");
 
-    expect(toolbox.feature.saveAsImage).toBeDefined();
-    expect(toolbox.feature.dataView).toBeDefined();
-    expect(toolbox.feature.restore).toBeDefined();
+    expect(toolbox.feature.saveAsImage).toEqual({ show: true });
+    expect(toolbox.feature.dataView).toEqual({ show: true, readOnly: false });
+    expect(toolbox.feature.restore).toEqual({ show: true });
     expect(toolbox.feature.dataZoom).toBeUndefined();
   });
 
@@ -82,8 +82,10 @@ describe("toolboxHelper - buildToolboxConfig", () => {
     const toolbox = buildToolboxConfig(widgetConfig, "line");
 
     expect(toolbox.feature).toEqual({
-      saveAsImage: {},
-      dataZoom: {},
+      saveAsImage: { show: true },
+      dataView: { show: false, readOnly: false },
+      restore: { show: false },
+      dataZoom: { show: true },
     });
   });
 
