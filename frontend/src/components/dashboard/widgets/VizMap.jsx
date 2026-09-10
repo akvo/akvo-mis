@@ -110,7 +110,17 @@ const VizMap = ({ config, data }) => {
     }));
   }, [data, colorForStatus, fallback, isRange, valueRanges]);
 
-  const center = useMemo(() => geo?.defaultPos?.()?.coordinates || [0, 0], []);
+  const center = useMemo(() => {
+    if (points.length === 0) {
+      return geo?.defaultPos?.()?.coordinates || [0, 0];
+    }
+    const lats = points.map((p) => p.point[0]);
+    const lons = points.map((p) => p.point[1]);
+    return [
+      (Math.min(...lats) + Math.max(...lats)) / 2,
+      (Math.min(...lons) + Math.max(...lons)) / 2,
+    ];
+  }, [points]);
 
   // Two legends, one shape: a status name and its colour, or a band
   // label and its colour.
@@ -165,7 +175,12 @@ const VizMap = ({ config, data }) => {
             }
           : { groupKey: "status" })}
         {...(isRange ? { cluster: false } : {})}
-        config={{ center, zoom: 5, height: "100%", width: "100%" }}
+        config={{
+          center,
+          zoom: points.length > 0 ? 8 : 5,
+          height: "100%",
+          width: "100%",
+        }}
         tile={geo.tile}
         // Null, not a function: MapCluster renders its own popup —
         // the label plus the exact value, unrounded — only when
