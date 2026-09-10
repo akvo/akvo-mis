@@ -2,6 +2,7 @@ import React from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import { Bar, StackBar } from "akvo-charts";
+import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
@@ -26,9 +27,15 @@ const VizBar = ({ config, data }) => {
   }
 
   const horizontal = widgetConfig.orientation === "horizontal";
+  const toolbox = buildToolboxConfig(widgetConfig, "bar");
 
   if (hasStack) {
-    const chartConfig = { title: "", color: colors, horizontal };
+    const chartConfig = {
+      title: "",
+      color: colors,
+      horizontal,
+      ...(toolbox ? { toolbox } : {}),
+    };
     const props = { config: chartConfig, data: chartData };
     if (widgetConfig.stackMapping) {
       props.stackMapping = widgetConfig.stackMapping;
@@ -45,6 +52,7 @@ const VizBar = ({ config, data }) => {
     color: colors,
     tooltip: { trigger: "axis" },
     legend: { show: false },
+    ...(toolbox ? { toolbox } : {}),
     grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
     xAxis: {
       type: horizontal ? "value" : "category",

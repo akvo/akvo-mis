@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import useEChartsOption from "./useEChartsOption";
 import { Line, StackLine } from "akvo-charts";
+import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
@@ -20,6 +21,7 @@ const CategoryLine = ({ config, data }) => {
     const seriesColors = labels.map(
       (name, idx) => catColors[name] || colors[idx % colors.length]
     );
+    const toolbox = buildToolboxConfig(wc, "line");
     return {
       color: seriesColors,
       tooltip: {
@@ -30,6 +32,7 @@ const CategoryLine = ({ config, data }) => {
         data: labels,
         bottom: 0,
       },
+      ...(toolbox ? { toolbox } : {}),
       grid: { top: 20, right: 20, bottom: 40, left: 40, containLabel: true },
       xAxis: {
         type: "category",
@@ -76,7 +79,12 @@ const VizLine = ({ config, data }) => {
     ? config.color
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
-  const chartConfig = { title: "", color: colors };
+  const toolbox = buildToolboxConfig(widgetConfig, "line");
+  const chartConfig = {
+    title: "",
+    color: colors,
+    ...(toolbox ? { toolbox } : {}),
+  };
   const chartData = Array.isArray(data) ? data : [];
 
   if (chartData.length === 0) {

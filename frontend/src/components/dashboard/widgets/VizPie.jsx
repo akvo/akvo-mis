@@ -2,6 +2,7 @@ import React from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import { Pie, Doughnut } from "akvo-charts";
+import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
@@ -15,7 +16,12 @@ const VizPie = ({ config, data }) => {
     ? config.color
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
-  const chartConfig = { title: "", color: colors };
+  const toolbox = buildToolboxConfig(widgetConfig, "pie");
+  const chartConfig = {
+    title: "",
+    color: colors,
+    ...(toolbox ? { toolbox } : {}),
+  };
   const chartData = Array.isArray(data) ? data : [];
 
   if (chartData.length === 0) {
