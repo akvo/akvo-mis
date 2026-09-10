@@ -142,6 +142,14 @@ class DashboardReadTestCase(TestCase, ProfileTestHelperMixin):
             body["default_filters"], {"date": {"enabled": True}}
         )
 
+    def test_retrieve_includes_root_administration_id(self):
+        self.make("alpha")
+        body = self.client.get(
+            "{0}/alpha".format(READ_URL), **self.header
+        ).json()
+        self.assertIn("root_administration_id", body)
+        self.assertIsNotNone(body["root_administration_id"])
+
     def test_published_at_matches_the_builder_endpoints_format(self):
         # One field, two endpoints. VIZ-008 must not have to parse two
         # formats depending on where it read the dashboard from.
