@@ -71,11 +71,18 @@ def geometry_answers(data_ids, question_ids):
 
     `data_ids` may be a list of ids or an id-yielding queryset; both work
     with `__in`.
+
+    Ordered so a datapoint's repeat-group entries arrive in the same
+    sequence on every request. Postgres is free to return an unordered
+    query's rows in any order it likes, and a device diffing two
+    responses should not see a change that is not one.
     """
     return Answers.objects.filter(
         data_id__in=data_ids,
         question_id__in=question_ids,
-    ).exclude(options__isnull=True).exclude(options=[])
+    ).exclude(
+        options__isnull=True
+    ).exclude(options=[]).order_by("question_id", "index")
 
 
 def geometry_by_data_id(data_ids, question_ids):
@@ -91,8 +98,6 @@ def geometry_by_data_id(data_ids, question_ids):
     )
     for row in rows:
         coordinates = row["options"]
-        if not coordinates:
-            continue
         result.setdefault(row["data_id"], []).append({
             "question_id": row["question_id"],
             "index": row["index"],

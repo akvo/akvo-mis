@@ -231,7 +231,15 @@ def add_fake_answers(data):
         if question.meta:
             if name:
                 meta_name.append(name)
-            elif option and question.type != QuestionTypes.geo:
+            elif option and question.type not in [
+                QuestionTypes.geo,
+                QuestionTypes.geoshape,
+                QuestionTypes.geotrace,
+            ]:
+                # `option` is a flat list of labels for the option
+                # types. For the geometry types it is a list of
+                # coordinate pairs, which `",".join` cannot take and
+                # which has no business in a datapoint name anyway.
                 meta_name.append(",".join(option))
             elif value and question.type != QuestionTypes.cascade:
                 meta_name.append(str(value))

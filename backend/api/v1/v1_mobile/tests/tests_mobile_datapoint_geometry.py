@@ -192,14 +192,15 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
                 response = self.get_list(f"?form_id={self.form.id}")
                 self.assertNotIn(b"geometry", response.content)
 
-
-@override_settings(USE_TZ=False, TEST_ENV=True)
-class MobileDatapointGeometryTotalTestCase(MobileDatapointGeometryTestCase):
-    """The completeness invariant.
-
-    `total` is the cursor-filtered delta. `geometry_total` is the absolute
-    candidate count. They are deliberately different numbers.
-    """
+    # ---------------------------------------------------------------
+    # The completeness invariant
+    #
+    # `total` is the cursor-filtered delta. `geometry_total` is the
+    # absolute candidate count. They are deliberately different
+    # numbers. These used to live in a subclass of this class, which
+    # made Django's loader re-collect every test above them a second
+    # time and pay the seeder fixture twice for it.
+    # ---------------------------------------------------------------
 
     def test_geometry_total_counts_every_candidate(self):
         self.make_datapoint(self.form, "Plot B", ADDIS_PLOT)
