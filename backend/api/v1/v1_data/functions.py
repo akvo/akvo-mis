@@ -188,6 +188,20 @@ def set_answer_data(
         name = (data.created + timedelta(days=days)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         )
+    elif question.type in (QuestionTypes.geoshape, QuestionTypes.geotrace):
+        # A small square around a random point, in the same
+        # latitude-first format a real client sends. Roughly 100 m on a
+        # side, which is plausible for a smallholder plot and keeps
+        # seeded polygons from overlapping by accident.
+        origin_lat = float(fake.latitude())
+        origin_lon = float(fake.longitude())
+        step = 0.001
+        option = [
+            [origin_lat, origin_lon],
+            [origin_lat + step, origin_lon],
+            [origin_lat + step, origin_lon + step],
+            [origin_lat, origin_lon + step],
+        ]
     else:
         pass
 

@@ -1,7 +1,7 @@
 from django.test import TestCase, override_settings
 from rest_framework.exceptions import ValidationError
 
-from api.v1.v1_data.functions import answer_fields
+from api.v1.v1_data.functions import answer_fields, set_answer_data
 from api.v1.v1_data.serializers import SubmitFormDataAnswerSerializer
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
@@ -95,3 +95,26 @@ class GeoshapeValidationTestCase(TestCase):
     def test_a_string_is_rejected_on_drafts_too(self):
         with self.assertRaises(ValidationError):
             self.validate("9.03,38.74", is_draft=True)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class GeoshapeSeederTestCase(TestCase):
+    def setUp(self):
+        self.form = Forms.objects.create(name="Plot Form", version=1)
+        self.group = QuestionGroup.objects.create(
+            form=self.form, name="Group", order=1
+        )
+        self.q = Questions.objects.create(
+            form=self.form, question_group=self.group, name="plot",
+            label="Plot boundary", order=1, type=QuestionTypes.geoshape,
+        )
+
+    def test_seeder_produces_a_usable_polygon(self):
+        name, value, option = set_answer_data(data=None, question=self.q)
+        self.assertIsNone(name)
+        self.assertIsNone(value)
+        self.assertGreaterEqual(len(option), 3)
+        for lat, lon in option:
+            self.assertTrue(-90 <= lat <= 90)
+            self.assertTrue(-180 <= lon <= 180)
+        self.assertNotEqual(option[0], option[-1])
