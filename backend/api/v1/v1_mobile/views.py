@@ -51,6 +51,7 @@ from .serializers import (
     SyncDeviceParamsSerializer,
     DraftFormDataSerializer,
 )
+from .geometry import enabled_geoshape_question_ids, geometry_by_data_id
 from .models import MobileAssignment, MobileApk
 from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
 from api.v1.v1_forms.constants import FormStatus
@@ -754,6 +755,15 @@ def get_datapoint_download_list(request, version):
     queryset = FormData.objects.for_user(assignment.user).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
     )
+
+    # Geometry rides only on the per-form path. Without form_id the
+    # response spans every form in the assignment, so a per-form
+    # completeness claim would be meaningless there, and leaving that
+    # branch untouched is what makes "byte-identical when off" provable
+    # rather than argued.
+    geometry_question_ids = (
+        enabled_geoshape_question_ids(find_form) if form_id else []
+    )
     if assignment.last_synced_at:
         queryset = queryset.filter(
             Q(created__gte=assignment.last_synced_at)
@@ -775,8 +785,15 @@ def get_datapoint_download_list(request, version):
     ).order_by("-created")
 
     instance = paginator.paginate_queryset(queryset, request)
+    context = {}
+    if geometry_question_ids:
+        context["geometry"] = geometry_by_data_id(
+            [row["id"] for row in instance], geometry_question_ids
+        )
     response = paginator.get_paginated_response(
-        MobileDataPointDownloadListSerializer(instance, many=True).data
+        MobileDataPointDownloadListSerializer(
+            instance, many=True, context=context
+        ).data
     )
     page = response.data["current"]
     total_page = response.data["total_page"]
