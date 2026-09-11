@@ -8,7 +8,7 @@ const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
 const VizScatter = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
-  const widgetConfig = config?.config || {};
+  const widgetConfig = useMemo(() => config?.config || {}, [config?.config]);
   const colors = widgetConfig.chart_colors || DEFAULT_COLORS;
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const xLabel = widgetConfig.x_axis_label || "Number of datapoints";
