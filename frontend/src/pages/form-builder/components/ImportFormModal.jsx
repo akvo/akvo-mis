@@ -14,6 +14,7 @@ import {
 import { InboxOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../lib";
+import "./ImportFormModal.scss";
 
 const { Dragger } = Upload;
 const { Text } = Typography;
@@ -263,8 +264,8 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
 
   const renderUploadStep = () => (
     <>
-      <div style={{ marginBottom: 16 }}>
-        <p style={{ marginBottom: 6, fontWeight: 500 }}>
+      <div className="import-modal-format-section">
+        <p className="import-modal-section-label">
           {text.formBuilderImportFormatLabel}
         </p>
         <Radio.Group
@@ -405,7 +406,7 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
     const confirmDisabled = !formType || monitoringParentMissing;
 
     return (
-      <>
+      <div className="import-modal-review-step">
         <Alert
           type="info"
           showIcon
@@ -414,16 +415,16 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
           description={text.formBuilderImportXlsformNoticeDesc}
         />
 
-        <div style={{ marginBottom: 12 }}>
-          <p style={{ marginBottom: 4 }}>
+        <div className="import-modal-form-details">
+          <div className="import-modal-form-name">
             <strong>{text.formBuilderImportFormLabel}:</strong>{" "}
             {preflight?.form?.name || "Untitled Form"}
-          </p>
-          <p style={{ marginBottom: 4, color: "#666" }}>
+          </div>
+          <div className="import-modal-form-counts">
             {text.formBuilderImportQuestionsLabel}:{" "}
-            {preflight?.question_count || 0} |{" "}
+            {preflight?.question_count || 0} &nbsp;|&nbsp;{" "}
             {text.formBuilderImportGroupsLabel}: {preflight?.group_count || 0}
-          </p>
+          </div>
         </div>
 
         {preflight?.skipped_count > 0 && (
@@ -444,8 +445,8 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
         />
 
         <div style={{ marginBottom: 16 }}>
-          <p style={{ marginBottom: 6 }}>
-            <strong>{text.formBuilderImportFormTypeLabel} *</strong>
+          <p className="import-modal-section-label">
+            {text.formBuilderImportFormTypeLabel} *
           </p>
           <Radio.Group
             value={formType}
@@ -472,8 +473,8 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
 
         {isMonitoring && (
           <div style={{ marginBottom: 16 }}>
-            <p style={{ marginBottom: 4 }}>
-              <strong>{text.formBuilderImportParentLabel} *</strong>
+            <p className="import-modal-section-label">
+              {text.formBuilderImportParentLabel} *
             </p>
             {monitoringParentMissing && (
               <Alert
@@ -497,19 +498,21 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
           </div>
         )}
 
-        <Space>
-          <Button
-            type="primary"
-            disabled={confirmDisabled}
-            onClick={onConfirmImport}
-          >
-            {text.formBuilderImportConfirmButton}
-          </Button>
-          <Button onClick={resetState}>
-            {text.formBuilderImportRetryButton}
-          </Button>
-        </Space>
-      </>
+        <div className="import-modal-actions">
+          <Space>
+            <Button
+              type="primary"
+              disabled={confirmDisabled}
+              onClick={onConfirmImport}
+            >
+              {text.formBuilderImportConfirmButton}
+            </Button>
+            <Button onClick={resetState}>
+              {text.formBuilderImportRetryButton}
+            </Button>
+          </Space>
+        </div>
+      </div>
     );
   };
 
@@ -578,15 +581,17 @@ const ImportFormModal = ({ open, onClose, onImported, text }) => {
 
   return (
     <Modal
+      className="import-form-modal"
       title={text.formBuilderImportModalTitle}
       open={open}
       onCancel={onClose}
       footer={null}
+      width={560}
       maskClosable={step !== "importing"}
       closable={step !== "importing"}
       destroyOnClose
     >
-      {stepRenderers[step]()}
+      <div className="import-form-modal-body">{stepRenderers[step]()}</div>
     </Modal>
   );
 };

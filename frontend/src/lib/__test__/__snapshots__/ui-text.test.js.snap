@@ -209,6 +209,8 @@ Object {
     "dashboardVisibilityTitle": "Public dashboard",
     "dashboardWidgetError": "Couldn't load this widget",
     "dashboardWidgetFormGone": "This widget's form no longer exists.",
+    "dashboardWidgetNoData": "No data available",
+    "dashboardWidgetNoDataFiltered": "No data found for current filters",
     "dashboardWidgetQuestionGone": "This widget's question no longer exists.",
     "dashboardWidgetRetry": "Retry",
     "dashboards": "Dashboards",
@@ -516,8 +518,95 @@ Object {
     "formBuilderImportUpdateDesc": [Function],
     "formBuilderImportUpdateTitle": [Function],
     "formBuilderImportWarningsTitle": "Warnings",
-    "formBuilderImportXlsformNoticeDesc": "Akvo MIS imports standard question types, options, multi-language labels, validations, and skip-logic. Follow-up questions for 'Other' choices are preserved as dependent questions (which you can optionally streamline using 'Allow other' in the Form Editor). Advanced features such as dynamic calculations, programmatic repeat counts, or complex XPath expressions are skipped. Please review any warnings below and verify the form in the Form Editor after import.",
-    "formBuilderImportXlsformNoticeTitle": "XLSForm Compatibility Note",
+    "formBuilderImportXlsformNoticeDesc": <div
+      style={
+        Object {
+          "fontSize": 13,
+          "lineHeight": 1.5,
+          "textAlign": "left",
+        }
+      }
+    >
+      <p
+        style={
+          Object {
+            "margin": "4px 0 8px 0",
+            "textAlign": "left",
+          }
+        }
+      >
+        Your XLSForm was imported successfully, but Kobo and Akvo MIS don't work identically and some form logic may need manual adjustment to fully match your original. Please review the warnings below and test the form before publishing.
+      </p>
+      <p
+        style={
+          Object {
+            "fontWeight": 600,
+            "margin": "8px 0 4px 0",
+            "textAlign": "left",
+          }
+        }
+      >
+        Common things to check:
+      </p>
+      <ul
+        style={
+          Object {
+            "listStyleType": "disc",
+            "margin": "0 0 8px 0",
+            "paddingLeft": 18,
+            "textAlign": "left",
+          }
+        }
+      >
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Calculated fields – formulas may need to be re-verified
+        </li>
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Dynamic repeat counts – repeat groups driven by a variable may need manual setup
+        </li>
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Group relevance / skip logic – conditional group visibility should be double-checked
+        </li>
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          "Other" follow-up questions – these aren't auto-converted; add them manually if needed
+        </li>
+      </ul>
+      <p
+        style={
+          Object {
+            "margin": "8px 0 0 0",
+            "textAlign": "left",
+          }
+        }
+      >
+        We recommend previewing the full form and testing a submission before it goes live.
+      </p>
+    </div>,
+    "formBuilderImportXlsformNoticeTitle": "This import needs a quick review",
     "formBuilderLastUpdatedCol": "Last Updated",
     "formBuilderMonitoringFor": [Function],
     "formBuilderMonitoringType": "Monitoring",
