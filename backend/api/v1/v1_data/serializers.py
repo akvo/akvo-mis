@@ -90,6 +90,8 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                 QuestionTypes.geo,
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
+                QuestionTypes.geoshape,
+                QuestionTypes.geotrace,
             ] and not isinstance(attrs.get("value"), list):
                 raise ValidationError(
                     "Valid list value is required for Question:{0}".format(
@@ -137,6 +139,8 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
             QuestionTypes.geo,
             QuestionTypes.option,
             QuestionTypes.multiple_option,
+            QuestionTypes.geoshape,
+            QuestionTypes.geotrace,
         ]:
             raise ValidationError(
                 "Valid list value is required for Question:{0}".format(

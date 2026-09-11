@@ -54,6 +54,8 @@ def answer_fields(question: Questions, value):
         QuestionTypes.geo,
         QuestionTypes.option,
         QuestionTypes.multiple_option,
+        QuestionTypes.geoshape,
+        QuestionTypes.geotrace,
     ]:
         return None, None, value
 
