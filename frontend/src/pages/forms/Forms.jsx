@@ -26,6 +26,7 @@ import { pick, isEmpty } from "lodash";
 import { PageLoader, Breadcrumbs, DescriptionPanel } from "../../components";
 import { useNotification } from "../../util/hooks";
 import moment from "moment";
+import { v4 as uuidv4 } from "uuid";
 
 const Forms = () => {
   const navigate = useNavigate();
@@ -222,7 +223,9 @@ const Forms = () => {
       : `${authUser.administration.name} - ${moment().format("MMM YYYY")}`;
 
     if (!submissionKeyRef.current) {
-      submissionKeyRef.current = crypto.randomUUID();
+      // crypto.randomUUID() is undefined outside secure contexts (plain
+      // HTTP on a LAN/subdomain host) and in jsdom, so use the uuid package.
+      submissionKeyRef.current = uuidv4();
     }
 
     const dataPayload = {
