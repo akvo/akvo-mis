@@ -189,6 +189,47 @@ _SNAKE_TO_CAMEL_Q = {
     "disable_delete": "disableDelete",
 }
 
+# Option settings the editor (and akvo-react-form) keep at the question's
+# top level but the backend stores inside Questions.extra, which is the only
+# place the web form and mobile payloads read them from.
+_EXTRA_OPTION_KEYS = ("allowOther", "allowOtherText")
+
+
+def _fold_option_keys_into_extra(q):
+    """Move allowOther/allowOtherText from the question into q['extra']."""
+    if not any(k in q for k in _EXTRA_OPTION_KEYS):
+        return q
+    extra = q.get("extra")
+    extra = dict(extra) if isinstance(extra, dict) else {}
+    for key in _EXTRA_OPTION_KEYS:
+        if key not in q:
+            continue
+        val = q.pop(key)
+        if val in (None, False, ""):
+            extra.pop(key, None)
+        else:
+            extra[key] = val
+    q["extra"] = extra or None
+    return q
+
+
+def _lift_option_keys_from_extra(q):
+    """Inverse of _fold_option_keys_into_extra for editor responses."""
+    extra = q.get("extra")
+    if not isinstance(extra, dict):
+        return q
+    if not any(k in extra for k in _EXTRA_OPTION_KEYS):
+        return q
+    extra = dict(extra)
+    for key in _EXTRA_OPTION_KEYS:
+        if key in extra:
+            q[key] = extra.pop(key)
+    if extra:
+        q["extra"] = extra
+    else:
+        q.pop("extra", None)
+    return q
+
 
 def _normalize_editor_payload(data):
     """Translate akvo-react-form-editor field names to backend conventions.
@@ -238,7 +279,7 @@ def _normalize_editor_payload(data):
                 q["tree_option"] = q.pop("option")
                 q["option"] = []
             q.pop("questionGroupId", None)
-            qs.append(q)
+            qs.append(_fold_option_keys_into_extra(q))
         g["question"] = qs
         groups.append(g)
     out["question_group"] = groups
@@ -271,7 +312,7 @@ def _to_editor_format(data):
             for snake, camel in _SNAKE_TO_CAMEL_Q.items():
                 if snake in q:
                     q[camel] = q.pop(snake)
-            questions.append(q)
+            questions.append(_lift_option_keys_from_extra(q))
         g["question"] = questions
         groups.append(g)
     out["question_group"] = groups
