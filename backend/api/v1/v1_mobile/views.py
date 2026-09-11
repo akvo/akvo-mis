@@ -693,10 +693,10 @@ def get_forms_tree(request, version):
     return Response(result, status=status.HTTP_200_OK)
 
 
-# Schema-only shapes for the `geometry` row field below. Kept separate
-# from `MobileDataPointDownloadListSerializer` because that field is
+# Schema-only shapes for the `geometry` row field below. Kept off
+# `MobileDataPointDownloadListSerializer` because that field is
 # injected in `to_representation`, not declared, so a real field on the
-# class would appear on every row and break the flag-off/no-form_id
+# live class would appear on every row and break the flag-off/no-form_id
 # omission the tests in tests_mobile_datapoint_geometry.py pin down.
 _geometry_bbox_schema = inline_serializer(
     "MobileDatapointGeometryBbox",
@@ -718,6 +718,30 @@ _geometry_entry_schema = inline_serializer(
         "bbox": _geometry_bbox_schema,
     },
 )
+
+
+# Documentation only - referenced from `responses=`, never instantiated
+# to serialize a row. It subclasses the real serializer rather than
+# restating its six fields, so the documented row cannot drift from the
+# served one and `url` keeps the `format: uri` its
+# `@extend_schema_field` gives it. `geometry` is declared here and not
+# on the parent for the reason above: on the parent it would be emitted
+# on every row, including the flag-off and no-form_id responses that
+# have to stay byte-identical to what the device gets today. No
+# docstring, because drf-spectacular would publish it as the schema's
+# description.
+class MobileDataPointDownloadListRowSerializer(
+    MobileDataPointDownloadListSerializer
+):
+    geometry = serializers.ListField(
+        child=_geometry_entry_schema,
+        required=False,
+        help_text=(
+            "Present only with form_id, detectOverlaps and the geometry "
+            "flag on. Empty list means no polygon for this datapoint, "
+            "not that geometry is absent."
+        ),
+    )
 
 
 @extend_schema(
@@ -750,33 +774,15 @@ _geometry_entry_schema = inline_serializer(
                 "total": serializers.IntegerField(
                     help_text=(
                         "Rows matching the sync cursor, i.e. this "
-                        "delta. NOT the candidate count."
+                        "delta. NOT the candidate count. Under "
+                        "geometry_full=true the cursor is ignored and "
+                        "this becomes the whole candidate count."
                     )
                 ),
-                "data": inline_serializer(
-                    "MobileDataPointDownloadListRow",
-                    fields={
-                        "id": serializers.IntegerField(),
-                        "form_id": serializers.IntegerField(),
-                        "name": serializers.CharField(),
-                        "administration_id": serializers.IntegerField(),
-                        "url": serializers.CharField(),
-                        "last_updated": serializers.DateTimeField(),
-                        "geometry": serializers.ListField(
-                            child=_geometry_entry_schema,
-                            required=False,
-                            help_text=(
-                                "Present only with form_id, "
-                                "detectOverlaps and the geometry flag "
-                                "on. Empty list means no polygon for "
-                                "this datapoint, not that geometry is "
-                                "absent."
-                            ),
-                        ),
-                    },
-                    many=True,
+                "data": MobileDataPointDownloadListRowSerializer(
+                    many=True
                 ),
-                "page": serializers.IntegerField(),
+                "total_page": serializers.IntegerField(),
                 "current": serializers.IntegerField(),
                 "geometry_total": serializers.IntegerField(
                     required=False,
