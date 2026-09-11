@@ -129,6 +129,7 @@ const CreateBatchModal = ({
 
   return (
     <Modal
+      className="create-batch-modal"
       open={isOpen}
       onCancel={handleOnCancel}
       maskClosable={false}
