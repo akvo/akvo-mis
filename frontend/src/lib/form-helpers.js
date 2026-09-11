@@ -273,3 +273,29 @@ export const getLastAnswerDisplayValue = (record, oldValue) => {
       return oldValue || oldValue === 0 ? oldValue : "-";
   }
 };
+
+/**
+ * Flatten a `/form/web` question for akvo-react-form.
+ *
+ * `extra` is spread onto the question (allowOther, api hints, ...) but
+ * `extra.type` is a cascade sub-type ("administration" | "entity"), not a
+ * render type — the library only knows "cascade", so an unknown type falls
+ * back to a plain text input. Always keep the backend `type`.
+ */
+export const normalizeWebformQuestion = (q) => {
+  if (!q?.extra) {
+    return { ...q };
+  }
+  const { extra, ...rest } = q;
+  let qVal = { ...rest, ...extra, type: q.type };
+  if (extra.allowOther) {
+    qVal = {
+      ...qVal,
+      allowOtherText: extra.allowOtherText || "Enter any OTHER value",
+    };
+  }
+  if (extra.type === QUESTION_TYPES.entity) {
+    qVal = { ...qVal, type: QUESTION_TYPES.cascade, extra };
+  }
+  return qVal;
+};

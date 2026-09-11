@@ -20,6 +20,7 @@ import {
   processRepeatableQuestions,
   transformValue,
   getCascadeAnswerAPI,
+  normalizeWebformQuestion,
 } from "../../lib";
 import { pick, isEmpty } from "lodash";
 import { PageLoader, Breadcrumbs, DescriptionPanel } from "../../components";
@@ -333,31 +334,12 @@ const ManageDraftForm = () => {
       const { data: apiData } = await api.get(`/form/web/${formId}`);
       const questionGroups = apiData.question_group.map((qg) => {
         const questions = qg.question
-          .map((q) => {
-            let qVal = { ...q, required: isPublish ? q.required : false };
-
-            if (q?.extra) {
-              delete qVal.extra;
-              qVal = {
-                ...qVal,
-                ...q.extra,
-              };
-              if (q.extra?.allowOther) {
-                qVal = {
-                  ...qVal,
-                  allowOtherText: "Enter any OTHER value",
-                };
-              }
-              if (qVal?.type === "entity") {
-                qVal = {
-                  ...qVal,
-                  type: QUESTION_TYPES.cascade,
-                  extra: q?.extra,
-                };
-              }
-            }
-            return qVal;
-          })
+          .map((q) =>
+            normalizeWebformQuestion({
+              ...q,
+              required: isPublish ? q.required : false,
+            })
+          )
           .filter((x) => !x?.hidden);
         return {
           ...qg,

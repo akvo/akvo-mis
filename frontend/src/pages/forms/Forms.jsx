@@ -18,6 +18,7 @@ import {
   getCascadeAnswerAPI,
   processFileUploads,
   processEntityCascades,
+  normalizeWebformQuestion,
   processRepeatableQuestions,
   transformValue,
 } from "../../lib";
@@ -398,31 +399,7 @@ const Forms = () => {
       api.get(`/form/web/${formId}`).then((res) => {
         const questionGroups = res.data.question_group.map((qg) => {
           const questions = qg.question
-            .map((q) => {
-              let qVal = { ...q };
-
-              if (q?.extra) {
-                delete qVal.extra;
-                qVal = {
-                  ...qVal,
-                  ...q.extra,
-                };
-                if (q.extra?.allowOther) {
-                  qVal = {
-                    ...qVal,
-                    allowOtherText: "Enter any OTHER value",
-                  };
-                }
-                if (qVal?.type === "entity") {
-                  qVal = {
-                    ...qVal,
-                    type: QUESTION_TYPES.cascade,
-                    extra: q?.extra,
-                  };
-                }
-              }
-              return qVal;
-            })
+            .map(normalizeWebformQuestion)
             .filter((x) => !x?.hidden); // filter out hidden questions
           return {
             ...qg,
