@@ -4,6 +4,7 @@ import useChartResize from "./useChartResize";
 import useEChartsOption from "./useEChartsOption";
 import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Line, StackLine } from "akvo-charts";
+import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
@@ -22,6 +23,7 @@ const CategoryLine = ({ config, data, filters }) => {
     const seriesColors = labels.map(
       (name, idx) => catColors[name] || colors[idx % colors.length]
     );
+    const toolbox = buildToolboxConfig(wc, "line");
     return {
       color: seriesColors,
       tooltip: {
@@ -32,6 +34,7 @@ const CategoryLine = ({ config, data, filters }) => {
         data: labels,
         bottom: 0,
       },
+      toolbox: toolbox || { show: false },
       grid: { top: 20, right: 20, bottom: 40, left: 40, containLabel: true },
       xAxis: {
         type: "category",
@@ -70,23 +73,28 @@ CategoryLine.propTypes = {
 
 const VizLine = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
-  const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const hasCategory = Boolean(widgetConfig.category_question_id);
   const hasStack = Boolean(widgetConfig.stack_by);
+
+  const colors = Array.isArray(config?.color)
+    ? config.color
+    : widgetConfig.chart_colors || DEFAULT_COLORS;
+
+  const toolbox = buildToolboxConfig(widgetConfig, "line");
+  const { chartRef, boxRef } = useChartResize(toolbox);
+
+  const chartConfig = {
+    title: "",
+    color: colors,
+  };
+  const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   if (hasCategory) {
     return <CategoryLine config={config} data={data} filters={filters} />;
   }
 
   const Component = hasStack ? StackLine : Line;
-
-  const colors = Array.isArray(config?.color)
-    ? config.color
-    : widgetConfig.chart_colors || DEFAULT_COLORS;
-
-  const chartConfig = { title: "", color: colors };
-  const chartData = Array.isArray(data) ? data : [];
 
   if (chartData.length === 0) {
     return (

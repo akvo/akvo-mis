@@ -1,13 +1,14 @@
 import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useEChartsOption from "./useEChartsOption";
+import { buildToolboxConfig } from "./toolboxHelper";
 import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
 const VizScatter = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
-  const widgetConfig = config?.config || {};
+  const widgetConfig = useMemo(() => config?.config || {}, [config?.config]);
   const colors = widgetConfig.chart_colors || DEFAULT_COLORS;
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const xLabel = widgetConfig.x_axis_label || "Number of datapoints";
@@ -17,6 +18,7 @@ const VizScatter = ({ config, data, filters }) => {
     if (chartData.length === 0) {
       return null;
     }
+    const toolbox = buildToolboxConfig(widgetConfig, "scatter");
     return {
       color: colors,
       tooltip: {
@@ -32,6 +34,7 @@ const VizScatter = ({ config, data, filters }) => {
         },
       },
       legend: { show: false },
+      toolbox: toolbox || { show: false },
       grid: { top: 40, right: 20, bottom: 50, left: 60, containLabel: true },
       xAxis: {
         type: "value",
@@ -54,7 +57,7 @@ const VizScatter = ({ config, data, filters }) => {
         },
       ],
     };
-  }, [chartData, colors, xLabel, yLabel]);
+  }, [chartData, colors, widgetConfig, xLabel, yLabel]);
 
   const { boxRef } = useEChartsOption(option);
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * Keep an akvo-charts chart the size of its container.
@@ -21,13 +21,58 @@ import { useEffect, useRef } from "react";
  * resize. It also fixes a pre-existing gap: charts in this app currently
  * do not reflow when the window resizes.
  *
- * @returns {{chartRef: object, boxRef: object}} `chartRef` goes on the
+ * In addition, when `toolbox` is provided, this hook wraps `chartInstance.setOption`
+ * so that when `akvo-charts` initialises and sets chart options on initial mount or
+ * data update, the `toolbox` configuration is automatically merged in.
+ *
+ * @param {object|null} [toolbox] ECharts toolbox configuration object or null.
+ * @returns {{chartRef: function|object, boxRef: object}} `chartRef` goes on the
  *   akvo-charts component (it forwards the ECharts instance), `boxRef` on
  *   the wrapper whose size the chart should follow.
  */
-export const useChartResize = () => {
+export const useChartResize = (toolbox) => {
   const chartRef = useRef(null);
   const boxRef = useRef(null);
+  const toolboxRef = useRef(toolbox);
+  toolboxRef.current = toolbox;
+
+  const setChartRef = useCallback((chart) => {
+    chartRef.current = chart;
+    setChartRef.current = chart;
+    if (
+      chart &&
+      !chart.__mis_toolbox_patched &&
+      typeof chart.setOption === "function"
+    ) {
+      chart.__mis_toolbox_patched = true;
+      const originalSetOption = chart.setOption.bind(chart);
+      chart.setOption = (opts, ...args) => {
+        const tb = toolboxRef.current;
+        const finalOpts =
+          opts && typeof opts === "object"
+            ? {
+                ...opts,
+                toolbox: tb || { show: false },
+              }
+            : opts;
+        return originalSetOption(finalOpts, ...args);
+      };
+      if (toolboxRef.current) {
+        chart.setOption({ toolbox: toolboxRef.current });
+      }
+    }
+  }, []);
+
+  setChartRef.current = chartRef.current;
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (chart && typeof chart.setOption === "function") {
+      chart.setOption({
+        toolbox: toolbox || { show: false },
+      });
+    }
+  }, [toolbox]);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -60,7 +105,7 @@ export const useChartResize = () => {
     return () => observer.disconnect();
   }, []);
 
-  return { chartRef, boxRef };
+  return { chartRef: setChartRef, boxRef };
 };
 
 export default useChartResize;
