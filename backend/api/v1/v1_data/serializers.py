@@ -62,6 +62,30 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
         ]
 
 
+# A geoshape or geotrace answer is a bare coordinate ring,
+# `[[lat, lon], ...]`. The flat `geo` point shape `[9.03, 38.74]` is the
+# mistake a client is most likely to make and `isinstance(value, list)`
+# cannot tell the two apart, so a bad value is stored happily and then
+# breaks every `datapoint-list?form_id=...` request for that form - for
+# every device, including the repair path that would otherwise let one
+# recover. There is no safe place downstream to drop a single bad row
+# either: the payload and `geometry_total` have to describe the same
+# set, so a skip there would reintroduce a mismatch the device can never
+# reconcile. The write boundary is the only place this can be refused.
+def is_coordinate_ring(value):
+    return isinstance(value, list) and all(
+        isinstance(point, (list, tuple))
+        and len(point) == 2
+        # `isinstance(True, int)` is True in Python, and a boolean is
+        # not a latitude.
+        and all(
+            isinstance(axis, (int, float)) and not isinstance(axis, bool)
+            for axis in point
+        )
+        for point in value
+    )
+
+
 class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
     value = UnvalidatedField(allow_null=False)
     question = CustomPrimaryKeyRelatedField(queryset=Questions.objects.none())
@@ -97,6 +121,14 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                     "Valid list value is required for Question:{0}".format(
                         question.id
                     )
+                )
+            if question.type in [
+                QuestionTypes.geoshape,
+                QuestionTypes.geotrace,
+            ] and not is_coordinate_ring(attrs.get("value")):
+                raise ValidationError(
+                    "Valid coordinate list is required for Question:{0}"
+                    .format(question.id)
                 )
             if isinstance(attrs.get("value"), list) and question.type in [
                 QuestionTypes.input,
@@ -171,6 +203,16 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
         ]:
             raise ValidationError(
                 "Valid number value is required for Question:{0}".format(
+                    attrs.get("question").id
+                )
+            )
+
+        if attrs.get("question").type in [
+            QuestionTypes.geoshape,
+            QuestionTypes.geotrace,
+        ] and not is_coordinate_ring(attrs.get("value")):
+            raise ValidationError(
+                "Valid coordinate list is required for Question:{0}".format(
                     attrs.get("question").id
                 )
             )

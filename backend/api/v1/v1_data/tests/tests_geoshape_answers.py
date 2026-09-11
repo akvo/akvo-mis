@@ -96,6 +96,34 @@ class GeoshapeValidationTestCase(TestCase):
         with self.assertRaises(ValidationError):
             self.validate("9.03,38.74", is_draft=True)
 
+    def test_a_flat_point_pair_is_rejected(self):
+        """The `geo` point shape. A list, so the type check passes, but
+        `point[0]` on a float raises in `bounding_box` and takes the
+        whole form's datapoint-list down - repair path included."""
+        with self.assertRaises(ValidationError):
+            self.validate([9.03, 38.74])
+
+    def test_a_non_numeric_pair_is_rejected(self):
+        """No crash, worse: a string bounding box in the payload."""
+        with self.assertRaises(ValidationError):
+            self.validate([["a", "b"]])
+
+    def test_a_wrong_arity_row_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self.validate([[1.0, 2.0, 3.0]])
+
+    def test_a_boolean_is_not_a_coordinate(self):
+        """`isinstance(True, int)` is True, so a naive number check
+        would let this through."""
+        with self.assertRaises(ValidationError):
+            self.validate([[True, False]])
+
+    def test_malformed_rows_are_rejected_on_drafts_too(self):
+        for bad in ([9.03, 38.74], [["a", "b"]], [[1.0, 2.0, 3.0]]):
+            with self.subTest(value=bad):
+                with self.assertRaises(ValidationError):
+                    self.validate(bad, is_draft=True)
+
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
 class GeoshapeSeederTestCase(TestCase):
