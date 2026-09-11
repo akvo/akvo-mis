@@ -75,7 +75,7 @@ def geometry_answers(data_ids, question_ids):
     return Answers.objects.filter(
         data_id__in=data_ids,
         question_id__in=question_ids,
-    ).exclude(options__isnull=True)
+    ).exclude(options__isnull=True).exclude(options=[])
 
 
 def geometry_by_data_id(data_ids, question_ids):

@@ -5,6 +5,7 @@ from rest_framework import status
 from api.v1.v1_data.models import Answers, FormData
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
+from api.v1.v1_mobile.geometry import geometry_answers
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
@@ -143,6 +144,26 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
         rows = {r["name"]: r for r in response.json()["data"]}
         self.assertEqual(rows["Plot B"]["geometry"], [])
         self.assertEqual(len(rows["Plot A"]["geometry"]), 1)
+
+    def test_stored_empty_list_is_excluded_from_payload_and_count(self):
+        """A stored `options == []` is JSON '[]', not SQL NULL, so a
+        naive `options__isnull=True` filter alone would leave it in the
+        count while the payload loop drops it - a permanent mismatch
+        the device could never reconcile. Both paths must agree, by
+        construction: geometry_answers is the query the count will be
+        built on (Task 6), and the payload is built from the same call.
+        """
+        empty = self.make_datapoint(self.form, "Plot Empty", [])
+        response = self.get_list(f"?form_id={self.form.id}")
+        rows = {r["name"]: r for r in response.json()["data"]}
+        self.assertEqual(rows["Plot Empty"]["geometry"], [])
+
+        self.assertEqual(
+            geometry_answers(
+                [empty.id], [self.form.plot_question.id]
+            ).count(),
+            0,
+        )
 
     def test_repeat_group_answers_produce_multiple_entries(self):
         """One entry per geoshape ANSWER, not per datapoint. A singular
