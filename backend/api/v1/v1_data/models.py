@@ -207,6 +207,16 @@ class Answers(models.Model):
         q = self.question
         qname = f"{self.question.name}"
         if q.type in [
+            QuestionTypes.geoshape,
+            QuestionTypes.geotrace,
+        ]:
+            # A ring of coordinate pairs has to collapse into one cell.
+            # The pipe-joined form used for the flat list types would
+            # render Python list reprs - readable by nobody and
+            # parseable by nothing. JSON round-trips back into exactly
+            # the `[[lat, lon], ...]` the API and the mobile app use.
+            answer = json.dumps(self.options)
+        elif q.type in [
             QuestionTypes.geo,
             QuestionTypes.option,
             QuestionTypes.multiple_option,
@@ -241,6 +251,8 @@ class Answers(models.Model):
             QuestionTypes.geo,
             QuestionTypes.option,
             QuestionTypes.multiple_option,
+            QuestionTypes.geoshape,
+            QuestionTypes.geotrace,
         ]:
             answer = self.options
         elif q.type in [
