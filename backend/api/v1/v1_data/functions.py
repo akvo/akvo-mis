@@ -7,7 +7,8 @@ from datetime import timedelta
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Questions
 from api.v1.v1_data.models import Answers, FormData
-from api.v1.v1_profile.models import Entity, EntityData
+from api.v1.v1_profile.models import Administration, Entity, EntityData
+from api.v1.v1_users.models import Organisation
 from faker import Faker
 
 fake = Faker()
@@ -35,6 +36,59 @@ def create_cache(name, resp, timeout=None):
     today = datetime.now().strftime("%Y%m%d")
     cache_name = f"{today}-{name}"
     cache.set(cache_name, resp, timeout=timeout)
+
+
+def answer_fields(question: Questions, value):
+    """Map a submitted answer value onto Answers' three value columns.
+
+    Every write path routes through here: the three submit serializers
+    and the two edit endpoints. It used to be five copies, and they
+    drifted. The edit copies silently lost the cascade and autofield
+    branches, so editing a cascade answer wiped its stored label and
+    editing an autofield pushed a string into a FloatField. One dispatch
+    is what stops the next question type being missed the same way.
+
+    Returns (name, value, options), in the order the callers assign them.
+    """
+    if question.type in [
+        QuestionTypes.geo,
+        QuestionTypes.option,
+        QuestionTypes.multiple_option,
+    ]:
+        return None, None, value
+
+    if question.type in [
+        QuestionTypes.input,
+        QuestionTypes.text,
+        QuestionTypes.image,
+        QuestionTypes.date,
+        QuestionTypes.autofield,
+        QuestionTypes.attachment,
+        QuestionTypes.signature,
+    ]:
+        return value, None, None
+
+    if question.type == QuestionTypes.cascade:
+        endpoint = (question.api or {}).get("endpoint", "")
+        extra_type = (question.extra or {}).get("type")
+        if "organisation" in endpoint:
+            name = Organisation.objects.filter(pk=value).values_list(
+                "name", flat=True
+            ).first()
+            return name, None, None
+        if "entity-data" in endpoint or extra_type == "entity":
+            name = EntityData.objects.filter(pk=value).values_list(
+                "name", flat=True
+            ).first()
+            return name, None, None
+        # An administration cascade keeps both: the label for display and
+        # the integer id for joins.
+        name = Administration.objects.filter(pk=value).values_list(
+            "name", flat=True
+        ).first()
+        return name, value, None
+
+    return None, value, None
 
 
 def set_answer_data(
