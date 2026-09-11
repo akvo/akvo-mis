@@ -232,23 +232,33 @@ export const processRepeatableQuestions = (values, repeatableQuestions) => {
   return repeatableAnswers;
 };
 
+// An "allow other" answer is free text that matches no option, so an
+// unmatched value is shown as-is instead of "-".
+const optionLabel = (record, v) =>
+  record?.option?.find((o) => o.value === v)?.label || v;
+
+const optionDisplayValue = (record, value) => {
+  if (!value?.length) {
+    return "-";
+  }
+  if (record.type === QUESTION_TYPES.multiple_option) {
+    return (
+      value
+        .map((v) => optionLabel(record, v))
+        .filter(Boolean)
+        .join(", ") || "-"
+    );
+  }
+  return optionLabel(record, value[0]) || "-";
+};
+
 export const getAnswerDisplayValue = (record, value) => {
   switch (record.type) {
     case QUESTION_TYPES.date:
       return value ? moment(value).format("YYYY-MM-DD") : "-";
     case QUESTION_TYPES.multiple_option:
-      return value?.length
-        ? value
-            ?.map((v) => {
-              const option = record?.option?.find((o) => o.value === v);
-              return option?.label;
-            })
-            ?.join(", ") || "-"
-        : "-";
     case QUESTION_TYPES.option:
-      return value?.length
-        ? record?.option?.find((o) => o.value === value[0])?.label || "-"
-        : "-";
+      return optionDisplayValue(record, value);
     default:
       return value || value === 0 ? value : "-";
   }
@@ -257,19 +267,35 @@ export const getAnswerDisplayValue = (record, value) => {
 export const getLastAnswerDisplayValue = (record, oldValue) => {
   switch (record.type) {
     case QUESTION_TYPES.multiple_option:
-      return oldValue?.length
-        ? oldValue
-            ?.map((v) => {
-              const option = record?.option?.find((o) => o.value === v);
-              return option?.label;
-            })
-            ?.join(", ") || "-"
-        : "-";
     case QUESTION_TYPES.option:
-      return oldValue?.length
-        ? record?.option?.find((o) => o.value === oldValue[0])?.label || "-"
-        : "-";
+      return optionDisplayValue(record, oldValue);
     default:
       return oldValue || oldValue === 0 ? oldValue : "-";
   }
+};
+
+/**
+ * Flatten a `/form/web` question for akvo-react-form.
+ *
+ * `extra` is spread onto the question (allowOther, api hints, ...) but
+ * `extra.type` is a cascade sub-type ("administration" | "entity"), not a
+ * render type — the library only knows "cascade", so an unknown type falls
+ * back to a plain text input. Always keep the backend `type`.
+ */
+export const normalizeWebformQuestion = (q) => {
+  if (!q?.extra) {
+    return { ...q };
+  }
+  const { extra, ...rest } = q;
+  let qVal = { ...rest, ...extra, type: q.type };
+  if (extra.allowOther) {
+    qVal = {
+      ...qVal,
+      allowOtherText: extra.allowOtherText || "Enter any OTHER value",
+    };
+  }
+  if (extra.type === QUESTION_TYPES.entity) {
+    qVal = { ...qVal, type: QUESTION_TYPES.cascade, extra };
+  }
+  return qVal;
 };

@@ -13,6 +13,8 @@ import { UndoOutlined, SaveOutlined } from "@ant-design/icons";
 import moment from "moment";
 import PropTypes from "prop-types";
 
+const OTHER_VALUE = "__other__";
+
 const EditableCell = ({
   record,
   parentId,
@@ -127,25 +129,56 @@ const EditableCell = ({
     }
   }, [record, locationName, lastValue]);
 
+  // "Allow other" questions accept free text that matches no option. The
+  // single-choice Select gets a synthetic "Other" entry that reveals an
+  // input; the multiple-choice Select uses tags mode so text can be typed.
+  const allowOther = record?.extra?.allowOther || false;
+  const otherText = record?.extra?.allowOtherText || "Other";
+  const singleValue = value?.length ? value[0] : null;
+  const otherSelected =
+    allowOther &&
+    typeof singleValue === "string" &&
+    !record?.option?.some((o) => o.value === singleValue);
+  const otherEmpty = otherSelected && !singleValue;
+
   const renderAnswerInput = () => {
     return record.type === QUESTION_TYPES.option ? (
-      <Select
-        style={{ width: "100%" }}
-        value={value?.length ? value[0] : null}
-        onChange={(e) => {
-          setValue([e]);
-        }}
-        disabled={disabled}
-      >
-        {record.option.map((o) => (
-          <Option key={o.id} value={o?.value} title={o?.label}>
-            {o?.label}
-          </Option>
-        ))}
-      </Select>
+      <>
+        <Select
+          style={{ width: "100%" }}
+          value={otherSelected ? OTHER_VALUE : singleValue}
+          onChange={(e) => {
+            setValue([e === OTHER_VALUE ? "" : e]);
+          }}
+          disabled={disabled}
+        >
+          {record.option.map((o) => (
+            <Option key={o.id} value={o?.value} title={o?.label}>
+              {o?.label}
+            </Option>
+          ))}
+          {allowOther && (
+            <Option key={OTHER_VALUE} value={OTHER_VALUE} title={otherText}>
+              {otherText}
+            </Option>
+          )}
+        </Select>
+        {otherSelected && (
+          <Input
+            autoFocus
+            style={{ marginTop: 8 }}
+            placeholder={otherText}
+            value={singleValue}
+            onChange={(e) => {
+              setValue([e.target.value]);
+            }}
+            disabled={disabled}
+          />
+        )}
+      </>
     ) : record.type === QUESTION_TYPES.multiple_option ? (
       <Select
-        mode="multiple"
+        mode={allowOther ? "tags" : "multiple"}
         style={{ width: "100%" }}
         value={value?.filter(Boolean)}
         onChange={(e) => {
@@ -199,6 +232,7 @@ const EditableCell = ({
           updateCell(record.id, parentId, value);
           setEditing(false);
         }}
+        disabled={otherEmpty}
         icon={<SaveOutlined />}
         style={{ marginRight: "8px" }}
       >
@@ -270,6 +304,7 @@ EditableCell.propTypes = {
     type: PropTypes.string.isRequired,
     value: PropTypes.oneOfType([PropTypes.any, PropTypes.oneOf([null])]),
     option: PropTypes.array,
+    extra: PropTypes.object,
     newValue: PropTypes.any,
   }),
   parentId: PropTypes.number.isRequired,

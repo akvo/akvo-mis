@@ -119,9 +119,9 @@ const MonitoringDetail = () => {
         : f?.content?.parent === parseInt(form, 10)
     );
     return forms
-      .map((f) => f.content.question_group)
+      .map((f) => f?.content?.question_group || [])
       .flat()
-      .filter((qg) => qg.question)
+      .filter((qg) => qg?.question)
       .map((qg) => qg.question)
       .flat()
       .filter((q) => questionOverviewTypes.includes(q.type))
@@ -177,8 +177,23 @@ const MonitoringDetail = () => {
             type: "success",
             message: `${deleteData.name} deleted`,
           });
-          setDataset(dataset.filter((d) => d.id !== deleteData.id));
-          setDeleteData(null);
+          const isDatapoint =
+            Number(deleteData.id) === Number(parentId) ||
+            (selectedFormData?.id &&
+              Number(deleteData.id) === Number(selectedFormData.id));
+          if (isDatapoint) {
+            store.update((s) => {
+              s.selectedFormData = null;
+            });
+            setDeleteData(null);
+            navigate("/control-center/data");
+          } else {
+            setDataset((prevDataset) =>
+              prevDataset.filter((d) => d.id !== deleteData.id)
+            );
+            setDeleteData(null);
+            setTotalCount((prev) => Math.max(0, prev - 1));
+          }
         })
         .catch((err) => {
           notify({
@@ -215,9 +230,9 @@ const MonitoringDetail = () => {
   useEffect(() => {
     if (questionGroups.length === 0 && dataset.length > 0) {
       store.update((s) => {
-        s.questionGroups = getForms().find(
-          (f) => f.id === dataset[0]?.form
-        ).content.question_group;
+        s.questionGroups =
+          getForms().find((f) => f.id === dataset[0]?.form)?.content
+            ?.question_group || [];
       });
     }
   }, [questionGroups, dataset]);
