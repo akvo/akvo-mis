@@ -51,7 +51,11 @@ from .serializers import (
     SyncDeviceParamsSerializer,
     DraftFormDataSerializer,
 )
-from .geometry import enabled_geoshape_question_ids, geometry_by_data_id
+from .geometry import (
+    enabled_geoshape_question_ids,
+    geometry_answers,
+    geometry_by_data_id,
+)
 from .models import MobileAssignment, MobileApk
 from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
 from api.v1.v1_forms.constants import FormStatus
@@ -689,6 +693,33 @@ def get_forms_tree(request, version):
     return Response(result, status=status.HTTP_200_OK)
 
 
+# Schema-only shapes for the `geometry` row field below. Kept separate
+# from `MobileDataPointDownloadListSerializer` because that field is
+# injected in `to_representation`, not declared, so a real field on the
+# class would appear on every row and break the flag-off/no-form_id
+# omission the tests in tests_mobile_datapoint_geometry.py pin down.
+_geometry_bbox_schema = inline_serializer(
+    "MobileDatapointGeometryBbox",
+    fields={
+        "min_lat": serializers.FloatField(),
+        "max_lat": serializers.FloatField(),
+        "min_lon": serializers.FloatField(),
+        "max_lon": serializers.FloatField(),
+    },
+)
+_geometry_entry_schema = inline_serializer(
+    "MobileDatapointGeometryEntry",
+    fields={
+        "question_id": serializers.IntegerField(),
+        "index": serializers.IntegerField(),
+        "coordinates": serializers.ListField(
+            child=serializers.ListField(child=serializers.FloatField())
+        ),
+        "bbox": _geometry_bbox_schema,
+    },
+)
+
+
 @extend_schema(
     # Add form_id as query parameter for
     # filtering datapoints related to a specific form
@@ -698,16 +729,65 @@ def get_forms_tree(request, version):
             required=False,
             type=OpenApiTypes.NUMBER,
             location=OpenApiParameter.QUERY,
-        )
+        ),
+        OpenApiParameter(
+            name="geometry_full",
+            required=False,
+            type=OpenApiTypes.BOOL,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "Ignore the sync cursor and return every geometry "
+                "candidate for this form. The device's repair path after "
+                "its indexed row count disagrees with geometry_total. "
+                "Ignored without form_id."
+            ),
+        ),
     ],
     responses={
         (200, "application/json"): inline_serializer(
             "MobileDeviceDownloadDatapointListResponse",
             fields={
-                "total": serializers.IntegerField(),
-                "data": MobileDataPointDownloadListSerializer(many=True),
+                "total": serializers.IntegerField(
+                    help_text=(
+                        "Rows matching the sync cursor, i.e. this "
+                        "delta. NOT the candidate count."
+                    )
+                ),
+                "data": inline_serializer(
+                    "MobileDataPointDownloadListRow",
+                    fields={
+                        "id": serializers.IntegerField(),
+                        "form_id": serializers.IntegerField(),
+                        "name": serializers.CharField(),
+                        "administration_id": serializers.IntegerField(),
+                        "url": serializers.CharField(),
+                        "last_updated": serializers.DateTimeField(),
+                        "geometry": serializers.ListField(
+                            child=_geometry_entry_schema,
+                            required=False,
+                            help_text=(
+                                "Present only with form_id, "
+                                "detectOverlaps and the geometry flag "
+                                "on. Empty list means no polygon for "
+                                "this datapoint, not that geometry is "
+                                "absent."
+                            ),
+                        ),
+                    },
+                    many=True,
+                ),
                 "page": serializers.IntegerField(),
                 "current": serializers.IntegerField(),
+                "geometry_total": serializers.IntegerField(
+                    required=False,
+                    help_text=(
+                        "Geoshape answers this assignment can see for "
+                        "this form, ignoring the sync cursor. The device "
+                        "compares this against its own indexed row count "
+                        "and must refuse to validate on mismatch. Present "
+                        "only with form_id and detectOverlaps."
+                    ),
+                ),
             },
         )
     },
@@ -764,16 +844,25 @@ def get_datapoint_download_list(request, version):
     geometry_question_ids = (
         enabled_geoshape_question_ids(find_form) if form_id else []
     )
-    if assignment.last_synced_at:
-        queryset = queryset.filter(
-            Q(created__gte=assignment.last_synced_at)
-            | Q(updated__gte=assignment.last_synced_at)
-        )
-
     queryset = queryset.filter(
         is_pending=False,
         is_draft=False,
     )
+    # Held before the cursor narrows it. `geometry_total` has to describe
+    # the whole candidate set: a device that lost a page would otherwise
+    # compare its gapped index against an equally gapped count and
+    # conclude it was complete. See spec D-5.
+    candidates = queryset
+
+    geometry_full = (
+        bool(geometry_question_ids)
+        and request.GET.get("geometry_full") == "true"
+    )
+    if assignment.last_synced_at and not geometry_full:
+        queryset = queryset.filter(
+            Q(created__gte=assignment.last_synced_at)
+            | Q(updated__gte=assignment.last_synced_at)
+        )
     queryset = queryset.values(
         "uuid",
         "id",
@@ -795,6 +884,14 @@ def get_datapoint_download_list(request, version):
             instance, many=True, context=context
         ).data
     )
+    if geometry_question_ids:
+        # Deliberately from `candidates`, not `queryset`: the cursor-free
+        # set. `total` stays the delta count. These are different numbers
+        # and the API documentation says so, because a reader who
+        # conflates them rebuilds the bug this exists to prevent.
+        response.data["geometry_total"] = geometry_answers(
+            candidates.values("id"), geometry_question_ids
+        ).count()
     page = response.data["current"]
     total_page = response.data["total_page"]
     if page == total_page and not form_id:

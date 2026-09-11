@@ -1,5 +1,6 @@
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from rest_framework import status
 
 from api.v1.v1_data.models import Answers, FormData
@@ -190,3 +191,84 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
                 self.form.plot_question.save()
                 response = self.get_list(f"?form_id={self.form.id}")
                 self.assertNotIn(b"geometry", response.content)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class MobileDatapointGeometryTotalTestCase(MobileDatapointGeometryTestCase):
+    """The completeness invariant.
+
+    `total` is the cursor-filtered delta. `geometry_total` is the absolute
+    candidate count. They are deliberately different numbers.
+    """
+
+    def test_geometry_total_counts_every_candidate(self):
+        self.make_datapoint(self.form, "Plot B", ADDIS_PLOT)
+        response = self.get_list(f"?form_id={self.form.id}")
+        self.assertEqual(response.json()["geometry_total"], 2)
+
+    def test_geometry_total_ignores_the_sync_cursor(self):
+        """The whole point. A device that has already synced sees a delta
+        of zero rows and still learns there are two candidates it must be
+        holding before it may trust a no-overlap result."""
+        self.make_datapoint(self.form, "Plot B", ADDIS_PLOT)
+        self.assignment.last_synced_at = timezone.now()
+        self.assignment.save()
+        response = self.get_list(f"?form_id={self.form.id}")
+        body = response.json()
+        self.assertEqual(body["total"], 0)
+        self.assertEqual(body["geometry_total"], 2)
+
+    def test_geometry_total_is_the_same_on_every_page(self):
+        for n in range(3):
+            self.make_datapoint(self.form, f"Plot P{n}", ADDIS_PLOT)
+        first = self.get_list(f"?form_id={self.form.id}&page_size=2&page=1")
+        second = self.get_list(f"?form_id={self.form.id}&page_size=2&page=2")
+        self.assertEqual(first.json()["geometry_total"], 4)
+        self.assertEqual(second.json()["geometry_total"], 4)
+
+    def test_geometry_total_counts_answers_not_datapoints(self):
+        """One row per geoshape answer, matching GEO-006's index, so the
+        device's COUNT(*) and this number describe the same unit."""
+        other = [[1.0, 2.0], [1.1, 2.0], [1.1, 2.1]]
+        Answers.objects.create(
+            data=self.datapoint, question=self.form.plot_question,
+            options=other, created_by=self.user, index=1,
+        )
+        response = self.get_list(f"?form_id={self.form.id}")
+        self.assertEqual(response.json()["geometry_total"], 2)
+
+    def test_geometry_full_returns_the_whole_set(self):
+        """The repair path. After a count mismatch the device re-lists
+        without the cursor and rebuilds its index."""
+        self.make_datapoint(self.form, "Plot B", ADDIS_PLOT)
+        self.assignment.last_synced_at = timezone.now()
+        self.assignment.save()
+        delta = self.get_list(f"?form_id={self.form.id}")
+        full = self.get_list(f"?form_id={self.form.id}&geometry_full=true")
+        self.assertEqual(delta.json()["total"], 0)
+        self.assertEqual(full.json()["total"], 2)
+        self.assertEqual(len(full.json()["data"]), 2)
+
+    def test_no_geometry_total_when_the_flag_is_off(self):
+        self.make_datapoint(self.plain_form, "Plain A", ADDIS_PLOT)
+        response = self.get_list(f"?form_id={self.plain_form.id}")
+        self.assertNotIn("geometry_total", response.json())
+
+    def test_no_geometry_total_without_form_id(self):
+        response = self.get_list()
+        self.assertNotIn("geometry_total", response.json())
+
+    def test_geometry_full_without_form_id_is_ignored(self):
+        """There is no geometry on that path to make full."""
+        response = self.get_list("?geometry_full=true")
+        self.assertNotIn("geometry_total", response.json())
+        self.assertNotIn(b"geometry", response.content)
+
+    def test_the_count_and_the_payload_describe_the_same_set(self):
+        """If these ever disagree the device's comparison never balances
+        and it refuses to validate forever."""
+        self.make_datapoint(self.form, "Plot B", ADDIS_PLOT)
+        response = self.get_list(f"?form_id={self.form.id}&geometry_full=true")
+        body = response.json()
+        served = sum(len(row["geometry"]) for row in body["data"])
+        self.assertEqual(served, body["geometry_total"])
