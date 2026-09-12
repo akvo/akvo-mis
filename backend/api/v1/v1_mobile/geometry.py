@@ -21,22 +21,24 @@ from api.v1.v1_forms.models import Questions
 def enabled_geoshape_question_ids(form):
     """Geoshape questions on this form that opted into overlap detection.
 
-    The gate is deliberately strict: only `is True` counts. GEO-010 has
-    not validated `extra.geoConfig` yet, and GEO-009 notes the editor
-    array-wraps values, so `"true"` and `["true"]` can both arrive here.
-    Anything else means off. Failing open would hand the device a
-    candidate set nobody promised was complete, which is the exact
-    failure this feature exists to prevent.
+    The gate is deliberately strict. GEO-010 has not validated
+    `extra.geoConfig` yet, and GEO-009 notes the editor array-wraps
+    values, so `"true"` and `["true"]` can both arrive here. Anything
+    that is not the real boolean means off. Failing open would hand the
+    device a candidate set nobody promised was complete, which is the
+    exact failure this feature exists to prevent.
+
+    The `=True` lookup carries that strictness: Django encodes the
+    right-hand side as JSON, so it matches `true` and not `"true"`,
+    `["true"]`, `1` or a missing key.
     """
-    ids = []
-    questions = Questions.objects.filter(
-        form=form, type=QuestionTypes.geoshape
-    ).only("id", "extra")
-    for question in questions:
-        geo_config = (question.extra or {}).get("geoConfig") or {}
-        if geo_config.get("detectOverlaps") is True:
-            ids.append(question.id)
-    return ids
+    return list(
+        Questions.objects.filter(
+            form=form,
+            type=QuestionTypes.geoshape,
+            extra__geoConfig__detectOverlaps=True,
+        ).values_list("id", flat=True)
+    )
 
 
 def bounding_box(coordinates):
@@ -52,8 +54,7 @@ def bounding_box(coordinates):
     spanning the globe. Plot boundaries do not, and GEO-006's range
     queries could not use such a bbox anyway.
     """
-    latitudes = [point[0] for point in coordinates]
-    longitudes = [point[1] for point in coordinates]
+    latitudes, longitudes = zip(*coordinates)
     return {
         "min_lat": min(latitudes),
         "max_lat": max(latitudes),

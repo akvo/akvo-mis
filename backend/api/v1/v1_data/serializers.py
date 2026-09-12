@@ -73,6 +73,9 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
 # set, so a skip there would reintroduce a mismatch the device can never
 # reconcile. The write boundary is the only place this can be refused.
 def is_coordinate_ring(value):
+    # The `isinstance(value, list)` clause is load-bearing: it is why
+    # geoshape and geotrace are absent from the plain list-check branches
+    # in `validate` below. Do not drop it and do not re-add them there.
     return isinstance(value, list) and all(
         isinstance(point, (list, tuple))
         and len(point) == 2
@@ -114,8 +117,6 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                 QuestionTypes.geo,
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
-                QuestionTypes.geoshape,
-                QuestionTypes.geotrace,
             ] and not isinstance(attrs.get("value"), list):
                 raise ValidationError(
                     "Valid list value is required for Question:{0}".format(
@@ -171,8 +172,6 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
             QuestionTypes.geo,
             QuestionTypes.option,
             QuestionTypes.multiple_option,
-            QuestionTypes.geoshape,
-            QuestionTypes.geotrace,
         ]:
             raise ValidationError(
                 "Valid list value is required for Question:{0}".format(

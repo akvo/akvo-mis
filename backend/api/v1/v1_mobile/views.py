@@ -693,53 +693,31 @@ def get_forms_tree(request, version):
     return Response(result, status=status.HTTP_200_OK)
 
 
-# Schema-only shapes for the `geometry` row field below. Kept off
-# `MobileDataPointDownloadListSerializer` because that field is
-# injected in `to_representation`, not declared, so a real field on the
-# live class would appear on every row and break the flag-off/no-form_id
-# omission the tests in tests_mobile_datapoint_geometry.py pin down.
-_geometry_bbox_schema = inline_serializer(
-    "MobileDatapointGeometryBbox",
-    fields={
-        "min_lat": serializers.FloatField(),
-        "max_lat": serializers.FloatField(),
-        "min_lon": serializers.FloatField(),
-        "max_lon": serializers.FloatField(),
-    },
-)
-_geometry_entry_schema = inline_serializer(
-    "MobileDatapointGeometryEntry",
-    fields={
-        "question_id": serializers.IntegerField(),
-        "index": serializers.IntegerField(),
-        "coordinates": serializers.ListField(
-            child=serializers.ListField(child=serializers.FloatField())
-        ),
-        "bbox": _geometry_bbox_schema,
-    },
-)
-
-
 # Documentation only - referenced from `responses=`, never instantiated
 # to serialize a row. It subclasses the real serializer rather than
 # restating its six fields, so the documented row cannot drift from the
 # served one and `url` keeps the `format: uri` its
 # `@extend_schema_field` gives it. `geometry` is declared here and not
-# on the parent for the reason above: on the parent it would be emitted
-# on every row, including the flag-off and no-form_id responses that
-# have to stay byte-identical to what the device gets today. No
-# docstring, because drf-spectacular would publish it as the schema's
-# description.
+# on the parent because on the parent it would be emitted on every row,
+# including the flag-off and no-form_id responses that have to stay
+# byte-identical to what the device gets today. No docstring, because
+# drf-spectacular would publish it as the schema's description.
+#
+# The entry shape is described in help_text rather than as nested
+# inline_serializers. Spelling it out in the schema cost thirty lines to
+# restate what this endpoint's own response already shows.
 class MobileDataPointDownloadListRowSerializer(
     MobileDataPointDownloadListSerializer
 ):
     geometry = serializers.ListField(
-        child=_geometry_entry_schema,
+        child=serializers.DictField(),
         required=False,
         help_text=(
-            "Present only with form_id, detectOverlaps and the geometry "
-            "flag on. Empty list means no polygon for this datapoint, "
-            "not that geometry is absent."
+            "One entry per geoshape answer: question_id, index, "
+            "coordinates as [[lat, lon], ...], and bbox with min_lat, "
+            "max_lat, min_lon, max_lon. Present only with form_id, "
+            "detectOverlaps and the geometry flag on. Empty list means "
+            "no polygon for this datapoint, not that geometry is absent."
         ),
     )
 
