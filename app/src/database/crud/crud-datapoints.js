@@ -1,5 +1,21 @@
 import sql from '../sql';
 
+/**
+ * Parse the stored answers column. A row can carry NULL (a datapoint whose
+ * JSON file was missing on the server when it synced) or a corrupt string;
+ * both read as "no answers" rather than crashing the caller.
+ */
+export const parseAnswers = (raw) => {
+  if (!raw || typeof raw !== 'string') {
+    return null;
+  }
+  try {
+    return JSON.parse(raw.replace(/''/g, "'"));
+  } catch (e) {
+    return null;
+  }
+};
+
 const selectDataPointById = async (db, { id }) => {
   const current = await sql.getFirstRow(db, 'datapoints', { id });
   if (!current) {
@@ -7,7 +23,7 @@ const selectDataPointById = async (db, { id }) => {
   }
   return {
     ...current,
-    json: JSON.parse(current.json.replace(/''/g, "'")),
+    json: parseAnswers(current.json),
   };
 };
 
@@ -210,7 +226,7 @@ const dataPointsQuery = () => ({
     }
     return {
       ...res,
-      json: res?.json ? JSON.parse(res.json.replace(/''/g, "'")) : null,
+      json: parseAnswers(res.json),
     };
   },
   deleteDraftIdIsNull: async (db) => {
