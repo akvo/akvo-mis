@@ -360,9 +360,54 @@ const uiText = {
     formBuilderImportFormTypeRequired: "Please select a form type",
     formBuilderImportSkippedCount: (count) =>
       `${count} unsupported row(s) will be skipped`,
-    formBuilderImportXlsformNoticeTitle: "XLSForm Compatibility Note",
-    formBuilderImportXlsformNoticeDesc:
-      "Akvo MIS imports standard question types, options, multi-language labels, validations, and skip-logic. Follow-up questions for 'Other' choices are preserved as dependent questions (which you can optionally streamline using 'Allow other' in the Form Editor). Advanced features such as dynamic calculations, programmatic repeat counts, or complex XPath expressions are skipped. Please review any warnings below and verify the form in the Form Editor after import.",
+    formBuilderImportXlsformNoticeTitle: "This import needs a quick review",
+    formBuilderImportXlsformNoticeDesc: (
+      <div style={{ textAlign: "left", fontSize: 13, lineHeight: 1.5 }}>
+        <p style={{ margin: "4px 0 8px 0", textAlign: "left" }}>
+          Your XLSForm was imported successfully, but Kobo and Akvo MIS
+          don&apos;t work identically and some form logic may need manual
+          adjustment to fully match your original. Please review the warnings
+          below and test the form before publishing.
+        </p>
+        <p
+          style={{
+            margin: "8px 0 4px 0",
+            fontWeight: 600,
+            textAlign: "left",
+          }}
+        >
+          Common things to check:
+        </p>
+        <ul
+          style={{
+            margin: "0 0 8px 0",
+            paddingLeft: 18,
+            textAlign: "left",
+            listStyleType: "disc",
+          }}
+        >
+          <li style={{ marginBottom: 4 }}>
+            Calculated fields – formulas may need to be re-verified
+          </li>
+          <li style={{ marginBottom: 4 }}>
+            Dynamic repeat counts – repeat groups driven by a variable may need
+            manual setup
+          </li>
+          <li style={{ marginBottom: 4 }}>
+            Group relevance / skip logic – conditional group visibility should
+            be double-checked
+          </li>
+          <li style={{ marginBottom: 4 }}>
+            &quot;Other&quot; follow-up questions – these aren&apos;t
+            auto-converted; add them manually if needed
+          </li>
+        </ul>
+        <p style={{ margin: "8px 0 0 0", textAlign: "left" }}>
+          We recommend previewing the full form and testing a submission before
+          it goes live.
+        </p>
+      </div>
+    ),
     formBuilderImportUpdateTitle: (name) => `Update existing form "${name}"?`,
     formBuilderImportUpdateDesc: (count) =>
       `A form with the same ID already exists in this environment` +
