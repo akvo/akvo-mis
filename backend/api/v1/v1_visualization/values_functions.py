@@ -467,7 +467,8 @@ def handle_option_question(form, question, params):
     if stack_by == "administration" and group_by in (
         "month", "date"
     ):
-        admin_level = params.get("admin_level", 1)
+        raw_level = params.get("admin_level")
+        admin_level = raw_level if raw_level is not None else 1
         admin_groups = _build_admin_groups(
             data_ids, admin_level
         )
@@ -1476,7 +1477,8 @@ def handle_stack_by_administration(
 ):
     """Handle stack_by=administration: one line per admin area."""
     group_by = params.get("group_by")
-    admin_level = params.get("admin_level", 1)
+    raw_level = params.get("admin_level")
+    admin_level = raw_level if raw_level is not None else 1
 
     admin_groups = _build_admin_groups(data_ids, admin_level)
     admin_names = sorted(admin_groups.keys())
