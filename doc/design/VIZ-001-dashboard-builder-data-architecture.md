@@ -439,8 +439,8 @@ Enforced on save, so an invalid dashboard cannot be persisted:
 | `1 <= col_span <= 24` | 400 |
 | `table.columns[].key` is non-empty string, unique per widget | 400 |
 | `table.columns[].source ∈ VALID_COLUMN_SOURCES` | 400 |
-| `table.columns[].question` required for source in `{answer, parent_answer, latest_date}` | 400 |
-| `table.columns[].question` belongs to `root_form` (for `parent_answer`) or `widget.form` (for `answer`, `latest_date`) | 400 |
+| `table.columns[].question` required for source in `{answer, parent_answer}` (optional for `latest_date`) | 400 |
+| `table.columns[].question` belongs to `root_form` (for `parent_answer`) or `widget.form` (for `answer`, `latest_date` when provided) | 400 |
 | `table.columns[]` stored config uses `question` rather than `question_id` | 400 |
 | `slug` matches `^[a-z0-9]+(-[a-z0-9]+)*$`, unique per tenant | 409 |
 

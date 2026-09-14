@@ -78,7 +78,7 @@ implementing every rule in VIZ-001 §4.5:
 - `1 <= col_span <= 24`
 - `table.columns[].key` is non-empty string, unique per widget
 - `table.columns[].source` in `VALID_COLUMN_SOURCES`
-- `table.columns[].question` required for sources in `{answer, parent_answer, latest_date}` and scoped to `root_form` (for `parent_answer`) or `widget.form` (for `answer`, `latest_date`)
+- `table.columns[].question` required for sources in `{answer, parent_answer}`; optional for `latest_date` (scoped to `widget.form` when provided) or `root_form` (for `parent_answer`)
 - `table.columns[]` stored config uses `question` rather than `question_id`
 - `slug` matches `^[a-z0-9]+(-[a-z0-9]+)*$`, unique per live row per tenant
 
