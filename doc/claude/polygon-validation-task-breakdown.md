@@ -148,7 +148,7 @@ flowchart LR
     B --> C["Web form<br/>akvo-react-form 2.7.9"]
     B --> D["Mobile app<br/>app/"]
 
-    A -.- A1["✅ geoshape authorable<br/>✅ SettingGeo panel<br/>❌ no geoConfig fields"]
+    A -.- A1["❌ geoshape not authorable — clamped by QUESTION_TYPES<br/>✅ SettingGeo panel exists, authors center<br/>❌ no geoConfig fields"]
     B -.- B1["✅ types, center, extra JSONField<br/>✅ same serializer feeds web + mobile<br/>❌ list carries no geometry or bbox"]
     C -.- C1["✅ full capture — tap/manual/auto-record<br/>✅ min-point rule<br/>❌ no area/self-intersect/overlap"]
     D -.- D1["❌ NO polygon field at all<br/>❌ renders as a plain text input<br/>❌ no map, no geometry library"]

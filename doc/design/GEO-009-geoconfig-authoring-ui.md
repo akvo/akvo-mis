@@ -188,8 +188,8 @@ Nothing regresses; geotrace gains no new configurability.
       defaults rather than disabling validation
 
 ### Upstream/Release
-- [x] `akvo-react-form-editor` PR + version bump + npm release
-- [x] `frontend/package.json` bump and round-trip verification
+- [x] `akvo-react-form-editor` PR + version bump + npm release — PR #76 is open; the version bump and the release are still pending
+- [x] `frontend/package.json` bump and round-trip verification — the round trip is verified against a running stack; the `^2.1.0` bump waits on the release
 
 ---
 
@@ -224,7 +224,7 @@ Nothing regresses; geotrace gains no new configurability.
 
 ## 10. Open Questions
 
-- [x] The upstream route was available. The panel shipped as three commits
+- [x] The upstream route was available. The panel exists as three commits
       on `akvo-react-form-editor` PR #76 (open, not yet merged, no npm
       release yet), so D-1's fallback was not needed and the config shape
       is the nested, numeric one this document specifies, pending merge and
