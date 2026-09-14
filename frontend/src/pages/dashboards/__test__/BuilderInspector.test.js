@@ -1402,3 +1402,107 @@ describe("pruneConfigForForm and the value question", () => {
     expect(next.value_question).toBeNull();
   });
 });
+
+describe("chart toolbox controls in BuilderInspector", () => {
+  const chartWidget = (type, config = {}) => ({
+    id: 1,
+    type,
+    title: `My ${type}`,
+    col_span: 12,
+    form: 6002,
+    question: 600203,
+    config: {
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      ...config,
+    },
+  });
+
+  test("offers the toolbox switch for bar, line, pie, and scatter widgets", () => {
+    ["bar", "line", "pie", "scatter"].forEach((type) => {
+      const { unmount } = render(
+        <BuilderInspector
+          widget={chartWidget(type)}
+          sources={SOURCES}
+          onWidgetChange={jest.fn()}
+          onDashboardChange={jest.fn()}
+        />
+      );
+      expect(screen.getByText("Show toolbox")).toBeInTheDocument();
+      unmount();
+    });
+  });
+
+  test("does not offer the toolbox switch for table, kpi, or section_title", () => {
+    ["table", "kpi", "section_title"].forEach((type) => {
+      const { unmount } = render(
+        <BuilderInspector
+          widget={{
+            id: 2,
+            type,
+            title: `My ${type}`,
+            col_span: 12,
+            config: {},
+          }}
+          sources={SOURCES}
+          onWidgetChange={jest.fn()}
+          onDashboardChange={jest.fn()}
+        />
+      );
+      expect(screen.queryByText("Show toolbox")).not.toBeInTheDocument();
+      unmount();
+    });
+  });
+
+  test("toggling the toolbox switch updates widget.config.show_toolbox", () => {
+    const onWidgetChange = jest.fn();
+    render(
+      <BuilderInspector
+        widget={chartWidget("bar", { show_toolbox: false })}
+        sources={SOURCES}
+        onWidgetChange={onWidgetChange}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    const label = screen.getByText("Show toolbox").closest("label");
+    const switchEl = label.querySelector("button[role='switch']");
+    fireEvent.click(switchEl);
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          show_toolbox: true,
+        }),
+      })
+    );
+  });
+
+  test("shows position select and feature checkboxes when show_toolbox is true", () => {
+    render(
+      <BuilderInspector
+        widget={chartWidget("bar", { show_toolbox: true })}
+        sources={SOURCES}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText("Toolbox position")).toBeInTheDocument();
+    expect(screen.getByText("Toolbox features")).toBeInTheDocument();
+    expect(screen.getByText("Save as image")).toBeInTheDocument();
+    expect(screen.getByText("Data view")).toBeInTheDocument();
+    expect(screen.getByText("Restore zoom/filters")).toBeInTheDocument();
+    expect(screen.getByText("Data zoom")).toBeInTheDocument();
+  });
+
+  test("hides Data zoom checkbox for pie charts", () => {
+    render(
+      <BuilderInspector
+        widget={chartWidget("pie", { show_toolbox: true })}
+        sources={SOURCES}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText("Save as image")).toBeInTheDocument();
+    expect(screen.queryByText("Data zoom")).not.toBeInTheDocument();
+  });
+});

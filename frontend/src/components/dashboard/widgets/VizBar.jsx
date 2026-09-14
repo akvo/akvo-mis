@@ -1,14 +1,14 @@
-import React from "react";
+import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Bar, StackBar } from "akvo-charts";
+import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
 const VizBar = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
-  const { chartRef, boxRef } = useChartResize();
   const widgetConfig = config?.config || {};
   const hasStack = Boolean(widgetConfig.stack_by);
   const Component = hasStack ? StackBar : Bar;
@@ -17,7 +17,11 @@ const VizBar = ({ config, data, filters }) => {
     ? config.color
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
-  const chartData = Array.isArray(data) ? data : [];
+  const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+
+  const horizontal = widgetConfig.orientation === "horizontal";
+  const toolbox = buildToolboxConfig(widgetConfig, "bar");
+  const { chartRef, boxRef } = useChartResize(toolbox);
 
   if (chartData.length === 0) {
     return (
@@ -27,14 +31,17 @@ const VizBar = ({ config, data, filters }) => {
     );
   }
 
-  const horizontal = widgetConfig.orientation === "horizontal";
-
   if (hasStack) {
-    const chartConfig = { title: "", color: colors, horizontal };
+    const chartConfig = {
+      title: "",
+      color: colors,
+      horizontal,
+    };
     const props = { config: chartConfig, data: chartData };
     if (widgetConfig.stackMapping) {
       props.stackMapping = widgetConfig.stackMapping;
     }
+
     return (
       <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
         <Component ref={chartRef} {...props} />
@@ -49,6 +56,7 @@ const VizBar = ({ config, data, filters }) => {
     color: colors,
     tooltip: { trigger: "axis" },
     legend: { show: false },
+    toolbox: toolbox || { show: false },
     grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
     xAxis: {
       type: horizontal ? "value" : "category",
