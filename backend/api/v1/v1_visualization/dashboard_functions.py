@@ -352,7 +352,10 @@ def normalize_table_columns(columns):
         if not isinstance(key, str) or not key.strip():
             source = c.get("source")
             question = c.get("question")
-            if source in ("parent_name", "administration"):
+            if (
+                source in ("parent_name", "administration", "latest_date")
+                and question is None
+            ):
                 key = source
             elif question is not None:
                 key = "{0}_{1}".format(source, question)
@@ -734,7 +737,7 @@ def _validate_widget(
                     index,
                     "config.columns",
                 )
-            if source in ("answer", "parent_answer", "latest_date"):
+            if source in ("answer", "parent_answer"):
                 col_q_id = _as_int(column.get("question"))
                 if col_q_id is None:
                     return _error(
@@ -759,7 +762,24 @@ def _validate_widget(
                             index,
                             "config.columns",
                         )
-                elif source in ("answer", "latest_date"):
+                elif source == "answer":
+                    if form is None or col_q.form_id != form.id:
+                        return _error(
+                            "column question must belong to the"
+                            " widget's form",
+                            index,
+                            "config.columns",
+                        )
+            elif source == "latest_date":
+                col_q_id = _as_int(column.get("question"))
+                if col_q_id is not None:
+                    col_q = questions.filter(pk=col_q_id).first()
+                    if col_q is None:
+                        return _error(
+                            "column question not found",
+                            index,
+                            "config.columns",
+                        )
                     if form is None or col_q.form_id != form.id:
                         return _error(
                             "column question must belong to the"

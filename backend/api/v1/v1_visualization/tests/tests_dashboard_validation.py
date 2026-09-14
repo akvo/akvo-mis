@@ -734,7 +734,7 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("question", err["message"])
 
     def test_table_column_missing_question_for_answer_sources_is_refused(self):
-        for src in ("answer", "parent_answer", "latest_date"):
+        for src in ("answer", "parent_answer"):
             err = self.check(
                 self.widget(
                     type="table",
@@ -744,6 +744,20 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
             )
             self.assertEqual(err["field"], "config.columns", src)
             self.assertIn("requires a question", err["message"])
+
+    def test_table_column_latest_date_without_question_is_accepted(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={
+                    "columns": [
+                        {"key": "latest_date", "source": "latest_date"}
+                    ]
+                },
+            )
+        )
+        self.assertIsNone(err)
 
     def test_table_column_nonexistent_question_is_refused(self):
         err = self.check(
