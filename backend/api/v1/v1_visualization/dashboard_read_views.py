@@ -25,6 +25,9 @@ from rest_framework.response import Response
 
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
+from api.v1.v1_visualization.dashboard_functions import (
+    normalize_table_columns,
+)
 from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
 from api.v1.v1_visualization.embed_views import embed_url_for
 from api.v1.v1_visualization.models import Dashboard
@@ -50,9 +53,17 @@ def read_snapshot(dashboard):
     state some other way renders empty instead of 500ing the viewer.
     """
     config = dashboard.published_config or {}
+    widgets = config.get("widgets") or []
+    for w in widgets:
+        if isinstance(w, dict) and w.get("type") == "table":
+            w_config = w.get("config")
+            if isinstance(w_config, dict) and "columns" in w_config:
+                w_config["columns"] = normalize_table_columns(
+                    w_config["columns"]
+                )
     return {
         "default_filters": config.get("default_filters") or {},
-        "widgets": config.get("widgets") or [],
+        "widgets": widgets,
     }
 
 

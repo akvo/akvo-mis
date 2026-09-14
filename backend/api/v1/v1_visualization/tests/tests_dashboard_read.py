@@ -282,6 +282,74 @@ class DashboardReadTestCase(TestCase, ProfileTestHelperMixin):
             len(small.captured_queries), len(large.captured_queries)
         )
 
+    def test_published_table_columns_are_normalized_on_read(self):
+        legacy_table = {
+            "id": 10,
+            "order": 1,
+            "type": "table",
+            "col_span": 24,
+            "title": "Site Summary",
+            "color": None,
+            "form": 6002,
+            "question": None,
+            "config": {
+                "columns": [
+                    {"source": "parent_name", "label": "Site"},
+                    {
+                        "source": "answer",
+                        "question_id": 600203,
+                        "label": "Status",
+                    },
+                ]
+            },
+        }
+        self.make(
+            "legacy-table-dash",
+            published_config=snapshot([legacy_table]),
+        )
+        res = self.client.get(
+            "/api/v1/dashboards/legacy-table-dash", **self.header
+        )
+        self.assertEqual(res.status_code, 200)
+        widgets = res.json()["widgets"]
+        self.assertEqual(len(widgets), 1)
+        cols = widgets[0]["config"]["columns"]
+        self.assertEqual(len(cols), 2)
+        self.assertEqual(cols[0]["key"], "parent_name")
+        self.assertEqual(cols[0]["source"], "parent_name")
+        self.assertEqual(cols[1]["key"], "answer_600203")
+        self.assertEqual(cols[1]["source"], "answer")
+        self.assertEqual(cols[1]["question"], 600203)
+        self.assertNotIn("question_id", cols[1])
+
+    def test_draft_table_widget_columns_are_normalized_on_read(self):
+        from api.v1.v1_visualization.dashboard_builder_serializers import (
+            DashboardDetailSerializer,
+        )
+        from api.v1.v1_visualization.models import DashboardWidget
+        from api.v1.v1_visualization.constants import WidgetTypes
+
+        d = self.make("draft-table-dash", status=DashboardStatus.draft)
+        DashboardWidget.objects.create(
+            dashboard=d,
+            order=1,
+            type=WidgetTypes.table,
+            col_span=24,
+            title="Draft Table",
+            config={
+                "columns": [
+                    {"source": "administration", "label": "Admin"},
+                    {"source": "parent_answer", "question_id": 600102},
+                ]
+            },
+        )
+        data = DashboardDetailSerializer(instance=d).data
+        cols = data["widgets"][0]["config"]["columns"]
+        self.assertEqual(cols[0]["key"], "administration")
+        self.assertEqual(cols[1]["key"], "parent_answer_600102")
+        self.assertEqual(cols[1]["question"], 600102)
+        self.assertNotIn("question_id", cols[1])
+
 
 @override_settings(USE_TZ=False)
 class DashboardReadAcceptanceTestCase(TestCase, ProfileTestHelperMixin):
