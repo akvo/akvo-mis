@@ -296,6 +296,7 @@ const Users = () => {
         </div>
       </div>
       <Modal
+        className="delete-user-modal"
         open={deleteUser}
         onCancel={() => setDeleteUser(null)}
         centered
