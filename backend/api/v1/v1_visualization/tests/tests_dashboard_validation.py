@@ -16,6 +16,7 @@ from api.v1.v1_visualization.constants import (
 )
 from api.v1.v1_visualization.dashboard_functions import (
     SLUG_PATTERN,
+    normalize_table_columns,
     validate_dashboard_payload,
 )
 from api.v1.v1_visualization.models import Dashboard
@@ -666,6 +667,222 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
             )
         )
         self.assertEqual(err["field"], "config.criteria")
+
+    def test_table_column_missing_key_is_refused(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={
+                    "columns": [
+                        {"source": "parent_name", "label": "Site"}
+                    ]
+                },
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+        self.assertIn("non-empty string key", err["message"])
+
+    def test_table_column_empty_or_non_string_key_is_refused(self):
+        for bad_key in ("", "   ", 123, None, []):
+            err = self.check(
+                self.widget(
+                    type="table",
+                    question=None,
+                    config={
+                        "columns": [
+                            {"key": bad_key, "source": "parent_name"}
+                        ]
+                    },
+                )
+            )
+            self.assertEqual(err["field"], "config.columns", bad_key)
+
+    def test_table_column_duplicate_key_is_refused(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={
+                    "columns": [
+                        {"key": "site", "source": "parent_name"},
+                        {"key": "site", "source": "administration"},
+                    ]
+                },
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+        self.assertIn("duplicate", err["message"].lower())
+
+    def test_table_column_question_id_field_is_refused(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={
+                    "columns": [
+                        {
+                            "key": "vol",
+                            "source": "answer",
+                            "question_id": self.q_option.id,
+                        }
+                    ]
+                },
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+        self.assertIn("question", err["message"])
+
+    def test_table_column_missing_question_for_answer_sources_is_refused(self):
+        for src in ("answer", "parent_answer", "latest_date"):
+            err = self.check(
+                self.widget(
+                    type="table",
+                    question=None,
+                    config={"columns": [{"key": "col", "source": src}]},
+                )
+            )
+            self.assertEqual(err["field"], "config.columns", src)
+            self.assertIn("requires a question", err["message"])
+
+    def test_table_column_nonexistent_question_is_refused(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={
+                    "columns": [
+                        {
+                            "key": "col",
+                            "source": "answer",
+                            "question": 999999,
+                        }
+                    ]
+                },
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+        self.assertIn("not found", err["message"])
+
+    def test_table_column_parent_answer_question_on_root_form(self):
+        # q_option is on the monitoring form, not root form
+        err = self.check(
+            self.widget(
+                type="table",
+                question=None,
+                config={
+                    "columns": [
+                        {
+                            "key": "col",
+                            "source": "parent_answer",
+                            "question": self.q_option.id,
+                        }
+                    ]
+                },
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+        self.assertIn("root form", err["message"])
+
+    def test_table_column_answer_question_must_belong_to_widget_form(self):
+        # q_reg_option is on root form, but widget form is monitoring form
+        err = self.check(
+            self.widget(
+                type="table",
+                form=self.monitoring.id,
+                question=None,
+                config={
+                    "columns": [
+                        {
+                            "key": "col",
+                            "source": "answer",
+                            "question": self.q_reg_option.id,
+                        }
+                    ]
+                },
+            )
+        )
+        self.assertEqual(err["field"], "config.columns")
+        self.assertIn("widget's form", err["message"])
+
+    def test_table_valid_columns_accepted(self):
+        err = self.check(
+            self.widget(
+                type="table",
+                form=self.monitoring.id,
+                question=None,
+                config={
+                    "columns": [
+                        {
+                            "key": "site",
+                            "source": "parent_name",
+                            "label": "Site",
+                        },
+                        {
+                            "key": "adm",
+                            "source": "administration",
+                            "label": "Adm",
+                        },
+                        {
+                            "key": "parent_stat",
+                            "source": "parent_answer",
+                            "question": self.q_reg_option.id,
+                            "label": "Parent Status",
+                        },
+                        {
+                            "key": "status",
+                            "source": "answer",
+                            "question": self.q_option.id,
+                            "label": "Status",
+                        },
+                        {
+                            "key": "checked",
+                            "source": "latest_date",
+                            "question": self.q_number.id,
+                            "label": "Last checked",
+                        },
+                    ]
+                },
+            )
+        )
+        self.assertIsNone(err)
+
+    def test_normalize_table_columns(self):
+        # 1. Populates missing keys for built-ins and question sources
+        raw = [
+            {"source": "parent_name", "label": "Site"},
+            {"source": "administration", "label": "Adm"},
+            {"source": "parent_answer", "question": 101, "label": "PAns"},
+            {"source": "answer", "question_id": 102, "label": "Ans"},
+            {"source": "latest_date", "question_id": 103, "label": "Date"},
+        ]
+        norm = normalize_table_columns(raw)
+        self.assertEqual(norm[0]["key"], "parent_name")
+        self.assertEqual(norm[1]["key"], "administration")
+        self.assertEqual(norm[2]["key"], "parent_answer_101")
+        self.assertEqual(norm[3]["key"], "answer_102")
+        self.assertEqual(norm[3]["question"], 102)
+        self.assertNotIn("question_id", norm[3])
+        self.assertEqual(norm[4]["key"], "latest_date_103")
+        self.assertEqual(norm[4]["question"], 103)
+        self.assertNotIn("question_id", norm[4])
+
+        # 2. Key deduplication
+        raw_dups = [
+            {"key": "site", "source": "parent_name"},
+            {"key": "site", "source": "parent_name"},
+            {"key": "site", "source": "parent_name"},
+        ]
+        norm_dups = normalize_table_columns(raw_dups)
+        self.assertEqual(
+            [c["key"] for c in norm_dups],
+            ["site", "site_1", "site_2"],
+        )
+
+        # 3. Non-list and non-dict passthrough
+        self.assertIsNone(normalize_table_columns(None))
+        self.assertEqual(normalize_table_columns("not_a_list"), "not_a_list")
+        self.assertEqual(normalize_table_columns([123, "abc"]), [123, "abc"])
 
     def test_unknown_config_keys_are_left_alone(self):
         # VIZ-008 owns config expansion; this slice must not become a
