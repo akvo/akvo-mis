@@ -6,6 +6,7 @@ from django.db.models.functions import TruncMonth, Substr
 from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import QuestionOptions
+from api.v1.v1_profile.models import Administration
 from api.v1.v1_visualization.constants import AGG_FUNCS
 from api.v1.v1_visualization.functions import (
     get_base_monitoring_qs,
@@ -463,6 +464,25 @@ def handle_option_question(form, question, params):
         params.get("value_question"), data_ids
     )
 
+    if stack_by == "administration" and group_by in (
+        "month", "date"
+    ):
+        raw_level = params.get("admin_level")
+        admin_level = raw_level if raw_level is not None else 1
+        admin_groups = _build_admin_groups(
+            data_ids, admin_level
+        )
+        admin_names = sorted(admin_groups.keys())
+        if not admin_names:
+            return {
+                "data": [], "labels": [],
+                "stack_labels": [], "colors": [],
+            }
+        return _count_stack_admin_by_period(
+            data_ids, admin_groups, admin_names, params,
+            period=group_by,
+        )
+
     if stack_by == "option" and group_by and not self_crosstab:
         stack_options = (
             options
@@ -787,6 +807,11 @@ def handle_number_question(form, question, params):
     )
     data_ids = get_monitoring_data_ids(qs, is_latest)
     agg_func = AGG_FUNCS.get(repeat_agg, Avg)
+
+    if stack_by == "administration":
+        return handle_stack_by_administration(
+            question, qs, is_latest, data_ids, params
+        )
 
     if stack_by == "parent_id":
         return handle_stack_by_parent(
@@ -1383,6 +1408,238 @@ def _stack_option_crosstab(
         "labels": [d["label"] for d in data],
         "stack_labels": labels,
         "colors": colors,
+    }
+
+
+def _build_admin_groups(data_ids, target_level):
+    """Map data_ids to administration groups at target_level.
+
+    Returns a dict ``{admin_name: [data_id, ...]}``, one entry per
+    distinct administration at the requested level. Data-ids whose
+    administration sits above the target level are silently dropped.
+    """
+    fd_rows = FormData.objects.filter(
+        id__in=data_ids,
+    ).values_list("id", "administration_id")
+    data_to_admin = dict(fd_rows)
+    admin_ids = set(data_to_admin.values())
+
+    admins = Administration.objects.filter(
+        id__in=admin_ids,
+    ).values("id", "path", "name", "level__level")
+    admin_info = {a["id"]: a for a in admins}
+
+    # Collect ancestor ids we need to resolve names for.
+    ancestor_ids = set()
+    for info in admin_info.values():
+        lvl = info["level__level"]
+        if lvl == target_level:
+            ancestor_ids.add(info["id"])
+        elif lvl > target_level and info["path"]:
+            segments = [
+                int(s) for s in info["path"].split(".") if s
+            ]
+            if target_level < len(segments):
+                ancestor_ids.add(segments[target_level])
+
+    ancestor_names = dict(
+        Administration.objects.filter(
+            id__in=ancestor_ids,
+        ).values_list("id", "name")
+    )
+
+    # Build admin_id → (ancestor_id, ancestor_name) mapping.
+    admin_to_ancestor = {}
+    for admin_id, info in admin_info.items():
+        lvl = info["level__level"]
+        if lvl == target_level:
+            admin_to_ancestor[admin_id] = info["name"]
+        elif lvl > target_level and info["path"]:
+            segments = [
+                int(s) for s in info["path"].split(".") if s
+            ]
+            if target_level < len(segments):
+                anc_id = segments[target_level]
+                admin_to_ancestor[admin_id] = (
+                    ancestor_names.get(anc_id, str(anc_id))
+                )
+
+    groups = defaultdict(list)
+    for data_id, admin_id in data_to_admin.items():
+        name = admin_to_ancestor.get(admin_id)
+        if name:
+            groups[name].append(data_id)
+    return groups
+
+
+def handle_stack_by_administration(
+    question, qs, is_latest, data_ids, params
+):
+    """Handle stack_by=administration: one line per admin area."""
+    group_by = params.get("group_by")
+    raw_level = params.get("admin_level")
+    admin_level = raw_level if raw_level is not None else 1
+
+    admin_groups = _build_admin_groups(data_ids, admin_level)
+    admin_names = sorted(admin_groups.keys())
+
+    if not admin_names:
+        return {"data": [], "labels": [], "stack_labels": []}
+
+    if group_by in ("month", "date"):
+        return _stack_admin_by_period(
+            question, admin_groups, admin_names, params,
+            period=group_by,
+        )
+
+    return {"data": [], "labels": [], "stack_labels": []}
+
+
+def _stack_admin_by_period(
+    question, admin_groups, admin_names, params,
+    period="month",
+):
+    """Stack by administration, grouped by month or date.
+
+    Fetches all answers in one query, then buckets in Python —
+    O(N) instead of O(groups) queries.
+    """
+    date_qid = params.get("date_question_id")
+    repeat_agg = params.get("repeat_agg", "average")
+
+    by_day = period == "date"
+    width = 10 if by_day else 7
+    format_label = format_date_group if by_day else format_month_label
+
+    all_data_ids = []
+    data_to_admin = {}
+    for admin_name, ids in admin_groups.items():
+        all_data_ids.extend(ids)
+        for data_id in ids:
+            data_to_admin[data_id] = admin_name
+
+    base = Answers.objects.filter(
+        data_id__in=all_data_ids,
+        question_id=question.id,
+        value__isnull=False,
+    )
+
+    if date_qid:
+        date_sq = Answers.objects.filter(
+            data_id=OuterRef("data_id"),
+            question_id=date_qid,
+            name__isnull=False,
+        ).values("name")[:1]
+        rows = base.annotate(
+            date_name=Subquery(date_sq),
+        ).filter(
+            date_name__isnull=False,
+        ).annotate(
+            period_key=Substr("date_name", 1, width),
+        ).values("data_id", "period_key", "value")
+        get_key = lambda r: r["period_key"]  # noqa: E731
+    elif by_day:
+        rows = base.values(
+            "data_id", "value",
+            day=F("data__created__date"),
+        )
+        get_key = lambda r: format_date_group(r["day"])  # noqa: E731
+    else:
+        rows = base.annotate(
+            month=TruncMonth("data__created"),
+        ).values("data_id", "month", "value")
+        get_key = lambda r: format_month_group(  # noqa: E731
+            r["month"]
+        )
+
+    buckets = defaultdict(lambda: defaultdict(list))
+    for r in rows:
+        key = get_key(r)
+        if not key:
+            continue
+        admin_name = data_to_admin.get(r["data_id"])
+        if admin_name:
+            buckets[key][admin_name].append(r["value"])
+
+    data = []
+    for key in sorted(buckets.keys()):
+        row = {"group": key, "label": format_label(key)}
+        for name in admin_names:
+            values = buckets[key].get(name, [])
+            row[name] = (
+                round(aggregate_values(values, repeat_agg), 2)
+                if values else 0
+            )
+        data.append(row)
+
+    label_key = "label"
+    return {
+        "data": data,
+        "labels": [d[label_key] for d in data],
+        "stack_labels": admin_names,
+    }
+
+
+def _count_stack_admin_by_period(
+    data_ids, admin_groups, admin_names, params,
+    period="month",
+):
+    """Count submissions per admin area, grouped by period."""
+    date_qid = params.get("date_question_id")
+    by_day = period == "date"
+    width = 10 if by_day else 7
+    format_label = format_date_group if by_day else format_month_label
+
+    data_to_admin = {}
+    for admin_name, ids in admin_groups.items():
+        for data_id in ids:
+            data_to_admin[data_id] = admin_name
+
+    if date_qid:
+        rows = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=date_qid,
+            name__isnull=False,
+        ).annotate(
+            period_key=Substr("name", 1, width),
+        ).values("data_id", "period_key")
+        get_key = lambda r: r["period_key"]  # noqa: E731
+    elif by_day:
+        rows = FormData.objects.filter(
+            id__in=data_ids,
+        ).values("id", day=F("created__date"))
+        get_key = lambda r: format_date_group(r["day"])  # noqa: E731
+    else:
+        rows = FormData.objects.filter(
+            id__in=data_ids,
+        ).annotate(
+            month=TruncMonth("created"),
+        ).values("id", "month")
+        get_key = lambda r: format_month_group(  # noqa: E731
+            r["month"]
+        )
+
+    buckets = defaultdict(lambda: defaultdict(set))
+    id_field = "data_id" if date_qid else "id"
+    for r in rows:
+        key = get_key(r)
+        if not key:
+            continue
+        admin_name = data_to_admin.get(r[id_field])
+        if admin_name:
+            buckets[key][admin_name].add(r[id_field])
+
+    data = []
+    for key in sorted(buckets.keys()):
+        row = {"group": key, "label": format_label(key)}
+        for name in admin_names:
+            row[name] = len(buckets[key].get(name, set()))
+        data.append(row)
+
+    return {
+        "data": data,
+        "labels": [d["label"] for d in data],
+        "stack_labels": admin_names,
     }
 
 
