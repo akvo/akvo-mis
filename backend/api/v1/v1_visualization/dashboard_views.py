@@ -158,6 +158,15 @@ from utils.custom_serializer_fields import (
             location=OpenApiParameter.QUERY,
         ),
         OpenApiParameter(
+            name="admin_level", required=False,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "Administration level to group by when"
+                " stack_by=administration. 0=root, 1=region, etc."
+            ),
+        ),
+        OpenApiParameter(
             name="criteria", required=False,
             type=OpenApiTypes.STR,
             location=OpenApiParameter.QUERY,
@@ -267,6 +276,7 @@ def visualization_values(request, version):
         "include_empty": validated.get(
             "include_empty", False
         ),
+        "admin_level": validated.get("admin_level"),
     }
 
     # Scatter mode

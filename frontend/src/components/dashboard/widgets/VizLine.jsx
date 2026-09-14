@@ -2,11 +2,14 @@ import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useChartResize from "./useChartResize";
 import useEChartsOption from "./useEChartsOption";
+import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Line, StackLine } from "akvo-charts";
+import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
-const CategoryLine = ({ config, data }) => {
+const CategoryLine = ({ config, data, filters }) => {
+  const emptyMessage = useEmptyWidgetMessage(filters);
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   const option = useMemo(() => {
@@ -20,6 +23,7 @@ const CategoryLine = ({ config, data }) => {
     const seriesColors = labels.map(
       (name, idx) => catColors[name] || colors[idx % colors.length]
     );
+    const toolbox = buildToolboxConfig(wc, "line");
     return {
       color: seriesColors,
       tooltip: {
@@ -30,6 +34,7 @@ const CategoryLine = ({ config, data }) => {
         data: labels,
         bottom: 0,
       },
+      toolbox: toolbox || { show: false },
       grid: { top: 20, right: 20, bottom: 40, left: 40, containLabel: true },
       xAxis: {
         type: "category",
@@ -52,7 +57,7 @@ const CategoryLine = ({ config, data }) => {
   if (chartData.length === 0) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        No data
+        {emptyMessage}
       </div>
     );
   }
@@ -60,29 +65,42 @@ const CategoryLine = ({ config, data }) => {
   return <div ref={boxRef} style={{ width: "100%", height: "100%" }} />;
 };
 
-const VizLine = ({ config, data }) => {
-  const { chartRef, boxRef } = useChartResize();
+CategoryLine.propTypes = {
+  config: PropTypes.object.isRequired,
+  data: PropTypes.array,
+  filters: PropTypes.object,
+};
+
+const VizLine = ({ config, data, filters }) => {
+  const emptyMessage = useEmptyWidgetMessage(filters);
   const widgetConfig = config?.config || {};
   const hasCategory = Boolean(widgetConfig.category_question_id);
-  const hasStack = Boolean(widgetConfig.stack_by);
-
-  if (hasCategory) {
-    return <CategoryLine config={config} data={data} />;
-  }
-
-  const Component = hasStack ? StackLine : Line;
+  const isAdminGrouped = widgetConfig.stack_by === "administration";
+  const hasStack = Boolean(widgetConfig.stack_by || widgetConfig.stackMapping);
 
   const colors = Array.isArray(config?.color)
     ? config.color
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
-  const chartConfig = { title: "", color: colors };
-  const chartData = Array.isArray(data) ? data : [];
+  const toolbox = buildToolboxConfig(widgetConfig, "line");
+  const { chartRef, boxRef } = useChartResize(toolbox);
+
+  const chartConfig = {
+    title: "",
+    color: colors,
+  };
+  const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+
+  if (hasCategory || isAdminGrouped) {
+    return <CategoryLine config={config} data={data} filters={filters} />;
+  }
+
+  const Component = hasStack ? StackLine : Line;
 
   if (chartData.length === 0) {
     return (
       <div style={{ padding: 16, color: "#999", textAlign: "center" }}>
-        No data
+        {emptyMessage}
       </div>
     );
   }
@@ -102,6 +120,7 @@ const VizLine = ({ config, data }) => {
 VizLine.propTypes = {
   config: PropTypes.object.isRequired,
   data: PropTypes.array,
+  filters: PropTypes.object,
 };
 
 export default VizLine;

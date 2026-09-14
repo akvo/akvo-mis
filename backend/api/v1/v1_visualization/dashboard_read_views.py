@@ -23,6 +23,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from api.v1.v1_profile.models import Administration
 from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
 from api.v1.v1_visualization.embed_views import embed_url_for
@@ -208,4 +209,13 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
         row["widgets"] = annotate_broken(
             snapshot["widgets"], dashboard.tenant
         )
+        root_adm = (
+            Administration.objects.filter(
+                tenant=dashboard.tenant, parent__isnull=True
+            )
+            .order_by("id")
+            .values_list("id", flat=True)
+            .first()
+        )
+        row["root_administration_id"] = root_adm
         return Response(row)

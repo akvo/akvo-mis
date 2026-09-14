@@ -313,6 +313,26 @@ Format:  ● JSON definition   ○ XLSForm (.xlsx)
 
 **XLSForm review step wireframe**:
 ```
+┌────────────────────────────────────────────────────────────────────────┐
+│ ℹ This import needs a quick review                                     │
+│   Your XLSForm was imported successfully, but Kobo and Akvo MIS don't   │
+│   work identically and some form logic may need manual adjustment to   │
+│   fully match your original. Please review the warnings below and test │
+│   the form before publishing.                                          │
+│                                                                        │
+│   Common things to check:                                              │
+│   • Calculated fields – formulas may need to be re-verified             │
+│   • Dynamic repeat counts – repeat groups driven by a variable may     │
+│     need manual setup                                                  │
+│   • Group relevance / skip logic – conditional group visibility should │
+│     be double-checked                                                  │
+│   • "Other" follow-up questions – these aren't auto-converted; add     │
+│     them manually if needed                                            │
+│                                                                        │
+│   We recommend previewing the full form and testing a submission       │
+│   before it goes live.                                                 │
+└────────────────────────────────────────────────────────────────────────┘
+
 Form: "Household Survey"  (24 questions, 3 groups)
 ⚠ 1 row skipped: row:12 — unsupported type 'calculate'
 
@@ -324,22 +344,40 @@ Form Type:  ● Registration   ○ Monitoring
 
 ### 5.2 `frontend/src/lib/ui-text.js`
 
-New keys to add after `formBuilderImportCloseButton` (line 280):
+Keys for XLSForm import review messaging:
 
 ```js
-formBuilderImportFormatLabel: "File Format",
-formBuilderImportFormatJson: "JSON Definition",
-formBuilderImportFormatXlsform: "XLSForm (.xlsx)",
-formBuilderImportXlsformDraggerHint: (mb) =>
-  `Supports XLSForm standard (survey / choices / settings). Max ${mb} MB.`,
-formBuilderImportXlsformInvalidFile:
-  "Only .xlsx or .xls files are supported",
-formBuilderImportXlsformFormTypeLabel: "Form Type",
-formBuilderImportXlsformFormTypeRegistration: "Registration",
-formBuilderImportXlsformFormTypeMonitoring: "Monitoring",
-formBuilderImportXlsformFormTypeRequired: "Please select a form type",
-formBuilderImportXlsformSkippedSummary: (n) =>
-  `${n} row(s) skipped (unsupported type)`,
+formBuilderImportXlsformNoticeTitle: "This import needs a quick review",
+formBuilderImportXlsformNoticeDesc: (
+  <Fragment>
+    <p>
+      Your XLSForm was imported successfully, but Kobo and Akvo MIS don't
+      work identically and some form logic may need manual adjustment to
+      fully match your original. Please review the warnings below and test
+      the form before publishing.
+    </p>
+    <p>Common things to check:</p>
+    <ul>
+      <li>Calculated fields – formulas may need to be re-verified</li>
+      <li>
+        Dynamic repeat counts – repeat groups driven by a variable may need
+        manual setup
+      </li>
+      <li>
+        Group relevance / skip logic – conditional group visibility should
+        be double-checked
+      </li>
+      <li>
+        "Other" follow-up questions – these aren't auto-converted; add
+        them manually if needed
+      </li>
+    </ul>
+    <p>
+      We recommend previewing the full form and testing a submission before
+      it goes live.
+    </p>
+  </Fragment>
+),
 ```
 
 ---

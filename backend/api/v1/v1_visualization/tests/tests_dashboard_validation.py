@@ -2,7 +2,11 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from api.v1.v1_forms.constants import FormStatus, FormTypes
+from api.v1.v1_forms.constants import (
+    FormStatus,
+    FormTypes,
+    QuestionTypes,
+)
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_users.models import Tenant
@@ -39,6 +43,18 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
         self.q_option = Questions.objects.get(pk=600203)
         self.q_text = Questions.objects.get(pk=600205)
         self.q_reg_option = Questions.objects.get(pk=600102)
+        self.q_number = Questions.objects.get(pk=600202)
+        # A number question on the REGISTRATION form. The seeded
+        # example-vis-6 registration form has none of its own.
+        self.q_reg_number = Questions.objects.create(
+            id=600105,
+            form=self.root,
+            question_group=self.q_reg_option.question_group,
+            order=5,
+            label="Population served",
+            name="population_served",
+            type=QuestionTypes.number,
+        )
         # multiple_option on the monitoring form: the type a cross-form
         # chart refuses as its measured question.
         self.q_multi = Questions.objects.get(pk=600204)
@@ -424,6 +440,52 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(err["field"], "config.repeat_agg")
 
     # ── §4.5: root_form ──
+
+    # ── a map bound to a number question (#382) ──
+
+    def test_a_map_bound_to_a_number_question_is_accepted(self):
+        """No rule to relax: `number` is already aggregatable.
+
+        The magnitude question is `widget.question`, not
+        `config.value_question`, which is why this needed no new
+        validation. Pinned because the feature rests on it: routing the
+        map through value_question instead WOULD have been refused —
+        that rule requires an option question, and a quantity map has
+        no option question at all.
+        """
+        self.assertIsNone(self.check(self.widget(
+            type="map",
+            question=self.q_number.id,
+            config={
+                "measure": "current_state",
+                "map_mode": "quantity",
+            },
+        )))
+
+    def test_a_map_on_the_registration_form_takes_a_number_too(self):
+        """The case group_by=id exists for: a number asked at
+        registration, on the form that also carries `geo`."""
+        self.assertIsNone(self.check(self.widget(
+            type="map",
+            form=self.root.id,
+            question=self.q_reg_number.id,
+            config={"map_mode": "quantity"},
+        )))
+
+    def test_map_mode_is_not_a_validated_vocabulary(self):
+        """Deliberately unchecked, and worth saying so.
+
+        `map_mode` names no form, question or endpoint parameter — it
+        only tells the renderer which of two encodings to draw — so an
+        unknown value degrades to the category map rather than to a
+        wrong number. The vocabularies that ARE enforced (group_by,
+        stack_by, value_type, repeat_agg) all reach a query string.
+        """
+        self.assertIsNone(self.check(self.widget(
+            type="map",
+            question=self.q_number.id,
+            config={"measure": "current_state", "map_mode": "nonsense"},
+        )))
 
     def test_root_form_must_be_a_registration_form(self):
         err = validate_dashboard_payload(

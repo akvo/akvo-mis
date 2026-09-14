@@ -1,5 +1,8 @@
 from django.test.utils import override_settings
 from rest_framework.test import APITestCase
+from api.v1.v1_data.models import Answers, FormData
+from api.v1.v1_forms.constants import QuestionTypes
+from api.v1.v1_forms.models import Questions
 from api.v1.v1_visualization.tests.mixins import (
     VisualizationValuesTestMixin,
 )
@@ -275,3 +278,150 @@ class ValuesNumberTestCases(VisualizationValuesTestMixin, APITestCase):
         values_by_group = {d["group"]: d["value"] for d in data["data"]}
         self.assertEqual(values_by_group["2025-01"], 40.0)
         self.assertEqual(values_by_group["2025-03"], 60.0)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class ValuesNumberGroupByIdTestCases(
+    VisualizationValuesTestMixin, APITestCase
+):
+    """group_by=id for a number question (#382).
+
+    The map widget keys its points on the REGISTRATION datapoint id, and
+    a number question asked at registration has no parent to group by --
+    `data__parent_id` is NULL on every row, so group_by=parent_id
+    collapses the whole form into a single `group: "None"`. group_by=id
+    is the path that answers "this datapoint's own number", and until
+    now only count mode implemented it (_count_group_by_id); a number
+    question fell through to the ungrouped "Total" aggregate.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # A number question on the registration form. The seeded
+        # example-vis-6 registration form has none -- its only number
+        # lives on the monitoring child -- and adding one to the shared
+        # fixture would change every test that reads /sources.
+        self.q_reg_number = Questions.objects.create(
+            id=600105,
+            form=self.registration,
+            question_group=self.q_reg_option.question_group,
+            order=5,
+            label="Population served",
+            name="population_served",
+            type=QuestionTypes.number,
+        )
+        Answers.objects.create(
+            data=self.reg1,
+            question=self.q_reg_number,
+            value=100,
+            created_by=self.user,
+        )
+        Answers.objects.create(
+            data=self.reg2,
+            question=self.q_reg_number,
+            value=250,
+            created_by=self.user,
+        )
+
+    def test_registration_number_group_by_id(self):
+        """One row per registration datapoint, keyed by its own id."""
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.registration.id}"
+            f"&question_id={self.q_reg_number.id}"
+            "&group_by=id"
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()["data"]
+        self.assertEqual(len(rows), 2)
+
+        by_group = {r["group"]: r for r in rows}
+        self.assertEqual(
+            by_group[str(self.reg1.id)]["value"], 100.0
+        )
+        self.assertEqual(
+            by_group[str(self.reg1.id)]["label"], "Site Alpha"
+        )
+        self.assertEqual(
+            by_group[str(self.reg2.id)]["value"], 250.0
+        )
+        self.assertEqual(
+            by_group[str(self.reg2.id)]["label"], "Site Beta"
+        )
+
+    def test_registration_number_group_by_parent_id_is_unusable(self):
+        """Why group_by=id exists: parent_id cannot answer this.
+
+        Regression guard, not an endorsement -- a registration form has
+        no parents, so this collapses to one unjoinable row. If it ever
+        starts returning per-datapoint rows, the map should use it and
+        this test should be the thing that says so.
+        """
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.registration.id}"
+            f"&question_id={self.q_reg_number.id}"
+            "&group_by=parent_id"
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()["data"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["group"], "None")
+
+    def test_registration_number_group_by_id_skips_unanswered(self):
+        """A datapoint with no answer is absent, not zero.
+
+        The renderer decides what a missing number means -- akvo-charts
+        draws a zero-value point as a small circle rather than dropping
+        it -- and a row invented here would be indistinguishable from a
+        real zero.
+        """
+        FormData.objects.create(
+            id=7202,
+            name="Site Gamma",
+            form=self.registration,
+            administration=self.adm_parent,
+            geo=[-18.11, 178.44],
+            created_by=self.user,
+        )
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.registration.id}"
+            f"&question_id={self.q_reg_number.id}"
+            "&group_by=id"
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()["data"]
+        self.assertEqual(len(rows), 2)
+        self.assertNotIn("7202", [r["group"] for r in rows])
+
+    def test_registration_number_group_by_id_percentage(self):
+        """value_type=percentage shares the group_by=parent_id rule."""
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.registration.id}"
+            f"&question_id={self.q_reg_number.id}"
+            "&group_by=id&value_type=percentage"
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()["data"]
+        by_group = {r["group"]: r["value"] for r in rows}
+        # 100 / 350 and 250 / 350
+        self.assertEqual(by_group[str(self.reg1.id)], 28.57)
+        self.assertEqual(by_group[str(self.reg2.id)], 71.43)
+
+    def test_monitoring_number_group_by_id(self):
+        """On a monitoring form the key is the submission, not the site.
+
+        Consistent with _count_group_by_id, which keys the latest
+        monitoring submission's own id. The map does not use this path
+        -- it has parent_id for monitoring forms -- but the grammar has
+        to mean one thing.
+        """
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&question_id={self.q_number.id}"
+            "&group_by=id&monitoring=latest"
+        )
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()["data"]
+        self.assertEqual(len(rows), 2)
+        by_group = {r["group"]: r["value"] for r in rows}
+        self.assertEqual(by_group[str(self.mon1b.id)], 20.0)
+        self.assertEqual(by_group[str(self.mon2b.id)], 40.0)

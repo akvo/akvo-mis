@@ -618,7 +618,12 @@ class CreateBatchSerializer(serializers.Serializer):
         )
 
     def validate_name(self, name):
-        if DataBatch.objects.filter(name__iexact=name).exists():
+        # Per workspace, not global: one tenant taking "September Review"
+        # must not stop another from using it, and the refusal would
+        # otherwise confirm that some other workspace holds the name.
+        user = self.context.get("user")
+        taken = DataBatch.objects.for_user(user).filter(name__iexact=name)
+        if taken.exists():
             raise ValidationError("name has already been taken")
         return name
 

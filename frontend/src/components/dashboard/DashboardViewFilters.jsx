@@ -36,6 +36,7 @@ const { RangePicker } = DatePicker;
 
 const DashboardViewFilters = ({
   defaultFilters,
+  rootAdministrationId = null,
   value,
   onChange,
   disabled = false,
@@ -88,6 +89,7 @@ const DashboardViewFilters = ({
           )}
           {administrationEnabled && (
             <AdministrationDropdownLocal
+              rootId={rootAdministrationId}
               onChange={handleAdministrationChange}
               loading={disabled}
             />
@@ -100,6 +102,10 @@ const DashboardViewFilters = ({
 
 DashboardViewFilters.propTypes = {
   defaultFilters: PropTypes.object,
+  rootAdministrationId: PropTypes.oneOfType([
+    PropTypes.number,
+    PropTypes.string,
+  ]),
   value: PropTypes.object.isRequired,
   onChange: PropTypes.func.isRequired,
   // The builder canvas shows the bar so the author can see what viewers

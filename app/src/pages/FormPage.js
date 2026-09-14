@@ -306,33 +306,41 @@ const FormPage = ({ navigation, route }) => {
       return;
     }
     setLoading(true);
-    const dpValue = await crudDataPoints.selectDataPointById(db, { id: savedDataPointId });
-    setCurrentDataPoint(dpValue);
-    const jsonData = dpValue?.json;
-    if (jsonData && Object.keys(jsonData).length) {
-      let prevAdmAnswer = [];
-      // Process cascade questions
-      (formJSON?.question_group || [])
-        .flatMap((qg) => qg.question)
-        .filter((q) => q.type === QUESTION_TYPES.cascade)
-        .forEach((q) => {
-          const val = jsonData[q.id];
-          if (q?.source?.file === 'administrator.sqlite' && val) {
-            prevAdmAnswer = Array.isArray(val) ? val : [val];
-          }
-          if (val && !Array.isArray(val)) {
-            jsonData[q.id] = [val];
-          }
+    try {
+      const dpValue = await crudDataPoints.selectDataPointById(db, { id: savedDataPointId });
+      setCurrentDataPoint(dpValue);
+      const jsonData = dpValue?.json;
+      // No stored answers (the datapoint synced without its JSON file, or the
+      // column is corrupt): open the form empty rather than prefilled.
+      if (jsonData && Object.keys(jsonData).length) {
+        let prevAdmAnswer = [];
+        // Process cascade questions
+        (formJSON?.question_group || [])
+          .flatMap((qg) => qg.question)
+          .filter((q) => q.type === QUESTION_TYPES.cascade)
+          .forEach((q) => {
+            const val = jsonData[q.id];
+            if (q?.source?.file === 'administrator.sqlite' && val) {
+              prevAdmAnswer = Array.isArray(val) ? val : [val];
+            }
+            if (val && !Array.isArray(val)) {
+              jsonData[q.id] = [val];
+            }
+          });
+        // The stored answers arriving in state is not the user changing them.
+        withoutTracking(() => {
+          FormState.update((s) => {
+            s.currentValues = jsonData;
+            s.prevAdmAnswer = prevAdmAnswer;
+          });
         });
-      // The stored answers arriving in state is not the user changing them.
-      withoutTracking(() => {
-        FormState.update((s) => {
-          s.currentValues = jsonData;
-          s.prevAdmAnswer = prevAdmAnswer;
-        });
-      });
+      }
+    } catch (err) {
+      Sentry.captureException(err);
+    } finally {
+      // Always leave the loading state, or the page shows a spinner forever.
+      setLoading(false);
     }
-    setLoading(false);
   }, [db, savedDataPointId, formJSON]);
 
   useEffect(() => {

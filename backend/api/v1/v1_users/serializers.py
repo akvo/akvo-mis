@@ -391,7 +391,7 @@ class AddEditUserSerializer(
     )
     trained = CustomBooleanField(default=False)
     roles = AddRolesSerializer(many=True, required=False)
-    forms = CustomPrimaryKeyRelatedField(
+    forms = TenantScopedPrimaryKeyRelatedField(
         queryset=Forms.objects.filter(
             parent__isnull=True,
         ).all(),
@@ -469,9 +469,12 @@ class AddEditUserSerializer(
         # if forms is empty and is_superuser is True
         # then assign all published forms to user
         if not forms and user.is_superuser:
+            # "All published forms" means all of *this workspace's* — the
+            # unscoped read handed a new admin every other tenant's forms,
+            # which then showed up in their user-list Forms column.
             published_forms = Forms.objects.filter(
                 status=FormStatus.published
-            ).all()
+            ).for_user(user)
             for form in published_forms:
                 UserForms.objects.create(user=user, form=form)
         return user

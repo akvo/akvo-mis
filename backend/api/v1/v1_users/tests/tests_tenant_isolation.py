@@ -249,3 +249,45 @@ class UsersTenantIsolationTestCase(TenantIsolationTestCase):
         user_a = SystemUser.objects_with_deleted.get(pk=self.a["user"].pk)
         self.assertIsNone(user_a.deleted_at)
         self.assertEqual(user_a.first_name, "Restored")
+
+    def test_new_superuser_gets_only_its_own_tenants_forms(self):
+        # Creating a superuser with an empty `forms` list means "give them
+        # everything published" — but "everything" was read from an
+        # unscoped queryset, so the new admin picked up every other
+        # workspace's forms too, and the user list then showed them.
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "New",
+                "last_name": "Admin",
+                "email": "new.admin@acme.org",
+                "is_superuser": True,
+                "forms": [],
+                "roles": [],
+            },
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertIn(res.status_code, (200, 201))
+
+        created = SystemUser.objects.get(email="new.admin@acme.org")
+        assigned = {uf.form_id for uf in created.user_form.all()}
+        self.assertIn(self.a["form"].id, assigned)
+        self.assertNotIn(self.b["form"].id, assigned)
+
+    def test_cannot_assign_another_tenants_form(self):
+        # The `forms` payload is validated against a global queryset, so a
+        # pk belonging to another workspace binds instead of failing.
+        res = self.client.post(
+            "/api/v1/user",
+            {
+                "first_name": "Cross",
+                "last_name": "Tenant",
+                "email": "cross@acme.org",
+                "forms": [self.b["form"].id],
+                "roles": [],
+            },
+            content_type="application/json",
+            **self.auth(self.a["user"]),
+        )
+        self.assertEqual(res.status_code, 400)

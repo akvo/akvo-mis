@@ -2,6 +2,7 @@ import React from "react";
 import PropTypes from "prop-types";
 import { Button, Skeleton } from "antd";
 import WidgetRenderer from "./widgets/WidgetRenderer";
+import WidgetErrorBoundary from "./WidgetErrorBoundary";
 import useWidgetData from "../../util/hooks/useWidgetData";
 import { WIDGET_BODY_HEIGHT } from "./widgetLayout";
 import { store, uiText } from "../../lib";
@@ -90,11 +91,14 @@ const DashboardWidgetCell = ({
     // sites never monitored are excluded unless include_unmonitored is
     // set, so empty is routine rather than a failure.
     return (
-      <WidgetRenderer
-        widget={renderWidget || widget}
-        data={data}
-        pagination={pagination}
-      />
+      <WidgetErrorBoundary text={text} filters={filters}>
+        <WidgetRenderer
+          widget={renderWidget || widget}
+          data={data}
+          pagination={pagination}
+          filters={filters}
+        />
+      </WidgetErrorBoundary>
     );
   };
 

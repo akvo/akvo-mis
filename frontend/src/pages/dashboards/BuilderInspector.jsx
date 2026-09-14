@@ -1,8 +1,16 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
+import api from "../../lib/api";
+import { getLevels } from "../../util/level";
+import { mapValueParams } from "../../util/hooks/useWidgetData";
+import { quantileRanges, rangeLabel, readable } from "../../util/valueRanges";
 import {
   NEEDS_FORM,
   NEEDS_QUESTION,
@@ -39,6 +47,9 @@ import {
   repeatAggOptions,
   tableColumnOptions,
   monitoringForms,
+  MAP_QUESTION_TYPES,
+  TOOLBOX_POSITION_PRESETS,
+  DEFAULT_TOOLBOX_FEATURES,
 } from "./builderConstants";
 
 const { TextArea } = Input;
@@ -189,6 +200,120 @@ const BuilderInspector = ({
     [widget, onWidgetChange]
   );
 
+  /**
+   * Seed the colour bands from the values the map is about to draw.
+   *
+   * Fired from an author action — picking a value question, or turning
+   * clustering off — never from a render. Writing config during a render
+   * marks the dashboard dirty for someone who only clicked a widget,
+   * which is the bug #385 had to fix.
+   *
+   * Once only: after this the numbers belong to the author. Breaks
+   * recomputed from live data would move with the dashboard's date and
+   * administration filters, so the same colour would mean different
+   * things on the same map. That is also why the request carries no
+   * filters — the bands describe the form, not the current view.
+   *
+   * A failed request is not an error state: `quantileRanges([])` returns
+   * the single open band, which is a usable editor to type into.
+   *
+   * How MANY bands comes from the widget, not from here. Three is the
+   * opening guess for a map that has none; once the author has added
+   * rows, that count is a decision they made, and asking for fresh
+   * numbers must not throw their rows away to impose the default again.
+   */
+  const seedValueRanges = useCallback(
+    async (target) => {
+      const count = target.config?.value_ranges?.length || 3;
+      const root = (sources?.forms || []).find(
+        (f) => f.type === "registration"
+      );
+      const params = mapValueParams(target, root?.id);
+      let values = [];
+      try {
+        const res = await api.get("visualization/values", {
+          // Same drop rule as useWidgetData's compact(): a half-built
+          // widget cannot reach here today — every caller runs behind a
+          // form and a question — but two filters with different rules
+          // for the same request is a difference waiting to matter.
+          params: Object.fromEntries(
+            Object.entries(params).filter(
+              ([, val]) =>
+                val !== null && typeof val !== "undefined" && val !== ""
+            )
+          ),
+        });
+        values = (res?.data?.data || []).map((row) => row?.value);
+      } catch {
+        values = [];
+      }
+      const palette =
+        COLOR_SCHEMES[target.config?.color_scheme || DEFAULT_COLOR_SCHEME]
+          .colors;
+      onWidgetChange({
+        ...target,
+        config: {
+          ...target.config,
+          value_ranges: quantileRanges(values, palette, count),
+        },
+      });
+    },
+    [sources, onWidgetChange]
+  );
+
+  // Heal a stored `map_mode` that disagrees with the question — a map
+  // saved before the flag existed, or one whose question was swapped
+  // through a path that did not write it.
+  //
+  // ABOVE the early return below, and reading the widget directly
+  // rather than through the derived values further down, because those
+  // are computed after it: a hook placed there runs only when a widget
+  // is selected, and React counts hooks per render. Selecting the first
+  // widget then renders more hooks than the empty inspector did, which
+  // takes the whole page down with "Rendered more hooks than during the
+  // previous render."
+  //
+  // Narrow on purpose: `onWidgetChange` sets the builder's `dirty` flag,
+  // and a dirty dashboard prompts "You have unsaved changes" on the way
+  // out. The comparison is against what VizMap will actually DRAW, not
+  // against the string — VizMap draws quantity iff the flag reads
+  // "quantity", so an absent flag on an option map already draws
+  // correctly and writing "category" into it changes no pixel. Compared
+  // as strings, every map in every existing dashboard would raise that
+  // prompt for merely being clicked on.
+  useEffect(() => {
+    if (widget?.type !== "map" || !widget.question) {
+      return;
+    }
+    const picked = questionsForForm(widget.form).find(
+      (q) => q.id === widget.question
+    );
+    // Absent means category to VizMap, so an option map with no flag
+    // already draws correctly — writing one would mark the dashboard
+    // dirty for a change no reader could see (#385).
+    const stored = (widget.config || {}).map_mode || "category";
+    // A value question draws two ways and BOTH are legitimate, so the
+    // heal only rescues a mode the question cannot draw at all. Landing
+    // on `range` rather than `quantity` is the new default (#387) —
+    // clustering is opted into, never inherited — but a map already set
+    // to `quantity` was set there on purpose and must survive.
+    const isValue = picked?.type === "number";
+    const drawable = isValue ? ["range", "quantity"] : ["category"];
+    if (drawable.includes(stored)) {
+      return;
+    }
+    onWidgetChange({
+      ...widget,
+      config: {
+        ...widget.config,
+        map_mode: drawable[0],
+        // A value question has no options, so colours left by a
+        // previous option question describe nothing.
+        ...(isValue ? { status_colors: {} } : {}),
+      },
+    });
+  }, [widget, questionsForForm, onWidgetChange]);
+
   if (!widget) {
     return (
       <div className="builder-inspector">
@@ -324,12 +449,36 @@ const BuilderInspector = ({
   const questions =
     wType === "scatter" || wType === "line"
       ? allQuestions.filter((q) => q.type === "number")
+      : wType === "map"
+      ? // A map reads its question one of two ways: colour by an option
+        // question's answer, or size by a number question's. /sources
+        // already narrows to the four aggregatable types, and `date` is
+        // the one of them a map can do neither with — it has no options
+        // to colour by and no magnitude to size by, so picking one drew
+        // a map of identical dots that ignored the choice.
+        allQuestions.filter((q) => MAP_QUESTION_TYPES.has(q.type))
       : allQuestions;
   const dateQuestions = allQuestions.filter((q) => q.type === "date");
   const optionQuestions = allQuestions.filter(
     (q) => q.type === "option" || q.type === "multiple_option"
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
+  // A map bound to a NUMBER question sizes its circles by the answer
+  // rather than colouring them by a status (#382). Derived from the
+  // question's type rather than read back from `config.map_mode`, so the
+  // controls can never disagree with the question actually picked; the
+  // stored flag exists for the viewer, which has no question types.
+  const isValueMap = wType === "map" && selectedQuestion?.type === "number";
+  // Clustering is the opt-in (#387). Off, the map draws every site and
+  // colours it by band; on, nearby sites merge into one circle sized by
+  // their combined value.
+  const isClustered = isValueMap && wConfig.map_mode === "quantity";
+  const scheme = COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
+  // One open band is the honest empty state: it colours every point the
+  // same and claims no boundary the author did not set.
+  const bands = wConfig.value_ranges?.length
+    ? wConfig.value_ranges
+    : [{ to: null, color: scheme.colors[0] }];
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );
@@ -628,9 +777,7 @@ const BuilderInspector = ({
         {showQuestion && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              {wType === "map"
-                ? "Status question"
-                : wType === "scatter"
+              {wType === "scatter"
                 ? "X axis (number question)"
                 : wType === "line"
                 ? "Y axis (number question)"
@@ -641,17 +788,48 @@ const BuilderInspector = ({
               onChange={(val) => {
                 if (wType === "map" && val) {
                   const q = questions.find((qq) => qq.id === val);
-                  const sc =
-                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
-                  const auto = {};
-                  (q?.options || []).forEach((opt, idx) => {
-                    auto[opt.value] = sc.colors[idx % sc.colors.length];
-                  });
-                  onWidgetChange({
-                    ...widget,
-                    question: val,
-                    config: { ...widget.config, status_colors: auto },
-                  });
+                  // The mode follows the question's type; there is no
+                  // separate switch to leave inconsistent with it. A
+                  // number has no options, so the status colours left
+                  // behind by a previous option question are cleared
+                  // rather than kept as dead config.
+                  if (q?.type === "number") {
+                    // Ranges, not clustering (#387). Clustering answers
+                    // "how much in total here" and hides the sites; it
+                    // is opted into, never landed on by picking a
+                    // question.
+                    const next = {
+                      ...widget,
+                      question: val,
+                      config: {
+                        ...widget.config,
+                        map_mode: "range",
+                        status_colors: {},
+                      },
+                    };
+                    onWidgetChange(next);
+                    if (!wConfig.value_ranges?.length) {
+                      seedValueRanges(next);
+                    }
+                  } else {
+                    const sc =
+                      COLOR_SCHEMES[
+                        wConfig.color_scheme || DEFAULT_COLOR_SCHEME
+                      ];
+                    const auto = {};
+                    (q?.options || []).forEach((opt, idx) => {
+                      auto[opt.value] = sc.colors[idx % sc.colors.length];
+                    });
+                    onWidgetChange({
+                      ...widget,
+                      question: val,
+                      config: {
+                        ...widget.config,
+                        map_mode: "category",
+                        status_colors: auto,
+                      },
+                    });
+                  }
                 } else if (wType === "scatter") {
                   const q = questions.find((qq) => qq.id === val);
                   onWidgetChange({
@@ -741,6 +919,58 @@ const BuilderInspector = ({
                 Default: each datapoint counts as 1
               </div>
             )}
+          </div>
+        )}
+
+        {/* Clustering, for a value question only (#387). Off by default:
+            a value map is read one site at a time, and a cluster hides
+            the sites to answer a question the author did not ask. */}
+        {isValueMap && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-switch-row">
+              <span>Cluster and size by value</span>
+              <Switch
+                size="small"
+                checked={isClustered}
+                onChange={(checked) => {
+                  const next = {
+                    ...widget,
+                    config: {
+                      ...widget.config,
+                      map_mode: checked ? "quantity" : "range",
+                    },
+                  };
+                  onWidgetChange(next);
+                  // Un-clustering reveals the Colours editor, so it needs
+                  // bands to show. Only when the author has none — theirs
+                  // are never overwritten.
+                  if (!checked && !wConfig.value_ranges?.length) {
+                    seedValueRanges(next);
+                  }
+                }}
+              />
+            </label>
+            <div className="builder-inspector-hint">
+              {isClustered
+                ? "Nearby sites merge into one circle, sized by their combined value."
+                : "Every site is drawn on its own, coloured by its value."}
+            </div>
+          </div>
+        )}
+
+        {/* How a cluster combines its points. Sum is right for a total
+            and wrong for a rate — five sites at 50 l/p/d is not 250. */}
+        {isClustered && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Combine by</label>
+            <Select
+              value={wConfig.map_aggregate || "sum"}
+              onChange={(val) => updateConfig("map_aggregate", val)}
+              style={{ width: "100%" }}
+            >
+              <Select.Option value="sum">Sum</Select.Option>
+              <Select.Option value="average">Average</Select.Option>
+            </Select>
           </div>
         )}
 
@@ -876,56 +1106,124 @@ const BuilderInspector = ({
         )}
 
         {/* Line category (option question → multiple lines) */}
-        {NEEDS_LINE_CATEGORY.has(wType) && widget.form && (
+        {NEEDS_LINE_CATEGORY.has(wType) &&
+          widget.form &&
+          wConfig.stack_by !== "administration" && (
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">
+                Category (option question)
+              </label>
+              <Select
+                value={wConfig.category_question_id || null}
+                onChange={(val) => {
+                  if (val) {
+                    const q = allQuestions.find((qq) => qq.id === val);
+                    const sc =
+                      COLOR_SCHEMES[
+                        wConfig.color_scheme || DEFAULT_COLOR_SCHEME
+                      ];
+                    const auto = {};
+                    (q?.options || []).forEach((opt, idx) => {
+                      auto[opt.label] = sc.colors[idx % sc.colors.length];
+                    });
+                    onWidgetChange({
+                      ...widget,
+                      config: {
+                        ...widget.config,
+                        category_question_id: val,
+                        category_colors: auto,
+                      },
+                    });
+                  } else {
+                    onWidgetChange({
+                      ...widget,
+                      config: {
+                        ...widget.config,
+                        category_question_id: null,
+                        category_colors: null,
+                      },
+                    });
+                  }
+                }}
+                placeholder="None (single line)"
+                style={{ width: "100%" }}
+                allowClear
+                optionLabelProp="label"
+              >
+                {optionQuestions.map((q) => (
+                  <Select.Option
+                    key={q.id}
+                    value={q.id}
+                    label={<QuestionLabel label={q.label} type={q.type} />}
+                  >
+                    <QuestionLabel label={q.label} type={q.type} />
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+        {/* Line: Group lines by (administration aggregation) */}
+        {wType === "line" && widget.form && widget.question && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">
-              Category (option question)
-            </label>
+            <label className="builder-inspector-label">Group lines by</label>
             <Select
-              value={wConfig.category_question_id || null}
+              value={wConfig.stack_by || ""}
               onChange={(val) => {
-                if (val) {
-                  const q = allQuestions.find((qq) => qq.id === val);
-                  const sc =
-                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
-                  const auto = {};
-                  (q?.options || []).forEach((opt, idx) => {
-                    auto[opt.label] = sc.colors[idx % sc.colors.length];
-                  });
-                  onWidgetChange({
-                    ...widget,
-                    config: {
-                      ...widget.config,
-                      category_question_id: val,
-                      category_colors: auto,
-                    },
-                  });
-                } else {
-                  onWidgetChange({
-                    ...widget,
-                    config: {
-                      ...widget.config,
-                      category_question_id: null,
-                      category_colors: null,
-                    },
-                  });
-                }
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    stack_by: val || null,
+                    // Clear category when switching to admin grouping
+                    ...(val === "administration"
+                      ? {
+                          category_question_id: null,
+                          category_colors: null,
+                        }
+                      : {}),
+                    // Default admin_level to 1 when picking administration
+                    ...(val === "administration" && !widget.config?.admin_level
+                      ? { admin_level: 1 }
+                      : {}),
+                  },
+                });
               }}
-              placeholder="None (single line)"
               style={{ width: "100%" }}
               allowClear
-              optionLabelProp="label"
             >
-              {optionQuestions.map((q) => (
-                <Select.Option
-                  key={q.id}
-                  value={q.id}
-                  label={<QuestionLabel label={q.label} type={q.type} />}
-                >
-                  <QuestionLabel label={q.label} type={q.type} />
-                </Select.Option>
-              ))}
+              <Select.Option value="">None (single line)</Select.Option>
+              <Select.Option value="administration">
+                Administration area
+              </Select.Option>
             </Select>
+          </div>
+        )}
+
+        {/* Line: Administration level picker */}
+        {wType === "line" && wConfig.stack_by === "administration" && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">
+              Administration level
+            </label>
+            <Select
+              value={wConfig.admin_level ?? 1}
+              onChange={(val) => {
+                updateConfig("admin_level", val);
+              }}
+              style={{ width: "100%" }}
+            >
+              {getLevels()
+                .filter((lvl) => lvl.level > 0)
+                .map((lvl) => (
+                  <Select.Option key={lvl.level} value={lvl.level}>
+                    {lvl.name}
+                  </Select.Option>
+                ))}
+            </Select>
+            <div className="builder-inspector-hint">
+              Entities are grouped by this administration level
+            </div>
           </div>
         )}
 
@@ -1438,7 +1736,7 @@ const BuilderInspector = ({
                       color_scheme: key,
                       chart_colors: scheme.colors,
                     };
-                    if (wType === "map" && widget.question) {
+                    if (wType === "map" && widget.question && !isValueMap) {
                       const opts = selectedQuestion?.options || [];
                       const auto = {};
                       opts.forEach((opt, idx) => {
@@ -1446,6 +1744,20 @@ const BuilderInspector = ({
                           scheme.colors[idx % scheme.colors.length];
                       });
                       next.status_colors = auto;
+                    }
+                    // A range map's bands carry their own colours, so a
+                    // new scheme has to reach them the same way it
+                    // reaches an option map's statuses — otherwise
+                    // picking one changes the swatches in the panel and
+                    // nothing on the map. The breaks are the author's
+                    // and stay exactly where they are.
+                    if (wConfig.value_ranges?.length) {
+                      next.value_ranges = wConfig.value_ranges.map(
+                        (band, idx) => ({
+                          ...band,
+                          color: scheme.colors[idx % scheme.colors.length],
+                        })
+                      );
                     }
                     if (wType === "line" && wConfig.category_question_id) {
                       const catQ = allQuestions.find(
@@ -1543,10 +1855,130 @@ const BuilderInspector = ({
             </div>
           )}
 
-        {/* Map status colours */}
-        {wType === "map" && widget.question && (
+        {/* One colour per BAND, for a map that colours its points by how
+            much (#387). The bands are ordered ascending and the last is
+            open — a band added after it could never hold a point, so
+            "Add range" always inserts before it. */}
+        {isValueMap && !isClustered && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Status colours</label>
+            <div className="builder-inspector-label-row">
+              <label className="builder-inspector-label">Colours</label>
+              {/* Above the bands, because it REPLACES them: putting it
+                  under "Add range" made the two read as a pair when one
+                  appends a row and the other discards every number in
+                  the list. */}
+              <button
+                className="builder-inspector-inline-btn"
+                onClick={() => seedValueRanges(widget)}
+              >
+                <ReloadOutlined />
+                Re-seed from data
+              </button>
+            </div>
+            {bands.map((band, idx) => (
+              <div key={idx} className="builder-inspector-range-row">
+                <input
+                  type="color"
+                  aria-label={`Colour for ${rangeLabel(bands, idx)}`}
+                  value={band.color || scheme.colors[0]}
+                  onChange={(e) => {
+                    const next = bands.map((b, i) =>
+                      i === idx ? { ...b, color: e.target.value } : b
+                    );
+                    updateConfig("value_ranges", next);
+                  }}
+                />
+                {band.to === null ? (
+                  <span className="builder-inspector-range-open">
+                    {idx === 0
+                      ? "All values"
+                      : `Above ${readable(bands[idx - 1]?.to)}`}
+                  </span>
+                ) : (
+                  <InputNumber
+                    // No steppers. They are absolutely positioned over
+                    // the right edge of the field and appear on hover,
+                    // so they sat on top of the digits — and stepping a
+                    // population threshold by one is no use to anybody.
+                    controls={false}
+                    // Each editable row carries that band's UPPER bound,
+                    // so the same word leads every one of them. A bare
+                    // number does not say which side it bounds, and the
+                    // rows only read as a ladder once it does. The
+                    // legend keeps interval labels instead — "340 – 890"
+                    // is the band's extent, which "Under 890" would
+                    // misstate.
+                    //
+                    // addonBefore, not prefix: antd's prefix is inline
+                    // text inside the field, so the word blended into
+                    // the number. The addon is the attached grey box
+                    // that reads as a label, and it comes with its own
+                    // background, border and radius.
+                    addonBefore="Under"
+                    value={band.to}
+                    placeholder="up to"
+                    onChange={(val) => {
+                      const next = bands.map((b, i) =>
+                        i === idx ? { ...b, to: val } : b
+                      );
+                      updateConfig("value_ranges", next);
+                    }}
+                  />
+                )}
+                {bands.length > 1 && (
+                  <button
+                    className="builder-inspector-criteria-remove"
+                    aria-label={`Remove ${rangeLabel(bands, idx)}`}
+                    onClick={() => {
+                      const next = bands.filter((b, i) => i !== idx);
+                      // Never leave the list without an open top, or
+                      // every point above the last break loses its
+                      // colour entirely.
+                      if (next.length && next.at(-1).to !== null) {
+                        next[next.length - 1] = {
+                          ...next[next.length - 1],
+                          to: null,
+                        };
+                      }
+                      updateConfig("value_ranges", next);
+                    }}
+                  >
+                    <DeleteOutlined />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              className="builder-inspector-add-btn"
+              onClick={() => {
+                const open = bands.at(-1);
+                const previous = bands.length > 1 ? bands.at(-2)?.to : null;
+                const next = [
+                  ...bands.slice(0, -1),
+                  {
+                    to: previous === null ? 0 : previous,
+                    color: open.color,
+                  },
+                  {
+                    ...open,
+                    color: scheme.colors[bands.length % scheme.colors.length],
+                  },
+                ];
+                updateConfig("value_ranges", next);
+              }}
+            >
+              <PlusOutlined />
+              Add range
+            </button>
+          </div>
+        )}
+
+        {/* One colour per option, for a map that colours its points by
+            the answer. Never for a value question: it has no options, so
+            this rendered a heading over nothing. */}
+        {wType === "map" && widget.question && !isValueMap && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">Colours</label>
             {(selectedQuestion?.options || []).map((opt, idx) => {
               const colors = wConfig.status_colors || {};
               const scheme =
@@ -1571,6 +2003,160 @@ const BuilderInspector = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Toolbox options (chart widgets) */}
+        {["bar", "line", "pie", "scatter"].includes(wType) && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-switch-row">
+              <span>Show toolbox</span>
+              <Switch
+                size="small"
+                checked={wConfig.show_toolbox === true}
+                onChange={(checked) => {
+                  if (checked) {
+                    onWidgetChange({
+                      ...widget,
+                      config: {
+                        ...widget.config,
+                        show_toolbox: true,
+                        toolbox_position:
+                          widget.config?.toolbox_position || "top-right",
+                        toolbox_features: widget.config?.toolbox_features || {
+                          ...DEFAULT_TOOLBOX_FEATURES,
+                        },
+                      },
+                    });
+                  } else {
+                    updateConfig("show_toolbox", false);
+                  }
+                }}
+              />
+            </label>
+
+            {wConfig.show_toolbox === true && (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div
+                  className="builder-inspector-field"
+                  style={{ marginBottom: 4 }}
+                >
+                  <label className="builder-inspector-label">
+                    Toolbox position
+                  </label>
+                  <Select
+                    size="small"
+                    style={{ width: "100%" }}
+                    value={wConfig.toolbox_position || "top-right"}
+                    onChange={(val) => {
+                      updateConfig("toolbox_position", val);
+                    }}
+                  >
+                    {TOOLBOX_POSITION_PRESETS.map((pos) => (
+                      <Select.Option key={pos.value} value={pos.value}>
+                        {pos.label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div
+                  className="builder-inspector-field"
+                  style={{ marginBottom: 0 }}
+                >
+                  <label className="builder-inspector-label">
+                    Toolbox features
+                  </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={
+                          wConfig.toolbox_features?.saveAsImage !== false
+                        }
+                        onChange={(e) => {
+                          const current = wConfig.toolbox_features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          updateConfig("toolbox_features", {
+                            ...current,
+                            saveAsImage: e.target.checked,
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Save as image
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={wConfig.toolbox_features?.dataView !== false}
+                        onChange={(e) => {
+                          const current = wConfig.toolbox_features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          updateConfig("toolbox_features", {
+                            ...current,
+                            dataView: e.target.checked,
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Data view
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={wConfig.toolbox_features?.restore !== false}
+                        onChange={(e) => {
+                          const current = wConfig.toolbox_features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          updateConfig("toolbox_features", {
+                            ...current,
+                            restore: e.target.checked,
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Restore zoom/filters
+                      </span>
+                    </label>
+                    {wType !== "pie" && (
+                      <label className="builder-inspector-col-row">
+                        <Checkbox
+                          checked={wConfig.toolbox_features?.dataZoom !== false}
+                          onChange={(e) => {
+                            const current = wConfig.toolbox_features || {
+                              ...DEFAULT_TOOLBOX_FEATURES,
+                            };
+                            updateConfig("toolbox_features", {
+                              ...current,
+                              dataZoom: e.target.checked,
+                            });
+                          }}
+                        />
+                        <span className="builder-inspector-q-label">
+                          Data zoom
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

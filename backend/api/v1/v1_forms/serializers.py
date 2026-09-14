@@ -515,6 +515,7 @@ class FormDataListQuestionSerializer(serializers.ModelSerializer):
             "dependency_rule",
             "display_only",
             "attributes",
+            "extra",
         ]
 
 

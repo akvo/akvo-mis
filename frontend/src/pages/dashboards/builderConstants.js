@@ -57,6 +57,20 @@ const DEFAULT_CHART_COLORS = [
   "#9b59b6",
 ];
 
+export const TOOLBOX_POSITION_PRESETS = [
+  { value: "top-right", label: "Top right" },
+  { value: "top-left", label: "Top left" },
+  { value: "bottom-right", label: "Bottom right" },
+  { value: "bottom-left", label: "Bottom left" },
+];
+
+export const DEFAULT_TOOLBOX_FEATURES = {
+  saveAsImage: true,
+  dataView: true,
+  restore: true,
+  dataZoom: true,
+};
+
 export const WIDGET_DEFAULTS = {
   kpi: {
     col_span: 6,
@@ -74,6 +88,9 @@ export const WIDGET_DEFAULTS = {
       group_by: "option",
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: { ...DEFAULT_TOOLBOX_FEATURES },
     },
   },
   line: {
@@ -83,8 +100,13 @@ export const WIDGET_DEFAULTS = {
       group_by: "month",
       date_question_id: null,
       category_question_id: null,
+      stack_by: null,
+      admin_level: 1,
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: { ...DEFAULT_TOOLBOX_FEATURES },
     },
   },
   pie: {
@@ -95,6 +117,13 @@ export const WIDGET_DEFAULTS = {
       variant: "pie",
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: {
+        saveAsImage: true,
+        dataView: true,
+        restore: true,
+      },
     },
   },
   table: {
@@ -108,6 +137,12 @@ export const WIDGET_DEFAULTS = {
     config: {
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      // "category" colours each point by an option question's answer;
+      // "quantity" sizes it by a number question's answer (#382). Not a
+      // control of its own — the inspector writes it from the type of
+      // the question the author picks — but it is what the viewer reads,
+      // and the viewer has no question types to derive it from.
+      map_mode: "category",
     },
   },
   scatter: {
@@ -116,6 +151,9 @@ export const WIDGET_DEFAULTS = {
     config: {
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      toolbox_features: { ...DEFAULT_TOOLBOX_FEATURES },
     },
   },
   section_title: {
@@ -152,6 +190,7 @@ export const VALID_STACK_BY = [
   { value: "", label: "None" },
   { value: "option", label: "Option value" },
   { value: "parent_id", label: "Registration site" },
+  { value: "administration", label: "Administration area" },
 ];
 
 /**
@@ -166,6 +205,25 @@ export const STACK_QUESTION_TYPES = new Set(["option", "multiple_option"]);
 
 // Types whose grouping differs from the plain count of submissions.
 export const SUPPORTED_GROUP_QUESTION_TYPES = new Set([
+  "option",
+  "multiple_option",
+  "number",
+]);
+
+/**
+ * What a map widget can bind its question to.
+ *
+ * A map reads the answer one of two ways — colour the point by an
+ * option question's value, or size it by a number question's (#382) —
+ * and `date` supports neither: no options to colour by, no magnitude to
+ * size by. It reached the picker only because /sources narrows to the
+ * four types the backend can aggregate at all, which is a broader
+ * question than what a map can draw. Deliberately its own set rather
+ * than SUPPORTED_GROUP_QUESTION_TYPES: the members coincide today, but
+ * "what a bar can group by" and "what a map can encode" are different
+ * claims and should be free to diverge.
+ */
+export const MAP_QUESTION_TYPES = new Set([
   "option",
   "multiple_option",
   "number",
@@ -211,7 +269,12 @@ export const stackByOptions = (
   }
   if (question.type === "number") {
     return groupBy === "month" || groupBy === "date"
-      ? [...none, ...VALID_STACK_BY.filter((s) => s.value === "parent_id")]
+      ? [
+          ...none,
+          ...VALID_STACK_BY.filter(
+            (s) => s.value === "parent_id" || s.value === "administration"
+          ),
+        ]
       : none;
   }
   if (!STACK_QUESTION_TYPES.has(question.type)) {
@@ -305,7 +368,7 @@ export const groupByOptions = (question = null, config = {}) => {
     return by("month", "date", "parent_id");
   }
   if (question.type === "number") {
-    return stackBy === "parent_id"
+    return stackBy === "parent_id" || stackBy === "administration"
       ? by("month", "date")
       : by("month", "date", "parent_id");
   }
@@ -704,10 +767,10 @@ export const NEEDS_QUESTION = new Set([
   "map",
   "scatter",
 ]);
-export const NEEDS_GROUP_BY = new Set(["bar", "pie"]);
+export const NEEDS_GROUP_BY = new Set(["bar", "pie", "line"]);
 export const NEEDS_STACK_BY = new Set(["bar"]);
 export const NEEDS_VALUE_TYPE = new Set(["kpi", "bar", "pie"]);
-export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar"]);
+export const NEEDS_REPEAT_AGG = new Set(["kpi", "bar", "line"]);
 export const NEEDS_COLOR = new Set([
   "kpi",
   "bar",

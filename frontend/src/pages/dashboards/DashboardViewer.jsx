@@ -196,6 +196,7 @@ const DashboardViewer = () => {
 
             <DashboardViewFilters
               defaultFilters={dashboard.default_filters}
+              rootAdministrationId={dashboard.root_administration_id}
               value={filters}
               onChange={setFilters}
             />

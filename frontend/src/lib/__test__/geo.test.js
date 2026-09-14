@@ -4,9 +4,13 @@ import geo from "../geo";
 describe("geo", () => {
   test("exports exactly the topojson-free helpers", () => {
     expect(Object.keys(geo).sort()).toEqual([
+      "boundsFromPoints",
       "defaultPos",
       "fixCoordinates",
       "getColorScale",
+      // Added by #375 with the map-tile consolidation; this exhaustive
+      // list was not updated with it, so the suite has been red since.
+      "hasValidPoint",
       "normalizeLon",
       "shiftLonPositive",
       "tile",

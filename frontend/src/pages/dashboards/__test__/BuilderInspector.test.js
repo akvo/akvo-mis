@@ -1,7 +1,10 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import BuilderInspector from "../BuilderInspector";
+import api from "../../../lib/api";
+
+jest.mock("../../../lib/api");
 import {
   pruneConfigForForm,
   tableColumnOptions,
@@ -45,6 +48,8 @@ const SOURCES = {
       type: "monitoring",
       questions: [
         { id: 600203, label: "Status", name: "status", type: "option" },
+        { id: 600202, label: "Population", name: "population", type: "number" },
+        { id: 600201, label: "Inspected on", name: "inspected", type: "date" },
       ],
     },
   ],
@@ -83,6 +88,475 @@ const draw = (widget, onWidgetChange = jest.fn()) => {
   );
   return onWidgetChange;
 };
+
+// =========================================================
+// The map's stored `map_mode`
+// =========================================================
+//
+// VizMap reads `config.map_mode`; the inspector derives the same thing
+// from the picked question's type. Healing a widget saved before the
+// flag existed is worth doing — but only where the two actually
+// disagree about what gets drawn, because `onWidgetChange` sets the
+// builder's `dirty` flag, and a dirty dashboard prompts "You have
+// unsaved changes" on the way out. Writing a flag that changes nothing
+// would raise that prompt on every map in every existing dashboard, for
+// merely clicking one.
+
+const mapWidget = (question, config = {}) => ({
+  id: 1,
+  type: "map",
+  title: "Sites",
+  col_span: 24,
+  form: 6002,
+  question,
+  config,
+});
+
+describe("clustering is a choice, not the default (#387)", () => {
+  const SWITCH = "Cluster and size by value";
+
+  beforeEach(() => {
+    api.get.mockReset();
+    api.get.mockResolvedValue({ data: { data: [] } });
+  });
+
+  const switchFor = () =>
+    screen
+      .getByText(SWITCH)
+      .closest(".builder-inspector-switch-row")
+      .querySelector("button");
+
+  test("picking a value question leaves clustering off", () => {
+    // The path an author actually takes. The heal effect covers widgets
+    // saved before map_mode existed; this is the one that runs when
+    // somebody builds a map today, and it must land on the default.
+    const onWidgetChange = draw(mapWidget(null));
+    fireEvent.mouseDown(
+      screen.getByText("Select a question").closest(".ant-select-selector")
+    );
+    fireEvent.click(screen.getByText("Population"));
+    const next = onWidgetChange.mock.calls.at(-1)[0];
+    expect(next.config.map_mode).toBe("range");
+  });
+
+  test("the switch is offered for a value question", () => {
+    draw(mapWidget(600202, { map_mode: "range" }));
+    expect(screen.getByText(SWITCH)).toBeInTheDocument();
+  });
+
+  test("an option question is never offered it", () => {
+    // Clustering by an option question's answer is what a category map
+    // already does; there is nothing to size by.
+    draw(mapWidget(600203, { map_mode: "category" }));
+    expect(screen.queryByText(SWITCH)).toBeNull();
+  });
+
+  test("it reads off in range mode and on in quantity mode", () => {
+    const { unmount } = render(
+      <BuilderInspector
+        widget={mapWidget(600202, { map_mode: "range" })}
+        sources={SOURCES}
+        dashboardName="W"
+        dashboardDesc=""
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+        errorMessage={null}
+      />
+    );
+    expect(switchFor()).toHaveAttribute("aria-checked", "false");
+    unmount();
+    draw(mapWidget(600202, { map_mode: "quantity" }));
+    expect(switchFor()).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("turning it on switches to the clustered magnitude map", () => {
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "range" }));
+    fireEvent.click(switchFor());
+    const next = onWidgetChange.mock.calls.at(-1)[0];
+    expect(next.config.map_mode).toBe("quantity");
+  });
+
+  test("turning it off goes back to ranges", () => {
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    fireEvent.click(switchFor());
+    const next = onWidgetChange.mock.calls.at(-1)[0];
+    expect(next.config.map_mode).toBe("range");
+  });
+
+  test("Combine by is offered only while clustering", () => {
+    const { unmount } = render(
+      <BuilderInspector
+        widget={mapWidget(600202, { map_mode: "quantity" })}
+        sources={SOURCES}
+        dashboardName="W"
+        dashboardDesc=""
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+        errorMessage={null}
+      />
+    );
+    expect(screen.getByText("Combine by")).toBeInTheDocument();
+    unmount();
+    draw(mapWidget(600202, { map_mode: "range" }));
+    expect(screen.queryByText("Combine by")).toBeNull();
+  });
+
+  test("range mode shows the bands, with the open one last", () => {
+    draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    expect(screen.getByText("Colours")).toBeInTheDocument();
+    // The editor names one bound per row; the legend keeps intervals.
+    expect(screen.getByText("Above 340")).toBeInTheDocument();
+  });
+
+  test("every editable band says which side its number bounds", () => {
+    // A bare number in a row does not say whether it is that band's
+    // floor or its ceiling. Each editable row carries an upper bound, so
+    // each one reads "Under N".
+    draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: 890, color: "#fee08b" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    expect(
+      document.querySelectorAll(".ant-input-number-group-addon")
+    ).toHaveLength(2);
+    expect(screen.getAllByText("Under")).toHaveLength(2);
+  });
+
+  test("the open band reads as a floor, not a ceiling", () => {
+    draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    expect(screen.getByText("Above 340")).toBeInTheDocument();
+  });
+
+  test("a lone open band names no bound at all", () => {
+    draw(mapWidget(600202, { map_mode: "range" }));
+    expect(screen.getByText("All values")).toBeInTheDocument();
+  });
+
+  test("editing a threshold writes it back", () => {
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    const input = document.querySelector(".ant-input-number-input");
+    fireEvent.change(input, { target: { value: "500" } });
+    const next = onWidgetChange.mock.calls.at(-1)[0];
+    expect(next.config.value_ranges[0].to).toBe(500);
+  });
+
+  test("adding a band keeps the open one last", () => {
+    // A band added after the open one could never hold a point.
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 340, color: "#d73027" },
+          { to: null, color: "#1a9850" },
+        ],
+      })
+    );
+    fireEvent.click(screen.getByText("Add range"));
+    const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
+    expect(next).toHaveLength(3);
+    expect(next.at(-1).to).toBeNull();
+    expect(next.slice(0, -1).every((b) => b.to !== null)).toBe(true);
+  });
+
+  test("re-seeding asks the data again and replaces the bands", async () => {
+    api.get.mockResolvedValue({
+      data: { data: [1, 2, 3, 4, 5, 6].map((v) => ({ group: "x", value: v })) },
+    });
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [
+          { to: 999, color: "#111" },
+          { to: null, color: "#222" },
+        ],
+      })
+    );
+    fireEvent.click(screen.getByText("Re-seed from data"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
+    expect(next.map((b) => b.to)).not.toContain(999);
+  });
+
+  test("a new colour scheme recolours the bands, keeping the breaks", () => {
+    // The scheme reseeds an option map's status_colours and a line
+    // chart's category colours; a range map's bands were left behind, so
+    // picking a scheme visibly did nothing to the map.
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        color_scheme: "categorical",
+        value_ranges: [
+          { to: 340, color: "#1890ff" },
+          { to: 890, color: "#64A73B" },
+          { to: null, color: "#F5A623" },
+        ],
+      })
+    );
+    fireEvent.click(screen.getByTitle("Green shades"));
+    const next = onWidgetChange.mock.calls.at(-1)[0].config;
+    expect(next.value_ranges.map((b) => b.color)).toEqual([
+      "#006d2c",
+      "#31a354",
+      "#74c476",
+    ]);
+    // The numbers are the author's; a palette change must not move them.
+    expect(next.value_ranges.map((b) => b.to)).toEqual([340, 890, null]);
+  });
+
+  test("a clustered map has no bands to recolour", () => {
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "quantity", color_scheme: "categorical" })
+    );
+    fireEvent.click(screen.getByTitle("Warm"));
+    const next = onWidgetChange.mock.calls.at(-1)[0].config;
+    expect(next.value_ranges).toBeUndefined();
+    expect(next.chart_colors[0]).toBe("#bd0026");
+  });
+
+  test("more bands than the palette has colours still recolours", () => {
+    const onWidgetChange = draw(
+      mapWidget(600202, {
+        map_mode: "range",
+        value_ranges: [1, 2, 3, 4, 5, 6].map((n) => ({
+          to: n === 6 ? null : n * 10,
+          color: "#000",
+        })),
+      })
+    );
+    fireEvent.click(screen.getByTitle("Warm"));
+    const colors = onWidgetChange.mock.calls
+      .at(-1)[0]
+      .config.value_ranges.map((b) => b.color);
+    expect(colors).toHaveLength(6);
+    expect(colors.every((c) => c !== "#000")).toBe(true);
+  });
+
+  test("re-seeding keeps as many bands as the author has", async () => {
+    // Seeding three is the right FIRST guess, not a standing rule. An
+    // author who added two more bands and then asked for fresh numbers
+    // had three handed back, silently discarding the rows they made.
+    api.get.mockResolvedValue({
+      data: {
+        data: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => ({
+          group: String(v),
+          value: v,
+        })),
+      },
+    });
+    const five = [100, 200, 300, 400].map((to, i) => ({
+      to,
+      color: `#00000${i}`,
+    }));
+    five.push({ to: null, color: "#000005" });
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "range", value_ranges: five })
+    );
+    fireEvent.click(screen.getByText("Re-seed from data"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
+    expect(next).toHaveLength(5);
+    expect(next.at(-1).to).toBeNull();
+  });
+
+  test("but data that cannot fill them gives back fewer", async () => {
+    // The count is what to aim for, not a promise. Five bands over one
+    // repeated value would be four that no point can land in, and an
+    // empty band in a legend is worse than a missing one.
+    api.get.mockResolvedValue({
+      data: { data: [7, 7, 7, 7, 7].map((v) => ({ group: "x", value: v })) },
+    });
+    const five = [1, 2, 3, 4].map((to) => ({ to, color: "#000" }));
+    five.push({ to: null, color: "#111" });
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "range", value_ranges: five })
+    );
+    fireEvent.click(screen.getByText("Re-seed from data"));
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
+    expect(next).toEqual([{ to: null, color: expect.any(String) }]);
+  });
+
+  test("the first seed still guesses three", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        data: [1, 2, 3, 4, 5, 6].map((v) => ({ group: String(v), value: v })),
+      },
+    });
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    fireEvent.click(
+      screen
+        .getByText("Cluster and size by value")
+        .closest(".builder-inspector-switch-row")
+        .querySelector("button")
+    );
+    await waitFor(() =>
+      expect(
+        onWidgetChange.mock.calls.some((c) => c[0].config.value_ranges?.length)
+      ).toBe(true)
+    );
+    const seeded = onWidgetChange.mock.calls
+      .map((c) => c[0].config.value_ranges)
+      .filter(Boolean)
+      .at(-1);
+    expect(seeded).toHaveLength(3);
+  });
+
+  test("Colours are offered only while NOT clustering", () => {
+    // Every clustered circle is one colour; a palette would describe
+    // nothing on screen.
+    draw(mapWidget(600202, { map_mode: "quantity" }));
+    expect(screen.queryByText("Colours")).toBeNull();
+  });
+
+  test("turning it off seeds bands from the data, once", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        data: [10, 20, 30, 40, 50, 60].map((v, i) => ({
+          group: String(i),
+          value: v,
+        })),
+      },
+    });
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    fireEvent.click(switchFor());
+
+    await waitFor(() =>
+      expect(
+        onWidgetChange.mock.calls.some((c) => c[0].config.value_ranges?.length)
+      ).toBe(true)
+    );
+    const seeded = onWidgetChange.mock.calls
+      .map((c) => c[0].config.value_ranges)
+      .filter(Boolean)
+      .at(-1);
+    expect(seeded.at(-1).to).toBeNull();
+    expect(seeded.length).toBeGreaterThan(1);
+  });
+
+  test("bands the author already set are never re-seeded", async () => {
+    // The whole point of seeding once: their numbers stay put.
+    const existing = [
+      { to: 5, color: "#111" },
+      { to: null, color: "#222" },
+    ];
+    const onWidgetChange = draw(
+      mapWidget(600202, { map_mode: "quantity", value_ranges: existing })
+    );
+    fireEvent.click(switchFor());
+    await waitFor(() => expect(onWidgetChange).toHaveBeenCalled());
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
+  test("a failed seed still leaves a usable editor", async () => {
+    api.get.mockRejectedValue(new Error("network"));
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    fireEvent.click(switchFor());
+    await waitFor(() =>
+      expect(
+        onWidgetChange.mock.calls.some((c) => c[0].config.value_ranges)
+      ).toBe(true)
+    );
+    const seeded = onWidgetChange.mock.calls
+      .map((c) => c[0].config.value_ranges)
+      .filter(Boolean)
+      .at(-1);
+    expect(seeded).toEqual([{ to: null, color: expect.any(String) }]);
+  });
+});
+
+describe("map_mode is healed only where it changes the drawing", () => {
+  test("a legacy map on a value question is switched to ranges", () => {
+    // The case that matters: saved before map_mode existed, so it reads
+    // as a category map and draws identical dots, ignoring the value.
+    // It lands in range mode because that is the default a value
+    // question gets — clustering is opted into, never inherited.
+    const onWidgetChange = draw(mapWidget(600202));
+    expect(onWidgetChange).toHaveBeenCalledTimes(1);
+    const next = onWidgetChange.mock.calls[0][0];
+    expect(next.config.map_mode).toBe("range");
+    // A value question has no options, so any colours left by a
+    // previous option question describe nothing.
+    expect(next.config.status_colors).toEqual({});
+  });
+
+  test("a value map already set to quantity is left alone", () => {
+    // The author chose clustering; inheriting the new default would
+    // silently un-cluster every map shipped by #382.
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a legacy map on an option question is left alone", () => {
+    // Absent already means category to VizMap, so writing "category"
+    // changes no pixel — and would mark the dashboard dirty for it.
+    const onWidgetChange = draw(mapWidget(600203));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a map already in the right mode is left alone", () => {
+    const onWidgetChange = draw(mapWidget(600202, { map_mode: "quantity" }));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a map with no question yet is left alone", () => {
+    const onWidgetChange = draw(mapWidget(null));
+    expect(onWidgetChange).not.toHaveBeenCalled();
+  });
+
+  test("a map stuck in quantity after a swap to an option question", () => {
+    // The reverse heal, and it does change the drawing: quantity mode
+    // sizes by a value the option question cannot supply.
+    const onWidgetChange = draw(mapWidget(600203, { map_mode: "quantity" }));
+    expect(onWidgetChange).toHaveBeenCalledTimes(1);
+    expect(onWidgetChange.mock.calls[0][0].config.map_mode).toBe("category");
+  });
+});
+
+describe("the map question picker", () => {
+  test("offers no date question", () => {
+    // /sources narrows to the four aggregatable types, but a map can
+    // neither colour by a date nor size by one.
+    draw(mapWidget(null));
+    fireEvent.mouseDown(
+      screen.getByText("Select a question").closest(".ant-select-selector")
+    );
+    expect(screen.getByText("Population")).toBeInTheDocument();
+    expect(screen.getByText("Status")).toBeInTheDocument();
+    expect(screen.queryByText("Inspected on")).toBeNull();
+  });
+});
 
 describe("criteria rows can be removed", () => {
   test("every criterion offers a named remove control", () => {
@@ -926,5 +1400,109 @@ describe("pruneConfigForForm and the value question", () => {
       { id: 600203 },
     ]);
     expect(next.value_question).toBeNull();
+  });
+});
+
+describe("chart toolbox controls in BuilderInspector", () => {
+  const chartWidget = (type, config = {}) => ({
+    id: 1,
+    type,
+    title: `My ${type}`,
+    col_span: 12,
+    form: 6002,
+    question: 600203,
+    config: {
+      show_toolbox: false,
+      toolbox_position: "top-right",
+      ...config,
+    },
+  });
+
+  test("offers the toolbox switch for bar, line, pie, and scatter widgets", () => {
+    ["bar", "line", "pie", "scatter"].forEach((type) => {
+      const { unmount } = render(
+        <BuilderInspector
+          widget={chartWidget(type)}
+          sources={SOURCES}
+          onWidgetChange={jest.fn()}
+          onDashboardChange={jest.fn()}
+        />
+      );
+      expect(screen.getByText("Show toolbox")).toBeInTheDocument();
+      unmount();
+    });
+  });
+
+  test("does not offer the toolbox switch for table, kpi, or section_title", () => {
+    ["table", "kpi", "section_title"].forEach((type) => {
+      const { unmount } = render(
+        <BuilderInspector
+          widget={{
+            id: 2,
+            type,
+            title: `My ${type}`,
+            col_span: 12,
+            config: {},
+          }}
+          sources={SOURCES}
+          onWidgetChange={jest.fn()}
+          onDashboardChange={jest.fn()}
+        />
+      );
+      expect(screen.queryByText("Show toolbox")).not.toBeInTheDocument();
+      unmount();
+    });
+  });
+
+  test("toggling the toolbox switch updates widget.config.show_toolbox", () => {
+    const onWidgetChange = jest.fn();
+    render(
+      <BuilderInspector
+        widget={chartWidget("bar", { show_toolbox: false })}
+        sources={SOURCES}
+        onWidgetChange={onWidgetChange}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    const label = screen.getByText("Show toolbox").closest("label");
+    const switchEl = label.querySelector("button[role='switch']");
+    fireEvent.click(switchEl);
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          show_toolbox: true,
+        }),
+      })
+    );
+  });
+
+  test("shows position select and feature checkboxes when show_toolbox is true", () => {
+    render(
+      <BuilderInspector
+        widget={chartWidget("bar", { show_toolbox: true })}
+        sources={SOURCES}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText("Toolbox position")).toBeInTheDocument();
+    expect(screen.getByText("Toolbox features")).toBeInTheDocument();
+    expect(screen.getByText("Save as image")).toBeInTheDocument();
+    expect(screen.getByText("Data view")).toBeInTheDocument();
+    expect(screen.getByText("Restore zoom/filters")).toBeInTheDocument();
+    expect(screen.getByText("Data zoom")).toBeInTheDocument();
+  });
+
+  test("hides Data zoom checkbox for pie charts", () => {
+    render(
+      <BuilderInspector
+        widget={chartWidget("pie", { show_toolbox: true })}
+        sources={SOURCES}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText("Save as image")).toBeInTheDocument();
+    expect(screen.queryByText("Data zoom")).not.toBeInTheDocument();
   });
 });

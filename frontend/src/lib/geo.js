@@ -88,11 +88,51 @@ const fixCoordinates = (coords) => {
 
 const hasValidPoint = (row) => Array.isArray(row?.geo) && row.geo.length === 2;
 
+const boundsFromPoints = (pts) => {
+  if (!pts || pts.length === 0) {
+    return defaultPos();
+  }
+
+  const lats = pts.map((p) => p[0]);
+  const lons = pts.map((p) => p[1]);
+
+  const latMin = Math.min(...lats);
+  const latMax = Math.max(...lats);
+  const latCenter = (latMin + latMax) / 2;
+
+  let lonMin = Math.min(...lons);
+  let lonMax = Math.max(...lons);
+  let lonCenter;
+
+  if (lonMax - lonMin > 180) {
+    const shifted = lons.map((l) => (l < 0 ? l + 360 : l));
+    lonMin = Math.min(...shifted);
+    lonMax = Math.max(...shifted);
+    lonCenter = (lonMin + lonMax) / 2;
+    if (lonCenter > 180) {
+      lonCenter -= 360;
+    }
+    lonMin = lonMin > 180 ? lonMin - 360 : lonMin;
+    lonMax = lonMax > 180 ? lonMax - 360 : lonMax;
+  } else {
+    lonCenter = (lonMin + lonMax) / 2;
+  }
+
+  return {
+    coordinates: [latCenter, lonCenter],
+    bbox: [
+      [latMin, Math.min(lonMin, lonMax)],
+      [latMax, Math.max(lonMin, lonMax)],
+    ],
+  };
+};
+
 const geo = {
   tile,
   defaultPos,
   getColorScale,
   hasValidPoint,
+  boundsFromPoints,
   normalizeLon,
   shiftLonPositive,
   fixCoordinates,

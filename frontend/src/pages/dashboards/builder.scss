@@ -715,22 +715,82 @@
   }
 }
 
+/* The bands of a value map (#387). Unlike the status rows this one holds
+   a real control, so the parts are spaced by a gap and the input takes
+   the room that is left — at the same height as every other input in the
+   panel, not the shorter `size="small"` that belongs to the criteria
+   rows' three-controls-per-line squeeze. */
+.builder-inspector-range-row {
+  gap: 8px;
+
+  /* An addon makes antd wrap the control twice: the flex child of this
+     row is `-group-wrapper` (inline-block, no width of its own), inside
+     it a `display: table; width: 100%` group, and only then the input.
+     Sizing the inner one leaves the outer at its default width, which is
+     what kept the field narrow. All three are listed so the row survives
+     a change of affix. */
+  .ant-input-number,
+  .ant-input-number-affix-wrapper,
+  .ant-input-number-group-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* The open top has no number to edit, so it reads as text where the
+   others carry an input — same row, same height, so the colour swatches
+   stay in one column. */
+.builder-inspector-range-open {
+  flex: 1;
+  color: #55606d;
+}
+
 .builder-inspector-add-btn {
   background: none;
-  border: 1px dashed #d6dbe1;
+  border: 1px solid #d6dbe1;
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 12.5px;
   color: #1651b6;
   cursor: pointer;
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 
   &:hover {
     background: #f6f8fb;
   }
 }
 
-.builder-inspector-status-color-row {
+/* A section label with an action on its right. */
+.builder-inspector-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.builder-inspector-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #1651b6;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.builder-inspector-status-color-row,
+.builder-inspector-range-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
