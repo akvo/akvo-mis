@@ -265,6 +265,54 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
         self.assertNotIn("geometry_total", response.json())
         self.assertNotIn(b"geometry", response.content)
 
+    def test_complete_is_true_only_on_the_last_page(self):
+        """GEO-005 section 4's completeness flag, scoped to what it can
+        honestly claim: this listing is fully delivered."""
+        for n in range(3):
+            self.make_datapoint(self.form, f"Plot C{n}", ADDIS_PLOT)
+        first = self.get_list(f"?form_id={self.form.id}&page_size=2&page=1")
+        last = self.get_list(f"?form_id={self.form.id}&page_size=2&page=2")
+        self.assertEqual(first.json()["total_page"], 2)
+        self.assertFalse(first.json()["complete"])
+        self.assertTrue(last.json()["complete"])
+
+    def test_no_complete_flag_when_the_flag_is_off(self):
+        self.make_datapoint(self.plain_form, "Plain A", ADDIS_PLOT)
+        response = self.get_list(f"?form_id={self.plain_form.id}")
+        self.assertNotIn("complete", response.json())
+
+    def test_no_complete_flag_without_form_id(self):
+        self.assertNotIn("complete", self.get_list().json())
+
+    def test_pagination_and_cursor_still_behave_with_geometry_on(self):
+        """The doc's fourth testing-strategy row. Geometry is attached by
+        a follow-up query keyed on the page's ids, so paging is where that
+        could plausibly go wrong: rows duplicated across pages, dropped
+        between them, or the cursor stopping working."""
+        for n in range(3):
+            self.make_datapoint(self.form, f"Plot P{n}", ADDIS_PLOT)
+
+        first = self.get_list(f"?form_id={self.form.id}&page_size=2&page=1")
+        second = self.get_list(f"?form_id={self.form.id}&page_size=2&page=2")
+        names = [r["name"] for r in first.json()["data"]]
+        names += [r["name"] for r in second.json()["data"]]
+
+        # Every datapoint exactly once across the pages, none duplicated.
+        self.assertEqual(len(names), 4)
+        self.assertEqual(sorted(names), sorted(set(names)))
+        self.assertEqual(first.json()["total"], 4)
+        # Geometry rode along on both pages, not just the first.
+        for body in (first.json(), second.json()):
+            for row in body["data"]:
+                self.assertEqual(len(row["geometry"]), 1)
+
+        # The cursor still filters the listing when geometry is on.
+        self.assignment.last_synced_at = timezone.now()
+        self.assignment.save()
+        after = self.get_list(f"?form_id={self.form.id}")
+        self.assertEqual(after.json()["total"], 0)
+        self.assertEqual(after.json()["data"], [])
+
     def test_the_count_and_the_payload_describe_the_same_set(self):
         """If these ever disagree the device's comparison never balances
         and it refuses to validate forever."""

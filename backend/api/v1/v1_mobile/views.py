@@ -762,6 +762,17 @@ class MobileDataPointDownloadListRowSerializer(
                 ),
                 "total_page": serializers.IntegerField(),
                 "current": serializers.IntegerField(),
+                "complete": serializers.BooleanField(
+                    required=False,
+                    help_text=(
+                        "This response delivered the last page of this "
+                        "listing. NOT a claim that the device's stored "
+                        "candidate set is complete - compare "
+                        "geometry_total against the local row count for "
+                        "that. Present only with form_id and "
+                        "detectOverlaps."
+                    ),
+                ),
                 "geometry_total": serializers.IntegerField(
                     required=False,
                     help_text=(
@@ -876,6 +887,17 @@ def get_datapoint_download_list(request, version):
         response.data["geometry_total"] = geometry_answers(
             candidates.values("id"), geometry_question_ids
         ).count()
+        # Scoped deliberately narrowly: "this response delivered the last
+        # page of this listing". It is NOT "your local index is now
+        # complete", and it must not be read that way. The cursor advances
+        # when the final page is delivered rather than confirmed, so a
+        # device that dies mid-page and drains the next run cleanly would
+        # see this true over a gapped index. `geometry_total` is the field
+        # that catches that, because the device can re-check it against its
+        # own row count at validation time.
+        response.data["complete"] = (
+            response.data["current"] == response.data["total_page"]
+        )
     page = response.data["current"]
     total_page = response.data["total_page"]
     if page == total_page and not form_id:
