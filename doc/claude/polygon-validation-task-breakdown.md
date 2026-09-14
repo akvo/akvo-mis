@@ -159,7 +159,7 @@ flowchart LR
 | Layer | What works today | What is missing |
 |---|---|---|
 | **Backend** | `geoshape`=14, `geotrace`=15 with `center`; `Questions.extra` is a free-form `JSONField` already serialized to mobile; XLSForm export maps both types | Geometry + bbox on the datapoint list (**T2**); `geoConfig` round-trip tests (**T9**) |
-| **Form builder** | `geotrace`/`geoshape` are authorable; `SettingGeo` panel exists and already authors a structured value (`center`) | The overlap / shape / min-size checkboxes and their numeric fields (**T8**) |
+| **Form builder** | `SettingGeo` panel exists and already authors a structured value (`center`), scoped to the three geo types | `geoshape` is **not** authorable: both form-builder pages clamp the type dropdown with `limitQuestionType={Object.keys(QUESTION_TYPES)}` and `geoshape` is absent from it (**T8**). Plus the overlap threshold controls themselves (**T8**) |
 | **Web form** | Full polygon capture via ARF `TypeGeoDrawing` — tap, drag-marker, auto-record, accuracy threshold, i18n in 5 languages | Any validation beyond the min-point rule; manage-data cells render a raw coordinate array |
 | **Mobile app** | `TypeGeo.js` — a **single lat/lng point**. `datapoints` already holds local *and* synced records offline. `react-native-webview` installed. Validation plumbing (`feedback` + submit gate) already exists | **Everything polygon**: capture, map, geometry library, overlap, shape and area checks, geometry index (**T1, T3–T7**) |
 

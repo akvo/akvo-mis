@@ -48,8 +48,8 @@ Established by inspection, not assumption:
 | `datapoints.geo` is `VARCHAR(255)` — a point, not a polygon | [tables.js:53](../../app/src/database/tables.js#L53) |
 | GPS tuning knobs already live in `config` and sync from backend | [tables.js:23-25](../../app/src/database/tables.js#L23) |
 | `Questions.extra` is a free-form `JSONField` already serialized to mobile — **no model change needed for per-question geo config** | [models.py:148](../../backend/api/v1/v1_forms/models.py#L148), [serializers.py](../../backend/api/v1/v1_forms/serializers.py) `get_extra` |
-| **Web already collects polygons end to end.** `akvo-react-form-editor@2.0.4` offers `geotrace`/`geoshape` as authorable types with a `SettingGeo` panel; [Forms.jsx:532](../../frontend/src/pages/forms/Forms.jsx#L532) passes form JSON straight to ARF `<Webform>`, and ARF **2.7.9** switches on the type internally | [frontend/package.json:11-12](../../frontend/package.json#L11), `node_modules/akvo-react-form-editor/dist` |
-| Frontend `QUESTION_TYPES` is referenced **only** by `EditableCell` / `ReadOnlyCell` / `RawDataTable` — it drives **data display**, not form rendering | [frontend/src/lib/constants.js:14](../../frontend/src/lib/constants.js#L14) |
+| **Web already collects polygons end to end, once authoring is unblocked.** `akvo-react-form-editor@2.0.4` offers `geotrace`/`geoshape` as authorable types with a `SettingGeo` panel, but this host clamped both types out of the form builder via `QUESTION_TYPES`; GEO-009 added `geoshape` to that list, leaving `geotrace` unauthorable; [Forms.jsx:532](../../frontend/src/pages/forms/Forms.jsx#L532) passes form JSON straight to ARF `<Webform>`, and ARF **2.7.9** switches on the type internally | [frontend/package.json:11-12](../../frontend/package.json#L11), `node_modules/akvo-react-form-editor/dist` |
+| Frontend `QUESTION_TYPES` drives **both** display **and** authoring. Both form-builder pages pass it to the editor as `limitQuestionType` ([FormBuilderCreate.jsx:110](../../frontend/src/pages/form-builder/FormBuilderCreate.jsx#L110), [FormBuilderEdit.jsx:434](../../frontend/src/pages/form-builder/FormBuilderEdit.jsx#L434)), so a type absent from it cannot be authored at all | [frontend/src/lib/constants.js:14](../../frontend/src/lib/constants.js#L14) |
 | `@turf/turf ^6.5.0` is already a declared frontend dependency — pure JS, so it runs in React Native too | [frontend/package.json:9](../../frontend/package.json#L9) |
 | No `Forms` field gates web vs mobile; client targeting is by `MobileAssignment` and by which questions a form author adds | [v1_forms/models.py:18](../../backend/api/v1/v1_forms/models.py#L18) |
 
@@ -227,8 +227,10 @@ Items 4 and 7 are the quiet failures: the field looks correct on screen and vali
 
 Web **capture** needs no change (§2). But `frontend/src/lib/constants.js` `QUESTION_TYPES` drives
 manage-data display, so a polygon answer currently renders as a raw coordinate array in
-`EditableCell` / `ReadOnlyCell` / `RawDataTable`. Adding the types there is a **display fix**,
-not an enabler, and is independent of this mobile work.
+`EditableCell` / `ReadOnlyCell` / `RawDataTable`. Adding the type to `QUESTION_TYPES` is an
+**enabler**, not a display fix: it is what makes a `geoshape` question authorable. GEO-009 does
+that for `geoshape`. What remains optional here, and independent of this mobile work, is giving
+the display components a real rendering for polygon answers instead of a raw coordinate array.
 
 ### FR-2 — Single-polygon validation
 
