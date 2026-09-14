@@ -13,12 +13,12 @@ from api.v1.v1_data.models import (
     Answers,
     AnswerHistory,
 )
+from api.v1.v1_data.functions import answer_fields
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import (
     Questions,
 )
-from api.v1.v1_profile.models import Administration, EntityData
-from api.v1.v1_users.models import Organisation
+from api.v1.v1_profile.models import Administration
 from utils.custom_serializer_fields import (
     CustomPrimaryKeyRelatedField,
     UnvalidatedField,
@@ -62,6 +62,33 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
         ]
 
 
+# A geoshape or geotrace answer is a bare coordinate ring,
+# `[[lat, lon], ...]`. The flat `geo` point shape `[9.03, 38.74]` is the
+# mistake a client is most likely to make and `isinstance(value, list)`
+# cannot tell the two apart, so a bad value is stored happily and then
+# breaks every `datapoint-list?form_id=...` request for that form - for
+# every device, including the repair path that would otherwise let one
+# recover. There is no safe place downstream to drop a single bad row
+# either: the payload and `geometry_total` have to describe the same
+# set, so a skip there would reintroduce a mismatch the device can never
+# reconcile. The write boundary is the only place this can be refused.
+def is_coordinate_ring(value):
+    # The `isinstance(value, list)` clause is load-bearing: it is why
+    # geoshape and geotrace are absent from the plain list-check branches
+    # in `validate` below. Do not drop it and do not re-add them there.
+    return isinstance(value, list) and all(
+        isinstance(point, (list, tuple))
+        and len(point) == 2
+        # `isinstance(True, int)` is True in Python, and a boolean is
+        # not a latitude.
+        and all(
+            isinstance(axis, (int, float)) and not isinstance(axis, bool)
+            for axis in point
+        )
+        for point in value
+    )
+
+
 class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
     value = UnvalidatedField(allow_null=False)
     question = CustomPrimaryKeyRelatedField(queryset=Questions.objects.none())
@@ -95,6 +122,14 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                     "Valid list value is required for Question:{0}".format(
                         question.id
                     )
+                )
+            if question.type in [
+                QuestionTypes.geoshape,
+                QuestionTypes.geotrace,
+            ] and not is_coordinate_ring(attrs.get("value")):
+                raise ValidationError(
+                    "Valid coordinate list is required for Question:{0}"
+                    .format(question.id)
                 )
             if isinstance(attrs.get("value"), list) and question.type in [
                 QuestionTypes.input,
@@ -171,6 +206,16 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
                 )
             )
 
+        if attrs.get("question").type in [
+            QuestionTypes.geoshape,
+            QuestionTypes.geotrace,
+        ] and not is_coordinate_ring(attrs.get("value")):
+            raise ValidationError(
+                "Valid coordinate list is required for Question:{0}".format(
+                    attrs.get("question").id
+                )
+            )
+
         if attrs.get("question").type == QuestionTypes.cascade:
             attrs["value"] = int(float(attrs.get("value")))
 
@@ -197,61 +242,10 @@ class SubmitFormSerializer(serializers.Serializer):
         data["created_by"] = self.context.get("user")
         data["updated_by"] = self.context.get("user")
         obj_data = self.fields.get("data").create(data)
-        # Answer value based on Question type
-        # - geo = 1 #option
-        # - administration = 2 #value
-        # - text = 3 #name
-        # - number = 4 #value
-        # - option = 5 #option
-        # - multiple_option = 6 #option
-        # - cascade = 7 #option
-        # - photo = 8 #name
-        # - date = 9 #name
-        # - autofield = 10 #name
-        # - attachment = 11 #name
-
         for answer in validated_data.get("answer"):
-            name = None
-            value = None
-            option = None
-
-            if answer.get("question").type in [
-                QuestionTypes.geo,
-                QuestionTypes.option,
-                QuestionTypes.multiple_option,
-            ]:
-                option = answer.get("value")
-            elif answer.get("question").type in [
-                QuestionTypes.input,
-                QuestionTypes.text,
-                QuestionTypes.image,
-                QuestionTypes.date,
-                QuestionTypes.autofield,
-                QuestionTypes.attachment,
-                QuestionTypes.signature,
-            ]:
-                name = answer.get("value")
-            elif answer.get("question").type == QuestionTypes.cascade:
-                id = answer.get("value")
-                q_api = answer.get("question").api or {}
-                ep = q_api.get("endpoint", "")
-                extra_type = (answer.get("question").extra or {}).get("type")
-                val = None
-                if "organisation" in ep:
-                    obj = Organisation.objects.filter(pk=id).first()
-                    val = obj.name if obj else None
-                elif "entity-data" in ep or extra_type == "entity":
-                    obj = EntityData.objects.filter(pk=id).first()
-                    val = obj.name if obj else None
-                else:
-                    # administration cascade: store both name and integer value
-                    obj = Administration.objects.filter(pk=id).first()
-                    val = obj.name if obj else None
-                    value = id
-                name = val
-            else:
-                # for number question type
-                value = answer.get("value")
+            name, value, option = answer_fields(
+                answer.get("question"), answer.get("value")
+            )
 
             Answers.objects.create(
                 data=obj_data,
@@ -717,56 +711,9 @@ class SubmitPendingFormSerializer(serializers.Serializer):
 
         for answer in validated_data.get("answer"):
             question = answer.get("question")
-            name = None
-            value = None
-            option = None
-
-            if question.type in [
-                QuestionTypes.geo,
-                QuestionTypes.option,
-                QuestionTypes.multiple_option,
-            ]:
-                option = answer.get("value")
-            elif question.type in [
-                QuestionTypes.input,
-                QuestionTypes.text,
-                QuestionTypes.image,
-                QuestionTypes.date,
-                QuestionTypes.autofield,
-                QuestionTypes.attachment,
-                QuestionTypes.signature,
-            ]:
-                name = answer.get("value")
-            elif question.type == QuestionTypes.cascade:
-                id = answer.get("value")
-                extra_type = (question.extra or {}).get("type")
-                q_api = question.api or {}
-                ep = q_api.get("endpoint", "")
-                val = None
-                if "organisation" in ep:
-                    val = (
-                        Organisation.objects.filter(pk=id)
-                        .values_list("name", flat=True)
-                        .first()
-                    )
-                elif "entity-data" in ep or extra_type == "entity":
-                    val = (
-                        EntityData.objects.filter(pk=id)
-                        .values_list("name", flat=True)
-                        .first()
-                    )
-                else:
-                    # administration cascade: store both name and integer value
-                    val = (
-                        Administration.objects.filter(pk=id)
-                        .values_list("name", flat=True)
-                        .first()
-                    )
-                    value = id
-                name = val
-            else:
-                # for number question type
-                value = answer.get("value")
+            name, value, option = answer_fields(
+                question, answer.get("value")
+            )
 
             answers.append(
                 Answers(
@@ -840,56 +787,9 @@ class SubmitUpdateDraftFormSerializer(SubmitPendingFormSerializer):
         answers = []
         for answer in validated_data.get("answer"):
             question = answer.get("question")
-            name = None
-            value = None
-            option = None
-
-            if question.type in [
-                QuestionTypes.geo,
-                QuestionTypes.option,
-                QuestionTypes.multiple_option,
-            ]:
-                option = answer.get("value")
-            elif question.type in [
-                QuestionTypes.input,
-                QuestionTypes.text,
-                QuestionTypes.image,
-                QuestionTypes.date,
-                QuestionTypes.autofield,
-                QuestionTypes.attachment,
-                QuestionTypes.signature,
-            ]:
-                name = answer.get("value")
-            elif question.type == QuestionTypes.cascade:
-                id = answer.get("value")
-                extra_type = (question.extra or {}).get("type")
-                q_api = question.api or {}
-                ep = q_api.get("endpoint", "")
-                val = None
-                if "organisation" in ep:
-                    val = (
-                        Organisation.objects.filter(pk=id)
-                        .values_list("name", flat=True)
-                        .first()
-                    )
-                elif "entity-data" in ep or extra_type == "entity":
-                    val = (
-                        EntityData.objects.filter(pk=id)
-                        .values_list("name", flat=True)
-                        .first()
-                    )
-                else:
-                    # administration cascade: store both name and integer value
-                    val = (
-                        Administration.objects.filter(pk=id)
-                        .values_list("name", flat=True)
-                        .first()
-                    )
-                    value = id
-                name = val
-            else:
-                # for number question type
-                value = answer.get("value")
+            name, value, option = answer_fields(
+                question, answer.get("value")
+            )
 
             answers.append(
                 Answers(
