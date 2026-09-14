@@ -100,6 +100,8 @@ export const WIDGET_DEFAULTS = {
       group_by: "month",
       date_question_id: null,
       category_question_id: null,
+      stack_by: null,
+      admin_level: 1,
       color_scheme: "categorical",
       chart_colors: DEFAULT_CHART_COLORS,
       show_toolbox: false,
@@ -188,6 +190,7 @@ export const VALID_STACK_BY = [
   { value: "", label: "None" },
   { value: "option", label: "Option value" },
   { value: "parent_id", label: "Registration site" },
+  { value: "administration", label: "Administration area" },
 ];
 
 /**
@@ -266,7 +269,12 @@ export const stackByOptions = (
   }
   if (question.type === "number") {
     return groupBy === "month" || groupBy === "date"
-      ? [...none, ...VALID_STACK_BY.filter((s) => s.value === "parent_id")]
+      ? [
+          ...none,
+          ...VALID_STACK_BY.filter(
+            (s) => s.value === "parent_id" || s.value === "administration"
+          ),
+        ]
       : none;
   }
   if (!STACK_QUESTION_TYPES.has(question.type)) {
@@ -360,7 +368,7 @@ export const groupByOptions = (question = null, config = {}) => {
     return by("month", "date", "parent_id");
   }
   if (question.type === "number") {
-    return stackBy === "parent_id"
+    return stackBy === "parent_id" || stackBy === "administration"
       ? by("month", "date")
       : by("month", "date", "parent_id");
   }

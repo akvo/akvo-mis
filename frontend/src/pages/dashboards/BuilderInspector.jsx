@@ -8,6 +8,7 @@ import {
 } from "@ant-design/icons";
 import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
 import api from "../../lib/api";
+import { getLevels } from "../../util/level";
 import { mapValueParams } from "../../util/hooks/useWidgetData";
 import { quantileRanges, rangeLabel, readable } from "../../util/valueRanges";
 import {
@@ -1105,56 +1106,124 @@ const BuilderInspector = ({
         )}
 
         {/* Line category (option question → multiple lines) */}
-        {NEEDS_LINE_CATEGORY.has(wType) && widget.form && (
+        {NEEDS_LINE_CATEGORY.has(wType) &&
+          widget.form &&
+          wConfig.stack_by !== "administration" && (
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">
+                Category (option question)
+              </label>
+              <Select
+                value={wConfig.category_question_id || null}
+                onChange={(val) => {
+                  if (val) {
+                    const q = allQuestions.find((qq) => qq.id === val);
+                    const sc =
+                      COLOR_SCHEMES[
+                        wConfig.color_scheme || DEFAULT_COLOR_SCHEME
+                      ];
+                    const auto = {};
+                    (q?.options || []).forEach((opt, idx) => {
+                      auto[opt.label] = sc.colors[idx % sc.colors.length];
+                    });
+                    onWidgetChange({
+                      ...widget,
+                      config: {
+                        ...widget.config,
+                        category_question_id: val,
+                        category_colors: auto,
+                      },
+                    });
+                  } else {
+                    onWidgetChange({
+                      ...widget,
+                      config: {
+                        ...widget.config,
+                        category_question_id: null,
+                        category_colors: null,
+                      },
+                    });
+                  }
+                }}
+                placeholder="None (single line)"
+                style={{ width: "100%" }}
+                allowClear
+                optionLabelProp="label"
+              >
+                {optionQuestions.map((q) => (
+                  <Select.Option
+                    key={q.id}
+                    value={q.id}
+                    label={<QuestionLabel label={q.label} type={q.type} />}
+                  >
+                    <QuestionLabel label={q.label} type={q.type} />
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+        {/* Line: Group lines by (administration aggregation) */}
+        {wType === "line" && widget.form && widget.question && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">
-              Category (option question)
-            </label>
+            <label className="builder-inspector-label">Group lines by</label>
             <Select
-              value={wConfig.category_question_id || null}
+              value={wConfig.stack_by || ""}
               onChange={(val) => {
-                if (val) {
-                  const q = allQuestions.find((qq) => qq.id === val);
-                  const sc =
-                    COLOR_SCHEMES[wConfig.color_scheme || DEFAULT_COLOR_SCHEME];
-                  const auto = {};
-                  (q?.options || []).forEach((opt, idx) => {
-                    auto[opt.label] = sc.colors[idx % sc.colors.length];
-                  });
-                  onWidgetChange({
-                    ...widget,
-                    config: {
-                      ...widget.config,
-                      category_question_id: val,
-                      category_colors: auto,
-                    },
-                  });
-                } else {
-                  onWidgetChange({
-                    ...widget,
-                    config: {
-                      ...widget.config,
-                      category_question_id: null,
-                      category_colors: null,
-                    },
-                  });
-                }
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    stack_by: val || null,
+                    // Clear category when switching to admin grouping
+                    ...(val === "administration"
+                      ? {
+                          category_question_id: null,
+                          category_colors: null,
+                        }
+                      : {}),
+                    // Default admin_level to 1 when picking administration
+                    ...(val === "administration" && !widget.config?.admin_level
+                      ? { admin_level: 1 }
+                      : {}),
+                  },
+                });
               }}
-              placeholder="None (single line)"
               style={{ width: "100%" }}
               allowClear
-              optionLabelProp="label"
             >
-              {optionQuestions.map((q) => (
-                <Select.Option
-                  key={q.id}
-                  value={q.id}
-                  label={<QuestionLabel label={q.label} type={q.type} />}
-                >
-                  <QuestionLabel label={q.label} type={q.type} />
-                </Select.Option>
-              ))}
+              <Select.Option value="">None (single line)</Select.Option>
+              <Select.Option value="administration">
+                Administration area
+              </Select.Option>
             </Select>
+          </div>
+        )}
+
+        {/* Line: Administration level picker */}
+        {wType === "line" && wConfig.stack_by === "administration" && (
+          <div className="builder-inspector-field">
+            <label className="builder-inspector-label">
+              Administration level
+            </label>
+            <Select
+              value={wConfig.admin_level ?? 1}
+              onChange={(val) => {
+                updateConfig("admin_level", val);
+              }}
+              style={{ width: "100%" }}
+            >
+              {getLevels()
+                .filter((lvl) => lvl.level > 0)
+                .map((lvl) => (
+                  <Select.Option key={lvl.level} value={lvl.level}>
+                    {lvl.name}
+                  </Select.Option>
+                ))}
+            </Select>
+            <div className="builder-inspector-hint">
+              Entities are grouped by this administration level
+            </div>
           </div>
         )}
 
