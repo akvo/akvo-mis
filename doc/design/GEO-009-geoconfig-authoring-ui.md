@@ -225,10 +225,9 @@ Nothing regresses; geotrace gains no new configurability.
 ## 10. Open Questions
 
 - [x] The upstream route was available. The panel exists as three commits
-      on `akvo-react-form-editor` PR #76 (open, not yet merged, no npm
-      release yet), so D-1's fallback was not needed and the config shape
-      is the nested, numeric one this document specifies, pending merge and
-      the 2.1.0 release.
+      on `akvo-react-form-editor` PR #76, so D-1's fallback was not needed
+      and the config shape is the nested, numeric one this document
+      specifies. Release state is on the Status line above.
 - [ ] Nothing verifies `geoConfig` end to end on the backend yet. GEO-010.
 
 ---

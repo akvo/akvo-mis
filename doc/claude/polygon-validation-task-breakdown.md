@@ -208,10 +208,9 @@ Three consequences that are easy to get wrong:
 
 Web **rendering** works with no akvo-mis frontend code involved: ARF `2.7.9` renders a `geoshape`
 answer as soon as a form has one, and that part is settled and should not be re-litigated.
-Authoring did need one line of host code: `frontend/src/lib/constants.js` `QUESTION_TYPES`
-clamped `geoshape` out of the form builder, and GEO-009 added it back in. Whether a given form
-*has* a polygon question is now a form-authoring choice, made per form in the builder. This work
-makes the mobile client capable of the same thing; it does not restrict either client.
+Authoring is a separate matter, covered in the layer table above. Whether a given form *has* a
+polygon question is a form-authoring choice, made per form in the builder. This work makes the
+mobile client capable of the same thing; it does not restrict either client.
 
 ---
 
