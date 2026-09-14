@@ -74,10 +74,8 @@ CategoryLine.propTypes = {
 const VizLine = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
   const widgetConfig = config?.config || {};
-  const hasCategory = Boolean(
-    widgetConfig.category_question_id &&
-      widgetConfig.stack_by !== "administration"
-  );
+  const hasCategory = Boolean(widgetConfig.category_question_id);
+  const isAdminGrouped = widgetConfig.stack_by === "administration";
   const hasStack = Boolean(widgetConfig.stack_by || widgetConfig.stackMapping);
 
   const colors = Array.isArray(config?.color)
@@ -93,7 +91,7 @@ const VizLine = ({ config, data, filters }) => {
   };
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
-  if (hasCategory) {
+  if (hasCategory || isAdminGrouped) {
     return <CategoryLine config={config} data={data} filters={filters} />;
   }
 
