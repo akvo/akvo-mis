@@ -12,16 +12,22 @@ let lastProps = null;
 // honest way to ask whether a prop change reached the map at all — DOM
 // identity does not answer it reliably under rerender.
 let mountCount = 0;
+// forwardRef, like the real MapCluster: VizMap hands it a ref. A plain
+// function here makes React warn about the ref on first mount, and while
+// building the component stack for that warning React's dev build calls
+// the component again with no arguments — which overwrote lastProps with
+// undefined in the first test of the file.
 jest.mock("akvo-charts", () => {
   const RealReact = require("react");
   return {
-    MapCluster: (props) => {
+    MapCluster: RealReact.forwardRef((props, ref) => {
       lastProps = props;
+      RealReact.useImperativeHandle(ref, () => ({}), []);
       RealReact.useEffect(() => {
         mountCount += 1;
       }, []);
       return <div data-testid="map-cluster" />;
-    },
+    }),
   };
 });
 

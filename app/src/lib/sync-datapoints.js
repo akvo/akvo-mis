@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import { crudDataPoints, crudForms } from '../database/crud';
 import sql from '../database/sql';
 import api from './api';
@@ -162,6 +163,14 @@ export const downloadDatapointsJson = async (
 
   const jsonData = response.data;
   const { datapoint_name: name, geolocation: geo, answers } = jsonData || {};
+  // A missing file on the server comes back as the web app's index.html with
+  // HTTP 200, so `answers` is undefined. Storing that would leave a datapoint
+  // with a NULL json column that crashes every screen reading it. Skip it;
+  // the next sync retries because no local row was written.
+  if (!answers || typeof answers !== 'object') {
+    Sentry.captureMessage(`[sync-datapoints] no answers in datapoint file, skipped: ${url}`);
+    return;
+  }
 
   // DB operations INSIDE the transaction
   await sql.withTransaction(db, async (txDb) => {

@@ -22,7 +22,7 @@ VALID_GROUP_BY = {"date", "month", "id", "parent_id", "option"}
 VALID_MONITORING = {"latest", "all"}
 VALID_VALUE_TYPE = {"number", "percentage"}
 VALID_REPEAT_AGG = {"average", "sum", "max", "min", "last"}
-VALID_STACK_BY = {"option", "parent_id"}
+VALID_STACK_BY = {"option", "parent_id", "administration"}
 SUPPORTED_QUESTION_TYPES = {
     QuestionTypes.number,
     QuestionTypes.option,

@@ -189,6 +189,7 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
 
   if (type === "line") {
     const hasCategory = Boolean(config.category_question_id);
+    const hasAdminStack = config.stack_by === "administration";
     return {
       endpoint: "visualization/values",
       params: compact({
@@ -199,7 +200,12 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
         ...expandMeasure(widget, rootFormId),
         group_by: config.group_by || "month",
         repeat_agg: config.repeat_agg,
-        stack_by: hasCategory ? "option" : null,
+        stack_by: hasCategory
+          ? "option"
+          : hasAdminStack
+          ? "administration"
+          : null,
+        admin_level: hasAdminStack ? config.admin_level ?? 1 : null,
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
         date_question_id: config.date_question_id,

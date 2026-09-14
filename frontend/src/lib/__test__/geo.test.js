@@ -4,6 +4,7 @@ import geo from "../geo";
 describe("geo", () => {
   test("exports exactly the topojson-free helpers", () => {
     expect(Object.keys(geo).sort()).toEqual([
+      "boundsFromPoints",
       "defaultPos",
       "fixCoordinates",
       "getColorScale",

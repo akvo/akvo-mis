@@ -74,6 +74,7 @@ class ValuesFilterSerializer(serializers.Serializer):
         required=False,
         default=False,
     )
+    admin_level = serializers.IntegerField(required=False)
 
     def validate_criteria(self, value):
         try:

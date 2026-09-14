@@ -18,6 +18,7 @@ import {
   getCascadeAnswerAPI,
   processFileUploads,
   processEntityCascades,
+  normalizeWebformQuestion,
   processRepeatableQuestions,
   transformValue,
 } from "../../lib";
@@ -25,6 +26,7 @@ import { pick, isEmpty } from "lodash";
 import { PageLoader, Breadcrumbs, DescriptionPanel } from "../../components";
 import { useNotification } from "../../util/hooks";
 import moment from "moment";
+import { v4 as uuidv4 } from "uuid";
 
 const Forms = () => {
   const navigate = useNavigate();
@@ -221,7 +223,9 @@ const Forms = () => {
       : `${authUser.administration.name} - ${moment().format("MMM YYYY")}`;
 
     if (!submissionKeyRef.current) {
-      submissionKeyRef.current = crypto.randomUUID();
+      // crypto.randomUUID() is undefined outside secure contexts (plain
+      // HTTP on a LAN/subdomain host) and in jsdom, so use the uuid package.
+      submissionKeyRef.current = uuidv4();
     }
 
     const dataPayload = {
@@ -398,31 +402,7 @@ const Forms = () => {
       api.get(`/form/web/${formId}`).then((res) => {
         const questionGroups = res.data.question_group.map((qg) => {
           const questions = qg.question
-            .map((q) => {
-              let qVal = { ...q };
-
-              if (q?.extra) {
-                delete qVal.extra;
-                qVal = {
-                  ...qVal,
-                  ...q.extra,
-                };
-                if (q.extra?.allowOther) {
-                  qVal = {
-                    ...qVal,
-                    allowOtherText: "Enter any OTHER value",
-                  };
-                }
-                if (qVal?.type === "entity") {
-                  qVal = {
-                    ...qVal,
-                    type: QUESTION_TYPES.cascade,
-                    extra: q?.extra,
-                  };
-                }
-              }
-              return qVal;
-            })
+            .map(normalizeWebformQuestion)
             .filter((x) => !x?.hidden); // filter out hidden questions
           return {
             ...qg,
