@@ -140,6 +140,11 @@ most people assume.
 
 ### The pipeline today
 
+**As of this writing, this section is the pre-epic baseline.** It predates GEO-009, which added
+`geoshape` to `QUESTION_TYPES` and made it authorable, and predates the base-branch work that
+gave the datapoint list geometry (row B1 below still describes it as carrying none). Read the
+diagram and table below as "before this epic started," not as current state.
+
 A polygon question has to survive four layers. Three of them already work.
 
 ```mermaid
@@ -201,10 +206,12 @@ Three consequences that are easy to get wrong:
 
 ### One thing that is already true and should not be re-litigated
 
-Web capture works. `akvo-react-form-editor@2.0.4` can author polygon questions and ARF `2.7.9`
-renders them — with no akvo-mis frontend code involved. Whether a given form *has* a polygon
-question is a form-authoring choice, made per form in the builder. This work makes the mobile
-client capable of the same thing; it does not restrict either client.
+Web **rendering** works with no akvo-mis frontend code involved: ARF `2.7.9` renders a `geoshape`
+answer as soon as a form has one, and that part is settled and should not be re-litigated.
+Authoring did need one line of host code: `frontend/src/lib/constants.js` `QUESTION_TYPES`
+clamped `geoshape` out of the form builder, and GEO-009 added it back in. Whether a given form
+*has* a polygon question is now a form-authoring choice, made per form in the builder. This work
+makes the mobile client capable of the same thing; it does not restrict either client.
 
 ---
 

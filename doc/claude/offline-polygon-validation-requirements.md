@@ -232,6 +232,14 @@ manage-data display, so a polygon answer currently renders as a raw coordinate a
 that for `geoshape`. What remains optional here, and independent of this mobile work, is giving
 the display components a real rendering for polygon answers instead of a raw coordinate array.
 
+Now that `geoshape` is authorable, the gap is reachable: `EditableCell`'s `notEditable` list
+([EditableCell.jsx:68-75](../../frontend/src/components/EditableCell.jsx#L68)) includes `geo`
+but not `geoshape`, so a polygon answer renders as an editable text input holding a comma-joined
+coordinate dump. This display fix should add `geoshape` to that list. It is not urgent because
+both edit endpoints run `SubmitFormDataAnswerSerializer`'s coordinate-ring check, which rejects
+anything that is not `[[lat, lon], ...]` — a mangled edit through the raw input is a 400, not
+silent data corruption.
+
 ### FR-2 — Single-polygon validation
 
 Runs before any overlap check. Ported directly from `polygon-validation.md`.
@@ -559,7 +567,7 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 | Server-side overlap validation on submit | Offline-first; the device is authoritative at collection time |
 | `plots` table with `isDraft` / `instanceName` matching | Section 1 — solves a problem Akvo MIS does not have |
 | Intent contract, XLSForm appearance changes | Section 1 — no external app involved |
-| Web frontend polygon capture | Already works via ARF 2.7.9 + editor 2.0.4 — nothing to build (§2, Q9) |
+| Web frontend polygon capture | Rendering already works via ARF 2.7.9 + editor 2.0.4; GEO-009 added `geoshape` to `QUESTION_TYPES` so it can be authored — nothing left to build (§2, Q9) |
 | Web frontend polygon *validation* (area, self-intersection, overlap) | Mobile-only request. Web has capture but no validation; parity is a later decision |
 | Web manage-data display of polygon answers | FR-1.17 — optional, independent |
 | Overlap detection between two polygons *within a single submission* | Not in source AC; confirm if repeatable groups can hold polygons |
@@ -619,11 +627,12 @@ required** (D13); hand-edited JSON is not acceptable. It belongs upstream in
 escape hatch is the weaker option.
 
 **Q9 — ~~Should akvo-mis web adopt ARF `TypeGeoDrawing`~~ — CLOSED.** The premise was wrong:
-web already collects polygons end to end via `akvo-react-form-editor@2.0.4` (authoring) and
-ARF 2.7.9 (rendering), with no frontend code required (§2). Whether a given form has a polygon
-question is a **form-authoring choice**, per form, made in the builder. This work makes the
-mobile client capable of the same thing; it does not restrict either client. Optional web
-display parity is FR-1.17.
+web already renders polygons end to end via ARF 2.7.9, with no frontend code required for that
+half (§2). Authoring needed one line of frontend code: this host clamped `geoshape` out of the
+form builder via `QUESTION_TYPES`, and GEO-009 added it back in. Whether a given form has a
+polygon question is now a **form-authoring choice**, per form, made in the builder. This work
+makes the mobile client capable of the same thing; it does not restrict either client. Optional
+web display parity is FR-1.17.
 
 **Q10 — Should the ported capture code stay in sync with ARF?** DEP-4. Options: hard fork and
 accept drift, or track ARF releases and re-port. The value format is the contract that must
