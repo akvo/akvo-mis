@@ -1,7 +1,9 @@
 from django.core.management import BaseCommand
 from utils.custom_generator import generate_sqlite
 from api.v1.v1_profile.models import Administration, Entity, EntityData
-from api.v1.v1_users.models import Organisation
+from api.v1.v1_users.models import Organisation, Tenant
+
+MODELS = [Administration, Organisation, Entity, EntityData]
 
 
 class Command(BaseCommand):
@@ -13,18 +15,18 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         test = options.get("test", False)
-        file = generate_sqlite(Administration, test=test)
-        if not test:
-            self.log_generated(file, Administration)
-        file = generate_sqlite(Organisation, test=test)
-        if not test:
-            self.log_generated(file, Organisation)
-        file = generate_sqlite(Entity, test=test)
-        if not test:
-            self.log_generated(file, Entity)
-        file = generate_sqlite(EntityData, test=test)
-        if not test:
-            self.log_generated(file, EntityData)
+        # The tenant-less pass stays: seeders and single-tenant installs
+        # still read the root files. The per-tenant pass is what a device
+        # actually downloads.
+        for model in MODELS:
+            file = generate_sqlite(model, test=test)
+            if not test:
+                self.log_generated(file, model)
+        for tenant in Tenant.objects.all():
+            for model in MODELS:
+                file = generate_sqlite(model, tenant=tenant, test=test)
+                if not test:
+                    self.log_generated(file, model)
 
     def log_generated(self, file, model):
         message = (

@@ -5,9 +5,9 @@ import AdministrationDropdown from "./AdministrationDropdown";
 import { store, uiText } from "../../lib";
 import { Link } from "react-router-dom";
 import {
-  // DownloadOutlined,
+  DownloadOutlined,
   PlusOutlined,
-  // UploadOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { Fragment } from "react";
 
@@ -47,18 +47,17 @@ const AdministrationFilters = ({
 
         <Col>
           <Space>
-            {/* <Link to="/control-center/master-data/administration/upload">
-                <Button icon={<UploadOutlined />} shape="round">
-                  {text.bulkUploadButton}
-                </Button>
-              </Link>
-              <Link to="/control-center/master-data/administration/download">
-                <Button icon={<DownloadOutlined />} shape="round">
-                  {text.download}
-                </Button>
-              </Link> */}
+            <Link to="/control-center/master-data/administration/upload">
+              <Button icon={<UploadOutlined />} shape="round">
+                {text.bulkUploadButton}
+              </Button>
+            </Link>
+            <Link to="/control-center/master-data/administration/download">
+              <Button icon={<DownloadOutlined />} shape="round">
+                {text.download}
+              </Button>
+            </Link>
             <Link to={addLink}>
-              {/* TODO: Temporarily show the Add button for data entry. */}
               <Button type="primary" icon={<PlusOutlined />} shape="round">
                 {text.addNewButton}
               </Button>

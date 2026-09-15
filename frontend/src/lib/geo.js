@@ -1,91 +1,27 @@
-import { feature, merge } from "topojson-client";
-import { geoCentroid, geoBounds } from "d3-geo";
-import { groupBy, chain } from "lodash";
 import { scaleQuantize } from "d3-scale";
-import union from "@turf/union";
 
-const topojson = window.topojson;
-const topojson_object = topojson.objects[Object.keys(topojson.objects)[0]];
-const shapeLevels = Object.keys(topojson_object.geometries[0].properties);
+// =========================================================
+// Map helpers — TopoJSON-free
+// =========================================================
+// The per-country TopoJSON global (window.topojson) is gone: a SaaS
+// instance has no country shapefile. What survives is everything that
+// never depended on polygons: the tile config, colour scales, and
+// coordinate normalization around the antimeridian.
 
 const tile = {
   url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png",
   attribution: "Tiles &copy; Esri &mdash; DeLorme, NAVTEQ, Esri",
 };
 
-export const getBounds = (selected = []) => {
-  const geoFilter = topojson_object.geometries.filter((x) => {
-    const filters = [];
-    selected.forEach((s) => {
-      if (x?.properties?.[s.prop] === s.value) {
-        filters.push(true);
-      } else {
-        filters.push(false);
-      }
-    });
-    return filters?.filter((f) => f).length === selected.length;
-  });
-  const mergeTopo = merge(
-    topojson,
-    geoFilter.length ? geoFilter : topojson_object.geometries
-  );
-  const center = geoCentroid(mergeTopo).reverse();
-  const bounds = geoBounds(mergeTopo);
-  const bbox = [bounds[0].reverse(), bounds[1].reverse()];
-  return {
-    coordinates: center,
-    bbox: bbox,
-  };
-};
-
-export const defaultPos = () => {
-  const mergeTopo = merge(topojson, topojson_object.geometries);
-  const center = geoCentroid(mergeTopo).reverse();
-  const bounds = geoBounds(mergeTopo);
-  const bbox = [bounds[0].reverse(), bounds[1].reverse()];
-  return {
-    coordinates: center,
-    bbox: bbox,
-  };
-};
-
-const geojson = feature(topojson, topojson_object);
-
-const countiesjson = chain(groupBy(geojson.features, "properties.NAME_1"))
-  .map((d, v) => {
-    const polygon = d.reduce((g, c, i) => {
-      if (!i) {
-        return c;
-      }
-      return union(g, c);
-    });
-    return { polygon: polygon, name: v };
-  })
-  .value()
-  .map((x) => {
-    return { ...x.polygon, properties: { NAME_01: x.name } };
-  });
-
-const getGeometry = ({ level, name }) => {
-  const filtered = geojson.features.filter((x) => {
-    return x.properties[`NAME_${level}`] === name;
-  });
-  const features = chain(groupBy(filtered, `properties.NAME_${level + 1}`))
-    .map((d, v) => {
-      const polygon = d.reduce((g, c, i) => {
-        if (!i) {
-          return c;
-        }
-        return union(g, c);
-      });
-      return { polygon: polygon, name: v };
-    })
-    .value()
-    .map((x) => {
-      return { ...x.polygon, properties: { [`NAME_${level + 1}`]: x.name } };
-    });
-  return { type: "FeatureCollection", features: features };
-};
+// Neutral world viewport. Keeps the legacy { coordinates, bbox } shape the
+// polygon-derived version returned, so callers need no reshaping.
+const defaultPos = () => ({
+  coordinates: [0, 0],
+  bbox: [
+    [-60, -180],
+    [75, 180],
+  ],
+});
 
 const getColorScale = ({ method, colors, colorRange }) => {
   if (method === "percent") {
@@ -138,17 +74,12 @@ const fixCoordinates = (coords) => {
 };
 
 const geo = {
-  geojson: geojson,
-  countiesjson: { type: "FeatureCollection", features: countiesjson },
-  getGeometry: getGeometry,
-  shapeLevels: shapeLevels,
-  tile: tile,
-  getBounds: getBounds,
-  getColorScale: getColorScale,
-  defaultPos: defaultPos,
-  normalizeLon: normalizeLon,
-  shiftLonPositive: shiftLonPositive,
-  fixCoordinates: fixCoordinates,
+  tile,
+  defaultPos,
+  getColorScale,
+  normalizeLon,
+  shiftLonPositive,
+  fixCoordinates,
 };
 
 export default geo;

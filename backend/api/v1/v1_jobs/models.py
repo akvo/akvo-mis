@@ -1,11 +1,15 @@
 from django.db import models
 
+from utils.tenant_scoped_model import TenantManager
+
 # Create your models here.
 from api.v1.v1_jobs.constants import JobTypes, JobStatus
 from api.v1.v1_users.models import SystemUser
 
 
 class Jobs(models.Model):
+    TENANT_PATH = "user__tenant"
+    objects = TenantManager()
     task_id = models.CharField(
         max_length=50, unique=True, null=True, default=None
     )

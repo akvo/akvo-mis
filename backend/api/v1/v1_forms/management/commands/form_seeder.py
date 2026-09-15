@@ -3,17 +3,18 @@ import os
 
 from mis.settings import PROD
 from django.core.management import BaseCommand
+from django.core.management.base import CommandError
 from django.db import transaction
 
 from api.v1.v1_forms.constants import AttributeTypes, FormStatus
 from api.v1.v1_forms.functions import (
+    _build_schema_snapshot,
     import_form_definition,
     normalize_form_definition,
     validate_form_definition,
 )
 from api.v1.v1_forms.models import (
     Forms, Questions,
-    QuestionGroup as QG,
     QuestionAttribute as QA)
 from api.v1.v1_data.models import (
     Answers, AnswerHistory, FormData)
@@ -73,6 +74,33 @@ def migrate_question_answers(question, target_form_id):
             history.delete()
 
 
+def structure_fingerprint(form):
+    """Comparable view of a form's live structure.
+
+    Used to decide whether a re-seed actually changed anything. The
+    snapshot builder already walks groups → questions → options in a
+    fixed order, so comparing two of them answers "did this file change
+    the form?" without hand-maintaining a field list that would drift
+    every time a column is added.
+
+    The `version` pop is purely defensive: _build_schema_snapshot does not
+    emit a version key today, and it must never leak into the comparison
+    if that ever changes, since the version is the thing being decided.
+
+    `type` and `parent_id` are folded in by hand because the snapshot
+    builder covers only the structure below the form row, yet both are
+    columns the seeder writes from the file. Without them a definition
+    that only retypes a form — registration to monitoring, or a
+    re-parenting — would never bump the version and so would never reach
+    a mobile device, which re-downloads on version change alone.
+    """
+    schema = _build_schema_snapshot(form)
+    schema.pop("version", None)
+    schema["type"] = form.type
+    schema["parent_id"] = form.parent_id
+    return json.dumps(schema, sort_keys=True, default=str)
+
+
 class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("-t",
@@ -107,9 +135,14 @@ class Command(BaseCommand):
             if (os.path.isfile(os.path.join(source_folder, json_file))
                 and json_file.endswith('.json'))
         ]
-        source_files = list(
-            filter(lambda x: "example" in x
-                   if TEST else "example" not in x, source_files))
+        # --test narrows to the bundled example fixtures. Without it every
+        # JSON in the folder is seeded: a real deployment drops its own form
+        # definitions here and should not have to encode "not an example" in
+        # the filename. The old `else` branch did exactly that, and since the
+        # folder holds nothing but example-* files it made a plain run seed
+        # nothing at all and exit 0.
+        if TEST:
+            source_files = [f for f in source_files if "example" in f]
         if PROD:
             source_files = list(filter(lambda x: "prod" in x, source_files))
         if JSON_FILE:
@@ -150,8 +183,7 @@ class Command(BaseCommand):
 
         # Process all form sources in the correct order
         # (parents first, then children)
-        all_question_group_ids = []
-        all_form_ids = []
+        failed_sources = []
         with transaction.atomic():
             for source in parent_forms + child_forms:
                 norm = norms[source]
@@ -159,11 +191,15 @@ class Command(BaseCommand):
                 issues = validate_form_definition(norm, check_entities=False)
                 errors = [i for i in issues if i.get("level") == "error"]
                 if errors:
+                    # Report every problem in every file rather than
+                    # stopping at the first, so one pass tells the operator
+                    # everything that needs fixing.
                     for e in errors:
                         self.stderr.write(
                             f"{source}: [{e['code']}] "
                             f"{e['path']}: {e['message']}"
                         )
+                    failed_sources.append(source)
                     continue
 
                 form = Forms.objects.filter(id=norm["form_id"]).first()
@@ -190,8 +226,18 @@ class Command(BaseCommand):
                         status=FormStatus.published,
                         parent=parent,
                     )
+                    # A form that did not exist has nothing to compare
+                    # against; it is new, so its version stands at 1.
+                    before_fingerprint = None
                 else:
-                    form.version += 1
+                    # Snapshot before anything is written, so the
+                    # post-import comparison can tell a real edit from a
+                    # no-op re-run. It has to happen ahead of the save
+                    # below: that save applies the file's parent/type, and
+                    # those are part of the fingerprint, so capturing
+                    # afterwards would compare the new values against
+                    # themselves and hide the change.
+                    before_fingerprint = structure_fingerprint(form)
                     if parent:
                         form.parent = parent
                     if norm.get("type"):
@@ -200,34 +246,31 @@ class Command(BaseCommand):
 
                 # Collect IDs from the file before processing
                 list_of_question_ids = []
-                list_of_question_group_ids = []
-                all_form_ids.append(norm["form_id"])
                 for g in norm["question_group"]:
-                    list_of_question_group_ids.append(g["id"])
                     list_of_question_ids += [
                         q["id"] for q in g["question"]
                     ]
-                all_question_group_ids += list_of_question_group_ids
 
-                # Handle removed questions BEFORE the import runs:
-                # a question moving to another form keeps its row (the
-                # target form claims it via claim_foreign_questions); a
-                # truly removed question is hard-deleted.
+                # A question this form no longer declares is left alone as
+                # long as it carries answers: deleting it would cascade to
+                # them, and a re-seed must never cost a submission. An
+                # unanswered one is still pruned by the import writer's
+                # never_delete pass, which has nothing to protect and needs
+                # the freed (form, name) slot. The one exception to leaving
+                # answered questions alone is a question moving to another
+                # form. `claim_foreign_questions` reassigns the row by
+                # primary key, so without this its answers would stay bound
+                # to submissions of the form it left. The migration helper
+                # below copies them down to the monitoring children first
+                # and only then drops the originals — it deletes strictly
+                # what it has already copied.
                 removed_qs = Questions.objects.filter(
                     form=form
                 ).exclude(id__in=list_of_question_ids)
                 for question in removed_qs:
                     target_form_id = question_target_map.get(question.id)
                     if target_form_id and target_form_id != form.id:
-                        # Question is moving to another form;
-                        # migrate answers before it gets reassigned
-                        migrate_question_answers(
-                            question, target_form_id)
-                    else:
-                        # Question truly removed — delete it
-                        question.delete()
-
-                QA.objects.filter(question__form=form).all().delete()
+                        migrate_question_answers(question, target_form_id)
 
                 # Shared write path (D-8): groups/questions/options upsert
                 # by exported id; cross-form moves claimed by PK so answers
@@ -238,42 +281,75 @@ class Command(BaseCommand):
                     mode="create_or_update",
                     require_parent=False,
                     claim_foreign_questions=True,
+                    never_delete=True,
                 )
 
                 # Question attributes stay a seeder concern (not part of
-                # the FB-007 export format).
+                # the FB-007 export format). Reconcile rather than wipe and
+                # rebuild, and only for questions this file declares —
+                # attributes of any other question are none of its business.
+                #
+                # Dropping an attribute here is not a data-loss exception:
+                # QuestionAttribute rows are form metadata, nothing
+                # references them, and no answer depends on one.
                 qa_rows = []
                 for g in norm["question_group"]:
                     for q in g["question"]:
-                        attrs = q.get("attributes")
-                        if not attrs:
-                            continue
                         db_q = Questions.objects.filter(
                             form=form, name=q["name"]
                         ).first()
                         if not db_q:
                             continue
+                        declared = set()
+                        for a in q.get("attributes") or []:
+                            declared.add(getattr(AttributeTypes, a))
+                        current = set(
+                            QA.objects.filter(
+                                question=db_q
+                            ).values_list("attribute", flat=True)
+                        )
+                        QA.objects.filter(question=db_q).exclude(
+                            attribute__in=declared
+                        ).delete()
                         qa_rows += [
-                            QA(
-                                attribute=getattr(AttributeTypes, a),
-                                question=db_q,
-                            ) for a in attrs
+                            QA(attribute=a, question=db_q)
+                            for a in declared - current
                         ]
                 if qa_rows:
                     QA.objects.bulk_create(qa_rows)
+
+                # Bump only for a definition that actually differs. See
+                # structure_fingerprint for why this matters to mobile.
+                if before_fingerprint is not None:
+                    form.refresh_from_db()
+                    if structure_fingerprint(form) != before_fingerprint:
+                        form.version += 1
+                        form.save(update_fields=["version"])
 
                 if not TEST:
                     verb = "Created" if created else "Updated"
                     self.stdout.write(
                         f"Form {verb} | {norm['name']} V{form.version}")
 
-            # Final cleanup: delete question groups not present in any
-            # JSON and with no remaining questions. This catches groups
-            # emptied by cross-form question moves.
-            QG.objects.filter(
-                form_id__in=all_form_ids
-            ).exclude(
-                id__in=all_question_group_ids
-            ).filter(
-                question_group_question__isnull=True
-            ).delete()
+            # A file that failed validation must not be a silent skip.
+            # seeder.sh calls this command bare and reports success on
+            # exit 0, so without this a client's real form could go
+            # missing while the install looks clean.
+            #
+            # The raise sits inside the atomic block on purpose. Every
+            # file was still attempted, so the operator gets the complete
+            # list of failures in one run — but the run as a whole is
+            # rolled back rather than committed half-applied. That matters
+            # because question_target_map is built from all files
+            # including the invalid ones: committing here could leave
+            # answers migrated towards a form that was never written.
+            if failed_sources:
+                raise CommandError(
+                    "form_seeder failed to load {0} of {1} definition(s): "
+                    "{2}. See the errors above; no forms were written."
+                    .format(
+                        len(failed_sources),
+                        len(source_files),
+                        ", ".join(failed_sources),
+                    )
+                )

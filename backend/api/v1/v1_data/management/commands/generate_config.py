@@ -4,21 +4,21 @@ from django.core.management import BaseCommand
 from jsmin import jsmin
 
 from mis.settings import (
-    COUNTRY_NAME,
+    ALLOW_REGISTRATION,
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
+    BASE_DOMAIN,
     SHOW_LANDING_PAGE,
 )
-from api.v1.v1_profile.models import Levels
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
 from api.v1.v1_visualization.functions import refresh_materialized_data
 
 
 class Command(BaseCommand):
     help = (
-        "Generate source/config/config.min.js (forms, levels, topojson, "
-        "appConfig, roleFeatures) for the frontend bundle. "
+        "Generate source/config/config.min.js (appConfig, "
+        "roleFeatures) for the frontend bundle. "
         "Pass --refresh-views to also refresh the view_data_options "
         "materialized view (acquires an exclusive lock — see flag help)."
     )
@@ -43,23 +43,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         print("GENERATING CONFIG JS")
-        topojson = open(f"source/{COUNTRY_NAME}.topojson").read()
 
         # write config
         config_file = jsmin(open("source/config/config.js").read())
-        levels = []
-        # NOTE: forms are no longer baked here. The web frontend fetches them
-        # at runtime from GET /api/v1/forms/published so newly published forms
-        # reflect without a config rebuild. See doc/claude/
-        # remove-window-forms-runtime-fetch.md
-        for level in Levels.objects.all():
-            levels.append(
-                {
-                    "id": level.id,
-                    "name": level.name,
-                    "level": level.level,
-                }
-            )
+        # NOTE: neither forms nor levels are baked here any more. The web
+        # frontend fetches both at runtime — forms from
+        # GET /api/v1/forms/published, levels from GET /api/v1/levels —
+        # because levels are tenant-owned and a global bake would show
+        # every tenant's tiers to everyone.
         role_features = []
         for key, value in FeatureTypes.FieldStr.items():
             role_features.append(
@@ -78,12 +69,6 @@ class Command(BaseCommand):
         min_config = jsmin(
             "".join(
                 [
-                    "var topojson=",
-                    topojson,
-                    ";",
-                    "var levels=",
-                    json.dumps(levels),
-                    ";",
                     config_file,
                     "var appConfig=",
                     json.dumps({
@@ -91,6 +76,16 @@ class Command(BaseCommand):
                         "shortName": APP_SHORT_NAME,
                         "apkName": APK_NAME,
                         "showLandingPage": SHOW_LANDING_PAGE,
+                        # Empty on a single-host deployment, which is how
+                        # the frontend knows not to split itself into
+                        # base-domain and workspace contexts at all.
+                        # tenant-info answers 204 in both cases, so the
+                        # app cannot tell them apart without this.
+                        "baseDomain": BASE_DOMAIN,
+                        # Off on a dedicated single-customer deployment,
+                        # which is how the login page knows not to offer a
+                        # sign-up its backend would refuse anyway.
+                        "allowRegistration": ALLOW_REGISTRATION,
                     }),
                     ";",
                     "var roleFeatures=",
@@ -101,7 +96,6 @@ class Command(BaseCommand):
         )
         open("source/config/config.min.js", "w").write(min_config)
         # os.remove(administration_json)
-        del levels
         del min_config
         if options.get("refresh_views"):
             refresh_materialized_data()

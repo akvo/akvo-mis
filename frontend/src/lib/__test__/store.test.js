@@ -23,7 +23,7 @@ describe("Store", () => {
       loadingMap: false,
       allForms: [],
       forms: [],
-      levels: window.levels,
+      levels: [],
       selectedForm: null,
       loadingForm: false,
       questionGroups: [],

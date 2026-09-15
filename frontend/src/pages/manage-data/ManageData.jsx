@@ -14,6 +14,7 @@ const ManageData = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [activeTab, setActiveTab] = useState("data-list");
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState("registration");
 
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -24,6 +25,11 @@ const ManageData = () => {
   const formIdFromUrl = new URLSearchParams(window.location.search).get(
     "form_id"
   );
+
+  const handleViewModeChange = (value) => {
+    setViewMode(value);
+    setSelectedRowKeys([]);
+  };
 
   return (
     <div id="manageData">
@@ -57,6 +63,8 @@ const ManageData = () => {
             selectedRowKeys={selectedRowKeys}
             search={search}
             onSearchChange={setSearch}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
           />
           <Divider style={{ marginBottom: 8 }} />
           <div
@@ -85,6 +93,7 @@ const ManageData = () => {
                     selectedRowKeys,
                     setSelectedRowKeys,
                     search,
+                    viewMode,
                   }}
                 />
               </TabPane>

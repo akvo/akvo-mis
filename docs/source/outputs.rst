@@ -16,20 +16,20 @@ Go to the Manage data menu, select the questionnaire you want to download data f
 Click the Download button to download the data as a document.
 
 
-.. image:: ../assests/manage-data-download-report-1.png
+.. image:: ../assets/manage-data-download-report-1.png
     :alt: Select Data to Download
     :width: 100%
 
 Downloaded data can be accessed from the Downloaded Data tab of the control center. Click the download button to get your data in a document format.
 
-.. image:: ../assests/manage-data-download-report-2.png
+.. image:: ../assets/manage-data-download-report-2.png
     :alt: Downloaded Data Page
     :width: 100%
 
 
 Here is the preview of the downloaded document:
 
-.. image:: ../assests/data-report-example.png
+.. image:: ../assets/data-report-example.png
    :alt: Downloaded Document
    :width: 100%
 
@@ -44,6 +44,6 @@ Users will get email notifications in the following scenarios:
 * Submitter is notified when data is approved
 * Submitter is notified when data is rejected
 
-.. image:: ../assests/approval-email-notification.png
+.. image:: ../assets/approval-email-notification.png
     :alt: Notifications
     :width: 100%

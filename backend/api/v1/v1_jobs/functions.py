@@ -42,3 +42,6 @@ class ValidationText(enum.Enum):
     duplicated_data_id = "--data_id-- is a duplicate data id"
     invalid_attribute_options = (
             "invalid attribute options: {}, available options: {}")
+    administration_empty_row = "Row has no administration names"
+    administration_root_mismatch = (
+            "First column must be the top level name: {}")
