@@ -5,10 +5,11 @@ import { config } from "../../lib";
 const GradationLegend = ({
   title = "",
   thresholds = [],
+  colors = null,
   onClick = () => {},
 }) => {
   const [shapeFilterColor, setShapeFilterColor] = useState(null);
-  const colorRange = config.mapConfig.colorRange;
+  const colorRange = colors || config.mapConfig.colorRange;
 
   const handleOnClick = (index) => {
     if (shapeFilterColor === colorRange[index]) {
