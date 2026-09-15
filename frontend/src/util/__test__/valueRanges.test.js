@@ -16,11 +16,7 @@ describe("quantileRanges", () => {
   });
 
   test("large values produce round breaks", () => {
-    const ranges = quantileRanges(
-      [100, 200, 500, 1200],
-      PALETTE,
-      3
-    );
+    const ranges = quantileRanges([100, 200, 500, 1200], PALETTE, 3);
     const tos = ranges.map((r) => r.to);
     expect(tos[tos.length - 1]).toBeNull();
     tos.slice(0, -1).forEach((t) => {
