@@ -1501,9 +1501,7 @@ describe("chart toolbox controls in BuilderInspector (dashboard-level)", () => {
     expect(screen.getByText("Toolbox features")).toBeInTheDocument();
     expect(screen.getByText("Save as image")).toBeInTheDocument();
     expect(screen.getByText("Data view")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Restore zoom/filters")
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Restore zoom/filters")).not.toBeInTheDocument();
     expect(screen.getByText("Data zoom")).toBeInTheDocument();
   });
 });
