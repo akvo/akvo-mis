@@ -52,13 +52,24 @@ export const useChartResize = (toolbox) => {
           opts && typeof opts === "object"
             ? {
                 ...opts,
-                toolbox: tb || { show: false },
+                toolbox: tb || { show: false, feature: {} },
               }
             : opts;
-        return originalSetOption(finalOpts, ...args);
+        try {
+          return originalSetOption(finalOpts, ...args);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error("ECharts setOption error:", e);
+          return null;
+        }
       };
       if (toolboxRef.current) {
-        chart.setOption({ toolbox: toolboxRef.current });
+        try {
+          chart.setOption({ toolbox: toolboxRef.current });
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error("ECharts initial toolbox error:", e);
+        }
       }
     }
   }, []);
@@ -68,9 +79,14 @@ export const useChartResize = (toolbox) => {
   useEffect(() => {
     const chart = chartRef.current;
     if (chart && typeof chart.setOption === "function") {
-      chart.setOption({
-        toolbox: toolbox || { show: false },
-      });
+      try {
+        chart.setOption({
+          toolbox: toolbox || { show: false, feature: {} },
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("ECharts update toolbox error:", e);
+      }
     }
   }, [toolbox]);
 

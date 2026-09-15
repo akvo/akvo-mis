@@ -204,6 +204,7 @@ const DashboardViewer = () => {
             <DashboardGrid
               widgets={dashboard.widgets}
               filters={filters}
+              defaultFilters={dashboard.default_filters}
               rootFormId={dashboard.root_form?.id}
               dashboardSlug={slug}
             />

@@ -17,10 +17,15 @@ const useEChartsOption = (option) => {
       return () => {};
     }
 
-    if (!chartRef.current) {
-      chartRef.current = echarts.init(box);
+    try {
+      if (!chartRef.current) {
+        chartRef.current = echarts.init(box);
+      }
+      chartRef.current.setOption(option, true);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("useEChartsOption error:", e);
     }
-    chartRef.current.setOption(option, true);
 
     let cleanup;
     if (typeof ResizeObserver !== "undefined") {

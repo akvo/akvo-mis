@@ -71,6 +71,12 @@ export const DEFAULT_TOOLBOX_FEATURES = {
   dataZoom: true,
 };
 
+export const DEFAULT_DASHBOARD_TOOLBOX = {
+  enabled: false,
+  position: "top-right",
+  features: { ...DEFAULT_TOOLBOX_FEATURES },
+};
+
 export const WIDGET_DEFAULTS = {
   kpi: {
     col_span: 6,
@@ -269,12 +275,7 @@ export const stackByOptions = (
   }
   if (question.type === "number") {
     return groupBy === "month" || groupBy === "date"
-      ? [
-          ...none,
-          ...VALID_STACK_BY.filter(
-            (s) => s.value === "parent_id" || s.value === "administration"
-          ),
-        ]
+      ? [...none, ...VALID_STACK_BY.filter((s) => s.value === "parent_id")]
       : none;
   }
   if (!STACK_QUESTION_TYPES.has(question.type)) {

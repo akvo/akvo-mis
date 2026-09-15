@@ -552,6 +552,7 @@ const DashboardBuilder = () => {
               <DashboardGrid
                 widgets={widgets}
                 filters={previewFilters}
+                defaultFilters={dashboard.default_filters}
                 rootFormId={dashboard.root_form?.id}
               />
             </>
