@@ -5,7 +5,7 @@
 **Task ID**: GEO-009 (breakdown ref: T8)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Approved — panel implemented upstream in akvo/akvo-react-form-editor#76 (open), pending merge and the 2.1.0 release
+**Status**: Delivered — panel merged upstream (akvo/akvo-react-form-editor#76) and released as 2.0.5; host depends on it
 **Phase**: 3 — Overlap detection
 **Estimate**: 5h ≈ 1 day (Frontend — **upstream repo + host**)
 **Blocks**: GEO-007
@@ -64,11 +64,13 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 keys.** An enable-checkbox for "should this be a valid polygon?" has no meaningful *off* state.
 
 ### User Acceptance Criteria
-- [ ] `overlapThreshold` is revealed only when `detectOverlaps` is ticked
-- [ ] The overlap checkbox carries help text stating the consequence: *enabling this syncs the
-      geometry of all other responses to this question onto the enumerator's device*
-- [ ] Reopening the form restores checkbox and numeric state
-- [ ] Values survive publish and appear unchanged in the mobile form payload
+- [x] `overlapThreshold` is revealed only when `detectOverlaps` is ticked
+- [x] The overlap checkbox carries help text stating the consequence: *enabling this syncs the
+      geometry of all other responses to this question onto the enumerator's device* — shipped as
+      always-visible warning text rather than a tooltip, and asserted by a test on the string
+      itself, not merely on the key existing
+- [x] Reopening the form restores checkbox and numeric state
+- [x] Values survive publish and appear unchanged in the mobile form payload
 
 ### Design-review addition: resolved as three fields
 
@@ -99,8 +101,8 @@ the panel was unreachable regardless of the upstream work. Adding the type
 is part of this task.
 
 ### Technical Acceptance Criteria
-- [ ] Values written as **numbers**, nested under `extra.geoConfig` — not strings, not top level
-- [ ] Panel appears on **`geoshape` only** — not `geo`, not `geotrace`, not any other type
+- [x] Values written as **numbers**, nested under `extra.geoConfig` — not strings, not top level
+- [x] Panel appears on **`geoshape` only** — not `geo`, not `geotrace`, not any other type
 
 ---
 
@@ -188,8 +190,8 @@ Nothing regresses; geotrace gains no new configurability.
       defaults rather than disabling validation
 
 ### Upstream/Release
-- [x] `akvo-react-form-editor` PR + version bump + npm release — PR #76 is open; the version bump and the release are still pending
-- [x] `frontend/package.json` bump and round-trip verification — the round trip is verified against a running stack; the `^2.1.0` bump waits on the release
+- [x] `akvo-react-form-editor` PR + version bump + npm release — PR #76 merged; released as **2.0.5**, a patch rather than the 2.1.0 anticipated here, since the panel is additive
+- [x] `frontend/package.json` bump and round-trip verification — both done: round trip verified against a running stack, and the host now depends on `^2.0.5`
 
 ---
 
@@ -224,10 +226,15 @@ Nothing regresses; geotrace gains no new configurability.
 
 ## 10. Open Questions
 
-- [x] The upstream route was available. The panel exists as three commits
-      on `akvo-react-form-editor` PR #76, so D-1's fallback was not needed
-      and the config shape is the nested, numeric one this document
-      specifies. Release state is on the Status line above.
+- [x] The upstream route was available. D-1's fallback was not needed, and
+      the config shape is the nested, numeric one this document specifies.
+      PR #76 was squash-merged and released as 2.0.5.
+- [x] A fix landed upstream after the panel merged: the geo inputs became
+      controlled components rather than relying on `Form.Item initialValue`,
+      which only applies on first render and left the fields blank when a
+      question's `geoConfig` arrived after mount. Worth knowing because it
+      is the mechanism behind the "reopening the form restores state"
+      criterion in section 2.
 - [ ] Nothing verifies `geoConfig` end to end on the backend yet. GEO-010.
 
 ---
