@@ -42,16 +42,20 @@ describe("toolboxHelper - buildToolboxConfig", () => {
       top: 0,
       orient: "horizontal",
       feature: {
-        saveAsImage: { show: true, title: "Save as image" },
+        saveAsImage: {
+          show: true,
+          title: "Save as image",
+          name: "Water Points",
+        },
         dataView: {
           show: true,
           readOnly: true,
           optionToContent: expect.any(Function),
         },
-        restore: { show: true, title: "Restore" },
         dataZoom: { show: true, yAxisIndex: "none" },
       },
     });
+    expect(toolbox.feature.restore).toBeUndefined();
   });
 
   test("omits disabled features completely from feature object", () => {
@@ -60,18 +64,18 @@ describe("toolboxHelper - buildToolboxConfig", () => {
       features: {
         saveAsImage: true,
         dataView: true,
-        restore: true,
+        restore: false,
         dataZoom: false,
       },
     };
     const toolbox = buildToolboxConfig(config, "bar");
 
-    expect(toolbox.feature.saveAsImage).toEqual({
+    expect(toolbox.feature.saveAsImage).toMatchObject({
       show: true,
       title: "Save as image",
     });
     expect(toolbox.feature.dataView.show).toBe(true);
-    expect(toolbox.feature.restore).toEqual({ show: true, title: "Restore" });
+    expect(toolbox.feature.restore).toBeUndefined();
     expect(toolbox.feature.dataZoom).toBeUndefined();
   });
 
@@ -106,18 +110,18 @@ describe("toolboxHelper - buildToolboxConfig", () => {
       features: {
         saveAsImage: true,
         dataView: true,
-        restore: true,
+        restore: false,
         dataZoom: true,
       },
     };
     const toolbox = buildToolboxConfig(config, "pie");
 
-    expect(toolbox.feature.saveAsImage).toEqual({
+    expect(toolbox.feature.saveAsImage).toMatchObject({
       show: true,
       title: "Save as image",
     });
     expect(toolbox.feature.dataView.show).toBe(true);
-    expect(toolbox.feature.restore).toEqual({ show: true, title: "Restore" });
+    expect(toolbox.feature.restore).toBeUndefined();
     expect(toolbox.feature.dataZoom).toBeUndefined();
   });
 

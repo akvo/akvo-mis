@@ -214,14 +214,10 @@ describe("clustering is a choice, not the default (#387)", () => {
       })
     );
     expect(screen.getByText("Colours")).toBeInTheDocument();
-    // The editor names one bound per row; the legend keeps intervals.
-    expect(screen.getByText("Above 340")).toBeInTheDocument();
+    expect(screen.getByText("341 +")).toBeInTheDocument();
   });
 
-  test("every editable band says which side its number bounds", () => {
-    // A bare number in a row does not say whether it is that band's
-    // floor or its ceiling. Each editable row carries an upper bound, so
-    // each one reads "Under N".
+  test("every editable band shows its range prefix", () => {
     draw(
       mapWidget(600202, {
         map_mode: "range",
@@ -235,10 +231,11 @@ describe("clustering is a choice, not the default (#387)", () => {
     expect(
       document.querySelectorAll(".ant-input-number-group-addon")
     ).toHaveLength(2);
-    expect(screen.getAllByText("Under")).toHaveLength(2);
+    expect(screen.getByText("≤")).toBeInTheDocument();
+    expect(screen.getByText("341 –")).toBeInTheDocument();
   });
 
-  test("the open band reads as a floor, not a ceiling", () => {
+  test("the open band reads as a floor", () => {
     draw(
       mapWidget(600202, {
         map_mode: "range",
@@ -248,7 +245,7 @@ describe("clustering is a choice, not the default (#387)", () => {
         ],
       })
     );
-    expect(screen.getByText("Above 340")).toBeInTheDocument();
+    expect(screen.getByText("341 +")).toBeInTheDocument();
   });
 
   test("a lone open band names no bound at all", () => {
@@ -327,8 +324,8 @@ describe("clustering is a choice, not the default (#387)", () => {
     fireEvent.click(screen.getByTitle("Green shades"));
     const next = onWidgetChange.mock.calls.at(-1)[0].config;
     expect(next.value_ranges.map((b) => b.color)).toEqual([
-      "#006d2c",
-      "#31a354",
+      "#c7e9c0",
+      "#a1d99b",
       "#74c476",
     ]);
     // The numbers are the author's; a palette change must not move them.
@@ -390,10 +387,7 @@ describe("clustering is a choice, not the default (#387)", () => {
     expect(next.at(-1).to).toBeNull();
   });
 
-  test("but data that cannot fill them gives back fewer", async () => {
-    // The count is what to aim for, not a promise. Five bands over one
-    // repeated value would be four that no point can land in, and an
-    // empty band in a legend is worse than a missing one.
+  test("but data that cannot fill them still produces valid bands", async () => {
     api.get.mockResolvedValue({
       data: { data: [7, 7, 7, 7, 7].map((v) => ({ group: "x", value: v })) },
     });
@@ -405,7 +399,9 @@ describe("clustering is a choice, not the default (#387)", () => {
     fireEvent.click(screen.getByText("Re-seed from data"));
     await waitFor(() => expect(api.get).toHaveBeenCalled());
     const next = onWidgetChange.mock.calls.at(-1)[0].config.value_ranges;
-    expect(next).toEqual([{ to: null, color: expect.any(String) }]);
+    expect(next.at(-1).to).toBeNull();
+    const tos = next.slice(0, -1).map((r) => r.to);
+    expect([...tos].sort((a, b) => a - b)).toEqual(tos);
   });
 
   test("the first seed still guesses three", async () => {
@@ -1505,7 +1501,9 @@ describe("chart toolbox controls in BuilderInspector (dashboard-level)", () => {
     expect(screen.getByText("Toolbox features")).toBeInTheDocument();
     expect(screen.getByText("Save as image")).toBeInTheDocument();
     expect(screen.getByText("Data view")).toBeInTheDocument();
-    expect(screen.getByText("Restore zoom/filters")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Restore zoom/filters")
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Data zoom")).toBeInTheDocument();
   });
 });

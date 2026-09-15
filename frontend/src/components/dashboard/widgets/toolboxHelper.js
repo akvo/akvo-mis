@@ -10,7 +10,7 @@ export const TOOLBOX_POSITIONS = {
 export const DEFAULT_TOOLBOX_FEATURES = {
   saveAsImage: true,
   dataView: true,
-  restore: true,
+  restore: false,
   dataZoom: true,
 };
 
@@ -171,8 +171,8 @@ export const exportDataViewToExcel = (columns, rows, title = "chart_data") => {
   );
 
   const cleanTitle =
-    (title || "chart_data").replace(/[^a-zA-Z0-9_\-\s]/g, "").trim() ||
-    "chart_data";
+    (title || "Untitled").replace(/[^a-zA-Z0-9_\-\s]/g, "").trim() ||
+    "Untitled";
   const excel = new Excel();
   excel
     .addSheet("Data")
@@ -294,7 +294,6 @@ export const buildToolboxConfig = (
   const hasAnyFeature =
     features.saveAsImage !== false ||
     features.dataView !== false ||
-    features.restore !== false ||
     (features.dataZoom !== false && widgetType !== "pie");
 
   if (!hasAnyFeature) {
@@ -304,7 +303,14 @@ export const buildToolboxConfig = (
   const feature = {};
 
   if (features.saveAsImage !== false) {
-    feature.saveAsImage = { show: true, title: "Save as image" };
+    const cleanName =
+      (widgetTitle || "Untitled").replace(/[^a-zA-Z0-9_\-\s]/g, "").trim() ||
+      "Untitled";
+    feature.saveAsImage = {
+      show: true,
+      title: "Save as image",
+      name: cleanName,
+    };
   }
 
   if (features.dataView !== false) {
@@ -314,10 +320,6 @@ export const buildToolboxConfig = (
       title: "Data view",
       optionToContent: (opt) => renderDataViewTable(opt, widgetTitle),
     };
-  }
-
-  if (features.restore !== false) {
-    feature.restore = { show: true, title: "Restore" };
   }
 
   if (widgetType !== "pie" && features.dataZoom !== false) {

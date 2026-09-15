@@ -544,31 +544,6 @@ const BuilderInspector = ({
                     <label className="builder-inspector-col-row">
                       <Checkbox
                         checked={
-                          defaultFilters?.toolbox?.features?.restore !== false
-                        }
-                        onChange={(e) => {
-                          const current = defaultFilters?.toolbox?.features || {
-                            ...DEFAULT_TOOLBOX_FEATURES,
-                          };
-                          onDashboardChange("default_filters", {
-                            ...(defaultFilters || {}),
-                            toolbox: {
-                              ...(defaultFilters?.toolbox || {}),
-                              features: {
-                                ...current,
-                                restore: e.target.checked,
-                              },
-                            },
-                          });
-                        }}
-                      />
-                      <span className="builder-inspector-q-label">
-                        Restore zoom/filters
-                      </span>
-                    </label>
-                    <label className="builder-inspector-col-row">
-                      <Checkbox
-                        checked={
                           defaultFilters?.toolbox?.features?.dataZoom !== false
                         }
                         onChange={(e) => {
