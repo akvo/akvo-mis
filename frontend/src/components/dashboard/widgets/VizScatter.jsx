@@ -21,6 +21,12 @@ const VizScatter = ({ config, data, filters }) => {
     const toolboxConfig =
       config?.toolbox || widgetConfig.toolbox || widgetConfig;
     const toolbox = buildToolboxConfig(toolboxConfig, "scatter", config?.title);
+    const isTopToolbox = Boolean(
+      toolbox?.show && typeof toolbox?.top !== "undefined"
+    );
+    const isBottomToolbox = Boolean(
+      toolbox?.show && typeof toolbox?.bottom !== "undefined"
+    );
     return {
       color: colors,
       tooltip: {
@@ -37,7 +43,13 @@ const VizScatter = ({ config, data, filters }) => {
       },
       legend: { show: false },
       toolbox: toolbox || { show: false, feature: {} },
-      grid: { top: 40, right: 20, bottom: 50, left: 60, containLabel: true },
+      grid: {
+        top: isTopToolbox ? 55 : 35,
+        right: 20,
+        bottom: isBottomToolbox ? 75 : 50,
+        left: 60,
+        containLabel: true,
+      },
       xAxis: {
         type: "value",
         name: xLabel,

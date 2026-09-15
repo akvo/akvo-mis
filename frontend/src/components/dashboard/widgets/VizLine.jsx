@@ -25,6 +25,12 @@ const CategoryLine = ({ config, data, filters }) => {
     );
     const toolboxConfig = config?.toolbox || wc.toolbox || wc;
     const toolbox = buildToolboxConfig(toolboxConfig, "line", config?.title);
+    const isTopToolbox = Boolean(
+      toolbox?.show && typeof toolbox?.top !== "undefined"
+    );
+    const isBottomToolbox = Boolean(
+      toolbox?.show && typeof toolbox?.bottom !== "undefined"
+    );
     return {
       color: seriesColors,
       tooltip: {
@@ -36,7 +42,13 @@ const CategoryLine = ({ config, data, filters }) => {
         bottom: 0,
       },
       toolbox: toolbox || { show: false, feature: {} },
-      grid: { top: 20, right: 20, bottom: 40, left: 40, containLabel: true },
+      grid: {
+        top: isTopToolbox ? 55 : 30,
+        right: 20,
+        bottom: isBottomToolbox ? 65 : 40,
+        left: 40,
+        containLabel: true,
+      },
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
@@ -102,6 +114,13 @@ const VizLine = ({ config, data, filters }) => {
     );
   }
 
+  const isTopToolbox = Boolean(
+    toolbox?.show && typeof toolbox?.top !== "undefined"
+  );
+  const isBottomToolbox = Boolean(
+    toolbox?.show && typeof toolbox?.bottom !== "undefined"
+  );
+
   if (hasStack) {
     const firstItem = chartData[0] || {};
     const stackLabels =
@@ -115,7 +134,13 @@ const VizLine = ({ config, data, filters }) => {
       tooltip: { trigger: "axis" },
       legend: { show: true, data: stackLabels, bottom: 0 },
       toolbox: toolbox || { show: false, feature: {} },
-      grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
+      grid: {
+        top: isTopToolbox ? 55 : 35,
+        right: 20,
+        bottom: isBottomToolbox ? 65 : 40,
+        left: 50,
+        containLabel: true,
+      },
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
@@ -152,7 +177,13 @@ const VizLine = ({ config, data, filters }) => {
     tooltip: { trigger: "axis" },
     legend: { show: false },
     toolbox: toolbox || { show: false, feature: {} },
-    grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
+    grid: {
+      top: isTopToolbox ? 55 : 35,
+      right: 20,
+      bottom: isBottomToolbox ? 55 : 40,
+      left: 50,
+      containLabel: true,
+    },
     xAxis: {
       type: "category",
       data: chartData.map((d) => d[categoryKey]),

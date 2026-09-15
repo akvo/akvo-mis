@@ -27,8 +27,28 @@ const VizPie = ({ config, data, filters }) => {
   };
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
-  const rawConfig = useMemo(
-    () => ({
+  const rawConfig = useMemo(() => {
+    const isTopToolbox = Boolean(
+      toolbox?.show && typeof toolbox?.top !== "undefined"
+    );
+    const isBottomToolbox = Boolean(
+      toolbox?.show && typeof toolbox?.bottom !== "undefined"
+    );
+    const pieCenter = isBottomToolbox
+      ? ["50%", "44%"]
+      : isTopToolbox
+      ? ["50%", "54%"]
+      : ["50%", "50%"];
+    const pieRadius =
+      isTopToolbox || isBottomToolbox
+        ? isDoughnut
+          ? ["36%", "65%"]
+          : "65%"
+        : isDoughnut
+        ? ["40%", "70%"]
+        : "70%";
+
+    return {
       color: colors,
       tooltip: {
         trigger: "item",
@@ -41,16 +61,16 @@ const VizPie = ({ config, data, filters }) => {
       series: [
         {
           type: "pie",
-          radius: isDoughnut ? ["40%", "70%"] : "70%",
+          center: pieCenter,
+          radius: pieRadius,
           data: chartData.map((d) => ({
             name: d.name ?? d.label ?? "-",
             value: d.value ?? 0,
           })),
         },
       ],
-    }),
-    [colors, isDoughnut, toolbox, chartData]
-  );
+    };
+  }, [colors, isDoughnut, toolbox, chartData]);
 
   if (chartData.length === 0) {
     return (
