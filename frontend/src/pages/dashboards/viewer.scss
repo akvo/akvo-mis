@@ -352,6 +352,51 @@ $view-gutter: 50px;
   border: none;
 }
 
+/* Graduated legend for range (number) maps. The wrapper positions the
+   GradationLegend component above Leaflet's tile pane (z-index 500). */
+.dashboard-view-map-gradation {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+
+  .shape-legend {
+    position: relative;
+    background-color: rgba(255, 255, 255, 0.92);
+    padding: 6px 12px;
+    text-align: center;
+    font-size: 12px;
+
+    h4 {
+      margin: 0;
+    }
+
+    .legend-wrap {
+      width: 100%;
+      margin-top: 4px;
+      font-weight: 500;
+
+      .legend-item {
+        cursor: pointer;
+        margin: 0 1px;
+        border: solid transparent 2px;
+        color: #2d3436;
+        padding: 2px 0;
+
+        &.legend-selected {
+          border: solid #036799 2px;
+          color: #fff;
+          &:first-child,
+          &:nth-child(2) {
+            color: #005f40;
+          }
+        }
+      }
+    }
+  }
+}
+
 .dashboard-view-map-legend {
   position: absolute;
   left: 12px;
