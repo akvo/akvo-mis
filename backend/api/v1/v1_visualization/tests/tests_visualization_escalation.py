@@ -89,6 +89,23 @@ class EscalationTestCases(VisualizationValuesTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_column_missing_key_raises_key_error(self):
+        """Direct call to handle_escalation with column missing key
+        raises KeyError.
+        """
+        from api.v1.v1_visualization.escalation_functions import (
+            handle_escalation,
+        )
+        with self.assertRaises(KeyError) as ctx:
+            handle_escalation(
+                self.registration,
+                self.monitoring.id,
+                [],
+                [{"source": "parent_name"}],
+                {"page": 1, "page_size": 10},
+            )
+        self.assertIn("non-empty 'key'", str(ctx.exception))
+
     def test_invalid_form_id(self):
         """Non-existent form_id — returns 404."""
         response = self.client.get(

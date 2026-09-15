@@ -76,7 +76,10 @@ implementing every rule in VIZ-001 §4.5:
 - `measure == current_state` only on a monitoring form
 - `stack_by` requires `group_by` and `question`
 - `1 <= col_span <= 24`
+- `table.columns[].key` is non-empty string, unique per widget
 - `table.columns[].source` in `VALID_COLUMN_SOURCES`
+- `table.columns[].question` required for sources in `{answer, parent_answer}`; optional for `latest_date` (scoped to `widget.form` when provided) or `root_form` (for `parent_answer`)
+- `table.columns[]` stored config uses `question` rather than `question_id`
 - `slug` matches `^[a-z0-9]+(-[a-z0-9]+)*$`, unique per live row per tenant
 
 Errors return 400 with the offending widget's index and field, so the
