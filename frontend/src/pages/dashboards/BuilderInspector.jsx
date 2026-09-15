@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
-import { Input, InputNumber, Select, Switch, Checkbox } from "antd";
+import { Input, InputNumber, Select, Switch, Checkbox, Tooltip } from "antd";
 import {
   DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
+  InfoCircleOutlined,
 } from "@ant-design/icons";
 import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
 import api from "../../lib/api";
@@ -400,6 +401,209 @@ const BuilderInspector = ({
                 }}
               />
             </label>
+          </div>
+
+          <div className="builder-inspector-field">
+            <div
+              className="builder-inspector-label"
+              style={{ marginBottom: 8 }}
+            >
+              Chart toolbox
+            </div>
+            <label className="builder-inspector-filter-row">
+              Show toolbox
+              <Switch
+                size="small"
+                checked={Boolean(
+                  defaultFilters?.toolbox?.enabled ??
+                    defaultFilters?.toolbox?.show
+                )}
+                onChange={(checked) => {
+                  onDashboardChange("default_filters", {
+                    ...(defaultFilters || {}),
+                    toolbox: {
+                      ...(defaultFilters?.toolbox || {}),
+                      enabled: checked,
+                      show: checked,
+                      position:
+                        defaultFilters?.toolbox?.position || "top-right",
+                      features: defaultFilters?.toolbox?.features || {
+                        ...DEFAULT_TOOLBOX_FEATURES,
+                      },
+                    },
+                  });
+                }}
+              />
+            </label>
+
+            {(defaultFilters?.toolbox?.enabled ||
+              defaultFilters?.toolbox?.show) && (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div
+                  className="builder-inspector-field"
+                  style={{ marginBottom: 4 }}
+                >
+                  <label className="builder-inspector-label">
+                    Toolbox position
+                  </label>
+                  <Select
+                    size="small"
+                    style={{ width: "100%" }}
+                    value={defaultFilters?.toolbox?.position || "top-right"}
+                    onChange={(val) => {
+                      onDashboardChange("default_filters", {
+                        ...(defaultFilters || {}),
+                        toolbox: {
+                          ...(defaultFilters?.toolbox || {}),
+                          position: val,
+                        },
+                      });
+                    }}
+                  >
+                    {TOOLBOX_POSITION_PRESETS.map((pos) => (
+                      <Select.Option key={pos.value} value={pos.value}>
+                        {pos.label}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div
+                  className="builder-inspector-field"
+                  style={{ marginBottom: 0 }}
+                >
+                  <label className="builder-inspector-label">
+                    Toolbox features
+                  </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={
+                          defaultFilters?.toolbox?.features?.saveAsImage !==
+                          false
+                        }
+                        onChange={(e) => {
+                          const current = defaultFilters?.toolbox?.features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          onDashboardChange("default_filters", {
+                            ...(defaultFilters || {}),
+                            toolbox: {
+                              ...(defaultFilters?.toolbox || {}),
+                              features: {
+                                ...current,
+                                saveAsImage: e.target.checked,
+                              },
+                            },
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Save as image
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={
+                          defaultFilters?.toolbox?.features?.dataView !== false
+                        }
+                        onChange={(e) => {
+                          const current = defaultFilters?.toolbox?.features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          onDashboardChange("default_filters", {
+                            ...(defaultFilters || {}),
+                            toolbox: {
+                              ...(defaultFilters?.toolbox || {}),
+                              features: {
+                                ...current,
+                                dataView: e.target.checked,
+                              },
+                            },
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Data view
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={
+                          defaultFilters?.toolbox?.features?.restore !== false
+                        }
+                        onChange={(e) => {
+                          const current = defaultFilters?.toolbox?.features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          onDashboardChange("default_filters", {
+                            ...(defaultFilters || {}),
+                            toolbox: {
+                              ...(defaultFilters?.toolbox || {}),
+                              features: {
+                                ...current,
+                                restore: e.target.checked,
+                              },
+                            },
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Restore zoom/filters
+                      </span>
+                    </label>
+                    <label className="builder-inspector-col-row">
+                      <Checkbox
+                        checked={
+                          defaultFilters?.toolbox?.features?.dataZoom !== false
+                        }
+                        onChange={(e) => {
+                          const current = defaultFilters?.toolbox?.features || {
+                            ...DEFAULT_TOOLBOX_FEATURES,
+                          };
+                          onDashboardChange("default_filters", {
+                            ...(defaultFilters || {}),
+                            toolbox: {
+                              ...(defaultFilters?.toolbox || {}),
+                              features: {
+                                ...current,
+                                dataZoom: e.target.checked,
+                              },
+                            },
+                          });
+                        }}
+                      />
+                      <span className="builder-inspector-q-label">
+                        Data zoom
+                      </span>
+                      <Tooltip title="Data zoom applies to charts with X/Y axes (Bar, Line, Scatter)">
+                        <InfoCircleOutlined
+                          style={{
+                            color: "#8c8c8c",
+                            fontSize: 12,
+                            marginLeft: 4,
+                            cursor: "pointer",
+                          }}
+                        />
+                      </Tooltip>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <DashboardVisibilityToggle
@@ -2003,160 +2207,6 @@ const BuilderInspector = ({
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Toolbox options (chart widgets) */}
-        {["bar", "line", "pie", "scatter"].includes(wType) && (
-          <div className="builder-inspector-field">
-            <label className="builder-inspector-switch-row">
-              <span>Show toolbox</span>
-              <Switch
-                size="small"
-                checked={wConfig.show_toolbox === true}
-                onChange={(checked) => {
-                  if (checked) {
-                    onWidgetChange({
-                      ...widget,
-                      config: {
-                        ...widget.config,
-                        show_toolbox: true,
-                        toolbox_position:
-                          widget.config?.toolbox_position || "top-right",
-                        toolbox_features: widget.config?.toolbox_features || {
-                          ...DEFAULT_TOOLBOX_FEATURES,
-                        },
-                      },
-                    });
-                  } else {
-                    updateConfig("show_toolbox", false);
-                  }
-                }}
-              />
-            </label>
-
-            {wConfig.show_toolbox === true && (
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
-                <div
-                  className="builder-inspector-field"
-                  style={{ marginBottom: 4 }}
-                >
-                  <label className="builder-inspector-label">
-                    Toolbox position
-                  </label>
-                  <Select
-                    size="small"
-                    style={{ width: "100%" }}
-                    value={wConfig.toolbox_position || "top-right"}
-                    onChange={(val) => {
-                      updateConfig("toolbox_position", val);
-                    }}
-                  >
-                    {TOOLBOX_POSITION_PRESETS.map((pos) => (
-                      <Select.Option key={pos.value} value={pos.value}>
-                        {pos.label}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div
-                  className="builder-inspector-field"
-                  style={{ marginBottom: 0 }}
-                >
-                  <label className="builder-inspector-label">
-                    Toolbox features
-                  </label>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
-                    <label className="builder-inspector-col-row">
-                      <Checkbox
-                        checked={
-                          wConfig.toolbox_features?.saveAsImage !== false
-                        }
-                        onChange={(e) => {
-                          const current = wConfig.toolbox_features || {
-                            ...DEFAULT_TOOLBOX_FEATURES,
-                          };
-                          updateConfig("toolbox_features", {
-                            ...current,
-                            saveAsImage: e.target.checked,
-                          });
-                        }}
-                      />
-                      <span className="builder-inspector-q-label">
-                        Save as image
-                      </span>
-                    </label>
-                    <label className="builder-inspector-col-row">
-                      <Checkbox
-                        checked={wConfig.toolbox_features?.dataView !== false}
-                        onChange={(e) => {
-                          const current = wConfig.toolbox_features || {
-                            ...DEFAULT_TOOLBOX_FEATURES,
-                          };
-                          updateConfig("toolbox_features", {
-                            ...current,
-                            dataView: e.target.checked,
-                          });
-                        }}
-                      />
-                      <span className="builder-inspector-q-label">
-                        Data view
-                      </span>
-                    </label>
-                    <label className="builder-inspector-col-row">
-                      <Checkbox
-                        checked={wConfig.toolbox_features?.restore !== false}
-                        onChange={(e) => {
-                          const current = wConfig.toolbox_features || {
-                            ...DEFAULT_TOOLBOX_FEATURES,
-                          };
-                          updateConfig("toolbox_features", {
-                            ...current,
-                            restore: e.target.checked,
-                          });
-                        }}
-                      />
-                      <span className="builder-inspector-q-label">
-                        Restore zoom/filters
-                      </span>
-                    </label>
-                    {wType !== "pie" && (
-                      <label className="builder-inspector-col-row">
-                        <Checkbox
-                          checked={wConfig.toolbox_features?.dataZoom !== false}
-                          onChange={(e) => {
-                            const current = wConfig.toolbox_features || {
-                              ...DEFAULT_TOOLBOX_FEATURES,
-                            };
-                            updateConfig("toolbox_features", {
-                              ...current,
-                              dataZoom: e.target.checked,
-                            });
-                          }}
-                        />
-                        <span className="builder-inspector-q-label">
-                          Data zoom
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

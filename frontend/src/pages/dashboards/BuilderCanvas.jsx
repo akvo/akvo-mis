@@ -7,6 +7,7 @@ import {
   DeleteOutlined,
 } from "@ant-design/icons";
 import WidgetRenderer from "../../components/dashboard/widgets/WidgetRenderer";
+import WidgetErrorBoundary from "../../components/dashboard/WidgetErrorBoundary";
 import useWidgetData from "../../util/hooks/useWidgetData";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import { WIDGET_BODY_HEIGHT } from "../../components/dashboard/widgetLayout";
@@ -28,6 +29,7 @@ const CanvasWidgetCard = memo(
     index,
     filters,
     rootFormId,
+    toolbox,
     isSelected,
     onSelect,
     onMove,
@@ -69,11 +71,14 @@ const CanvasWidgetCard = memo(
       // excluded unless include_unmonitored is set, so empty is a routine
       // answer rather than a fault.
       return (
-        <WidgetRenderer
-          widget={renderWidget || widget}
-          data={data}
-          pagination={pagination}
-        />
+        <WidgetErrorBoundary filters={filters}>
+          <WidgetRenderer
+            widget={renderWidget || widget}
+            data={data}
+            pagination={pagination}
+            toolbox={toolbox}
+          />
+        </WidgetErrorBoundary>
       );
     };
 
@@ -262,6 +267,7 @@ const BuilderCanvas = ({
                 index={idx}
                 filters={filters}
                 rootFormId={rootFormId}
+                toolbox={defaultFilters?.toolbox}
                 isSelected={w.id === selectedId}
                 onSelect={onSelect}
                 onMove={onMove}

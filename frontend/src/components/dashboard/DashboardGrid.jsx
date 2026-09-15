@@ -37,6 +37,7 @@ const BODY_PADDING = { table: 0, map: 12 };
 const DashboardWidgetCell = ({
   widget,
   filters,
+  defaultFilters,
   rootFormId,
   dashboardSlug,
   text,
@@ -97,6 +98,7 @@ const DashboardWidgetCell = ({
           data={data}
           pagination={pagination}
           filters={filters}
+          toolbox={defaultFilters?.toolbox}
         />
       </WidgetErrorBoundary>
     );
@@ -121,12 +123,19 @@ const DashboardWidgetCell = ({
 DashboardWidgetCell.propTypes = {
   widget: PropTypes.object.isRequired,
   filters: PropTypes.object,
+  defaultFilters: PropTypes.object,
   rootFormId: PropTypes.number,
   dashboardSlug: PropTypes.string,
   text: PropTypes.object.isRequired,
 };
 
-const DashboardGrid = ({ widgets, filters, rootFormId, dashboardSlug }) => {
+const DashboardGrid = ({
+  widgets,
+  filters,
+  defaultFilters,
+  rootFormId,
+  dashboardSlug,
+}) => {
   const { language } = store.useState((s) => s);
   const text = uiText[language.active];
 
@@ -143,6 +152,7 @@ const DashboardGrid = ({ widgets, filters, rootFormId, dashboardSlug }) => {
           key={widget.id}
           widget={widget}
           filters={filters}
+          defaultFilters={defaultFilters}
           rootFormId={rootFormId}
           dashboardSlug={dashboardSlug}
           text={text}
@@ -155,6 +165,7 @@ const DashboardGrid = ({ widgets, filters, rootFormId, dashboardSlug }) => {
 DashboardGrid.propTypes = {
   widgets: PropTypes.array,
   filters: PropTypes.object,
+  defaultFilters: PropTypes.object,
   rootFormId: PropTypes.number,
   dashboardSlug: PropTypes.string,
 };
