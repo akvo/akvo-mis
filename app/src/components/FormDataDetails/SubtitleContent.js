@@ -6,6 +6,7 @@ import * as Linking from 'expo-linking';
 import { UIState } from '../../store';
 import { cascades, i18n } from '../../lib';
 import { QUESTION_TYPES } from '../../lib/constants';
+import GeoshapeView from './GeoshapeView';
 
 const SubtitleContent = ({ index, answer, type, source = null, option = [] }) => {
   const activeLang = UIState.useState((s) => s.lang);
@@ -48,6 +49,9 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
           </Text>
         </View>
       );
+    case QUESTION_TYPES.geoshape:
+      // Without this the array of pairs falls to `default:` and renders as a run of digits.
+      return <GeoshapeView index={index} answer={answer} />;
     case QUESTION_TYPES.cascade:
       return <Text testID={`text-answer-${index}`}>{cascadeValue?.full_path_name || answer}</Text>;
     case QUESTION_TYPES.date:

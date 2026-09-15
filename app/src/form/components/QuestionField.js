@@ -15,6 +15,7 @@ import {
   TypeAutofield,
   TypeAttachment,
   TypeSignature,
+  TypeGeoDrawing,
 } from '../fields';
 import styles from '../styles';
 import { FormState } from '../../store';
@@ -139,6 +140,15 @@ const QuestionField = ({
       case QUESTION_TYPES.attachment:
         return (
           <TypeAttachment
+            keyform={keyform}
+            onChange={handleOnChangeField}
+            value={value}
+            {...questionField}
+          />
+        );
+      case QUESTION_TYPES.geoshape:
+        return (
+          <TypeGeoDrawing
             keyform={keyform}
             onChange={handleOnChangeField}
             value={value}

@@ -10,3 +10,4 @@ export { default as TypeCascade } from './TypeCascade';
 export { default as TypeAutofield } from './TypeAutofield';
 export { default as TypeAttachment } from './TypeAttachment';
 export { default as TypeSignature } from './TypeSignature';
+export { default as TypeGeoDrawing } from './TypeGeoDrawing';
