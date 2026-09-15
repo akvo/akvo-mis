@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import { MapCluster } from "akvo-charts";
 import "leaflet/dist/leaflet.css";
-import { scaleQuantize } from "d3-scale";
+import { scaleQuantize, scaleThreshold } from "d3-scale";
 import { geo, config as appConfig } from "../../../lib";
 import GradationLegend from "../../map-view/GradationLegend";
 
@@ -76,18 +76,42 @@ const VizMap = ({ config, data }) => {
     return lookup;
   }, [data, statusColors, chartColors, fallback]);
 
+  const valueRanges = useMemo(
+    () => widgetConfig.value_ranges || [],
+    [widgetConfig.value_ranges]
+  );
+
+  // When the author has set value_ranges with thresholds, use those
+  // directly. Otherwise fall back to auto-computed bins from chartColors.
+  const hasCustomRanges =
+    isRange && valueRanges.length > 1 && valueRanges.some((b) => b.to !== null);
+
+  // Schemes are dark-to-light; reverse for graduated maps (low = light).
+  const gradientPalette = useMemo(() => {
+    if (hasCustomRanges) {
+      return valueRanges.map((b) => b.color || fallback);
+    }
+    if (chartColors.length >= 5) {
+      return [...chartColors.slice(0, 5)].reverse();
+    }
+    return appConfig.mapConfig.colorRange;
+  }, [chartColors, hasCustomRanges, valueRanges, fallback]);
+
   const colorScale = useMemo(() => {
     if (!isRange) {
       return null;
+    }
+    if (hasCustomRanges) {
+      const domain = valueRanges.filter((b) => b.to !== null).map((b) => b.to);
+      const colors = valueRanges.map((b) => b.color || fallback);
+      return scaleThreshold().domain(domain).range(colors);
     }
     const rows = Array.isArray(data) ? data : [];
     const numericValues = rows
       .map((r) => Number(r.value))
       .filter((v) => Number.isFinite(v) && v > 0);
     if (numericValues.length === 0) {
-      return scaleQuantize()
-        .domain([0, 1])
-        .range(appConfig.mapConfig.colorRange);
+      return scaleQuantize().domain([0, 1]).range(gradientPalette);
     }
     const maxValue = Math.max(...numericValues);
     let domainMax = maxValue;
@@ -98,10 +122,8 @@ const VizMap = ({ config, data }) => {
     } else {
       domainMax = Math.ceil(maxValue / 50) * 50;
     }
-    return scaleQuantize()
-      .domain([0, domainMax])
-      .range(appConfig.mapConfig.colorRange);
-  }, [data, isRange]);
+    return scaleQuantize().domain([0, domainMax]).range(gradientPalette);
+  }, [data, isRange, hasCustomRanges, valueRanges, fallback, gradientPalette]);
 
   const points = useMemo(() => {
     const rows = Array.isArray(data) ? data : [];
@@ -154,44 +176,37 @@ const VizMap = ({ config, data }) => {
     fitMap();
   }, [fitMap]);
 
-  // Category legend: one dot per status.
   const legendEntries = Object.keys(colorForStatus).map((status) => ({
     key: status,
     color: colorForStatus[status],
   }));
   const uniqueColors = new Set(legendEntries.map((e) => e.color));
-  // Never in quantity mode: size carries the meaning there and every
-  // circle is one colour, so a colour legend would describe nothing
-  // that is on screen.
   const showCategoryLegend =
     !isQuantity &&
     !isRange &&
     legendEntries.length > 0 &&
     uniqueColors.size > 1;
 
-  // Graduated legend for range mode: show when there are data points to
-  // compute meaningful thresholds from.
-  const thresholds = useMemo(
-    () => (colorScale ? colorScale.thresholds() : []),
-    [colorScale]
-  );
+  const thresholds = useMemo(() => {
+    if (!colorScale) {
+      return [];
+    }
+    if (hasCustomRanges) {
+      return colorScale.domain();
+    }
+    return colorScale.thresholds();
+  }, [colorScale, hasCustomRanges]);
   const showGradationLegend =
     isRange && thresholds.length > 0 && points.length > 0;
 
-  // MapCluster builds its Leaflet cluster group in an effect, and a
-  // Leaflet object does not follow React prop updates — so the mode
-  // belongs in the remount key alongside the colours.
-  // Everything a mounted Leaflet object cannot pick up on its own.
-  // MapCluster keys its cluster group on `type` and `cluster` only, and
-  // MarkerClusterGroup captures `iconCreateFunction` at mount by design —
-  // so a changed `aggregate` alone would leave the old closure summing,
-  // with nothing on screen to say the switch did nothing.
   const colorKey =
     Object.values(statusColors).join(",") +
     fallback +
     (widgetConfig.map_mode || "category") +
     (widgetConfig.map_aggregate || "sum") +
-    thresholds.join(",");
+    thresholds.join(",") +
+    gradientPalette.join(",") +
+    valueRanges.map((b) => `${b.to}:${b.color}`).join(",");
 
   return (
     <div className="dashboard-view-map">
@@ -242,9 +257,38 @@ const VizMap = ({ config, data }) => {
             : (point) => point?.label
         }
       />
-      {showGradationLegend && (
+      {showGradationLegend && !hasCustomRanges && (
         <div className="dashboard-view-map-gradation">
-          <GradationLegend thresholds={thresholds} />
+          <GradationLegend thresholds={thresholds} colors={gradientPalette} />
+        </div>
+      )}
+      {showGradationLegend && hasCustomRanges && (
+        <div className="dashboard-view-map-gradation">
+          <div className="shape-legend">
+            <div className="legend-wrap" style={{ display: "flex" }}>
+              {valueRanges.map((band, idx) => (
+                <div
+                  key={idx}
+                  className="legend-item"
+                  style={{
+                    flex: 1,
+                    backgroundColor: band.color || fallback,
+                    textAlign: "center",
+                    padding: "2px 0",
+                    margin: "0 1px",
+                    fontSize: 12,
+                    fontWeight: 500,
+                  }}
+                >
+                  {band.to === null
+                    ? `Above ${valueRanges[idx - 1]?.to ?? 0}`
+                    : idx === 0
+                    ? `0 – ${band.to}`
+                    : `${valueRanges[idx - 1]?.to ?? 0} – ${band.to}`}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
       {showCategoryLegend && (

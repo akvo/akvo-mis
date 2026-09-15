@@ -320,14 +320,41 @@ describe("range mode", () => {
     expect(lastProps.cluster).not.toBe(false);
   });
 
-  test("each point takes a graduated colour from the auto-computed scale", () => {
-    // scaleQuantize domain [0, 12000], 5 bins from mapConfig.colorRange.
-    // 120 and 500 fall in the lowest bin, 12000 in the highest.
+  test("each point takes colour from user-defined value_ranges", () => {
     render(<VizMap config={rangeWidget()} data={VALUED} />);
+    const colors = lastProps.data.map((d) => d.color);
+    expect(colors[0]).toBe("#d73027"); // 120 < 340 → first band
+    expect(colors[1]).toBe("#fee08b"); // 500 between 340-890 → second band
+    expect(colors[2]).toBe("#1a9850"); // 12000 > 890 → open band
+  });
+
+  test("auto-computed scale when no value_ranges", () => {
+    render(
+      <VizMap
+        config={widget({ map_mode: "range", value_ranges: [] })}
+        data={VALUED}
+      />
+    );
     const colors = lastProps.data.map((d) => d.color);
     expect(colors[0]).toBe("#e8f7e3"); // 120 → lowest bin
     expect(colors[1]).toBe("#e8f7e3"); // 500 → lowest bin
     expect(colors[2]).toBe("#107550"); // 12000 → highest bin
+  });
+
+  test("the author's colour scheme is applied light-to-dark", () => {
+    const WARM = ["#bd0026", "#f03b20", "#fd8d3c", "#fecc5c", "#ffffb2"];
+    render(
+      <VizMap
+        config={widget({
+          map_mode: "range",
+          value_ranges: [],
+          chart_colors: WARM,
+        })}
+        data={VALUED}
+      />
+    );
+    expect(lastProps.data[0].color).toBe("#ffffb2"); // 120 → lightest
+    expect(lastProps.data[2].color).toBe("#bd0026"); // 12000 → darkest
   });
 
   test("a point with no answer falls back rather than reading as zero", () => {
@@ -342,10 +369,23 @@ describe("range mode", () => {
     expect(lastProps.data[0].color).toBe("#64A73B");
   });
 
-  test("the graduated legend shows auto-computed bin ranges", () => {
-    // GradationLegend renders thresholds from scaleQuantize.
-    // Domain [0, 12000] → thresholds [2400, 4800, 7200, 9600].
+  test("the graduated legend shows custom range thresholds", () => {
     render(<VizMap config={rangeWidget()} data={VALUED} />);
+    expect(
+      document.querySelector(".dashboard-view-map-gradation")
+    ).not.toBeNull();
+    expect(screen.getByText("0 – 340")).toBeInTheDocument();
+    expect(screen.getByText("340 – 890")).toBeInTheDocument();
+    expect(screen.getByText("Above 890")).toBeInTheDocument();
+  });
+
+  test("auto-computed legend when no value_ranges", () => {
+    render(
+      <VizMap
+        config={widget({ map_mode: "range", value_ranges: [] })}
+        data={VALUED}
+      />
+    );
     expect(
       document.querySelector(".dashboard-view-map-gradation")
     ).not.toBeNull();
@@ -397,8 +437,6 @@ describe("range mode", () => {
   });
 
   test("no data still renders the map without a graduated legend", () => {
-    // Empty data means no thresholds to compute — the map renders
-    // without a legend rather than breaking.
     render(<VizMap config={rangeWidget()} data={[]} />);
     expect(screen.getByTestId("map-cluster")).toBeInTheDocument();
     expect(document.querySelector(".dashboard-view-map-gradation")).toBeNull();
