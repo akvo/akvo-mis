@@ -33,22 +33,23 @@ Goal:
 
 ### User Acceptance Criteria (UAC)
 
-- [ ] In Dashboard Builder, selecting a chart widget (Bar, Line, Pie, Scatter) displays a "Toolbox Options" setting in the Inspector panel.
-- [ ] Users can toggle the Toolbox ON/OFF for each chart widget independently (defaults to OFF).
+- [ ] In Dashboard Builder, clicking on the canvas background / Dashboard settings displays a "Toolbox Options" setting in the Inspector panel.
+- [ ] Users can toggle the Toolbox ON/OFF for all dashboard charts globally (defaults to OFF).
 - [ ] Users can adjust the toolbox position (`top-right`, `top-left`, `bottom-right`, `bottom-left`).
 - [ ] Users can select which toolbox features to enable:
   - **Save as Image** (`saveAsImage`) - Downloads current chart as PNG.
-  - **Data View** (`dataView`) - Opens modal table showing raw category/value data.
+  - **Data View** (`dataView`) - Opens custom modal table showing raw category/value data without internal series IDs, with a "Download Excel (.xlsx)" export action.
   - **Restore** (`restore`) - Resets filters/zoom on the chart.
   - **Data Zoom** (`dataZoom`) - Allows box and wheel zoom (for Bar, Line, Scatter).
-- [ ] In Dashboard Viewer (and builder canvas), charts with toolbox enabled display the toolbox icons in the designated position.
-- [ ] Non-chart widgets (KPI, Table, Map, Section Title) do not show toolbox options.
+- [ ] In Dashboard Viewer (and builder canvas), charts display the toolbox icons in the designated position when enabled.
+- [ ] Individual widget inspector panels do not display redundant toolbox settings.
 
 ### Technical Acceptance Criteria (TAC)
 
-- [ ] Stored in widget JSON configuration (`widget.config.show_toolbox`, `widget.config.toolbox_position`, `widget.config.toolbox_features`).
+- [ ] Stored in dashboard JSON configuration (`dashboard.default_filters.toolbox`).
 - [ ] Works seamlessly with both `akvo-charts` components (`Bar`, `StackBar`, `Line`, `StackLine`, `Pie`, `Doughnut`) and custom ECharts options (`useEChartsOption`, `rawConfig`).
-- [ ] No database schema migrations required (uses existing `JSONField` `config` on `DashboardWidget`).
+- [ ] Custom `dataView.optionToContent` renders human-readable table headers and triggers XLSX export via `antd-table-saveas-excel`.
+- [ ] No database schema migrations required (uses existing `JSONField` `default_filters` on `Dashboard`).
 - [ ] Backward compatibility: existing dashboards without toolbox config render with toolbox disabled by default.
 
 ---
@@ -61,28 +62,29 @@ Goal:
 
 ### Modified Models
 
-*None required.* `DashboardWidget.config` is a `JSONField` that stores widget-specific presentation settings:
+*None required.* `Dashboard.default_filters` is a `JSONField` that stores dashboard-level filters and presentation settings:
 
 ```json
-// Example widget.config
+// Example dashboard.default_filters.toolbox
 {
-  "group_by": "option",
-  "chart_colors": ["#1890ff", "#64A73B"],
-  "show_toolbox": false,
-  "toolbox_position": "top-right",
-  "toolbox_orient": "horizontal",
-  "toolbox_features": {
-    "saveAsImage": true,
-    "dataView": true,
-    "restore": true,
-    "dataZoom": true
+  "date": { "enabled": true },
+  "toolbox": {
+    "show": true,
+    "position": "top-right",
+    "orient": "horizontal",
+    "features": {
+      "saveAsImage": true,
+      "dataView": true,
+      "restore": true,
+      "dataZoom": true
+    }
   }
 }
 ```
 
 ### Migration Strategy
 
-*No database migrations needed.* Existing dashboard widgets will have `show_toolbox: false` (or `undefined`), preserving current behavior.
+*No database migrations needed.* Existing dashboards will have `toolbox: undefined` / `show: false`, preserving current behavior.
 
 ---
 
@@ -90,7 +92,7 @@ Goal:
 
 ### Endpoints
 
-*Existing dashboard CRUD and publish endpoints handle widget `config` transparently:*
+*Existing dashboard CRUD and publish endpoints handle dashboard `default_filters` transparently:*
 
 - `GET /api/v1/dashboards/:id`
 - `PUT /api/v1/dashboards/:id`
@@ -108,14 +110,34 @@ Goal:
 1. Single boolean toggle (`show_toolbox: true/false`) with fixed default features (`saveAsImage`, `dataView`, `restore`, `dataZoom`).
 2. Granular feature checkboxes (`saveAsImage`, `dataView`, `restore`, `dataZoom`) with a master toggle and adjustable position (`top-right`, `top-left`, `bottom-right`, `bottom-left`).
 
-**Decision**: Option 2 (Master toggle + feature checklist + position selector, defaulting to `show_toolbox: false`).
+**Decision**: Option 2 (Master toggle + feature checklist + position selector, defaulting to `show: false`).
 
-**Rationale**:
-- `show_toolbox: false` by default keeps charts clean unless authors explicitly enable it.
-- Omitting `magicType` prevents chart type mismatch with dashboard widget configurations (e.g. converting a customized stacked bar into a line chart breaks visual intent and legends).
-- Position selector prevents toolbox icons from overlapping chart titles, legends, or data labels.
+---
 
-**Impact**: Flexible UI in `BuilderInspector.jsx` and standardized helper to build ECharts `toolbox` config.
+### D-2: Dashboard-Level Scoping
+
+**Context**: Configuring toolbox on every individual widget was repetitive and cluttered the widget inspector.
+
+**Decision**: Elevate the toolbox configuration to the Dashboard Settings level (`dashboard.default_filters.toolbox`). All chart widgets on the dashboard inherit this setting.
+
+---
+
+### D-3: Custom DataView Table & XLSX Export
+
+**Context**: ECharts' default `dataView` renders unformatted internal series variables (e.g. `series_0`, `series_1`) and lacks direct spreadsheet export.
+
+**Decision**: Implement `dataView.optionToContent` to construct a styled HTML `<table>` with human-readable headers (Category names, Series names, Values, Percentages) and an "Export to Excel (.xlsx)" button using `antd-table-saveas-excel`.
+
+---
+
+### D-4: Cartesian-Scoped DataZoom & UX Guidance
+
+**Context**: Pie/Doughnut charts use angular polar representations without Cartesian X/Y axes. In ECharts, `feature.dataZoom` is an axis-based tool that only functions on Cartesian coordinate systems (Bar, Line, Scatter).
+
+**Decision**:
+1. `buildToolboxConfig` automatically skips `dataZoom` for non-Cartesian widgets (`pie`, `map`, `kpi`).
+2. Disabled features are completely omitted from the ECharts `feature` object, and `dataZoom` is configured with `yAxisIndex: "none"` to prevent model clashes across category axes.
+3. In the Dashboard Inspector UI, the Data zoom option includes an informational tooltip clarifying: *"Data zoom applies to charts with X/Y axes (Bar, Line, Scatter)"*.
 
 ---
 
