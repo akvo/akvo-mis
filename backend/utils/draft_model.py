@@ -1,8 +1,9 @@
 from django.db import models
 from .soft_deletes_model import SoftDeletesQuerySet, SoftDeletesManager
+from .tenant_scoped_model import TenantScopedQuerySetMixin
 
 
-class DraftQuerySet(models.QuerySet):
+class DraftQuerySet(TenantScopedQuerySetMixin, models.QuerySet):
     def only_draft(self):
         return self.filter(is_draft=True)
 
@@ -39,6 +40,9 @@ class DraftManager(models.Manager):
 
     def draft(self):
         return DraftQuerySet(self.model).only_draft()
+
+    def for_user(self, user):
+        return self.get_queryset().for_user(user)
 
 
 class DraftSoftDeletesManager(SoftDeletesManager):

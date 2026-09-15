@@ -20,10 +20,11 @@ from mis.settings import STORAGE_PATH
 def generate_template(
     filepath,
     attributes: List[int] = [],
+    user: SystemUser = None,
 ):
     level_headers = [
         col
-        for lvl in Levels.objects.order_by('level').all()
+        for lvl in Levels.objects.for_user(user).order_by('level')
         for col in [f'{lvl.id}|{lvl.name}', f'{lvl.id}|{lvl.name} Code']
     ]
     attribute_headers = generate_attribute_headers(
@@ -60,7 +61,7 @@ def generate_administration_excel(
     filepath = f"./{directory}/{filename}"
     if os.path.exists(filepath):
         os.remove(filepath)
-    generate_template(filepath=filepath, attributes=attributes)
+    generate_template(filepath=filepath, attributes=attributes, user=user)
     return filepath
 
 
@@ -69,13 +70,14 @@ def generate_administration_template(
     attributes: List[int] = [],
     level: int = None,
     adm_id: int = None,
+    user: SystemUser = None,
 ):
     file_path = "./tmp/{0}".format(file_path.replace("/", "_"))
     if os.path.exists(file_path):
         os.remove(file_path)
     level_headers = [
         f"{lvl.id}|{lvl.name}"
-        for lvl in Levels.objects.order_by("level").all()
+        for lvl in Levels.objects.for_user(user).order_by("level")
     ]
     attribute_headers = generate_attribute_headers(
         AdministrationAttribute.objects.filter(id__in=attributes).order_by(
@@ -102,7 +104,7 @@ def generate_administration_template(
         filter_path = "{0}{1}.".format(
             filter_administration.path, filter_administration.id
         )
-    administrations = Administration.objects.filter(
+    administrations = Administration.objects.for_user(user).filter(
         Q(path__startswith=filter_path) | Q(pk=adm_id)
     ).all()
     # EOL get administrations with path
@@ -172,6 +174,7 @@ def fill_administration_data(
     sheet_name: str,
     administration: Administration = None,
     testing: bool = False,
+    user: SystemUser = None,
 ):
     filename = ADMINISTRATION_CSV_FILE
     if testing:
@@ -194,10 +197,12 @@ def fill_administration_data(
     administrations = df.to_dict("records")
 
     worksheet = writer.sheets[sheet_name]
-    level_names = list(Levels.objects.order_by("level").values_list(
-        "name", flat=True
-    ))
-    national = Administration.objects.filter(
+    level_names = list(
+        Levels.objects.for_user(user).order_by("level").values_list(
+            "name", flat=True
+        )
+    )
+    national = Administration.objects.for_user(user).filter(
         level__level=0
     ).first()
     for adx, adm in enumerate(administrations):
@@ -217,8 +222,9 @@ def generate_entities_template(
     administration: Administration = None,
     prefilled: bool = False,
     testing: bool = False,
+    user: SystemUser = None,
 ):
-    level_names = Levels.objects.order_by("level").values_list(
+    level_names = Levels.objects.for_user(user).order_by("level").values_list(
         "name", flat=True
     )
     static_columns = ["Name", "Code"]
@@ -245,6 +251,7 @@ def generate_entities_template(
                     sheet_name=sheet_name,
                     administration=administration,
                     testing=testing,
+                    user=user,
                 )
 
 
@@ -270,5 +277,6 @@ def generate_entities_data_excel(
         administration=administration,
         prefilled=prefilled,
         testing=testing,
+        user=user,
     )
     return filepath

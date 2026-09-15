@@ -25,6 +25,15 @@ Real Time Monitoring Information Systems
 
 .. toctree::
    :maxdepth: 2
+   :caption: Form Builder
+
+   formBuilder
+   questionTypes
+   dependencies
+   formBuilderBestPractices
+
+.. toctree::
+   :maxdepth: 2
    :caption: Overview of input channel
 
    inputChannel

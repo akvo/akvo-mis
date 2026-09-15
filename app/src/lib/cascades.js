@@ -3,6 +3,8 @@ import * as FileSystem from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 
+import api from './api';
+
 const DIR_NAME = 'SQLite';
 
 const createSqliteDir = async () => {
@@ -22,8 +24,14 @@ const download = async (downloadUrl, fileUrl, update = false) => {
     await SQLite.deleteDatabaseAsync(fileSql);
   }
   if (!exists || update) {
+    /**
+     * The sqlite endpoint resolves the tenant from the assignment token and
+     * serves that tenant's file, so the download must carry the token the
+     * rest of the api client already sends. Without it the request 401s.
+     */
     await FileSystem.downloadAsync(downloadUrl, FileSystem.documentDirectory + pathSql, {
       cache: false,
+      headers: api.getConfig().headers,
     });
   }
 };

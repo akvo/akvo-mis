@@ -99,6 +99,12 @@ const Login = () => {
                       <img src="./logo-square.svg" alt="login-logo" />
                       <div className="login-content">
                         <h1>{text.loginTitle}</h1>
+                        {/* No workspace name here. It was added so that
+                            someone with access to more than one could
+                            tell them apart, but an account belongs to
+                            exactly one workspace, so that reader never
+                            existed — and the address bar already says
+                            which workspace this is. */}
                         <ContactUsText />
                       </div>
                       <LoginForm />

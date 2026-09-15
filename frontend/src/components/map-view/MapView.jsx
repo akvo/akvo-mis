@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { Button, Space } from "antd";
 import { Map } from "akvo-charts";
-import takeRight from "lodash/takeRight";
 import { store, geo, config } from "../../lib";
 
 import {
@@ -15,7 +14,6 @@ import { buildOffsetCoordinates } from "./overlapUtils";
 
 const MapView = ({ dataset, loading, position }) => {
   const selectedForm = store.useState((s) => s.selectedForm);
-  const selectedAdm = store.useState((s) => s.administration);
 
   const mapInstance = useRef(null);
   const lg = useRef(null);
@@ -52,20 +50,6 @@ const MapView = ({ dataset, loading, position }) => {
     },
     [getMarkerDisplayText]
   );
-
-  const mapStyle = (feature) => {
-    const activeAdm = takeRight(selectedAdm, 1)[0];
-    return {
-      fillColor:
-        feature.properties?.[activeAdm?.level_name] === activeAdm?.name
-          ? "#01137C"
-          : "#D2EDFF",
-      color: "#01137C",
-      weight: 2,
-      opacity: 0.6,
-      fillOpacity: 0.7,
-    };
-  };
 
   const disableScrollWheelZoom = useCallback(() => {
     const map = mapInstance.current?.getMap();
@@ -201,19 +185,7 @@ const MapView = ({ dataset, loading, position }) => {
         ref={(el) => {
           mapInstance.current = el;
         }}
-      >
-        {Map.getGeoJSONList(window?.topojson).map((sd, sx) => (
-          <Map.GeoJson
-            key={sx}
-            data={sd}
-            mapData={dataset}
-            onClick={({ target }) => {
-              mapInstance.current?.getMap()?.fitBounds(target._bounds);
-            }}
-            style={mapStyle}
-          />
-        ))}
-      </Map.Container>
+      />
     </div>
   );
 };

@@ -12,6 +12,7 @@ class EmailTypes:
     user_approval = "user_approval"
     user_forgot_password = "user_forgot_password"
     user_invite = "user_invite"
+    user_activation = "user_activation"
     user_update = "user_update"
     data_approval = "data_approval"
     data_rejection = "data_rejection"
@@ -31,6 +32,7 @@ class EmailTypes:
         user_approval: "user_approval",
         user_forgot_password: "user_forgot_password",
         user_invite: "user_invite",
+        user_activation: "user_activation",
         user_update: "user_update",
         data_approval: "data_approval",
         data_rejection: "data_rejection",
@@ -108,6 +110,23 @@ def email_context(context: dict, type: str):
                 "button": True,
                 "button_url": button_url,
                 "button_text": "Reset Password",
+            }
+        )
+    if type == EmailTypes.user_activation:
+        # Unlike the invite, this link only proves the address is real — the
+        # password was already set at sign-up.
+        context.update(
+            {
+                "subject": "Activate your account",
+                "body": (
+                    "Welcome! Confirm your email address to finish setting "
+                    f"up your {APP_NAME} workspace."
+                ),
+                "align": "left",
+                "explore_button": False,
+                "button": True,
+                "button_url": context.get("button_url", "#"),
+                "button_text": "Activate account",
             }
         )
     if type == EmailTypes.user_invite:

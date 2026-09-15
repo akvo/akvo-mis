@@ -10,26 +10,46 @@ from api.v1.v1_profile.models import Administration
 logger = logging.getLogger(__name__)
 
 
-def generate_sqlite(model, test: bool = False):
+# Master data is offline data: whatever lands in these files is what a
+# device holds on its own storage. One global file per table therefore
+# handed every device every tenant's hierarchy, so each tenant gets its
+# own subdirectory keyed by subdomain. tenant=None keeps the historical
+# root location for seeders and the management command.
+def sqlite_path(model, tenant=None, test: bool = False):
     if not test:
         test = settings.TEST_ENV
-    table_name = model._meta.db_table
+    directory = (
+        MASTER_DATA
+        if tenant is None
+        else "{0}/{1}".format(MASTER_DATA, tenant.subdomain)
+    )
+    return "{0}/{1}{2}.sqlite".format(
+        directory,
+        "test_" if test else "",
+        model._meta.db_table,
+    )
+
+
+def generate_sqlite(model, tenant=None, test: bool = False):
+    if not test:
+        test = settings.TEST_ENV
     field_names = [f.name for f in model._meta.fields]
     objects = model.objects.all()
-    file_name = "{0}/{1}{2}.sqlite".format(
-        MASTER_DATA,
-        "test_" if test else "",
-        table_name,
-    )
+    if tenant is not None:
+        objects = objects.filter(**{model.TENANT_PATH: tenant})
+    file_name = sqlite_path(model, tenant=tenant, test=test)
+    os.makedirs(os.path.dirname(file_name), exist_ok=True)
     if os.path.exists(file_name):
         try:
             os.remove(file_name)
         except OSError:
             pass
-    data = pd.DataFrame(list(objects.values(*field_names)))
-    no_rows = data.shape[0]
-    if no_rows < 1:
-        return
+    # columns= keeps the frame's shape when a tenant has no rows yet, so an
+    # empty tenant still gets a valid nodes table rather than no file: the
+    # device asks for entity_data.sqlite whether or not entities exist.
+    data = pd.DataFrame(
+        list(objects.values(*field_names)), columns=field_names
+    )
     # Add full_path_name for Administration model
     if model.__name__ == "Administration":
         # Get all Administration objects with their full_path_name property
@@ -66,9 +86,8 @@ def generate_sqlite(model, test: bool = False):
     raise last_err
 
 
-def update_sqlite(model, data, id=None):
+def update_sqlite(model, data, tenant=None, id=None):
     test = settings.TEST_ENV
-    table_name = model._meta.db_table
     fields = data.keys()
     field_names = ", ".join([f for f in fields])
     placeholders = ", ".join(["?" for _ in range(len(fields))])
@@ -76,11 +95,10 @@ def update_sqlite(model, data, id=None):
     params = list(data.values())
     if id:
         params += [id]
-    file_name = "{0}/{1}{2}.sqlite".format(
-        MASTER_DATA,
-        "test_" if test else "",
-        table_name,
-    )
+    file_name = sqlite_path(model, tenant=tenant, test=test)
+    # sqlite3.connect creates the file but not its parent directory, and a
+    # tenant's first row can arrive before anything generated the file.
+    os.makedirs(os.path.dirname(file_name), exist_ok=True)
     conn = sqlite3.connect(file_name, timeout=30)
     try:
         with conn:
@@ -96,7 +114,7 @@ def update_sqlite(model, data, id=None):
                     VALUES ({placeholders})"
                 c.execute(query, params)
     except sqlite3.OperationalError:
-        generate_sqlite(model=model, test=test)
+        generate_sqlite(model=model, tenant=tenant, test=test)
     finally:
         conn.close()
 

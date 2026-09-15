@@ -72,6 +72,8 @@ class UserProfileTestCase(TestCase, ProfileTestHelperMixin):
                 'is_superuser',
                 'administration',
                 'id',
+                'configured',
+                'subdomain',
             ]
         )
         self.assertEqual(data["email"], self.superuser.email)

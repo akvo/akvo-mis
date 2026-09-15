@@ -10,10 +10,14 @@ from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 @override_settings(USE_TZ=False)
 class FormSeederTestCase(TestCase, ProfileTestHelperMixin):
     def setUp(self):
-        # Run the form seeder twice to ensure forms
-        # are populated with the last version is 2
+        # reset_forms must return every form to version 1. Seed once, then
+        # set the version directly. What this test asserts is what
+        # reset_forms does to an already-versioned form, not how the seeder
+        # arrives at a version — double-seeding produced version 2 only
+        # because the seeder used to bump unconditionally, which it no
+        # longer does.
         call_command("form_seeder", "--test")
-        call_command("form_seeder", "--test")
+        Forms.objects.update(version=2)
 
     def call_command(self, *args, **kwargs):
         out = StringIO()

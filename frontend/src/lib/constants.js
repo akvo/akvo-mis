@@ -52,12 +52,20 @@ export const APPROVAL_STATUS_PENDING = 1;
 export const APPROVAL_STATUS_APPROVED = 2;
 export const APPROVAL_STATUS_REJECTED = 3;
 
-export const ARF_CASCASE_URLS = [
+// The administration cascade for the form builder. It used to point at a
+// token-less /public/administrations, which handed every tenant's units to
+// anyone; that endpoint is gone. akvo-react-form threads `headers` into its
+// axios.get, so the cascade can use the authenticated, tenant-scoped
+// endpoint instead. It has to be built per render rather than kept as a
+// module constant: it needs the live token, and `initial` must be the
+// caller's own root, not a hardcoded 1.
+export const buildAdministrationCascade = (token, rootId) => [
   {
     name: "Administration",
-    endpoint: "/api/v1/public/administrations",
-    initial: 1,
+    endpoint: "/api/v1/administration",
+    initial: rootId,
     list: "children",
+    headers: { Authorization: `Bearer ${token}` },
   },
 ];
 

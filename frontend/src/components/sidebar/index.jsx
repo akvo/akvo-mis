@@ -248,6 +248,12 @@ const Sidebar = () => {
                 {text.menuAdministrativeList}
               </Menu.Item>
               <Menu.Item
+                key="menu-levels"
+                data-url="/control-center/master-data/levels"
+              >
+                {text.menuLevels}
+              </Menu.Item>
+              <Menu.Item
                 key="menu-attributes"
                 data-url="/control-center/master-data/attributes"
               >

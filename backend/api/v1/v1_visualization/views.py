@@ -52,7 +52,9 @@ from utils.custom_serializer_fields import validate_serializers_message
 )
 @api_view(["GET"])
 def formdata_stats(request, form_id, version):
-    form = get_object_or_404(Forms, pk=form_id)
+    form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=form_id
+    )
     serializer = FormDataStatsFilterSerializer(
         data=request.GET,
         context={"form": form}
@@ -323,7 +325,9 @@ class GeolocationListView(APIView):
                 data=[],
                 status=status.HTTP_200_OK,
             )
-        form = get_object_or_404(Forms, pk=form_id)
+        form = get_object_or_404(
+            Forms.objects.for_user(request.user), pk=form_id
+        )
         queryset = form.form_form_data.filter(
             is_pending=False,
             is_draft=False,
@@ -418,7 +422,7 @@ class DatapointDetailView(APIView):
     )
     def get(self, request, data_id, version):
         point = get_object_or_404(
-            FormData, pk=data_id,
+            FormData.objects.for_user(request.user), pk=data_id,
             is_pending=False, is_draft=False, parent__isnull=True
         )
         return Response(
@@ -506,7 +510,9 @@ def visualization_values_formula(request, version):
         )
 
     validated = serializer.validated_data
-    form = get_object_or_404(Forms, pk=validated["form_id"])
+    form = get_object_or_404(
+        Forms.objects.for_user(request.user), pk=validated["form_id"]
+    )
     formula = validated["formula"]
     criteria = validated.get("criteria")
     from_date = validated.get("from_date")

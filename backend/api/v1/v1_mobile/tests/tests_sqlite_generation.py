@@ -9,7 +9,9 @@ from api.v1.v1_profile.management.commands.administration_seeder import (
     seed_levels
 )
 from api.v1.v1_profile.constants import DEFAULT_ADMINISTRATION_LEVELS
-from api.v1.v1_users.models import Organisation
+from api.v1.v1_users.models import Organisation, SystemUser
+from api.v1.v1_mobile.authentication import MobileAssignmentToken
+from api.v1.v1_mobile.models import MobileAssignment
 from django.core.management import call_command
 from utils.custom_generator import generate_sqlite, update_sqlite
 from unittest.mock import patch
@@ -64,11 +66,31 @@ class SQLiteGenerationTest(TestCase):
             len(pd.read_sql_query("SELECT * FROM nodes", conn)),
         )
         conn.close()
-        file = file_name.split("/")[-1]
-        endpoint = f"/api/v1/device/sqlite/{file}"
-        response = self.client.get(endpoint)
+        # The device asks for the logical table name, not the on-disk one:
+        # the server picks the file, which is how it stays inside the
+        # caller's tenant. This user is tenant-less, so it gets the root
+        # file the assertions above just checked.
+        user = SystemUser.objects.create_user(
+            email="device@test.org", password="Secret#Pass123",
+            first_name="D", last_name="D",
+        )
+        assignment = MobileAssignment.objects.create_assignment(
+            user=user, name="device"
+        )
+        token = MobileAssignmentToken.for_assignment(assignment)
+        response = self.client.get(
+            "/api/v1/device/sqlite/administrator.sqlite",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
         self.assertEqual(response.status_code, 200)
         os.remove(file_name)
+
+    def test_sqlite_file_endpoint_rejects_an_anonymous_caller(self):
+        generate_sqlite(Administration)
+        response = self.client.get(
+            "/api/v1/device/sqlite/administrator.sqlite"
+        )
+        self.assertEqual(response.status_code, 401)
 
     def test_update_sqlite_org_added(self):
         # Test for adding new org

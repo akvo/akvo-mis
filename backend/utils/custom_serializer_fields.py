@@ -1,4 +1,6 @@
 from django.core.validators import EmailValidator
+
+from utils.tenant_scoped_model import acting_user
 from django.utils.translation import gettext_lazy as _
 from rest_framework.fields import (
     IntegerField,
@@ -274,3 +276,14 @@ def validate_serializers_message(errors):
 
     msg = extract_messages(errors)
     return "|".join(msg)
+
+
+class TenantScopedPrimaryKeyRelatedField(CustomPrimaryKeyRelatedField):
+    # Narrows the candidate queryset to the acting user's tenant, so a pk
+    # referencing another tenant's object fails validation as
+    # does_not_exist (a 400) rather than silently binding a foreign row.
+    def get_queryset(self):
+        # No acting user means no context was passed: fail closed.
+        queryset = super().get_queryset()
+        user = acting_user(self.context)
+        return queryset.for_user(user) if user else queryset.none()

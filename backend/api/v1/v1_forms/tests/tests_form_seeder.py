@@ -56,6 +56,17 @@ class FormSeederTestCase(TestCase):
         return user.get("token")
 
     def test_call_command(self):
+        """A plain run (no --test) seeds every JSON in the real
+        default source folder. That folder currently holds only the
+        bundled example fixtures, so this deliberately covers the
+        plain-run path: 10 forms in, 10 "Form Created | ..." lines
+        out. Before Task 1's fix this test pinned the opposite
+        (buggy) behaviour -- a plain run matching zero files and
+        printing nothing -- so its assertions are updated to match
+        the corrected behaviour rather than the bug. Asserting on
+        count and line shape, not the exact 10 strings, so this
+        doesn't become a tripwire again as fixtures are added.
+        """
 
         self.maxDiff = None
         forms = Forms.objects.all().delete()
@@ -64,9 +75,11 @@ class FormSeederTestCase(TestCase):
         output = self.call_command()
         output = list(filter(lambda x: len(x), output.split("\n")))
         forms = Forms.objects.all()
-        self.assertEqual(forms.count(), 0)
-        # assert output contains expected log messages
-        self.assertListEqual(output, [])
+        self.assertEqual(forms.count(), 10)
+        # Every seeded form logs "Form Created | <name> V<version>".
+        self.assertEqual(len(output), 10)
+        for line in output:
+            self.assertTrue(line.startswith("Form Created | "))
 
     def test_additional_attributes(self):
         seed_administration_test()

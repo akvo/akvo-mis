@@ -10,7 +10,7 @@ import {
   store,
   uiText,
   QUESTION_TYPES,
-  ARF_CASCASE_URLS,
+  buildAdministrationCascade,
 } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { fetchPublishedForms } from "../../util/form";
@@ -41,7 +41,13 @@ const FormBuilderEdit = () => {
   const [previewingVersion, setPreviewingVersion] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const { language } = store.useState((s) => s);
+  const { language, user: authUser } = store.useState((s) => s);
+  // The cascade is authenticated now and starts at this tenant's own
+  // root administration, which the profile resolves.
+  const cascadeURL = useMemo(
+    () => buildAdministrationCascade(api.token, authUser?.administration?.id),
+    [authUser]
+  );
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
@@ -246,6 +252,75 @@ const FormBuilderEdit = () => {
       });
   };
 
+  const onExportXlsform = () => {
+    api
+      .get(`/manage/forms/${formId}/export-xlsform`, { responseType: "blob" })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({
+            type: "error",
+            message: text.formBuilderExportXlsformError,
+          });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        const skippedHeader = res.headers["x-xlsform-skipped"];
+        if (skippedHeader) {
+          notify({
+            type: "warning",
+            message: `${text.formBuilderExportXlsformWarningTitle}: ${skippedHeader}`,
+          });
+        }
+      })
+      .catch(() => {
+        notify({ type: "error", message: text.formBuilderExportXlsformError });
+      });
+  };
+
+  const onExportAdministrationCsv = () => {
+    api
+      .get(`/manage/forms/${formId}/administration-csv`, {
+        responseType: "blob",
+      })
+      .then((res) => {
+        const contentDispositionHeader = res.headers["content-disposition"];
+        const filename = regExpFilename.exec(contentDispositionHeader)?.groups
+          ?.filename;
+        if (!filename) {
+          notify({
+            type: "error",
+            message: text.formBuilderExportCascadeCsvError,
+          });
+          return;
+        }
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        notify({
+          type: "error",
+          message: text.formBuilderExportCascadeCsvError,
+        });
+      });
+  };
+
   const infoBannerText = useMemo(() => {
     if (formStatus !== "published") {
       return null;
@@ -283,6 +358,22 @@ const FormBuilderEdit = () => {
                 disabled={saving || publishing || unpublishing}
               >
                 {text.formBuilderExportButton}
+              </Button>
+
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={onExportXlsform}
+                disabled={saving || publishing || unpublishing}
+              >
+                {text.formBuilderExportXlsformButton}
+              </Button>
+
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={onExportAdministrationCsv}
+                disabled={saving || publishing || unpublishing}
+              >
+                {text.formBuilderExportCascadeCsvButton}
               </Button>
 
               {hasVersionHistory && (
@@ -341,7 +432,7 @@ const FormBuilderEdit = () => {
               initialValue={loading ? {} : initialValue}
               onSave={saving ? null : onSave}
               limitQuestionType={Object.keys(QUESTION_TYPES)}
-              settingCascadeURL={ARF_CASCASE_URLS}
+              settingCascadeURL={cascadeURL}
             />
           </div>
         </div>

@@ -8,6 +8,7 @@ import { SteppedLineTo } from "react-lineto";
 import { takeRight } from "lodash";
 import { useNotification } from "../../util/hooks";
 import { InfoCircleOutlined } from "@ant-design/icons";
+import { getLevels } from "../../util/level";
 
 const ApproversTree = () => {
   const {
@@ -43,7 +44,7 @@ const ApproversTree = () => {
     },
   ];
 
-  const startingLevel = window.levels.find(
+  const startingLevel = getLevels().find(
     (l) => l.level === authUser?.administration?.level + 1
   );
 
@@ -273,7 +274,7 @@ const ApproversTree = () => {
                       onClick={() => {
                         if (
                           adminItem.levelName !==
-                            takeRight(window.levels, 2)[0]?.name &&
+                            takeRight(getLevels(), 2)[0]?.name &&
                           administration[k + 1]?.children[0]?.parent !==
                             childItem.id
                         ) {

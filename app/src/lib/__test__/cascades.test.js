@@ -3,6 +3,7 @@ import * as SQLite from 'expo-sqlite';
 import { act, waitFor } from '@testing-library/react-native';
 
 import cascades from '../cascades';
+import api from '../api';
 
 jest.mock('expo-sqlite');
 
@@ -48,9 +49,28 @@ describe('cascades', () => {
       expect(FileSystem.downloadAsync).toHaveBeenCalledWith(
         downloadUrl,
         `test-document-directory/${DIR_NAME}/file.sqlite`,
-        { cache: false },
+        expect.objectContaining({ cache: false }),
       );
     });
+  });
+
+  it('should send the assignment token when downloading', async () => {
+    /**
+     * The sqlite endpoint is per-tenant and authenticated: it picks the file
+     * from the caller's token, so an unauthenticated download now 401s.
+     */
+    api.setToken('assignment-token');
+    const downloadUrl = 'https://example.com/api/v1/device/sqlite/administrator.sqlite';
+    const fileUrl = '/device/sqlite/administrator.sqlite';
+    await cascades.download(downloadUrl, fileUrl);
+
+    expect(FileSystem.downloadAsync).toHaveBeenCalledWith(
+      downloadUrl,
+      `test-document-directory/${DIR_NAME}/administrator.sqlite`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer assignment-token' }),
+      }),
+    );
   });
 
   it('should not download the file if it already exists', () => {

@@ -8,20 +8,33 @@ from api.v1.v1_profile.constants import (
     FeatureTypes,
 )
 from api.v1.v1_users.models import SystemUser
+from utils.tenant_model import tenant_fk
+from utils.tenant_scoped_model import TenantManager
 
 
 class Levels(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     name = models.CharField(max_length=50)
     level = models.IntegerField()
+    tenant = tenant_fk("levels")
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "levels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "level"],
+                name="unique_level_per_tenant",
+            )
+        ]
 
 
 class Administration(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     parent = models.ForeignKey(
         "self",
         on_delete=models.PROTECT,
@@ -36,6 +49,7 @@ class Administration(models.Model):
     )
     name = models.TextField()
     path = models.TextField(null=True, default=None)
+    tenant = tenant_fk("administrations")
 
     def __str__(self):
         return self.name
@@ -73,6 +87,13 @@ class Administration(models.Model):
 
     class Meta:
         db_table = "administrator"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant"],
+                condition=models.Q(parent__isnull=True),
+                name="unique_root_administration_per_tenant",
+            )
+        ]
 
 
 @receiver(pre_save, sender=Administration)
@@ -86,6 +107,9 @@ def set_administration_path(sender, instance: Administration, **_):
 
 
 class AdministrationAttribute(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
+
     class Type(models.TextChoices):
         VALUE = "value", "Value"
         OPTION = "option", "Option"
@@ -99,12 +123,15 @@ class AdministrationAttribute(models.Model):
     options = ArrayField(
         models.CharField(max_length=255, null=True), default=list, blank=True
     )
+    tenant = tenant_fk("administration_attributes")
 
     class Meta:
         db_table = "administration_attribute"
 
 
 class AdministrationAttributeValue(models.Model):
+    TENANT_PATH = "administration__tenant"
+    objects = TenantManager()
     administration = models.ForeignKey(
         to=Administration, on_delete=models.CASCADE, related_name="attributes"
     )
@@ -118,13 +145,18 @@ class AdministrationAttributeValue(models.Model):
 
 
 class Entity(models.Model):
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
     name = models.TextField()
+    tenant = tenant_fk("entities")
 
     class Meta:
         db_table = "entities"
 
 
 class EntityData(models.Model):
+    TENANT_PATH = "entity__tenant"
+    objects = TenantManager()
     name = models.TextField()
     code = models.CharField(max_length=255, null=True, default=None)
     entity = models.ForeignKey(
@@ -142,19 +174,38 @@ class EntityData(models.Model):
 
 
 class Role(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    TENANT_PATH = "tenant"
+    objects = TenantManager()
+    name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
     administration_level = models.ForeignKey(
         to=Levels,
         on_delete=models.CASCADE,
         related_name="role_administration_level",
     )
+    # Denormalised from administration_level.tenant, which is where a role's
+    # ownership actually comes from. It is stored rather than derived because
+    # names must be unique per tenant, and a unique constraint cannot span a
+    # join. `save` keeps the two in step so they cannot drift.
+    tenant = tenant_fk("roles")
+
+    def save(self, *args, **kwargs):
+        self.tenant = self.administration_level.tenant
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "role"
+        constraints = [
+            # A globally unique name meant the second workspace to want a
+            # "Data Entry" role could not have one.
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="unique_role_name_per_tenant",
+            )
+        ]
 
 
 class RoleAccess(models.Model):
@@ -200,6 +251,8 @@ class RoleFeatureAccess(models.Model):
 
 
 class UserRole(models.Model):
+    TENANT_PATH = "user__tenant"
+    objects = TenantManager()
     user = models.ForeignKey(
         to=SystemUser,
         on_delete=models.CASCADE,
