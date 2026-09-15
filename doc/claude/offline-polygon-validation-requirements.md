@@ -48,8 +48,8 @@ Established by inspection, not assumption:
 | `datapoints.geo` is `VARCHAR(255)` — a point, not a polygon | [tables.js:53](../../app/src/database/tables.js#L53) |
 | GPS tuning knobs already live in `config` and sync from backend | [tables.js:23-25](../../app/src/database/tables.js#L23) |
 | `Questions.extra` is a free-form `JSONField` already serialized to mobile — **no model change needed for per-question geo config** | [models.py:148](../../backend/api/v1/v1_forms/models.py#L148), [serializers.py](../../backend/api/v1/v1_forms/serializers.py) `get_extra` |
-| **Web already collects polygons end to end.** `akvo-react-form-editor@2.0.4` offers `geotrace`/`geoshape` as authorable types with a `SettingGeo` panel; [Forms.jsx:532](../../frontend/src/pages/forms/Forms.jsx#L532) passes form JSON straight to ARF `<Webform>`, and ARF **2.7.9** switches on the type internally | [frontend/package.json:11-12](../../frontend/package.json#L11), `node_modules/akvo-react-form-editor/dist` |
-| Frontend `QUESTION_TYPES` is referenced **only** by `EditableCell` / `ReadOnlyCell` / `RawDataTable` — it drives **data display**, not form rendering | [frontend/src/lib/constants.js:14](../../frontend/src/lib/constants.js#L14) |
+| **Web already collects polygons end to end, once authoring is unblocked.** `akvo-react-form-editor@2.0.4` offers `geotrace`/`geoshape` as authorable types with a `SettingGeo` panel, but this host clamped both types out of the form builder via `QUESTION_TYPES`; the epic added `geoshape` to that list (#383), leaving `geotrace` unauthorable; [Forms.jsx:532](../../frontend/src/pages/forms/Forms.jsx#L532) passes form JSON straight to ARF `<Webform>`, and ARF **2.7.9** switches on the type internally | [frontend/package.json:11-12](../../frontend/package.json#L11), `node_modules/akvo-react-form-editor/dist` |
+| Frontend `QUESTION_TYPES` drives **both** display **and** authoring. Both form-builder pages pass it to the editor as `limitQuestionType` ([FormBuilderCreate.jsx:110](../../frontend/src/pages/form-builder/FormBuilderCreate.jsx#L110), [FormBuilderEdit.jsx:434](../../frontend/src/pages/form-builder/FormBuilderEdit.jsx#L434)), so a type absent from it cannot be authored at all | [frontend/src/lib/constants.js:14](../../frontend/src/lib/constants.js#L14) |
 | `@turf/turf ^6.5.0` is already a declared frontend dependency — pure JS, so it runs in React Native too | [frontend/package.json:9](../../frontend/package.json#L9) |
 | No `Forms` field gates web vs mobile; client targeting is by `MobileAssignment` and by which questions a form author adds | [v1_forms/models.py:18](../../backend/api/v1/v1_forms/models.py#L18) |
 
@@ -227,8 +227,18 @@ Items 4 and 7 are the quiet failures: the field looks correct on screen and vali
 
 Web **capture** needs no change (§2). But `frontend/src/lib/constants.js` `QUESTION_TYPES` drives
 manage-data display, so a polygon answer currently renders as a raw coordinate array in
-`EditableCell` / `ReadOnlyCell` / `RawDataTable`. Adding the types there is a **display fix**,
-not an enabler, and is independent of this mobile work.
+`EditableCell` / `ReadOnlyCell` / `RawDataTable`. Adding the type to `QUESTION_TYPES` is an
+**enabler**, not a display fix: it is what makes a `geoshape` question authorable. GEO-009 does
+that for `geoshape`. What remains optional here, and independent of this mobile work, is giving
+the display components a real rendering for polygon answers instead of a raw coordinate array.
+
+Now that `geoshape` is authorable, the gap is reachable: `EditableCell`'s `notEditable` list
+([EditableCell.jsx:68-75](../../frontend/src/components/EditableCell.jsx#L68)) includes `geo`
+but not `geoshape`, so a polygon answer renders as an editable text input holding a comma-joined
+coordinate dump. This display fix should add `geoshape` to that list. It is not urgent because
+both edit endpoints run `SubmitFormDataAnswerSerializer`'s coordinate-ring check, which rejects
+anything that is not `[[lat, lon], ...]` — a mangled edit through the raw input is a 400, not
+silent data corruption.
 
 ### FR-2 — Single-polygon validation
 
@@ -557,7 +567,7 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 | Server-side overlap validation on submit | Offline-first; the device is authoritative at collection time |
 | `plots` table with `isDraft` / `instanceName` matching | Section 1 — solves a problem Akvo MIS does not have |
 | Intent contract, XLSForm appearance changes | Section 1 — no external app involved |
-| Web frontend polygon capture | Already works via ARF 2.7.9 + editor 2.0.4 — nothing to build (§2, Q9) |
+| Web frontend polygon capture | Rendering already works via ARF 2.7.9 + editor 2.0.4; the epic added `geoshape` to `QUESTION_TYPES` (#383) so it can be authored — nothing left to build (§2, Q9) |
 | Web frontend polygon *validation* (area, self-intersection, overlap) | Mobile-only request. Web has capture but no validation; parity is a later decision |
 | Web manage-data display of polygon answers | FR-1.17 — optional, independent |
 | Overlap detection between two polygons *within a single submission* | Not in source AC; confirm if repeatable groups can hold polygons |
@@ -617,11 +627,12 @@ required** (D13); hand-edited JSON is not acceptable. It belongs upstream in
 escape hatch is the weaker option.
 
 **Q9 — ~~Should akvo-mis web adopt ARF `TypeGeoDrawing`~~ — CLOSED.** The premise was wrong:
-web already collects polygons end to end via `akvo-react-form-editor@2.0.4` (authoring) and
-ARF 2.7.9 (rendering), with no frontend code required (§2). Whether a given form has a polygon
-question is a **form-authoring choice**, per form, made in the builder. This work makes the
-mobile client capable of the same thing; it does not restrict either client. Optional web
-display parity is FR-1.17.
+web already renders polygons end to end via ARF 2.7.9, with no frontend code required for that
+half (§2). Authoring needed one line of frontend code: this host clamped `geoshape` out of the
+form builder via `QUESTION_TYPES`, and the epic added it back in (#383). Whether a given form has a
+polygon question is now a **form-authoring choice**, per form, made in the builder. This work
+makes the mobile client capable of the same thing; it does not restrict either client. Optional
+web display parity is FR-1.17.
 
 **Q10 — Should the ported capture code stay in sync with ARF?** DEP-4. Options: hard fork and
 accept drift, or track ARF releases and re-port. The value format is the contract that must

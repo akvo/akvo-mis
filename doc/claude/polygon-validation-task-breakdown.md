@@ -140,6 +140,11 @@ most people assume.
 
 ### The pipeline today
 
+**As of this writing, this section is the pre-epic baseline.** It predates the epic change that added
+`geoshape` to `QUESTION_TYPES` (#383) and made it authorable, and predates the base-branch work that
+gave the datapoint list geometry (row B1 below still describes it as carrying none). Read the
+diagram and table below as "before this epic started," not as current state.
+
 A polygon question has to survive four layers. Three of them already work.
 
 ```mermaid
@@ -148,7 +153,7 @@ flowchart LR
     B --> C["Web form<br/>akvo-react-form 2.7.9"]
     B --> D["Mobile app<br/>app/"]
 
-    A -.- A1["✅ geoshape authorable<br/>✅ SettingGeo panel<br/>❌ no geoConfig fields"]
+    A -.- A1["❌ geoshape not authorable — clamped by QUESTION_TYPES<br/>✅ SettingGeo panel exists, authors center<br/>❌ no geoConfig fields"]
     B -.- B1["✅ types, center, extra JSONField<br/>✅ same serializer feeds web + mobile<br/>❌ list carries no geometry or bbox"]
     C -.- C1["✅ full capture — tap/manual/auto-record<br/>✅ min-point rule<br/>❌ no area/self-intersect/overlap"]
     D -.- D1["❌ NO polygon field at all<br/>❌ renders as a plain text input<br/>❌ no map, no geometry library"]
@@ -159,7 +164,7 @@ flowchart LR
 | Layer | What works today | What is missing |
 |---|---|---|
 | **Backend** | `geoshape`=14, `geotrace`=15 with `center`; `Questions.extra` is a free-form `JSONField` already serialized to mobile; XLSForm export maps both types | Geometry + bbox on the datapoint list (**T2**); `geoConfig` round-trip tests (**T9**) |
-| **Form builder** | `geotrace`/`geoshape` are authorable; `SettingGeo` panel exists and already authors a structured value (`center`) | The overlap / shape / min-size checkboxes and their numeric fields (**T8**) |
+| **Form builder** | `SettingGeo` panel exists and already authors a structured value (`center`), scoped to the three geo types | `geoshape` is **not** authorable: both form-builder pages clamp the type dropdown with `limitQuestionType={Object.keys(QUESTION_TYPES)}` and `geoshape` is absent from it (**T8**). Plus the overlap threshold controls themselves (**T8**) |
 | **Web form** | Full polygon capture via ARF `TypeGeoDrawing` — tap, drag-marker, auto-record, accuracy threshold, i18n in 5 languages | Any validation beyond the min-point rule; manage-data cells render a raw coordinate array |
 | **Mobile app** | `TypeGeo.js` — a **single lat/lng point**. `datapoints` already holds local *and* synced records offline. `react-native-webview` installed. Validation plumbing (`feedback` + submit gate) already exists | **Everything polygon**: capture, map, geometry library, overlap, shape and area checks, geometry index (**T1, T3–T7**) |
 
@@ -201,10 +206,11 @@ Three consequences that are easy to get wrong:
 
 ### One thing that is already true and should not be re-litigated
 
-Web capture works. `akvo-react-form-editor@2.0.4` can author polygon questions and ARF `2.7.9`
-renders them — with no akvo-mis frontend code involved. Whether a given form *has* a polygon
-question is a form-authoring choice, made per form in the builder. This work makes the mobile
-client capable of the same thing; it does not restrict either client.
+Web **rendering** works with no akvo-mis frontend code involved: ARF `2.7.9` renders a `geoshape`
+answer as soon as a form has one, and that part is settled and should not be re-litigated.
+Authoring is a separate matter, covered in the layer table above. Whether a given form *has* a
+polygon question is a form-authoring choice, made per form in the builder. This work makes the
+mobile client capable of the same thing; it does not restrict either client.
 
 ---
 
