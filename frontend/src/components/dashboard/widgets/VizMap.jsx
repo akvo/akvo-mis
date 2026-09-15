@@ -281,10 +281,10 @@ const VizMap = ({ config, data }) => {
                   }}
                 >
                   {band.to === null
-                    ? `Above ${valueRanges[idx - 1]?.to ?? 0}`
+                    ? `${(valueRanges[idx - 1]?.to ?? 0) + 1} +`
                     : idx === 0
-                    ? `0 – ${band.to}`
-                    : `${valueRanges[idx - 1]?.to ?? 0} – ${band.to}`}
+                    ? `≤ ${band.to}`
+                    : `${(valueRanges[idx - 1]?.to ?? 0) + 1} – ${band.to}`}
                 </div>
               ))}
             </div>
