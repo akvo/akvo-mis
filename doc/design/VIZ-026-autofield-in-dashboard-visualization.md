@@ -58,22 +58,35 @@ Enable dashboard authors to visualize **both numeric and categorical autofields*
 
 ## 3. Technical Design
 
-### 3.1. Safe PostgreSQL Numeric Casting
-Because `Answers.name` is a text column, converting it to numbers must guard against non-numeric text to avoid PostgreSQL runtime cast errors.
+### 3.1. Safe PostgreSQL Numeric Casting & Data Sanitization
+Because `Answers.name` is a text column, converting it to numbers must guard against non-numeric text, scientific notation, leading/trailing whitespace, and JS runtime artifacts (`"NaN"`, `"null"`, `"undefined"`, `""`):
 
-We define a reusable ORM expression:
 ```python
 from django.db.models import Case, When, Value, FloatField
-from django.db.models.functions import Cast
+from django.db.models.functions import Cast, Trim
 
 NUMERIC_AUTOFIELD_EXPR = Case(
-    When(name__regex=r'^-?[0-9]+(\.[0-9]+)?$', then=Cast('name', output_field=FloatField())),
+    When(
+        name__regex=r'^\s*-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\s*$',
+        then=Cast(Trim('name'), output_field=FloatField())
+    ),
     default=Value(None),
     output_field=FloatField(),
 )
 ```
 
-### 3.2. Backend Integration Points (`backend/api/v1/v1_visualization/`)
+### 3.2. Edge-Case Mitigations & Defenses
+
+| Dimension | Potential Risk / Bug | Hardened Defense in VIZ-026 |
+|---|---|---|
+| **Non-Numeric / Corrupted Text** | SQL `DataError` on float conversion when text is passed to numeric widget | Regex guard in `NUMERIC_AUTOFIELD_EXPR` returns `NULL`. Aggregation skips nulls safely without raising SQL exceptions. |
+| **Repeatable Groups** | Autofield within a repeating matrix with `index > 0` | Supported across all `repeat_agg` modes (`average`, `sum`, `max`, `min`, `last`). `Last` aggregate applies directly to the evaluated expression. |
+| **Categorical Cardinality** | Unbounded string autofield causing 100+ bar/pie segments | Categorical grouping caps output to top 50 categories or uses predefined keys from `question.fn.fnColor`. |
+| **Scatter Plot Nulls** | Missing/non-numeric coordinate pairing | Scatter query filters `Q(x__isnull=False) & Q(y__isnull=False)` on annotated float values. |
+| **Criteria Filtering** | Multi-select / Option-in criteria on autofields | Unified filter `Q(options__contains=[v]) \| Q(name=v)` for equals, and `Q(name__in=values)` for `option_in`. |
+| **Multi-Tenancy** | Cross-tenant data leakage | All queries inherit the tenant-scoped `get_base_monitoring_qs` pipeline. Zero unscoped queries. |
+
+### 3.3. Backend Integration Points (`backend/api/v1/v1_visualization/`)
 
 1. **`constants.py`**:
    - Add `QuestionTypes.autofield` to `SUPPORTED_QUESTION_TYPES` (returned by `/dashboard/sources/`).
@@ -95,7 +108,7 @@ NUMERIC_AUTOFIELD_EXPR = Case(
 5. **`scatter_functions.py`**:
    - Allow `QuestionTypes.autofield` on X/Y axes by applying `NUMERIC_AUTOFIELD_EXPR`.
 
-### 3.3. Frontend Integration Points (`frontend/src/pages/dashboards/`)
+### 3.4. Frontend Integration Points (`frontend/src/pages/dashboards/`)
 
 1. **`builderConstants.js`**:
    - Add `"autofield"` to `SUPPORTED_GROUP_QUESTION_TYPES`, `MAP_QUESTION_TYPES`, and `STACK_QUESTION_TYPES`.
@@ -147,9 +160,9 @@ sequenceDiagram
 
 | Task ID | Task Description | Vibe Coding (Dev) | Automated Testing | QA & Review | Total Est. Time |
 |:---|:---|:---:|:---:|:---:|:---:|
-| **TASK-01** | **Backend Autofield Engine & Sources API**<br>• Add `autofield` to `SUPPORTED_QUESTION_TYPES` & `/dashboard/sources/`<br>• Implement safe PostgreSQL numeric casting and categorical grouping in `values_functions.py` & `dashboard_views.py`<br>• Support table criteria & escalation for autofields | 60m | 45m | 30m | **135m (2.25h)** |
-| **TASK-02** | **Frontend Dashboard Builder UI Integration**<br>• Update `builderConstants.js` (`SUPPORTED_GROUP_QUESTION_TYPES`, `MAP_QUESTION_TYPES`, `STACK_QUESTION_TYPES`)<br>• Adapt `BuilderInspector.jsx` for autofield question selection and `fnColor` palette extraction<br>• Render autofields across KPI, Bar, Pie, Line, Table, Map, Scatter widgets | 45m | 35m | 25m | **105m (1.75h)** |
-| **TASK-03** | **End-to-End Verification & Edge-Case Testing**<br>• Unit & integration tests for mixed numeric/text values, nulls, and malformed strings in `Answers.name`<br>• Verify viewer & builder parity across all 7 widget types<br>• Align documentation and feature specs | 30m | 30m | 20m | **80m (1.33h)** |
+| **TASK-01** | **Backend Autofield Engine & Sources API**<br>• Add `autofield` to `SUPPORTED_QUESTION_TYPES` & `/dashboard/sources/`<br>• Implement safe PostgreSQL numeric casting and categorical grouping in `values_functions.py` & `dashboard_views.py`<br>• Table criteria & escalation support for autofields | 60m | 30m | 30m | **120m (2.0h)** |
+| **TASK-02** | **Frontend Dashboard Builder UI Integration**<br>• Update `builderConstants.js` (`SUPPORTED_GROUP_QUESTION_TYPES`, `MAP_QUESTION_TYPES`, `STACK_QUESTION_TYPES`)<br>• Adapt `BuilderInspector.jsx` for autofield question selection and `fnColor` palette extraction<br>• Render autofields across KPI, Bar, Pie, Line, Table, Map, Scatter widgets | 60m | 30m | 30m | **120m (2.0h)** |
+| **TASK-03** | **End-to-End Verification & Edge-Case Testing**<br>• Unit & integration tests for mixed numeric/text values, nulls, and malformed strings in `Answers.name`<br>• Verify viewer & builder parity across all 7 widget types<br>• Align documentation and feature specs | 30m | 20m | 10m | **60m (1.0h)** |
 
 ---
 
