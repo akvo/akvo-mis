@@ -1013,9 +1013,7 @@ const BuilderInspector = ({
                       },
                     };
                     onWidgetChange(next);
-                    if (!wConfig.value_ranges?.length) {
-                      seedValueRanges(next);
-                    }
+                    seedValueRanges(next);
                   } else {
                     const sc =
                       COLOR_SCHEMES[
@@ -2104,29 +2102,16 @@ const BuilderInspector = ({
                   <span className="builder-inspector-range-open">
                     {idx === 0
                       ? "All values"
-                      : `Above ${readable(bands[idx - 1]?.to)}`}
+                      : `${readable((bands[idx - 1]?.to ?? 0) + 1)} +`}
                   </span>
                 ) : (
                   <InputNumber
-                    // No steppers. They are absolutely positioned over
-                    // the right edge of the field and appear on hover,
-                    // so they sat on top of the digits — and stepping a
-                    // population threshold by one is no use to anybody.
                     controls={false}
-                    // Each editable row carries that band's UPPER bound,
-                    // so the same word leads every one of them. A bare
-                    // number does not say which side it bounds, and the
-                    // rows only read as a ladder once it does. The
-                    // legend keeps interval labels instead — "340 – 890"
-                    // is the band's extent, which "Under 890" would
-                    // misstate.
-                    //
-                    // addonBefore, not prefix: antd's prefix is inline
-                    // text inside the field, so the word blended into
-                    // the number. The addon is the attached grey box
-                    // that reads as a label, and it comes with its own
-                    // background, border and radius.
-                    addonBefore="Under"
+                    addonBefore={
+                      idx === 0
+                        ? "≤"
+                        : `${readable((bands[idx - 1]?.to ?? 0) + 1)} –`
+                    }
                     value={band.to}
                     placeholder="up to"
                     onChange={(val) => {

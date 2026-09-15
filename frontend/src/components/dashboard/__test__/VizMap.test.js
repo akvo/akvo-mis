@@ -374,9 +374,9 @@ describe("range mode", () => {
     expect(
       document.querySelector(".dashboard-view-map-gradation")
     ).not.toBeNull();
-    expect(screen.getByText("0 – 340")).toBeInTheDocument();
-    expect(screen.getByText("340 – 890")).toBeInTheDocument();
-    expect(screen.getByText("Above 890")).toBeInTheDocument();
+    expect(screen.getByText("≤ 340")).toBeInTheDocument();
+    expect(screen.getByText("341 – 890")).toBeInTheDocument();
+    expect(screen.getByText("891 +")).toBeInTheDocument();
   });
 
   test("auto-computed legend when no value_ranges", () => {
