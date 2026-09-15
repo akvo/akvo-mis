@@ -282,7 +282,13 @@ def handle_escalation(
     for parent in paginated:
         row = {"id": parent.id}
         for col in columns:
-            row[col["key"]] = extract_column_value(
+            col_key = col.get("key")
+            if not col_key:
+                raise KeyError(
+                    "Each column in escalation must have a non-empty "
+                    f"'key': {col}"
+                )
+            row[col_key] = extract_column_value(
                 parent, parent.latest_id, col, caches,
             )
         results.append(row)

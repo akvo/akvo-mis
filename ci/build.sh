@@ -3,7 +3,10 @@
 
 set -exuo pipefail
 
-[[ "${CI_BRANCH}" ==  "gh-pages" ]] && { echo "GH Pages update. Skip all"; exit 0; }
+[[ "${CI_BRANCH}" == "gh-pages" ]] && {
+    echo "GH Pages update. Skip all"
+    exit 0
+}
 
 #Detect tag for prod/staging deployment
 tag_pattern="^[0-9]+\.[0-9]+\.[0-9]+$"
@@ -12,53 +15,46 @@ if [[ "${CI_BRANCH}" =~ $tag_pattern && -z "${CI_TAG}" ]]; then
     exit 0
 fi
 
-
 if grep -q .yml .gitignore; then
     echo "ERROR: .gitignore contains other docker-compose file"
     exit 1
 fi
 
-
 BACKEND_CHANGES=0
 FRONTEND_CHANGES=0
 COMMIT_CONTENT="${ALL_CHANGED_FILES}"
 
-if grep -q "backend" <<< "${COMMIT_CONTENT}"
-then
+if grep -q "backend" <<<"${COMMIT_CONTENT}"; then
     BACKEND_CHANGES=1
 fi
 
-if grep -q "frontend" <<< "${COMMIT_CONTENT}"
-then
+if grep -q "frontend" <<<"${COMMIT_CONTENT}"; then
     FRONTEND_CHANGES=1
 fi
 
-if grep -q "docs" <<< "${COMMIT_CONTENT}"
-then
+if grep -q "docs" <<<"${COMMIT_CONTENT}"; then
     FRONTEND_CHANGES=1
 fi
 
-if [[ "${CI_TAG}" =~ $tag_pattern || "${CI_BRANCH}" ==  "main" || "${CI_BRANCH}" ==  "develop" && "${CI_PULL_REQUEST}" !=  "true" ]];
-then
+if [[ "${CI_TAG}" =~ $tag_pattern || "${CI_BRANCH}" == "main" || "${CI_BRANCH}" == "develop" && "${CI_PULL_REQUEST}" != "true" ]]; then
     BACKEND_CHANGES=1
     FRONTEND_CHANGES=1
 fi
 
-if [ ! -d "${SERVICE_ACCOUNT}" ]
-then
+if [ ! -d "${SERVICE_ACCOUNT}" ]; then
     echo "Service account not exists"
     exit 1
 fi
 
 image_prefix="eu.gcr.io/akvo-lumen/akvo-mis"
 
-dc () {
+dc() {
     docker compose \
         --ansi never \
         "$@"
 }
 
-dci () {
+dci() {
     dc -f docker-compose.ci.yml "$@"
 }
 
@@ -68,20 +64,20 @@ documentation_build() {
     cp -r docs/build/html frontend/public/documentation
 }
 
-frontend_build () {
+frontend_build() {
 
-    echo "PUBLIC_URL=/" > frontend/.env
-    echo "REACT_APP_CARTO_API_KEY=${REACT_APP_CARTO_API_KEY:-}" >> frontend/.env
+    echo "PUBLIC_URL=/" >frontend/.env
+    echo "REACT_APP_CARTO_API_KEY=${REACT_APP_CARTO_API_KEY:-}" >>frontend/.env
 
     # Code Quality and Build Folder
-    sed 's/"warn"/"error"/g' < frontend/.eslintrc.json > frontend/.eslintrc.prod.json
-    sed "s/\"##CACHE_VERSION##\"/\"${CI_COMMIT}\"/g" < frontend/public/service-worker.template.js > frontend/public/service-worker.js
+    sed 's/"warn"/"error"/g' <frontend/.eslintrc.json >frontend/.eslintrc.prod.json
+    sed "s/\"##CACHE_VERSION##\"/\"${CI_COMMIT}\"/g" <frontend/public/service-worker.template.js >frontend/public/service-worker.js
 
     dc -f docker-compose.yml run \
-       --rm \
-       --no-deps \
-       frontend \
-       sh release.sh
+        --rm \
+        --no-deps \
+        frontend \
+        sh release.sh
 
     docker build \
         --tag "${image_prefix}/frontend:latest-test" \
@@ -89,7 +85,7 @@ frontend_build () {
 
 }
 
-backend_build () {
+backend_build() {
 
     docker build \
         --tag "${image_prefix}/backend:latest-test" \
@@ -110,24 +106,22 @@ worker_build() {
 }
 
 update_dbdocs() {
-    if [[ "${CI_BRANCH}" ==  "main" || "${CI_BRANCH}" ==  "develop" ]]; then
+    if [[ "${CI_BRANCH}" == "main" || "${CI_BRANCH}" == "develop" ]]; then
         npm install -g dbdocs
         # dbdocs build doc/dbml/schema.dbml --project akvo-mis
         dbdocs build backend/db.dbml --project "akvo-mis-$CI_BRANCH"
     fi
 }
 
-if [[ ${BACKEND_CHANGES} == 1 ]];
-then
+if [[ ${BACKEND_CHANGES} == 1 ]]; then
     echo "================== * BACKEND BUILD * =================="
     backend_build
-    update_dbdocs
+    # update_dbdocs
 else
     echo "No Changes detected for backend -- SKIP BUILD"
 fi
 
-if [[ ${FRONTEND_CHANGES} == 1 ]];
-then
+if [[ ${FRONTEND_CHANGES} == 1 ]]; then
     echo "================== * FRONTEND BUILD * =================="
     documentation_build
     frontend_build
@@ -138,8 +132,8 @@ fi
 if [[ ${FRONTEND_CHANGES} == 1 && ${BACKEND_CHANGES} == 1 ]]; then
     worker_build
     if ! dci run -T ci ./basic.sh; then
-      dci logs
-      echo "Build failed when running basic.sh"
-      exit 1
+        dci logs
+        echo "Build failed when running basic.sh"
+        exit 1
     fi
 fi

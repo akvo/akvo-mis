@@ -128,7 +128,9 @@ def allowlist_from(dashboard):
             for entry in widget_config.get(key) or []:
                 if not isinstance(entry, dict):
                     continue
-                qid = _as_id(entry.get("question"))
+                qid = _as_id(
+                    entry.get("question") or entry.get("question_id")
+                )
                 if qid is not None:
                     questions.add(qid)
 
