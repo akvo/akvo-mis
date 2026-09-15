@@ -23,7 +23,8 @@ const VizBar = ({ config, data, filters }) => {
 
   const horizontal = widgetConfig.orientation === "horizontal";
   const isPercentage = widgetConfig.value_type === "percentage";
-  const toolbox = buildToolboxConfig(widgetConfig, "bar");
+  const toolboxConfig = config?.toolbox || widgetConfig.toolbox || widgetConfig;
+  const toolbox = buildToolboxConfig(toolboxConfig, "bar", config?.title);
   const { chartRef, boxRef } = useChartResize(toolbox);
 
   if (chartData.length === 0) {
@@ -60,7 +61,7 @@ const VizBar = ({ config, data, filters }) => {
       color: colors,
       tooltip,
       legend: { show: true, data: stackLabels, bottom: 0 },
-      toolbox: toolbox || { show: false },
+      toolbox: toolbox || { show: false, feature: {} },
       grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
       xAxis: {
         type: horizontal ? "value" : "category",
@@ -103,7 +104,7 @@ const VizBar = ({ config, data, filters }) => {
     color: colors,
     tooltip,
     legend: { show: false },
-    toolbox: toolbox || { show: false },
+    toolbox: toolbox || { show: false, feature: {} },
     grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
     xAxis: {
       type: horizontal ? "value" : "category",

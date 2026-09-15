@@ -23,7 +23,8 @@ const CategoryLine = ({ config, data, filters }) => {
     const seriesColors = labels.map(
       (name, idx) => catColors[name] || colors[idx % colors.length]
     );
-    const toolbox = buildToolboxConfig(wc, "line");
+    const toolboxConfig = config?.toolbox || wc.toolbox || wc;
+    const toolbox = buildToolboxConfig(toolboxConfig, "line", config?.title);
     return {
       color: seriesColors,
       tooltip: {
@@ -34,7 +35,7 @@ const CategoryLine = ({ config, data, filters }) => {
         data: labels,
         bottom: 0,
       },
-      toolbox: toolbox || { show: false },
+      toolbox: toolbox || { show: false, feature: {} },
       grid: { top: 20, right: 20, bottom: 40, left: 40, containLabel: true },
       xAxis: {
         type: "category",
@@ -82,13 +83,10 @@ const VizLine = ({ config, data, filters }) => {
     ? config.color
     : widgetConfig.chart_colors || DEFAULT_COLORS;
 
-  const toolbox = buildToolboxConfig(widgetConfig, "line");
+  const toolboxConfig = config?.toolbox || widgetConfig.toolbox || widgetConfig;
+  const toolbox = buildToolboxConfig(toolboxConfig, "line", config?.title);
   const { chartRef, boxRef } = useChartResize(toolbox);
 
-  const chartConfig = {
-    title: "",
-    color: colors,
-  };
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   if (hasCategory || isAdminGrouped) {
@@ -104,14 +102,77 @@ const VizLine = ({ config, data, filters }) => {
     );
   }
 
-  const props = { config: chartConfig, data: chartData };
-  if (hasStack && widgetConfig.stackMapping) {
-    props.stackMapping = widgetConfig.stackMapping;
+  if (hasStack) {
+    const firstItem = chartData[0] || {};
+    const stackLabels =
+      widgetConfig.stackMapping?.stack ||
+      Object.keys(firstItem).filter((k) => {
+        return k !== "label" && k !== "value";
+      });
+
+    const rawConfig = {
+      color: colors,
+      tooltip: { trigger: "axis" },
+      legend: { show: true, data: stackLabels, bottom: 0 },
+      toolbox: toolbox || { show: false, feature: {} },
+      grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: chartData.map((d) => d.label),
+      },
+      yAxis: {
+        type: "value",
+      },
+      series: stackLabels.map((name, idx) => ({
+        name,
+        type: "line",
+        stack: "defaultStack",
+        data: chartData.map((d) => {
+          return d[name] ?? 0;
+        }),
+        itemStyle: { color: colors[idx % colors.length] },
+      })),
+    };
+
+    return (
+      <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
+        <Component ref={chartRef} rawConfig={rawConfig} />
+      </div>
+    );
   }
+
+  const firstItem = chartData[0] || {};
+  const categoryKey =
+    Object.keys(firstItem).find((k) => {
+      return k !== "value";
+    }) || "label";
+
+  const rawConfig = {
+    color: colors,
+    tooltip: { trigger: "axis" },
+    legend: { show: false },
+    toolbox: toolbox || { show: false, feature: {} },
+    grid: { top: 40, right: 20, bottom: 40, left: 50, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: chartData.map((d) => d[categoryKey]),
+    },
+    yAxis: {
+      type: "value",
+    },
+    series: [
+      {
+        name: config?.title || "Value",
+        type: "line",
+        data: chartData.map((d) => d.value),
+        itemStyle: { color: colors[0] },
+      },
+    ],
+  };
 
   return (
     <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
-      <Component ref={chartRef} {...props} />
+      <Component ref={chartRef} rawConfig={rawConfig} />
     </div>
   );
 };

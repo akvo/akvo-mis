@@ -18,7 +18,9 @@ const VizScatter = ({ config, data, filters }) => {
     if (chartData.length === 0) {
       return null;
     }
-    const toolbox = buildToolboxConfig(widgetConfig, "scatter");
+    const toolboxConfig =
+      config?.toolbox || widgetConfig.toolbox || widgetConfig;
+    const toolbox = buildToolboxConfig(toolboxConfig, "scatter", config?.title);
     return {
       color: colors,
       tooltip: {
@@ -34,7 +36,7 @@ const VizScatter = ({ config, data, filters }) => {
         },
       },
       legend: { show: false },
-      toolbox: toolbox || { show: false },
+      toolbox: toolbox || { show: false, feature: {} },
       grid: { top: 40, right: 20, bottom: 50, left: 60, containLabel: true },
       xAxis: {
         type: "value",
@@ -57,7 +59,7 @@ const VizScatter = ({ config, data, filters }) => {
         },
       ],
     };
-  }, [chartData, colors, widgetConfig, xLabel, yLabel]);
+  }, [chartData, colors, config, widgetConfig, xLabel, yLabel]);
 
   const { boxRef } = useEChartsOption(option);
 
