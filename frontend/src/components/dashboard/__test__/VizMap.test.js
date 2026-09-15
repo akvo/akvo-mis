@@ -320,13 +320,14 @@ describe("range mode", () => {
     expect(lastProps.cluster).not.toBe(false);
   });
 
-  test("each point takes the colour of its band", () => {
+  test("each point takes a graduated colour from the auto-computed scale", () => {
+    // scaleQuantize domain [0, 12000], 5 bins from mapConfig.colorRange.
+    // 120 and 500 fall in the lowest bin, 12000 in the highest.
     render(<VizMap config={rangeWidget()} data={VALUED} />);
-    expect(lastProps.data.map((d) => d.color)).toEqual([
-      "#d73027",
-      "#fee08b",
-      "#1a9850",
-    ]);
+    const colors = lastProps.data.map((d) => d.color);
+    expect(colors[0]).toBe("#e8f7e3"); // 120 → lowest bin
+    expect(colors[1]).toBe("#e8f7e3"); // 500 → lowest bin
+    expect(colors[2]).toBe("#107550"); // 12000 → highest bin
   });
 
   test("a point with no answer falls back rather than reading as zero", () => {
@@ -341,11 +342,15 @@ describe("range mode", () => {
     expect(lastProps.data[0].color).toBe("#64A73B");
   });
 
-  test("the legend names the bands, not the statuses", () => {
+  test("the graduated legend shows auto-computed bin ranges", () => {
+    // GradationLegend renders thresholds from scaleQuantize.
+    // Domain [0, 12000] → thresholds [2400, 4800, 7200, 9600].
     render(<VizMap config={rangeWidget()} data={VALUED} />);
-    expect(screen.getByText("under 340")).toBeInTheDocument();
-    expect(screen.getByText("340 – 890")).toBeInTheDocument();
-    expect(screen.getByText("890 and above")).toBeInTheDocument();
+    expect(
+      document.querySelector(".dashboard-view-map-gradation")
+    ).not.toBeNull();
+    expect(screen.getByText("0 - 2400")).toBeInTheDocument();
+    expect(screen.getByText(/> 9600/)).toBeInTheDocument();
   });
 
   test("the popup carries the number, not just the name", () => {
@@ -391,13 +396,12 @@ describe("range mode", () => {
     expect(container.textContent).not.toContain("No value");
   });
 
-  test("no bands configured yet still renders the map", () => {
-    // The seeding request can fail; the author gets an uncoloured map
-    // rather than a broken widget.
-    render(<VizMap config={rangeWidget({ value_ranges: [] })} data={VALUED} />);
+  test("no data still renders the map without a graduated legend", () => {
+    // Empty data means no thresholds to compute — the map renders
+    // without a legend rather than breaking.
+    render(<VizMap config={rangeWidget()} data={[]} />);
     expect(screen.getByTestId("map-cluster")).toBeInTheDocument();
-    expect(lastProps.data.every((d) => d.color === "#64A73B")).toBe(true);
-    expect(document.querySelector(".dashboard-view-map-legend")).toBeNull();
+    expect(document.querySelector(".dashboard-view-map-gradation")).toBeNull();
   });
 });
 

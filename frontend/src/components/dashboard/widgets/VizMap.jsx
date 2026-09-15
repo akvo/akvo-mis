@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import { MapCluster } from "akvo-charts";
 import "leaflet/dist/leaflet.css";
-import { geo } from "../../../lib";
-import { colorForValue, rangeLabel } from "../../../util/valueRanges";
+import { scaleQuantize } from "d3-scale";
+import { geo, config as appConfig } from "../../../lib";
+import GradationLegend from "../../map-view/GradationLegend";
 
 const DEFAULT_COLOR = "#1890ff";
 const NO_STATUS_COLOR = "#999";
@@ -54,10 +55,6 @@ const VizMap = ({ config, data }) => {
   // came back empty and the question was never asked about again.
   const isQuantity = widgetConfig.map_mode === QUANTITY;
   const isRange = widgetConfig.map_mode === RANGE;
-  const valueRanges = useMemo(
-    () => widgetConfig.value_ranges || [],
-    [widgetConfig.value_ranges]
-  );
   const statusColors = useMemo(
     () => widgetConfig.status_colors || {},
     [widgetConfig.status_colors]
@@ -79,6 +76,33 @@ const VizMap = ({ config, data }) => {
     return lookup;
   }, [data, statusColors, chartColors, fallback]);
 
+  const colorScale = useMemo(() => {
+    if (!isRange) {
+      return null;
+    }
+    const rows = Array.isArray(data) ? data : [];
+    const numericValues = rows
+      .map((r) => Number(r.value))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (numericValues.length === 0) {
+      return scaleQuantize()
+        .domain([0, 1])
+        .range(appConfig.mapConfig.colorRange);
+    }
+    const maxValue = Math.max(...numericValues);
+    let domainMax = maxValue;
+    if (maxValue <= 10) {
+      domainMax = Math.ceil(maxValue / 5) * 5;
+    } else if (maxValue <= 100) {
+      domainMax = Math.ceil(maxValue / 10) * 10;
+    } else {
+      domainMax = Math.ceil(maxValue / 50) * 50;
+    }
+    return scaleQuantize()
+      .domain([0, domainMax])
+      .range(appConfig.mapConfig.colorRange);
+  }, [data, isRange]);
+
   const points = useMemo(() => {
     const rows = Array.isArray(data) ? data : [];
     return rows.filter(geo.hasValidPoint).map((row) => ({
@@ -99,16 +123,18 @@ const VizMap = ({ config, data }) => {
           ? Number(row.value)
           : null,
       // A range map ignores status entirely — it has none to read, and
-      // the band is the whole message. `colorForValue` falls back rather
-      // than treating a missing answer as zero: on a map of population
-      // served, "not reported" and "nobody" are different facts.
+      // the band is the whole message. The scale falls back rather than
+      // treating a missing answer as zero: on a map of population served,
+      // "not reported" and "nobody" are different facts.
       color: isRange
-        ? colorForValue(row.value, valueRanges, fallback)
+        ? Number.isFinite(Number(row.value))
+          ? colorScale(Number(row.value))
+          : fallback
         : row.status
         ? colorForStatus[row.status] || fallback
         : fallback,
     }));
-  }, [data, colorForStatus, fallback, isRange, valueRanges]);
+  }, [data, colorForStatus, fallback, isRange, colorScale]);
 
   const mapRef = useRef(null);
 
@@ -128,25 +154,29 @@ const VizMap = ({ config, data }) => {
     fitMap();
   }, [fitMap]);
 
-  // Two legends, one shape: a status name and its colour, or a band
-  // label and its colour.
-  const legendEntries = isRange
-    ? valueRanges.map((band, i) => ({
-        key: rangeLabel(valueRanges, i),
-        color: band.color,
-      }))
-    : Object.keys(colorForStatus).map((status) => ({
-        key: status,
-        color: colorForStatus[status],
-      }));
+  // Category legend: one dot per status.
+  const legendEntries = Object.keys(colorForStatus).map((status) => ({
+    key: status,
+    color: colorForStatus[status],
+  }));
   const uniqueColors = new Set(legendEntries.map((e) => e.color));
   // Never in quantity mode: size carries the meaning there and every
   // circle is one colour, so a colour legend would describe nothing
-  // that is on screen. A range map with one band has nothing to
-  // distinguish either — the same reason the status legend hides when
-  // every pin shares a colour.
-  const showLegend =
-    !isQuantity && legendEntries.length > 0 && uniqueColors.size > 1;
+  // that is on screen.
+  const showCategoryLegend =
+    !isQuantity &&
+    !isRange &&
+    legendEntries.length > 0 &&
+    uniqueColors.size > 1;
+
+  // Graduated legend for range mode: show when there are data points to
+  // compute meaningful thresholds from.
+  const thresholds = useMemo(
+    () => (colorScale ? colorScale.thresholds() : []),
+    [colorScale]
+  );
+  const showGradationLegend =
+    isRange && thresholds.length > 0 && points.length > 0;
 
   // MapCluster builds its Leaflet cluster group in an effect, and a
   // Leaflet object does not follow React prop updates — so the mode
@@ -161,7 +191,7 @@ const VizMap = ({ config, data }) => {
     fallback +
     (widgetConfig.map_mode || "category") +
     (widgetConfig.map_aggregate || "sum") +
-    valueRanges.map((b) => `${b.to}:${b.color}`).join(",");
+    thresholds.join(",");
 
   return (
     <div className="dashboard-view-map">
@@ -212,7 +242,12 @@ const VizMap = ({ config, data }) => {
             : (point) => point?.label
         }
       />
-      {showLegend && (
+      {showGradationLegend && (
+        <div className="dashboard-view-map-gradation">
+          <GradationLegend thresholds={thresholds} />
+        </div>
+      )}
+      {showCategoryLegend && (
         <div className="dashboard-view-map-legend">
           {legendEntries.map((entry) => (
             <span key={entry.key} className="dashboard-view-map-legend-item">
