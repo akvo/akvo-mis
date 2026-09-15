@@ -140,8 +140,8 @@ most people assume.
 
 ### The pipeline today
 
-**As of this writing, this section is the pre-epic baseline.** It predates GEO-009, which added
-`geoshape` to `QUESTION_TYPES` and made it authorable, and predates the base-branch work that
+**As of this writing, this section is the pre-epic baseline.** It predates the epic change that added
+`geoshape` to `QUESTION_TYPES` (#383) and made it authorable, and predates the base-branch work that
 gave the datapoint list geometry (row B1 below still describes it as carrying none). Read the
 diagram and table below as "before this epic started," not as current state.
 

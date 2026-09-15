@@ -97,8 +97,9 @@ GEO-007 must decide what gates that button.
 `geoshape` was absent from `frontend/src/lib/constants.js` `QUESTION_TYPES`,
 and both form-builder pages pass that object to the editor as
 `limitQuestionType`. No `geoshape` question could be created in Akvo MIS, so
-the panel was unreachable regardless of the upstream work. Adding the type
-is part of this task.
+the panel was unreachable regardless of the upstream work. GEO-009 found
+this; the type itself was added on the epic branch under #383, so it is no
+longer part of this task's diff.
 
 ### Technical Acceptance Criteria
 - [x] Values written as **numbers**, nested under `extra.geoConfig` — not strings, not top level
