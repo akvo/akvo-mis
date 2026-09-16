@@ -1376,6 +1376,7 @@ const BuilderInspector = ({
               allowClear
             >
               <Select.Option value="">None (single line)</Select.Option>
+              <Select.Option value="parent_id">Registration site</Select.Option>
               <Select.Option value="administration">
                 Administration area
               </Select.Option>
