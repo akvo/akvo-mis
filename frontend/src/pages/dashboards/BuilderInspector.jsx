@@ -693,9 +693,8 @@ const BuilderInspector = ({
     Boolean(wConfig.stack_by)
   );
 
-  // Bar's single control (S-13). Line and pie keep the pair above: a
-  // line's request path fixes group_by=month and ignores the control,
-  // and a pie has no stack to merge with.
+  // Bar's single control (S-13). Line keeps its own "Time bin" control
+  // (month/date only), and a pie has no stack to merge with.
   const breakdownChoices = breakdownOptions(
     selectedQuestion,
     allQuestions,
@@ -753,8 +752,14 @@ const BuilderInspector = ({
     );
   })();
 
-  // Which groupings draw at all, given the question and the stack.
-  const groupChoices = groupByOptions(selectedQuestion, wConfig);
+  // Line charts only group by time (month/date) on the X-axis.
+  const groupByDefault = wType === "line" ? "month" : "option";
+  const groupChoices =
+    wType === "line"
+      ? groupByOptions(selectedQuestion, wConfig).filter(
+          (g) => g.value === "month" || g.value === "date"
+        )
+      : groupByOptions(selectedQuestion, wConfig);
   // Hidden when there was never a choice to make — an unstacked option
   // question has exactly one way to draw, and a control with one entry
   // teaches nothing. Distinct from the cross-form case below, which
@@ -1371,6 +1376,7 @@ const BuilderInspector = ({
               allowClear
             >
               <Select.Option value="">None (single line)</Select.Option>
+              <Select.Option value="parent_id">Registration site</Select.Option>
               <Select.Option value="administration">
                 Administration area
               </Select.Option>
@@ -1458,9 +1464,11 @@ const BuilderInspector = ({
         {/* Group by */}
         {wType !== "bar" && NEEDS_GROUP_BY.has(wType) && !groupByIsForced && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Group by</label>
+            <label className="builder-inspector-label">
+              {wType === "line" ? "Time interval" : "Group by"}
+            </label>
             <Select
-              value={wConfig.group_by || "option"}
+              value={wConfig.group_by || groupByDefault}
               onChange={(val) => {
                 // Regrouping can strand the stack choice too: another
                 // question's options are only drawable under

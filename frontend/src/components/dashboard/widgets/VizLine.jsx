@@ -7,6 +7,9 @@ import { Line, StackLine } from "akvo-charts";
 import { buildToolboxConfig } from "./toolboxHelper";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
+const MAX_LEGEND_LEN = 15;
+const truncate = (s) =>
+  s && s.length > MAX_LEGEND_LEN ? `${s.slice(0, MAX_LEGEND_LEN)}…` : s;
 
 const CategoryLine = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
@@ -38,8 +41,10 @@ const CategoryLine = ({ config, data, filters }) => {
         appendToBody: true,
       },
       legend: {
+        type: "scroll",
         data: labels,
         bottom: 0,
+        formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
@@ -132,7 +137,13 @@ const VizLine = ({ config, data, filters }) => {
     const rawConfig = {
       color: colors,
       tooltip: { trigger: "axis" },
-      legend: { show: true, data: stackLabels, bottom: 0 },
+      legend: {
+        show: true,
+        type: "scroll",
+        data: stackLabels,
+        bottom: 0,
+        formatter: truncate,
+      },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 35,
