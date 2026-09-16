@@ -61,13 +61,20 @@ def generate_sqlite(model, tenant=None, test: bool = False):
             lambda id_: full_path_names.get(id_, "")
         )
 
+    # pd.notna, not `x == x`. The latter is a NaN check and nothing else:
+    # it is False for NaN and True for None. pandas types a column of
+    # [None, 1] as float64/NaN -- which `x == x` handles -- but a column of
+    # [None] alone stays object and keeps the real None, which it passes
+    # straight to int(). A workspace whose only Administration is its root
+    # is exactly that column, and it aborted generate_sqlite for every
+    # workspace after it.
     if "parent" in field_names:
         data["parent"] = data["parent"].apply(
-            lambda x: int(x) if x == x else 0
+            lambda x: int(x) if pd.notna(x) else 0
         )
     elif "administration" in field_names:
         data["parent"] = data["administration"].apply(
-            lambda x: int(x) if x == x else 0
+            lambda x: int(x) if pd.notna(x) else 0
         )
     else:
         data["parent"] = 0

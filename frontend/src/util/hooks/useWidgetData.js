@@ -204,6 +204,8 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
           ? "option"
           : hasAdminStack
           ? "administration"
+          : config.stack_by === "parent_id"
+          ? "parent_id"
           : null,
         admin_level: hasAdminStack ? config.admin_level ?? 1 : null,
         administration_id: filters?.administration_id,

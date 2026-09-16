@@ -28,18 +28,24 @@ const FALLBACK_PALETTE = ["#1890ff"];
 // above it, where a reader looking at those labels would expect it.
 
 /**
- * The value at quantile `q`, interpolating between neighbours.
- *
- * Same definition as d3.quantile. `sorted` must be ascending and
- * non-empty.
+ * Round a raw step up to a "nice" number: 1, 2, 5, 10, 20, 50, …
  */
-const quantileAt = (sorted, q) => {
-  const h = (sorted.length - 1) * q;
-  const lo = Math.floor(h);
-  if (lo >= sorted.length - 1) {
-    return sorted[sorted.length - 1];
+const niceStep = (raw) => {
+  if (raw <= 0) {
+    return 1;
   }
-  return sorted[lo] + (h - lo) * (sorted[lo + 1] - sorted[lo]);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  if (norm <= 1) {
+    return mag;
+  }
+  if (norm <= 2) {
+    return 2 * mag;
+  }
+  if (norm <= 5) {
+    return 5 * mag;
+  }
+  return 10 * mag;
 };
 
 /**
@@ -70,31 +76,21 @@ export const quantileRanges = (values = [], colors = [], count = 3) => {
     .filter((v) => Number.isFinite(v))
     .sort((a, b) => a - b);
 
-  // No numbers, no breaks. `quantileAt` is documented as needing a
-  // non-empty array; calling it anyway returned NaN and leaned on the
-  // guard below to drop it, which worked by accident and would stop
-  // working the moment that helper was tightened.
   if (!sorted.length) {
     return [{ to: null, color: at(0) }];
   }
 
+  const max = sorted[sorted.length - 1];
+  const step = niceStep(max / count);
+
   const breaks = [];
   for (let i = 1; i < count; i += 1) {
-    const value = Math.round(quantileAt(sorted, i / count) * 100) / 100;
-    // Strictly ascending: ties in the data land two breaks on the same
-    // number, and a band whose floor equals its ceiling can never hold a
-    // point. Dropping it leaves fewer bands rather than empty ones.
-    if (value > (breaks[breaks.length - 1] ?? -Infinity)) {
-      breaks.push(value);
-    }
+    breaks.push(step * i);
   }
-  // The lowest value is not a break — every point is at or above it, so a
-  // band ending there would always be empty.
-  const usable = breaks.filter((b) => b > sorted[0]);
 
   return [
-    ...usable.map((to, i) => ({ to, color: at(i) })),
-    { to: null, color: at(usable.length) },
+    ...breaks.map((to, i) => ({ to, color: at(i) })),
+    { to: null, color: at(breaks.length) },
   ];
 };
 

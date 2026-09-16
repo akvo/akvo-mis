@@ -8,11 +8,12 @@ from api.v1.v1_profile.models import (
 from api.v1.v1_mobile.models import MobileAssignment
 from faker import Faker
 from typing import List
+from utils.tenant_command import resolve_tenant
 
 fake = Faker()
 
 
-def seed_administration_attribute(self, test: bool):
+def seed_administration_attribute(self, test: bool, tenant=None):
     attribute_types = ["value", "option", "multiple_option", "aggregate"]
     for at in attribute_types:
         name = "Population"
@@ -28,8 +29,14 @@ def seed_administration_attribute(self, test: bool):
             options = ["Primary", "Secondary", "Higher"]
         if not test:
             self.stdout.write(name)
-        AdministrationAttribute.objects.create(
-            name=name, type=at, options=options
+        # get_or_create on (name, tenant), the key administration_csv_seeder
+        # already uses. `create()` meant a second run produced a second
+        # "Population" attribute for the same workspace, and the attribute
+        # manager lists both.
+        AdministrationAttribute.objects.get_or_create(
+            name=name,
+            tenant=tenant,
+            defaults={"type": at, "options": options},
         )
 
 
@@ -58,11 +65,18 @@ def seed_administration_attribute_value(
         )
 
 
-def seed_data(self, repeat: int = 2, test: bool = False):
-    adm_attributes = AdministrationAttribute.objects.all()
-    mobile_assignments = MobileAssignment.objects.prefetch_related(
+def seed_data(self, repeat: int = 2, test: bool = False, tenant=None):
+    # Every lookup below is scoped. Unscoped, this attached one
+    # workspace's attributes to another workspace's administrations --
+    # AdministrationAttributeValue would then carry an `administration`
+    # owned by A and an `attribute` owned by B, which no tenant filter
+    # can untangle afterwards.
+    adm_attributes = AdministrationAttribute.objects.filter(tenant=tenant)
+    mobile_assignments = MobileAssignment.objects.filter(
+        user__tenant=tenant
+    ).prefetch_related(
         "administrations",
-    ).all()
+    )
     adms = [
         adm
         for m in mobile_assignments
@@ -73,11 +87,18 @@ def seed_data(self, repeat: int = 2, test: bool = False):
             self, adm_attributes=adm_attributes, administration=adm, test=test
         )
     if len(adms) == 0:
-        # Generate randomly
-        last_level = Levels.objects.order_by("-id").first()
-        randoms = Administration.objects.filter(level=last_level).order_by(
-            "?"
-        )[:repeat]
+        # Generate randomly. order_by("-level"), not "-id": ids ascend by
+        # creation order across the whole install, so on a multi-workspace
+        # database the highest id was whichever workspace was configured
+        # last -- not the deepest tier of this one.
+        last_level = (
+            Levels.objects.filter(tenant=tenant).order_by("-level").first()
+        )
+        if last_level is None:
+            return
+        randoms = Administration.objects.filter(
+            level=last_level, tenant=tenant
+        ).order_by("?")[:repeat]
         for r in randoms:
             seed_administration_attribute_value(
                 self,
@@ -88,6 +109,11 @@ def seed_data(self, repeat: int = 2, test: bool = False):
 
 
 class Command(BaseCommand):
+    help = (
+        "Seed example administration attributes and values for one "
+        "workspace. Omit --tenant to seed the tenant-less space."
+    )
+
     def add_arguments(self, parser):
         parser.add_argument(
             "-t", "--test", nargs="?", const=False, default=False, type=bool
@@ -98,18 +124,35 @@ class Command(BaseCommand):
         parser.add_argument(
             "-c", "--clean", nargs="?", const=1, default=False, type=int
         )
+        # No short flag: -t is already --test here.
+        parser.add_argument(
+            "--tenant",
+            default=None,
+            type=str,
+            help=(
+                "Workspace subdomain to seed into. Omit to seed the "
+                "tenant-less space."
+            ),
+        )
 
     def handle(self, *args, **options):
         test = options.get("test")
         repeat = options.get("repeat")
         clean = options.get("clean")
+        tenant = resolve_tenant(options.get("tenant"))
         if clean:
-            AdministrationAttributeValue.objects.all().delete()
+            # Scoped, because this deletes. Unscoped it wiped every
+            # workspace's attribute definitions, including ones imported
+            # from a real hierarchy by administration_csv_seeder --
+            # "Bounding Box" among them, which the data seeder needs.
+            AdministrationAttributeValue.objects.filter(
+                administration__tenant=tenant
+            ).delete()
             self.stdout.write("-- Administration attribute value Cleared")
-            AdministrationAttribute.objects.all().delete()
+            AdministrationAttribute.objects.filter(tenant=tenant).delete()
             self.stdout.write("-- Administration attribute Cleared")
         else:
-            seed_administration_attribute(self, test=test)
-            seed_data(self, repeat=repeat, test=test)
+            seed_administration_attribute(self, test=test, tenant=tenant)
+            seed_data(self, repeat=repeat, test=test, tenant=tenant)
         if not test:
             self.stdout.write("-- FINISH")

@@ -22,11 +22,15 @@ from api.v1.v1_visualization.constants import (
     SUPPORTED_QUESTION_TYPES,
     WidgetTypes,
 )
+from api.v1.v1_visualization.dashboard_functions import (
+    normalize_table_columns,
+)
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 
 
 class DashboardWidgetSerializer(serializers.ModelSerializer):
     type = serializers.SerializerMethodField()
+    config = serializers.SerializerMethodField()
 
     class Meta:
         model = DashboardWidget
@@ -44,6 +48,17 @@ class DashboardWidgetSerializer(serializers.ModelSerializer):
 
     def get_type(self, instance):
         return WidgetTypes.FieldStr.get(instance.type)
+
+    def get_config(self, instance):
+        config = instance.config or {}
+        if (
+            instance.type == WidgetTypes.table
+            and isinstance(config, dict)
+            and "columns" in config
+        ):
+            config = dict(config)
+            config["columns"] = normalize_table_columns(config["columns"])
+        return config
 
 
 class DashboardListSerializer(serializers.ModelSerializer):

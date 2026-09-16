@@ -258,7 +258,11 @@ class FakeUserSeederTenantTestCase(TestCase, TenantHierarchyMixin):
     def test_stamps_and_scopes_to_the_named_workspace(self):
         acme = self.make_tenant("acme")
         beta = self.make_tenant("beta")
-        call_command("default_roles_seeder", "--test", 1)
+        # make_tenant builds acme-owned Levels, so the roles seeder has to
+        # be told which workspace to walk. It used to visit every level on
+        # the database, which is the leak SEED-004 D-1 closes -- this call
+        # site depended on that and is one of exactly two that did.
+        call_command("default_roles_seeder", "--test", 1, tenant="acme")
         call_command("fake_organisation_seeder", "--repeat", 2, tenant="acme")
 
         call_command(

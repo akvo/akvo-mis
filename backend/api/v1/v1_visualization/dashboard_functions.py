@@ -325,6 +325,59 @@ def validate_dashboard_payload(data, user, dashboard=None):
     return None
 
 
+def normalize_table_columns(columns):
+    """Normalize stored, wire, or legacy table column dicts.
+
+    Ensures every column has a non-empty string `key`, converts
+    legacy `question_id` to `question`, and ensures key uniqueness.
+    """
+    if not isinstance(columns, list):
+        return columns
+    normalized = []
+    seen_keys = set()
+    for i, col in enumerate(columns):
+        if not isinstance(col, dict):
+            normalized.append(col)
+            continue
+        c = dict(col)
+        # 1. question_id -> question
+        if "question_id" in c:
+            if "question" not in c or c["question"] is None:
+                c["question"] = c.pop("question_id")
+            else:
+                c.pop("question_id")
+
+        # 2. ensure key
+        key = c.get("key")
+        if not isinstance(key, str) or not key.strip():
+            source = c.get("source")
+            question = c.get("question")
+            if (
+                source in ("parent_name", "administration", "latest_date")
+                and question is None
+            ):
+                key = source
+            elif question is not None:
+                key = "{0}_{1}".format(source, question)
+            elif source:
+                key = "{0}_{1}".format(source, i + 1)
+            else:
+                key = "col_{0}".format(i + 1)
+            c["key"] = key
+
+        # 3. ensure unique key
+        base_key = c["key"]
+        final_key = base_key
+        counter = 1
+        while final_key in seen_keys:
+            final_key = "{0}_{1}".format(base_key, counter)
+            counter += 1
+        c["key"] = final_key
+        seen_keys.add(final_key)
+        normalized.append(c)
+    return normalized
+
+
 def _validate_widget(
     widget, index, root_form, forms, questions, live_widget_ids
 ):
@@ -646,6 +699,7 @@ def _validate_widget(
             return _error(
                 "columns must be a list", index, "config.columns"
             )
+        seen_column_keys = set()
         for column in columns or []:
             if not isinstance(column, dict):
                 return _error(
@@ -653,7 +707,29 @@ def _validate_widget(
                     index,
                     "config.columns",
                 )
-            if column.get("source") not in VALID_COLUMN_SOURCES:
+            if "question_id" in column:
+                return _error(
+                    "column must use 'question' rather than 'question_id'",
+                    index,
+                    "config.columns",
+                )
+            col_key = column.get("key")
+            if not isinstance(col_key, str) or not col_key.strip():
+                return _error(
+                    "each column must have a non-empty string key",
+                    index,
+                    "config.columns",
+                )
+            if col_key in seen_column_keys:
+                return _error(
+                    "column key '{0}' is duplicated".format(col_key),
+                    index,
+                    "config.columns",
+                )
+            seen_column_keys.add(col_key)
+
+            source = column.get("source")
+            if source not in VALID_COLUMN_SOURCES:
                 return _error(
                     "column source must be one of: {0}".format(
                         ", ".join(sorted(VALID_COLUMN_SOURCES))
@@ -661,6 +737,56 @@ def _validate_widget(
                     index,
                     "config.columns",
                 )
+            if source in ("answer", "parent_answer"):
+                col_q_id = _as_int(column.get("question"))
+                if col_q_id is None:
+                    return _error(
+                        "column source '{0}' requires a question".format(
+                            source
+                        ),
+                        index,
+                        "config.columns",
+                    )
+                col_q = questions.filter(pk=col_q_id).first()
+                if col_q is None:
+                    return _error(
+                        "column question not found",
+                        index,
+                        "config.columns",
+                    )
+                if source == "parent_answer":
+                    if col_q.form_id != root_form.id:
+                        return _error(
+                            "parent_answer question must belong to the"
+                            " root form",
+                            index,
+                            "config.columns",
+                        )
+                elif source == "answer":
+                    if form is None or col_q.form_id != form.id:
+                        return _error(
+                            "column question must belong to the"
+                            " widget's form",
+                            index,
+                            "config.columns",
+                        )
+            elif source == "latest_date":
+                col_q_id = _as_int(column.get("question"))
+                if col_q_id is not None:
+                    col_q = questions.filter(pk=col_q_id).first()
+                    if col_q is None:
+                        return _error(
+                            "column question not found",
+                            index,
+                            "config.columns",
+                        )
+                    if form is None or col_q.form_id != form.id:
+                        return _error(
+                            "column question must belong to the"
+                            " widget's form",
+                            index,
+                            "config.columns",
+                        )
         criteria = config.get("criteria")
         if criteria is not None and not isinstance(criteria, list):
             return _error(
@@ -704,6 +830,16 @@ def apply_widgets(dashboard, widgets):
     existing = {w.id: w for w in dashboard.widgets.all()}
     kept = set()
     for index, payload in enumerate(widgets):
+        w_config = payload.get("config") or {}
+        if (
+            payload.get("type") == "table"
+            and isinstance(w_config, dict)
+            and "columns" in w_config
+        ):
+            w_config = dict(w_config)
+            w_config["columns"] = normalize_table_columns(
+                w_config["columns"]
+            )
         fields = {
             "order": payload.get("order", index + 1),
             "type": WIDGET_TYPE_IDS[payload["type"]],
@@ -712,7 +848,7 @@ def apply_widgets(dashboard, widgets):
             "color": payload.get("color"),
             "form_id": payload.get("form"),
             "question_id": payload.get("question"),
-            "config": payload.get("config") or {},
+            "config": w_config,
         }
         widget = existing.get(payload.get("id"))
         if widget is None:

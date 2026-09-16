@@ -19,8 +19,8 @@ Usage: ./seeder.sh --tenant=<subdomain>
                         'default' exists on any migrated database.
   -h, --help            Show this message.
 
-Administration attributes and roles ignore this value: attributes are
-install-wide, and a role takes its workspace from the level it belongs to.
+Every step is scoped to the workspace named here, attributes and roles
+included.
 EOF
 }
 
@@ -114,21 +114,29 @@ if [[ "${seed_organization}" == 'y' || "${seed_organization}" == 'Y' ]]; then
     python manage.py organisation_seeder --tenant="${tenant}"
 fi
 
+# AdministrationAttribute carries a tenant FK, so these are a workspace's
+# own definitions, not install-wide. Without --tenant the seeder wrote
+# them with tenant=None -- invisible to every workspace -- and attached
+# their values to whichever workspace happened to own the highest level id.
 echo "Seed Administration Attribute? [y/n]"
 read -r seed_administration_attribute
 if [[ "${seed_administration_attribute}" == 'y' \
       || "${seed_administration_attribute}" == 'Y' ]]; then
-    python manage.py administration_attribute_seeder
+    python manage.py administration_attribute_seeder --tenant="${tenant}"
 fi
 
 # Roles are defined per level, so this has to follow the administration
 # step rather than lead it. It is idempotent, and the fake data below
 # cannot run without a role granting submit access.
+#
+# --tenant is not optional here even though the command tolerates its
+# absence: without it the seeder walked Levels.objects.all() and created
+# roles in every workspace on the database, not the one named above.
 echo "Seed Default Roles? [y/n]"
 echo "  One Admin / Submitter / Approver role per administration level."
 read -r seed_roles
 if [[ "${seed_roles}" == 'y' || "${seed_roles}" == 'Y' ]]; then
-    python manage.py default_roles_seeder
+    python manage.py default_roles_seeder --tenant="${tenant}"
 fi
 
 echo "Seed Fake Data? [y/n]"
@@ -184,5 +192,9 @@ if [[ "${fake_data}" == 'y' || "${fake_data}" == 'Y' ]]; then
         --draft="${draft_data}"
 fi
 
-python manage.py generate_sqlite
+# generate_sqlite without --tenant rewrites every workspace's master-data
+# files, which on a multi-workspace database is eight directories of
+# byte-identical output hiding the one that changed. generate_config takes
+# no workspace -- it writes one install-wide config.min.js.
+python manage.py generate_sqlite --tenant="${tenant}"
 python manage.py generate_config
