@@ -66,6 +66,7 @@ describe('TypeGeoDrawing', () => {
       id: 42,
       value: triangle,
       name: 'Plot boundary',
+      type: 'geoshape',
     });
   });
 
@@ -74,5 +75,33 @@ describe('TypeGeoDrawing', () => {
       <TypeGeoDrawing keyform={0} id={42} label="Plot boundary" value={triangle} />,
     );
     expect(queryByTestId('webview-map-draw')).toBeNull();
+  });
+
+  it('passes the question type through to the map screen', () => {
+    const navigation = useNavigation();
+    const { getByTestId } = render(
+      <TypeGeoDrawing keyform={0} id={42} label="Route walked" type="geotrace" value={triangle} />,
+    );
+
+    fireEvent.press(getByTestId('button-draw-on-map'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('MapDrawView', {
+      id: 42,
+      value: triangle,
+      name: 'Route walked',
+      type: 'geotrace',
+    });
+  });
+
+  /**
+   * A geotrace is an open line: it encloses nothing, so reporting an area for it would be
+   * a number with no meaning.
+   */
+  it('reports no area for a geotrace', () => {
+    const { getByTestId, queryByTestId } = render(
+      <TypeGeoDrawing keyform={0} id={42} label="Route walked" type="geotrace" value={triangle} />,
+    );
+    expect(getByTestId('text-point-count').props.children).toContain(3);
+    expect(queryByTestId('text-area')).toBeNull();
   });
 });

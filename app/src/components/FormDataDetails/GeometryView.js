@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { UIState } from '../../store';
 import i18n from '../../lib/i18n';
 import loadMapDrawHtml from '../../lib/map-draw-html';
+import { QUESTION_TYPES } from '../../lib/constants';
 import { polygonAreaHectares } from '../../form/lib/geometry';
 
 const MIN_POINTS_FOR_AREA = 3;
@@ -25,29 +26,37 @@ const toPoints = (answer) => {
 };
 
 /**
- * Read-only polygon preview for the datapoint detail list.
+ * Read-only geometry preview for the datapoint detail list.
  *
  * The map is loaded with interaction disabled (GEO-001 D-5): inside a SectionList a pannable
  * map would swallow the scroll gesture, so here it behaves as a picture of the shape.
+ *
+ * geoshape is a closed ring with an enclosed area; geotrace is an open line with neither.
  */
-const GeoshapeView = ({ index, answer }) => {
+const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
   const [htmlContent, setHtmlContent] = useState(null);
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
 
   const points = toPoints(answer);
   const pointCount = points.length;
+  const isClosed = type !== QUESTION_TYPES.geotrace;
 
   const loadHtml = useCallback(async () => {
     if (!pointCount) {
       return;
     }
-    const html = await loadMapDrawHtml({ points, center: points[0], readonly: true });
+    const html = await loadMapDrawHtml({
+      points,
+      center: points[0],
+      readonly: true,
+      closed: isClosed,
+    });
     setHtmlContent(html);
     // `points` is derived from `answer` on every render; keying the effect to the answer keeps
     // it from reloading the page on unrelated re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answer, pointCount]);
+  }, [answer, pointCount, isClosed]);
 
   useEffect(() => {
     loadHtml();
@@ -58,7 +67,7 @@ const GeoshapeView = ({ index, answer }) => {
   }
 
   return (
-    <View testID={`text-type-geoshape-${index}`} style={styles.container}>
+    <View testID={`text-type-geometry-${index}`} style={styles.container}>
       <View style={styles.mapWrapper}>
         {htmlContent ? (
           <WebView
@@ -66,18 +75,18 @@ const GeoshapeView = ({ index, answer }) => {
             source={{ html: htmlContent }}
             style={styles.map}
             scrollEnabled={false}
-            testID={`webview-geoshape-${index}`}
+            testID={`webview-geometry-${index}`}
           />
         ) : (
-          <ActivityIndicator testID={`loading-geoshape-${index}`} />
+          <ActivityIndicator testID={`loading-geometry-${index}`} />
         )}
       </View>
       <View style={styles.readout}>
-        <Text testID={`text-geoshape-points-${index}`}>
+        <Text testID={`text-geometry-points-${index}`}>
           {trans.polygonPoints}: {pointCount}
         </Text>
-        {pointCount >= MIN_POINTS_FOR_AREA && (
-          <Text testID={`text-geoshape-area-${index}`}>
+        {isClosed && pointCount >= MIN_POINTS_FOR_AREA && (
+          <Text testID={`text-geometry-area-${index}`}>
             {trans.polygonArea}: {polygonAreaHectares(points).toFixed(2)} ha
           </Text>
         )}
@@ -108,4 +117,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default GeoshapeView;
+export default GeometryView;

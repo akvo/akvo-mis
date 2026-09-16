@@ -14,6 +14,7 @@ const loadMapDrawHtml = async ({
   center = [0, 0],
   readonly = false,
   myLocation = null,
+  closed = true,
 }) => {
   // eslint-disable-next-line global-require
   const [{ localUri }] = await Asset.loadAsync(require('../../assets/map-draw.html'));
@@ -22,7 +23,8 @@ const loadMapDrawHtml = async ({
     .replace('{{points}}', () => escapeAttribute(points))
     .replace('{{center}}', () => escapeAttribute(center))
     .replace('{{readonly}}', () => `${readonly}`)
-    .replace('{{myLocation}}', () => escapeAttribute(myLocation));
+    .replace('{{myLocation}}', () => escapeAttribute(myLocation))
+    .replace('{{closed}}', () => `${closed}`);
 };
 
 export default loadMapDrawHtml;

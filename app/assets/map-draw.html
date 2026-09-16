@@ -703,6 +703,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       data-center="{{center}}"
       data-readonly="{{readonly}}"
       data-mylocation="{{myLocation}}"
+      data-closed="{{closed}}"
     ></div>
     <script>
       (function () {
@@ -740,7 +741,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
             'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
         }).addTo(map);
 
-        var polygon = L.polygon([], { color: '#1651b6', weight: 3, fillOpacity: 0.2 }).addTo(map);
+        // geoshape is a closed ring with a fill; geotrace is an open line with neither.
+        // Everything else about capture - tapping, dragging, undo - is identical.
+        var closed = root.getAttribute('data-closed') !== 'false';
+        var polygon = closed
+          ? L.polygon([], { color: '#1651b6', weight: 3, fillOpacity: 0.2 }).addTo(map)
+          : L.polyline([], { color: '#1651b6', weight: 3 }).addTo(map);
         var markers = [];
         var myDot = null;
         var myCircle = null;
