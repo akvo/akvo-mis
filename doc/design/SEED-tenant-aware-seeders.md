@@ -218,6 +218,9 @@ form on a fresh production install, and exits 0.
       and no other workspace's (D-8).
 - [x] A monitoring form seeds beside the registration form, and every dashboard
       widget except KPI `repeat_agg` has a question to bind to (D-9).
+- [x] `./seeder.sh --tenant=acme` seeds administration attributes into `acme`
+      and `--clean` removes only `acme`'s, leaving other workspaces' imported
+      `Bounding Box` rows intact (D-10).
 
 ### Technical Acceptance Criteria
 
@@ -1647,6 +1650,58 @@ both limitations.
 `parent_hint`, so ordering within the folder does not matter. The monitoring
 form needs no entity types either, so D-4's constraint holds across the pair.
 
+#### D-10: `administration_attribute_seeder` is workspace-scoped too
+
+**Decision**: `--tenant` added, optional, omission meaning the tenant-less
+space — the same contract as D-2. Every read and both deletes are scoped.
+
+**This reverses two claims made earlier in this document.** The §7 table said
+*"`administration_attribute_seeder` | unchanged"*, and `seeder.sh`'s usage text
+said *"Administration attributes ignore this value — they are install-wide."*
+Both are wrong: `AdministrationAttribute` declares
+`TENANT_PATH = "tenant"` and a `tenant_fk("administration_attributes")`, so an
+attribute is a workspace's own definition. `administration_csv_seeder` already
+treated it that way — `_ensure_attributes` passes `tenant=` to its
+`get_or_create` — so the two seeders disagreed about the same table.
+
+**Three consequences, in ascending severity:**
+
+1. **Invisible attributes.** `AdministrationAttribute.objects.create(...)`
+   passed no tenant, so every seeded attribute landed with `tenant=None`. Reads
+   go through `for_user`, which filters on the tenant, so no workspace could
+   see what the seeder had just written.
+2. **Value rows that straddle two workspaces.** `seed_data` read
+   `AdministrationAttribute.objects.all()` and
+   `MobileAssignment.objects.all()`, so it attached one workspace's attributes
+   to another's administrations. The resulting `AdministrationAttributeValue`
+   has an `administration` owned by A and an `attribute` owned by B —
+   `TENANT_PATH = "administration__tenant"` resolves it to A, so B's attribute
+   is silently readable through A. No later filter untangles that.
+3. **A cross-workspace delete.** `--clean` ran
+   `AdministrationAttributeValue.objects.all().delete()` followed by
+   `AdministrationAttribute.objects.all().delete()` — every workspace's
+   definitions, including the `Bounding Box` rows
+   `administration_csv_seeder` imports and `fake_complete_data_seeder`
+   refuses to run without (Part 3 D-9). Cleaning workspace A's example
+   attributes took workspace B's map coordinates with it.
+
+**Two defects found in the same function while scoping it:**
+
+- `Levels.objects.order_by("-id").first()` was picking the deepest level by
+  **id**, not by `level`. Ids ascend by creation order across the whole
+  install, so on a multi-workspace database the highest id belonged to
+  whichever workspace was configured last — not to the deepest tier of the one
+  being seeded. Now `filter(tenant=tenant).order_by("-level")`, and a workspace
+  with no levels returns early instead of raising.
+- `create()` rather than `get_or_create()` meant a second run produced a second
+  `Population` attribute for the same workspace, both listed in the attribute
+  manager. Now keyed on `(name, tenant)` — the key `administration_csv_seeder`
+  already uses.
+
+**Impact**: `seeder.sh` passes `--tenant`, and its usage text is corrected. The
+one pre-existing test call site (`test_administration_attributes.py`) passes no
+`--tenant` and keeps working, because omission means the tenant-less space.
+
 ### Appendix: decisions reversed during this work
 
 Three decisions were made before the boundary pipeline existed and undone once
@@ -1833,7 +1888,7 @@ latitude. Nothing new should reorder either.
 | `form_seeder` | `--tenant` added, optional — omitting it keeps the pre-workspace behaviour. **Part 4**: an unparseable source file now raises `CommandError` naming the file (D-6); a non-`--test` run selects `*.prod.json` only, and `settings.PROD` no longer affects file selection (D-7) |
 | `default_roles_seeder` | ~~unchanged; takes no `--tenant` (it derives each role's workspace from its level)~~ → **reversed by Part 4 D-2.** `--tenant` added, optional; omitting it means the tenant-less space. Deriving a role's tenant from its level was never the question — which levels the loop visits was |
 | `generate_sqlite` | **Part 4**: `--tenant` added, optional — omitting it keeps the rebuild-everything behaviour `run-prod.sh` depends on (D-8); the all-`None` parent column no longer raises (D-5) |
-| `administration_attribute_seeder` | unchanged |
+| `administration_attribute_seeder` | ~~unchanged~~ → **reversed by Part 4 D-10.** `--tenant` added, optional; all reads and both `--clean` deletes scoped. Attributes were never install-wide — the model carries a tenant FK |
 | `createsuperuser` | **overridden** in `v1_users`; `--tenant` added, optional. Requires `api.v1.v1_users` to precede `django.contrib.auth` in `INSTALLED_APPS` |
 | `assign_forms` | `--tenant` added to disambiguate the account; the form list is scoped to that account's own workspace |
 | `organisation_seeder` | `--tenant` added, optional; keyed on `(name, workspace)` when one is named, because the fixture's primary keys can only belong to one workspace |
@@ -2012,8 +2067,9 @@ prefix, `--clean` and the bounding boxes.
 
 ### Part 4 — tenant-scoped roles, the seeded form, and the sqlite guard
 
-**41 tests ship with Part 4**, in three new files:
+**52 tests ship with Part 4**, in four new files:
 `v1_profile/tests/test_default_roles_seeder.py` (11),
+`v1_profile/tests/test_administration_attribute_seeder.py` (11),
 `v1_forms/tests/tests_initial_form_seed.py` (23),
 `v1_mobile/tests/tests_generate_sqlite_null_parent.py` (7).
 Two existing form-seeder test files were also updated for D-7
@@ -2049,6 +2105,14 @@ site for D-2 (I-11).
 | Integration | The command with `--tenant=acme` writes into `acme/` and no other workspace's directory, and skips the tenant-less root files (D-8) |
 | Integration | The command with no `--tenant` still rebuilds every workspace plus the root files — the `run-prod.sh` boot path |
 | Unit | `--tenant=<unknown>` raises `CommandError` before any file is written |
+| Integration | Attributes seed into the named workspace only; none reach another workspace or the tenant-less space (D-10) |
+| Integration | **No `AdministrationAttributeValue` joins two workspaces** — every row's `administration.tenant` equals its `attribute.tenant`. The sharpest edge of D-10 |
+| Integration | Values land on the named workspace's own units |
+| Unit | The deepest level is chosen by `level`, not by `id` — a second workspace configured later must not win |
+| Unit | A workspace with no levels is a no-op rather than an error |
+| Unit | Re-running creates no duplicate `Population` attribute |
+| Integration | `--clean --tenant=acme` removes only `acme`'s attributes and values |
+| Integration | **`--clean` leaves another workspace's imported `Bounding Box` attribute alone** — the row the data seeder refuses to run without |
 
 ### Verification performed
 
@@ -2086,7 +2150,10 @@ remaining manual verification.
     at the time; D-8 later brought it to 7);
   - reverting D-8's `targets = [tenant]` to the all-workspaces walk fails 2 of
     the 7 sqlite tests, including the one asserting a `--tenant` run writes no
-    other workspace's directory.
+    other workspace's directory;
+  - reverting D-10's scoping fails **7 of the 11** attribute-seeder tests,
+    including both `--clean` isolation assertions and the one forbidding an
+    `AdministrationAttributeValue` that joins two workspaces.
 - The pandas dtype claim behind D-5 checked against the pinned version (2.1.1):
   `[{'parent': None}]` → `object [None]`, `[{'parent': None}, {'parent': 1}]` →
   `float64 [nan, 1.0]`. This is why the regression fixture must be a *single*

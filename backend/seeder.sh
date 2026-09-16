@@ -19,8 +19,8 @@ Usage: ./seeder.sh --tenant=<subdomain>
                         'default' exists on any migrated database.
   -h, --help            Show this message.
 
-Administration attributes ignore this value -- they are install-wide.
-Everything else, roles included, is scoped to the workspace named here.
+Every step is scoped to the workspace named here, attributes and roles
+included.
 EOF
 }
 
@@ -114,11 +114,15 @@ if [[ "${seed_organization}" == 'y' || "${seed_organization}" == 'Y' ]]; then
     python manage.py organisation_seeder --tenant="${tenant}"
 fi
 
+# AdministrationAttribute carries a tenant FK, so these are a workspace's
+# own definitions, not install-wide. Without --tenant the seeder wrote
+# them with tenant=None -- invisible to every workspace -- and attached
+# their values to whichever workspace happened to own the highest level id.
 echo "Seed Administration Attribute? [y/n]"
 read -r seed_administration_attribute
 if [[ "${seed_administration_attribute}" == 'y' \
       || "${seed_administration_attribute}" == 'Y' ]]; then
-    python manage.py administration_attribute_seeder
+    python manage.py administration_attribute_seeder --tenant="${tenant}"
 fi
 
 # Roles are defined per level, so this has to follow the administration
