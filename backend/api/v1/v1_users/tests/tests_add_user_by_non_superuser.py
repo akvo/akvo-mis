@@ -4,6 +4,7 @@ from django.test.utils import override_settings
 
 from api.v1.v1_users.models import Organisation, SystemUser
 from api.v1.v1_forms.models import Forms
+from api.v1.v1_users.tests.tests_add_user import expected_assignment
 from api.v1.v1_profile.models import (
     Role,
     Administration,
@@ -77,7 +78,10 @@ class AddUserByNonSuperUserTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(data, {"message": "User added successfully"})
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, False)
-        self.assertEqual(user.user_form.count(), 1)
+        self.assertEqual(
+            set(user.user_form.values_list("form_id", flat=True)),
+            expected_assignment([self.form.id]),
+        )
 
         # Check that the user has been assigned the correct role
         user_roles = user.user_user_role.all()
@@ -124,7 +128,10 @@ class AddUserByNonSuperUserTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(data, {"message": "User added successfully"})
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, False)
-        self.assertEqual(user.user_form.count(), 1)
+        self.assertEqual(
+            set(user.user_form.values_list("form_id", flat=True)),
+            expected_assignment([self.form.id]),
+        )
 
         # Check that the user has been assigned the correct role
         user_roles = user.user_user_role.all()

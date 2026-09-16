@@ -383,6 +383,35 @@ class AddRolesSerializer(serializers.Serializer):
         fields = ["role", "administration"]
 
 
+def with_monitoring_children(forms):
+    """The given forms, plus every published monitoring form under them.
+
+    The user screen's form picker offers registration forms only --
+    `AddUser.jsx` filters on `!f?.content?.parent` -- so a monitoring form
+    can never appear in the payload. The API took the list literally, so
+    a user ended up assigned to a registration form and none of its
+    monitoring children.
+
+    That matters because `UserSerializer.get_forms` returns
+    `user_form.all()` verbatim, and the mobile assignment screen reads
+    monitoring forms out of that same list as the children of each
+    registration form. A parent with no assigned children offers nothing
+    to attach to a device.
+
+    Children are resolved from the parents given, so a workspace's own
+    forms stay a workspace's own: `forms` has already been validated
+    through TenantScopedPrimaryKeyRelatedField, and a child's parent FK
+    cannot cross that line.
+    """
+    forms = list(forms or [])
+    if not forms:
+        return forms
+    children = Forms.objects.filter(
+        parent__in=forms, status=FormStatus.published
+    ).exclude(pk__in=[f.pk for f in forms])
+    return forms + list(children)
+
+
 class AddEditUserSerializer(
     TenantStampedSerializerMixin, serializers.ModelSerializer
 ):
@@ -464,8 +493,8 @@ class AddEditUserSerializer(
                     role=role_data["role"],
                 )
         # add new user forms
-        for form in forms:
-            UserForms.objects.create(user=user, form=form)
+        for form in with_monitoring_children(forms):
+            UserForms.objects.get_or_create(user=user, form=form)
         # if forms is empty and is_superuser is True
         # then assign all published forms to user
         if not forms and user.is_superuser:
@@ -496,8 +525,8 @@ class AddEditUserSerializer(
             # Delete old user forms
             user_forms = UserForms.objects.filter(user=instance).all()
             user_forms.delete()
-            for form in forms:
-                UserForms.objects.create(user=instance, form=form)
+            for form in with_monitoring_children(forms):
+                UserForms.objects.get_or_create(user=instance, form=form)
         # Handle multiple role assignments
         if roles_data:
             # Get existing roles
