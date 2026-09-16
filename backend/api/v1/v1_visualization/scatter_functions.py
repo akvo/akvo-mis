@@ -1,4 +1,9 @@
 from api.v1.v1_data.models import FormData, Answers
+from api.v1.v1_forms.constants import QuestionTypes
+from api.v1.v1_visualization.constants import (
+    NON_VALUE_TOKENS,
+    NUMERIC_STRING_REGEX,
+)
 from api.v1.v1_visualization.functions import (
     get_base_monitoring_qs,
     get_monitoring_data_ids,
@@ -7,6 +12,24 @@ from api.v1.v1_visualization.functions import (
 
 def _answer_map(data_ids, question):
     """Map data_id -> numeric value for one question."""
+    if question.type == QuestionTypes.autofield:
+        rows = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=question.id,
+            name__isnull=False,
+        ).exclude(
+            name__in=NON_VALUE_TOKENS
+        ).filter(
+            name__regex=NUMERIC_STRING_REGEX
+        ).values_list("data_id", "name")
+        res = {}
+        for did, val_str in rows:
+            try:
+                res[did] = float(val_str.strip())
+            except (ValueError, TypeError):
+                continue
+        return res
+
     return dict(
         Answers.objects.filter(
             data_id__in=data_ids,
