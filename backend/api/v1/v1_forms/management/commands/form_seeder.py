@@ -140,6 +140,63 @@ class Command(BaseCommand):
                                   "into. Omit to seed into the "
                                   "tenant-less space."))
 
+    def copy_into_workspace(self, norm, tenant, seeded_ids, test):
+        """This workspace's own copy of a definition another one owns.
+
+        `Forms.id` is the primary key, so a shipped definition can live
+        in exactly one workspace under the id its file declares. Every
+        other workspace gets a copy with fresh ids -- form, groups,
+        questions and options -- allocated by the shared import writer's
+        `create_copy` mode.
+
+        A re-run does not rewrite the copy. The copy's questions carry
+        ids the file has never seen, so the id-keyed update path cannot
+        match them, and name-matching would be a second identity model in
+        the writer. A workspace that already has the form is left exactly
+        as it is, which is also the right answer for one whose operator
+        has since edited it -- editing the seeded form is the expected
+        workflow.
+        """
+        existing = Forms.objects.filter(
+            tenant=tenant, name=norm["name"]
+        ).first()
+        if existing is not None:
+            if not test:
+                self.stdout.write(
+                    f"Form Present | {norm['name']} "
+                    f"({tenant.subdomain}) -- left as it is"
+                )
+            return existing
+
+        # The parent hint names the file's id, which in this workspace
+        # belongs to nobody. seeded_ids carries the copy written moments
+        # ago by this same run.
+        parent_id = None
+        hint = norm.get("parent_hint")
+        if hint and hint.get("id"):
+            parent_id = seeded_ids.get(hint["id"])
+
+        form, _ = import_form_definition(
+            norm,
+            None,
+            mode="create_copy",
+            parent_id=parent_id,
+            require_parent=False,
+        )
+        # create_copy stamps tenant from the `user` it is given and the
+        # seeder has none, and the shared writer creates drafts (FR-11).
+        # Both are corrected here, exactly as the non-copy path does when
+        # it pre-creates its row.
+        form.tenant = tenant
+        form.status = FormStatus.published
+        form.save(update_fields=["tenant", "status"])
+        if not test:
+            self.stdout.write(
+                f"Form Copied  | {norm['name']} "
+                f"({tenant.subdomain}) id {form.id}"
+            )
+        return form
+
     def handle(self, *args, **options):
         TEST = options.get("test")
         # Optional: omitting it seeds into the tenant-less space, which
@@ -225,6 +282,11 @@ class Command(BaseCommand):
         # Process all form sources in the correct order
         # (parents first, then children)
         failed_sources = []
+        # file form id -> the id this workspace actually owns. A copy
+        # (below) gets a fresh id, and the monitoring form's parent hint
+        # names the *file's* id, so without this a child would attach to
+        # whichever workspace seeded first -- or to nothing.
+        seeded_ids = {}
         with transaction.atomic():
             for source in parent_forms + child_forms:
                 norm = norms[source]
@@ -255,32 +317,32 @@ class Command(BaseCommand):
                 created = form is None
 
                 if created and tenant is not None:
-                    # Form ids come from the file and `id` IS the primary
-                    # key, so the same definition cannot be seeded into two
-                    # workspaces. Without this check the unscoped lookup
-                    # this replaced would find the other tenant's row and
-                    # silently rewrite it -- handing their form to whoever
-                    # ran the seeder last. objects_with_deleted because a
-                    # soft-deleted form still occupies its id.
+                    # `id` IS the primary key, so one file can occupy one
+                    # workspace and no more. That used to be a hard error,
+                    # which made the shipped forms seedable into exactly
+                    # one workspace -- a second `./seeder.sh --tenant=x`
+                    # died here. The workspace gets its own copy instead:
+                    # new ids throughout, and the other workspace's row is
+                    # never read or written, which is the property the
+                    # error existed to protect. objects_with_deleted
+                    # because a soft-deleted form still occupies its id.
                     clash = Forms.objects_with_deleted.filter(
                         id=norm["form_id"]
                     ).first()
                     if clash is not None:
-                        owner = (
-                            clash.tenant.subdomain if clash.tenant
-                            else "the tenant-less space"
+                        copied = self.copy_into_workspace(
+                            norm, tenant, seeded_ids, TEST
                         )
-                        raise CommandError(
-                            f"{source}: form id {norm['form_id']} already "
-                            f"belongs to {owner}. Form ids are global, so "
-                            "a definition can only be seeded once per "
-                            "install -- give this file its own id."
-                        )
+                        seeded_ids[norm["form_id"]] = copied.id
+                        continue
 
                 parent = None
                 hint = norm.get("parent_hint")
                 if hint and hint.get("id"):
-                    parents_qs = Forms.objects.filter(id=hint["id"])
+                    # seeded_ids first: this run may have written the
+                    # parent under a different id, as a copy.
+                    parent_id = seeded_ids.get(hint["id"], hint["id"])
+                    parents_qs = Forms.objects.filter(id=parent_id)
                     if tenant is not None:
                         parents_qs = parents_qs.filter(tenant=tenant)
                     parent = parents_qs.first()
@@ -408,6 +470,8 @@ class Command(BaseCommand):
                     if structure_fingerprint(form) != before_fingerprint:
                         form.version += 1
                         form.save(update_fields=["version"])
+
+                seeded_ids[norm["form_id"]] = form.id
 
                 if not TEST:
                     verb = "Created" if created else "Updated"
