@@ -54,9 +54,14 @@ const FormNavigation = ({
          */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
-          const defaultVal = ['cascade', 'multiple_option', 'option', 'geo', 'geoshape'].includes(
-            q?.type,
-          )
+          const defaultVal = [
+            'cascade',
+            'multiple_option',
+            'option',
+            'geo',
+            'geoshape',
+            'geotrace',
+          ].includes(q?.type)
             ? null
             : '';
           const fieldValue =
@@ -101,9 +106,14 @@ const FormNavigation = ({
          */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
-          const defaultVal = ['cascade', 'multiple_option', 'option', 'geo', 'geoshape'].includes(
-            q?.type,
-          )
+          const defaultVal = [
+            'cascade',
+            'multiple_option',
+            'option',
+            'geo',
+            'geoshape',
+            'geotrace',
+          ].includes(q?.type)
             ? null
             : '';
           /**
