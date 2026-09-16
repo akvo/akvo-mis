@@ -248,9 +248,10 @@ const BuilderInspector = ({
       } catch {
         values = [];
       }
-      const palette =
+      const rawPalette =
         COLOR_SCHEMES[target.config?.color_scheme || DEFAULT_COLOR_SCHEME]
           .colors;
+      const palette = [...rawPalette].reverse();
       onWidgetChange({
         ...target,
         config: {
@@ -543,31 +544,6 @@ const BuilderInspector = ({
                     <label className="builder-inspector-col-row">
                       <Checkbox
                         checked={
-                          defaultFilters?.toolbox?.features?.restore !== false
-                        }
-                        onChange={(e) => {
-                          const current = defaultFilters?.toolbox?.features || {
-                            ...DEFAULT_TOOLBOX_FEATURES,
-                          };
-                          onDashboardChange("default_filters", {
-                            ...(defaultFilters || {}),
-                            toolbox: {
-                              ...(defaultFilters?.toolbox || {}),
-                              features: {
-                                ...current,
-                                restore: e.target.checked,
-                              },
-                            },
-                          });
-                        }}
-                      />
-                      <span className="builder-inspector-q-label">
-                        Restore zoom/filters
-                      </span>
-                    </label>
-                    <label className="builder-inspector-col-row">
-                      <Checkbox
-                        checked={
                           defaultFilters?.toolbox?.features?.dataZoom !== false
                         }
                         onChange={(e) => {
@@ -682,7 +658,7 @@ const BuilderInspector = ({
   // same and claims no boundary the author did not set.
   const bands = wConfig.value_ranges?.length
     ? wConfig.value_ranges
-    : [{ to: null, color: scheme.colors[0] }];
+    : [{ to: null, color: scheme.colors[scheme.colors.length - 1] }];
   const selectedCategoryQuestion = allQuestions.find(
     (q) => q.id === wConfig.category_question_id
   );
@@ -1012,9 +988,7 @@ const BuilderInspector = ({
                       },
                     };
                     onWidgetChange(next);
-                    if (!wConfig.value_ranges?.length) {
-                      seedValueRanges(next);
-                    }
+                    seedValueRanges(next);
                   } else {
                     const sc =
                       COLOR_SCHEMES[
@@ -1956,10 +1930,11 @@ const BuilderInspector = ({
                     // nothing on the map. The breaks are the author's
                     // and stay exactly where they are.
                     if (wConfig.value_ranges?.length) {
+                      const reversed = [...scheme.colors].reverse();
                       next.value_ranges = wConfig.value_ranges.map(
                         (band, idx) => ({
                           ...band,
-                          color: scheme.colors[idx % scheme.colors.length],
+                          color: reversed[idx % reversed.length],
                         })
                       );
                     }
@@ -2083,42 +2058,35 @@ const BuilderInspector = ({
               <div key={idx} className="builder-inspector-range-row">
                 <input
                   type="color"
+                  key={`${idx}-${band.color}`}
                   aria-label={`Colour for ${rangeLabel(bands, idx)}`}
-                  value={band.color || scheme.colors[0]}
-                  onChange={(e) => {
-                    const next = bands.map((b, i) =>
-                      i === idx ? { ...b, color: e.target.value } : b
-                    );
-                    updateConfig("value_ranges", next);
+                  defaultValue={band.color || scheme.colors[0]}
+                  ref={(el) => {
+                    if (!el) {
+                      return;
+                    }
+                    el.onchange = (e) => {
+                      const next = bands.map((b, i) =>
+                        i === idx ? { ...b, color: e.target.value } : b
+                      );
+                      updateConfig("value_ranges", next);
+                    };
                   }}
                 />
                 {band.to === null ? (
                   <span className="builder-inspector-range-open">
                     {idx === 0
                       ? "All values"
-                      : `Above ${readable(bands[idx - 1]?.to)}`}
+                      : `${readable((bands[idx - 1]?.to ?? 0) + 1)} +`}
                   </span>
                 ) : (
                   <InputNumber
-                    // No steppers. They are absolutely positioned over
-                    // the right edge of the field and appear on hover,
-                    // so they sat on top of the digits — and stepping a
-                    // population threshold by one is no use to anybody.
                     controls={false}
-                    // Each editable row carries that band's UPPER bound,
-                    // so the same word leads every one of them. A bare
-                    // number does not say which side it bounds, and the
-                    // rows only read as a ladder once it does. The
-                    // legend keeps interval labels instead — "340 – 890"
-                    // is the band's extent, which "Under 890" would
-                    // misstate.
-                    //
-                    // addonBefore, not prefix: antd's prefix is inline
-                    // text inside the field, so the word blended into
-                    // the number. The addon is the attached grey box
-                    // that reads as a label, and it comes with its own
-                    // background, border and radius.
-                    addonBefore="Under"
+                    addonBefore={
+                      idx === 0
+                        ? "≤"
+                        : `${readable((bands[idx - 1]?.to ?? 0) + 1)} –`
+                    }
                     value={band.to}
                     placeholder="up to"
                     onChange={(val) => {
@@ -2165,7 +2133,9 @@ const BuilderInspector = ({
                   },
                   {
                     ...open,
-                    color: scheme.colors[bands.length % scheme.colors.length],
+                    color: [...scheme.colors].reverse()[
+                      bands.length % scheme.colors.length
+                    ],
                   },
                 ];
                 updateConfig("value_ranges", next);
@@ -2196,12 +2166,18 @@ const BuilderInspector = ({
                   <span>{opt.label}</span>
                   <input
                     type="color"
-                    value={colors[opt.value] || defaultColor}
-                    onChange={(e) => {
-                      updateConfig("status_colors", {
-                        ...colors,
-                        [opt.value]: e.target.value,
-                      });
+                    key={colors[opt.value] || defaultColor}
+                    defaultValue={colors[opt.value] || defaultColor}
+                    ref={(el) => {
+                      if (!el) {
+                        return;
+                      }
+                      el.onchange = (e) => {
+                        updateConfig("status_colors", {
+                          ...colors,
+                          [opt.value]: e.target.value,
+                        });
+                      };
                     }}
                   />
                 </div>

@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import { MapCluster } from "akvo-charts";
 import "leaflet/dist/leaflet.css";
-import { geo } from "../../../lib";
-import { colorForValue, rangeLabel } from "../../../util/valueRanges";
+import { scaleQuantize, scaleThreshold } from "d3-scale";
+import { geo, config as appConfig } from "../../../lib";
+import GradationLegend from "../../map-view/GradationLegend";
 
 const DEFAULT_COLOR = "#1890ff";
 const NO_STATUS_COLOR = "#999";
@@ -54,10 +55,6 @@ const VizMap = ({ config, data }) => {
   // came back empty and the question was never asked about again.
   const isQuantity = widgetConfig.map_mode === QUANTITY;
   const isRange = widgetConfig.map_mode === RANGE;
-  const valueRanges = useMemo(
-    () => widgetConfig.value_ranges || [],
-    [widgetConfig.value_ranges]
-  );
   const statusColors = useMemo(
     () => widgetConfig.status_colors || {},
     [widgetConfig.status_colors]
@@ -79,6 +76,55 @@ const VizMap = ({ config, data }) => {
     return lookup;
   }, [data, statusColors, chartColors, fallback]);
 
+  const valueRanges = useMemo(
+    () => widgetConfig.value_ranges || [],
+    [widgetConfig.value_ranges]
+  );
+
+  // When the author has set value_ranges with thresholds, use those
+  // directly. Otherwise fall back to auto-computed bins from chartColors.
+  const hasCustomRanges =
+    isRange && valueRanges.length > 1 && valueRanges.some((b) => b.to !== null);
+
+  // Schemes are dark-to-light; reverse for graduated maps (low = light).
+  const gradientPalette = useMemo(() => {
+    if (hasCustomRanges) {
+      return valueRanges.map((b) => b.color || fallback);
+    }
+    if (chartColors.length >= 5) {
+      return [...chartColors.slice(0, 5)].reverse();
+    }
+    return appConfig.mapConfig.colorRange;
+  }, [chartColors, hasCustomRanges, valueRanges, fallback]);
+
+  const colorScale = useMemo(() => {
+    if (!isRange) {
+      return null;
+    }
+    if (hasCustomRanges) {
+      const domain = valueRanges.filter((b) => b.to !== null).map((b) => b.to);
+      const colors = valueRanges.map((b) => b.color || fallback);
+      return scaleThreshold().domain(domain).range(colors);
+    }
+    const rows = Array.isArray(data) ? data : [];
+    const numericValues = rows
+      .map((r) => Number(r.value))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (numericValues.length === 0) {
+      return scaleQuantize().domain([0, 1]).range(gradientPalette);
+    }
+    const maxValue = Math.max(...numericValues);
+    let domainMax = maxValue;
+    if (maxValue <= 10) {
+      domainMax = Math.ceil(maxValue / 5) * 5;
+    } else if (maxValue <= 100) {
+      domainMax = Math.ceil(maxValue / 10) * 10;
+    } else {
+      domainMax = Math.ceil(maxValue / 50) * 50;
+    }
+    return scaleQuantize().domain([0, domainMax]).range(gradientPalette);
+  }, [data, isRange, hasCustomRanges, valueRanges, fallback, gradientPalette]);
+
   const points = useMemo(() => {
     const rows = Array.isArray(data) ? data : [];
     return rows.filter(geo.hasValidPoint).map((row) => ({
@@ -99,16 +145,18 @@ const VizMap = ({ config, data }) => {
           ? Number(row.value)
           : null,
       // A range map ignores status entirely — it has none to read, and
-      // the band is the whole message. `colorForValue` falls back rather
-      // than treating a missing answer as zero: on a map of population
-      // served, "not reported" and "nobody" are different facts.
+      // the band is the whole message. The scale falls back rather than
+      // treating a missing answer as zero: on a map of population served,
+      // "not reported" and "nobody" are different facts.
       color: isRange
-        ? colorForValue(row.value, valueRanges, fallback)
+        ? Number.isFinite(Number(row.value))
+          ? colorScale(Number(row.value))
+          : fallback
         : row.status
         ? colorForStatus[row.status] || fallback
         : fallback,
     }));
-  }, [data, colorForStatus, fallback, isRange, valueRanges]);
+  }, [data, colorForStatus, fallback, isRange, colorScale]);
 
   const mapRef = useRef(null);
 
@@ -128,39 +176,36 @@ const VizMap = ({ config, data }) => {
     fitMap();
   }, [fitMap]);
 
-  // Two legends, one shape: a status name and its colour, or a band
-  // label and its colour.
-  const legendEntries = isRange
-    ? valueRanges.map((band, i) => ({
-        key: rangeLabel(valueRanges, i),
-        color: band.color,
-      }))
-    : Object.keys(colorForStatus).map((status) => ({
-        key: status,
-        color: colorForStatus[status],
-      }));
+  const legendEntries = Object.keys(colorForStatus).map((status) => ({
+    key: status,
+    color: colorForStatus[status],
+  }));
   const uniqueColors = new Set(legendEntries.map((e) => e.color));
-  // Never in quantity mode: size carries the meaning there and every
-  // circle is one colour, so a colour legend would describe nothing
-  // that is on screen. A range map with one band has nothing to
-  // distinguish either — the same reason the status legend hides when
-  // every pin shares a colour.
-  const showLegend =
-    !isQuantity && legendEntries.length > 0 && uniqueColors.size > 1;
+  const showCategoryLegend =
+    !isQuantity &&
+    !isRange &&
+    legendEntries.length > 0 &&
+    uniqueColors.size > 1;
 
-  // MapCluster builds its Leaflet cluster group in an effect, and a
-  // Leaflet object does not follow React prop updates — so the mode
-  // belongs in the remount key alongside the colours.
-  // Everything a mounted Leaflet object cannot pick up on its own.
-  // MapCluster keys its cluster group on `type` and `cluster` only, and
-  // MarkerClusterGroup captures `iconCreateFunction` at mount by design —
-  // so a changed `aggregate` alone would leave the old closure summing,
-  // with nothing on screen to say the switch did nothing.
+  const thresholds = useMemo(() => {
+    if (!colorScale) {
+      return [];
+    }
+    if (hasCustomRanges) {
+      return colorScale.domain();
+    }
+    return colorScale.thresholds();
+  }, [colorScale, hasCustomRanges]);
+  const showGradationLegend =
+    isRange && thresholds.length > 0 && points.length > 0;
+
   const colorKey =
     Object.values(statusColors).join(",") +
     fallback +
     (widgetConfig.map_mode || "category") +
     (widgetConfig.map_aggregate || "sum") +
+    thresholds.join(",") +
+    gradientPalette.join(",") +
     valueRanges.map((b) => `${b.to}:${b.color}`).join(",");
 
   return (
@@ -212,7 +257,41 @@ const VizMap = ({ config, data }) => {
             : (point) => point?.label
         }
       />
-      {showLegend && (
+      {showGradationLegend && !hasCustomRanges && (
+        <div className="dashboard-view-map-gradation">
+          <GradationLegend thresholds={thresholds} colors={gradientPalette} />
+        </div>
+      )}
+      {showGradationLegend && hasCustomRanges && (
+        <div className="dashboard-view-map-gradation">
+          <div className="shape-legend">
+            <div className="legend-wrap" style={{ display: "flex" }}>
+              {valueRanges.map((band, idx) => (
+                <div
+                  key={idx}
+                  className="legend-item"
+                  style={{
+                    flex: 1,
+                    backgroundColor: band.color || fallback,
+                    textAlign: "center",
+                    padding: "2px 0",
+                    margin: "0 1px",
+                    fontSize: 12,
+                    fontWeight: 500,
+                  }}
+                >
+                  {band.to === null
+                    ? `${(valueRanges[idx - 1]?.to ?? 0) + 1} +`
+                    : idx === 0
+                    ? `≤ ${band.to}`
+                    : `${(valueRanges[idx - 1]?.to ?? 0) + 1} – ${band.to}`}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {showCategoryLegend && (
         <div className="dashboard-view-map-legend">
           {legendEntries.map((entry) => (
             <span key={entry.key} className="dashboard-view-map-legend-item">
