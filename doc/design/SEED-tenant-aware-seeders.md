@@ -2,25 +2,33 @@
 
 ## Feature: Tenant-aware seeders — marked fake data, CSV hierarchies, and pins that match
 
-**Task IDs**: SEED-001, SEED-002, SEED-003 (one PR, one plan)
+**Task IDs**: SEED-001, SEED-002, SEED-003 (one PR, one plan); SEED-004 (follow-up)
 **Author**: Iwan Firmawan
-**Date**: 2026-08-31 → 2026-09-02
-**Branch**: `feature/89-tenant-aware-seeders` → `main`
-**Status**: Implemented; pending review
+**Date**: 2026-08-31 → 2026-09-02; Part 4 added 2026-09-16
+**Branch**: `feature/89-tenant-aware-seeders` → `main`; Part 4 on `feature/89-fix-seeder-complete-seeder`
+**Status**: Parts 1–3 implemented, pending review. Part 4 implemented, pending review.
 
 ---
 
 ## 0. How to read this
 
-Three pieces of work that ship together, because each is unusable without the
-one before it. They are kept as three parts rather than flattened, so the
-decision IDs already cited in the code comments still resolve.
+Three pieces of work that shipped together, because each is unusable without the
+one before it, plus a fourth that finishes the job. They are kept as separate
+parts rather than flattened, so the decision IDs already cited in the code
+comments still resolve.
 
 | Part | Task | What it does | Command |
 |---|---|---|---|
 | **1** | SEED-001 | Marks generated data `DUMMY-` and gives it a teardown | `fake_complete_data_seeder --clean` |
 | **2** | SEED-002 | Imports a real hierarchy — levels *and* units — from a CSV | `administration_csv_seeder` |
 | **3** | SEED-003 | Makes a generated pin land inside the unit it belongs to | (no new command) |
+| **4** | SEED-004 | Stops roles leaking across workspaces, ships a form to seed, and gets the run to its last line | `default_roles_seeder --tenant` |
+
+**Part 4 is a follow-up, not a fourth simultaneous piece.** Parts 1–3 made the
+seeder tenant-aware command by command; Part 4 is what a full
+`./seeder.sh --tenant=<sub>` run on a multi-workspace database showed was still
+missing once the other three were in place. Its four defects are independent of
+each other and share only that they are all on the same run.
 
 **Decision IDs are per-part.** Part 1's `D-6` and Part 2's `D-6` are different
 decisions; cross-part references are always written out ("Part 3 D-9").
@@ -77,6 +85,77 @@ This unblocks item 1 of the visualization debugging gap analysis
 ([MT-002](MT-002-tenant-scoping-database.md)): a `--tenant` flag is only usable
 if there is also a way to undo a run that landed in the wrong workspace.
 
+### Part 4 — what a real run still did wrong
+
+Parts 1–3 were verified against a database with one or two workspaces. Run the
+same script against a database with five — the state any developer reaches after
+testing free-tier registration ([MT-001](MT-001-free-tier-registration.md)) a few
+times — and four independent defects surface on a single pass.
+
+```
+Four things are true of ./seeder.sh --tenant=<sub> before this part.
+Line numbers are where the code sits after the fix, so the citations
+still resolve.
+
+1. The roles step ignores the workspace entirely.
+   - default_roles_seeder called Levels.objects.all(). `Levels.objects` is
+     a plain TenantManager -- models.Manager.from_queryset(TenantQuerySet),
+     utils/tenant_scoped_model.py:36 -- and TenantQuerySet adds `for_user`,
+     not an implicit filter. On the CLI there is no request and no user, so
+     .all() means every workspace.
+   - seeder.sh compounded it by not forwarding --tenant at all (the call is
+     now at seeder.sh:135), so the flag would not have helped even if the
+     command had accepted one.
+   - Observed on a five-workspace database: one run created roles for
+     National/Division/Province/Tikina (Fiji), Country/County/Ward/Subcounty
+     (Kenya), Region/District/Province (India), Atoll/Locality (Maldives)
+     and National/Province/District/Village -- four workspaces' worth of
+     roles from a run that named one.
+   - The rows are not corrupt: Role.save() stamps `tenant` from
+     `administration_level.tenant`, so each role lands in the right
+     workspace. They are simply roles nobody asked to create, in workspaces
+     the operator did not name, and the operator cannot tell from the
+     output which is which -- the log printed "Roles created for National
+     level." four times.
+
+2. An empty example.prod.json breaks form seeding in all three modes.
+   - backend/source/forms/example.prod.json was 0 bytes and untracked.
+   - form_seeder globs every *.json in the folder (form_seeder.py:186) and
+     json.load()s each one (form_seeder.py:198) with no guard ->
+     JSONDecodeError with no filename in the message.
+   - Neither filter excluded it: `--test` keeps files whose name contains
+     "example", and the PROD gate kept files whose name contains "prod".
+     It matched both.
+
+3. A PROD install seeds no forms at all.
+   - Under PROD, form_seeder narrowed to files matching "prod".
+     example.prod.json was the only candidate in the folder and it was
+     empty, so a production deployment that answered "y" to "Seed Form?"
+     got either a crash or nothing. (D-7 later removed the PROD gate
+     entirely -- the narrowing is now unconditional.)
+   - The four real forms were in source/forms/unused/, moved there by
+     [#55] and not seeded. D-4 deletes that folder.
+
+4. generate_sqlite dies on the last line of the run.
+   - custom_generator.py guarded with `int(x) if x == x else 0` -- an idiom
+     that catches NaN and nothing else. The two branches are now at
+     custom_generator.py:73 and :77.
+   - A workspace whose only Administration is its root has an all-None
+     parent column. pandas types that as `object` and leaves None in place
+     (verified, pandas 2.1.1: [{'parent': None}] -> object [None], whereas
+     a mixed column -> float64 [nan, 1.0]). None == None is True, so the
+     guard passed the None through to int() and the command raised
+     TypeError: int() argument must be a string, a bytes-like object or a
+     number, not 'NoneType'.
+   - generate_sqlite iterates Tenant.objects.all(), so one such workspace
+     aborted the step for every workspace after it -- and it is seeder.sh's
+     penultimate line, so the run ended on a traceback whatever else
+     succeeded. D-8 scopes that walk to the named workspace.
+```
+
+**Goal**: `./seeder.sh --tenant=acme` touches `acme` and nothing else, seeds a
+form on a fresh production install, and exits 0.
+
 ---
 
 ## 2. Requirements
@@ -118,6 +197,26 @@ if there is also a way to undo a run that landed in the wrong workspace.
 - [x] A workspace whose hierarchy carries no boxes gets an error naming the
       command to run, rather than submissions with no coordinates.
 
+**Part 4 — correctness of a full run**
+
+- [x] `./seeder.sh --tenant=acme` creates roles for `acme`'s levels only. No
+      other workspace's `Role` count changes.
+- [x] Each role line names the workspace, so four workspaces' "National" levels
+      can be told apart in the output.
+- [x] A fresh install seeds one working registration form that needs no
+      entity types. `PROD` no longer changes which files are seeded at all
+      (D-7), so "including a PROD one" is now the same run.
+- [ ] `./seeder.sh --tenant=acme` reaches its last line on a database holding
+      several workspaces, at least one of which has only a root administration.
+      **Not verified end to end** — every step is covered by tests, but the
+      live run that reproduces the original screenshots has not been done.
+- [x] An unparseable file in `source/forms/` names itself in the error, rather
+      than raising a bare `JSONDecodeError`.
+- [x] `source/forms/unused/` is gone. Its four forms were read for Part 4 D-4
+      and are not kept as dead weight afterwards.
+- [x] `./seeder.sh --tenant=acme` rebuilds `acme`'s master-data SQLite files
+      and no other workspace's (D-8).
+
 ### Technical Acceptance Criteria
 
 - [x] **No schema migration anywhere in this PR.** No new column on `form_data`
@@ -155,19 +254,45 @@ if there is also a way to undo a run that landed in the wrong workspace.
 - [x] `--test` is untouched: 35 existing callers keep working.
 - [x] `flake8` clean.
 
+**Part 4**
+
+- [x] `default_roles_seeder` takes `--tenant`, resolved through the shared
+      `utils.tenant_command.resolve_tenant` — not a fourth private copy of the
+      lookup (Part 4 D-1).
+- [x] Omitting `--tenant` means the tenant-less space, `tenant=None`, which is
+      what `resolve_tenant(required=False)` already documents. It does **not**
+      mean "every workspace" (Part 4 D-2).
+- [x] The `call_command("default_roles_seeder", "--test", 1)` sites that seed
+      levels through `administration_seeder --test` keep passing **unmodified**.
+      That command writes `tenant=None`, so the new filter selects exactly what
+      the old `.all()` did in a test database. **One** call site is the
+      exception — it builds tenant-owned levels and needed `--tenant` (I-11).
+- [x] The roles step stays idempotent: re-running creates no duplicate
+      `RoleAccess` or `RoleFeatureAccess` rows.
+- [x] The seeded registration form uses **no `entity` cascade**. `seeder.sh` has
+      no entities step, so an entity question would reference an entity type
+      that does not exist on a fresh database (Part 4 D-4).
+- [x] The form file is named `<form_id>.prod.json`, because `job.sh:8-10` and
+      `form_seeder -f` both parse the id out of the filename (Part 4 D-3).
+- [x] Form, group and question ids all sit above the autoincrement sequences,
+      which count up from 1 and are never reset (Part 4 D-3).
+- [x] No schema migration, in Part 4 either.
+- [x] `flake8` clean.
+
 ---
 
 ## 3. Data Model Changes
 
 ### New Models
 
-None, in any of the three parts.
+None, in any of the four parts.
 
 ### Modified Models
 
 | Model | Change | Reason |
 |---|---|---|
 | — | — | No model changes. Fake data is marked in existing `name`/`email` text columns; bounding boxes reuse `AdministrationAttribute`. |
+| — | — | Part 4 changes no model either. `Role.tenant` already exists and `Role.save()` already derives it from the level — the defect is which levels are iterated, not how a role is stored. |
 
 ### Migration Strategy
 
@@ -357,6 +482,42 @@ used by `administration_seeder --clean` (Part 1 D-7).
    Administration         0
    Levels                 0
 -- Fake data cleared
+```
+
+### `default_roles_seeder` (Part 4)
+
+| Flag | Type | Default | Purpose |
+|---|---|---|---|
+| `--tenant` | str | `None` → the tenant-less space | Workspace whose levels get roles |
+| `-t, --test` | bool | `False` | Re-create access rows on roles that already exist; used by ~140 test call sites |
+
+No short flag for `--tenant`: `-t` is already `--test` on this command, exactly
+as on `form_seeder`. Two flags one keystroke apart is how a subdomain ends up in
+`--test`.
+
+```bash
+# Roles for one workspace's levels
+./dc.sh exec backend python manage.py default_roles_seeder --tenant=acme
+
+# The tenant-less space -- single-host installs and the test suite
+./dc.sh exec backend python manage.py default_roles_seeder
+```
+
+Output names the workspace, because level names are not unique across
+workspaces and four unqualified `National` lines are what made the original
+defect invisible:
+
+```
+Roles created for National level (acme).
+Roles created for Province level (acme).
+Roles created for District level (acme).
+```
+
+An unknown subdomain fails before any write, with the message
+`resolve_tenant` already produces for the other seeders:
+
+```
+CommandError: No workspace with subdomain 'acmee'. Known: acme, default, …
 ```
 
 A workspace with no geography fails before any write:
@@ -1025,6 +1186,397 @@ than an error message saying what to run instead).
 
 ---
 
+### Part 4 — Seeder correctness and the initial form (SEED-004)
+
+Where `--tenant` reaches, after Part 4. The roles step is the one arrow that
+does not exist today:
+
+```mermaid
+flowchart TD
+    CLI["./seeder.sh --tenant=acme"] --> T{{"tenant = acme"}}
+    T --> A["administration_csv_seeder --tenant"]
+    T --> F["form_seeder --tenant"]
+    T --> S["createsuperuser / assign_forms --tenant"]
+    T --> O["organisation_seeder --tenant"]
+    T -.->|"Part 4 D-1 adds this"| R["default_roles_seeder --tenant"]
+    T --> D["fake_complete_data_seeder --tenant"]
+    A --> L[("Levels rows owned by acme")]
+    L --> R
+    R --> RO[("Role rows, tenant derived by Role.save()")]
+    RO --> D
+    D --> G["generate_sqlite<br/>(all workspaces, Part 4 D-5)"]
+
+    X["administration_attribute_seeder"] -.->|install-wide, no tenant| T
+```
+
+#### D-1: The workspace is an argument on the command, not a filter in the script
+
+**Options**: (1) `--tenant` on `default_roles_seeder`, resolved by the shared
+helper; (2) leave the command alone and have `seeder.sh` pre-compute the level
+ids and pass them in; (3) give the command its own `Tenant.objects.filter(...)`
+lookup.
+
+**Decision**: option 1.
+
+**Rationale**: option 3 is what the codebase already rejected —
+`utils/tenant_command.py` exists precisely because "three seeders had grown
+their own copy, which is how the same typo produced three different error
+messages". Option 2 leaves the command wrong for anyone invoking it directly,
+which is the larger population: `seeder.sh` is one caller and there are 130
+test call sites plus whatever an operator types. The fix belongs where every
+caller routes through it.
+
+**Impact**: two lines in the command (`resolve_tenant`, then `filter` instead of
+`all`), one argument definition, and `--tenant="${tenant}"` on
+[seeder.sh:135](../../backend/seeder.sh). `resolve_tenant` brings the unknown-
+subdomain rejection for free, which the command has never had.
+
+#### D-2: Omitting `--tenant` means the tenant-less space, not every workspace
+
+**Options**: (1) omitted → `tenant=None`, matching `resolve_tenant`'s documented
+contract; (2) omitted → today's behaviour, every level in every workspace, with
+`--tenant` as an opt-in narrowing; (3) `--tenant` required.
+
+**Decision**: option 1.
+
+**Rationale**: option 3 is correct in the abstract and costs 130 test file
+edits for no behaviour change in any of them — the tests seed `tenant=None`
+levels and would all pass `--tenant=""`. Option 2 keeps a default that has now
+demonstrably surprised its operator, and keeps it in the one place a seeder's
+default matters: a shared database. Option 1 is the only one where the flag's
+absence means the same thing here as it does on `form_seeder`,
+`organisation_seeder` and `fake_user_seeder`, all of which already treat
+omission as the tenant-less space.
+
+The reason it is safe is worth stating explicitly, because it is the whole
+argument for not touching the tests: every test that seeds levels does so
+through `administration_seeder --test`, and that command "wrote tenant=None"
+(Part 2 D-7). So in a test database `Levels.objects.filter(tenant=None)` and
+`Levels.objects.all()` select the same rows. The change is a no-op there and a
+fix in production.
+
+**Impact**: **this reverses the §7 table row**, which read *"`default_roles_seeder`
+| unchanged; takes no `--tenant` (it derives each role's workspace from its
+level)"*. That sentence was true about the *rows* and wrong about the *loop*:
+deriving each role's tenant from its level makes every role valid, but says
+nothing about which levels should have been visited. The row is corrected in §7.
+
+#### D-3: The form file is named by its id, not by a description
+
+**Options**: (1) `source/forms/<form_id>.prod.json`; (2) keep
+`example.prod.json` and teach the tooling to read the id from the JSON body;
+(3) keep `example.prod.json` and accept the tooling breaking on it.
+
+**Decision**: option 1 — `source/forms/1789516800000.prod.json`.
+
+**Rationale**: two separate consumers already parse the id out of the filename,
+and neither is a seeder:
+
+```bash
+# backend/job.sh:8-10 -- the Excel export cron
+for file in "$dir"/*.prod.json; do
+    filename=$(basename "$file")
+    form_id="${filename%.prod.json}"
+    ./manage.py generate_excel_data "$form_id" …
+```
+
+`example.prod.json` yields `form_id=example`, which is not a form id. The same
+convention is what `form_seeder -f <id>` reads (`form_seeder.py:179`). Option 2
+changes two tools to accommodate one file; option 1 changes the file.
+
+**Why an epoch-millisecond id** rather than `1` or `101`. The reason is the
+autoincrement sequence, not aesthetics:
+
+- **The form builder mints its own id, and it is a timestamp.**
+  `akvo-react-form-editor/src/lib/store.js:16` is
+  `const generateId = () => new Date().getTime()`, `defaultForm()` uses it,
+  `FormBuilderCreate.jsx` posts `editorOutput` verbatim and `save_form` honours
+  `data.get("id")`. So a seeded id shares an id space with wall-clock
+  milliseconds and must not land on one.
+- **1789516800000 is a fixed instant in the past** — 2026-09-16 00:00:00.000
+  UTC. `getTime()` only moves forward, so no form created from now on can be
+  given that id; the collision window closed at that millisecond. A
+  *pre-existing* form holding it would need to have been created in that exact
+  millisecond, and `form_seeder` refuses with `form id ... already belongs to`
+  rather than overwriting.
+- `Forms.id` is a `BigAutoField`, so `form_id_seq` also matters for a form
+  created without an explicit id: the sequence counts up from 1.
+- `resetsequence` exists in `v1_profile/management/commands/` and has **zero
+  callers**. Nothing realigns the sequence after a seed.
+- So a seeded form holding a low id is an id the sequence *will* reach. The
+  collision is not hypothetical: `example-1.json` through `example-5.json`
+  already occupy 1–5 in a dev database, and the first few forms created
+  through the builder land on top of them.
+- At 1.79 × 10¹² the sequence will not arrive within the life of the install,
+  and the value is comfortably inside both `BigAutoField` (9.22 × 10¹⁸) and
+  JavaScript's safe integer range (9.01 × 10¹⁵), which matters because the id
+  crosses into the mobile SQLite and the web client.
+
+Large timestamp ids are the **designed-for** case rather than an edge case.
+`functions.py` carries `_sync_import_pk_sequences()`, whose docstring is
+explicit: *"Without this, auto-created rows with auto-increment IDs collide
+with existing large editor-generated timestamp IDs already in the DB."* Those
+"editor-generated timestamp IDs" are exactly what `generateId()` above
+produces — the mechanism is named in the code.
+
+Group and question ids follow from the same argument and are derived from the
+form id (`…001`–`…003` for groups, `…011`–`…033` for questions).
+`question_group_id_seq` and `question_id_seq` count up from 1 too, and
+`example-1.json` already parks questions at 101–115.
+
+**Impact**: `backend/source/forms/example.prod.json` is deleted (it was
+untracked and empty, so nothing is lost) and
+`backend/source/forms/1789516800000.prod.json` is added. `job.sh` and
+`form_seeder -f 1789516800000` work unchanged.
+
+#### D-4: The seeded form is sector-neutral and carries no `entity` question
+
+**Options**: (1) promote one of the four `source/forms/unused/*.prod.json` files;
+(2) consolidate the four into one water-sector registration form; (3) write a
+sector-neutral form from the questions the four have in common.
+
+**Decision**: option 3.
+
+**Rationale**: options 1 and 2 are both blocked by the same dependency. All four
+archived forms open with an entity cascade:
+
+```json
+{ "type": "cascade", "name": "rws_name", "meta": true,
+  "extra": { "type": "entity" } }
+```
+
+An `entity` question resolves its options against an `Entity` type that must
+exist before the form is usable — and Part 1 **dropped the entities step from
+`seeder.sh`** (§7). So a fresh install seeding any of those files gets a form
+whose first required question has no options. Reviving the entities step to ship
+a default form would be a much larger change than writing a form that does not
+need it.
+
+They are also all water-sector (Water Treatment Plant, Rural Water Supply, EPS
+Inspection, EPS Water Quality Testing). This file is what every new deployment
+sees first, whatever it monitors.
+
+**What the four files contribute** is their common spine, which is the same in
+all of them: an administration cascade as the first meta question, a name, a
+date, a geolocation, contact details, a photo, a status option, free-text
+remarks. That is the form:
+
+| Group | Question | Type | Flags |
+|---|---|---|---|
+| Primary Information | `administration` | `cascade`, `extra.type: administration` | meta, required |
+| | `name` | `input` | meta, required |
+| | `registration_date` | `date` | required |
+| | `geolocation` | `geo` | meta |
+| Contact Details | `contact_name` | `input` | — |
+| | `phone` | `number` | — |
+| Condition | `status` | `option` (Functional / Partially functional / Non-functional) | required |
+| | `photo` | `photo` | — |
+| | `remarks` | `text` | — |
+
+```jsonc
+{
+  "id": 1789516800000,
+  "form": "Registration",
+  "version": 1,
+  "type": 1,                    // FormTypes.registration
+  "description": "Generic registration form …",
+  "defaultLanguage": "en",
+  "languages": ["en"],
+  "question_groups": [ /* as tabled above */ ]
+}
+```
+
+No `parent`, so `normalize_form_definition` sorts it as a parent form and no
+monitoring form is implied. The legacy `form` / `question_groups` / `questions`
+key style is accepted (`v1_forms/functions.py:853`), but the FB-007 canonical
+style is preferred for a file being written new.
+
+**Impact**: `backend/source/forms/unused/` is **deleted**. An earlier revision
+of this decision kept the four files as reference material; they are reference
+material for writing this form once, and afterwards they are four water-sector
+forms in a folder named `unused` that no code path reads — `grep` finds
+references only in documentation. They remain in git history at
+`[#55] Move all old forms to unused folder` if a deployment ever wants one back.
+
+Their ids (`1`, `100`, `1000`, `1710731783596`) are freed by the deletion, which
+does not change D-3: low ids are unsafe because of the sequence, not because
+those files held them.
+
+#### D-5: `x == x` is a NaN check; the column can hold `None`
+
+**Options**: (1) fix the lambda in `generate_sqlite`; (2) coerce the column with
+`fillna(0)` before the `apply`; (3) guard at the call site in the
+`generate_sqlite` management command.
+
+**Decision**: option 1, and in **both** branches that share the idiom.
+
+**Rationale**: option 3 patches the path the traceback named and leaves
+`update_sqlite` and every other caller of `generate_sqlite` broken. Option 2
+does not work: `fillna` on an `object` column holding `None` is exactly the case
+pandas handles inconsistently, and it adds a line rather than fixing one. The
+guard is wrong, not missing:
+
+```python
+# utils/custom_generator.py -- before the fix (now lines 71-78)
+if "parent" in field_names:
+    data["parent"] = data["parent"].apply(lambda x: int(x) if x == x else 0)
+elif "administration" in field_names:
+    data["parent"] = data["administration"].apply(lambda x: int(x) if x == x else 0)
+```
+
+`x == x` is false for `NaN` and true for everything else including `None`.
+
+Only the **`parent`** branch can actually reach the bug: `Administration.parent`
+is `null=True`, and a root-only workspace makes that column all-`None`. The
+`administration` branch is fixed for symmetry, not because it is reachable --
+`EntityData.administration` is a non-nullable FK, so its column never holds a
+`None`. Correcting an earlier draft of this decision, which claimed both columns
+were nullable: they are not, and the second branch has no regression test for
+that reason.
+
+**Why the column goes `object`**: `pd.DataFrame(list_of_dicts)` infers per
+column. A column of `[None, 1]` becomes `float64` with `NaN` — which the old
+guard handles. A column of `[None]` alone stays `object` with a real `None` —
+which it does not. Verified on the pinned pandas 2.1.1. So the bug only appears
+for a workspace whose *every* administration has a null parent, i.e. one that
+registered but never imported a hierarchy. That is the normal state of a
+workspace created by free-tier registration, which is why it took a
+five-workspace database to surface.
+
+**Impact**: one expression, twice. No change to the emitted SQLite: the `parent`
+column is still an integer with `0` for roots, so no device sees anything new.
+
+#### D-6: A bad file in `source/forms/` names itself
+
+**Options**: (1) delete the empty file and stop there; (2) guard the
+`json.load` so any unparseable file reports its own path; (3) validate the whole
+folder up front with a dedicated check command.
+
+**Decision**: option 2 (option 1 happens anyway, via D-3).
+
+**Rationale**: deleting `example.prod.json` fixes today's crash and leaves the
+trap armed. `source/forms/` is explicitly an operator drop-box — the seeder's own
+comment says "a real deployment drops its own form definitions here and should
+not have to encode 'not an example' in the filename" — so the next 0-byte or
+half-saved file produces the same bare `JSONDecodeError`, from a `json` frame,
+with no indication of which of eleven files it came from. One `try`/`except` at
+the single `json.load` covers every file and every caller. Option 3 is a command
+nobody will run.
+
+**Impact**: `form_seeder.py` around line 175. Raise `CommandError` naming the
+file and the parse error; do not skip silently, because a form the operator put
+there and expected to be seeded must not vanish quietly.
+
+#### D-7: The filename decides what gets seeded, not the environment
+
+**Options**: (1) a non-`--test` run selects `*.prod.json`, always; (2) keep
+"every `*.json`" and have `seeder.sh` pass `--file <id>`; (3) keep the
+`settings.PROD` gate and document that local runs seed the fixtures too.
+
+**Decision**: option 1. `settings.PROD` no longer participates in file
+selection, and the import is removed.
+
+**Rationale**: this **reverses a decision made during Parts 1–3**, which read:
+
+> `--test` narrows to the bundled example fixtures. Without it every JSON in
+> the folder is seeded: a real deployment drops its own form definitions here
+> and should not have to encode "not an example" in the filename. The old
+> `else` branch did exactly that, and since the folder holds nothing but
+> `example-*` files it made a plain run seed nothing at all and exit 0.
+
+The premise in the last clause is what changed. D-3 ships a real
+`<id>.prod.json`, so the prod-only filter now has something to select and no
+longer degenerates to "seed nothing". Meanwhile the behaviour it was replaced
+with turned out to be worse in the case that actually happens — a local
+`./seeder.sh --tenant=<sub>` run answering `y` to "Seed Form?" dies with:
+
+```
+CommandError: ./source/forms/example-2.json: form id 2 already belongs to
+              default. Form ids are global, so a definition can only be seeded
+              once per install -- give this file its own id.
+```
+
+The dev fixtures hold ids 1–5 and an earlier `--test` run has already claimed
+them, so a plain run collides on its second file. Worse, `PROD` made the seeded
+set depend on the environment: the same command on the same folder seeded
+eleven forms locally and one in production, which is the opposite of what a
+seeder should do.
+
+`*.prod.json` was already the convention everywhere else — `job.sh` globs it to
+decide which forms get an Excel export, and `--file <id>` builds exactly that
+name. This makes the command agree with its neighbours:
+
+| Run | Selects |
+|---|---|
+| `--test` | `*example*` |
+| anything else | `*.prod.json` |
+| `--file <id>` | `<id>.prod.json` |
+
+A deployment dropping its own definitions does now have to name them
+`.prod.json`. That is a real cost, and it is the right one: the alternative is
+an unnamed convention where a scratch file, an editor backup or a half-saved
+export is seeded because it happens to end in `.json`.
+
+**Impact**: `mis.settings.PROD` is no longer imported by `form_seeder`. Four
+test fixtures were renamed to `.prod.json`, and two assertions that pinned the
+old rule were rewritten — `test_plain_run_loads_every_json` (now
+`test_plain_run_loads_only_prod_definitions`) and `tests_form_seeder.py`'s
+`test_call_command`, whose hardcoded `10` is replaced by a count derived from
+the folder, since that assertion has now been rewritten twice for the same
+reason.
+
+#### D-8: `generate_sqlite` rebuilds one workspace when told which
+
+**Options**: (1) `--tenant` on the command, rebuilding that workspace only;
+(2) leave it walking every workspace and accept the noise; (3) always rebuild
+everything but quieten the log.
+
+**Decision**: option 1, with omission still meaning "rebuild everything".
+
+**Rationale**: the command walked `Tenant.objects.all()` unconditionally, so
+`./seeder.sh --tenant=acme` rewrote every workspace's master data:
+
+```
+./source/administrator.sqlite Generated Successfully        <- tenant-less
+./source/default/administrator.sqlite Generated Successfully
+./source/demo/administrator.sqlite Generated Successfully
+./source/iwan/administrator.sqlite Generated Successfully
+./source/qa1/administrator.sqlite Generated Successfully
+./source/acme/administrator.sqlite Generated Successfully   <- the only one
+./source/mbg/administrator.sqlite Generated Successfully       that changed
+./source/indonesia/administrator.sqlite Generated Successfully
+     ... x4 models
+```
+
+Thirty-two files to express a change to four. The output is not merely noisy:
+it is how Part 4 D-5's crash stayed hidden, because the failing workspace was
+one of eight and the traceback arrived after a wall of successes.
+
+Unlike the roles seeder, rewriting another workspace's file is **not** a
+correctness bug — the content is derived from that workspace's own rows, so
+the rewrite is byte-identical. The cost is time, log noise, and 32 chances for
+an unrelated workspace's data to abort a run that never meant to touch it.
+
+**Why omission still means "everything"**, which is *not* what it means on
+`default_roles_seeder` (D-2): `run-prod.sh:7` calls this command bare at
+container boot, and it wants every workspace's files to exist. The asymmetry is
+in what the two commands do — `default_roles_seeder` **creates rows**, and "in
+every workspace" is never the right default for that; `generate_sqlite`
+**rewrites derived files** idempotently, so "all of them" is a legitimate
+maintenance operation and the only sensible boot behaviour.
+
+| Invocation | Rebuilds |
+|---|---|
+| `--tenant=acme` | `MASTER_DATA/acme/` only |
+| omitted | the tenant-less root files **and** every workspace |
+| `--tenant=typo` | nothing; `CommandError` before any write |
+
+**Impact**: `generate_sqlite.py` gains `--tenant` and collapses its two loops
+into one over `[None] + Tenant.objects.all()` or `[tenant]`. `seeder.sh`'s
+final line passes `--tenant`. `run-prod.sh` is unchanged and keeps the
+rebuild-everything behaviour. `generate_config` beside it takes no workspace at
+all — it writes one install-wide `config.min.js`.
+
 ### Appendix: decisions reversed during this work
 
 Three decisions were made before the boundary pipeline existed and undone once
@@ -1141,6 +1693,26 @@ The order flip is load-bearing and handled in exactly one place —
 `random_point_in` returns `[lat, lng]` because the map widgets read `geo[0]` as
 latitude. Nothing new should reorder either.
 
+### The seeded form (Part 4)
+
+| File / field | Backend constant | Value |
+|---|---|---|
+| `source/forms/1789516800000.prod.json` | — | filename **is** the form id (`job.sh`, `form_seeder -f`) |
+| `"type": 1` | `FormTypes.registration` | `1` |
+| *(no `parent` key)* | — | sorts as a parent form in `normalize_form_definition` |
+| seeded status | `FormStatus.published` | `2` — the seeder publishes on create |
+| `"extra": {"type": "administration"}` | — | the one cascade kind that needs no seeded data |
+| ~~`"extra": {"type": "entity"}`~~ | — | **not used** — see Part 4 D-4 |
+
+### `--tenant` semantics across the seeders (Part 4)
+
+| Value passed | Resolves to | Levels the roles seeder visits |
+|---|---|---|
+| `--tenant=acme` | `Tenant(subdomain="acme")` | `Levels.objects.filter(tenant=acme)` |
+| `--tenant=""` or omitted | `None` | `Levels.objects.filter(tenant=None)` — the tenant-less space |
+| `--tenant=typo` | `CommandError` | none; fails before any write |
+| *(today, any value)* | ignored | `Levels.objects.all()` — every workspace |
+
 ---
 
 ## 7. Compatibility & Migration
@@ -1188,8 +1760,9 @@ latitude. Nothing new should reorder either.
 | `fake_complete_data_seeder` | `--tenant` required; `--clean` terminal; `--bbox`, `--depth`, `--fanout` removed |
 | `administration_csv_seeder` | **new**; accepts `attr_*` columns |
 | `administration_seeder` | `seed_administration_prod()` and the topojson path removed; `--test` fixture unchanged |
-| `form_seeder` | `--tenant` added, optional — omitting it keeps the pre-workspace behaviour |
-| `default_roles_seeder` | unchanged; takes no `--tenant` (it derives each role's workspace from its level) |
+| `form_seeder` | `--tenant` added, optional — omitting it keeps the pre-workspace behaviour. **Part 4**: an unparseable source file now raises `CommandError` naming the file (D-6); a non-`--test` run selects `*.prod.json` only, and `settings.PROD` no longer affects file selection (D-7) |
+| `default_roles_seeder` | ~~unchanged; takes no `--tenant` (it derives each role's workspace from its level)~~ → **reversed by Part 4 D-2.** `--tenant` added, optional; omitting it means the tenant-less space. Deriving a role's tenant from its level was never the question — which levels the loop visits was |
+| `generate_sqlite` | **Part 4**: `--tenant` added, optional — omitting it keeps the rebuild-everything behaviour `run-prod.sh` depends on (D-8); the all-`None` parent column no longer raises (D-5) |
 | `administration_attribute_seeder` | unchanged |
 | `createsuperuser` | **overridden** in `v1_users`; `--tenant` added, optional. Requires `api.v1.v1_users` to precede `django.contrib.auth` in `INSTALLED_APPS` |
 | `assign_forms` | `--tenant` added to disambiguate the account; the form list is scoped to that account's own workspace |
@@ -1209,6 +1782,48 @@ alone (not unique across workspaces) and handed out every workspace's forms,
 and `fake_user_seeder`'s organisation lookup compared a related row's primary
 key rather than its `type`, so seeded users came out org-less once the
 attribute sequence had moved past `OrganisationTypes.member`.
+
+**Part 4 compatibility.**
+
+- [ ] `seeder.sh`'s argument surface is unchanged — `--tenant` is already
+      required and is simply forwarded to one more command.
+- [ ] `default_roles_seeder` with no arguments keeps working and keeps meaning
+      something sensible; 129 of the 130 test call sites are not edited
+      (Part 4 D-2; the exception is I-11).
+- [ ] **Roles already created in the wrong workspaces are not cleaned up.** The
+      fix is forward-only; see the open item in §10.
+- [x] The new form file is additive. A deployment that has replaced
+      `source/forms/` with its own definitions is unaffected — except that it
+      now gets this form too, unless it removes the file.
+- [x] `job.sh` gains a real form id to export, where `example.prod.json` would
+      have made it call `generate_excel_data example`.
+- [x] **`source/forms/unused/` is deleted.** No code reads it — `grep` over
+      `backend/`, `ci/` and `frontend/` finds references only in documentation
+      ([FB-002A](FB-002A-align-question-model-with-editor-payload.md) lists the
+      four files in a table). Recoverable from git history.
+- [ ] **A plain `form_seeder` run no longer seeds the `example-*` fixtures**
+      (D-7). This is breaking for anyone who relied on a bare run to populate a
+      dev database with them — use `--test` instead, which is what the 150
+      existing call sites already do.
+- [ ] A deployment dropping its own definitions into `source/forms/` must name
+      them `*.prod.json` for a plain run to pick them up (D-7).
+- [x] `--test` is unaffected: it keeps only filenames containing "example",
+      which the initial form's does not.
+
+**Part 4 — Mobile App Impact**
+
+- [ ] SQLite schema unchanged (Part 4 D-5 changes which values reach the file,
+      not which columns). A root-only workspace previously got **no**
+      `administrator.sqlite` at all, because the command aborted; it now gets one
+      with a single row whose `parent` is `0`, which is what every other root
+      row already looks like.
+- [ ] Workspaces ordered after the failing one in `Tenant.objects.all()` were
+      silently missing their SQLite files entirely. They now get them. Devices
+      in those workspaces pick the files up on their next sync — no app change,
+      no version bump.
+- [ ] The seeded registration form reaches devices through the normal form
+      assignment path. It is a plain registration form with no question type the
+      app does not already render.
 
 
 ---
@@ -1237,6 +1852,24 @@ attribute sequence had moved past `OrganisationTypes.member`.
       (b) the prefix is a compile-time constant, not user input;
       (c) user deletion is additionally guarded on having no surviving
       `FormData`.
+
+**Part 4.**
+
+- [ ] **The roles defect is a permissions defect, which is why it is in this
+      section and not only in §1.** `default_roles_seeder` writes `RoleAccess`
+      and `RoleFeatureAccess` rows — read, submit, edit, delete, `invite_user`
+      and the five form-builder grants. Creating an unrequested `Admin` role in
+      someone else's workspace creates a grantable full-access role there. No
+      user is assigned to it, so nothing is exposed today; a workspace
+      administrator picking from a role list they did not build is the risk, and
+      it is the reason this is worth fixing rather than tolerating.
+- [ ] Part 4 adds no HTTP surface and no new destructive operation. Nothing in
+      it deletes.
+- [ ] `--tenant` is a subdomain looked up through `resolve_tenant`, which does
+      an exact `filter(subdomain=...)` — not a `LIKE`, not a raw id, and an
+      unknown value is rejected rather than defaulting to "all".
+- [ ] The seeded form is committed, reviewed content, not operator input. The
+      `CommandError` of D-6 exists for the files an operator adds beside it.
 
 There is deliberately **no `DEBUG` gate** — see R-4. The three guards above are
 what make the operation safe, and they hold in every environment; an
@@ -1307,6 +1940,39 @@ prefix, `--clean` and the bounding boxes.
 | Unit | `--test` still produces `TEST_GEO_DATA` coordinates |
 | Integration | **`--clean` keeps the boxes** — they belong to the hierarchy, carry no `DUMMY-` prefix, and the prefix-keyed deletion already leaves them alone. The test exists to keep it that way |
 
+### Part 4 — tenant-scoped roles, the seeded form, and the sqlite guard
+
+**31 tests ship with Part 4**, in three new files:
+`v1_profile/tests/test_default_roles_seeder.py` (11),
+`v1_forms/tests/tests_initial_form_seed.py` (13),
+`v1_mobile/tests/tests_generate_sqlite_null_parent.py` (7).
+Two existing form-seeder test files were also updated for D-7
+(`tests_form_seeder.py`, `tests_form_seeder_upsert.py`), and one roles call
+site for D-2 (I-11).
+
+| Type | Coverage |
+|---|---|
+| Integration | **Two workspaces, one run.** Seed levels for `acme` and `other`; run `default_roles_seeder --tenant=acme`; assert `Role.objects.filter(tenant=other).count() == 0`. The defect this part exists to fix — and it fails against the former `.all()` implementation |
+| Integration | Roles created for `acme` cover every one of its levels, with the `Admin` / `Submitter` / `Approver` access rows each role is supposed to carry |
+| Unit | No `--tenant` seeds `tenant=None` levels only, and leaves a workspace's levels alone — the assertion that every unmodified test call site rests on (all but the one in I-11) |
+| Unit | `--tenant=<unknown>` raises `CommandError` listing known subdomains, before any `Role` is written |
+| Integration | Idempotency — a second run creates no second `RoleAccess`/`RoleFeatureAccess` row for the same role |
+| Unit | Two levels with the same name in *different* workspaces both get roles; the `unique_role_name_per_tenant` constraint is not tripped |
+| Integration | `Role.tenant` on every created row equals `administration_level.tenant` — pins the `Role.save()` derivation the fix relies on |
+| Unit | The seeded form file parses through `normalize_form_definition` and `validate_form_definition` without error — catches a hand-edit that breaks the JSON before an operator finds it |
+| Unit | **The seeded form contains no `extra.type == "entity"` question.** The D-4 constraint, asserted rather than trusted to a code review |
+| Integration | `form_seeder --tenant=acme` on an empty database creates the form, published, as `FormTypes.registration`, with the expected group and question counts |
+| Integration | Seeding the form creates **no** `Entity` rows and needs none — the end the entity-free constraint is a means to. Asserted inside the seeding test rather than as a separate submission test, which would exercise the submission machinery rather than this form |
+| Unit | An unparseable file in the source folder raises `CommandError` **naming the file**; a valid folder is unaffected. Use `--source` with a temp folder, as the existing tests do, rather than writing into the shared fixtures |
+| Unit | A plain run selects `*.prod.json` and skips both `example-*.json` and an unrelated `.json` in the same folder (D-7) |
+| Unit | A stray non-prod `.json` beside the definitions is not even parsed — the empty `example.prod.json` would have been skipped outright had it not carried the suffix |
+| Unit | The plain-run form count is derived from the folder's `*.prod.json` listing, not hardcoded, and no `example-*` id (1–5) is among the seeded forms |
+| Unit | `generate_sqlite` on a queryset whose `parent` column is all-`None` writes `parent = 0` and does not raise. The regression for D-5 — and it must build the frame from a single root row, because a second row with a real parent makes pandas produce `NaN` and the old code passes |
+| Integration | `generate_sqlite` across several workspaces where an early one is root-only: every workspace still gets its file |
+| Integration | The command with `--tenant=acme` writes into `acme/` and no other workspace's directory, and skips the tenant-less root files (D-8) |
+| Integration | The command with no `--tenant` still rebuilds every workspace plus the root files — the `run-prod.sh` boot path |
+| Unit | `--tenant=<unknown>` raises `CommandError` before any file is written |
+
 ### Verification performed
 
 - **Full backend suite: 1,975 tests pass** (1 skipped). `flake8` clean on every
@@ -1329,6 +1995,56 @@ prefix, `--clean` and the bounding boxes.
 **Not done**: a manual click-through of Manage Data and a dashboard after
 seeding. The API-level behaviour is covered above; the visual check is the
 remaining manual verification.
+
+**Part 4 — verification performed**
+
+- **Both regressions were confirmed to fail against the unfixed code** before
+  the fix was restored, which is the only evidence that a passing test means
+  anything here:
+  - reverting `Levels.objects.filter(tenant=tenant)` to `.all()` fails 3 of the
+    11 roles tests, including the two-workspace assertion;
+  - reverting `pd.notna(x)` to `x == x` fails 2 of the sqlite tests with the
+    exact `TypeError: int() argument must be a string, a bytes-like object or a
+    number, not 'NoneType'` from the original traceback (the file held 3 tests
+    at the time; D-8 later brought it to 7);
+  - reverting D-8's `targets = [tenant]` to the all-workspaces walk fails 2 of
+    the 7 sqlite tests, including the one asserting a `--tenant` run writes no
+    other workspace's directory.
+- The pandas dtype claim behind D-5 checked against the pinned version (2.1.1):
+  `[{'parent': None}]` → `object [None]`, `[{'parent': None}, {'parent': 1}]` →
+  `float64 [nan, 1.0]`. This is why the regression fixture must be a *single*
+  root-only row.
+- `flake8` clean across the backend.
+- **Exactly one pre-existing call site needed `--tenant` added**, which is the
+  honest version of D-2's claim. `tests_seeder_tenant_scoping.py`'s
+  `test_stamps_and_scopes_to_the_named_workspace` builds *acme-owned* levels and
+  then called the roles seeder bare, relying on `.all()` to reach them. It was
+  found by the full suite, not predicted — see I-11. Every other roles call site
+  passes only `--test` and seeds `tenant=None` levels, so all of those are
+  unmodified.
+- Two existing form-seeder test files were updated for D-7, which is a
+  deliberate behaviour change rather than a surprise: four fixtures renamed to
+  `.prod.json`, and two assertions that pinned the old selection rule rewritten.
+
+**Module-level runs, all green**: 60/60 across the five modules D-7 touches
+(`tests_form_seeder`, `tests_form_seeder_upsert`, `tests_initial_form_seed`,
+`tests_seeder_tenant_scoping`, `test_default_roles_seeder`), and 7/7 on the
+sqlite module after D-8.
+
+**Not done, and it matters:**
+
+- **No complete run of the backend suite has succeeded since Part 4 landed.**
+  One full run early in the work completed (2,304 tests, the 2 failures that
+  became I-11) — that was before D-7 and D-8. Every attempt since has died for
+  an environmental reason rather than a test one: two were OOM-killed
+  (`exit=137`; the container has no memory limit and the host had ~9 GB free),
+  and one aborted at database setup because a killed run had left `test_mis`
+  behind and `docker compose exec -T` gives Django no stdin to answer its
+  "delete it?" prompt. Use `--noinput`, and do not run other test modules
+  alongside it. **This is the one outstanding verification gap in Part 4.**
+- A live `./seeder.sh --tenant=<sub>` run against the developer's
+  five-workspace database. The tests cover the API-level behaviour of every
+  step; this is the run that reproduces the original screenshots.
 
 ---
 
@@ -1401,8 +2117,33 @@ path already produces. One code path, one behaviour, both callers agreeing.
    entire hierarchy to add it.
 4. *Fiji / the antimeridian?* → **Answered by measurement**, see Part 3 D-7.
 
+**R-8 · Part 4's four defects are fixed together, not split.** They are
+unrelated in cause — a missing filter, an empty file, a NaN idiom — and share
+only that they are all on one `./seeder.sh` run. Splitting them into four
+changes would mean four rounds of "run the seeder end to end on a
+multi-workspace database", which is the only way any of them is really
+verified. The acceptance criterion is a run that exits 0, and that criterion
+cannot be met a quarter at a time.
+
+**R-9 · The roles seeder keeps `--test`, and keeps its current meaning.**
+`--test` re-creates access rows on roles that already exist, which is not what
+the flag name suggests. It is load-bearing for 130 call sites that seed roles
+into a database where `get_or_create` may find an existing row, and renaming it
+is a 140-file change for a cosmetic gain. Left alone deliberately; noted here so
+the next reader does not mistake it for an oversight.
+
 ### Still open
 
+- [ ] **Clean up roles already created in the wrong workspaces.** Part 4 is
+      forward-only: it stops new runs leaking, and does nothing about roles a
+      previous run already created in workspaces it was not asked to touch.
+      Deliberately not a `--prune` flag — a command that deletes roles is a
+      command that can delete a role a real user is assigned to
+      (`UserRole.role` is not nullable and `Role.administration_level` cascades,
+      per Part 1 I-4). If the affected workspaces are local test data, dropping
+      the database is the cheaper answer; if they are not, a reviewed one-off
+      `Role.objects.filter(...).delete()` in a shell, after checking
+      `user_user_role` is empty for those roles, is the right size of fix.
 - [ ] **Retire `administration_seeder`.** Its three defects (Part 2 D-1) are not
       worth fixing, because `administration_csv_seeder` replaces every non-test
       caller. The only dependency to unpick is the `--test` fixture used by 30+
@@ -1503,6 +2244,73 @@ back empty strings, so "blank means truncate here" is a plain falsy check.
 `utf-8-sig` is used so a spreadsheet-exported BOM does not become part of the
 first header's name.
 
+### I-9: the seeder resyncs the PK sequences, and where timestamp ids come from
+
+Part 4 D-3 argues the seeded form's id must sit above `form_id_seq`. While
+building, the mechanism turned out to be stronger than the decision claimed.
+
+`form_seeder` pre-creates the `Forms` row (`form_seeder.py:293`) and then lets
+`import_form_definition` take the **update** path, and
+`_apply_import_update_path` calls `_sync_import_pk_sequences()` twice
+(`functions.py:1670`, `:1786`). That runs
+`setval(seq, COALESCE(MAX(id), 1))` over `form`, `question_group` and
+`question`. So after seeding, `form_id_seq` is 1789516800000 and the next form
+created through the builder gets 1789516800001 — no collision, and the
+sequence is realigned rather than merely avoided.
+
+The same call also repairs the pre-existing dev-only hazard that made D-3 worth
+arguing at all: `example-1.json` through `example-5.json` occupy ids 1–5 while
+the sequence sits at 1, so the first form created through the builder would
+otherwise land on an occupied id. Seeding any form now pushes the sequence past
+all of them.
+
+**Corrected after checking a live database.** An earlier draft of D-3 said the
+form builder does not mint ids and that the database assigns them. That is
+wrong, and it was wrong in the direction that matters: the builder *does* mint
+`new Date().getTime()`
+(`akvo-react-form-editor/src/lib/store.js:16`), so the seeded form shares an id
+space with wall-clock milliseconds. The grep that produced the error searched
+`frontend/src`, where there is nothing to find — the minting is inside the npm
+package.
+
+Verified against a five-workspace dev database carrying 31 forms, 20 of them
+builder-minted between 2024-03 and today:
+
+| Check | Result |
+|---|---|
+| Form id collision with `1789516800000` | none; nearest other id is 24,119,304 ms (6.7 h) away |
+| Group / question / option id collisions | none |
+| `question_id_seq` position | ~1.85 × 10¹³ — an order of magnitude *above* the timestamp band, so auto-assigned question ids do not approach the seeded ones either |
+
+The decision stands; only its rationale needed fixing.
+
+### I-10: `--test` does not pick up the new form, deliberately
+
+`form_seeder --test` narrows to filenames containing `example`
+(`form_seeder.py:174`). `1789516800000.prod.json` does not match, so the
+existing tests never see it and their form fixtures are unchanged. The Part 4
+tests seed it explicitly with `--file 1789516800000`, or point `--source` at a
+temp folder holding a copy — never at the shared `source/forms/`, which races
+under `--parallel`.
+
+### I-11: one pre-existing roles call site did depend on the leak
+
+Part 4 D-2 predicted that every `default_roles_seeder` test call site would
+keep working untouched, because they all seed `tenant=None` levels. The full
+suite found one that does not.
+
+`v1_users/tests/tests_seeder_tenant_scoping.py::test_stamps_and_scopes_to_the_named_workspace`
+builds *acme-owned* levels through `TenantHierarchyMixin`, then called the
+roles seeder bare and relied on `Levels.objects.all()` to reach them. Under the
+fix it creates nothing, `fake_user_seeder` finds no role to assign, and the
+test fails on `UserRole.objects.count() == 0`.
+
+The fix is `tenant="acme"` on that call — the caller wanting a workspace's roles
+now has to say which workspace. Worth noting that this is the Parts 1–3 test
+suite catching the Part 4 change in exactly the place it should: a test written
+to prove the fake-user seeder is workspace-scoped was itself depending on a
+seeder that was not.
+
 ### I-8: the notebook was not valid nbformat
 
 Every cell's `source` was a list of lines with no trailing newlines, back to the
@@ -1523,7 +2331,23 @@ fields.
     — the Excel path
   - [VIZ-009 Legacy dashboard removal](VIZ-009-legacy-dashboard-removal.md) —
     the surface this data feeds
+  - [MT-001 Free-tier registration](MT-001-free-tier-registration.md) — how a
+    workspace comes to exist with only a root administration, which is the
+    precondition for Part 4 D-5
+  - [FB-002 Form builder backend CRUD API](FB-002-form-builder-backend-crud-api.md)
+    — where the epoch-millisecond form ids of Part 4 D-3 come from
+  - [FB-015 Form import tenant isolation](FB-015-form-import-tenant-isolation.md)
+    — why form ids are global and a seeded file can only belong to one workspace
 - Prior art:
+  - `api/v1/v1_profile/management/commands/default_roles_seeder.py` — the
+    `Levels.objects.all()` of Part 4 D-1
+  - `utils/tenant_command.py` — `resolve_tenant`, reused rather than copied a
+    fourth time (Part 4 D-1)
+  - `utils/custom_generator.py` — the `x == x` guard of Part 4 D-5
+  - `backend/source/forms/unused/*.prod.json` — the four archived forms Part 4
+    D-4 read for their common spine, then deleted. In git history at
+    `[#55] Move all old forms to unused folder`
+  - `backend/job.sh` — the filename-is-the-id convention behind Part 4 D-3
   - `api/v1/v1_jobs/administrations_bulk_upload.py` — `seed_administrations()`
     reused wholesale (Part 2 D-3), and the attribute upsert reused by Part 3
   - `api/v1/v1_profile/management/commands/administration_seeder.py` — the
@@ -1544,8 +2368,9 @@ fields.
 
 ## Approval
 
-| Role | Name | Date | Status |
-|------|------|------|--------|
-| Developer | Iwan Firmawan | 2026-09-02 | Implemented, pending review |
-| Tech Lead | | | |
-| Product | | | |
+| Role | Name | Date | Status | Scope |
+|------|------|------|--------|-------|
+| Developer | Iwan Firmawan | 2026-09-02 | Implemented, pending review | Parts 1–3 |
+| Developer | Iwan Firmawan | 2026-09-16 | Implemented, pending review | Part 4 |
+| Tech Lead | | | | |
+| Product | | | | |
