@@ -358,20 +358,20 @@ Submit 5 entries under Version 1 (Question 5 formula: `return #1 + #2`):
 
 #### Step 2: Dashboard Builder Widget Verification (All on Test Form 5)
 
-| Widget Type | Form Used | Config Tested | Expected Behavior |
+| Widget Type | Form Used | Config Tested | Expected Behavior (After All 7 Submissions) |
 |---|---|---|---|
-| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | • If Entry 5 is `0`: Displays average **`25.0`** (computed over `[20, 20, 60, 0]` divided by 4, skipping `None`).<br>• If Entry 5 is `"NaN"` / missing: Displays average **`33.33`** (computed over `[20, 20, 60]` divided by 3, safely ignoring `None` and `"NaN"` without crashing or distorting denominator). |
-| **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Optimal"`, `"Degraded"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`3`** (`"Degraded"`) without crashing. |
+| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | Displays average **`75.0`** (computed as $\frac{20 + 20 + 60 + 0 + 300 + 50}{6} = \frac{450}{6}$, safely skipping `None`).<br>*(Note: If tested before Phase 2 entries, displays `25.0` for `[20, 20, 60, 0]`, or `33.33` if Entry 5 is `"NaN"`).* |
+| **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`3`** (`"Degraded"`). |
 | **KPI Card (Mixed Version Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["12", "9", "19", "0", "Pass", "Fail"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`1`** (`"0"`) without SQL cast exception. |
-| **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars: `"Degraded"` (count: 3) and `"Optimal"` (count: 1). |
-| **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories (`"Degraded"`: 3, `"Optimal"`: 1). |
-| **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 pie slices: `"Degraded"` (75%, count: 3) and `"Optimal"` (25%, count: 1). |
+| **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars with equal height: **`"Degraded"` (count: 3)** and **`"Optimal"` (count: 3)**. |
+| **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories (`"Degraded"`: 3, `"Optimal"`: 3). |
+| **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 equal pie slices: **`"Degraded"` (50%, count: 3)** and **`"Optimal"` (50%, count: 3)**. |
 | **Pie Chart (Mixed Version Upgrade)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 6 discrete category slices: `"0"` (1), `"9"` (1), `"12"` (1), `"19"` (1), `"Fail"` (1), `"Pass"` (1) without dropping historical submissions. |
 | **Line Chart** | Test Form 5 | Y axis: `Total Cost`, Category: `Operational Status`, `group_by="month"` | Renders numeric time-series trend line of monthly average cost (`Total Cost`), split into 2 lines by `Operational Status` (`Optimal` vs `Degraded`). |
-| **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots coordinates `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, cleanly dropping uncomputable null/NaN rows. |
-| **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` on `Operational Status`, or `threshold_gt: 50` on `Total Cost` | Correctly filters rows according to string options or numeric thresholds. |
-| **Map Widget (Category Mode)** | Test Form 5 | Map question: `Operational Status`, Map mode `"category"` | Markers colored according to categorical status `"Degraded"` vs `"Optimal"`. |
-| **Map Widget (Quantity Mode)** | Test Form 5 | Map question: `Total Cost`, Map mode `"range"` | Markers sized proportional to numeric `Total Cost` (nulls rendered with neutral default size). |
+| **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots 6 coordinates: `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(5, 50)`, cleanly dropping uncomputable null/NaN rows. |
+| **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` (3 rows) or `threshold_gt: 50` on `Total Cost` (2 rows) | Correctly filters rows according to string options or numeric thresholds. |
+| **Map Widget (Category Mode)** | Test Form 5 | Map question: `Operational Status`, Map mode `"category"` | Markers colored according to categorical status `"Degraded"` (3) vs `"Optimal"` (3). |
+| **Map Widget (Quantity Mode)** | Test Form 5 | Map question: `Total Cost`, Map mode `"range"` | Markers sized proportional to numeric `Total Cost` ranges (nulls rendered with neutral default size). |
 
 #### Step 3: Publish & Viewer Parity
 1. Save the dashboard and click **Publish**.
