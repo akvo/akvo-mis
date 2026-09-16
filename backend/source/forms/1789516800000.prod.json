@@ -1,0 +1,149 @@
+{
+  "id": 1789516800000,
+  "form": "Registration",
+  "version": 1,
+  "type": 1,
+  "description": "Generic registration form. Every deployment starts from this and edits it in the form builder; it deliberately names nothing sector-specific and depends on no seeded entity types.",
+  "defaultLanguage": "en",
+  "languages": ["en"],
+  "question_groups": [
+    {
+      "id": 1789516800001,
+      "order": 1,
+      "name": "primary_information",
+      "label": "Primary Information",
+      "questions": [
+        {
+          "id": 1789516800011,
+          "order": 1,
+          "name": "administration",
+          "label": "Location",
+          "short_label": "Location",
+          "type": "cascade",
+          "required": true,
+          "meta": true,
+          "extra": {
+            "type": "administration"
+          }
+        },
+        {
+          "id": 1789516800012,
+          "order": 2,
+          "name": "name",
+          "label": "Name",
+          "short_label": "Name",
+          "type": "input",
+          "required": true,
+          "meta": true
+        },
+        {
+          "id": 1789516800013,
+          "order": 3,
+          "name": "registration_date",
+          "label": "Date of Registration",
+          "short_label": "Registration Date",
+          "type": "date",
+          "required": true,
+          "meta": false
+        },
+        {
+          "id": 1789516800014,
+          "order": 4,
+          "name": "geolocation",
+          "label": "Geolocation",
+          "short_label": null,
+          "type": "geo",
+          "required": false,
+          "meta": true
+        }
+      ]
+    },
+    {
+      "id": 1789516800002,
+      "order": 2,
+      "name": "contact_details",
+      "label": "Contact Details",
+      "questions": [
+        {
+          "id": 1789516800021,
+          "order": 1,
+          "name": "contact_name",
+          "label": "Contact Person",
+          "short_label": "Contact",
+          "type": "input",
+          "required": false,
+          "meta": false
+        },
+        {
+          "id": 1789516800022,
+          "order": 2,
+          "name": "phone",
+          "label": "Phone Number",
+          "short_label": "Phone",
+          "type": "number",
+          "required": false,
+          "meta": false
+        }
+      ]
+    },
+    {
+      "id": 1789516800003,
+      "order": 3,
+      "name": "condition",
+      "label": "Condition",
+      "questions": [
+        {
+          "id": 1789516800031,
+          "order": 1,
+          "name": "status",
+          "label": "Current Status",
+          "short_label": "Status",
+          "type": "option",
+          "required": true,
+          "meta": false,
+          "attributes": ["chart", "table"],
+          "options": [
+            {
+              "id": 1789516800311,
+              "order": 1,
+              "label": "Functional",
+              "value": "functional"
+            },
+            {
+              "id": 1789516800312,
+              "order": 2,
+              "label": "Partially functional",
+              "value": "partially_functional"
+            },
+            {
+              "id": 1789516800313,
+              "order": 3,
+              "label": "Non-functional",
+              "value": "non_functional"
+            }
+          ]
+        },
+        {
+          "id": 1789516800032,
+          "order": 2,
+          "name": "photo",
+          "label": "Photo",
+          "short_label": null,
+          "type": "image",
+          "required": false,
+          "meta": false
+        },
+        {
+          "id": 1789516800033,
+          "order": 3,
+          "name": "remarks",
+          "label": "Remarks",
+          "short_label": null,
+          "type": "text",
+          "required": false,
+          "meta": false
+        }
+      ]
+    }
+  ]
+}
