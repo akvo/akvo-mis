@@ -208,10 +208,91 @@ sequenceDiagram
 
 | Task ID | Task Description | Vibe Coding (Dev) | Automated Testing | QA & Review | Total Est. Time |
 |:---|:---|:---:|:---:|:---:|:---:|
-| **TASK-01** | **Backend Autofield Engine & Mixed-Value Detection**<br>• Add `autofield` to `SUPPORTED_QUESTION_TYPES` & `/dashboard/sources/`<br>• Implement `has_string_values` check & safe PostgreSQL numeric casting in `values_functions.py` & `dashboard_views.py`<br>• Table criteria & escalation support for autofields | 60m | 30m | 30m | **120m (2.0h)** |
-| **TASK-02** | **Frontend Dashboard Builder UI Integration**<br>• Update `builderConstants.js` (`SUPPORTED_GROUP_QUESTION_TYPES`, `MAP_QUESTION_TYPES`, `STACK_QUESTION_TYPES`)<br>• Enable autofield question selection across KPI, Bar, Pie, Line, Table, Map, Scatter widgets in `BuilderInspector.jsx` | 60m | 30m | 30m | **120m (2.0h)** |
-| **TASK-03** | **End-to-End Verification & Edge-Case Testing**<br>• Unit & integration tests for mixed numeric/string datasets, form version upgrades, and nulls<br>• Execute complete manual verification protocol across all 7 widget types<br>• Align documentation and feature specs | 30m | 20m | 10m | **60m (1.0h)** |
+| **TASK-01** | **Backend Autofield Engine & Mixed-Value Detection** | 60m | 30m | 30m | **120m (2.0h)** |
+| **TASK-02** | **Frontend Dashboard Builder UI Integration** | 60m | 30m | 30m | **120m (2.0h)** |
+| **TASK-03** | **End-to-End Verification, Edge Cases & Docs Alignment** | 30m | 20m | 10m | **60m (1.0h)** |
 | **TOTAL** | | **150m (2.5h)** | **80m (1.33h)** | **70m (1.17h)** | **300m (5.0h)** |
+
+---
+
+### TASK-01: Backend Autofield Engine & Mixed-Value Detection
+- **Est. Effort**: 60m Dev + 30m Testing + 30m QA = **120m (2.0h)**
+- **Touchpoint Files**:
+  - `backend/api/v1/v1_visualization/constants.py`
+  - `backend/api/v1/v1_visualization/dashboard_builder_serializers.py`
+  - `backend/api/v1/v1_visualization/dashboard_views.py`
+  - `backend/api/v1/v1_visualization/values_functions.py`
+  - `backend/api/v1/v1_visualization/escalation_functions.py`
+  - `backend/api/v1/v1_visualization/functions.py`
+  - `backend/api/v1/v1_visualization/scatter_functions.py`
+
+#### User Acceptance Criteria (UAC):
+- [ ] Dashboard sources API (`/manage/dashboards/<pk>/sources`) includes `autofield` questions in the form family sources list.
+- [ ] When an autofield question contains 100% numeric answers, arithmetic aggregations (`Average`, `Sum`, `Min`, `Max`, `Last`) compute the true mathematical value.
+- [ ] When an autofield question contains non-numeric strings (e.g. `"Pass"`, `"Fail"`, `"N/A"`), the endpoint automatically falls back to categorical string options without failing.
+- [ ] Table widget escalation and criteria filters (`option_equals`, `threshold_gt`, `threshold_lt`) evaluate autofield values in `Answers.name`.
+- [ ] Scatter plot mode (`mode=scatter`) accepts autofield questions on X and Y axes.
+
+#### Technical Acceptance Criteria (TAC):
+- [ ] `SUPPORTED_QUESTION_TYPES` and `STACK_QUESTION_TYPES` in `constants.py` include `QuestionTypes.autofield`.
+- [ ] `serialize_question` in `dashboard_builder_serializers.py` serializes `"type": "autofield"`.
+- [ ] `has_string_values` check in `values_functions.py` excludes `NON_VALUE_TOKENS` (`""`, `"null"`, `"undefined"`, `"NaN"`, `"None"`) and identifies string presence using regex `^\s*-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\s*$`.
+- [ ] `NUMERIC_AUTOFIELD_EXPR` uses `Case(When(..., then=Cast(Trim('name'), output_field=FloatField())))` to safely parse numbers and return `Value(None)` for non-numbers.
+- [ ] `handle_option_question` groups on `Answers.name` when `question.type == QuestionTypes.autofield`.
+- [ ] `_criterion_matching_ids` and `build_escalation_criteria_filter` match `Q(options__contains=[v]) | Q(name=v)` for `option_equals` and use `NUMERIC_AUTOFIELD_EXPR` for `threshold_gt`/`threshold_lt`.
+- [ ] All queries preserve multi-tenant scoping via `get_base_monitoring_qs`.
+
+---
+
+### TASK-02: Frontend Dashboard Builder UI Integration
+- **Est. Effort**: 60m Dev + 30m Testing + 30m QA = **120m (2.0h)**
+- **Touchpoint Files**:
+  - `frontend/src/pages/dashboards/builderConstants.js`
+  - `frontend/src/pages/dashboards/BuilderInspector.jsx`
+  - `frontend/src/pages/dashboards/BuilderCanvas.jsx`
+  - `frontend/src/components/dashboard/widgets/` (`VizKPI.jsx`, `VizBar.jsx`, `VizPie.jsx`, `VizLine.jsx`, `VizScatter.jsx`, `VizTable.jsx`, `VizMap.jsx`)
+
+#### User Acceptance Criteria (UAC):
+- [ ] Autofield questions appear in question selection dropdowns for all widget types: KPI, Bar, Pie, Line, Scatter, Table, and Map.
+- [ ] Authors can group and stack charts by autofield questions.
+- [ ] Map widget allows selecting autofield questions for both "Category" (point color) and "Quantity" (point size) modes.
+- [ ] Table widget column picker and criteria filter builder offer autofield questions.
+- [ ] Standard chart color palettes apply consistently to autofield visualizations.
+
+#### Technical Acceptance Criteria (TAC):
+- [ ] `SUPPORTED_GROUP_QUESTION_TYPES`, `MAP_QUESTION_TYPES`, and `STACK_QUESTION_TYPES` in `builderConstants.js` include `"autofield"`.
+- [ ] `groupByOptions` and `stackByOptions` in `builderConstants.js` handle question objects with `type: "autofield"`.
+- [ ] `BuilderInspector.jsx` renders appropriate controls (Aggregations, Group by, Stack by, Criteria) when an autofield question is selected.
+- [ ] Widget renderers (`VizKPI`, `VizBar`, `VizPie`, `VizLine`, `VizScatter`, `VizTable`, `VizMap`) render autofield metrics without frontend runtime errors.
+- [ ] Formatted values in tooltips and legends match existing number/string formatting conventions (`formatNumber`, `formatDate`).
+
+---
+
+### TASK-03: End-to-End Verification, Edge Cases & Documentation Alignment
+- **Est. Effort**: 30m Dev + 20m Testing + 10m QA = **60m (1.0h)**
+- **Touchpoint Files**:
+  - `backend/api/v1/v1_visualization/tests/tests_autofield_visualization.py`
+  - `frontend/src/pages/dashboards/__test__/BuilderInspector.test.js`
+  - `doc/design/VIZ-026-autofield-in-dashboard-visualization.md`
+
+#### User Acceptance Criteria (UAC):
+- [ ] All 7 widget types render with full visual and data parity between Dashboard Builder and published Dashboard Viewer (`/dashboards/<slug>`).
+- [ ] Form version upgrade scenario (historical integer scores + new text status strings) renders all values as discrete categories without data loss.
+- [ ] Null, NaN, undefined, and empty string submissions are gracefully skipped in numeric metrics without crashing or skewing denominators.
+- [ ] Dashboard global filters (administration hierarchy, date ranges) correctly filter autofield widget data.
+
+#### Technical Acceptance Criteria (TAC):
+- [ ] New automated test file `backend/api/v1/v1_visualization/tests/tests_autofield_visualization.py` covers:
+  - Pure numeric autofield aggregation (`average`, `sum`, `min`, `max`, `last`).
+  - Categorical autofield grouping and stacking.
+  - Mixed numeric + string dataset fallback.
+  - Form version upgrade scenario.
+  - Null / NaN / empty string handling and 100% null dataset default.
+  - Scatter plot with autofield X/Y axes and null coordinate skipping.
+  - Table criteria filtering (`option_equals`, `threshold_gt`, `threshold_lt`).
+  - Multi-tenant query isolation.
+- [ ] Frontend unit tests in `BuilderInspector.test.js` and widget suites pass.
+- [ ] Backend test suite achieves $\ge 80\%$ test coverage; `flake8` and `eslint` pass cleanly with zero lint warnings.
 
 ---
 
