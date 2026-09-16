@@ -7,7 +7,12 @@ from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import QuestionOptions
 from api.v1.v1_profile.models import Administration
-from api.v1.v1_visualization.constants import AGG_FUNCS
+from api.v1.v1_visualization.constants import (
+    AGG_FUNCS,
+    NON_VALUE_TOKENS,
+    NUMERIC_STRING_REGEX,
+    NUMERIC_AUTOFIELD_EXPR,
+)
 from api.v1.v1_visualization.functions import (
     get_base_monitoring_qs,
     get_monitoring_data_ids,
@@ -40,6 +45,23 @@ def value_by_data(value_question, data_ids):
     if value_question is None:
         return None
     values = defaultdict(list)
+    if value_question.type == QuestionTypes.autofield:
+        rows = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=value_question.id,
+            name__isnull=False,
+        ).exclude(
+            name__in=NON_VALUE_TOKENS
+        ).filter(
+            name__regex=NUMERIC_STRING_REGEX
+        ).values_list("data_id", "name")
+        for data_id, name in rows:
+            try:
+                values[data_id].append(float(name.strip()))
+            except (ValueError, TypeError):
+                continue
+        return values
+
     rows = Answers.objects.filter(
         data_id__in=data_ids,
         question_id=value_question.id,
@@ -1845,6 +1867,587 @@ def _stack_parent_by_month(
 
     data = [all_rows[k] for k in sorted(all_rows.keys())]
     labels = [d["month"] for d in data]
+    return {
+        "data": data,
+        "labels": labels,
+        "stack_labels": parent_names,
+    }
+
+
+# -- Autofield question handlers (Mixed-Value Rule) --
+
+def handle_autofield_question(form, question, params):
+    """Handle autofield questions according to the Mixed-Value Rule."""
+    form_id = form.id
+    group_by = params.get("group_by")
+    repeat_agg = params.get("repeat_agg", "average")
+    value_type = params.get("value_type", "number")
+    stack_by = params.get("stack_by")
+
+    qs, is_latest, _ = get_base_monitoring_qs(
+        form, form_id, params
+    )
+    data_ids = get_monitoring_data_ids(qs, is_latest)
+    agg_func = AGG_FUNCS.get(repeat_agg, Avg)
+
+    has_string_values = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).exclude(
+        name__regex=NUMERIC_STRING_REGEX
+    ).exists()
+
+    if not has_string_values and group_by != "option":
+        if stack_by == "administration":
+            return _autofield_stack_by_administration(
+                question, qs, is_latest, data_ids, params
+            )
+
+        if stack_by == "parent_id":
+            return _autofield_stack_by_parent(
+                question, qs, is_latest, data_ids, params
+            )
+
+        if group_by == "parent_id":
+            return _autofield_group_by_parent(
+                question, data_ids, agg_func, value_type
+            )
+
+        if group_by == "id":
+            return _autofield_group_by_id(
+                question, data_ids, agg_func, value_type
+            )
+
+        if group_by == "date":
+            return _autofield_group_by_date(
+                question, data_ids, params
+            )
+
+        if group_by == "month":
+            return _autofield_group_by_month(
+                question, data_ids, agg_func, value_type, params
+            )
+
+        # Total / KPI
+        result = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=question.id,
+            name__isnull=False,
+        ).exclude(
+            name__in=NON_VALUE_TOKENS
+        ).annotate(
+            num_value=NUMERIC_AUTOFIELD_EXPR
+        ).aggregate(agg_value=agg_func("num_value"))
+
+        value = (
+            round(result["agg_value"], 2)
+            if result["agg_value"] is not None else 0
+        )
+        return [{"value": value, "label": "Total"}], ["Total"]
+
+    return _autofield_group_by_option(
+        question, data_ids, qs, is_latest, value_type,
+        form=form, params=params
+    )
+
+
+def _autofield_group_by_parent(
+    question, data_ids, agg_func, value_type
+):
+    """Autofield question grouped by parent_id."""
+    results = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).annotate(
+        num_value=NUMERIC_AUTOFIELD_EXPR
+    ).filter(
+        num_value__isnull=False
+    ).values(
+        parent_name=F("data__parent__name"),
+        parent_id=F("data__parent_id"),
+    ).annotate(
+        agg_value=agg_func("num_value"),
+    ).order_by("parent_name")
+
+    data = [
+        {
+            "value": round(r["agg_value"], 2),
+            "label": r["parent_name"],
+            "group": str(r["parent_id"]),
+        }
+        for r in results
+    ]
+
+    if value_type == "percentage":
+        total = sum(d["value"] for d in data)
+        if total > 0:
+            for d in data:
+                d["value"] = round(
+                    d["value"] / total * 100, 2
+                )
+
+    labels = [d["label"] for d in data]
+    return data, labels
+
+
+def _autofield_group_by_id(
+    question, data_ids, agg_func, value_type
+):
+    """Autofield question grouped by record id."""
+    results = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).annotate(
+        num_value=NUMERIC_AUTOFIELD_EXPR
+    ).filter(
+        num_value__isnull=False
+    ).values(
+        "data_id",
+        data_name=F("data__name"),
+    ).annotate(
+        agg_value=agg_func("num_value"),
+    ).order_by("data_name")
+
+    data = [
+        {
+            "value": round(r["agg_value"], 2),
+            "label": r["data_name"],
+            "group": str(r["data_id"]),
+        }
+        for r in results
+    ]
+
+    if value_type == "percentage":
+        total = sum(d["value"] for d in data)
+        if total > 0:
+            for d in data:
+                d["value"] = round(
+                    d["value"] / total * 100, 2
+                )
+
+    labels = [d["label"] for d in data]
+    return data, labels
+
+
+def _autofield_group_by_date(question, data_ids, params):
+    """Autofield question grouped by date."""
+    repeat_agg = params.get("repeat_agg", "average")
+    agg_func = AGG_FUNCS.get(repeat_agg, Avg)
+    date_qid = params.get("date_question_id")
+
+    if date_qid:
+        data = []
+        for data_id in data_ids:
+            date_answer = Answers.objects.filter(
+                data_id=data_id,
+                question_id=date_qid,
+                name__isnull=False,
+            ).first()
+            if not date_answer or not date_answer.name:
+                continue
+            val_result = Answers.objects.filter(
+                data_id=data_id,
+                question_id=question.id,
+                name__isnull=False,
+            ).exclude(
+                name__in=NON_VALUE_TOKENS
+            ).annotate(
+                num_value=NUMERIC_AUTOFIELD_EXPR
+            ).aggregate(agg_value=agg_func("num_value"))
+            if val_result["agg_value"] is not None:
+                date_str = format_date_group(
+                    date_answer.name
+                )
+                data.append({
+                    "value": round(
+                        val_result["agg_value"], 2
+                    ),
+                    "label": date_str,
+                    "group": date_str,
+                })
+    else:
+        results = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=question.id,
+            name__isnull=False,
+        ).exclude(
+            name__in=NON_VALUE_TOKENS
+        ).annotate(
+            num_value=NUMERIC_AUTOFIELD_EXPR
+        ).filter(
+            num_value__isnull=False
+        ).values(
+            date=F("data__created__date"),
+        ).annotate(
+            agg_value=agg_func("num_value"),
+        ).order_by("date")
+        data = [
+            {
+                "value": round(r["agg_value"], 2),
+                "label": format_date_group(r["date"]),
+                "group": format_date_group(r["date"]),
+            }
+            for r in results
+        ]
+
+    data.sort(key=lambda x: x["group"])
+    if _should_fill_gaps(params):
+        data = fill_date_gaps(
+            data, params["from_date"], params["to_date"]
+        )
+    labels = [d["label"] for d in data]
+    return data, labels
+
+
+def _autofield_group_by_month(
+    question, data_ids, agg_func, value_type, params
+):
+    """Autofield question grouped by month."""
+    date_qid = params.get("date_question_id")
+
+    base = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).annotate(
+        num_value=NUMERIC_AUTOFIELD_EXPR
+    ).filter(
+        num_value__isnull=False
+    )
+
+    if date_qid:
+        date_sq = Answers.objects.filter(
+            data_id=OuterRef("data_id"),
+            question_id=date_qid,
+            name__isnull=False,
+        ).values("name")[:1]
+        results = base.annotate(
+            date_name=Subquery(date_sq),
+        ).filter(
+            date_name__isnull=False,
+        ).annotate(
+            month_key=Substr("date_name", 1, 7),
+        ).values("month_key").annotate(
+            agg_value=agg_func("num_value"),
+        ).order_by("month_key")
+        data = [
+            {
+                "value": round(r["agg_value"], 2),
+                "label": format_month_label(r["month_key"]),
+                "group": r["month_key"],
+            }
+            for r in results if r["agg_value"] is not None
+        ]
+    else:
+        results = base.annotate(
+            month=TruncMonth("data__created"),
+        ).values("month").annotate(
+            agg_value=agg_func("num_value"),
+        ).order_by("month")
+        data = [
+            {
+                "value": round(r["agg_value"], 2),
+                "label": format_month_label(r["month"]),
+                "group": format_month_group(r["month"]),
+            }
+            for r in results if r["agg_value"] is not None
+        ]
+
+    data.sort(key=lambda x: x["group"])
+    if _should_fill_gaps(params):
+        data = fill_month_gaps(
+            data, params["from_date"], params["to_date"]
+        )
+
+    if value_type == "percentage":
+        total = sum(d["value"] for d in data)
+        if total > 0:
+            for d in data:
+                d["value"] = round(
+                    d["value"] / total * 100, 2
+                )
+
+    labels = [d["label"] for d in data]
+    return data, labels
+
+
+def _autofield_group_by_option(
+    question, data_ids, qs, is_latest, value_type,
+    form=None, params=None
+):
+    """Group by distinct string values for autofield (categorical mode)."""
+    values_by_data = value_by_data(
+        (params or {}).get("value_question"), data_ids
+    )
+    agg = (params or {}).get("repeat_agg", "average")
+    include_empty = (params or {}).get("include_empty", False)
+
+    answer_qs = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    )
+    if not include_empty:
+        answer_qs = answer_qs.exclude(name__in=NON_VALUE_TOKENS)
+
+    distinct_names = list(
+        answer_qs.values_list("name", flat=True)
+        .distinct()
+        .order_by("name")
+    )
+
+    members = defaultdict(list)
+    for did, name in answer_qs.values_list("data_id", "name"):
+        members[name].append(did)
+
+    counts = [
+        cell_value(members.get(name, []), values_by_data, agg)
+        for name in distinct_names
+    ]
+
+    if value_type == "percentage":
+        denom = sum(counts)
+    else:
+        denom = None
+
+    data = []
+    for name, count in zip(distinct_names, counts):
+        val = (
+            round((count / denom * 100), 2)
+            if value_type == "percentage" and denom else count
+        )
+        data.append({
+            "value": val,
+            "label": name,
+            "group": name,
+            "color": None,
+        })
+
+    labels = [d["label"] for d in data]
+    return data, labels
+
+
+def _autofield_stack_by_administration(
+    question, qs, is_latest, data_ids, params
+):
+    """Stack numeric autofield by administration level."""
+    raw_level = params.get("admin_level")
+    admin_level = raw_level if raw_level is not None else 1
+    admin_groups = _build_admin_groups(data_ids, admin_level)
+    admin_names = sorted(admin_groups.keys())
+    if not admin_names:
+        return {
+            "data": [], "labels": [],
+            "stack_labels": [], "colors": [],
+        }
+
+    agg_func = AGG_FUNCS.get(
+        params.get("repeat_agg", "average"), Avg
+    )
+    period = params.get("group_by", "month")
+    date_qid = params.get("date_question_id")
+
+    # Map data_id to period
+    if date_qid:
+        date_rows = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=date_qid,
+            name__isnull=False,
+        ).values("data_id", "name")
+        format_fn = (
+            format_month_group if period == "month"
+            else format_date_group
+        )
+        date_map = {
+            r["data_id"]: format_fn(r["name"])
+            for r in date_rows
+        }
+    else:
+        fd_rows = FormData.objects.filter(
+            id__in=data_ids,
+        ).values("id", "created")
+        format_fn = (
+            format_month_group if period == "month"
+            else format_date_group
+        )
+        date_map = {
+            r["id"]: format_fn(r["created"])
+            for r in fd_rows
+        }
+
+    val_rows = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).annotate(
+        num_value=NUMERIC_AUTOFIELD_EXPR
+    ).filter(
+        num_value__isnull=False
+    ).values("data_id").annotate(
+        agg_value=agg_func("num_value"),
+    )
+    val_map = {
+        r["data_id"]: r["agg_value"]
+        for r in val_rows
+        if r["agg_value"] is not None
+    }
+
+    all_rows = {}
+    for admin_name in admin_names:
+        for did in admin_groups[admin_name]:
+            dkey = date_map.get(did)
+            agg_val = val_map.get(did)
+            if not dkey or agg_val is None:
+                continue
+            if dkey not in all_rows:
+                all_rows[dkey] = {
+                    period: (
+                        format_month_label(dkey)
+                        if period == "month" else dkey
+                    )
+                }
+            all_rows[dkey][admin_name] = round(agg_val, 2)
+
+    data = [all_rows[k] for k in sorted(all_rows.keys())]
+    labels = [d[period] for d in data]
+    return {
+        "data": data,
+        "labels": labels,
+        "stack_labels": admin_names,
+    }
+
+
+def _autofield_stack_by_parent(
+    question, qs, is_latest, data_ids, params
+):
+    """Stack numeric autofield by parent_id."""
+    if is_latest:
+        parents = list(
+            qs.values("id", "name", "latest_id")
+        )
+    else:
+        parent_ids = FormData.objects.filter(
+            id__in=data_ids,
+            parent__isnull=False,
+        ).values_list(
+            "parent_id", flat=True
+        ).distinct()
+        parent_data = FormData.objects.filter(
+            id__in=parent_ids,
+            is_pending=False,
+            is_draft=False,
+        ).values("id", "name")
+        parents = [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "data_ids": list(
+                    FormData.objects.filter(
+                        id__in=data_ids,
+                        parent_id=p["id"],
+                    ).values_list("id", flat=True)
+                ),
+            }
+            for p in parent_data
+        ]
+
+    parent_names = [p["name"] for p in parents]
+    group_by = params.get("group_by", "month")
+    agg_func = AGG_FUNCS.get(
+        params.get("repeat_agg", "average"), Avg
+    )
+    date_qid = params.get("date_question_id")
+
+    all_data_ids = []
+    for p in parents:
+        if is_latest:
+            all_data_ids.append(p["latest_id"])
+        else:
+            all_data_ids.extend(p["data_ids"])
+
+    if date_qid:
+        date_rows = Answers.objects.filter(
+            data_id__in=all_data_ids,
+            question_id=date_qid,
+            name__isnull=False,
+        ).values("data_id", "name")
+        format_fn = (
+            format_month_group if group_by == "month"
+            else format_date_group
+        )
+        date_map = {
+            r["data_id"]: format_fn(r["name"])
+            for r in date_rows
+        }
+    else:
+        fd_rows = FormData.objects.filter(
+            id__in=all_data_ids,
+        ).values("id", "created")
+        format_fn = (
+            format_month_group if group_by == "month"
+            else format_date_group
+        )
+        date_map = {
+            r["id"]: format_fn(r["created"])
+            for r in fd_rows
+        }
+
+    val_rows = Answers.objects.filter(
+        data_id__in=all_data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).annotate(
+        num_value=NUMERIC_AUTOFIELD_EXPR
+    ).filter(
+        num_value__isnull=False
+    ).values("data_id").annotate(
+        agg_value=agg_func("num_value"),
+    )
+    val_map = {
+        r["data_id"]: r["agg_value"]
+        for r in val_rows
+        if r["agg_value"] is not None
+    }
+
+    all_rows = {}
+    for p in parents:
+        p_ids = (
+            [p["latest_id"]] if is_latest
+            else p["data_ids"]
+        )
+        for did in p_ids:
+            dkey = date_map.get(did)
+            agg_val = val_map.get(did)
+            if not dkey or agg_val is None:
+                continue
+            if dkey not in all_rows:
+                all_rows[dkey] = {
+                    group_by: (
+                        format_month_label(dkey)
+                        if group_by == "month" else dkey
+                    )
+                }
+            all_rows[dkey][p["name"]] = round(agg_val, 2)
+
+    data = [all_rows[k] for k in sorted(all_rows.keys())]
+    labels = [
+        d[group_by] for d in data
+    ] if data else sorted(all_rows.keys())
     return {
         "data": data,
         "labels": labels,
