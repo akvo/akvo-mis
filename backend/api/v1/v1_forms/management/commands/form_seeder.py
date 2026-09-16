@@ -1,7 +1,6 @@
 import json
 import os
 
-from mis.settings import PROD
 from django.core.management import BaseCommand
 from django.core.management.base import CommandError
 from django.db import transaction
@@ -19,6 +18,10 @@ from api.v1.v1_forms.models import (
 from api.v1.v1_data.models import (
     Answers, AnswerHistory, FormData)
 from utils.tenant_command import resolve_tenant
+
+# A seedable form definition. `--file <id>` builds the same name, and
+# job.sh globs for it to decide which forms get an Excel export.
+PROD_SUFFIX = ".prod.json"
 
 
 def migrate_question_answers(question, target_form_id, tenant=None):
@@ -155,18 +158,25 @@ class Command(BaseCommand):
             if (os.path.isfile(os.path.join(source_folder, json_file))
                 and json_file.endswith('.json'))
         ]
-        # --test narrows to the bundled example fixtures. Without it every
-        # JSON in the folder is seeded: a real deployment drops its own form
-        # definitions here and should not have to encode "not an example" in
-        # the filename. The old `else` branch did exactly that, and since the
-        # folder holds nothing but example-* files it made a plain run seed
-        # nothing at all and exit 0.
+        # The filename says what a file is for. `--test` takes the bundled
+        # example-* fixtures; every other run takes *.prod.json, which is
+        # the same set job.sh globs for its Excel exports and the same
+        # convention `--file <id>` assumes.
+        #
+        # This used to be gated on settings.PROD, which meant a local
+        # ./seeder.sh run seeded the dev fixtures too and died on
+        # "form id 2 already belongs to default" -- their ids are already
+        # taken by an earlier --test run. The gate was there because the
+        # folder held nothing but example-* files, so a prod-only filter
+        # made a plain run seed nothing and exit 0. It ships a real
+        # <id>.prod.json now, so the filter has something to select and
+        # the environment no longer changes which files are seeded.
         if TEST:
             source_files = [f for f in source_files if "example" in f]
-        if PROD:
-            source_files = list(filter(lambda x: "prod" in x, source_files))
+        else:
+            source_files = [f for f in source_files if f.endswith(PROD_SUFFIX)]
         if JSON_FILE:
-            source_files = [f"{source_folder}{JSON_FILE}.prod.json"]
+            source_files = [f"{source_folder}{JSON_FILE}{PROD_SUFFIX}"]
 
         # Parse every file through the shared FB-007 parser (D-8) and
         # sort: forms without a parent hint first, then children.
@@ -175,8 +185,19 @@ class Command(BaseCommand):
         child_forms = []
 
         for source in source_files:
+            # source/forms/ is an operator drop-box -- the filter above
+            # deliberately seeds every JSON in it -- so an empty or
+            # half-saved file is a question of when, not if. Bare, the
+            # JSONDecodeError comes out of a json frame naming neither the
+            # file nor the folder, which is how a 0-byte example.prod.json
+            # broke seeding in all three modes at once. Raise rather than
+            # skip: a file the operator put there and expects to be seeded
+            # must not disappear quietly.
             with open(source, 'r') as f:
-                raw = json.load(f)
+                try:
+                    raw = json.load(f)
+                except ValueError as err:
+                    raise CommandError(f"{source}: not valid JSON -- {err}")
             norm = normalize_form_definition(raw)
             # Legacy files may omit order fields; default them by position
             # (same fallback the legacy seeder applied).
