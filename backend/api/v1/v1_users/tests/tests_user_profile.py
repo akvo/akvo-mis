@@ -126,3 +126,32 @@ class UserProfileTestCase(TestCase, ProfileTestHelperMixin):
     def test_user_profile_with_no_auth(self):
         response = self.client.get("/api/v1/profile/")
         self.assertEqual(response.status_code, 401)
+
+    def test_superuser_profile_forms_is_empty(self):
+        """A superuser's profile sends no forms even when UserForms rows
+        exist: an empty list means "no assignment filter", so the web client
+        offers every published form instead of the snapshot taken when the
+        superuser was created."""
+        form = Forms.objects.filter(parent__isnull=True).first()
+        self.superuser.user_form.create(form=form)
+
+        response = self.client.get(
+            "/api/v1/profile/",
+            HTTP_AUTHORIZATION=f"Bearer {self.super_token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["forms"], [])
+
+    def test_non_superuser_profile_keeps_assigned_forms(self):
+        """A non-superuser is still filtered by their own assignment."""
+        response = self.client.get(
+            "/api/v1/profile/",
+            HTTP_AUTHORIZATION=f"Bearer {self.user_token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        forms = response.json()["forms"]
+        self.assertEqual(
+            [f["id"] for f in forms],
+            list(self.user.user_form.values_list("form_id", flat=True)),
+        )
+        self.assertTrue(forms, "non-superuser must keep its assigned forms")

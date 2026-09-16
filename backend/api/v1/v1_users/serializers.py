@@ -903,6 +903,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(UserFormSerializer(many=True))
     def get_forms(self, instance: SystemUser):
+        # A superuser reaches every form in the workspace, so the profile
+        # says so by sending nothing: an empty `forms` means "no assignment
+        # filter", and the web client falls back to the full published list
+        # (frontend/src/util/form.js filterFormByAssigment).
+        #
+        # The UserForms rows a superuser picks up at creation time are a
+        # snapshot of whatever was published that day. Serializing them
+        # turns that snapshot into a permanent allowlist, so every form
+        # published afterwards — a new monitoring form, say — stays out of
+        # the mobile assignment picker until those rows are rewritten.
+        if instance.is_superuser:
+            return []
         return UserFormSerializer(
             instance=instance.user_form.all(), many=True
         ).data
