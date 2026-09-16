@@ -323,22 +323,46 @@ sequenceDiagram
 **Test Form 5 Questions:**
 1. Question 1 (`number`): `Unit Price`
 2. Question 2 (`number`): `Quantity`
-3. Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`) $\rightarrow$ *Pure Numeric Autofield*
-4. Question 4 (`autofield`): `Operational Status` (`function() { return #3 >= 50 ? "Optimal" : "Degraded"; }`) $\rightarrow$ *Pure Categorical Autofield*
-5. Question 5 (`autofield`): `Quality Score` $\rightarrow$ *Form Version Upgrade (Mixed Numeric + String)*
+3. Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`) $\rightarrow$ *Pure Numeric Autofield (multiplies Unit Price and Quantity)*.
+4. Question 4 (`autofield`): `Operational Status` (`function() { return #3 >= 50 ? "Optimal" : "Degraded"; }`) $\rightarrow$ *Pure Categorical Autofield (returns text based on Total Cost)*.
+5. Question 5 (`autofield`): `Quality Score` $\rightarrow$ *Added during initial creation (Version 1) with numeric formula `function() { return #1 + #2; }`, later updated in Version 2 to `function() { return (#1 + #2) >= 30 ? "Pass" : "Fail"; }` for Form Version Evolution testing*.
+
+---
 
 **Submissions Setup for Test Form 5:**
-- **Standard Dataset (Questions 1–4):**
-  - **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost: `20`, Operational Status: `"Degraded"`
-  - **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost: `20`, Operational Status: `"Degraded"`
-  - **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost: `60`, Operational Status: `"Optimal"`
-  - **Entry 4**: Unit Price: *(empty)*, Quantity: *(empty)* $\rightarrow$ Total Cost: `None`, Operational Status: `None`
-  - **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost: `0` (or `"NaN"` if division used), Operational Status: `"Degraded"`
 
-- **Version Upgrade Scenario on Question 5 (`Quality Score`):**
-  - **Version 1**: Formula returns numeric score (`function() { return #1 + #2; }`) $\rightarrow$ Submit 2 entries: `"85"`, `"95"`.
-  - **Version 2**: Update formula to return text (`function() { return #1 > 10 ? "Pass" : "Fail"; }`) $\rightarrow$ Submit 2 entries: `"Pass"`, `"Fail"`.
-  - **Total Database Answers for Question 5 in Test Form 5**: `["85", "95", "Pass", "Fail"]` (Mixed numbers + strings in the same form).
+##### Part A: Standard Dataset (Questions 1–4)
+Submit 5 entries to test numeric aggregation, null handling, zero handling, and categorical grouping:
+- **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost: `20`, Operational Status: `"Degraded"`
+- **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost: `20`, Operational Status: `"Degraded"`
+- **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost: `60`, Operational Status: `"Optimal"`
+- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost: `None`, Operational Status: `None`
+- **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost: `0` (or `"NaN"` if division used), Operational Status: `"Degraded"`
+
+##### Part B: Form Version Upgrade Scenario (Question 5: `Quality Score`)
+This scenario simulates what happens when a form administrator updates an autofield formula from returning numbers to returning status text across form versions:
+
+1. **Initial Form Version (Version 1):**
+   - In `Test Form 5`, set Question 5 (`Quality Score`) formula to:
+     ```javascript
+     function() { return #1 + #2; }
+     ```
+   - **Submit 2 entries in Version 1:**
+     - **Entry A**: Unit Price: `50`, Quantity: `35` $\rightarrow$ Question 5 calculates and saves `"85"`.
+     - **Entry B**: Unit Price: `50`, Quantity: `45` $\rightarrow$ Question 5 calculates and saves `"95"`.
+
+2. **Form Update & Re-Publish (Version 2):**
+   - Edit `Test Form 5` and change Question 5's formula to return text labels:
+     ```javascript
+     function() { return (#1 + #2) >= 30 ? "Pass" : "Fail"; }
+     ```
+   - Save and publish the form as **Version 2**.
+   - **Submit 2 entries in Version 2:**
+     - **Entry C**: Unit Price: `20`, Quantity: `15` $\rightarrow$ Formula computes $20 + 15 = 35 \ge 30 \rightarrow$ saves `"Pass"`.
+     - **Entry D**: Unit Price: `10`, Quantity: `5` $\rightarrow$ Formula computes $10 + 5 = 15 < 30 \rightarrow$ saves `"Fail"`.
+
+3. **Resulting Database State for Question 5:**
+   - The database now holds 4 valid historical submissions for Question 5: `["85", "95", "Pass", "Fail"]` (a mixed dataset within the exact same form).
 
 ---
 
