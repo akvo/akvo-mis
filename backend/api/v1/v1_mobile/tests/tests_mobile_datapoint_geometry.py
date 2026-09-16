@@ -180,8 +180,8 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual({g["index"] for g in geometry}, {0, 1})
 
     def test_the_gate_rejects_anything_that_is_not_exactly_true(self):
-        """GEO-010 has not validated geoConfig yet and the editor
-        array-wraps values, so "true" and ["true"] both reach here.
+        """GEO-010 has not validated geoConfig yet and the write boundary
+        is untrusted, so "true" and ["true"] can both reach here.
         Failing open would let the device trust a set nobody promised."""
         for bad in ["true", ["true"], 1, "True"]:
             with self.subTest(value=bad):

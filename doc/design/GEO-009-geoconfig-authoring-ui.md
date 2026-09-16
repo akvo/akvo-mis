@@ -5,7 +5,7 @@
 **Task ID**: GEO-009 (breakdown ref: T8)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
+**Status**: Delivered — panel merged upstream (akvo/akvo-react-form-editor#76) and released as 2.0.5; host depends on it
 **Phase**: 3 — Overlap detection
 **Estimate**: 5h ≈ 1 day (Frontend — **upstream repo + host**)
 **Blocks**: GEO-007
@@ -64,33 +64,46 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 keys.** An enable-checkbox for "should this be a valid polygon?" has no meaningful *off* state.
 
 ### User Acceptance Criteria
-- [ ] `overlapThreshold` is revealed only when `detectOverlaps` is ticked
-- [ ] The overlap checkbox carries help text stating the consequence: *enabling this syncs the
-      geometry of all other responses to this question onto the enumerator's device*
-- [ ] Reopening the form restores checkbox and numeric state
-- [ ] Values survive publish and appear unchanged in the mobile form payload
+- [x] `overlapThreshold` is revealed only when `detectOverlaps` is ticked
+- [x] The overlap checkbox carries help text stating the consequence: *enabling this syncs the
+      geometry of all other responses to this question onto the enumerator's device* — shipped as
+      always-visible warning text rather than a tooltip, and asserted by a test on the string
+      itself, not merely on the key existing
+- [x] Reopening the form restores checkbox and numeric state
+- [x] Values survive publish and appear unchanged in the mobile form payload
 
-### Design-review addition: rules are added incrementally, not all at once
+### Design-review addition: resolved as three fields
 
-- [ ] The author **selects which validations to apply** — they are not forced to configure all
-      of them. Review described it as picking from a dropdown and adding rules one at a time:
-      *"you don't have to add all the validations in one shot"*
-- [ ] A geoshape question with **no rules selected** is valid, and produces no Validate button
-      on mobile (GEO-007)
-- [ ] The panel must accommodate **more rules over time** without redesign — see GEO-007 D-8
+The conflict below was resolved on 2026-09-14 in favour of the three-field
+reading. Shape validity, the 3-vertex minimum and the 10 m² floor stay
+fixed constants in the mobile code, per GEO-002 D-1 and GEO-003 D-2 as
+approved. There is no rule dropdown and no off switch.
 
-> ⚠️ **This reopens a decision.** GEO-002 D-1 and GEO-003 D-2 made shape and area validation
-> *always-on fixed floors*, precisely because "should this be a valid polygon?" has no sensible
-> *off* state. Design review instead describes them as **selectable rules with configurable
-> values** — accuracy, minimum size, vertices — which is the original request.
->
-> Both readings are defensible: a floor that only catches accidents versus a programme-specific
-> quality bar. They are not compatible, and the difference changes this panel from three fields
-> to six. **Resolve before building GEO-009.**
+**This does not deliver the design-review request** for selectable rules
+added one at a time. GEO-002 D-1 and GEO-003 D-2 both instruct that such a
+narrowing be flagged to the requester rather than passed off as
+delivered-as-asked. That instruction applies here: the request was
+understood, considered, and deliberately not built, because it would double
+the panel and let a form ship with polygon validation disabled.
+
+**Consequence for GEO-007.** Its acceptance criterion that the Validate
+button is hidden "when the question has no validation rules configured"
+cannot be satisfied by anything this task writes. A plain geoshape question
+still carries all four FR-5.B floors; they are simply not authored.
+GEO-007 must decide what gates that button.
+
+### Prerequisite this document originally missed
+
+`geoshape` was absent from `frontend/src/lib/constants.js` `QUESTION_TYPES`,
+and both form-builder pages pass that object to the editor as
+`limitQuestionType`. No `geoshape` question could be created in Akvo MIS, so
+the panel was unreachable regardless of the upstream work. GEO-009 found
+this; the type itself was added on the epic branch under #383, so it is no
+longer part of this task's diff.
 
 ### Technical Acceptance Criteria
-- [ ] Values written as **numbers**, nested under `extra.geoConfig` — not strings, not top level
-- [ ] Panel appears on **`geoshape` only** — not `geo`, not `geotrace`, not any other type
+- [x] Values written as **numbers**, nested under `extra.geoConfig` — not strings, not top level
+- [x] Panel appears on **`geoshape` only** — not `geo`, not `geotrace`, not any other type
 
 ---
 
@@ -178,8 +191,8 @@ Nothing regresses; geotrace gains no new configurability.
       defaults rather than disabling validation
 
 ### Upstream/Release
-- [x] `akvo-react-form-editor` PR + version bump + npm release
-- [x] `frontend/package.json` bump and round-trip verification
+- [x] `akvo-react-form-editor` PR + version bump + npm release — PR #76 merged; released as **2.0.5**, a patch rather than the 2.1.0 anticipated here, since the panel is additive
+- [x] `frontend/package.json` bump and round-trip verification — both done: round trip verified against a running stack, and the host now depends on `^2.0.5`
 
 ---
 
@@ -214,8 +227,16 @@ Nothing regresses; geotrace gains no new configurability.
 
 ## 10. Open Questions
 
-- [ ] Is the upstream PR route available on the needed timeline? If blocked, D-1's fallback
-      changes the config shape and adds an unwrapping shim in the app
+- [x] The upstream route was available. D-1's fallback was not needed, and
+      the config shape is the nested, numeric one this document specifies.
+      PR #76 was squash-merged and released as 2.0.5.
+- [x] A fix landed upstream after the panel merged: the geo inputs became
+      controlled components rather than relying on `Form.Item initialValue`,
+      which only applies on first render and left the fields blank when a
+      question's `geoConfig` arrived after mount. Worth knowing because it
+      is the mechanism behind the "reopening the form restores state"
+      criterion in section 2.
+- [ ] Nothing verifies `geoConfig` end to end on the backend yet. GEO-010.
 
 ---
 

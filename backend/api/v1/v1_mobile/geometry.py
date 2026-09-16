@@ -22,11 +22,12 @@ def enabled_geoshape_question_ids(form):
     """Geoshape questions on this form that opted into overlap detection.
 
     The gate is deliberately strict. GEO-010 has not validated
-    `extra.geoConfig` yet, and GEO-009 notes the editor array-wraps
-    values, so `"true"` and `["true"]` can both arrive here. Anything
-    that is not the real boolean means off. Failing open would hand the
-    device a candidate set nobody promised was complete, which is the
-    exact failure this feature exists to prevent.
+    `extra.geoConfig` yet, and the write boundary is untrusted: an
+    import or a hand-edited payload can carry `"true"` or `["true"]`
+    instead of the real boolean. Anything that is not the real boolean
+    means off. Failing open would hand the device a candidate set
+    nobody promised was complete, which is the exact failure this
+    feature exists to prevent.
 
     The `=True` lookup carries that strictness: Django encodes the
     right-hand side as JSON, so it matches `true` and not `"true"`,
