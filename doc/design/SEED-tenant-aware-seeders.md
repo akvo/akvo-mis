@@ -216,6 +216,8 @@ form on a fresh production install, and exits 0.
       and are not kept as dead weight afterwards.
 - [x] `./seeder.sh --tenant=acme` rebuilds `acme`'s master-data SQLite files
       and no other workspace's (D-8).
+- [x] A monitoring form seeds beside the registration form, and every dashboard
+      widget except KPI `repeat_agg` has a question to bind to (D-9).
 
 ### Technical Acceptance Criteria
 
@@ -1577,6 +1579,74 @@ final line passes `--tenant`. `run-prod.sh` is unchanged and keeps the
 rebuild-everything behaviour. `generate_config` beside it takes no workspace at
 all — it writes one install-wide `config.min.js`.
 
+#### D-9: A monitoring form ships beside the registration form
+
+**Options**: (1) registration form only; (2) registration + a monitoring child
+chosen to make a dashboard buildable from seeded data; (3) registration +
+monitoring + a seeded example dashboard.
+
+**Decision**: option 2 — `source/forms/1789516900000.monitoring.prod.json`,
+`parent_id` 1789516800000.
+
+**Rationale**: a registration form alone cannot demonstrate the dashboard
+builder. Almost every widget needs a *monitoring* question — the line chart
+needs a date to put on its axis, KPI and scatter need numbers, bar/pie/stacking
+and the map's category mode need option sets — and a registration form is a
+site inventory, not a time series. Seeding one form therefore produces an
+install where the Dashboards section can be opened but not populated.
+
+Option 3 was rejected as scope: a dashboard is a workspace's own editorial
+choice, and seeding one would mean choosing widget colours and a layout on
+behalf of every deployment.
+
+**The question types are chosen from the inspector's allowlist, not invented.**
+`v1_visualization.constants.SUPPORTED_QUESTION_TYPES` is
+`{number, option, multiple_option, date}` — the sources serializer filters on it
+(`dashboard_builder_serializers.serialize_source_form`), so a `geo`, `input`,
+`text` or `signature` question never appears in a widget's question picker. A
+form of mostly free text builds an empty dashboard.
+
+| Widget | What it binds to |
+|---|---|
+| KPI (number / percentage) | `people_served` |
+| Bar, grouped by options | `functional_status` |
+| Bar, stacked | `functional_status` × `service_level`; × `issues_reported` for the `multiple_option` path |
+| Line, grouped by month / date | `visit_date` — `date_question_id` is required and this is the only `date` |
+| Pie / doughnut | `service_level` |
+| Scatter | `people_served` × `days_operational` — the serializer rejects a non-`number` on either axis |
+| Map, `category` mode | `functional_status`; the geometry comes from the parent's `geolocation` |
+| Map, `quantity` mode | `people_served` |
+| Table + criteria | `option_equals` on either option set, `threshold_gt` / `threshold_lt` on the numbers, `overdue` on `visit_date` |
+| Section title | no question |
+
+`functional_status` reuses the **registration form's exact option values**
+(`functional` / `partially_functional` / `non_functional`) so a cross-form
+stacked bar (VIZ-015.a) lines the two forms up instead of producing two
+disjoint series. A test pins the two option lists together.
+
+**One widget option is not demonstrable: KPI `repeat_agg`.** average / sum /
+max / min / last aggregate a question's *indexed* answers, which only a
+repeatable question group produces. An earlier revision of this form carried a
+repeatable "Meter Readings" group with a number in it for exactly that reason;
+it was removed in review, in favour of a `signature` / `signed_by` sign-off
+pair, on the grounds that a repeatable group is a poor thing to hand a
+deployment as its starting point. The gap is deliberate and
+`test_repeat_aggregations_need_a_repeatable_group_to_demonstrate` asserts it,
+so re-adding a repeatable group flips that test and prompts whoever does it to
+widen this table.
+
+**Filename**: the id-in-the-filename rule of D-3 applies, and this file bends
+it — `1789516900000.monitoring.prod.json` carries an infix, so
+`job.sh`'s `form_id="${filename%.prod.json}"` yields
+`1789516900000.monitoring` and `form_seeder --file 1789516900000` raises
+`FileNotFoundError`. A plain seeding run is unaffected, because the selector is
+`endswith(".prod.json")`. Renaming it to `1789516900000.prod.json` would remove
+both limitations.
+
+**Impact**: two forms seed where one did, parent first — the seeder sorts on
+`parent_hint`, so ordering within the folder does not matter. The monitoring
+form needs no entity types either, so D-4's constraint holds across the pair.
+
 ### Appendix: decisions reversed during this work
 
 Three decisions were made before the boundary pipeline existed and undone once
@@ -1942,9 +2012,9 @@ prefix, `--clean` and the bounding boxes.
 
 ### Part 4 — tenant-scoped roles, the seeded form, and the sqlite guard
 
-**31 tests ship with Part 4**, in three new files:
+**41 tests ship with Part 4**, in three new files:
 `v1_profile/tests/test_default_roles_seeder.py` (11),
-`v1_forms/tests/tests_initial_form_seed.py` (13),
+`v1_forms/tests/tests_initial_form_seed.py` (23),
 `v1_mobile/tests/tests_generate_sqlite_null_parent.py` (7).
 Two existing form-seeder test files were also updated for D-7
 (`tests_form_seeder.py`, `tests_form_seeder_upsert.py`), and one roles call
@@ -1967,6 +2037,13 @@ site for D-2 (I-11).
 | Unit | A plain run selects `*.prod.json` and skips both `example-*.json` and an unrelated `.json` in the same folder (D-7) |
 | Unit | A stray non-prod `.json` beside the definitions is not even parsed — the empty `example.prod.json` would have been skipped outright had it not carried the suffix |
 | Unit | The plain-run form count is derived from the folder's `*.prod.json` listing, not hardcoded, and no `example-*` id (1–5) is among the seeded forms |
+| Unit | The monitoring form validates, is `FormTypes.monitoring`, and its `parent_hint` is the registration form's id (D-9) |
+| Unit | Its id block does not overlap the registration form's — both derive from their own form id |
+| Unit | It supplies at least one `date`, two `number` and two `option` questions plus a `multiple_option`, so every widget has something to bind to |
+| Unit | `functional_status`'s option values equal the registration form's `status` values, so a cross-form stacked bar lines up |
+| Unit | No repeatable group — asserted, so adding one flips the test and prompts a coverage-table update (D-9) |
+| Integration | A plain run seeds **both** forms, parent first, and `parent_id` resolves; `Entity.objects.count()` stays 0 |
+| Integration | The registration form reports exactly the monitoring form as its child |
 | Unit | `generate_sqlite` on a queryset whose `parent` column is all-`None` writes `parent = 0` and does not raise. The regression for D-5 — and it must build the frame from a single root row, because a second row with a real parent makes pandas produce `NaN` and the old code passes |
 | Integration | `generate_sqlite` across several workspaces where an early one is root-only: every workspace still gets its file |
 | Integration | The command with `--tenant=acme` writes into `acme/` and no other workspace's directory, and skips the tenant-less root files (D-8) |

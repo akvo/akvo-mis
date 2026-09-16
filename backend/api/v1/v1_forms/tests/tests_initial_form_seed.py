@@ -42,6 +42,19 @@ def read_initial_form():
         return json.load(handle)
 
 
+def declared_counts(raw):
+    """(groups, questions) the committed file declares.
+
+    Derived rather than written out. These forms exist to be edited --
+    that is the whole point of shipping one -- and a hardcoded count
+    turns an intended edit into a failing test that says nothing about
+    whether the edit was correct. `tests_form_seeder.py` learned the
+    same lesson twice.
+    """
+    groups = raw["question_groups"]
+    return len(groups), sum(len(g["questions"]) for g in groups)
+
+
 @override_settings(USE_TZ=False, TEST_ENV=True)
 class InitialFormDefinitionTest(TestCase):
     """Assertions about the committed file, no database needed."""
@@ -110,10 +123,13 @@ class InitialFormSeedTest(TestCase):
         form = Forms.objects.get(pk=INITIAL_FORM_ID)
         self.assertEqual(form.type, FormTypes.registration)
         self.assertEqual(form.status, FormStatus.published)
+        groups, questions = declared_counts(read_initial_form())
         self.assertEqual(
-            QuestionGroup.objects.filter(form=form).count(), 3
+            QuestionGroup.objects.filter(form=form).count(), groups
         )
-        self.assertEqual(Questions.objects.filter(form=form).count(), 9)
+        self.assertEqual(
+            Questions.objects.filter(form=form).count(), questions
+        )
         # The end the entity-free constraint is a means to: seeder.sh has
         # no entities step, so the form must need no Entity type to be
         # usable. Nothing created one, and nothing has to.
@@ -189,3 +205,149 @@ class FormSeederBadSourceTest(TestCase):
         call_command("form_seeder", "--source", self.directory)
 
         self.assertTrue(Forms.objects.filter(pk=INITIAL_FORM_ID).exists())
+
+
+MONITORING_FORM_ID = 1789516900000
+MONITORING_FORM_FILE = os.path.join(
+    FORMS_DIR, f"{MONITORING_FORM_ID}.monitoring.prod.json"
+)
+
+
+def read_monitoring_form():
+    with open(MONITORING_FORM_FILE, "r") as handle:
+        return json.load(handle)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class InitialMonitoringFormDefinitionTest(TestCase):
+    def setUp(self):
+        self.raw = read_monitoring_form()
+        self.norm = normalize_form_definition(self.raw)
+
+    def test_definition_passes_the_shared_parser_and_validator(self):
+        validate_form_definition(self.norm)
+
+    def test_is_a_monitoring_form_hanging_off_the_registration_form(self):
+        self.assertEqual(self.norm["type"], FormTypes.monitoring)
+        self.assertEqual(
+            self.norm["parent_hint"]["id"], INITIAL_FORM_ID
+        )
+
+    def test_carries_no_entity_question(self):
+        extras = [
+            (q.get("extra") or {}).get("type")
+            for g in self.norm["question_group"]
+            for q in g["question"]
+        ]
+        self.assertNotIn("entity", extras)
+
+    def test_ids_are_unique_and_above_the_sequences(self):
+        ids = [self.raw["id"]]
+        for group in self.raw["question_groups"]:
+            ids.append(group["id"])
+            for question in group["questions"]:
+                ids.append(question["id"])
+                ids += [o["id"] for o in question.get("options") or []]
+        self.assertEqual(len(ids), len(set(ids)))
+        for value in ids:
+            self.assertGreater(value, 10**12)
+
+    def test_ids_do_not_overlap_the_registration_form(self):
+        """Both id blocks are derived from their own form id."""
+        def block(raw):
+            out = {raw["id"]}
+            for group in raw["question_groups"]:
+                out.add(group["id"])
+                for question in group["questions"]:
+                    out.add(question["id"])
+                    out |= {o["id"] for o in question.get("options") or []}
+            return out
+
+        self.assertEqual(
+            block(self.raw) & block(read_initial_form()), set()
+        )
+
+    def test_supplies_a_question_for_every_dashboard_widget(self):
+        """The reason this form exists.
+
+        A dashboard must be buildable from seeded data alone. The
+        inspector only offers number/option/multiple_option/date
+        (v1_visualization.constants.SUPPORTED_QUESTION_TYPES), and each
+        widget needs a particular shape: a date for the line chart's
+        axis, two numbers for a scatter's X and Y, an option set for
+        bar/pie/map-category, and a second option set to stack by.
+        """
+        by_type = {}
+        for group in self.norm["question_group"]:
+            for question in group["question"]:
+                by_type.setdefault(question["type"], []).append(
+                    question["name"]
+                )
+
+        self.assertGreaterEqual(len(by_type.get("date", [])), 1)
+        self.assertGreaterEqual(len(by_type.get("number", [])), 2)
+        self.assertGreaterEqual(len(by_type.get("option", [])), 2)
+        self.assertGreaterEqual(len(by_type.get("multiple_option", [])), 1)
+
+    def test_repeat_aggregations_need_a_repeatable_group_to_demonstrate(self):
+        """KPI `repeat_agg` is the one widget option this form cannot show.
+
+        average/sum/max/min/last aggregate a question's *indexed*
+        answers, which only a repeatable group produces. This form has
+        none, so those five options have nothing to act on in seeded
+        data -- a gap in the demonstration, not a defect.
+
+        Asserted rather than left as a comment so that adding a
+        repeatable group later flips this test and prompts whoever does
+        it to widen the coverage claim in SEED-004 D-9.
+        """
+        repeatable = [
+            g for g in self.norm["question_group"] if g.get("repeatable")
+        ]
+        self.assertEqual(
+            repeatable,
+            [],
+            "a repeatable group was added: `repeat_agg` is now "
+            "demonstrable, so update the widget-coverage table",
+        )
+
+    def test_status_options_match_the_registration_form(self):
+        """A cross-form chart lines the two up by option value."""
+        def values(norm, name):
+            for group in norm["question_group"]:
+                for question in group["question"]:
+                    if question["name"] == name:
+                        return [o["value"] for o in question["option"]]
+            return None
+
+        registration = normalize_form_definition(read_initial_form())
+        self.assertEqual(
+            values(self.norm, "functional_status"),
+            values(registration, "status"),
+        )
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class InitialMonitoringFormSeedTest(TestCase):
+    def test_a_plain_run_seeds_both_forms_and_links_them(self):
+        """Parent before child: the seeder sorts on `parent_hint`."""
+        call_command("form_seeder")
+
+        monitoring = Forms.objects.get(pk=MONITORING_FORM_ID)
+        self.assertEqual(monitoring.type, FormTypes.monitoring)
+        self.assertEqual(monitoring.status, FormStatus.published)
+        self.assertEqual(monitoring.parent_id, INITIAL_FORM_ID)
+        _, questions = declared_counts(read_monitoring_form())
+        self.assertEqual(
+            Questions.objects.filter(form=monitoring).count(), questions
+        )
+        self.assertEqual(Entity.objects.count(), 0)
+
+    def test_the_registration_form_reports_the_monitoring_child(self):
+        call_command("form_seeder")
+
+        registration = Forms.objects.get(pk=INITIAL_FORM_ID)
+        self.assertEqual(
+            list(registration.children.values_list("id", flat=True)),
+            [MONITORING_FORM_ID],
+        )
