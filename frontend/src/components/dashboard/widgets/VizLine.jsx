@@ -45,14 +45,14 @@ const CategoryLine = ({ config, data, filters }) => {
       legend: {
         type: "scroll",
         data: labels,
-        bottom: 0,
+        bottom: xLabel ? 15 : 0,
         formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 30,
         right: 20,
-        bottom: isBottomToolbox ? 65 : 40,
+        bottom: isBottomToolbox ? 65 : xLabel ? 70 : 40,
         left: 40,
         containLabel: true,
       },
@@ -60,7 +60,7 @@ const CategoryLine = ({ config, data, filters }) => {
         type: "category",
         data: chartData.map((d) => d.label),
         ...(xLabel
-          ? { name: xLabel, nameLocation: "center", nameGap: 25 }
+          ? { name: xLabel, nameLocation: "center", nameGap: 30 }
           : {}),
       },
       yAxis: {
@@ -151,14 +151,14 @@ const VizLine = ({ config, data, filters }) => {
         show: true,
         type: "scroll",
         data: stackLabels,
-        bottom: 0,
+        bottom: xAxisLabel ? 15 : 0,
         formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 35,
         right: 20,
-        bottom: isBottomToolbox ? 65 : 40,
+        bottom: isBottomToolbox ? 65 : xAxisLabel ? 70 : 40,
         left: 50,
         containLabel: true,
       },
@@ -166,7 +166,7 @@ const VizLine = ({ config, data, filters }) => {
         type: "category",
         data: chartData.map((d) => d.label),
         ...(xAxisLabel
-          ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+          ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
           : {}),
       },
       yAxis: {
@@ -207,7 +207,7 @@ const VizLine = ({ config, data, filters }) => {
     grid: {
       top: isTopToolbox ? 55 : 35,
       right: 20,
-      bottom: isBottomToolbox ? 55 : 40,
+      bottom: isBottomToolbox ? 55 : xAxisLabel ? 60 : 40,
       left: 50,
       containLabel: true,
     },
@@ -215,7 +215,7 @@ const VizLine = ({ config, data, filters }) => {
       type: "category",
       data: chartData.map((d) => d[categoryKey]),
       ...(xAxisLabel
-        ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+        ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
         : {}),
     },
     yAxis: {

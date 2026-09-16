@@ -1057,6 +1057,7 @@ const BuilderInspector = ({
                             widget.form
                           )
                         ),
+                        x_axis_label: qLabel,
                         y_axis_label: qLabel,
                       },
                     });
@@ -1080,6 +1081,7 @@ const BuilderInspector = ({
                           widget.form
                         )
                       ),
+                      x_axis_label: qLabel,
                       y_axis_label: qLabel,
                     },
                   });

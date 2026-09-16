@@ -69,12 +69,12 @@ const VizBar = ({ config, data, filters }) => {
     const rawConfig = {
       color: colors,
       tooltip,
-      legend: { show: true, data: stackLabels, bottom: 0 },
+      legend: { show: true, data: stackLabels, bottom: xAxisLabel ? 15 : 0 },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 35,
         right: 20,
-        bottom: isBottomToolbox ? 65 : 40,
+        bottom: isBottomToolbox ? 65 : xAxisLabel ? 70 : 40,
         left: 50,
         containLabel: true,
       },
@@ -85,7 +85,7 @@ const VizBar = ({ config, data, filters }) => {
           ? { axisLabel: { formatter: "{value}%" } }
           : {}),
         ...(xAxisLabel
-          ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+          ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
           : {}),
       },
       yAxis: {
@@ -129,7 +129,7 @@ const VizBar = ({ config, data, filters }) => {
     grid: {
       top: isTopToolbox ? 55 : 35,
       right: 20,
-      bottom: isBottomToolbox ? 55 : 40,
+      bottom: isBottomToolbox ? 55 : xAxisLabel ? 60 : 40,
       left: 50,
       containLabel: true,
     },
@@ -140,7 +140,7 @@ const VizBar = ({ config, data, filters }) => {
         ? { axisLabel: { formatter: "{value}%" } }
         : {}),
       ...(xAxisLabel
-        ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+        ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
         : {}),
     },
     yAxis: {
