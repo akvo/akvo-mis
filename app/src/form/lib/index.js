@@ -219,8 +219,19 @@ export const transformForm = (
         }
       } else {
         // Handle non-repeatable groups
+        /**
+         * Only ENTITY cascades are gated, and only until an administration answer exists
+         * to scope them by.
+         *
+         * `extra.type` is a cascade sub-type, and "administration" is the other member —
+         * so the previous `|| !q?.extra?.type` clause, meant to let ordinary questions
+         * through, silently dropped every administration cascade from the rendered form.
+         * The enumerator could not answer it, `keyform` renumbered over the gap, and a
+         * required administration question then reached the server unanswered and was
+         * refused.
+         */
         const questionList = qg.question.filter(
-          (q) => (q?.extra?.type === 'entity' && prevAdmAnswer?.length > 0) || !q?.extra?.type,
+          (q) => q?.extra?.type !== 'entity' || prevAdmAnswer?.length > 0,
         );
 
         // Process questions with numbering
@@ -366,6 +377,7 @@ export const generateValidationSchemaFieldLevel = async (currentValue, field) =>
       yupType = Yup.array();
       break;
     case 'geoshape':
+    case 'geotrace':
       /**
        * Nullable, mirroring multiple_option rather than geo: an unanswered question arrives
        * here as null (see FormNavigation's defaultVal list) and a bare Yup.array() rejects
@@ -420,7 +432,7 @@ export const generateDataPointName = (forms, currentValues, cascades = {}, datap
   const dpName = dataPointNameValues
     .filter(
       (d) =>
-        ![QUESTION_TYPES.geo, QUESTION_TYPES.geoshape].includes(d.type) &&
+        ![QUESTION_TYPES.geo, QUESTION_TYPES.geoshape, QUESTION_TYPES.geotrace].includes(d.type) &&
         (d.value || d.value === 0),
     )
     .map((x) => x.value)
@@ -478,7 +490,9 @@ const transformValue = (question, value, prefilled = []) => {
   if (question?.type === QUESTION_TYPES.cascade) {
     return [answer];
   }
-  if ([QUESTION_TYPES.geo, QUESTION_TYPES.geoshape].includes(question?.type)) {
+  if (
+    [QUESTION_TYPES.geo, QUESTION_TYPES.geoshape, QUESTION_TYPES.geotrace].includes(question?.type)
+  ) {
     return answer === '' ? [] : value;
   }
   if (question?.type === QUESTION_TYPES.number && typeof answer !== 'undefined') {
