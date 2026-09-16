@@ -318,40 +318,46 @@ sequenceDiagram
 
 ### 7.2. Complete Step-by-Step Manual Verification Protocol
 
-#### Step 1: Form & Submission Setup
-1. **Form A (Pure Numeric Autofield with Nulls & NaNs)**:
-   - Question 1 (`number`): `Unit Price`
-   - Question 2 (`number`): `Quantity`
-   - Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`)
-    - Submit 5 entries:
-      - Entry 1: (10, 2) $\rightarrow$ `20`
-      - Entry 2: (5, 4) $\rightarrow$ `20`
-      - Entry 3: (15, 4) $\rightarrow$ `60`
-      - Entry 4: (empty, empty) $\rightarrow$ `None` / `""` (unanswered / missing data)
-      - Entry 5: (0, 0) $\rightarrow$ `0` (or `"NaN"` if formula uses division `0 / 0`)
-2. **Form B (Pure Categorical Autofield)**:
-   - Question 1 (`number`): `Water Flow Rate`
-   - Question 2 (`autofield`): `Operational Status` (`function() { return #1 >= 50 ? "Optimal" : "Degraded"; }`)
-   - Submit 4 entries: 2 $\times$ `"Optimal"`, 2 $\times$ `"Degraded"`.
-3. **Form C (Form Version Upgrade - Mixed Numeric + String)**:
-   - **Version 1**: Question 1 (`autofield`): `Score` (`function() { return #score_raw; }`) $\rightarrow$ Submit 2 entries: `"85"`, `"95"`.
-   - **Version 2**: Update formula to return text (`function() { return #score_raw > 90 ? "Pass" : "Fail"; }`) $\rightarrow$ Submit 2 entries: `"Pass"`, `"Fail"`.
-   - Total Form C database answers: `["85", "95", "Pass", "Fail"]`.
+#### Step 1: Form & Submission Setup (Single Form: Test Form 5)
 
-#### Step 2: Dashboard Builder Widget Verification
+**Test Form 5 Questions:**
+1. Question 1 (`number`): `Unit Price`
+2. Question 2 (`number`): `Quantity`
+3. Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`) $\rightarrow$ *Pure Numeric Autofield*
+4. Question 4 (`autofield`): `Operational Status` (`function() { return #3 >= 50 ? "Optimal" : "Degraded"; }`) $\rightarrow$ *Pure Categorical Autofield*
+5. Question 5 (`autofield`): `Quality Score` $\rightarrow$ *Form Version Upgrade (Mixed Numeric + String)*
+
+**Submissions Setup for Test Form 5:**
+- **Standard Dataset (Questions 1–4):**
+  - **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost: `20`, Operational Status: `"Degraded"`
+  - **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost: `20`, Operational Status: `"Degraded"`
+  - **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost: `60`, Operational Status: `"Optimal"`
+  - **Entry 4**: Unit Price: *(empty)*, Quantity: *(empty)* $\rightarrow$ Total Cost: `None`, Operational Status: `None`
+  - **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost: `0` (or `"NaN"` if division used), Operational Status: `"Degraded"`
+
+- **Version Upgrade Scenario on Question 5 (`Quality Score`):**
+  - **Version 1**: Formula returns numeric score (`function() { return #1 + #2; }`) $\rightarrow$ Submit 2 entries: `"85"`, `"95"`.
+  - **Version 2**: Update formula to return text (`function() { return #1 > 10 ? "Pass" : "Fail"; }`) $\rightarrow$ Submit 2 entries: `"Pass"`, `"Fail"`.
+  - **Total Database Answers for Question 5 in Test Form 5**: `["85", "95", "Pass", "Fail"]` (Mixed numbers + strings in the same form).
+
+---
+
+#### Step 2: Dashboard Builder Widget Verification (All on Test Form 5)
 
 | Widget Type | Form Used | Config Tested | Expected Behavior |
 |---|---|---|---|
-| **KPI Card** | Form A | `repeat_agg="average"` | • If Entry 5 is `0`: Displays average **`25.0`** (computed over `[20, 20, 60, 0]` divided by 4, skipping `None`).<br>• If Entry 5 is `"NaN"` / missing: Displays average **`33.33`** (computed over `[20, 20, 60]` divided by 3, safely ignoring `None` and `"NaN"` without crashing or distorting denominator). |
-| **KPI Card** | Form C | `repeat_agg="average"` | Detects string values (`"Pass"`, `"Fail"`) $\rightarrow$ Gracefully displays total submission count `4` without crashing. |
-| **Bar Chart** | Form B | `group_by="option"` | Displays 2 category bars (`"Optimal"` with count 2, `"Degraded"` with count 2). |
-| **Bar Chart (Stacked)** | Form B | `group_by="option"`, stacked by another option | Renders stacked bars keyed by status categories. |
-| **Pie Chart** | Form C | `group_by="option"` | Displays 4 pie slices: `"85"` (1), `"95"` (1), `"Pass"` (1), `"Fail"` (1). |
-| **Line Chart** | Form A | `group_by="month"` | Renders numeric time-series trend line of monthly average cost (nulls/NaNs skipped). |
-| **Scatter Plot** | Form A | X=`Quantity`, Y=`Total Cost` | Plots coordinates `(2, 20)`, `(4, 20)`, `(4, 60)`, cleanly dropping uncomputable null/NaN rows. |
-| **Table Widget** | Form B | Criteria `option_equals: Optimal` | Narrows table rows to only submissions where Status is `"Optimal"`. |
-| **Map Widget** | Form B | Map mode `"category"` | Markers colored according to categorical status `"Optimal"` vs `"Degraded"`. |
-| **Map Widget** | Form A | Map mode `"quantity"` | Markers sized proportional to numeric `Total Cost` (nulls rendered with neutral default size). |
+| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | • If Entry 5 is `0`: Displays average **`25.0`** (computed over `[20, 20, 60, 0]` divided by 4, skipping `None`).<br>• If Entry 5 is `"NaN"` / missing: Displays average **`33.33`** (computed over `[20, 20, 60]` divided by 3, safely ignoring `None` and `"NaN"` without crashing or distorting denominator). |
+| **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Optimal"`, `"Degraded"`) $\rightarrow$ Gracefully displays total submission count `4` without crashing. |
+| **KPI Card (Mixed Version Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["85", "95", "Pass", "Fail"]`) $\rightarrow$ Gracefully displays total submission count `4` without SQL cast exception. |
+| **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars (`"Optimal"` with count 1, `"Degraded"` with count 3). |
+| **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories. |
+| **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays pie slices: `"Optimal"` (25%) and `"Degraded"` (75%). |
+| **Pie Chart (Mixed Version Upgrade)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 4 discrete category slices: `"85"` (1), `"95"` (1), `"Pass"` (1), `"Fail"` (1) without dropping historical submissions. |
+| **Line Chart** | Test Form 5 | Y axis: `Total Cost`, Category: `Operational Status`, `group_by="month"` | Renders numeric time-series trend line of monthly average cost (nulls/NaNs skipped), optionally split into multiple lines by status. |
+| **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots coordinates `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, cleanly dropping uncomputable null/NaN rows. |
+| **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` on `Operational Status`, or `threshold_gt: 50` on `Total Cost` | Correctly filters rows according to string options or numeric thresholds. |
+| **Map Widget (Category Mode)** | Test Form 5 | Map question: `Operational Status`, Map mode `"category"` | Markers colored according to categorical status `"Optimal"` vs `"Degraded"`. |
+| **Map Widget (Quantity Mode)** | Test Form 5 | Map question: `Total Cost`, Map mode `"range"` | Markers sized proportional to numeric `Total Cost` (nulls rendered with neutral default size). |
 
 #### Step 3: Publish & Viewer Parity
 1. Save the dashboard and click **Publish**.
