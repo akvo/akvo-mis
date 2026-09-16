@@ -1464,7 +1464,9 @@ const BuilderInspector = ({
         {/* Group by */}
         {wType !== "bar" && NEEDS_GROUP_BY.has(wType) && !groupByIsForced && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Group by</label>
+            <label className="builder-inspector-label">
+              {wType === "line" ? "Time interval" : "Group by"}
+            </label>
             <Select
               value={wConfig.group_by || groupByDefault}
               onChange={(val) => {
