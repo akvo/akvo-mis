@@ -335,36 +335,140 @@ Submit 7 entries under the single published form:
 - **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"`
 - **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"9"`
 - **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `60`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"19"`
-- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `"Fail"` (blank inputs default to 0 $\le 0$)
+- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `None` (unanswered inputs skip autofield evaluation)
 - **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost (Q3): `0`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"Fail"` ($0 \le 0$)
 - **Entry 6**: Unit Price: `20`, Quantity: `15` $\rightarrow$ Total Cost (Q3): `300`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"Pass"` ($20 + 15 = 35 \ge 30$)
 - **Entry 7**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"` ($10 + 2 = 12 < 30$)
 
 ##### Resulting Database State for Question 5:
-- Database Answers: `["12", "9", "19", "Fail", "Fail", "Pass", "12"]`
-- Total Question 5 distinct values in database: `["12", "19", "9", "Fail", "Pass"]` (mixed dataset with counts: `"12"`: 2, `"Fail"`: 2, `"9"`: 1, `"19"`: 1, `"Pass"`: 1).
+- Database Answers: `["12", "9", "19", "Fail", "Pass", "12"]` (6 non-null records; Entry 4 safely skipped as `None`)
+- Total Question 5 distinct values in database: `["12", "19", "9", "Fail", "Pass"]` (mixed dataset with counts: `"12"`: 2, `"Fail"`: 1, `"Pass"`: 1, `"9"`: 1, `"19"`: 1).
 
 ---
 
-#### Step 2: Dashboard Builder Widget Verification (All on Test Form 5)
+#### Step 2: Dashboard Builder Widget Verification (Step-by-Step UI Guide)
 
-| Widget Type | Form Used | Config Tested | Expected Behavior (After All 7 Submissions) |
-|---|---|---|---|
-| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | Displays average **`70.0`** (computed as $\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4). |
-| **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`4`** (`"Degraded"`). |
-| **KPI Card (Mixed Dynamic Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["12", "9", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"12"` or `"Fail"`) without SQL cast exception. |
-| **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars: **`"Degraded"` (count: 4)** and **`"Optimal"` (count: 2)**. |
-| **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories (`"Degraded"`: 4, `"Optimal"`: 2). |
-| **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 pie slices: **`"Degraded"` (66.7%, count: 4)** and **`"Optimal"` (33.3%, count: 2)**. |
-| **Pie Chart (Mixed Autofield)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 5 discrete category slices: `"12"` (2), `"Fail"` (2), `"9"` (1), `"19"` (1), `"Pass"` (1). |
-| **Line Chart** | Test Form 5 | Y axis: `Total Cost`, Category: `Operational Status`, `group_by="month"` | Renders numeric time-series trend line of monthly average cost (`Total Cost`), split into 2 lines by `Operational Status` (`Optimal` vs `Degraded`). |
-| **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots 6 coordinates: `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(2, 20)`, cleanly dropping uncomputable null/NaN rows. |
-| **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` (2 rows: Entry 3, Entry 6) or `threshold_gt: 50` on `Total Cost` (2 rows: Entry 3: 60, Entry 6: 300) | Correctly filters rows according to string options or numeric thresholds. |
-| **Map Widget (Category Mode)** | Test Form 5 | Map question: `Operational Status`, Map mode `"category"` | Markers colored according to categorical status `"Degraded"` (4) vs `"Optimal"` (2). |
-| **Map Widget (Quantity Mode)** | Test Form 5 | Map question: `Total Cost`, Map mode `"range"` | Markers sized proportional to numeric `Total Cost` ranges (nulls rendered with neutral default size). |
+Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashboards/new`) and configure the following widgets in the **Inspector Settings** panel using **`Test Form 5 with AUTOFIELD TEST`** (or `Test Form 5`):
+
+---
+
+##### 1. KPI Card — Pure Numeric Autofield Aggregation
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Question**: `Total Cost`
+  - **Aggregation**: `Average`
+- **Expected Preview Output**: Displays **`70.0`** ($\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4).
+
+---
+
+##### 2. KPI Card — Pure Categorical Autofield (Fallback Mode)
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Question**: `Operational Status`
+  - **Aggregation**: `Average`
+- **Expected Preview Output**: Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`4`** (`"Degraded"`).
+
+---
+
+##### 3. KPI Card — Dynamic Mixed Autofield (Fallback Mode)
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Question**: `Quality Score`
+  - **Aggregation**: `Average`
+- **Expected Preview Output**: Detects mixed dataset (`["12", "9", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"12"`) without SQL cast errors.
+
+---
+
+##### 4. Bar Chart — Categorical Autofield
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Bar chart`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Question**: `Operational Status`
+  - **Break down by**: `None — this question's options`
+  - **Value**: *(leave empty to count submissions)*
+- **Expected Preview Output**: Renders 2 category bars: **`"Degraded"` (count: 4)** and **`"Optimal"` (count: 2)**.
+
+---
+
+##### 5. Pie Chart — Categorical Autofield
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Pie / doughnut`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Question**: `Operational Status`
+  - **Group by**: `This question's options`
+  - **Value**: *(leave empty to count submissions)*
+- **Expected Preview Output**: Renders 2 pie slices: **`"Degraded"` (66.7%, count: 4)** and **`"Optimal"` (33.3%, count: 2)**.
+
+---
+
+##### 6. Pie Chart — Dynamic Mixed Autofield
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Pie / doughnut`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Question**: `Quality Score`
+  - **Group by**: `This question's options`
+  - **Value**: *(leave empty to count submissions)*
+- **Expected Preview Output**: Renders 5 discrete category slices:
+  - `"12"`: **33.3%** (count: 2)
+  - `"Fail"`: **16.7%** (count: 1)
+  - `"Pass"`: **16.7%** (count: 1)
+  - `"9"`: **16.7%** (count: 1)
+  - `"19"`: **16.7%** (count: 1)
+
+---
+
+##### 7. Line Chart — Numeric Autofield Y-Axis with Categorical Series
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Line chart`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Y axis (number or autofield)**: `Total Cost`
+  - **X axis (date question)**: *(leave empty for default submission date)*
+  - **Time interval**: `Month`
+  - **Category (option or autofield)**: `Operational Status`
+- **Expected Preview Output**: Renders 2 monthly time-series trend lines for `"Optimal"` vs `"Degraded"`.
+
+---
+
+##### 8. Scatter Plot — Autofield Dependent Axis
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Scatter plot`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **X axis (number or autofield)**: `Quantity`
+  - **Y axis (number or autofield)**: `Total Cost`
+- **Expected Preview Output**: Plots 6 coordinates: `(10, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(2, 20)` (Entry 4 with blank null coordinates is cleanly skipped without errors).
+
+---
+
+##### 9. Table Widget — Autofield Columns and Criteria Filtering
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Table`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Columns**: Check `school_name`, `unit_price`, `quantity`, `total_cost`, `operational_status`, `quality_score`
+  - **Criteria (filter rows)** (Optional test):
+    - Select Question: `Operational Status`, Operator: `Equal to`, Value: `Optimal` $\rightarrow$ Filters to **2 rows** (Entry 3, Entry 6).
+    - Or Select Question: `Total Cost`, Operator: `Greater than`, Value: `50` $\rightarrow$ Filters to **2 rows** (Entry 3: 60, Entry 6: 300).
+- **Expected Preview Output**: Displays tabular grid with formatted numeric and string autofield column values.
+
+---
+
+##### 10. Map Widget — Autofield Point Sizing & Categorical Coloring
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Map`
+- **Inspector Settings**:
+  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Mode A (Category Mode)**:
+    - **Question**: Select `Operational Status`
+    - **Expected Preview Output**: Markers colored by status: 4 `"Degraded"` vs 2 `"Optimal"`.
+  - **Mode B (Quantity / Range Mode)**:
+    - **Question**: Select `Total Cost`
+    - **Expected Preview Output**: Markers sized proportionally to `Total Cost` range values.
+
+---
 
 #### Step 3: Publish & Viewer Parity
 1. Save the dashboard and click **Publish**.
 2. Navigate to the public/read URL: `/dashboards/<slug>`.
-3. Verify that all 7 widgets in the **Dashboard Viewer** render with identical layout, data, and styles as the builder preview.
+3. Verify that all widgets in the **Dashboard Viewer** render with identical layout, data, and styles as the builder preview.
 4. Toggle global dashboard filters (administration area, date range) and verify responsive re-querying.
