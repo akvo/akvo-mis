@@ -324,35 +324,25 @@ sequenceDiagram
 1. Question 1 (`number`): `Unit Price`
 2. Question 2 (`number`): `Quantity`
 3. Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`) $\rightarrow$ *Pure Numeric Autofield (multiplies Unit Price and Quantity)*.
-4. Question 4 (`autofield`): `Operational Status` (`function() { return #3 >= 50 ? "Optimal" : "Degraded"; }`) $\rightarrow$ *Pure Categorical Autofield (returns text based on Total Cost)*.
-5. Question 5 (`autofield`): `Quality Score` $\rightarrow$ *Added in Version 1 with numeric formula `function() { return #1 + #2; }`, then upgraded in Version 2 to `function() { return (#1 + #2) >= 30 ? "Pass" : "Fail"; }`*.
+4. Question 4 (`autofield`): `Operational Status` (`function() { return #3 >= 50 ? "Optimal" : "Degraded"; }`) $\rightarrow$ *Pure Categorical Autofield (returns status string based on Total Cost)*.
+5. Question 5 (`autofield`): `Quality Score` (`function() { return (#1 + #2) >= 30 ? "Pass" : ((#1 + #2) <= 0 ? "Fail" : (#1 + #2)); }`) $\rightarrow$ *Dynamic Mixed-Type Autofield (evaluates to string `"Pass"` when sum $\ge 30$, string `"Fail"` when sum $\le 0$, and numeric sum otherwise — producing mixed numeric and string values in the exact same question without requiring form versioning)*.
 
 ---
 
-**Submissions Setup for Test Form 5:**
+**Submissions Setup for Test Form 5 (Single Published Form):**
 
-##### Phase 1: Initial Form (Version 1) Submissions
-Submit 5 entries under Version 1 (Question 5 formula: `return #1 + #2`):
+Submit 7 entries under the single published form:
 - **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"`
 - **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"9"`
 - **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `60`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"19"`
-- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `"0"` (default evaluated value when inputs are blank)
-- **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost (Q3): `0`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"0"`
-
-##### Phase 2: Form Version Upgrade (Version 2) Submissions
-1. Edit `Test Form 5` in Form Builder: change Question 5 formula to return status strings:
-   ```javascript
-   function() { return (#1 + #2) >= 30 ? "Pass" : "Fail"; }
-   ```
-2. Save and publish as **Version 2**.
-3. **Submit 2 additional entries under Version 2:**
-   - **Entry 6**: Unit Price: `20`, Quantity: `15` $\rightarrow$ Total Cost (Q3): `300`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"Pass"` ($20 + 15 = 35 \ge 30$)
-   - **Entry 7**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"Fail"` ($10 + 2 = 12 < 30$)
+- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `"Fail"` (blank inputs default to 0 $\le 0$)
+- **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost (Q3): `0`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"Fail"` ($0 \le 0$)
+- **Entry 6**: Unit Price: `20`, Quantity: `15` $\rightarrow$ Total Cost (Q3): `300`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"Pass"` ($20 + 15 = 35 \ge 30$)
+- **Entry 7**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"` ($10 + 2 = 12 < 30$)
 
 ##### Resulting Database State for Question 5:
-- Version 1 Answers: `["12", "9", "19", "0", "0"]` (numbers/numeric strings)
-- Version 2 Answers: `["Pass", "Fail"]` (strings)
-- Total Question 5 distinct values in database: `["0", "9", "12", "19", "Fail", "Pass"]` (mixed dataset in the exact same form).
+- Database Answers: `["12", "9", "19", "Fail", "Fail", "Pass", "12"]`
+- Total Question 5 distinct values in database: `["12", "19", "9", "Fail", "Pass"]` (mixed dataset with counts: `"12"`: 2, `"Fail"`: 2, `"9"`: 1, `"19"`: 1, `"Pass"`: 1).
 
 ---
 
@@ -360,13 +350,13 @@ Submit 5 entries under Version 1 (Question 5 formula: `return #1 + #2`):
 
 | Widget Type | Form Used | Config Tested | Expected Behavior (After All 7 Submissions) |
 |---|---|---|---|
-| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | Displays average **`70.0`** (computed as $\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4).<br>*(Note: If tested before Phase 2 entries, displays `25.0` for `[20, 20, 60, 0]`).* |
+| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | Displays average **`70.0`** (computed as $\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4). |
 | **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`4`** (`"Degraded"`). |
-| **KPI Card (Mixed Version Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["0", "9", "12", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"0"`) without SQL cast exception. |
+| **KPI Card (Mixed Dynamic Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["12", "9", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"12"` or `"Fail"`) without SQL cast exception. |
 | **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars: **`"Degraded"` (count: 4)** and **`"Optimal"` (count: 2)**. |
 | **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories (`"Degraded"`: 4, `"Optimal"`: 2). |
 | **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 pie slices: **`"Degraded"` (66.7%, count: 4)** and **`"Optimal"` (33.3%, count: 2)**. |
-| **Pie Chart (Mixed Version Upgrade)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 6 discrete category slices: `"0"` (2), `"9"` (1), `"12"` (1), `"19"` (1), `"Fail"` (1), `"Pass"` (1) without dropping historical submissions. |
+| **Pie Chart (Mixed Autofield)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 5 discrete category slices: `"12"` (2), `"Fail"` (2), `"9"` (1), `"19"` (1), `"Pass"` (1). |
 | **Line Chart** | Test Form 5 | Y axis: `Total Cost`, Category: `Operational Status`, `group_by="month"` | Renders numeric time-series trend line of monthly average cost (`Total Cost`), split into 2 lines by `Operational Status` (`Optimal` vs `Degraded`). |
 | **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots 6 coordinates: `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(2, 20)`, cleanly dropping uncomputable null/NaN rows. |
 | **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` (2 rows: Entry 3, Entry 6) or `threshold_gt: 50` on `Total Cost` (2 rows: Entry 3: 60, Entry 6: 300) | Correctly filters rows according to string options or numeric thresholds. |
