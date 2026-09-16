@@ -9,7 +9,6 @@ import {
   getQualityOptions,
 } from '../image-compressor';
 
-
 describe('image-compressor tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();

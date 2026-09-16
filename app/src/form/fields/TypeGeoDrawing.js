@@ -9,6 +9,7 @@ import { FormState } from '../../store';
 // no use for.
 import FieldLabel from '../support/FieldLabel';
 import { polygonAreaHectares } from '../lib/geometry';
+import { QUESTION_TYPES } from '../../lib/constants';
 import styles from '../styles';
 import i18n from '../../lib/i18n';
 
@@ -22,6 +23,7 @@ const TypeGeoDrawing = ({
   keyform,
   id,
   label,
+  type = QUESTION_TYPES.geoshape,
   value = [],
   tooltip = null,
   required,
@@ -34,9 +36,11 @@ const TypeGeoDrawing = ({
 
   const points = Array.isArray(value) ? value : [];
   const requiredValue = required ? requiredSign : null;
+  // A geotrace is an open line: it encloses nothing, so it has no area to report.
+  const isClosed = type !== QUESTION_TYPES.geotrace;
 
   const handleDraw = () => {
-    navigation.navigate('MapDrawView', { id, value: points, name: label });
+    navigation.navigate('MapDrawView', { id, value: points, name: label, type });
   };
 
   return (
@@ -49,7 +53,7 @@ const TypeGeoDrawing = ({
               <Text testID="text-point-count">
                 {trans.polygonPoints}: {points.length}
               </Text>
-              {points.length >= MIN_POINTS_FOR_AREA && (
+              {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
                 <Text testID="text-area">
                   {trans.polygonArea}: {polygonAreaHectares(points).toFixed(2)} ha
                 </Text>

@@ -40,6 +40,7 @@ const StatusBanner = () => {
     2: trans.reSyncingText,
     3: trans.doneText,
     4: trans.syncErrorText,
+    5: trans.syncRejectedText,
   };
 
   const handleOnResetStatusBar = useCallback(() => {
@@ -63,7 +64,8 @@ const StatusBanner = () => {
    * Precedence: events interrupt, conditions resume.
    * 1. sync activity — transient, and it shows progress the user asked for
    * 2. low storage — a condition, and the only message here that predicts data loss
-   * 3. sync failed — sticky and unactionable from this bar, so it must not mask (2)
+   * 3. sync failed / refused — sticky, so neither must mask (2). Low storage still
+   *    outranks a refusal: the refused answers are safe as a draft, storage loss is not.
    * 4. offline — normal in the field, so it sits below (2) as well
    */
   const syncType = isOnline ? statusBar?.type : null;
@@ -82,7 +84,7 @@ const StatusBanner = () => {
     // useless to a signed-in one with nothing pending. Freeing device storage always
     // works.
     banner = { bg: '#f59e0b', icon: 'warning', text: trans.lowStorageText, isLowStorage: true };
-  } else if (syncType === SYNC_STATUS.failed) {
+  } else if (syncType === SYNC_STATUS.failed || syncType === SYNC_STATUS.rejected) {
     banner = { bg: statusBg, icon: statusIc, text: statusText?.[syncType] };
   } else if (!isOnline) {
     banner = { bg: '#ef4444', icon: 'cloud-offline', text: trans.offlineText };

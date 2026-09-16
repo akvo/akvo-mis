@@ -114,7 +114,8 @@ export const persistImage = async (uri, subDir = 'images') => {
  * @returns {Promise<{uri: string, size: number, compressed: boolean}>}
  */
 export const compressImage = async (uri, qualityPreset = DEFAULT_IMAGE_QUALITY) => {
-  const preset = IMAGE_QUALITY_PRESETS[qualityPreset] || IMAGE_QUALITY_PRESETS[DEFAULT_IMAGE_QUALITY];
+  const preset =
+    IMAGE_QUALITY_PRESETS[qualityPreset] || IMAGE_QUALITY_PRESETS[DEFAULT_IMAGE_QUALITY];
 
   // If original preset, return as-is with file size
   if (qualityPreset === 'original' || !preset.maxWidth) {

@@ -14,6 +14,7 @@ import { FormState, UserState } from '../store';
 import i18n from '../lib/i18n';
 import loadMapDrawHtml from '../lib/map-draw-html';
 import { polygonAreaHectares } from '../form/lib/geometry';
+import { QUESTION_TYPES } from '../lib/constants';
 
 const CLEAR_CONFIRM_THRESHOLD = 3;
 const MIN_POINTS_FOR_AREA = 3;
@@ -31,7 +32,10 @@ const INPUT_METHODS = [
 ];
 
 const MapDrawView = ({ navigation, route }) => {
-  const { id: questionID, value: initialValue = [] } = route.params;
+  const { id: questionID, value: initialValue = [], type = QUESTION_TYPES.geoshape } = route.params;
+  // geoshape is a closed ring with an enclosed area; geotrace is an open line with
+  // neither. Capture - tap, drag, undo, clear - is identical for both.
+  const isClosed = type !== QUESTION_TYPES.geotrace;
   const [htmlContent, setHtmlContent] = useState(null);
   const [points, setPoints] = useState(initialValue || []);
   const [showInputMethod, setShowInputMethod] = useState(false);
@@ -61,12 +65,13 @@ const MapDrawView = ({ navigation, route }) => {
       points: initialValue || [],
       center: coords ? [coords.latitude, coords.longitude] : [0, 0],
       myLocation: coords ? [coords.latitude, coords.longitude, coords.accuracy] : null,
+      closed: isClosed,
     });
     setHtmlContent(html);
     // initialValue is the value captured when the screen was pushed; it is deliberately
     // read once and not tracked, the WebView owns the geometry from then on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isClosed]);
 
   useEffect(() => {
     loadHtml();
@@ -114,8 +119,8 @@ const MapDrawView = ({ navigation, route }) => {
     return () => backHandler.remove();
   }, [navigation, showInputMethod]);
 
-  const command = (type, data) => {
-    webViewRef.current?.postMessage(JSON.stringify({ type, data: data || {} }));
+  const command = (commandType, data) => {
+    webViewRef.current?.postMessage(JSON.stringify({ type: commandType, data: data || {} }));
   };
 
   const handleMessage = (event) => {
@@ -234,7 +239,7 @@ const MapDrawView = ({ navigation, route }) => {
         <Text style={styles.statusText} testID="text-point-count">
           {trans.pointsEntered}: {points.length}
         </Text>
-        {points.length >= MIN_POINTS_FOR_AREA && (
+        {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
           <Text style={styles.statusText} testID="text-area">
             {trans.polygonArea}: {polygonAreaHectares(points).toFixed(2)} ha
           </Text>
@@ -264,15 +269,15 @@ const MapDrawView = ({ navigation, route }) => {
           </TouchableOpacity>
         ))}
         <Dialog.Actions>
+          <Button onPress={handleStartInputMethod} testID="button-start-input-method">
+            {trans.buttonStart}
+          </Button>
           <Button
             type="clear"
             onPress={() => setShowInputMethod(false)}
             testID="button-cancel-input-method"
           >
             {trans.buttonCancel}
-          </Button>
-          <Button onPress={handleStartInputMethod} testID="button-start-input-method">
-            {trans.buttonStart}
           </Button>
         </Dialog.Actions>
       </Dialog>

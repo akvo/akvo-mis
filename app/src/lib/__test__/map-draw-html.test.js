@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system';
 import loadMapDrawHtml from '../map-draw-html';
 
 const TEMPLATE =
-  '<div id="map" data-points="{{points}}" data-center="{{center}}" data-readonly="{{readonly}}" data-mylocation="{{myLocation}}"></div>';
+  '<div id="map" data-points="{{points}}" data-center="{{center}}" data-readonly="{{readonly}}" data-mylocation="{{myLocation}}" data-closed="{{closed}}"></div>';
 
 jest.mock('expo-asset', () => ({
   Asset: {
@@ -63,6 +63,16 @@ describe('loadMapDrawHtml', () => {
   it('renders no dot when there is no fix yet', async () => {
     const html = await loadMapDrawHtml({ points: triangle, center: triangle[0] });
     expect(html).toContain('data-mylocation="null"');
+  });
+
+  it('defaults to a closed shape', async () => {
+    const html = await loadMapDrawHtml({ points: triangle, center: triangle[0] });
+    expect(html).toContain('data-closed="true"');
+  });
+
+  it('marks a geotrace as an open line', async () => {
+    const html = await loadMapDrawHtml({ points: triangle, center: triangle[0], closed: false });
+    expect(html).toContain('data-closed="false"');
   });
 
   it('handles an empty polygon', async () => {

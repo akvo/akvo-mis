@@ -18,6 +18,56 @@ const triangle = [
 ];
 
 const geoshapeQuestion = { id: 1, name: 'boundary', type: QUESTION_TYPES.geoshape };
+const geotraceQuestion = { id: 1, name: 'route', type: QUESTION_TYPES.geotrace };
+
+/**
+ * geotrace is a sibling of geoshape everywhere but rendering - an open line rather than a
+ * closed ring - so every touchpoint has to list both or the field renders correctly and
+ * validates wrongly.
+ */
+describe('geotrace shares every touchpoint with geoshape', () => {
+  it('accepts an array of coordinate pairs', async () => {
+    expect(await generateValidationSchemaFieldLevel(triangle, geotraceQuestion)).toEqual({
+      1: true,
+    });
+  });
+
+  it('accepts null when optional', async () => {
+    expect(await generateValidationSchemaFieldLevel(null, geotraceQuestion)).toEqual({ 1: true });
+  });
+
+  it('rejects null when required', async () => {
+    const result = await generateValidationSchemaFieldLevel(null, {
+      ...geotraceQuestion,
+      required: true,
+    });
+    expect(result[1]).not.toBe(true);
+  });
+
+  it('keeps raw coordinates out of the datapoint name', () => {
+    const forms = {
+      question_group: [
+        {
+          question: [
+            { id: 1, name: 'village', type: QUESTION_TYPES.text, meta: true, order: 1 },
+            { id: 2, name: 'route', type: QUESTION_TYPES.geotrace, meta: true, order: 2 },
+          ],
+        },
+      ],
+    };
+    const { dpName } = generateDataPointName(forms, { 1: 'Bole', 2: triangle });
+    expect(dpName).toBe('Bole');
+    expect(dpName).not.toContain('9.03');
+  });
+
+  it('turns an empty answer into an empty array on resume', () => {
+    const formDataJson = {
+      json: JSON.stringify({ question_group: [{ question: [geotraceQuestion] }] }),
+    };
+    const { currentValues } = transformMonitoringData(formDataJson, { 1: '' });
+    expect(currentValues[1]).toEqual([]);
+  });
+});
 
 describe('geoshape validation schema (touchpoint 4)', () => {
   it('accepts an array of coordinate pairs', async () => {

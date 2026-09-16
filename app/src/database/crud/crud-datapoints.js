@@ -346,6 +346,22 @@ const dataPointsQuery = () => ({
     return res;
   },
   /**
+   * Hand a rejected submission back to the enumerator as a draft.
+   *
+   * The counterpart to saveAsPending: that one is for transient failures worth retrying,
+   * this one for a refusal that retrying can never fix. The same bytes are refused every
+   * time, so leaving the row submitted syncs it forever. A draft with no draftId drops
+   * out of selectSubmissionToSync, which stops the loop, and appears in the drafts list
+   * where the answers can be corrected and submitted again.
+   *
+   * Writes only `submitted`: updateDataPoint writes name, geo, duration and json
+   * unconditionally, so reusing it here would null the submission it is meant to save.
+   */
+  saveAsDraft: async (db, id) => {
+    const res = await sql.updateRow(db, 'datapoints', { id }, { submitted: 0 });
+    return res;
+  },
+  /**
    * How many OTHER datapoints still reference this file URI. Guards the local file
    * cleanup on delete: a shared file must outlive the row being deleted, or the
    * surviving row shows a broken preview.

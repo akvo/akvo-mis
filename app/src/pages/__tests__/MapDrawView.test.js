@@ -36,11 +36,11 @@ jest.mock('react-native/Libraries/Utilities/BackHandler', () => ({
 const mockGoBack = jest.fn();
 const mockNavigate = jest.fn();
 
-const renderScreen = (value = []) =>
+const renderScreen = (value = [], params = {}) =>
   render(
     <MapDrawView
       navigation={{ goBack: mockGoBack, navigate: mockNavigate, canGoBack: () => true }}
-      route={{ params: { id: 42, value } }}
+      route={{ params: { id: 42, value, ...params } }}
     />,
   );
 
@@ -433,5 +433,36 @@ describe('MapDrawView hardware back', () => {
     });
 
     expect(mockGoBack).not.toHaveBeenCalled();
+  });
+});
+
+describe('MapDrawView geotrace', () => {
+  beforeEach(() => {
+    act(() => {
+      FormState.update((s) => {
+        s.lang = 'en';
+        s.currentValues = {};
+      });
+      UserState.update((s) => {
+        s.currentLocation = { coords: { latitude: 9.03, longitude: 38.74, accuracy: 18.4 } };
+      });
+    });
+  });
+
+  it('reports no area for an open line', async () => {
+    const { getByTestId, queryByTestId } = renderScreen(triangle, { type: 'geotrace' });
+    await waitFor(() => expect(getByTestId('webview-map-draw')).toBeDefined());
+    expect(getByTestId('text-point-count').props.children).toContain(3);
+    expect(queryByTestId('text-area')).toBeNull();
+  });
+
+  it('still reports area for a geoshape', async () => {
+    const { getByTestId } = renderScreen(triangle, { type: 'geoshape' });
+    await waitFor(() => expect(getByTestId('text-area')).toBeDefined());
+  });
+
+  it('defaults to a closed shape when the type is absent', async () => {
+    const { getByTestId } = renderScreen(triangle);
+    await waitFor(() => expect(getByTestId('text-area')).toBeDefined());
   });
 });

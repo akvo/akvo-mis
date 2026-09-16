@@ -147,6 +147,7 @@ const QuestionField = ({
           />
         );
       case QUESTION_TYPES.geoshape:
+      case QUESTION_TYPES.geotrace:
         return (
           <TypeGeoDrawing
             keyform={keyform}
