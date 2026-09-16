@@ -323,12 +323,12 @@ sequenceDiagram
    - Question 1 (`number`): `Unit Price`
    - Question 2 (`number`): `Quantity`
    - Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`)
-   - Submit 5 entries:
-     - Entry 1: (10, 2) $\rightarrow$ `20`
-     - Entry 2: (5, 4) $\rightarrow$ `20`
-     - Entry 3: (15, 4) $\rightarrow$ `60`
-     - Entry 4: (empty, empty) $\rightarrow$ `None` / `""` (unanswered)
-     - Entry 5: (0, 0 with division artifact) $\rightarrow$ `"NaN"` / `"null"`
+    - Submit 5 entries:
+      - Entry 1: (10, 2) $\rightarrow$ `20`
+      - Entry 2: (5, 4) $\rightarrow$ `20`
+      - Entry 3: (15, 4) $\rightarrow$ `60`
+      - Entry 4: (empty, empty) $\rightarrow$ `None` / `""` (unanswered / missing data)
+      - Entry 5: (0, 0) $\rightarrow$ `0` (or `"NaN"` if formula uses division `0 / 0`)
 2. **Form B (Pure Categorical Autofield)**:
    - Question 1 (`number`): `Water Flow Rate`
    - Question 2 (`autofield`): `Operational Status` (`function() { return #1 >= 50 ? "Optimal" : "Degraded"; }`)
@@ -342,7 +342,7 @@ sequenceDiagram
 
 | Widget Type | Form Used | Config Tested | Expected Behavior |
 |---|---|---|---|
-| **KPI Card** | Form A | `repeat_agg="average"` | Displays average `33.33` (computed over `20, 20, 60`, safely ignoring `None` and `"NaN"` without crashing or distorting denominator). |
+| **KPI Card** | Form A | `repeat_agg="average"` | • If Entry 5 is `0`: Displays average **`25.0`** (computed over `[20, 20, 60, 0]` divided by 4, skipping `None`).<br>• If Entry 5 is `"NaN"` / missing: Displays average **`33.33`** (computed over `[20, 20, 60]` divided by 3, safely ignoring `None` and `"NaN"` without crashing or distorting denominator). |
 | **KPI Card** | Form C | `repeat_agg="average"` | Detects string values (`"Pass"`, `"Fail"`) $\rightarrow$ Gracefully displays total submission count `4` without crashing. |
 | **Bar Chart** | Form B | `group_by="option"` | Displays 2 category bars (`"Optimal"` with count 2, `"Degraded"` with count 2). |
 | **Bar Chart (Stacked)** | Form B | `group_by="option"`, stacked by another option | Renders stacked bars keyed by status categories. |
