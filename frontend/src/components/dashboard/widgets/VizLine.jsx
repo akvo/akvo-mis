@@ -20,6 +20,8 @@ const CategoryLine = ({ config, data, filters }) => {
     const colors = wc.chart_colors || DEFAULT_COLORS;
     const catColors = wc.category_colors || {};
     const labels = wc.stackMapping?.stack || [];
+    const xLabel = wc.x_axis_label || null;
+    const yLabel = wc.y_axis_label || null;
     if (chartData.length === 0 || labels.length === 0) {
       return null;
     }
@@ -57,9 +59,15 @@ const CategoryLine = ({ config, data, filters }) => {
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
+        ...(xLabel
+          ? { name: xLabel, nameLocation: "center", nameGap: 25 }
+          : {}),
       },
       yAxis: {
         type: "value",
+        ...(yLabel
+          ? { name: yLabel, nameLocation: "center", nameGap: 40 }
+          : {}),
       },
       series: labels.map((name, idx) => ({
         name,
@@ -95,6 +103,8 @@ const VizLine = ({ config, data, filters }) => {
   const hasCategory = Boolean(widgetConfig.category_question_id);
   const isAdminGrouped = widgetConfig.stack_by === "administration";
   const hasStack = Boolean(widgetConfig.stack_by || widgetConfig.stackMapping);
+  const xAxisLabel = widgetConfig.x_axis_label || null;
+  const yAxisLabel = widgetConfig.y_axis_label || null;
 
   const colors = Array.isArray(config?.color)
     ? config.color
@@ -155,9 +165,15 @@ const VizLine = ({ config, data, filters }) => {
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
+        ...(xAxisLabel
+          ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+          : {}),
       },
       yAxis: {
         type: "value",
+        ...(yAxisLabel
+          ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
+          : {}),
       },
       series: stackLabels.map((name, idx) => ({
         name,
@@ -198,9 +214,15 @@ const VizLine = ({ config, data, filters }) => {
     xAxis: {
       type: "category",
       data: chartData.map((d) => d[categoryKey]),
+      ...(xAxisLabel
+        ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+        : {}),
     },
     yAxis: {
       type: "value",
+      ...(yAxisLabel
+        ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
+        : {}),
     },
     series: [
       {

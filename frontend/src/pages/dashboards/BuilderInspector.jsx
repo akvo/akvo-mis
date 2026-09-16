@@ -1037,6 +1037,7 @@ const BuilderInspector = ({
                   // The stack is then validated against the grouping
                   // that survived, not the one being replaced.
                   const nextQuestion = allQuestions.find((q) => q.id === val);
+                  const qLabel = nextQuestion?.label || null;
                   if (wType === "bar") {
                     // One control, so one snap: a breakdown the new
                     // question cannot draw moves to the first that it
@@ -1046,15 +1047,18 @@ const BuilderInspector = ({
                     onWidgetChange({
                       ...widget,
                       question: val || null,
-                      config: withValidBreakdown(
-                        widget.config,
-                        breakdownOptions(
-                          nextQuestion,
-                          allQuestions,
-                          forms,
-                          widget.form
-                        )
-                      ),
+                      config: {
+                        ...withValidBreakdown(
+                          widget.config,
+                          breakdownOptions(
+                            nextQuestion,
+                            allQuestions,
+                            forms,
+                            widget.form
+                          )
+                        ),
+                        y_axis_label: qLabel,
+                      },
                     });
                     return;
                   }
@@ -1065,16 +1069,19 @@ const BuilderInspector = ({
                   onWidgetChange({
                     ...widget,
                     question: val || null,
-                    config: withValidStack(
-                      grouped,
-                      stackByOptions(
-                        allQuestions,
-                        val,
-                        grouped.group_by || "option",
-                        wType === "bar" ? forms : [],
-                        widget.form
-                      )
-                    ),
+                    config: {
+                      ...withValidStack(
+                        grouped,
+                        stackByOptions(
+                          allQuestions,
+                          val,
+                          grouped.group_by || "option",
+                          wType === "bar" ? forms : [],
+                          widget.form
+                        )
+                      ),
+                      y_axis_label: qLabel,
+                    },
                   });
                 }
               }}
@@ -1689,6 +1696,30 @@ const BuilderInspector = ({
               ))}
             </Select>
           </div>
+        )}
+
+        {/* Axis labels (bar, line, scatter) */}
+        {(wType === "bar" || wType === "line" || wType === "scatter") && (
+          <>
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">X axis label</label>
+              <Input
+                value={wConfig.x_axis_label || ""}
+                onChange={(e) => updateConfig("x_axis_label", e.target.value)}
+                placeholder="X axis label"
+                allowClear
+              />
+            </div>
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">Y axis label</label>
+              <Input
+                value={wConfig.y_axis_label || ""}
+                onChange={(e) => updateConfig("y_axis_label", e.target.value)}
+                placeholder="Y axis label"
+                allowClear
+              />
+            </div>
+          </>
         )}
 
         {/* Table columns */}

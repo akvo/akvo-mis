@@ -23,6 +23,8 @@ const VizBar = ({ config, data, filters }) => {
 
   const horizontal = widgetConfig.orientation === "horizontal";
   const isPercentage = widgetConfig.value_type === "percentage";
+  const xAxisLabel = widgetConfig.x_axis_label || null;
+  const yAxisLabel = widgetConfig.y_axis_label || null;
   const toolboxConfig = config?.toolbox || widgetConfig.toolbox || widgetConfig;
   const toolbox = buildToolboxConfig(toolboxConfig, "bar", config?.title);
   const { chartRef, boxRef } = useChartResize(toolbox);
@@ -82,12 +84,18 @@ const VizBar = ({ config, data, filters }) => {
         ...(horizontal && isPercentage
           ? { axisLabel: { formatter: "{value}%" } }
           : {}),
+        ...(xAxisLabel
+          ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+          : {}),
       },
       yAxis: {
         type: horizontal ? "category" : "value",
         data: horizontal ? chartData.map((d) => d.label) : null,
         ...(!horizontal && isPercentage
           ? { axisLabel: { formatter: "{value}%" } }
+          : {}),
+        ...(yAxisLabel
+          ? { name: yAxisLabel, nameLocation: "center", nameGap: 50 }
           : {}),
       },
       series: stackLabels.map((name, idx) => ({
@@ -131,12 +139,18 @@ const VizBar = ({ config, data, filters }) => {
       ...(horizontal && isPercentage
         ? { axisLabel: { formatter: "{value}%" } }
         : {}),
+      ...(xAxisLabel
+        ? { name: xAxisLabel, nameLocation: "center", nameGap: 25 }
+        : {}),
     },
     yAxis: {
       type: horizontal ? "category" : "value",
       data: horizontal ? chartData.map((d) => d[categoryKey]) : null,
       ...(!horizontal && isPercentage
         ? { axisLabel: { formatter: "{value}%" } }
+        : {}),
+      ...(yAxisLabel
+        ? { name: yAxisLabel, nameLocation: "center", nameGap: 50 }
         : {}),
     },
     series: [
