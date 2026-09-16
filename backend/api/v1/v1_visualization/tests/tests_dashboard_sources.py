@@ -203,7 +203,7 @@ class DashboardSourcesTestCase(TestCase, ProfileTestHelperMixin):
             len(few.captured_queries), len(many.captured_queries)
         )
 
-    def test_question_type_ids_are_the_four_aggregatable_ones(self):
+    def test_question_type_ids_are_the_five_aggregatable_ones(self):
         # Guards the import: if SUPPORTED_QUESTION_TYPES ever changes,
         # this test says so rather than /sources silently widening.
         self.assertEqual(
@@ -213,6 +213,7 @@ class DashboardSourcesTestCase(TestCase, ProfileTestHelperMixin):
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
                 QuestionTypes.date,
+                QuestionTypes.autofield,
             },
         )
 
