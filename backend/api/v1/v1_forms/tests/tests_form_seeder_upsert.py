@@ -60,7 +60,8 @@ class FormSeederFileSelectionTestCase(TestCase):
         self.source = tempfile.mkdtemp(prefix="form_seeder_select_")
         self.addCleanup(shutil.rmtree, self.source, ignore_errors=True)
         self.write("example-alpha.json", minimal_form(801, "Alpha", 80101))
-        self.write("client-beta.json", minimal_form(802, "Beta", 80201))
+        self.write("client-beta.prod.json", minimal_form(802, "Beta", 80201))
+        self.write("notes-draft.json", minimal_form(804, "Draft", 80401))
 
     def write(self, filename, payload):
         path = os.path.join(self.source, filename)
@@ -78,17 +79,24 @@ class FormSeederFileSelectionTestCase(TestCase):
         )
         return out.getvalue()
 
-    def test_plain_run_loads_every_json(self):
-        """No flag: every *.json in the folder is seeded, whatever it
-        is named. This is the point of the change — real deployments
-        drop their own definitions here."""
+    def test_plain_run_loads_only_prod_definitions(self):
+        """No flag: *.prod.json, and nothing else in the folder.
+
+        This used to be "every *.json, whatever it is named", gated on
+        settings.PROD. That made a local ./seeder.sh run seed the dev
+        fixtures too and die on "form id 2 already belongs to default",
+        and it made the file set depend on the environment. The filename
+        decides now: example-* for --test, *.prod.json for everything
+        else, which is also what job.sh globs.
+        """
         self.seed()
-        self.assertTrue(Forms.objects.filter(pk=801).exists())
         self.assertTrue(Forms.objects.filter(pk=802).exists())
+        self.assertFalse(Forms.objects.filter(pk=801).exists())
+        self.assertFalse(Forms.objects.filter(pk=804).exists())
 
     def test_test_flag_narrows_to_examples(self):
         """--test still selects only the bundled example fixtures, so
-        the 110 existing call sites keep their current meaning."""
+        the existing call sites keep their current meaning."""
         self.seed("--test", 1)
         self.assertTrue(Forms.objects.filter(pk=801).exists())
         self.assertFalse(Forms.objects.filter(pk=802).exists())
@@ -99,13 +107,13 @@ class FormSeederFileSelectionTestCase(TestCase):
         that never loaded would otherwise look like a clean install."""
         broken = minimal_form(803, "Broken", 80301)
         broken["type"] = 9
-        self.write("client-broken.json", broken)
+        self.write("client-broken.prod.json", broken)
 
         with self.assertRaises(CommandError) as caught:
             self.seed()
-        self.assertIn("client-broken.json", str(caught.exception))
+        self.assertIn("client-broken.prod.json", str(caught.exception))
         # Rolled back as a whole rather than committed half-applied.
-        self.assertFalse(Forms.objects.filter(pk=801).exists())
+        self.assertFalse(Forms.objects.filter(pk=802).exists())
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
@@ -356,7 +364,7 @@ class FormSeederNoDataLossTestCase(TestCase):
                 "type": "text",
                 "required": False,
             })
-        path = os.path.join(self.source, "client-upsert.json")
+        path = os.path.join(self.source, "client-upsert.prod.json")
         with open(path, "w") as handle:
             json.dump(payload, handle)
 
@@ -407,7 +415,7 @@ class FormSeederVersionTestCase(TestCase):
         payload = minimal_form(830, "Version Form", 83001)
         payload["type"] = form_type
         payload["question_groups"][0]["questions"][0]["label"] = label
-        path = os.path.join(self.source, "client-version.json")
+        path = os.path.join(self.source, "client-version.prod.json")
         with open(path, "w") as handle:
             json.dump(payload, handle)
 
