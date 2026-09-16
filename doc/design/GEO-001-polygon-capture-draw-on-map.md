@@ -5,9 +5,9 @@
 **Task ID**: GEO-001 (breakdown ref: T1)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Implemented and device-verified — 2026-09-15
+**Status**: Implemented and device-verified — 2026-09-16 (geoshape **and** geotrace, both clients)
 **Phase**: 1 — Capture & validity
-**Estimate**: 12.5h ≈ 1.5 days (Mobile)
+**Estimate**: 13h ≈ 1.5 days (Mobile) — plus two device-found defects outside the estimate (D-10, D-12)
 
 ---
 
@@ -48,7 +48,9 @@ integrated or demoed without it.
 - [x] Leaving and returning to the question group preserves captured points
 - [x] The capture screen follows ODK/Kobo's geoshape layout, and its Input method dialog lists all
       three ODK modes with the two GPS recording modes disabled until GEO-004 (**D-9**)
-- [x] A saved polygon previews as a read-only map in the datapoint detail view (§6.8)
+- [x] A saved geometry previews as a read-only map in the datapoint detail view — **mobile and
+      web** (§6.8)
+- [x] A `geotrace` question captures the same way and draws an open line with no area (**D-11**)
 
 ### Technical Acceptance Criteria
 - [x] Value format is `[[lat, lng], [lat, lng], …]` — identical to ARF's
@@ -58,7 +60,7 @@ integrated or demoed without it.
 - [x] Leaflet is served from a bundled asset, not unpkg — WebView renders with the network off
 - [x] With no tiles the map degrades to a usable drawing surface; capture is never blocked
 - [x] Files stay within the 200–400 line guideline (Airbnb ESLint enforced) — `MapDrawView.js`
-      is 355 lines, the largest
+      is 360 lines, the largest
 
 ### Out of scope
 - GPS boundary walking → **GEO-004**
@@ -84,6 +86,26 @@ serialized to mobile by `WebFormDetailSerializer`.
 ---
 
 ## 5. Decision Log
+
+Ordered by when each was made, not by number — D-11 sits next to the D-7 it reverses, because a
+reversal read apart from what it reverses is half a decision. The ones marked *found on device*
+were not foreseeable from the design; they are the ones worth reading first.
+
+| | Decision | |
+|---|---|---|
+| **D-1** | WebView + Leaflet, reusing the in-repo bridge | |
+| **D-1b** | Keep ARF's `[[lat, lng]]`, latitude first | ✅ resolved |
+| **D-2** | Port ARF's `TypeGeoDrawing`, not the Kotlin validator | |
+| **D-3** | Phase 1 is connected-only; OSM raster, no satellite | ✅ resolved |
+| **D-4** | Leaflet inlined into the page asset | ✅ resolved |
+| **D-5** | The map gets its own screen, not an inline WebView | |
+| **D-6** | `MapView` is orphaned — copy the pattern, not the file | |
+| **D-7** | ~~`geoshape` only~~ | ❌ reversed by D-11 |
+| **D-11** | `geotrace` ships with `geoshape` | |
+| **D-8** | `geoshape` validation must be nullable | 🔍 found in implementation |
+| **D-9** | ODK/Kobo capture UI, GEO-004's modes disabled | |
+| **D-10** | Leave a screen with `goBack()`, never `navigate()` by name | 🔍 **found on device — lost a submission** |
+| **D-12** | Administration cascades were never rendered | 🔍 **found on device — not our bug** |
 
 ### D-1: Map rendering approach
 
@@ -222,19 +244,47 @@ direction. Copying ~15 lines of proven loader is cheaper than owning that branch
 a point) or deletable dead code. Raise it as its own ticket — it should not be decided inside
 GEO-001. Its offline bug (D-3, D-4) is fixed either way once Leaflet is vendored.
 
-### D-7: `geoshape` only — `geotrace` deferred
+### ~~D-7: `geoshape` only — `geotrace` deferred~~ → **REVERSED, see D-11**
 
-**Decision**: implement `geoshape` (type 14) in GEO-001. Add `geotrace` (type 15) to
-`QUESTION_TYPES` but do **not** wire a renderer for it.
+**Original decision**: implement `geoshape` (type 14) only; add `geotrace` (type 15) to
+`QUESTION_TYPES` without a renderer, on the grounds that threading a `closed`/`open` flag
+through the page, the area readout and the validation was not worth paying before a form asked
+for a trace.
 
-**Rationale**: a geotrace is an open polyline — no ring closure, no enclosed area, and "clear all
-above 3 points" is the wrong confirmation threshold. Sharing one component across both means a
-`closed`/`open` flag threading through the page, the area readout and the validation before any
-form in the field actually asks for a trace. Ship the shape; add the trace when a form needs one.
+**Superseded 2026-09-16 (D-11).** The estimate was wrong: the flag turned out to be one
+attribute and one ternary, and the read-side work had to handle both types anyway.
 
-**Impact**: touchpoint #2 gets one `case`, not two. If `geotrace` reaches a device before its
-renderer exists it keeps falling through to `TypeInput` — the same behaviour as today, no
-regression.
+### D-11: `geotrace` ships with `geoshape` (2026-09-16)
+
+**Decision**: both types are captured, validated and previewed. They differ in exactly two
+places — the shape drawn and whether an area is reported.
+
+| | `geoshape` (14) | `geotrace` (15) |
+|---|---|---|
+| Leaflet layer | `L.polygon` — closed ring, filled | `L.polyline` — open line |
+| Area readout | yes | **no** — an open line encloses nothing |
+| Everything else | — identical: tap, drag, remove, undo, clear, save, preview — | |
+
+**What changed the decision.** Deferring assumed a `closed`/`open` flag would spread through the
+capture stack. In practice it is a single `data-closed` attribute on the page, one ternary
+choosing the Leaflet constructor, and one `isClosed &&` guarding the area line. Against that,
+the *read* side had to be generic regardless: a stored geotrace hits the same `default:` branch
+that rendered a geoshape as an unbroken run of digits, on web and on mobile. Building a preview
+that deliberately mishandled its sibling type would have been the more expensive choice.
+
+**Every touchpoint in §7 lists both types.** A type added to `QUESTION_TYPES` and a renderer but
+not to the validation branch, the datapoint-name filter, `transformValue` and both
+`FormNavigation` arrays renders correctly and validates wrongly — the quiet failure D-8 is about.
+
+**Naming follows.** `GeoshapeView` became `GeometryView` on both platforms, and
+`geoshape-touchpoints.test.js` became `geometry-touchpoints.test.js`: a component named for one
+of the two types it handles is a name that has to be re-learned the first time someone looks for
+the trace code.
+
+**Not built: a length readout for geotrace.** A trace's natural metric is its length, as area is
+a shape's, and it currently shows only a point count. Cheap to add (haversine over consecutive
+pairs, next to `polygonArea`) — deliberately left until a form asks for a trace and its reviewers
+say what they need.
 
 ---
 
@@ -401,24 +451,94 @@ by popping. If you ever need `navigate` by name to a screen that carries params,
 
 ---
 
+### D-12: administration cascades were never rendered — found on device (2026-09-16)
+
+**Not caused by this feature, found because of it.** Device testing of the capture flow produced
+a submission that synced forever and was refused every time. The cause was upstream of anything
+GEO-001 built.
+
+`extra.type` is a cascade **sub-type**: `"administration"` or `"entity"`. Three filters gated on
+it like this:
+
+```js
+(q) => (q?.extra?.type === 'entity' && prevAdmAnswer?.length > 0) || !q?.extra?.type
+```
+
+The `|| !q?.extra?.type` clause was meant to say "let ordinary questions through". It actually
+says "let through only questions with **no** sub-type at all" — so every **administration**
+cascade satisfied neither clause and was dropped:
+
+| Filter | File | Consequence |
+|---|---|---|
+| render | `form/lib/index.js` (transformForm) | the question never appears; `keyform` renumbers over the gap |
+| validate, per group | `form/support/FormNavigation.js` | a required administration question is never checked |
+| validate, whole form | `form/support/FormNavigation.js` | same, on submit |
+
+The failure chain: the enumerator cannot answer a required Location; Submit passes because it is
+not validated; the answer reaches `/sync` missing; the backend requires a number for a cascade and
+refuses; the row stays `submitted = 1` and retries forever.
+
+**Fix**: gate only entity cascades, which is what the code meant.
+
+```js
+(q) => q?.extra?.type !== 'entity' || prevAdmAnswer?.length > 0
+```
+
+**Why it looked like a GEO-001 bug and was not.** The visible symptoms — a blank Location in the
+datapoint detail view, a submission stuck in a sync loop — appeared on the same branch and in the
+same session as the polygon work. The give-away was the form's own numbering: the screenshot read
+`4. Geolocation`, but that question's id is 105. Question 104 was missing and the numbers had
+closed over it. Older datapoints carry administration values because the question gained
+`extra.type` later.
+
+**Related, also fixed outside this task**: a submission the server refuses is now handed back as a
+draft (`crudDataPoints.saveAsDraft`) instead of retried forever, with `SYNC_STATUS.rejected` to
+say so. `MAX_ATTEMPT` never bounded this: exhausting it deletes the job, and the next tick creates
+a fresh one at attempt 0. That is a sync-resilience fix, not a geometry one — recorded here only
+because this task's device pass is what exposed it.
+
+---
+
 ## 6. Component Design
 
 ### 6.1 File layout
 
-| File | Status | Lines (est.) | Responsibility |
-|---|---|---|---|
+**Mobile — capture:**
+
 | File | Status | Lines | Responsibility |
 |---|---|---|---|
-| `app/src/pages/MapDrawView.js` | new | 355 | Screen: ODK-style chrome, WebView host, bridge, input-method dialog |
-| `app/src/form/fields/TypeGeoDrawing.js` | new | 72 | Field: count + area readout and a single "Draw on map" button |
-| `app/assets/map-draw.html` | new | 891 | Leaflet page — **≈180 authored, the rest is inlined Leaflet 1.7.1** (D-4) |
+| `app/src/pages/MapDrawView.js` | new | 360 | Screen: ODK-style chrome, WebView host, bridge, input-method dialog |
+| `app/src/form/fields/TypeGeoDrawing.js` | new | 76 | Field: count + area readout and a single "Draw on map" button |
+| `app/assets/map-draw.html` | new | 897 | Leaflet page — **≈190 authored, the rest is inlined Leaflet 1.7.1** (D-4) |
+| `app/src/lib/map-draw-html.js` | new | 30 | Loads the asset and bakes in points/centre/read-only/closed/position |
 | `app/src/form/lib/geometry.js` | new | 31 | `polygonArea` / `polygonAreaHectares` — shoelace on a local planar projection |
-| `app/src/lib/map-draw-html.js` | new | 28 | Loads the asset and bakes in points/centre/read-only — shared by both WebView hosts |
-| `app/src/components/FormDataDetails/GeoshapeView.js` | new | 111 | Read-only preview of a saved polygon in the datapoint detail list (§6.8) |
+
+**Mobile — read-only preview (§6.8):**
+
+| File | Status | Lines | Responsibility |
+|---|---|---|---|
+| `app/src/components/FormDataDetails/GeometryView.js` | new | 120 | Preview of a saved geoshape/geotrace in the datapoint detail list |
+
+**Web — read-only preview (§6.8):**
+
+| File | Status | Lines | Responsibility |
+|---|---|---|---|
+| `frontend/src/components/GeometryView.jsx` | new | 105 | Static `react-leaflet` preview, wired through `EditableCell` |
+| `frontend/src/lib/geometry.js` | new | 52 | `toPolygonPoints` + shoelace area — the web twin of the mobile helper |
+
+**Test and tooling support:**
+
+| File | Status | Lines | Responsibility |
+|---|---|---|---|
 | `app/__mocks__/react-native-webview.js` | new | 18 | Package-level Jest mock; `RNCWebViewModule` has no native binary under Jest |
 | `app/setup-test-env.js` | modified | +5 | Global `react-native-safe-area-context` mock (§6.9) |
-| `app/src/lib/i18n/ui-text.js` | modified | +36 | 18 new keys × en/fr — capture controls and the input-method dialog |
+| `app/src/lib/i18n/ui-text.js` | modified | +38 | 19 keys × en/fr — capture controls and the input-method dialog |
 | `app/.prettierignore` | modified | +1 | `map-draw.html` — the inlined Leaflet blob must not be reformatted |
+
+**Two `geometry.js` files, deliberately.** `app/` and `frontend/` are separate npm packages with
+no shared library between them, so the shoelace is written twice rather than adding one. Both
+carry the same axis-order regression test (D-1b), which is the part that would hurt if they
+drifted.
 
 Leaflet 1.7.1 is **inlined into `map-draw.html`**, not shipped as separate asset files — see the
 implementation correction in D-4.
@@ -457,15 +577,18 @@ Props match the sibling fields exactly (`TypeGeo.js:11-20`) so `QuestionField`'s
 copy of its neighbours:
 
 ```
-TypeGeoDrawing({ keyform, id, label, value = [], tooltip, required,
-                 requiredSign = '*', disabled = false })
+TypeGeoDrawing({ keyform, id, label, type = QUESTION_TYPES.geoshape, value = [],
+                 tooltip, required, requiredSign = '*', disabled = false })
 ```
+
+`type` is what decides open vs closed (D-11). It is passed straight through to the map screen,
+so one field component serves both question types and the area line is suppressed for a trace.
 
 Renders:
 - `<FieldLabel>` — same as every other field
 - point count; enclosed area (ha, 2 dp) once `value.length >= 3`; a "no shape captured yet"
   line when empty
-- **Draw on map** → `navigation.navigate('MapDrawView', { id, value, name: label })`
+- **Draw on map** → `navigation.navigate('MapDrawView', { id, value, name: label, type })`
 
 **One button, not two.** The draft specified a Clear here as well; clearing ended up on the map
 screen instead, next to undo, where the enumerator can see what they are destroying. A Clear on
@@ -477,8 +600,10 @@ from `../support/FieldLabel` rather than the `../support` barrel, which re-expor
 
 ### 6.4 Bridge protocol
 
-Two message types outbound, five inbound. The initial polygon, centre, read-only flag and
-first GPS fix are templated at load, not posted.
+Two message types outbound, five inbound. Five values are templated into the page at load
+rather than posted — `{{points}}`, `{{center}}`, `{{readonly}}`, `{{closed}}` and
+`{{myLocation}}`. Nothing that the page needs in order to render correctly arrives over the
+bridge.
 
 **WebView → React Native** (`window.ReactNativeWebView.postMessage`):
 
@@ -585,15 +710,30 @@ drawn on a blank canvas is a valid polygon (D-3).
 
 | Frontend/Editor | Backend Constant | DB Value | Mobile |
 |-----------------|------------------|----------|--------|
-| `"geoshape"` | `QuestionTypes.geoshape` | `14` | `QUESTION_TYPES.geoshape` *(to add — renderer wired)* |
-| `"geotrace"` | `QuestionTypes.geotrace` | `15` | `QUESTION_TYPES.geotrace` *(constant only — D-7)* |
+| `"geoshape"` | `QuestionTypes.geoshape` | `14` | `QUESTION_TYPES.geoshape` *(renderer wired)* |
+| `"geotrace"` | `QuestionTypes.geotrace` | `15` | `QUESTION_TYPES.geotrace` *(renderer wired — D-11)* |
 
 ### 6.8 Read-only preview in the datapoint detail view
 
-A saved `geoshape` reaching `SubtitleContent` falls through to `default:` and renders as a run of
-concatenated digits, since `<Text>` flattens an array of coordinate pairs into its numbers. The
-`geoshape` case renders `GeoshapeView` instead: the same `map-draw.html`, loaded with
-`data-readonly="true"`.
+Present on **both** clients, and on both it replaces the same failure: an array of coordinate
+pairs reaching a text node and rendering as one unbroken run of digits.
+
+| | Mobile | Web |
+|---|---|---|
+| Component | `app/src/components/FormDataDetails/GeometryView.js` | `frontend/src/components/GeometryView.jsx` |
+| Map | the same `map-draw.html`, `data-readonly="true"` | `react-leaflet` (already a dependency, previously unused) |
+| Wired in | `SubtitleContent` | `EditableCell` |
+
+**Web also had a live corruption path.** `EditableCell`'s `notEditable` list covered `geo` but
+not `geoshape` or `geotrace`, so clicking the cell opened the default text `Input` holding the
+flattened coordinate run; saving PUT that **string** over the geometry. Both types are now in
+the list. The web map is additionally fully static — `dragging`, every zoom handler and
+`zoomControl` off — because it sits in a scrolling table where wheel-zoom would swallow the page
+scroll and panning could lose the shape with no control to bring it back.
+
+**Why it renders as digits without this.** `<Text>` (mobile) and a JSX text node (web) both
+flatten an array of coordinate pairs into a bare run of its numbers — every digit present, none
+of them meaning anything. Both clients hit that through their `default:` branch.
 
 Read-only is not cosmetic. The preview sits inside the detail `SectionList`, which is exactly the
 gesture conflict D-5 avoided by giving capture its own screen. So the page disables `dragging`,
@@ -601,9 +741,14 @@ gesture conflict D-5 avoided by giving capture its own screen. So the page disab
 control, makes vertices non-draggable and skips the map click handler — the map becomes a picture
 of the shape and the list keeps its scroll.
 
-Both hosts share `loadMapDrawHtml({ points, center, readonly })` rather than each doing their own
-`Asset.loadAsync` → `readAsStringAsync` → substitute. The attribute-escaping of the baked-in JSON
-lives there too, in one place, and is unit-tested directly.
+Both **mobile** hosts share `loadMapDrawHtml({ points, center, readonly, closed, myLocation })`
+rather than each doing their own `Asset.loadAsync` → `readAsStringAsync` → substitute. The
+attribute-escaping of the baked-in JSON lives there too, in one place, and is unit-tested
+directly.
+
+The web preview does not use that page at all — `react-leaflet` was already a dependency there
+(and previously unused), so a React component is cheaper than hosting a WebView to run the same
+Leaflet twice.
 
 ### 6.9 Safe-area inset on the capture screen
 
@@ -629,12 +774,12 @@ for, which survive the file shifting under them.
 | # | File | Anchor — current code | Change | Symptom if skipped |
 |---|---|---|---|---|
 | 1 | `app/src/lib/constants.js` | `QUESTION_TYPES = { … signature: 'signature' }` (≈L31–142) | Add `geoshape`, `geotrace` | Type never matches |
-| 2 | `app/src/form/components/QuestionField.js` | `case QUESTION_TYPES.signature:` … `default:` | Add `case QUESTION_TYPES.geoshape:` → `<TypeGeoDrawing>` | Renders a plain text input |
+| 2 | `app/src/form/components/QuestionField.js` | `case QUESTION_TYPES.signature:` … `default:` | Add `case QUESTION_TYPES.geoshape:` **and** `case QUESTION_TYPES.geotrace:` → `<TypeGeoDrawing>` | Renders a plain text input |
 | 3 | `app/src/form/fields/TypeGeoDrawing.js` + `fields/index.js` | `export { default as TypeSignature } …` | New component + export line | Nothing to render |
-| 4 | `app/src/form/lib/index.js` | `case 'geo':` → `yupType = Yup.array();` | Add a **separate** `case 'geoshape':` → `Yup.array().nullable()`, `min(1)` when required (**D-8** — not a shared branch with `geo`) | Falls to `default: Yup.string()` — **an array fails a string schema**; a non-nullable array flags every untouched optional polygon |
-| 5 | `app/src/form/lib/index.js` | `.filter((d) => d.type !== QUESTION_TYPES.geo && …)` | Widen to `![geo, geoshape].includes(d.type)` | Raw coordinates leak into the datapoint name |
-| 6 | `app/src/form/lib/index.js` | `if (question?.type === QUESTION_TYPES.geo) { return answer === '' ? [] : value; }` | Widen the condition to include `geoshape` | Empty polygon becomes `''`; breaks resume |
-| 7 | `app/src/form/support/FormNavigation.js` | `['cascade', 'multiple_option', 'option', 'geo']` — **two occurrences** | Add `'geoshape'` to both | Unanswered polygon defaults to `''` not `null` — **wrong required-check** |
+| 4 | `app/src/form/lib/index.js` | `case 'geo':` → `yupType = Yup.array();` | Add a **separate** `case 'geoshape': case 'geotrace':` → `Yup.array().nullable()`, `min(1)` when required (**D-8** — not a shared branch with `geo`) | Falls to `default: Yup.string()` — **an array fails a string schema**; a non-nullable array flags every untouched optional geometry |
+| 5 | `app/src/form/lib/index.js` | `.filter((d) => d.type !== QUESTION_TYPES.geo && …)` | Widen to `![geo, geoshape, geotrace].includes(d.type)` | Raw coordinates leak into the datapoint name |
+| 6 | `app/src/form/lib/index.js` | `if (question?.type === QUESTION_TYPES.geo) { return answer === '' ? [] : value; }` | Widen the condition to include `geoshape` and `geotrace` | Empty geometry becomes `''`; breaks resume |
+| 7 | `app/src/form/support/FormNavigation.js` | `['cascade', 'multiple_option', 'option', 'geo']` — **two occurrences** | Add `'geoshape'` **and** `'geotrace'` to both | Unanswered geometry defaults to `''` not `null` — **wrong required-check** |
 | 8 | `app/src/navigation/index.js` | `<Stack.Screen name="MapView" …/>` | Register `MapDrawView` alongside (D-5) | "Draw on map" navigates nowhere |
 
 **Items 4 and 7 are the quiet failures** — the field looks correct on screen and validates wrongly.
@@ -680,33 +825,46 @@ and whole-form-on-submit validation wrong.
 | Unit | `transformValue` for `geoshape`; validation schema returns `Yup.array()`; datapoint-name generation excludes polygons; `polygonArea` against a known-area fixture; **axis-order fixture (D-1b)** |
 | Component | `TypeGeoDrawing` renders count + area from `value`; `Clear` confirms above 3 points; navigates with the right params |
 | Integration | Capture → save draft → reopen → points intact; value shape matches ARF |
-| Manual (device) | Tap/drag/undo/clear on a real Android device; **airplane-mode load** (D-4 — the page must render, not blank); rotation; **leave via hardware back, then submit (D-10)** |
+| Manual (device) | Tap/drag/undo/clear on a real Android device; **airplane-mode load** (D-4 — the page must render, not blank); rotation; **leave via hardware back, then submit (D-10)**; capture a geotrace and confirm no area is shown |
 
-**Delivered: 7 suites, 79 assertions**, all green in the mobile container.
+**Delivered: 112 mobile assertions across 8 suites** (all green), plus **19 on web**.
+
+Mobile:
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `form/lib/__tests__/geometry.test.js` | 6 | area, winding, latitude convergence, **axis order (D-1b)** |
-| `form/lib/__tests__/geoshape-touchpoints.test.js` | 11 | touchpoints 4/5/6 — schema, datapoint name, resume |
+| `form/lib/__tests__/geometry-touchpoints.test.js` | 15 | touchpoints 4/5/6 for **both** types — schema, datapoint name, resume |
 | `form/support/__test__/FormNavigation.test.js` | +2 | touchpoint 7, asserted on `FormState.feedback` |
-| `form/fields/__test__/TypeGeoDrawing.test.js` | 6 | count/area rendering, navigation params |
-| `pages/__tests__/MapDrawView.test.js` | 25 | bridge, input-method dialog, controls, hardware back |
-| `lib/__test__/map-draw-html.test.js` | 8 | placeholder substitution, attribute escaping, read-only |
-| `components/FormDataDetails/__tests__/GeoshapeView.test.js` | 8 | read-only preview (§6.8) |
+| `form/fields/__test__/TypeGeoDrawing.test.js` | 8 | count/area rendering, navigation params, geotrace has no area |
+| `pages/__tests__/MapDrawView.test.js` | 28 | bridge, input-method dialog, controls, hardware back, geotrace |
+| `lib/__test__/map-draw-html.test.js` | 10 | placeholder substitution, attribute escaping, read-only, closed |
+| `components/FormDataDetails/__tests__/GeometryView.test.js` | 9 | read-only preview, geotrace as an open line (§6.8) |
+
+Web:
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `frontend/src/lib/__test__/geometry.test.js` | 8 | parsing, area, **axis order (D-1b)** |
+| `frontend/src/components/__test__/GeometryView.test.jsx` | 11 | polygon vs polyline, summary, fully-static map props |
 
 **The bridge is testable in Jest.** `MapDrawView`'s `onMessage` handler is a pure
 `(event) => setPoints(...)`; fire a synthetic `{ nativeEvent: { data: JSON.stringify(...) } }` at
 it. Outbound commands are asserted through the package-level WebView mock, whose `postMessage` is
 a spy. Only the Leaflet page itself needs a device.
 
-**Two regression tests were checked to fail when their fix is reverted** — the touchpoint-7
-feedback test and the D-10 pop-don't-navigate test. An earlier version of the first passed with
-the bug present, because it asserted that navigation advanced, which #136 made unconditional.
+**Three regression tests were checked to fail when their fix is reverted** — the touchpoint-7
+feedback test, the D-10 pop-don't-navigate test, and the D-12 administration-cascade render test.
+An earlier version of the first passed with the bug present, because it asserted that navigation
+advanced, which #136 made unconditional. Reverting a fix and watching the test go red is the only
+way to know a regression test has teeth; two of these did not, first time.
 
 **Pre-existing, unrelated:** 51 of 77 suites in `app/` were already failing before this work,
 every one on `Cannot find native module 'ExpoTaskManager'` — anything importing the `src/lib`
 barrel. Two (`form/lib/dependency-rule`, `form/support/FormNavigation`) were incidentally
-un-broken here by importing `i18n` directly instead of through that barrel.
+un-broken here by importing `i18n` directly instead of through that barrel. The nine failures in
+`database/crud/__tests__/crud-datapoints.test.js` are also pre-existing — verified by stashing
+this branch's change to that file and re-running.
 
 **Mandatory airplane-mode check.** It is the one test that fails today on `map.html` and is the
 entire point of D-4. Run it before the tile-degradation work, not after — if Leaflet is still
@@ -725,19 +883,23 @@ coming off unpkg, every "offline" observation below it is measuring the wrong th
 | | Undo / remove / clear + confirm | 0.5 |
 | | `TypeGeoDrawing` field — summary, count, area readout | 0.5 |
 | | `polygonArea` (shoelace + local projection) | 0.5 |
-| | Degraded-tile banner + `errorTileUrl` (§6.6) | 0.5 |
+| | `errorTileUrl` (§6.6 — the banner was **not** built) | 0.5 |
+| | `geotrace`: open/closed flag through page, screen, field, preview (D-11) | 0.5 |
 | T1c | The 8 touchpoints | 1 |
 | | Unit + component tests | 1 |
 | | **Device pass** | 2 |
-| | **Total** | **12.5** |
+| | **Total** | **13** |
 
 Roughly half of this task is device debugging and testing. That is the part AI assistance does not
 compress, and the part most likely to be wrong in either direction.
 
-The estimate moved 12 → 12.5h across brainstorm and design. The bridge got cheaper (proven
-in-repo pattern, D-1/D-5) and `geotrace` came out of scope (D-7); against that, vendoring Leaflet
-(D-4), the degraded-tile path (§6.6) and `polygonArea` were previously unaccounted. Net: half a
-day, and the residual risk moved from "unknown bridge" to "known device work".
+The estimate moved 12 → 12.5 → 13h. The bridge got cheaper (proven in-repo pattern, D-1/D-5);
+vendoring Leaflet (D-4) and `polygonArea` were unaccounted; `geotrace` came back into scope
+(D-11) for half a day, and the offline banner was dropped (§6.6).
+
+**What the number hides**: the device pass found two defects that cost far more than the capture
+code — D-10 and D-12 — and neither is in this table, because neither was foreseeable from the
+design. That is the honest shape of the 3h "on-device debugging" line: it is not polish time.
 
 ---
 
