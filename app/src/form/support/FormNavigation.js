@@ -47,11 +47,12 @@ const FormNavigation = ({
     const validationPromises = allGroups.map(async (group) => {
       const validateSync = group.question
         ?.filter((q) => onFilterDependency(group, currentValues, q, 0, allQuestions))
-        ?.filter(
-          (q) =>
-            (q?.extra?.type === 'entity' && currentValues?.[q?.id] !== undefined) ||
-            !q?.extra?.type,
-        )
+        /**
+         * Only ENTITY cascades are gated here. `extra.type` is a cascade sub-type, so
+         * the old `|| !q?.extra?.type` clause also excluded administration cascades —
+         * a required one was never validated, and the form submitted without it.
+         */
+        ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
           const defaultVal = ['cascade', 'multiple_option', 'option', 'geo'].includes(q?.type)
             ? null
@@ -90,14 +91,13 @@ const FormNavigation = ({
     const validateSync =
       currentGroup?.question
         ?.filter((q) => onFilterDependency(currentGroup, currentValues, q, 0, allQuestions))
-        ?.filter(
-          (q) =>
-            /**
-             * Only entity cascade should not be undefined due to depends on options and prevAdmAnswer
-             */
-            (q?.extra?.type === 'entity' && currentValues?.[q?.id] !== undefined) ||
-            !q?.extra?.type,
-        )
+        /**
+         * Only ENTITY cascades are gated, because they depend on options and
+         * prevAdmAnswer. `extra.type` is a cascade sub-type, so the old
+         * `|| !q?.extra?.type` clause also excluded administration cascades — a required
+         * one was never validated here, and the group passed without it.
+         */
+        ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
           const defaultVal = ['cascade', 'multiple_option', 'option', 'geo'].includes(q?.type)
             ? null

@@ -13,6 +13,10 @@ from api.v1.v1_users.models import SystemUser
 from django.test import TestCase
 from utils.functions import atomic_write_json
 
+# The command's own default. Kept here so the plain-run test counts the
+# same folder the seeder reads.
+SOURCE_FOLDER = "./source/forms/"
+
 
 def seed_administration_test():
     level = Levels(name="country", level=1)
@@ -56,28 +60,40 @@ class FormSeederTestCase(TestCase):
         return user.get("token")
 
     def test_call_command(self):
-        """A plain run (no --test) seeds every JSON in the real
-        default source folder. That folder currently holds only the
-        bundled example fixtures, so this deliberately covers the
-        plain-run path: 10 forms in, 10 "Form Created | ..." lines
-        out. Before Task 1's fix this test pinned the opposite
-        (buggy) behaviour -- a plain run matching zero files and
-        printing nothing -- so its assertions are updated to match
-        the corrected behaviour rather than the bug. Asserting on
-        count and line shape, not the exact 10 strings, so this
-        doesn't become a tripwire again as fixtures are added.
+        """A plain run (no --test) seeds the *.prod.json definitions in
+        the real default source folder, and nothing else.
+
+        The count is derived from the folder rather than written out,
+        because this assertion has now been rewritten twice as the
+        selection rule moved -- first when a plain run stopped matching
+        zero files, then again when it stopped matching the example-*
+        fixtures (SEED-004 D-7). A number here is a tripwire; the
+        invariant is "one form per *.prod.json".
         """
 
         self.maxDiff = None
-        forms = Forms.objects.all().delete()
+        Forms.objects.all().delete()
+        expected = len(
+            [
+                f
+                for f in os.listdir(SOURCE_FOLDER)
+                if f.endswith(".prod.json")
+            ]
+        )
+        self.assertGreater(
+            expected, 0, "the repo must ship at least one seedable form"
+        )
 
         # RUN SEED NEW FORM
         output = self.call_command()
         output = list(filter(lambda x: len(x), output.split("\n")))
-        forms = Forms.objects.all()
-        self.assertEqual(forms.count(), 10)
+        self.assertEqual(Forms.objects.count(), expected)
+        # No example-* fixture may be among them.
+        self.assertFalse(
+            Forms.objects.filter(pk__in=[1, 2, 3, 4, 5]).exists()
+        )
         # Every seeded form logs "Form Created | <name> V<version>".
-        self.assertEqual(len(output), 10)
+        self.assertEqual(len(output), expected)
         for line in output:
             self.assertTrue(line.startswith("Form Created | "))
 

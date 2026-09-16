@@ -215,8 +215,19 @@ export const transformForm = (
         }
       } else {
         // Handle non-repeatable groups
+        /**
+         * Only ENTITY cascades are gated, and only until an administration answer exists
+         * to scope them by.
+         *
+         * `extra.type` is a cascade sub-type, and "administration" is the other member —
+         * so the previous `|| !q?.extra?.type` clause, meant to let ordinary questions
+         * through, silently dropped every administration cascade from the rendered form.
+         * The enumerator could not answer it, `keyform` renumbered over the gap, and a
+         * required administration question then reached the server unanswered and was
+         * refused.
+         */
         const questionList = qg.question.filter(
-          (q) => (q?.extra?.type === 'entity' && prevAdmAnswer?.length > 0) || !q?.extra?.type,
+          (q) => q?.extra?.type !== 'entity' || prevAdmAnswer?.length > 0,
         );
 
         // Process questions with numbering
