@@ -15,6 +15,7 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 from django.test.utils import override_settings
 
+from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Administration, Levels, UserRole
 from api.v1.v1_users.models import Organisation, SystemUser, Tenant
@@ -221,11 +222,18 @@ class AssignFormsTenantTestCase(TestCase):
     def setUp(self):
         self.acme = Tenant.objects.create(subdomain="acme")
         self.beta = Tenant.objects.create(subdomain="beta")
+        # Published: assign_forms hands out published forms only, so a
+        # draft would leave the user with nothing and the tenant-scoping
+        # assertion below would pass for the wrong reason.
         self.acme_form = Forms.objects.create(
-            name="Acme form", tenant=self.acme
+            name="Acme form",
+            tenant=self.acme,
+            status=FormStatus.published,
         )
         self.beta_form = Forms.objects.create(
-            name="Beta form", tenant=self.beta
+            name="Beta form",
+            tenant=self.beta,
+            status=FormStatus.published,
         )
 
     def make_user(self, tenant):
