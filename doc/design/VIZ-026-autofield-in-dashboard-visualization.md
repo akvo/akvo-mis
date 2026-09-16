@@ -318,9 +318,9 @@ sequenceDiagram
 
 ### 7.2. Complete Step-by-Step Manual Verification Protocol
 
-#### Step 1: Form & Submission Setup (Single Form: Test Form 5)
+#### Step 1: Form & Submission Setup (Single Published Form)
 
-**Test Form 5 Questions:**
+**Form Questions:**
 1. Question 1 (`number`): `Unit Price`
 2. Question 2 (`number`): `Quantity`
 3. Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`) $\rightarrow$ *Pure Numeric Autofield (multiplies Unit Price and Quantity)*.
@@ -329,7 +329,7 @@ sequenceDiagram
 
 ---
 
-**Submissions Setup for Test Form 5 (Single Published Form):**
+**Submissions Setup (Single Published Form):**
 
 Submit 7 entries under the single published form:
 - **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"`
@@ -348,14 +348,14 @@ Submit 7 entries under the single published form:
 
 #### Step 2: Dashboard Builder Widget Verification (Step-by-Step UI Guide)
 
-Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashboards/new`) and configure the following widgets in the **Inspector Settings** panel using **`Test Form 5 with AUTOFIELD TEST`** (or `Test Form 5`):
+Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashboards/new`), select your created form as the **Root Form**, and configure the following widgets in the **Inspector Settings** panel:
 
 ---
 
 ##### 1. KPI Card — Pure Numeric Autofield Aggregation
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Question**: `Total Cost`
   - **Aggregation**: `Average`
 - **Expected Preview Output**: Displays **`70.0`** ($\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4).
@@ -365,7 +365,7 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 ##### 2. KPI Card — Pure Categorical Autofield (Fallback Mode)
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Question**: `Operational Status`
   - **Aggregation**: `Average`
 - **Expected Preview Output**: Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`4`** (`"Degraded"`).
@@ -375,7 +375,7 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 ##### 3. KPI Card — Dynamic Mixed Autofield (Fallback Mode)
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Question**: `Quality Score`
   - **Aggregation**: `Average`
 - **Expected Preview Output**: Detects mixed dataset (`["12", "9", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"12"`) without SQL cast errors.
@@ -385,7 +385,7 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 ##### 4. Bar Chart — Categorical Autofield
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Bar chart`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Question**: `Operational Status`
   - **Break down by**: `None — this question's options`
   - **Value**: *(leave empty to count submissions)*
@@ -396,7 +396,7 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 ##### 5. Pie Chart — Categorical Autofield
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Pie / doughnut`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Question**: `Operational Status`
   - **Group by**: `This question's options`
   - **Value**: *(leave empty to count submissions)*
@@ -407,7 +407,7 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 ##### 6. Pie Chart — Dynamic Mixed Autofield
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Pie / doughnut`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Question**: `Quality Score`
   - **Group by**: `This question's options`
   - **Value**: *(leave empty to count submissions)*
@@ -420,36 +420,39 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 
 ---
 
-##### 7. Line Chart — Numeric Autofield Y-Axis with Categorical Series
+##### 7. Line Chart — Numeric Autofield Time-Series Trend
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Line chart`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Y axis (number or autofield)**: `Total Cost`
   - **X axis (date question)**: *(leave empty for default submission date)*
   - **Time interval**: `Month`
-  - **Category (option or autofield)**: `Operational Status`
-- **Expected Preview Output**: Renders 2 monthly time-series trend lines for `"Optimal"` vs `"Degraded"`.
+  - **Category (option or autofield)**: `None (single line)`
+- **Expected Preview Output**: Renders a monthly time-series trend line plotting average Total Cost **`70.0`** for `Sep 2026`.
 
 ---
 
 ##### 8. Scatter Plot — Autofield Dependent Axis
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Scatter plot`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **X axis (number or autofield)**: `Quantity`
   - **Y axis (number or autofield)**: `Total Cost`
 - **Expected Preview Output**: Plots 6 coordinates: `(10, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(2, 20)` (Entry 4 with blank null coordinates is cleanly skipped without errors).
 
 ---
 
-##### 9. Table Widget — Autofield Columns and Criteria Filtering
+##### 9. Table Widget — Escalation Table (Monitoring Child Form Required)
+> [!NOTE]
+> In Akvo MIS architecture, the Table widget is an **Escalation / Monitoring Table** (`/api/v1/visualization/escalation`) designed to display the latest monitoring submissions for each parent registration site. On single registration form dashboards with no monitoring children, the Data source dropdown remains empty by design.
+
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Table`
-- **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
-  - **Columns**: Check `school_name`, `unit_price`, `quantity`, `total_cost`, `operational_status`, `quality_score`
+- **Inspector Settings** *(when used with a Registration + Monitoring form pair)*:
+  - **Data source (form)**: Select the Monitoring child form
+  - **Columns**: Check desired registration attributes and autofield columns (`total_cost`, `operational_status`, `quality_score`)
   - **Criteria (filter rows)** (Optional test):
-    - Select Question: `Operational Status`, Operator: `Equal to`, Value: `Optimal` $\rightarrow$ Filters to **2 rows** (Entry 3, Entry 6).
-    - Or Select Question: `Total Cost`, Operator: `Greater than`, Value: `50` $\rightarrow$ Filters to **2 rows** (Entry 3: 60, Entry 6: 300).
+    - Select Question: `Operational Status`, Operator: `Equal to`, Value: `Optimal`
+    - Or Select Question: `Total Cost`, Operator: `Greater than`, Value: `50`
 - **Expected Preview Output**: Displays tabular grid with formatted numeric and string autofield column values.
 
 ---
@@ -457,7 +460,7 @@ Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashb
 ##### 10. Map Widget — Autofield Point Sizing & Categorical Coloring
 - **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Map`
 - **Inspector Settings**:
-  - **Data source (form)**: `Test Form 5 with AUTOFIELD TEST`
+  - **Data source (form)**: Select your form
   - **Mode A (Category Mode)**:
     - **Question**: Select `Operational Status`
     - **Expected Preview Output**: Markers colored by status: 4 `"Degraded"` vs 2 `"Optimal"`.
