@@ -145,6 +145,24 @@ class AutofieldValuesTestCases(VisualizationValuesTestMixin, APITestCase):
         self.assertIn("20.5", labels)
         self.assertIn("30.0", labels)
 
+    def test_autofield_mixed_values_fallback_numeric_grouping(self):
+        """Mixed data falls back to option even if parent_id requested."""
+        self.ans_1a.name = "Grade A"
+        self.ans_1a.save()
+
+        # Request group_by=parent_id (only valid for pure numeric)
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&question_id={self.q_autofield.id}"
+            "&group_by=parent_id&monitoring=all"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        labels = [d["label"] for d in data["data"]]
+        # Must fall back to categorical grouping showing string labels
+        self.assertIn("Grade A", labels)
+        self.assertIn("20.5", labels)
+
     def test_autofield_runtime_tokens_ignored_in_numeric_detection(self):
         """Runtime tokens ('null', 'NaN', etc.) don't trigger categorical."""
         # Change one answer to "NaN" and another to "null"
