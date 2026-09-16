@@ -336,8 +336,8 @@ Submit 5 entries under Version 1 (Question 5 formula: `return #1 + #2`):
 - **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"`
 - **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"9"`
 - **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `60`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"19"`
-- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `None`
-- **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost (Q3): `0` (or `"NaN"` if division used), Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"0"`
+- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `"0"` (default evaluated value when inputs are blank)
+- **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost (Q3): `0`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"0"`
 
 ##### Phase 2: Form Version Upgrade (Version 2) Submissions
 1. Edit `Test Form 5` in Form Builder: change Question 5 formula to return status strings:
@@ -347,12 +347,12 @@ Submit 5 entries under Version 1 (Question 5 formula: `return #1 + #2`):
 2. Save and publish as **Version 2**.
 3. **Submit 2 additional entries under Version 2:**
    - **Entry 6**: Unit Price: `20`, Quantity: `15` $\rightarrow$ Total Cost (Q3): `300`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"Pass"` ($20 + 15 = 35 \ge 30$)
-   - **Entry 7**: Unit Price: `10`, Quantity: `5` $\rightarrow$ Total Cost (Q3): `50`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"Fail"` ($10 + 5 = 15 < 30$)
+   - **Entry 7**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"Fail"` ($10 + 2 = 12 < 30$)
 
 ##### Resulting Database State for Question 5:
-- Version 1 Answers: `["12", "9", "19", "0"]` (numbers)
+- Version 1 Answers: `["12", "9", "19", "0", "0"]` (numbers/numeric strings)
 - Version 2 Answers: `["Pass", "Fail"]` (strings)
-- Total Question 5 distinct values in database: `["12", "9", "19", "0", "Pass", "Fail"]` (mixed dataset in the exact same form).
+- Total Question 5 distinct values in database: `["0", "9", "12", "19", "Fail", "Pass"]` (mixed dataset in the exact same form).
 
 ---
 
@@ -360,17 +360,17 @@ Submit 5 entries under Version 1 (Question 5 formula: `return #1 + #2`):
 
 | Widget Type | Form Used | Config Tested | Expected Behavior (After All 7 Submissions) |
 |---|---|---|---|
-| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | Displays average **`75.0`** (computed as $\frac{20 + 20 + 60 + 0 + 300 + 50}{6} = \frac{450}{6}$, safely skipping `None`).<br>*(Note: If tested before Phase 2 entries, displays `25.0` for `[20, 20, 60, 0]`, or `33.33` if Entry 5 is `"NaN"`).* |
-| **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`3`** (`"Degraded"`). |
-| **KPI Card (Mixed Version Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["12", "9", "19", "0", "Pass", "Fail"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`1`** (`"0"`) without SQL cast exception. |
-| **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars with equal height: **`"Degraded"` (count: 3)** and **`"Optimal"` (count: 3)**. |
-| **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories (`"Degraded"`: 3, `"Optimal"`: 3). |
-| **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 equal pie slices: **`"Degraded"` (50%, count: 3)** and **`"Optimal"` (50%, count: 3)**. |
-| **Pie Chart (Mixed Version Upgrade)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 6 discrete category slices: `"0"` (1), `"9"` (1), `"12"` (1), `"19"` (1), `"Fail"` (1), `"Pass"` (1) without dropping historical submissions. |
+| **KPI Card (Numeric Aggregation)** | Test Form 5 | Question: `Total Cost`, `repeat_agg="average"` | Displays average **`70.0`** (computed as $\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4).<br>*(Note: If tested before Phase 2 entries, displays `25.0` for `[20, 20, 60, 0]`).* |
+| **KPI Card (Categorical Fallback)** | Test Form 5 | Question: `Operational Status`, `repeat_agg="average"` | Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`4`** (`"Degraded"`). |
+| **KPI Card (Mixed Version Fallback)** | Test Form 5 | Question: `Quality Score`, `repeat_agg="average"` | Detects mixed dataset (`["0", "9", "12", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"0"`) without SQL cast exception. |
+| **Bar Chart** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 category bars: **`"Degraded"` (count: 4)** and **`"Optimal"` (count: 2)**. |
+| **Bar Chart (Stacked)** | Test Form 5 | Question: `Operational Status`, `group_by="option"`, stacked by another option/question | Renders stacked bars keyed by status categories (`"Degraded"`: 4, `"Optimal"`: 2). |
+| **Pie Chart (Categorical)** | Test Form 5 | Question: `Operational Status`, `group_by="option"` | Displays 2 pie slices: **`"Degraded"` (66.7%, count: 4)** and **`"Optimal"` (33.3%, count: 2)**. |
+| **Pie Chart (Mixed Version Upgrade)** | Test Form 5 | Question: `Quality Score`, `group_by="option"` | Displays 6 discrete category slices: `"0"` (2), `"9"` (1), `"12"` (1), `"19"` (1), `"Fail"` (1), `"Pass"` (1) without dropping historical submissions. |
 | **Line Chart** | Test Form 5 | Y axis: `Total Cost`, Category: `Operational Status`, `group_by="month"` | Renders numeric time-series trend line of monthly average cost (`Total Cost`), split into 2 lines by `Operational Status` (`Optimal` vs `Degraded`). |
-| **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots 6 coordinates: `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(5, 50)`, cleanly dropping uncomputable null/NaN rows. |
-| **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` (3 rows) or `threshold_gt: 50` on `Total Cost` (2 rows) | Correctly filters rows according to string options or numeric thresholds. |
-| **Map Widget (Category Mode)** | Test Form 5 | Map question: `Operational Status`, Map mode `"category"` | Markers colored according to categorical status `"Degraded"` (3) vs `"Optimal"` (3). |
+| **Scatter Plot** | Test Form 5 | X axis: `Quantity`, Y axis: `Total Cost` | Plots 6 coordinates: `(2, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(2, 20)`, cleanly dropping uncomputable null/NaN rows. |
+| **Table Widget** | Test Form 5 | Criteria `option_equals: Optimal` (2 rows: Entry 3, Entry 6) or `threshold_gt: 50` on `Total Cost` (2 rows: Entry 3: 60, Entry 6: 300) | Correctly filters rows according to string options or numeric thresholds. |
+| **Map Widget (Category Mode)** | Test Form 5 | Map question: `Operational Status`, Map mode `"category"` | Markers colored according to categorical status `"Degraded"` (4) vs `"Optimal"` (2). |
 | **Map Widget (Quantity Mode)** | Test Form 5 | Map question: `Total Cost`, Map mode `"range"` | Markers sized proportional to numeric `Total Cost` ranges (nulls rendered with neutral default size). |
 
 #### Step 3: Publish & Viewer Parity
