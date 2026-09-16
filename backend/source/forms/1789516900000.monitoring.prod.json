@@ -1,0 +1,231 @@
+{
+  "id": 1789516900000,
+  "form": "Monitoring",
+  "version": 1,
+  "type": 2,
+  "parent_id": 1789516800000,
+  "description": "Generic monitoring form for the Registration form. Every deployment starts from this and edits it in the form builder; it deliberately names nothing sector-specific and depends on no seeded entity types.",
+  "defaultLanguage": "en",
+  "languages": ["en"],
+  "question_groups": [
+    {
+      "id": 1789516900001,
+      "order": 1,
+      "name": "visit",
+      "label": "Visit",
+      "questions": [
+        {
+          "id": 1789516900011,
+          "order": 1,
+          "name": "visit_date",
+          "label": "Date of Visit",
+          "short_label": "Visit Date",
+          "type": "date",
+          "required": true,
+          "meta": true,
+          "attributes": ["chart", "table"]
+        },
+        {
+          "id": 1789516900012,
+          "order": 2,
+          "name": "visited_by",
+          "label": "Visited By",
+          "short_label": "Visited By",
+          "type": "input",
+          "required": false,
+          "meta": false
+        },
+        {
+          "id": 1789516900013,
+          "order": 3,
+          "name": "functional_status",
+          "label": "Current Status",
+          "short_label": "Status",
+          "type": "option",
+          "required": true,
+          "meta": false,
+          "attributes": ["chart", "table"],
+          "options": [
+            {
+              "id": 1789516900311,
+              "order": 1,
+              "label": "Functional",
+              "value": "functional"
+            },
+            {
+              "id": 1789516900312,
+              "order": 2,
+              "label": "Partially functional",
+              "value": "partially_functional"
+            },
+            {
+              "id": 1789516900313,
+              "order": 3,
+              "label": "Non-functional",
+              "value": "non_functional"
+            }
+          ]
+        },
+        {
+          "id": 1789516900014,
+          "order": 4,
+          "name": "service_level",
+          "label": "Service Level",
+          "short_label": "Service Level",
+          "type": "option",
+          "required": true,
+          "meta": false,
+          "attributes": ["chart", "table"],
+          "options": [
+            {
+              "id": 1789516900321,
+              "order": 1,
+              "label": "Basic",
+              "value": "basic"
+            },
+            {
+              "id": 1789516900322,
+              "order": 2,
+              "label": "Limited",
+              "value": "limited"
+            },
+            {
+              "id": 1789516900323,
+              "order": 3,
+              "label": "None",
+              "value": "none"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1789516900002,
+      "order": 2,
+      "name": "usage",
+      "label": "Usage",
+      "questions": [
+        {
+          "id": 1789516900021,
+          "order": 1,
+          "name": "people_served",
+          "label": "People Served",
+          "short_label": "People Served",
+          "type": "number",
+          "required": true,
+          "meta": false,
+          "attributes": ["chart", "aggregate", "table"]
+        },
+        {
+          "id": 1789516900022,
+          "order": 2,
+          "name": "days_operational",
+          "label": "Days Operational This Period",
+          "short_label": "Days Operational",
+          "type": "number",
+          "required": false,
+          "meta": false,
+          "attributes": ["chart", "aggregate", "table"],
+          "rule": {
+            "min": 0,
+            "max": 31
+          }
+        },
+        {
+          "id": 1789516900023,
+          "order": 3,
+          "name": "downtime_days",
+          "label": "Days Out of Service This Period",
+          "short_label": "Downtime Days",
+          "type": "number",
+          "required": false,
+          "meta": false,
+          "attributes": ["chart", "aggregate", "table"],
+          "rule": {
+            "min": 0,
+            "max": 31
+          }
+        }
+      ]
+    },
+    {
+      "id": 1789516900003,
+      "order": 3,
+      "name": "issues",
+      "label": "Issues",
+      "questions": [
+        {
+          "id": 1789516900031,
+          "order": 1,
+          "name": "issues_reported",
+          "label": "Issues Reported",
+          "short_label": "Issues",
+          "type": "multiple_option",
+          "required": false,
+          "meta": false,
+          "attributes": ["chart", "table"],
+          "options": [
+            {
+              "id": 1789516900331,
+              "order": 1,
+              "label": "Equipment failure",
+              "value": "equipment_failure"
+            },
+            {
+              "id": 1789516900332,
+              "order": 2,
+              "label": "Power supply",
+              "value": "power_supply"
+            },
+            {
+              "id": 1789516900333,
+              "order": 3,
+              "label": "Staffing",
+              "value": "staffing"
+            },
+            {
+              "id": 1789516900334,
+              "order": 4,
+              "label": "Damage or vandalism",
+              "value": "damage_or_vandalism"
+            },
+            {
+              "id": 1789516900335,
+              "order": 5,
+              "label": "No issues",
+              "value": "no_issues"
+            }
+          ]
+        },
+        {
+          "id": 1789516900032,
+          "order": 2,
+          "name": "remarks",
+          "label": "Remarks",
+          "short_label": null,
+          "type": "text",
+          "required": false,
+          "meta": false
+        },
+        {
+          "id": 1789516900033,
+          "order": 3,
+          "name": "signature",
+          "label": "Signature",
+          "type": "signature",
+          "required": true,
+          "meta": false
+        },
+        {
+          "id": 1789516900034,
+          "order": 4,
+          "name": "signed_by",
+          "label": "Signed By",
+          "type": "input",
+          "required": true,
+          "meta": true
+        }
+      ]
+    }
+  ]
+}

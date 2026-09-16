@@ -6,10 +6,14 @@ from api.v1.v1_profile.constants import (
     FeatureTypes
 )
 from api.v1.v1_profile.models import Levels
+from utils.tenant_command import resolve_tenant
 
 
 class Command(BaseCommand):
-    help = "Seed default roles and permissions for the application"
+    help = (
+        "Seed default roles and permissions for one workspace's levels. "
+        "Omit --tenant to seed the tenant-less space."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -19,10 +23,30 @@ class Command(BaseCommand):
             default=False,
             type=bool
         )
+        # No short flag: -t is already --test on this command, as on
+        # form_seeder. Two flags one keystroke apart is how a subdomain
+        # ends up in --test.
+        parser.add_argument(
+            "--tenant",
+            default=None,
+            type=str,
+            help=("Workspace subdomain whose levels get roles. Omit to "
+                  "seed the tenant-less space."),
+        )
 
     def handle(self, *args, **options):
         test = options.get("test")
-        all_levels = Levels.objects.all()
+        # `Levels.objects` is a plain TenantManager -- it adds `for_user`,
+        # not an implicit filter -- so .all() means every workspace. On the
+        # CLI there is no request to narrow it, which is how one
+        # `seeder.sh --tenant=<sub>` run created roles across four
+        # unrelated workspaces. Optional, and omitting it means the
+        # tenant-less space: that is what resolve_tenant documents, and
+        # what administration_seeder --test writes, so the test suite
+        # selects the same rows .all() used to.
+        tenant = resolve_tenant(options.get("tenant"))
+        workspace = tenant.subdomain if tenant else "the tenant-less space"
+        all_levels = Levels.objects.filter(tenant=tenant)
         for level in all_levels:
             # Create Admin role
             admin_role, created = level.role_administration_level\
@@ -104,8 +128,12 @@ class Command(BaseCommand):
                     data_access=DataAccessTypes.approve
                 )
             if not test:
+                # Level names are unique per tenant, not per install, so an
+                # unqualified "Roles created for National level." four times
+                # over is exactly what hid the cross-workspace leak.
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"Roles created for {level.name} level."
+                        f"Roles created for {level.name} level "
+                        f"({workspace})."
                     )
                 )
