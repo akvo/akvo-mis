@@ -1763,7 +1763,9 @@ describe("VIZ-026: Autofield builderConstants and BuilderInspector integration",
       />
     );
     expect(screen.getByText(/Scatter\s+settings/i)).toBeInTheDocument();
-    expect(screen.getByText("Y axis (number question)")).toBeInTheDocument();
+    expect(
+      screen.getByText("Y axis (number or autofield)")
+    ).toBeInTheDocument();
   });
 
   test("renders line chart with autofield measure and category", () => {

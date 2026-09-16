@@ -986,9 +986,9 @@ const BuilderInspector = ({
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
               {wType === "scatter"
-                ? "X axis (number question)"
+                ? "X axis (number or autofield)"
                 : wType === "line"
-                ? "Y axis (number question)"
+                ? "Y axis (number or autofield)"
                 : "Question"}
             </label>
             <Select
@@ -1195,7 +1195,7 @@ const BuilderInspector = ({
         {NEEDS_SCATTER_Y.has(wType) && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              Y axis (number question)
+              Y axis (number or autofield)
             </label>
             <Select
               value={wConfig.question_y || null}
@@ -1343,7 +1343,7 @@ const BuilderInspector = ({
           wConfig.stack_by !== "administration" && (
             <div className="builder-inspector-field">
               <label className="builder-inspector-label">
-                Category (option question)
+                Category (option or autofield)
               </label>
               <Select
                 value={wConfig.category_question_id || null}
