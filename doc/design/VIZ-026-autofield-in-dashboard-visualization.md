@@ -271,7 +271,8 @@ sequenceDiagram
 ### TASK-03: End-to-End Verification, Edge Cases & Documentation Alignment
 - **Est. Effort**: 30m Dev + 20m Testing + 10m QA = **60m (1.0h)**
 - **Touchpoint Files**:
-  - `backend/api/v1/v1_visualization/tests/tests_autofield_visualization.py`
+  - `backend/api/v1/v1_visualization/tests/tests_autofield_values.py`
+  - `backend/api/v1/v1_visualization/tests/tests_dashboard_validation.py`
   - `frontend/src/pages/dashboards/__test__/BuilderInspector.test.js`
   - `doc/design/VIZ-026-autofield-in-dashboard-visualization.md`
 
@@ -282,7 +283,7 @@ sequenceDiagram
 - [ ] Dashboard global filters (administration hierarchy, date ranges) correctly filter autofield widget data.
 
 #### Technical Acceptance Criteria (TAC):
-- [ ] New automated test file `backend/api/v1/v1_visualization/tests/tests_autofield_visualization.py` covers:
+- [ ] Automated test files `backend/api/v1/v1_visualization/tests/tests_autofield_values.py` and `tests_dashboard_validation.py` cover:
   - Pure numeric autofield aggregation (`average`, `sum`, `min`, `max`, `last`).
   - Categorical autofield grouping and stacking.
   - Mixed numeric + string dataset fallback.
@@ -291,6 +292,7 @@ sequenceDiagram
   - Scatter plot with autofield X/Y axes and null coordinate skipping.
   - Table criteria filtering (`option_equals`, `threshold_gt`, `threshold_lt`).
   - Multi-tenant query isolation.
+  - Save-time dashboard validation for autofield `value_question`.
 - [ ] Frontend unit tests in `BuilderInspector.test.js` and widget suites pass.
 - [ ] Backend test suite achieves $\ge 80\%$ test coverage; `flake8` and `eslint` pass cleanly with zero lint warnings.
 
@@ -301,7 +303,7 @@ sequenceDiagram
 ### 7.1. Automated Tests
 - **Backend Tests**:
   ```bash
-  ./dc.sh exec backend python manage.py test api.v1.v1_visualization.tests.tests_autofield_visualization
+  ./dc.sh exec backend python manage.py test api.v1.v1_visualization.tests.tests_autofield_values api.v1.v1_visualization.tests.tests_dashboard_validation
   ./dc.sh exec backend coverage run --rcfile=./.coveragerc manage.py test --shuffle --parallel 4
   ```
 - **Frontend Tests**:
