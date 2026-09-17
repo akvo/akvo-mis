@@ -240,3 +240,119 @@ class AutofieldValuesTestCases(VisualizationValuesTestMixin, APITestCase):
         self.assertIn("y", data[0])
         self.assertIsInstance(data[0]["x"], float)
         self.assertIsInstance(data[0]["y"], float)
+
+    def test_autofield_negative_and_scientific_notation(self):
+        """Autofield handles negative numbers and scientific notation."""
+        self.ans_1a.name = "-15.5"
+        self.ans_1a.save()
+        self.ans_1b.name = "1.2e2"  # 120.0
+        self.ans_1b.save()
+        self.ans_2a.name = "-0.5"
+        self.ans_2a.save()
+        self.ans_2b.name = "10.0"
+        self.ans_2b.save()
+
+        # Average: (-15.5 + 120.0 - 0.5 + 10.0) / 4 = 114.0 / 4 = 28.5
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&question_id={self.q_autofield.id}&monitoring=all"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["data"][0]["value"], 28.5)
+
+    def test_autofield_dual_axis_scatter(self):
+        """Scatter plot where both X and Y axes are autofield questions."""
+        q_autofield_y = Questions.objects.create(
+            form=self.monitoring,
+            question_group=self.q_number.question_group,
+            name="Computed Factor",
+            label="Computed Factor",
+            type=QuestionTypes.autofield,
+            order=11,
+        )
+        Answers.objects.create(
+            data=self.mon1b,
+            question=q_autofield_y,
+            name="5.0",
+            created_by=self.user,
+        )
+        Answers.objects.create(
+            data=self.mon2b,
+            question=q_autofield_y,
+            name="10.0",
+            created_by=self.user,
+        )
+
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&mode=scatter"
+            f"&question_id={self.q_autofield.id}"
+            f"&question_y={q_autofield_y.id}"
+            "&monitoring=latest"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data), 2)
+        # Verify dual autofield coordinates
+        self.assertEqual(data[0]["x"], 20.5)
+        self.assertEqual(data[0]["y"], 5.0)
+        self.assertEqual(data[1]["x"], 40.0)
+        self.assertEqual(data[1]["y"], 10.0)
+
+    def test_autofield_scatter_skips_invalid_mixed_points(self):
+        """Scatter plot skips points with non-numeric or null coordinates."""
+        self.ans_1b.name = "Pass"  # Non-numeric string on X
+        self.ans_1b.save()
+
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&mode=scatter"
+            f"&question_id={self.q_autofield.id}"
+            f"&question_y={self.q_number.id}"
+            "&monitoring=latest"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        # Only Site Beta (mon2b) should be present, mon1b is skipped
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["x"], 40.0)
+
+    def test_autofield_zero_values_aggregation(self):
+        """Zero values ('0', '0.0') are aggregated as true zeros, not nulls."""
+        Answers.objects.filter(question=self.q_autofield).update(name="0.0")
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&question_id={self.q_autofield.id}"
+            "&monitoring=all&repeat_agg=sum"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["data"][0]["value"], 0.0)
+        self.assertEqual(data["data"][0]["label"], "Total")
+
+    def test_autofield_kpi_mixed_fallback_count(self):
+        """KPI card on mixed-type autofield returns top category count."""
+        # Mix dataset with 2 'Fail', 1 'Pass', 1 '12'
+        self.ans_1a.name = "Fail"
+        self.ans_1a.save()
+        self.ans_1b.name = "Fail"
+        self.ans_1b.save()
+        self.ans_2a.name = "Pass"
+        self.ans_2a.save()
+        self.ans_2b.name = "12"
+        self.ans_2b.save()
+
+        # No group_by requested (KPI card style)
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            f"&question_id={self.q_autofield.id}&monitoring=all"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        # Fallback to categorical grouping produces the category counts
+        self.assertTrue(len(data["data"]) > 0)
+        labels = {d["label"]: d["value"] for d in data["data"]}
+        self.assertEqual(labels["Fail"], 2)
+        self.assertEqual(labels["Pass"], 1)
+        self.assertEqual(labels["12"], 1)
