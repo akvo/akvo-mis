@@ -8,7 +8,13 @@ import {
   CircleMarker,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { toPolygonPoints, polygonAreaHectares, QUESTION_TYPES } from "../lib";
+import {
+  areaIsAmbiguous,
+  toPolygonPoints,
+  polygonAreaHectares,
+  polygonWarnings,
+  QUESTION_TYPES,
+} from "../lib";
 
 const MIN_POINTS_FOR_AREA = 3;
 const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -31,8 +37,20 @@ const GeometryView = ({
   value,
   type = QUESTION_TYPES.geoshape,
   height = 220,
+  geoConfig = null,
 }) => {
   const points = useMemo(() => toPolygonPoints(value), [value]);
+  /*
+    Derived here, never transmitted. The geometry is already stored and already drawn on this
+    map, so re-deriving costs a function call, while a device-sent flag would be absent for
+    web-form and imported submissions and so could never be read as "clean". GEO-002 D-7.
+    No severity is shown: whether this blocked anything was settled at capture. GEO-013 D-3.
+  */
+  const warnings = useMemo(
+    () => polygonWarnings(value, geoConfig),
+    [value, geoConfig]
+  );
+  const areaUnreliable = areaIsAmbiguous(warnings);
 
   if (!points.length) {
     return <span>-</span>;
@@ -89,8 +107,25 @@ const GeometryView = ({
       >
         <span>Points: {points.length}</span>
         {showArea && (
-          <span>Area: {polygonAreaHectares(points).toFixed(2)} ha</span>
+          /*
+            Marked, not stated: the shoelace area of a self-crossing ring is algebraic, so
+            opposite-wound lobes cancel and the figure can be anything from 0 to the true
+            extent. GEO-003 D-6.
+          */
+          <span style={areaUnreliable ? { color: "#b26a00" } : {}}>
+            Area: {areaUnreliable ? "~" : ""}
+            {polygonAreaHectares(points).toFixed(2)} ha
+          </span>
         )}
+        {warnings.map(({ key, label }) => (
+          <span
+            key={key}
+            data-testid={`geometry-warning-${key}`}
+            style={{ color: "#b26a00" }}
+          >
+            {`\u26A0 ${label}`}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -100,6 +135,9 @@ GeometryView.propTypes = {
   value: PropTypes.oneOfType([PropTypes.array, PropTypes.string]),
   type: PropTypes.string,
   height: PropTypes.number,
+  // The question's extra.geoConfig, for rules whose THRESHOLD is per question. Severity is
+  // still never resolved here - see GEO-013 D-3.
+  geoConfig: PropTypes.object,
 };
 
 export default GeometryView;

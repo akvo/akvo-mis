@@ -287,6 +287,7 @@ const EditableCell = ({
             <GeometryView
               value={lastValue ? oldValue : value}
               type={record.type}
+              geoConfig={record?.extra?.geoConfig}
             />
           ) : isImageType && value && !lastValue ? (
             <Image src={value} width={100} />
