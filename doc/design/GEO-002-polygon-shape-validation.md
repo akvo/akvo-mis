@@ -558,13 +558,30 @@ full bundle — mobile bundle size.
 | Question | `extra.geoConfig.validateShape` | boolean | *(absent)* | No — read only, D-5 |
 | Device | `BuildParamsState.validatePolygonShape` | TINYINT `0`/`1` | `1` | n/a — app Settings › Geolocation |
 
-Device-setting touch points (same six for GEO-003, one migration covers both):
-`app/src/pages/Settings/config.js` · `app/src/store/buildParams.js` ·
-`SettingsForm.js` (destructure + `configFields` allowlist) · `app/src/database/tables.js` ·
-`app/src/database/migrations/11_add_polygon_validation_to_config` · `app/src/lib/i18n` (en + fr).
+Device-setting touch points — **eight, not six**; the original count missed the two that make a
+migration actually run, and the omission shipped (see §9):
+
+| # | File | Why |
+|---|---|---|
+| 1 | `app/src/pages/Settings/config.js` | The switch itself |
+| 2 | `app/src/store/buildParams.js` | Default `1` |
+| 3 | `app/src/pages/Settings/SettingsForm.js` | Destructure + `configFields` allowlist |
+| 4 | `app/src/database/tables.js` | Column for **fresh installs** |
+| 5 | `app/src/database/migrations/11_add_polygon_validation_to_config.js` | Column for **upgrades** |
+| 6 | `app/src/lib/i18n/ui-text.js` | en + fr |
+| 7 | **`app/App.js`** | Import `m11`, add the `user_version === 10` ladder step, **and restore the value into the store in `handleInitConfig`** |
+| 8 | **`app/src/lib/constants.js`** | `DATABASE_VERSION` — `migrateDbIfNeeded` returns early when `user_version >= DATABASE_VERSION`, so a migration without a bump here never runs |
 
 `ALTER TABLE … ADD COLUMN … TINYINT DEFAULT 1` backfills existing rows, so devices that upgrade
 mid-programme land on `block`, not `warn`.
+
+⚠️ **The trap, for whoever adds the next setting.** Steps 4 and 5 are separate code paths, and a
+fresh install only exercises 4. A device-testing session on a freshly installed app therefore
+proves nothing about upgrades — the column exists either way. Steps 7 and 8 are invisible until
+an *upgrading* device runs the code, and their failure is silent: `crudConfig.addConfig` swallows
+its error, and `SettingsForm`'s switch handler reports to Sentry while the UI still animates. The
+toggle looks like it worked and does not persist. Restoring the value (step 7) must use `??` and
+not `||`, since `0` is the meaningful value.
 
 ---
 
@@ -646,6 +663,13 @@ pair costs about **8.75h** together — not 6.75 + 2 run twice.
 ---
 
 ### Implementation notes, 2026-09-17
+
+**Migration wiring was missed on first commit** (`6abf1cdc`), caught in review. `DATABASE_VERSION`
+stayed at `10` and `App.js` had no ladder step for `m11`, so the migration never ran on an
+upgrading device; the switches also were not restored into the store on launch. Both fixed in a
+follow-up. The device testing that validated this task ran against a database that already had
+the columns from `tables.js`, which is exactly why it did not catch either one — see the trap in
+§6.
 
 **Blocking the component-level acceptance criteria**: `app/package.json` declares `react@19.0.0`
 alongside `react-test-renderer@^18.2.0`, which resolves to 18.3.1 and cannot render React 19. **69
