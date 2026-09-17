@@ -7,7 +7,12 @@ from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import QuestionOptions
 from api.v1.v1_profile.models import Administration
-from api.v1.v1_visualization.constants import AGG_FUNCS
+from api.v1.v1_visualization.constants import (
+    AGG_FUNCS,
+    NON_VALUE_TOKENS,
+    NUMERIC_STRING_REGEX,
+    NUMERIC_AUTOFIELD_EXPR,
+)
 from api.v1.v1_visualization.functions import (
     get_base_monitoring_qs,
     get_monitoring_data_ids,
@@ -40,6 +45,23 @@ def value_by_data(value_question, data_ids):
     if value_question is None:
         return None
     values = defaultdict(list)
+    if value_question.type == QuestionTypes.autofield:
+        rows = Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=value_question.id,
+            name__isnull=False,
+        ).exclude(
+            name__in=NON_VALUE_TOKENS
+        ).filter(
+            name__regex=NUMERIC_STRING_REGEX
+        ).values_list("data_id", "name")
+        for data_id, name in rows:
+            try:
+                values[data_id].append(float(name.strip()))
+            except (ValueError, TypeError):
+                continue
+        return values
+
     rows = Answers.objects.filter(
         data_id__in=data_ids,
         question_id=value_question.id,
@@ -792,10 +814,33 @@ def _option_group_by_option(
     return data, labels
 
 
-# -- Number question handler --
+# -- Number / Numeric Autofield question handlers --
+
+def _numeric_answers_qs(question, data_ids):
+    """Return answers annotated with a unified num_value field."""
+    if question.type == QuestionTypes.autofield:
+        return Answers.objects.filter(
+            data_id__in=data_ids,
+            question_id=question.id,
+            name__isnull=False,
+        ).exclude(
+            name__in=NON_VALUE_TOKENS
+        ).annotate(
+            num_value=NUMERIC_AUTOFIELD_EXPR
+        ).filter(
+            num_value__isnull=False
+        )
+    return Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        value__isnull=False,
+    ).annotate(
+        num_value=F("value")
+    )
+
 
 def handle_number_question(form, question, params):
-    """Handle number questions."""
+    """Handle number (and pure numeric autofield) questions."""
     form_id = form.id
     group_by = params.get("group_by")
     repeat_agg = params.get("repeat_agg", "average")
@@ -839,15 +884,13 @@ def handle_number_question(form, question, params):
             question, data_ids, agg_func, value_type, params
         )
 
-    result = Answers.objects.filter(
-        data_id__in=data_ids,
-        question_id=question.id,
-        value__isnull=False,
-    ).aggregate(agg_value=agg_func("value"))
+    result = _numeric_answers_qs(question, data_ids).aggregate(
+        agg_value=agg_func("num_value")
+    )
 
     value = (
         round(result["agg_value"], 2)
-        if result["agg_value"] else 0
+        if result["agg_value"] is not None else 0
     )
     return [{"value": value, "label": "Total"}], ["Total"]
 
@@ -855,16 +898,12 @@ def handle_number_question(form, question, params):
 def _number_group_by_parent(
     question, data_ids, agg_func, value_type
 ):
-    """Number question grouped by parent_id."""
-    results = Answers.objects.filter(
-        data_id__in=data_ids,
-        question_id=question.id,
-        value__isnull=False,
-    ).values(
+    """Number or numeric autofield question grouped by parent_id."""
+    results = _numeric_answers_qs(question, data_ids).values(
         parent_name=F("data__parent__name"),
         parent_id=F("data__parent_id"),
     ).annotate(
-        agg_value=agg_func("value"),
+        agg_value=agg_func("num_value"),
     ).order_by("parent_name")
 
     data = [
@@ -891,35 +930,12 @@ def _number_group_by_parent(
 def _number_group_by_id(
     question, data_ids, agg_func, value_type
 ):
-    """Number question grouped by the record the answer belongs to.
-
-    The counterpart of _count_group_by_id for a measured question, and
-    the only grouping that answers "this datapoint's own number" (#382).
-    _number_group_by_parent keys on `data__parent_id`, which is NULL for
-    every row of a registration form, so a number asked at registration
-    -- the form that also carries `geo` -- collapses into one
-    `group: "None"` row there and cannot be joined to a map's points.
-
-    `data_ids` has already resolved what "the record" means: the latest
-    monitoring submission per site under monitoring=latest, every
-    matching submission under monitoring=all, and the registration
-    submissions themselves for a registration form. Grouping on
-    `data_id` therefore needs no monitoring/registration branch of its
-    own, unlike _stack_option_by_parent.
-
-    Datapoints with no answer are absent rather than zero: the caller
-    knows which points it asked about and what a gap means there, and a
-    row invented here would be indistinguishable from a real zero.
-    """
-    results = Answers.objects.filter(
-        data_id__in=data_ids,
-        question_id=question.id,
-        value__isnull=False,
-    ).values(
+    """Number or numeric autofield question grouped by the record id."""
+    results = _numeric_answers_qs(question, data_ids).values(
         "data_id",
         data_name=F("data__name"),
     ).annotate(
-        agg_value=agg_func("value"),
+        agg_value=agg_func("num_value"),
     ).order_by("data_name")
 
     data = [
@@ -944,45 +960,40 @@ def _number_group_by_id(
 
 
 def _number_group_by_date(question, data_ids, params):
-    """Number question grouped by date."""
+    """Number or numeric autofield question grouped by date."""
     repeat_agg = params.get("repeat_agg", "average")
     agg_func = AGG_FUNCS.get(repeat_agg, Avg)
     date_qid = params.get("date_question_id")
+    base = _numeric_answers_qs(question, data_ids)
 
     if date_qid:
-        data = []
-        for data_id in data_ids:
-            date_answer = Answers.objects.filter(
-                data_id=data_id,
-                question_id=date_qid,
-            ).first()
-            if not date_answer or not date_answer.name:
-                continue
-            val_result = Answers.objects.filter(
-                data_id=data_id,
-                question_id=question.id,
-                value__isnull=False,
-            ).aggregate(agg_value=agg_func("value"))
-            if val_result["agg_value"] is not None:
-                date_str = format_date_group(
-                    date_answer.name
-                )
-                data.append({
-                    "value": round(
-                        val_result["agg_value"], 2
-                    ),
-                    "label": date_str,
-                    "group": date_str,
-                })
+        date_sq = Answers.objects.filter(
+            data_id=OuterRef("data_id"),
+            question_id=date_qid,
+            name__isnull=False,
+        ).values("name")[:1]
+        results = base.annotate(
+            date_name=Subquery(date_sq),
+        ).filter(
+            date_name__isnull=False,
+        ).annotate(
+            date_key=Substr("date_name", 1, 10),
+        ).values("date_key").annotate(
+            agg_value=agg_func("num_value"),
+        ).order_by("date_key")
+        data = [
+            {
+                "value": round(r["agg_value"], 2),
+                "label": format_date_group(r["date_key"]),
+                "group": format_date_group(r["date_key"]),
+            }
+            for r in results if r["agg_value"] is not None
+        ]
     else:
-        results = Answers.objects.filter(
-            data_id__in=data_ids,
-            question_id=question.id,
-            value__isnull=False,
-        ).values(
+        results = base.values(
             date=F("data__created__date"),
         ).annotate(
-            agg_value=agg_func("value"),
+            agg_value=agg_func("num_value"),
         ).order_by("date")
         data = [
             {
@@ -990,7 +1001,7 @@ def _number_group_by_date(question, data_ids, params):
                 "label": format_date_group(r["date"]),
                 "group": format_date_group(r["date"]),
             }
-            for r in results
+            for r in results if r["agg_value"] is not None
         ]
 
     data.sort(key=lambda x: x["group"])
@@ -1005,19 +1016,9 @@ def _number_group_by_date(question, data_ids, params):
 def _number_group_by_month(
     question, data_ids, agg_func, value_type, params
 ):
-    """Number question grouped by month.
-
-    When date_question_id is provided, bucket by the month of that
-    date answer (via a Subquery) instead of FormData.created so the
-    x-axis aligns with the filter's date dimension.
-    """
+    """Number or numeric autofield question grouped by month."""
     date_qid = params.get("date_question_id")
-
-    base = Answers.objects.filter(
-        data_id__in=data_ids,
-        question_id=question.id,
-        value__isnull=False,
-    )
+    base = _numeric_answers_qs(question, data_ids)
 
     if date_qid:
         date_sq = Answers.objects.filter(
@@ -1032,7 +1033,7 @@ def _number_group_by_month(
         ).annotate(
             month_key=Substr("date_name", 1, 7),
         ).values("month_key").annotate(
-            agg_value=agg_func("value"),
+            agg_value=agg_func("num_value"),
         ).order_by("month_key")
         data = [
             {
@@ -1046,7 +1047,7 @@ def _number_group_by_month(
         results = base.annotate(
             month=TruncMonth("data__created"),
         ).values("month").annotate(
-            agg_value=agg_func("value"),
+            agg_value=agg_func("num_value"),
         ).order_by("month")
         data = [
             {
@@ -1054,7 +1055,7 @@ def _number_group_by_month(
                 "label": format_month_label(r["month"]),
                 "group": format_month_group(r["month"]),
             }
-            for r in results
+            for r in results if r["agg_value"] is not None
         ]
 
     if value_type == "percentage":
@@ -1065,6 +1066,7 @@ def _number_group_by_month(
                     d["value"] / total * 100, 2
                 )
 
+    data.sort(key=lambda x: x["group"])
     if _should_fill_gaps(params):
         data = fill_month_gaps(
             data, params["from_date"], params["to_date"]
@@ -1518,11 +1520,7 @@ def _stack_admin_by_period(
         for data_id in ids:
             data_to_admin[data_id] = admin_name
 
-    base = Answers.objects.filter(
-        data_id__in=all_data_ids,
-        question_id=question.id,
-        value__isnull=False,
-    )
+    base = _numeric_answers_qs(question, all_data_ids)
 
     if date_qid:
         date_sq = Answers.objects.filter(
@@ -1536,18 +1534,18 @@ def _stack_admin_by_period(
             date_name__isnull=False,
         ).annotate(
             period_key=Substr("date_name", 1, width),
-        ).values("data_id", "period_key", "value")
+        ).values("data_id", "period_key", "num_value")
         get_key = lambda r: r["period_key"]  # noqa: E731
     elif by_day:
         rows = base.values(
-            "data_id", "value",
+            "data_id", "num_value",
             day=F("data__created__date"),
         )
         get_key = lambda r: format_date_group(r["day"])  # noqa: E731
     else:
         rows = base.annotate(
             month=TruncMonth("data__created"),
-        ).values("data_id", "month", "value")
+        ).values("data_id", "month", "num_value")
         get_key = lambda r: format_month_group(  # noqa: E731
             r["month"]
         )
@@ -1559,7 +1557,7 @@ def _stack_admin_by_period(
             continue
         admin_name = data_to_admin.get(r["data_id"])
         if admin_name:
-            buckets[key][admin_name].append(r["value"])
+            buckets[key][admin_name].append(r["num_value"])
 
     data = []
     for key in sorted(buckets.keys()):
@@ -1738,12 +1736,10 @@ def _stack_parent_by_date(
             for r in fd_rows
         }
 
-    val_rows = Answers.objects.filter(
-        data_id__in=all_data_ids,
-        question_id=question.id,
-        value__isnull=False,
+    val_rows = _numeric_answers_qs(
+        question, all_data_ids
     ).values("data_id").annotate(
-        agg_value=agg_func("value"),
+        agg_value=agg_func("num_value"),
     )
     val_map = {
         r["data_id"]: r["agg_value"]
@@ -1793,11 +1789,7 @@ def _stack_parent_by_month(
             else p["data_ids"]
         )
 
-        base = Answers.objects.filter(
-            data_id__in=p_ids,
-            question_id=question.id,
-            value__isnull=False,
-        )
+        base = _numeric_answers_qs(question, p_ids)
 
         if date_qid:
             date_sq = Answers.objects.filter(
@@ -1812,7 +1804,7 @@ def _stack_parent_by_month(
             ).annotate(
                 month_key=Substr("date_name", 1, 7),
             ).values("month_key").annotate(
-                agg_value=agg_func("value"),
+                agg_value=agg_func("num_value"),
             ).order_by("month_key")
             for r in results:
                 if r["agg_value"] is None:
@@ -1829,9 +1821,11 @@ def _stack_parent_by_month(
             results = base.annotate(
                 month=TruncMonth("data__created"),
             ).values("month").annotate(
-                agg_value=agg_func("value"),
+                agg_value=agg_func("num_value"),
             ).order_by("month")
             for r in results:
+                if r["agg_value"] is None:
+                    continue
                 month_key = format_month_group(r["month"])
                 if month_key not in all_rows:
                     all_rows[month_key] = {
@@ -1850,3 +1844,90 @@ def _stack_parent_by_month(
         "labels": labels,
         "stack_labels": parent_names,
     }
+
+
+# -- Autofield question handlers (Mixed-Value Rule) --
+
+def handle_autofield_question(form, question, params):
+    """Handle autofield questions according to the Mixed-Value Rule."""
+    group_by = params.get("group_by")
+    value_type = params.get("value_type", "number")
+
+    qs, is_latest, _ = get_base_monitoring_qs(
+        form, form.id, params
+    )
+    data_ids = get_monitoring_data_ids(qs, is_latest)
+
+    has_string_values = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    ).exclude(
+        name__in=NON_VALUE_TOKENS
+    ).exclude(
+        name__regex=NUMERIC_STRING_REGEX
+    ).exists()
+
+    if not has_string_values and group_by != "option":
+        return handle_number_question(form, question, params)
+
+    return _autofield_group_by_option(
+        question, data_ids, qs, is_latest, value_type,
+        form=form, params=params
+    )
+
+
+def _autofield_group_by_option(
+    question, data_ids, qs, is_latest, value_type,
+    form=None, params=None
+):
+    """Group by distinct string values for autofield (categorical mode)."""
+    values_by_data = value_by_data(
+        (params or {}).get("value_question"), data_ids
+    )
+    agg = (params or {}).get("repeat_agg", "average")
+    include_empty = (params or {}).get("include_empty", False)
+
+    answer_qs = Answers.objects.filter(
+        data_id__in=data_ids,
+        question_id=question.id,
+        name__isnull=False,
+    )
+    if not include_empty:
+        answer_qs = answer_qs.exclude(name__in=NON_VALUE_TOKENS)
+
+    distinct_names = list(
+        answer_qs.values_list("name", flat=True)
+        .distinct()
+        .order_by("name")
+    )
+
+    members = defaultdict(list)
+    for did, name in answer_qs.values_list("data_id", "name"):
+        members[name].append(did)
+
+    counts = [
+        cell_value(members.get(name, []), values_by_data, agg)
+        for name in distinct_names
+    ]
+
+    if value_type == "percentage":
+        denom = sum(counts)
+    else:
+        denom = None
+
+    data = []
+    for name, count in zip(distinct_names, counts):
+        val = (
+            round((count / denom * 100), 2)
+            if value_type == "percentage" and denom else count
+        )
+        data.append({
+            "value": val,
+            "label": name,
+            "group": name,
+            "color": None,
+        })
+
+    labels = [d["label"] for d in data]
+    return data, labels
