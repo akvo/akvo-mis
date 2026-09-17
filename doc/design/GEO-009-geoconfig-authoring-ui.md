@@ -63,6 +63,16 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 **There are deliberately no `validateShape`, `validateMinArea`, `minPoints` or `minAreaSqm`
 keys.** An enable-checkbox for "should this be a valid polygon?" has no meaningful *off* state.
 
+> **Correction, 2026-09-17.** Half of that is still true; half is not. `minPoints` and
+> `minAreaSqm` remain unconfigurable at every layer. But `validateShape` and `validateArea`
+> now exist as **severity** keys, not enable keys — see GEO-002 D-4. When present they decide
+> whether a failed rule *blocks* submission or merely *warns*; the rule runs and reports either
+> way, so the "no meaningful off state" argument is unaffected. The mobile app reads them from
+> phase 1; a third key, `maxAreaHa` (GEO-003 D-5), is an opt-in upper bound read the same way.
+> **This panel authors none of them** (GEO-002 D-5 — the key costs nothing to read and
+> an upstream release to author, and no programme has asked yet). The three-field contract this
+> document specifies is therefore unchanged, and stays accurate as a description of the UI.
+
 ### User Acceptance Criteria
 - [x] `overlapThreshold` is revealed only when `detectOverlaps` is ticked
 - [x] The overlap checkbox carries help text stating the consequence: *enabling this syncs the
