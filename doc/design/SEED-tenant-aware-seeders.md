@@ -1702,6 +1702,85 @@ treated it that way — `_ensure_attributes` passes `tenant=` to its
 one pre-existing test call site (`test_administration_attributes.py`) passes no
 `--tenant` and keeps working, because omission means the tenant-less space.
 
+#### D-11: A shipped form seeds into every workspace, as a copy
+
+**The defect**: `./seeder.sh --tenant=qa1` died at the form step on any install
+where another workspace had already been seeded:
+
+```
+CommandError: ./source/forms/1789516800000.prod.json: form id 1789516800000
+              already belongs to indonesia. Form ids are global, so a
+              definition can only be seeded once per install -- give this
+              file its own id.
+```
+
+That error is FB-015's guard, and it was doing its job: `Forms.id` **is** the
+primary key, so the row for id 1789516800000 belongs to exactly one workspace,
+and the guard stopped the seeder rewriting another workspace's form. But it
+also meant the forms D-3 and D-9 ship were seedable into **one** workspace per
+install, which is not a seeder.
+
+**Options**: (1) copy with fresh ids per workspace; (2) derive a deterministic
+per-tenant id (`file_id + tenant.id * stride`); (3) give `Forms` a surrogate
+primary key plus a `form_id` business column under
+`unique_together = ("form_id", "tenant")`.
+
+**Decision**: option 1.
+
+**Rationale**: option 3 is the correct long-term model — a shipped definition
+would keep one identity in every workspace, and re-seeding would update copies
+through the ordinary id-keyed path. It is also a schema change to the
+most-referenced table in the system. Measured: 9 FK/M2M relations across six
+apps (those are fine — they point at the primary key), but **12+ URL routes**
+take `(?P<form_id>[0-9]+)` and would each have to declare which id they mean;
+the mobile SQLite stores `formId INTEGER NOT NULL` in two tables and joins on
+it in `crud-datapoints.js`, including `parentFormId`, with deployed devices
+already holding the primary key under that name; and `job.sh`, `config.js`,
+the builder's URLs, `--file <id>` and ~150 tests carry literal ids. It needs a
+backfill (`form_id = id`) and an API-wide decision, and it is not this PR.
+
+Option 2 invents an id scheme, and the offset pushes ids forward in time:
+`tenant.id` of 50 at a stride of 10⁶ is +13.9 hours, straight into the band
+where a builder-minted `Date.now()` lives (D-3). A collision would be silent.
+
+Option 1 reuses machinery that already exists — `import_form_definition` has a
+`create_copy` mode whose `force_new_id` allocates fresh ids for the form, its
+groups, its questions and their options — and it **preserves the property the
+error existed to protect**: the other workspace's row is never read or written.
+
+**Option 1 is forward-compatible with option 3.** If `form_id` is added later,
+each copy backfills with the file's business id and the `unique_together` then
+holds.
+
+**Three mechanics worth knowing:**
+
+1. **A per-run `seeded_ids` map**, file id → the id this workspace actually
+   got. The monitoring form's `parent_hint` names the *file's* registration id,
+   which in a second workspace belongs to nobody — without the map a copied
+   child would attach to the first workspace's parent, or to none.
+2. **`create_copy` writes a draft and stamps tenant from its `user`**, and the
+   seeder has no user. Both are corrected immediately afterwards
+   (`tenant`, `status=published`), exactly as the non-copy path does when it
+   pre-creates its row.
+3. **Ids come from the sequences**, which `_sync_import_pk_sequences()` has just
+   set to each table's `MAX(id)` — so a copy lands just above the highest form
+   id on the install. A future shipped file that declared an id a copy had
+   already taken would be treated as an update of that copy; keep new seeded
+   ids clear of the band copies grow into.
+
+**A re-run does not rewrite a copy** (see the log line `Form Present`). The
+copy's questions carry ids the file has never seen, so the id-keyed update path
+cannot match them, and name-matching would be a second identity model inside
+the import writer. A workspace that already has the form is left exactly as it
+is — which is also the right answer for one whose operator has edited it, since
+editing the seeded form is the expected workflow. **The cost, stated plainly:
+copies do not pick up later changes to the shipped definition.** The workspace
+that owns the file ids does.
+
+**Unchanged without `--tenant`.** The whole branch is inside
+`if created and tenant is not None`, so a tenant-less run — which is what the
+~150 `form_seeder` test call sites do — behaves exactly as before.
+
 ### Appendix: decisions reversed during this work
 
 Three decisions were made before the boundary pipeline existed and undone once

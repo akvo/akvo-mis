@@ -29,6 +29,7 @@ from api.v1.v1_forms.functions import (
 )
 from api.v1.v1_forms.models import Forms, QuestionGroup, Questions
 from api.v1.v1_profile.models import Entity
+from api.v1.v1_users.models import Tenant
 
 INITIAL_FORM_ID = 1789516800000
 FORMS_DIR = "./source/forms"
@@ -351,3 +352,126 @@ class InitialMonitoringFormSeedTest(TestCase):
             list(registration.children.values_list("id", flat=True)),
             [MONITORING_FORM_ID],
         )
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class SeedingIntoASecondWorkspaceTest(TestCase):
+    """`Forms.id` is the primary key, so the shipped files fit one
+    workspace. Every other workspace gets a copy.
+
+    Before this, the second `./seeder.sh --tenant=<other>` died with
+    "form id 1789516800000 already belongs to <first>", which made the
+    shipped forms seedable exactly once per install.
+    """
+
+    def setUp(self):
+        self.first = Tenant.objects.create(subdomain="first")
+        self.second = Tenant.objects.create(subdomain="second")
+        call_command("form_seeder", tenant="first")
+
+    def forms_of(self, tenant):
+        return Forms.objects.filter(tenant=tenant).order_by("id")
+
+    def test_the_first_workspace_keeps_the_file_ids(self):
+        ids = list(self.forms_of(self.first).values_list("id", flat=True))
+        self.assertIn(INITIAL_FORM_ID, ids)
+        self.assertIn(MONITORING_FORM_ID, ids)
+
+    def test_the_second_workspace_gets_its_own_copies(self):
+        call_command("form_seeder", tenant="second")
+
+        names = set(self.forms_of(self.second).values_list("name", flat=True))
+        self.assertEqual(names, {"Registration", "Monitoring"})
+
+    def test_the_copies_do_not_reuse_the_file_ids(self):
+        call_command("form_seeder", tenant="second")
+
+        ids = set(self.forms_of(self.second).values_list("id", flat=True))
+        self.assertFalse(ids & {INITIAL_FORM_ID, MONITORING_FORM_ID})
+
+    def test_the_first_workspaces_forms_are_untouched(self):
+        """The property the old hard error existed to protect."""
+        before = {
+            (f.id, f.name, f.version, f.tenant_id)
+            for f in self.forms_of(self.first)
+        }
+        before_questions = set(
+            Questions.objects.filter(
+                form__tenant=self.first
+            ).values_list("id", "form_id")
+        )
+
+        call_command("form_seeder", tenant="second")
+
+        after = {
+            (f.id, f.name, f.version, f.tenant_id)
+            for f in self.forms_of(self.first)
+        }
+        after_questions = set(
+            Questions.objects.filter(
+                form__tenant=self.first
+            ).values_list("id", "form_id")
+        )
+        self.assertEqual(before, after)
+        self.assertEqual(before_questions, after_questions)
+
+    def test_the_copied_monitoring_form_points_at_its_own_parent(self):
+        """The parent hint names the file's id, which belongs to `first`.
+
+        Without the per-run id map the copy would attach to the other
+        workspace's registration form, or to nothing at all.
+        """
+        call_command("form_seeder", tenant="second")
+
+        monitoring = self.forms_of(self.second).get(name="Monitoring")
+        registration = self.forms_of(self.second).get(name="Registration")
+        self.assertEqual(monitoring.parent_id, registration.id)
+        self.assertEqual(monitoring.parent.tenant_id, self.second.id)
+
+    def test_the_copies_carry_the_whole_definition(self):
+        call_command("form_seeder", tenant="second")
+
+        registration = self.forms_of(self.second).get(name="Registration")
+        monitoring = self.forms_of(self.second).get(name="Monitoring")
+        _, reg_questions = declared_counts(read_initial_form())
+        _, mon_questions = declared_counts(read_monitoring_form())
+        self.assertEqual(
+            Questions.objects.filter(form=registration).count(), reg_questions
+        )
+        self.assertEqual(
+            Questions.objects.filter(form=monitoring).count(), mon_questions
+        )
+
+    def test_the_copies_are_published(self):
+        call_command("form_seeder", tenant="second")
+
+        for form in self.forms_of(self.second):
+            self.assertEqual(form.status, FormStatus.published)
+            self.assertEqual(form.tenant_id, self.second.id)
+
+    def test_reseeding_leaves_an_existing_copy_alone(self):
+        call_command("form_seeder", tenant="second")
+        before = {
+            (f.id, f.name, f.version) for f in self.forms_of(self.second)
+        }
+
+        call_command("form_seeder", tenant="second")
+
+        after = {
+            (f.id, f.name, f.version) for f in self.forms_of(self.second)
+        }
+        self.assertEqual(before, after)
+        self.assertEqual(self.forms_of(self.second).count(), 2)
+
+    def test_a_third_workspace_gets_its_own_copies_too(self):
+        third = Tenant.objects.create(subdomain="third")
+        call_command("form_seeder", tenant="second")
+        call_command("form_seeder", tenant="third")
+
+        ids = [
+            set(self.forms_of(t).values_list("id", flat=True))
+            for t in (self.first, self.second, third)
+        ]
+        self.assertEqual(len(ids[0] & ids[1]), 0)
+        self.assertEqual(len(ids[1] & ids[2]), 0)
+        self.assertEqual(len(ids[0] & ids[2]), 0)

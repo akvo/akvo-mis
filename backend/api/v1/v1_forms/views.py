@@ -112,26 +112,19 @@ def _form_detail_from_snapshot(form, pv):
             type_str = q.get("type", "").lower()
             if type_str == "administration":
                 type_str = "cascade"
+            # Pass the snapshot question through whole. A whitelist here
+            # silently drops whatever _build_schema_snapshot writes but the
+            # list forgets — that is how `center`, `columns`, `limit`,
+            # `tree_option`, `disabled`, `hidden_string`,
+            # `required_double_entry`, `addon_before`, `addon_after` and
+            # `data_api_url` went missing from published-form responses.
             q_dict = {
-                "id": q["id"],
-                "order": q.get("order"),
-                "name": q.get("name"),
-                "label": q.get("label"),
-                "short_label": q.get("short_label"),
+                **q,
                 "type": type_str,
                 "meta": q.get("meta", False),
                 "required": q.get("required", True),
-                "rule": q.get("rule"),
-                "dependency": q.get("dependency"),
                 "dependency_rule": q.get("dependency_rule", "AND"),
-                "api": q.get("api"),
-                "extra": q.get("extra"),
-                "tooltip": q.get("tooltip"),
-                "fn": q.get("fn"),
-                "pre": q.get("pre"),
                 "display_only": q.get("display_only", False),
-                "variable_name": q.get("variable_name"),
-                "translations": q.get("translations"),
                 "option": q.get("option", []),
                 "disable_delete": (
                     True if q["id"] in answered_q_ids else None
