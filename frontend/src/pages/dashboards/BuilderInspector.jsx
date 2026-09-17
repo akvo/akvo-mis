@@ -32,6 +32,7 @@ import {
   NEEDS_SCATTER_Y,
   NEEDS_LINE_DATE_X,
   NEEDS_LINE_CATEGORY,
+  SUPPORTS_AXIS_LABELS,
   defaultMeasure,
   pruneConfigForForm,
   stackByOptions,
@@ -1044,6 +1045,7 @@ const BuilderInspector = ({
                     // can, which for a number question means the
                     // "None — this question's options" entry it no
                     // longer has cannot survive as group_by=option.
+                    const isHoriz = widget.config?.orientation === "horizontal";
                     onWidgetChange({
                       ...widget,
                       question: val || null,
@@ -1057,8 +1059,9 @@ const BuilderInspector = ({
                             widget.form
                           )
                         ),
-                        x_axis_label: qLabel,
-                        y_axis_label: qLabel,
+                        ...(isHoriz
+                          ? { y_axis_label: qLabel }
+                          : { x_axis_label: qLabel }),
                       },
                     });
                     return;
@@ -1067,6 +1070,7 @@ const BuilderInspector = ({
                     widget.config,
                     groupByOptions(nextQuestion, wConfig)
                   );
+                  const isLine = wType === "line";
                   onWidgetChange({
                     ...widget,
                     question: val || null,
@@ -1081,8 +1085,7 @@ const BuilderInspector = ({
                           widget.form
                         )
                       ),
-                      x_axis_label: qLabel,
-                      y_axis_label: qLabel,
+                      ...(isLine ? { y_axis_label: qLabel } : {}),
                     },
                   });
                 }
@@ -1222,6 +1225,8 @@ const BuilderInspector = ({
                 // rather than leaving a config the endpoint refuses.
                 const keepPercentage =
                   !val || widget.config?.repeat_agg === "sum";
+                const valChoice = valueChoices.find((q) => q.value === val);
+                const isHoriz = widget.config?.orientation === "horizontal";
                 onWidgetChange({
                   ...widget,
                   config: {
@@ -1237,6 +1242,11 @@ const BuilderInspector = ({
                     include_unmonitored: val
                       ? false
                       : widget.config?.include_unmonitored,
+                    ...(wType === "bar"
+                      ? isHoriz
+                        ? { x_axis_label: valChoice?.label || null }
+                        : { y_axis_label: valChoice?.label || null }
+                      : {}),
                   },
                 });
               }}
@@ -1272,7 +1282,15 @@ const BuilderInspector = ({
             <Select
               value={wConfig.date_question_id || null}
               onChange={(val) => {
-                updateConfig("date_question_id", val || null);
+                const dateQ = dateQuestions.find((q) => q.id === val);
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    date_question_id: val || null,
+                    x_axis_label: dateQ?.label || null,
+                  },
+                });
               }}
               placeholder="Submission date"
               style={{ width: "100%" }}
@@ -1688,7 +1706,20 @@ const BuilderInspector = ({
             <label className="builder-inspector-label">Orientation</label>
             <Select
               value={wConfig.orientation || "vertical"}
-              onChange={(val) => updateConfig("orientation", val)}
+              onChange={(val) => {
+                const currentOrientation = wConfig.orientation || "vertical";
+                if (val !== currentOrientation) {
+                  onWidgetChange({
+                    ...widget,
+                    config: {
+                      ...widget.config,
+                      orientation: val,
+                      x_axis_label: widget.config?.y_axis_label || null,
+                      y_axis_label: widget.config?.x_axis_label || null,
+                    },
+                  });
+                }
+              }}
               style={{ width: "100%" }}
             >
               {VALID_ORIENTATION.map((o) => (
@@ -1701,7 +1732,7 @@ const BuilderInspector = ({
         )}
 
         {/* Axis labels (bar, line, scatter) */}
-        {(wType === "bar" || wType === "line" || wType === "scatter") && (
+        {SUPPORTS_AXIS_LABELS.has(wType) && (
           <>
             <div className="builder-inspector-field">
               <label className="builder-inspector-label">X axis label</label>
