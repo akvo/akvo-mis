@@ -32,6 +32,7 @@ import {
   NEEDS_SCATTER_Y,
   NEEDS_LINE_DATE_X,
   NEEDS_LINE_CATEGORY,
+  SUPPORTS_AXIS_LABELS,
   defaultMeasure,
   pruneConfigForForm,
   stackByOptions,
@@ -49,6 +50,8 @@ import {
   tableColumnOptions,
   monitoringForms,
   MAP_QUESTION_TYPES,
+  NUMERIC_QUESTION_TYPES,
+  STACK_QUESTION_TYPES,
   TOOLBOX_POSITION_PRESETS,
   DEFAULT_TOOLBOX_FEATURES,
 } from "./builderConstants";
@@ -121,6 +124,19 @@ const IconSite = () => (
   </svg>
 );
 
+const IconAutofield = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 32 32">
+    <path
+      fill="currentColor"
+      d="M26 4H6a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM6 6h20v4H6zm0 20v-14h20v14z"
+    />
+    <path
+      fill="currentColor"
+      d="M9 15h3v2H9zm5 0h3v2h-3zm5 0h4v2h-4zm-10 4h3v2H9zm5 0h3v2h-3zm5 0h4v2h-4z"
+    />
+  </svg>
+);
+
 // The merged Break down by list mixes questions with fixed choices, so
 // the fixed ones carry a glyph of their own rather than sitting bare
 // beside icons.
@@ -134,6 +150,7 @@ const QUESTION_TYPE_ICON = {
   option: <IconOption />,
   multiple_option: <IconCheckbox />,
   date: <IconDate />,
+  autofield: <IconAutofield />,
 };
 
 /** A fixed breakdown choice: its own glyph, or none for "None". */
@@ -299,7 +316,7 @@ const BuilderInspector = ({
     // on `range` rather than `quantity` is the new default (#387) —
     // clustering is opted into, never inherited — but a map already set
     // to `quantity` was set there on purpose and must survive.
-    const isValue = picked?.type === "number";
+    const isValue = NUMERIC_QUESTION_TYPES.has(picked?.type);
     const drawable = isValue ? ["range", "quantity"] : ["category"];
     if (drawable.includes(stored)) {
       return;
@@ -628,7 +645,7 @@ const BuilderInspector = ({
   const allQuestions = showQuestion ? questionsForForm(widget.form) : [];
   const questions =
     wType === "scatter" || wType === "line"
-      ? allQuestions.filter((q) => q.type === "number")
+      ? allQuestions.filter((q) => NUMERIC_QUESTION_TYPES.has(q.type))
       : wType === "map"
       ? // A map reads its question one of two ways: colour by an option
         // question's answer, or size by a number question's. /sources
@@ -639,16 +656,17 @@ const BuilderInspector = ({
         allQuestions.filter((q) => MAP_QUESTION_TYPES.has(q.type))
       : allQuestions;
   const dateQuestions = allQuestions.filter((q) => q.type === "date");
-  const optionQuestions = allQuestions.filter(
-    (q) => q.type === "option" || q.type === "multiple_option"
+  const optionQuestions = allQuestions.filter((q) =>
+    STACK_QUESTION_TYPES.has(q.type)
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
-  // A map bound to a NUMBER question sizes its circles by the answer
+  // A map bound to a NUMBER or AUTOFIELD question sizes its circles by the answer
   // rather than colouring them by a status (#382). Derived from the
   // question's type rather than read back from `config.map_mode`, so the
   // controls can never disagree with the question actually picked; the
   // stored flag exists for the viewer, which has no question types.
-  const isValueMap = wType === "map" && selectedQuestion?.type === "number";
+  const isValueMap =
+    wType === "map" && NUMERIC_QUESTION_TYPES.has(selectedQuestion?.type);
   // Clustering is the opt-in (#387). Off, the map draws every site and
   // colours it by band; on, nearby sites merge into one circle sized by
   // their combined value.
@@ -713,7 +731,7 @@ const BuilderInspector = ({
     if (breakdownChoices.length === 0) {
       return "Pick a question first";
     }
-    if (selectedQuestion?.type === "number") {
+    if (NUMERIC_QUESTION_TYPES.has(selectedQuestion?.type)) {
       return (
         "A number question is already the measure, so it can only be" +
         " broken down by time or site. To split it by an option" +
@@ -963,9 +981,9 @@ const BuilderInspector = ({
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
               {wType === "scatter"
-                ? "X axis (number question)"
+                ? "X axis (number or autofield)"
                 : wType === "line"
-                ? "Y axis (number question)"
+                ? "Y axis (number or autofield)"
                 : "Question"}
             </label>
             <Select
@@ -978,7 +996,7 @@ const BuilderInspector = ({
                   // number has no options, so the status colours left
                   // behind by a previous option question are cleared
                   // rather than kept as dead config.
-                  if (q?.type === "number") {
+                  if (NUMERIC_QUESTION_TYPES.has(q?.type)) {
                     // Ranges, not clustering (#387). Clustering answers
                     // "how much in total here" and hides the sites; it
                     // is opted into, never landed on by picking a
@@ -1037,24 +1055,31 @@ const BuilderInspector = ({
                   // The stack is then validated against the grouping
                   // that survived, not the one being replaced.
                   const nextQuestion = allQuestions.find((q) => q.id === val);
+                  const qLabel = nextQuestion?.label || null;
                   if (wType === "bar") {
                     // One control, so one snap: a breakdown the new
                     // question cannot draw moves to the first that it
                     // can, which for a number question means the
                     // "None — this question's options" entry it no
                     // longer has cannot survive as group_by=option.
+                    const isHoriz = widget.config?.orientation === "horizontal";
                     onWidgetChange({
                       ...widget,
                       question: val || null,
-                      config: withValidBreakdown(
-                        widget.config,
-                        breakdownOptions(
-                          nextQuestion,
-                          allQuestions,
-                          forms,
-                          widget.form
-                        )
-                      ),
+                      config: {
+                        ...withValidBreakdown(
+                          widget.config,
+                          breakdownOptions(
+                            nextQuestion,
+                            allQuestions,
+                            forms,
+                            widget.form
+                          )
+                        ),
+                        ...(isHoriz
+                          ? { y_axis_label: qLabel }
+                          : { x_axis_label: qLabel }),
+                      },
                     });
                     return;
                   }
@@ -1062,19 +1087,23 @@ const BuilderInspector = ({
                     widget.config,
                     groupByOptions(nextQuestion, wConfig)
                   );
+                  const isLine = wType === "line";
                   onWidgetChange({
                     ...widget,
                     question: val || null,
-                    config: withValidStack(
-                      grouped,
-                      stackByOptions(
-                        allQuestions,
-                        val,
-                        grouped.group_by || "option",
-                        wType === "bar" ? forms : [],
-                        widget.form
-                      )
-                    ),
+                    config: {
+                      ...withValidStack(
+                        grouped,
+                        stackByOptions(
+                          allQuestions,
+                          val,
+                          grouped.group_by || "option",
+                          wType === "bar" ? forms : [],
+                          widget.form
+                        )
+                      ),
+                      ...(isLine ? { y_axis_label: qLabel } : {}),
+                    },
                   });
                 }
               }}
@@ -1161,7 +1190,7 @@ const BuilderInspector = ({
         {NEEDS_SCATTER_Y.has(wType) && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              Y axis (number question)
+              Y axis (number or autofield)
             </label>
             <Select
               value={wConfig.question_y || null}
@@ -1213,6 +1242,8 @@ const BuilderInspector = ({
                 // rather than leaving a config the endpoint refuses.
                 const keepPercentage =
                   !val || widget.config?.repeat_agg === "sum";
+                const valChoice = valueChoices.find((q) => q.value === val);
+                const isHoriz = widget.config?.orientation === "horizontal";
                 onWidgetChange({
                   ...widget,
                   config: {
@@ -1228,6 +1259,11 @@ const BuilderInspector = ({
                     include_unmonitored: val
                       ? false
                       : widget.config?.include_unmonitored,
+                    ...(wType === "bar"
+                      ? isHoriz
+                        ? { x_axis_label: valChoice?.label || null }
+                        : { y_axis_label: valChoice?.label || null }
+                      : {}),
                   },
                 });
               }}
@@ -1263,7 +1299,15 @@ const BuilderInspector = ({
             <Select
               value={wConfig.date_question_id || null}
               onChange={(val) => {
-                updateConfig("date_question_id", val || null);
+                const dateQ = dateQuestions.find((q) => q.id === val);
+                onWidgetChange({
+                  ...widget,
+                  config: {
+                    ...widget.config,
+                    date_question_id: val || null,
+                    x_axis_label: dateQ?.label || null,
+                  },
+                });
               }}
               placeholder="Submission date"
               style={{ width: "100%" }}
@@ -1294,7 +1338,7 @@ const BuilderInspector = ({
           wConfig.stack_by !== "administration" && (
             <div className="builder-inspector-field">
               <label className="builder-inspector-label">
-                Category (option question)
+                Category (option or autofield)
               </label>
               <Select
                 value={wConfig.category_question_id || null}
@@ -1679,7 +1723,20 @@ const BuilderInspector = ({
             <label className="builder-inspector-label">Orientation</label>
             <Select
               value={wConfig.orientation || "vertical"}
-              onChange={(val) => updateConfig("orientation", val)}
+              onChange={(val) => {
+                const currentOrientation = wConfig.orientation || "vertical";
+                if (val !== currentOrientation) {
+                  onWidgetChange({
+                    ...widget,
+                    config: {
+                      ...widget.config,
+                      orientation: val,
+                      x_axis_label: widget.config?.y_axis_label || null,
+                      y_axis_label: widget.config?.x_axis_label || null,
+                    },
+                  });
+                }
+              }}
               style={{ width: "100%" }}
             >
               {VALID_ORIENTATION.map((o) => (
@@ -1689,6 +1746,30 @@ const BuilderInspector = ({
               ))}
             </Select>
           </div>
+        )}
+
+        {/* Axis labels (bar, line, scatter) */}
+        {SUPPORTS_AXIS_LABELS.has(wType) && (
+          <>
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">X axis label</label>
+              <Input
+                value={wConfig.x_axis_label || ""}
+                onChange={(e) => updateConfig("x_axis_label", e.target.value)}
+                placeholder="X axis label"
+                allowClear
+              />
+            </div>
+            <div className="builder-inspector-field">
+              <label className="builder-inspector-label">Y axis label</label>
+              <Input
+                value={wConfig.y_axis_label || ""}
+                onChange={(e) => updateConfig("y_axis_label", e.target.value)}
+                placeholder="Y axis label"
+                allowClear
+              />
+            </div>
+          </>
         )}
 
         {/* Table columns */}

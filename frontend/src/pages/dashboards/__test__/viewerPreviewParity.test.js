@@ -19,19 +19,61 @@ jest.mock("../../../components/dashboard/DashboardViewFilters", () => {
   return MockFilters;
 });
 
-jest.mock("akvo-charts", () => ({
-  Bar: ({ config }) => (
-    <div data-testid="chart-bar" data-color={JSON.stringify(config?.color)} />
-  ),
-  StackBar: () => <div data-testid="chart-stackbar" />,
-  Line: () => <div data-testid="chart-line" />,
-  StackLine: () => <div data-testid="chart-stackline" />,
-  Pie: ({ config }) => (
-    <div data-testid="chart-pie" data-color={JSON.stringify(config?.color)} />
-  ),
-  Doughnut: () => <div data-testid="chart-doughnut" />,
-  MapCluster: () => <div data-testid="chart-map" />,
-}));
+jest.mock("akvo-charts", () => {
+  const React = require("react");
+  const Bar = React.forwardRef(({ config }, ref) => (
+    <div
+      ref={ref}
+      data-testid="chart-bar"
+      data-color={JSON.stringify(config?.color)}
+    />
+  ));
+  Bar.displayName = "Bar";
+
+  const StackBar = React.forwardRef((props, ref) => (
+    <div ref={ref} data-testid="chart-stackbar" />
+  ));
+  StackBar.displayName = "StackBar";
+
+  const Line = React.forwardRef((props, ref) => (
+    <div ref={ref} data-testid="chart-line" />
+  ));
+  Line.displayName = "Line";
+
+  const StackLine = React.forwardRef((props, ref) => (
+    <div ref={ref} data-testid="chart-stackline" />
+  ));
+  StackLine.displayName = "StackLine";
+
+  const Pie = React.forwardRef(({ config }, ref) => (
+    <div
+      ref={ref}
+      data-testid="chart-pie"
+      data-color={JSON.stringify(config?.color)}
+    />
+  ));
+  Pie.displayName = "Pie";
+
+  const Doughnut = React.forwardRef((props, ref) => (
+    <div ref={ref} data-testid="chart-doughnut" />
+  ));
+  Doughnut.displayName = "Doughnut";
+
+  const MapCluster = React.forwardRef((props, ref) => (
+    <div ref={ref} data-testid="chart-map" />
+  ));
+  MapCluster.displayName = "MapCluster";
+
+  return {
+    Bar,
+    StackBar,
+    Line,
+    StackLine,
+    Pie,
+    Doughnut,
+    MapCluster,
+  };
+});
 
 const ROOT_FORM = { id: 6001, name: "Registration" };
 

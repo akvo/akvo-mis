@@ -23,6 +23,9 @@ import {
   breakdownChangeOf,
   withValidBreakdown,
   VALID_STACK_BY,
+  STACK_QUESTION_TYPES,
+  SUPPORTED_GROUP_QUESTION_TYPES,
+  MAP_QUESTION_TYPES,
 } from "../builderConstants";
 
 // =========================================================
@@ -1503,5 +1506,436 @@ describe("chart toolbox controls in BuilderInspector (dashboard-level)", () => {
     expect(screen.getByText("Data view")).toBeInTheDocument();
     expect(screen.queryByText("Restore zoom/filters")).not.toBeInTheDocument();
     expect(screen.getByText("Data zoom")).toBeInTheDocument();
+  });
+});
+
+describe("Axis labels in BuilderInspector", () => {
+  const barWidget = (config = {}) => ({
+    id: 10,
+    type: "bar",
+    title: "Bar Chart",
+    form: 6002,
+    question: 600203,
+    config: {
+      x_axis_label: "Status",
+      y_axis_label: "Count",
+      ...config,
+    },
+  });
+
+  test("renders X and Y axis label inputs for bar, line, and scatter widgets", () => {
+    draw(barWidget());
+    expect(screen.getByText("X axis label")).toBeInTheDocument();
+    expect(screen.getByText("Y axis label")).toBeInTheDocument();
+  });
+
+  test("updating X axis label input calls onWidgetChange", () => {
+    const onWidgetChange = jest.fn();
+    draw(barWidget(), onWidgetChange);
+    const xInput = screen.getByPlaceholderText("X axis label");
+    fireEvent.change(xInput, { target: { value: "Custom X Label" } });
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          x_axis_label: "Custom X Label",
+        }),
+      })
+    );
+  });
+
+  test("updating Y axis label input calls onWidgetChange", () => {
+    const onWidgetChange = jest.fn();
+    draw(barWidget(), onWidgetChange);
+    const yInput = screen.getByPlaceholderText("Y axis label");
+    fireEvent.change(yInput, { target: { value: "Custom Y Label" } });
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          y_axis_label: "Custom Y Label",
+        }),
+      })
+    );
+  });
+
+  test("changing orientation on bar chart swaps x_axis_label and y_axis_label", () => {
+    const onWidgetChange = jest.fn();
+    draw(
+      barWidget({
+        orientation: "vertical",
+        x_axis_label: "Categories",
+        y_axis_label: "Totals",
+      }),
+      onWidgetChange
+    );
+    const orientationSelect = screen
+      .getByText("Vertical")
+      .closest(".ant-select");
+    fireEvent.mouseDown(
+      orientationSelect.querySelector(".ant-select-selector")
+    );
+    const option = screen.getByText("Horizontal");
+    fireEvent.click(option);
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          orientation: "horizontal",
+          x_axis_label: "Totals",
+          y_axis_label: "Categories",
+        }),
+      })
+    );
+  });
+});
+
+describe("VIZ-026: Autofield builderConstants and BuilderInspector integration", () => {
+  const autofieldNumeric = {
+    id: 9001,
+    label: "Calculated Yield",
+    name: "yield_calc",
+    type: "autofield",
+  };
+  const autofieldCategorical = {
+    id: 9002,
+    label: "Calculated Status",
+    name: "status_calc",
+    type: "autofield",
+  };
+  const numberQuestion = {
+    id: 9003,
+    label: "Capacity",
+    name: "capacity",
+    type: "number",
+  };
+  const optionQuestion = {
+    id: 9004,
+    label: "Condition",
+    name: "condition",
+    type: "option",
+  };
+  const dateQuestion = {
+    id: 9005,
+    label: "Recorded Date",
+    name: "recorded_date",
+    type: "date",
+  };
+
+  const allQuestions = [
+    autofieldNumeric,
+    autofieldCategorical,
+    numberQuestion,
+    optionQuestion,
+    dateQuestion,
+  ];
+
+  const mockSources = {
+    forms: [
+      {
+        id: 7001,
+        name: "Registration Form",
+        type: "registration",
+        questions: allQuestions,
+      },
+      {
+        id: 7002,
+        name: "Monitoring Form",
+        type: "monitoring",
+        questions: [
+          {
+            id: 8001,
+            label: "Monthly Flow (Calc)",
+            name: "flow_calc",
+            type: "autofield",
+          },
+          {
+            id: 8002,
+            label: "Inspection Date",
+            name: "inspected",
+            type: "date",
+          },
+        ],
+      },
+    ],
+  };
+
+  test("question type sets include autofield", () => {
+    expect(STACK_QUESTION_TYPES.has("autofield")).toBe(true);
+    expect(SUPPORTED_GROUP_QUESTION_TYPES.has("autofield")).toBe(true);
+    expect(MAP_QUESTION_TYPES.has("autofield")).toBe(true);
+  });
+
+  test("valueQuestionOptions offers autofield and number questions", () => {
+    const optionsForOption = valueQuestionOptions(allQuestions, optionQuestion);
+    expect(optionsForOption.map((o) => o.value)).toEqual([9001, 9002, 9003]);
+
+    const optionsForAutofield = valueQuestionOptions(
+      allQuestions,
+      autofieldCategorical
+    );
+    expect(optionsForAutofield.map((o) => o.value)).toEqual([9001, 9002, 9003]);
+
+    const optionsForNumber = valueQuestionOptions(allQuestions, numberQuestion);
+    expect(optionsForNumber).toEqual([]);
+  });
+
+  test("groupByOptions supports option, time, and site groupings for unstacked autofield", () => {
+    const unstacked = groupByOptions(autofieldNumeric, {});
+    const values = unstacked.map((g) => g.value);
+    expect(values).toContain("option");
+    expect(values).toContain("month");
+    expect(values).toContain("date");
+    expect(values).toContain("parent_id");
+  });
+
+  test("groupByOptions narrows when autofield is stacked", () => {
+    const stackedByQuestion = groupByOptions(autofieldNumeric, {
+      stack_question: 9004,
+    });
+    expect(stackedByQuestion.map((g) => g.value)).toEqual(["option"]);
+
+    const stackedByParent = groupByOptions(autofieldNumeric, {
+      stack_by: "parent_id",
+    });
+    const values = stackedByParent.map((g) => g.value);
+    expect(values).toEqual(["month", "date", "parent_id"]);
+  });
+
+  test("breakdownOptions offers own options, times, site, sibling questions and cross-form", () => {
+    const choices = breakdownOptions(
+      autofieldNumeric,
+      allQuestions,
+      mockSources.forms,
+      7001
+    );
+    const values = choices.map((c) =>
+      typeof c.value === "string" ? c.value : c.label
+    );
+    expect(values).toContain("");
+    expect(values).toContain("month");
+    expect(values).toContain("date");
+    expect(values).toContain("parent_id");
+    expect(values).toContain("q:9002");
+    expect(values).toContain("q:9004");
+    expect(values).toContain("Monitoring Form");
+  });
+
+  test("stackByOptions supports autofield questions", () => {
+    const options = stackByOptions(
+      allQuestions,
+      autofieldNumeric.id,
+      "option",
+      mockSources.forms,
+      7001
+    );
+    const values = options.map((o) =>
+      typeof o.value === "string" ? o.value : o.label
+    );
+    expect(values).toContain("");
+    expect(values).toContain("option");
+    expect(values).toContain("q:9002");
+    expect(values).toContain("q:9004");
+  });
+
+  test("tableColumnOptions includes autofield questions from both forms", () => {
+    const cols = tableColumnOptions(mockSources.forms, 7002);
+    const autofieldCols = cols.filter((c) => c.type === "autofield");
+    expect(autofieldCols.length).toBe(3);
+  });
+
+  test("renders scatter plot with autofield X and Y axis", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 1,
+          type: "scatter",
+          title: "Scatter Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9001,
+          config: {
+            question_y: 9002,
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Scatter\s+settings/i)).toBeInTheDocument();
+    expect(
+      screen.getByText("Y axis (number or autofield)")
+    ).toBeInTheDocument();
+  });
+
+  test("renders line chart with autofield measure and category", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 2,
+          type: "line",
+          title: "Line Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9001,
+          config: {
+            group_by: "month",
+            category_question_id: 9002,
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Line\s+settings/i)).toBeInTheDocument();
+  });
+
+  test("renders map with autofield question in range mode", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 3,
+          type: "map",
+          title: "Map Autofield",
+          col_span: 24,
+          form: 7001,
+          question: 9001,
+          config: {
+            map_mode: "range",
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Map\s+settings/i)).toBeInTheDocument();
+  });
+
+  test("renders bar chart with categorical autofield question and numeric autofield value", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 4,
+          type: "bar",
+          title: "Bar Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9002,
+          config: {
+            group_by: "option",
+            value_question: 9001,
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Bar\s+settings/i)).toBeInTheDocument();
+  });
+
+  test("renders KPI card with autofield question and aggregation controls", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 5,
+          type: "kpi",
+          title: "KPI Autofield",
+          col_span: 6,
+          form: 7001,
+          question: 9001,
+          config: {
+            repeat_agg: "average",
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/KPI\s+settings/i)).toBeInTheDocument();
+    expect(screen.getByText(/Aggregation/i)).toBeInTheDocument();
+  });
+
+  test("renders pie chart with autofield question and option grouping", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 6,
+          type: "pie",
+          title: "Pie Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9002,
+          config: {
+            group_by: "option",
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Pie\s+settings/i)).toBeInTheDocument();
+  });
+
+  test("renders line chart in single-line time series mode with autofield Y-axis", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 7,
+          type: "line",
+          title: "Line Single Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9001,
+          config: {
+            group_by: "month",
+            category_question_id: null,
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Line\s+settings/i)).toBeInTheDocument();
+    expect(
+      screen.getByText("Category (option or autofield)")
+    ).toBeInTheDocument();
+  });
+
+  test("prunes autofield value_question, stack_question, and columns when switched to form without them", () => {
+    const next = pruneConfigForForm(
+      {
+        value_question: 9001,
+        stack_question: 9002,
+        columns: [
+          { key: "c1", question: 9003 },
+          { key: "c2", question: 101 },
+        ],
+      },
+      [
+        { id: 101, type: "number" },
+        { id: 102, type: "option" },
+      ]
+    );
+    expect(next.value_question).toBeNull();
+    expect(next.stack_question).toBeNull();
+    expect(next.columns).toEqual([{ key: "c2", question: 101 }]);
   });
 });

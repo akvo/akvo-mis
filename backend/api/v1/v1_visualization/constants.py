@@ -1,4 +1,7 @@
-from django.db.models import Avg, Sum, Max, Min, Aggregate, FloatField
+from django.db.models import (
+    Avg, Sum, Max, Min, Aggregate, FloatField, Case, When, Value
+)
+from django.db.models.functions import Cast, Trim
 from api.v1.v1_forms.constants import QuestionTypes
 
 
@@ -18,6 +21,24 @@ class Last(Aggregate):
     output_field = FloatField()
 
 
+# Canonical runtime computation artifacts (missing / uncomputed data)
+NON_VALUE_TOKENS = [
+    "", "null", "NULL", "undefined", "UNDEFINED",
+    "NaN", "nan", "NAN", "None", "NONE"
+]
+
+NUMERIC_STRING_REGEX = r'^\s*-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\s*$'
+
+NUMERIC_AUTOFIELD_EXPR = Case(
+    When(
+        name__regex=NUMERIC_STRING_REGEX,
+        then=Cast(Trim("name"), output_field=FloatField()),
+    ),
+    default=Value(None),
+    output_field=FloatField(),
+)
+
+
 VALID_GROUP_BY = {"date", "month", "id", "parent_id", "option"}
 VALID_MONITORING = {"latest", "all"}
 VALID_VALUE_TYPE = {"number", "percentage"}
@@ -28,6 +49,7 @@ SUPPORTED_QUESTION_TYPES = {
     QuestionTypes.option,
     QuestionTypes.multiple_option,
     QuestionTypes.date,
+    QuestionTypes.autofield,
 }
 # A stacking question supplies the series of a stacked chart, so it must
 # have a bounded option set. A number or date question has none and would
@@ -35,6 +57,7 @@ SUPPORTED_QUESTION_TYPES = {
 STACK_QUESTION_TYPES = {
     QuestionTypes.option,
     QuestionTypes.multiple_option,
+    QuestionTypes.autofield,
 }
 AGG_FUNCS = {
     "average": Avg,

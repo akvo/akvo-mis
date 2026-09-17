@@ -133,11 +133,14 @@ class ValuesFilterSerializer(serializers.Serializer):
                         f" on form {form_id}."
                     ),
                 })
-            if question_y.type != QuestionTypes.number:
+            if question_y.type not in [
+                QuestionTypes.number,
+                QuestionTypes.autofield,
+            ]:
                 raise serializers.ValidationError({
                     "question_y": (
                         f"Question {question_y_id} must be"
-                        " a number type for scatter plots."
+                        " a number or autofield type for scatter plots."
                     ),
                 })
             data["question_y_obj"] = question_y
@@ -305,10 +308,14 @@ class ValuesFilterSerializer(serializers.Serializer):
                         f" on form {form_id}."
                     ),
                 })
-            if value_question.type != QuestionTypes.number:
+            if value_question.type not in [
+                QuestionTypes.number,
+                QuestionTypes.autofield,
+            ]:
                 raise serializers.ValidationError({
                     "value_question_id": (
-                        "value question must be a number question."
+                        "value question must be a number"
+                        " or autofield question."
                     ),
                 })
             stack_question = data.get("stack_question")

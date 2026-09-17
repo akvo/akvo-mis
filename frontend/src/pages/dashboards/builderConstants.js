@@ -207,13 +207,20 @@ export const VALID_STACK_BY = [
  * distinct answer, which is not a stacked bar; the backend refuses them
  * too, so the picker and the serializer agree.
  */
-export const STACK_QUESTION_TYPES = new Set(["option", "multiple_option"]);
+export const STACK_QUESTION_TYPES = new Set([
+  "option",
+  "multiple_option",
+  "autofield",
+]);
+
+export const NUMERIC_QUESTION_TYPES = new Set(["number", "autofield"]);
 
 // Types whose grouping differs from the plain count of submissions.
 export const SUPPORTED_GROUP_QUESTION_TYPES = new Set([
   "option",
   "multiple_option",
   "number",
+  "autofield",
 ]);
 
 /**
@@ -233,6 +240,7 @@ export const MAP_QUESTION_TYPES = new Set([
   "option",
   "multiple_option",
   "number",
+  "autofield",
 ]);
 
 /**
@@ -289,7 +297,7 @@ export const stackByOptions = (
   // single category answer, and offering a question whose answer it would
   // truncate is offering a chart that quietly drops data.
   if (groupBy === "parent_id") {
-    if (question.type !== "option") {
+    if (question.type !== "option" && question.type !== "autofield") {
       return [...none, ...own];
     }
     const groups = (family || [])
@@ -374,6 +382,13 @@ export const groupByOptions = (question = null, config = {}) => {
       : by("month", "date", "parent_id");
   }
 
+  if (question.type === "autofield") {
+    if (!stackBy && !stackQuestion) {
+      return by("option", "month", "date", "parent_id");
+    }
+    return stackQuestion ? by("option") : by("month", "date", "parent_id");
+  }
+
   // option / multiple_option, where the stack decides what the bars can
   // be:
   //
@@ -416,7 +431,7 @@ export const valueQuestionOptions = (questions = [], question = null) => {
     return [];
   }
   return (questions || [])
-    .filter((q) => q.type === "number")
+    .filter((q) => NUMERIC_QUESTION_TYPES.has(q.type))
     .map((q) => ({ value: q.id, label: q.label || q.name, type: q.type }));
 };
 
@@ -519,7 +534,7 @@ export const breakdownOptions = (
   // site's single category answer, so offering it would offer a chart
   // that quietly drops data.
   const crossForm =
-    question.type === "option"
+    question.type === "option" || question.type === "autofield"
       ? (family || [])
           .filter((f) => f.id !== widgetFormId)
           .map((f) => ({
@@ -794,6 +809,7 @@ export const NEEDS_MEASURE = new Set([
 export const NEEDS_SCATTER_Y = new Set(["scatter"]);
 export const NEEDS_LINE_DATE_X = new Set(["line"]);
 export const NEEDS_LINE_CATEGORY = new Set(["line"]);
+export const SUPPORTS_AXIS_LABELS = new Set(["bar", "line", "scatter"]);
 
 /**
  * The measure a widget should carry for the form it is bound to, or null.

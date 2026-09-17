@@ -20,6 +20,7 @@ from api.v1.v1_visualization.values_functions import (
     handle_count_mode,
     handle_option_question,
     handle_number_question,
+    handle_autofield_question,
 )
 from api.v1.v1_visualization.escalation_functions import (
     handle_escalation,
@@ -299,6 +300,10 @@ def visualization_values(request, version):
         QuestionTypes.multiple_option,
     ]:
         result = handle_option_question(
+            form, question, params
+        )
+    elif question.type == QuestionTypes.autofield:
+        result = handle_autofield_question(
             form, question, params
         )
     else:

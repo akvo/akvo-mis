@@ -202,4 +202,74 @@ describe("VizBar widget", () => {
       expect(raw.tooltip.valueFormatter(60)).toBe("60%");
     });
   });
+
+  describe("Axis labels", () => {
+    const data = [
+      { label: "District A", value: 30 },
+      { label: "District B", value: 70 },
+    ];
+
+    test("renders xAxis and yAxis names when x_axis_label and y_axis_label provided on vertical bar", () => {
+      render(
+        <VizBar
+          config={normalWidget({
+            x_axis_label: "Districts",
+            y_axis_label: "Number of submissions",
+          })}
+          data={data}
+          filters={{}}
+        />
+      );
+      expect(screen.getByTestId("bar-chart")).toBeInTheDocument();
+      const raw = lastBarProps.rawConfig;
+      expect(raw.xAxis.name).toBe("Districts");
+      expect(raw.xAxis.nameLocation).toBe("center");
+      expect(raw.xAxis.nameGap).toBe(30);
+      expect(raw.yAxis.name).toBe("Number of submissions");
+      expect(raw.yAxis.nameLocation).toBe("center");
+      expect(raw.yAxis.nameGap).toBe(50);
+      expect(raw.grid.bottom).toBe(60);
+    });
+
+    test("renders xAxis and yAxis names on horizontal bar", () => {
+      render(
+        <VizBar
+          config={normalWidget({
+            orientation: "horizontal",
+            x_axis_label: "Number of submissions",
+            y_axis_label: "Districts",
+          })}
+          data={data}
+          filters={{}}
+        />
+      );
+      expect(screen.getByTestId("bar-chart")).toBeInTheDocument();
+      const raw = lastBarProps.rawConfig;
+      expect(raw.xAxis.name).toBe("Number of submissions");
+      expect(raw.yAxis.name).toBe("Districts");
+    });
+
+    test("renders xAxis and yAxis names with adjusted legend bottom on stacked bar", () => {
+      const stackedData = [
+        { label: "District A", Active: 40, Completed: 60 },
+        { label: "District B", Active: 25, Completed: 75 },
+      ];
+      render(
+        <VizBar
+          config={stackedWidget({
+            x_axis_label: "Districts",
+            y_axis_label: "Total Projects",
+          })}
+          data={stackedData}
+          filters={{}}
+        />
+      );
+      expect(screen.getByTestId("stack-bar-chart")).toBeInTheDocument();
+      const raw = lastStackBarProps.rawConfig;
+      expect(raw.xAxis.name).toBe("Districts");
+      expect(raw.yAxis.name).toBe("Total Projects");
+      expect(raw.legend.bottom).toBe(15);
+      expect(raw.grid.bottom).toBe(70);
+    });
+  });
 });

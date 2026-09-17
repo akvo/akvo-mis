@@ -271,7 +271,8 @@ sequenceDiagram
 ### TASK-03: End-to-End Verification, Edge Cases & Documentation Alignment
 - **Est. Effort**: 30m Dev + 20m Testing + 10m QA = **60m (1.0h)**
 - **Touchpoint Files**:
-  - `backend/api/v1/v1_visualization/tests/tests_autofield_visualization.py`
+  - `backend/api/v1/v1_visualization/tests/tests_autofield_values.py`
+  - `backend/api/v1/v1_visualization/tests/tests_dashboard_validation.py`
   - `frontend/src/pages/dashboards/__test__/BuilderInspector.test.js`
   - `doc/design/VIZ-026-autofield-in-dashboard-visualization.md`
 
@@ -282,7 +283,7 @@ sequenceDiagram
 - [ ] Dashboard global filters (administration hierarchy, date ranges) correctly filter autofield widget data.
 
 #### Technical Acceptance Criteria (TAC):
-- [ ] New automated test file `backend/api/v1/v1_visualization/tests/tests_autofield_visualization.py` covers:
+- [ ] Automated test files `backend/api/v1/v1_visualization/tests/tests_autofield_values.py` and `tests_dashboard_validation.py` cover:
   - Pure numeric autofield aggregation (`average`, `sum`, `min`, `max`, `last`).
   - Categorical autofield grouping and stacking.
   - Mixed numeric + string dataset fallback.
@@ -291,6 +292,7 @@ sequenceDiagram
   - Scatter plot with autofield X/Y axes and null coordinate skipping.
   - Table criteria filtering (`option_equals`, `threshold_gt`, `threshold_lt`).
   - Multi-tenant query isolation.
+  - Save-time dashboard validation for autofield `value_question`.
 - [ ] Frontend unit tests in `BuilderInspector.test.js` and widget suites pass.
 - [ ] Backend test suite achieves $\ge 80\%$ test coverage; `flake8` and `eslint` pass cleanly with zero lint warnings.
 
@@ -301,7 +303,7 @@ sequenceDiagram
 ### 7.1. Automated Tests
 - **Backend Tests**:
   ```bash
-  ./dc.sh exec backend python manage.py test api.v1.v1_visualization.tests.tests_autofield_visualization
+  ./dc.sh exec backend python manage.py test api.v1.v1_visualization.tests.tests_autofield_values api.v1.v1_visualization.tests.tests_dashboard_validation
   ./dc.sh exec backend coverage run --rcfile=./.coveragerc manage.py test --shuffle --parallel 4
   ```
 - **Frontend Tests**:
@@ -318,43 +320,160 @@ sequenceDiagram
 
 ### 7.2. Complete Step-by-Step Manual Verification Protocol
 
-#### Step 1: Form & Submission Setup
-1. **Form A (Pure Numeric Autofield with Nulls & NaNs)**:
-   - Question 1 (`number`): `Unit Price`
-   - Question 2 (`number`): `Quantity`
-   - Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`)
-   - Submit 5 entries:
-     - Entry 1: (10, 2) $\rightarrow$ `20`
-     - Entry 2: (5, 4) $\rightarrow$ `20`
-     - Entry 3: (15, 4) $\rightarrow$ `60`
-     - Entry 4: (empty, empty) $\rightarrow$ `None` / `""` (unanswered)
-     - Entry 5: (0, 0 with division artifact) $\rightarrow$ `"NaN"` / `"null"`
-2. **Form B (Pure Categorical Autofield)**:
-   - Question 1 (`number`): `Water Flow Rate`
-   - Question 2 (`autofield`): `Operational Status` (`function() { return #1 >= 50 ? "Optimal" : "Degraded"; }`)
-   - Submit 4 entries: 2 $\times$ `"Optimal"`, 2 $\times$ `"Degraded"`.
-3. **Form C (Form Version Upgrade - Mixed Numeric + String)**:
-   - **Version 1**: Question 1 (`autofield`): `Score` (`function() { return #score_raw; }`) $\rightarrow$ Submit 2 entries: `"85"`, `"95"`.
-   - **Version 2**: Update formula to return text (`function() { return #score_raw > 90 ? "Pass" : "Fail"; }`) $\rightarrow$ Submit 2 entries: `"Pass"`, `"Fail"`.
-   - Total Form C database answers: `["85", "95", "Pass", "Fail"]`.
+#### Step 1: Form & Submission Setup (Single Published Form)
 
-#### Step 2: Dashboard Builder Widget Verification
+**Form Questions:**
+1. Question 1 (`number`): `Unit Price`
+2. Question 2 (`number`): `Quantity`
+3. Question 3 (`autofield`): `Total Cost` (`function() { return #1 * #2; }`) $\rightarrow$ *Pure Numeric Autofield (multiplies Unit Price and Quantity)*.
+4. Question 4 (`autofield`): `Operational Status` (`function() { return #3 >= 50 ? "Optimal" : "Degraded"; }`) $\rightarrow$ *Pure Categorical Autofield (returns status string based on Total Cost)*.
+5. Question 5 (`autofield`): `Quality Score` (`function() { return (#1 + #2) >= 30 ? "Pass" : ((#1 + #2) <= 0 ? "Fail" : (#1 + #2)); }`) $\rightarrow$ *Dynamic Mixed-Type Autofield (evaluates to string `"Pass"` when sum $\ge 30$, string `"Fail"` when sum $\le 0$, and numeric sum otherwise — producing mixed numeric and string values in the exact same question without requiring form versioning)*.
 
-| Widget Type | Form Used | Config Tested | Expected Behavior |
-|---|---|---|---|
-| **KPI Card** | Form A | `repeat_agg="average"` | Displays average `33.33` (computed over `20, 20, 60`, safely ignoring `None` and `"NaN"` without crashing or distorting denominator). |
-| **KPI Card** | Form C | `repeat_agg="average"` | Detects string values (`"Pass"`, `"Fail"`) $\rightarrow$ Gracefully displays total submission count `4` without crashing. |
-| **Bar Chart** | Form B | `group_by="option"` | Displays 2 category bars (`"Optimal"` with count 2, `"Degraded"` with count 2). |
-| **Bar Chart (Stacked)** | Form B | `group_by="option"`, stacked by another option | Renders stacked bars keyed by status categories. |
-| **Pie Chart** | Form C | `group_by="option"` | Displays 4 pie slices: `"85"` (1), `"95"` (1), `"Pass"` (1), `"Fail"` (1). |
-| **Line Chart** | Form A | `group_by="month"` | Renders numeric time-series trend line of monthly average cost (nulls/NaNs skipped). |
-| **Scatter Plot** | Form A | X=`Quantity`, Y=`Total Cost` | Plots coordinates `(2, 20)`, `(4, 20)`, `(4, 60)`, cleanly dropping uncomputable null/NaN rows. |
-| **Table Widget** | Form B | Criteria `option_equals: Optimal` | Narrows table rows to only submissions where Status is `"Optimal"`. |
-| **Map Widget** | Form B | Map mode `"category"` | Markers colored according to categorical status `"Optimal"` vs `"Degraded"`. |
-| **Map Widget** | Form A | Map mode `"quantity"` | Markers sized proportional to numeric `Total Cost` (nulls rendered with neutral default size). |
+---
+
+**Submissions Setup (Single Published Form):**
+
+Submit 7 entries under the single published form:
+- **Entry 1**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"`
+- **Entry 2**: Unit Price: `5`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"9"`
+- **Entry 3**: Unit Price: `15`, Quantity: `4` $\rightarrow$ Total Cost (Q3): `60`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"19"`
+- **Entry 4**: Unit Price: *(leave blank)*, Quantity: *(leave blank)* $\rightarrow$ Total Cost (Q3): `None`, Operational Status (Q4): `None`, Quality Score (Q5): `None` (unanswered inputs skip autofield evaluation)
+- **Entry 5**: Unit Price: `0`, Quantity: `0` $\rightarrow$ Total Cost (Q3): `0`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"Fail"` ($0 \le 0$)
+- **Entry 6**: Unit Price: `20`, Quantity: `15` $\rightarrow$ Total Cost (Q3): `300`, Operational Status (Q4): `"Optimal"`, Quality Score (Q5): `"Pass"` ($20 + 15 = 35 \ge 30$)
+- **Entry 7**: Unit Price: `10`, Quantity: `2` $\rightarrow$ Total Cost (Q3): `20`, Operational Status (Q4): `"Degraded"`, Quality Score (Q5): `"12"` ($10 + 2 = 12 < 30$)
+
+##### Resulting Database State for Question 5:
+- Database Answers: `["12", "9", "19", "Fail", "Pass", "12"]` (6 non-null records; Entry 4 safely skipped as `None`)
+- Total Question 5 distinct values in database: `["12", "19", "9", "Fail", "Pass"]` (mixed dataset with counts: `"12"`: 2, `"Fail"`: 1, `"Pass"`: 1, `"9"`: 1, `"19"`: 1).
+
+---
+
+#### Step 2: Dashboard Builder Widget Verification (Step-by-Step UI Guide)
+
+Create a new dashboard in Dashboard Builder (`/dashboards/new` or `/manage/dashboards/new`), select your created form as the **Root Form**, and configure the following widgets in the **Inspector Settings** panel:
+
+---
+
+##### 1. KPI Card — Pure Numeric Autofield Aggregation
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Question**: `Total Cost`
+  - **Aggregation**: `Average`
+- **Expected Preview Output**: Displays **`70.0`** ($\frac{20 + 20 + 60 + 0 + 300 + 20}{6} = \frac{420}{6}$, safely skipping `None` Entry 4).
+
+---
+
+##### 2. KPI Card — Pure Categorical Autofield (Fallback Mode)
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Question**: `Operational Status`
+  - **Aggregation**: `Average`
+- **Expected Preview Output**: Detects string values (`"Degraded"`, `"Optimal"`) $\rightarrow$ Falls back to categorical grouping and displays count of the first alphabetical category **`4`** (`"Degraded"`).
+
+---
+
+##### 3. KPI Card — Dynamic Mixed Autofield (Fallback Mode)
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `KPI card`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Question**: `Quality Score`
+  - **Aggregation**: `Average`
+- **Expected Preview Output**: Detects mixed dataset (`["12", "9", "19", "Fail", "Pass"]`) $\rightarrow$ Falls back to categorical grouping and displays count of the first sorted category **`2`** (`"12"`) without SQL cast errors.
+
+---
+
+##### 4. Bar Chart — Categorical Autofield
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Bar chart`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Question**: `Operational Status`
+  - **Break down by**: `None — this question's options`
+  - **Value**: *(leave empty to count submissions)*
+- **Expected Preview Output**: Renders 2 category bars: **`"Degraded"` (count: 4)** and **`"Optimal"` (count: 2)**.
+
+---
+
+##### 5. Pie Chart — Categorical Autofield
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Pie / doughnut`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Question**: `Operational Status`
+  - **Group by**: `This question's options`
+  - **Value**: *(leave empty to count submissions)*
+- **Expected Preview Output**: Renders 2 pie slices: **`"Degraded"` (66.7%, count: 4)** and **`"Optimal"` (33.3%, count: 2)**.
+
+---
+
+##### 6. Pie Chart — Dynamic Mixed Autofield
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Pie / doughnut`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Question**: `Quality Score`
+  - **Group by**: `This question's options`
+  - **Value**: *(leave empty to count submissions)*
+- **Expected Preview Output**: Renders 5 discrete category slices:
+  - `"12"`: **33.3%** (count: 2)
+  - `"Fail"`: **16.7%** (count: 1)
+  - `"Pass"`: **16.7%** (count: 1)
+  - `"9"`: **16.7%** (count: 1)
+  - `"19"`: **16.7%** (count: 1)
+
+---
+
+##### 7. Line Chart — Numeric Autofield Time-Series Trend
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Line chart`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Y axis (number or autofield)**: `Total Cost`
+  - **X axis (date question)**: *(leave empty for default submission date)*
+  - **Time interval**: `Month`
+  - **Category (option or autofield)**: `None (single line)`
+- **Expected Preview Output**: Renders a monthly time-series trend line plotting average Total Cost **`70.0`** for `Sep 2026`.
+
+---
+
+##### 8. Scatter Plot — Autofield Dependent Axis
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Scatter plot`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **X axis (number or autofield)**: `Quantity`
+  - **Y axis (number or autofield)**: `Total Cost`
+- **Expected Preview Output**: Plots 6 coordinates: `(10, 20)`, `(4, 20)`, `(4, 60)`, `(0, 0)`, `(15, 300)`, `(2, 20)` (Entry 4 with blank null coordinates is cleanly skipped without errors).
+
+---
+
+##### 9. Table Widget — Escalation Table (Monitoring Child Form Required)
+> [!NOTE]
+> In Akvo MIS architecture, the Table widget is an **Escalation / Monitoring Table** (`/api/v1/visualization/escalation`) designed to display the latest monitoring submissions for each parent registration site. On single registration form dashboards with no monitoring children, the Data source dropdown remains empty by design.
+
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Table`
+- **Inspector Settings** *(when used with a Registration + Monitoring form pair)*:
+  - **Data source (form)**: Select the Monitoring child form
+  - **Columns**: Check desired registration attributes and autofield columns (`total_cost`, `operational_status`, `quality_score`)
+  - **Criteria (filter rows)** (Optional test):
+    - Select Question: `Operational Status`, Operator: `Equal to`, Value: `Optimal`
+    - Or Select Question: `Total Cost`, Operator: `Greater than`, Value: `50`
+- **Expected Preview Output**: Displays tabular grid with formatted numeric and string autofield column values.
+
+---
+
+##### 10. Map Widget — Autofield Point Sizing & Categorical Coloring
+- **Add Widget**: Click `+ Add Widget` $\rightarrow$ Select `Map`
+- **Inspector Settings**:
+  - **Data source (form)**: Select your form
+  - **Mode A (Category Mode)**:
+    - **Question**: Select `Operational Status`
+    - **Expected Preview Output**: Markers colored by status: 4 `"Degraded"` vs 2 `"Optimal"`.
+  - **Mode B (Quantity / Range Mode)**:
+    - **Question**: Select `Total Cost`
+    - **Expected Preview Output**: Markers sized proportionally to `Total Cost` range values.
+
+---
 
 #### Step 3: Publish & Viewer Parity
 1. Save the dashboard and click **Publish**.
 2. Navigate to the public/read URL: `/dashboards/<slug>`.
-3. Verify that all 7 widgets in the **Dashboard Viewer** render with identical layout, data, and styles as the builder preview.
+3. Verify that all widgets in the **Dashboard Viewer** render with identical layout, data, and styles as the builder preview.
 4. Toggle global dashboard filters (administration area, date range) and verify responsive re-querying.

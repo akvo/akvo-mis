@@ -59,6 +59,15 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
         # multiple_option on the monitoring form: the type a cross-form
         # chart refuses as its measured question.
         self.q_multi = Questions.objects.get(pk=600204)
+        self.q_autofield = Questions.objects.create(
+            id=600299,
+            form=self.monitoring,
+            question_group=self.q_option.question_group,
+            order=6,
+            label="Computed cost",
+            name="computed_cost",
+            type=QuestionTypes.autofield,
+        )
 
         # A second family, so "outside the family" has something to
         # point at that is still inside the tenant.
@@ -333,6 +342,18 @@ class DashboardValidationTestCase(TestCase, ProfileTestHelperMixin):
                 "measure": "current_state",
                 "group_by": "option",
                 "value_question": 600202,
+                "repeat_agg": "sum",
+            },
+        )))
+
+    def test_an_autofield_value_question_is_accepted(self):
+        self.assertIsNone(self.check(self.widget(
+            type="bar",
+            question=self.q_option.id,
+            config={
+                "measure": "current_state",
+                "group_by": "option",
+                "value_question": self.q_autofield.id,
                 "repeat_agg": "sum",
             },
         )))
