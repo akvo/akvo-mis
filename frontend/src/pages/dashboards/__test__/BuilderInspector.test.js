@@ -1505,3 +1505,81 @@ describe("chart toolbox controls in BuilderInspector (dashboard-level)", () => {
     expect(screen.getByText("Data zoom")).toBeInTheDocument();
   });
 });
+
+describe("Axis labels in BuilderInspector", () => {
+  const barWidget = (config = {}) => ({
+    id: 10,
+    type: "bar",
+    title: "Bar Chart",
+    form: 6002,
+    question: 600203,
+    config: {
+      x_axis_label: "Status",
+      y_axis_label: "Count",
+      ...config,
+    },
+  });
+
+  test("renders X and Y axis label inputs for bar, line, and scatter widgets", () => {
+    draw(barWidget());
+    expect(screen.getByText("X axis label")).toBeInTheDocument();
+    expect(screen.getByText("Y axis label")).toBeInTheDocument();
+  });
+
+  test("updating X axis label input calls onWidgetChange", () => {
+    const onWidgetChange = jest.fn();
+    draw(barWidget(), onWidgetChange);
+    const xInput = screen.getByPlaceholderText("X axis label");
+    fireEvent.change(xInput, { target: { value: "Custom X Label" } });
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          x_axis_label: "Custom X Label",
+        }),
+      })
+    );
+  });
+
+  test("updating Y axis label input calls onWidgetChange", () => {
+    const onWidgetChange = jest.fn();
+    draw(barWidget(), onWidgetChange);
+    const yInput = screen.getByPlaceholderText("Y axis label");
+    fireEvent.change(yInput, { target: { value: "Custom Y Label" } });
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          y_axis_label: "Custom Y Label",
+        }),
+      })
+    );
+  });
+
+  test("changing orientation on bar chart swaps x_axis_label and y_axis_label", () => {
+    const onWidgetChange = jest.fn();
+    draw(
+      barWidget({
+        orientation: "vertical",
+        x_axis_label: "Categories",
+        y_axis_label: "Totals",
+      }),
+      onWidgetChange
+    );
+    const orientationSelect = screen
+      .getByText("Vertical")
+      .closest(".ant-select");
+    fireEvent.mouseDown(
+      orientationSelect.querySelector(".ant-select-selector")
+    );
+    const option = screen.getByText("Horizontal");
+    fireEvent.click(option);
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          orientation: "horizontal",
+          x_axis_label: "Totals",
+          y_axis_label: "Categories",
+        }),
+      })
+    );
+  });
+});

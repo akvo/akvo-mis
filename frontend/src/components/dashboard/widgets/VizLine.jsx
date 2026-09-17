@@ -20,6 +20,8 @@ const CategoryLine = ({ config, data, filters }) => {
     const colors = wc.chart_colors || DEFAULT_COLORS;
     const catColors = wc.category_colors || {};
     const labels = wc.stackMapping?.stack || [];
+    const xLabel = wc.x_axis_label || null;
+    const yLabel = wc.y_axis_label || null;
     if (chartData.length === 0 || labels.length === 0) {
       return null;
     }
@@ -43,23 +45,29 @@ const CategoryLine = ({ config, data, filters }) => {
       legend: {
         type: "scroll",
         data: labels,
-        bottom: 0,
+        bottom: xLabel ? 15 : 0,
         formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 30,
         right: 20,
-        bottom: isBottomToolbox ? 65 : 40,
+        bottom: isBottomToolbox ? 65 : xLabel ? 70 : 40,
         left: 40,
         containLabel: true,
       },
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
+        ...(xLabel
+          ? { name: xLabel, nameLocation: "center", nameGap: 30 }
+          : {}),
       },
       yAxis: {
         type: "value",
+        ...(yLabel
+          ? { name: yLabel, nameLocation: "center", nameGap: 40 }
+          : {}),
       },
       series: labels.map((name, idx) => ({
         name,
@@ -95,6 +103,8 @@ const VizLine = ({ config, data, filters }) => {
   const hasCategory = Boolean(widgetConfig.category_question_id);
   const isAdminGrouped = widgetConfig.stack_by === "administration";
   const hasStack = Boolean(widgetConfig.stack_by || widgetConfig.stackMapping);
+  const xAxisLabel = widgetConfig.x_axis_label || null;
+  const yAxisLabel = widgetConfig.y_axis_label || null;
 
   const colors = Array.isArray(config?.color)
     ? config.color
@@ -141,23 +151,29 @@ const VizLine = ({ config, data, filters }) => {
         show: true,
         type: "scroll",
         data: stackLabels,
-        bottom: 0,
+        bottom: xAxisLabel ? 15 : 0,
         formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 35,
         right: 20,
-        bottom: isBottomToolbox ? 65 : 40,
+        bottom: isBottomToolbox ? 65 : xAxisLabel ? 70 : 40,
         left: 50,
         containLabel: true,
       },
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
+        ...(xAxisLabel
+          ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
+          : {}),
       },
       yAxis: {
         type: "value",
+        ...(yAxisLabel
+          ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
+          : {}),
       },
       series: stackLabels.map((name, idx) => ({
         name,
@@ -191,16 +207,22 @@ const VizLine = ({ config, data, filters }) => {
     grid: {
       top: isTopToolbox ? 55 : 35,
       right: 20,
-      bottom: isBottomToolbox ? 55 : 40,
+      bottom: isBottomToolbox ? 55 : xAxisLabel ? 60 : 40,
       left: 50,
       containLabel: true,
     },
     xAxis: {
       type: "category",
       data: chartData.map((d) => d[categoryKey]),
+      ...(xAxisLabel
+        ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
+        : {}),
     },
     yAxis: {
       type: "value",
+      ...(yAxisLabel
+        ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
+        : {}),
     },
     series: [
       {
