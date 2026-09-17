@@ -1,6 +1,10 @@
 import * as Yup from 'yup';
-import { i18n } from '../../lib';
+// Imported directly, not via '../../lib': that barrel pulls expo-background-task and
+// expo-notifications, native modules this pure-logic module never uses.
+import i18n from '../../lib/i18n';
 import { QUESTION_TYPES } from '../../lib/constants';
+
+export * from './geometry';
 
 export const intersection = (array1, array2) => {
   const set1 = new Set(array1);
@@ -372,6 +376,18 @@ export const generateValidationSchemaFieldLevel = async (currentValue, field) =>
     case 'geo':
       yupType = Yup.array();
       break;
+    case 'geoshape':
+    case 'geotrace':
+      /**
+       * Nullable, mirroring multiple_option rather than geo: an unanswered question arrives
+       * here as null (see FormNavigation's defaultVal list) and a bare Yup.array() rejects
+       * null, flagging an optional polygon the enumerator simply never opened.
+       */
+      yupType = Yup.array().nullable();
+      if (required) {
+        yupType = Yup.array().min(1, requiredError);
+      }
+      break;
     default:
       yupType = Yup.string();
       break;
@@ -414,7 +430,11 @@ export const generateDataPointName = (forms, currentValues, cascades = {}, datap
         ?.sort((a, b) => a.order - b.order)
     : [];
   const dpName = dataPointNameValues
-    .filter((d) => d.type !== QUESTION_TYPES.geo && (d.value || d.value === 0))
+    .filter(
+      (d) =>
+        ![QUESTION_TYPES.geo, QUESTION_TYPES.geoshape, QUESTION_TYPES.geotrace].includes(d.type) &&
+        (d.value || d.value === 0),
+    )
     .map((x) => x.value)
     .join(' - ');
   if (datapoint?.geo && typeof datapoint.geo === 'string') {
@@ -470,7 +490,9 @@ const transformValue = (question, value, prefilled = []) => {
   if (question?.type === QUESTION_TYPES.cascade) {
     return [answer];
   }
-  if (question?.type === QUESTION_TYPES.geo) {
+  if (
+    [QUESTION_TYPES.geo, QUESTION_TYPES.geoshape, QUESTION_TYPES.geotrace].includes(question?.type)
+  ) {
     return answer === '' ? [] : value;
   }
   if (question?.type === QUESTION_TYPES.number && typeof answer !== 'undefined') {

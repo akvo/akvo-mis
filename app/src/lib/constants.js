@@ -9,6 +9,9 @@ export const SYNC_STATUS = {
   re_sync: 2,
   success: 3,
   failed: 4,
+  // The server refused the submission, so it has been handed back as a draft and will
+  // never retry. Distinct from `failed`, which retries and tells the user to try again.
+  rejected: 5,
 };
 
 export const SUBMISSION_TYPES = {
@@ -41,6 +44,8 @@ export const QUESTION_TYPES = {
   autofield: 'autofield',
   attachment: 'attachment',
   signature: 'signature',
+  geoshape: 'geoshape',
+  geotrace: 'geotrace',
 };
 
 export const jobStatus = {

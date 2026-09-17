@@ -67,6 +67,31 @@ const lastGroup = {
   ],
 };
 
+const optionalGeoshapeGroup = {
+  name: 'plot',
+  label: 'Plot',
+  order: 1,
+  question: [
+    {
+      id: 31,
+      name: 'your_name',
+      label: 'Your Name',
+      order: 1,
+      type: 'input',
+      required: true,
+      meta: true,
+    },
+    {
+      id: 32,
+      name: 'boundary',
+      label: 'Plot boundary',
+      order: 2,
+      type: 'geoshape',
+      required: false,
+    },
+  ],
+};
+
 describe('FormNavigation component', () => {
   it('renders form navigation correctly', () => {
     const setActiveGroup = jest.fn();
@@ -181,5 +206,76 @@ describe('FormNavigation component', () => {
     const btnNext = getByTestId('form-nav-btn-next');
     expect(btnNext).toBeDefined();
     expect(btnNext.props.accessibilityState.disabled).toBeTruthy();
+  });
+
+  /**
+   * GEO-001 touchpoint 7. An unanswered question defaults to '' unless its type is in the
+   * defaultVal list, and '' against the geoshape array schema is a type error. Navigation is
+   * never blocked (see #136), so the symptom is quiet: a spurious error toast and the field
+   * marked invalid in FormState.feedback for a polygon the enumerator was never required to
+   * draw. Assert on the feedback, not on whether the group moved.
+   */
+  it('marks an untouched optional geoshape as valid, not errored', async () => {
+    const { getByTestId } = render(
+      <FormNavigation
+        currentGroup={optionalGeoshapeGroup}
+        activeGroup={0}
+        setActiveGroup={jest.fn()}
+        onSubmit={jest.fn()}
+        totalGroup={2}
+        showQuestionGroupList={false}
+        setShowQuestionGroupList={jest.fn()}
+        setShowDialogMenu={jest.fn()}
+      />,
+    );
+
+    act(() => {
+      FormState.update((s) => {
+        // 32 is deliberately absent: the enumerator never opened the map.
+        s.currentValues = { 31: 'John Doe' };
+        s.feedback = {};
+      });
+    });
+
+    fireEvent.press(getByTestId('form-nav-btn-next'));
+
+    await waitFor(() => {
+      expect(FormState.getRawState().feedback[32]).toBe(true);
+    });
+  });
+
+  it('still flags a required geoshape that was never drawn', async () => {
+    const requiredGroup = {
+      ...optionalGeoshapeGroup,
+      question: optionalGeoshapeGroup.question.map((q) =>
+        q.id === 32 ? { ...q, required: true } : q,
+      ),
+    };
+
+    const { getByTestId } = render(
+      <FormNavigation
+        currentGroup={requiredGroup}
+        activeGroup={0}
+        setActiveGroup={jest.fn()}
+        onSubmit={jest.fn()}
+        totalGroup={2}
+        showQuestionGroupList={false}
+        setShowQuestionGroupList={jest.fn()}
+        setShowDialogMenu={jest.fn()}
+      />,
+    );
+
+    act(() => {
+      FormState.update((s) => {
+        s.currentValues = { 31: 'John Doe' };
+        s.feedback = {};
+      });
+    });
+
+    fireEvent.press(getByTestId('form-nav-btn-next'));
+
+    await waitFor(() => {
+      expect(FormState.getRawState().feedback[32]).not.toBe(true);
+    });
   });
 });

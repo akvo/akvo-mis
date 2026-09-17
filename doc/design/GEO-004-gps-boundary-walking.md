@@ -19,6 +19,9 @@ Currently:
 - GEO-001 ships tap-to-draw only, which requires a visible basemap — and therefore
   connectivity — to be usable in the field.
 - Kobo-style capture (walk the perimeter, record points automatically) does not exist.
+- GEO-001's capture screen already presents both recording modes in its ODK-style Input method
+  dialog, **disabled and labelled "Coming soon"** (GEO-001 D-9). The dialog, the mode list and the
+  `inputMethod` state exist; this task fills them in rather than adding new chrome.
 
 Goal:
 - The enumerator walks the plot boundary and the app records vertices from GPS.
@@ -47,6 +50,10 @@ ships connected-only (GEO-001 D-3), this is the task that removes that constrain
 - [ ] Accuracy threshold default 15 m (ARF's default)
 - [ ] No path leaves a GPS watch or interval running
 - [ ] Reuses GEO-001's WebView map host and bridge — none of it re-paid
+- [ ] Enables the two disabled rows in GEO-001's Input method dialog rather than adding a new
+      entry point; `addAtCenter` is already wired for "record this point"
+- [ ] Does **not** open a second GPS watch — `Home.js` already runs one into
+      `UserState.currentLocation`, which GEO-001's accuracy strip reads
 
 ---
 

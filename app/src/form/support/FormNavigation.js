@@ -3,7 +3,7 @@ import { ToastAndroid } from 'react-native';
 import { Tab } from '@rneui/themed';
 import styles from '../styles';
 import { UIState, FormState } from '../../store';
-import { i18n } from '../../lib';
+import i18n from '../../lib/i18n';
 import { generateValidationSchemaFieldLevel, onFilterDependency } from '../lib';
 
 const FormNavigation = ({
@@ -54,7 +54,14 @@ const FormNavigation = ({
          */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
-          const defaultVal = ['cascade', 'multiple_option', 'option', 'geo'].includes(q?.type)
+          const defaultVal = [
+            'cascade',
+            'multiple_option',
+            'option',
+            'geo',
+            'geoshape',
+            'geotrace',
+          ].includes(q?.type)
             ? null
             : '';
           const fieldValue =
@@ -99,7 +106,14 @@ const FormNavigation = ({
          */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
-          const defaultVal = ['cascade', 'multiple_option', 'option', 'geo'].includes(q?.type)
+          const defaultVal = [
+            'cascade',
+            'multiple_option',
+            'option',
+            'geo',
+            'geoshape',
+            'geotrace',
+          ].includes(q?.type)
             ? null
             : '';
           /**
