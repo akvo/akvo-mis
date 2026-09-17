@@ -1841,4 +1841,101 @@ describe("VIZ-026: Autofield builderConstants and BuilderInspector integration",
     );
     expect(screen.getByText(/Bar\s+settings/i)).toBeInTheDocument();
   });
+
+  test("renders KPI card with autofield question and aggregation controls", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 5,
+          type: "kpi",
+          title: "KPI Autofield",
+          col_span: 6,
+          form: 7001,
+          question: 9001,
+          config: {
+            repeat_agg: "average",
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/KPI\s+settings/i)).toBeInTheDocument();
+    expect(screen.getByText(/Aggregation/i)).toBeInTheDocument();
+  });
+
+  test("renders pie chart with autofield question and option grouping", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 6,
+          type: "pie",
+          title: "Pie Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9002,
+          config: {
+            group_by: "option",
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Pie\s+settings/i)).toBeInTheDocument();
+  });
+
+  test("renders line chart in single-line time series mode with autofield Y-axis", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 7,
+          type: "line",
+          title: "Line Single Autofield",
+          col_span: 12,
+          form: 7001,
+          question: 9001,
+          config: {
+            group_by: "month",
+            category_question_id: null,
+          },
+        }}
+        sources={mockSources}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Line\s+settings/i)).toBeInTheDocument();
+    expect(
+      screen.getByText("Category (option or autofield)")
+    ).toBeInTheDocument();
+  });
+
+  test("prunes autofield value_question, stack_question, and columns when switched to form without them", () => {
+    const next = pruneConfigForForm(
+      {
+        value_question: 9001,
+        stack_question: 9002,
+        columns: [
+          { key: "c1", question: 9003 },
+          { key: "c2", question: 101 },
+        ],
+      },
+      [
+        { id: 101, type: "number" },
+        { id: 102, type: "option" },
+      ]
+    );
+    expect(next.value_question).toBeNull();
+    expect(next.stack_question).toBeNull();
+    expect(next.columns).toEqual([{ key: "c2", question: 101 }]);
+  });
 });
