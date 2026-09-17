@@ -14,6 +14,7 @@ from api.v1.v1_data.management.commands.fake_complete_data_seeder import (
     mark_as_dummy,
 )
 from api.v1.v1_data.models import Answers, FormData
+from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.bbox import (
@@ -661,7 +662,14 @@ class CleanTenantScopeTest(TenantWorkspaceMixin, TestCase):
             name=f"{subdomain} submitter", administration_level=level
         )
         role.role_role_access.create(data_access=DataAccessTypes.submit)
-        Forms.objects.create(name=f"{subdomain} form", tenant=tenant)
+        # Published: the seeder only assigns published forms to a user,
+        # and it skips any form the user is not assigned to, so a draft
+        # here would seed no data at all.
+        Forms.objects.create(
+            name=f"{subdomain} form",
+            tenant=tenant,
+            status=FormStatus.published,
+        )
         Organisation.objects.create(name=f"{subdomain} org", tenant=tenant)
         self.attach_bboxes(tenant)
         return tenant

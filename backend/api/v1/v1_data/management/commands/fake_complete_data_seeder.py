@@ -22,6 +22,7 @@ from api.v1.v1_data.constants import (
 )
 from api.v1.v1_data.models import FormData
 from api.v1.v1_data.functions import add_fake_answers
+from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.bbox import (
     get_bbox_attribute,
@@ -218,6 +219,26 @@ def clean_dummy_data(tenant, stdout):
     return counts
 
 
+def assignable_forms(tenant):
+    """Every published form in the workspace, monitoring included.
+
+    UserSerializer.get_forms returns `user_form.all()` verbatim -- no
+    superuser case, no derivation of children -- and the mobile
+    assignment screen reads monitoring forms out of that same list as
+    the children of each registration form. Assigning only roots left
+    every registration form childless there, so no device could be given
+    a monitoring form. This matches what the user-create API already does
+    for a superuser with no explicit form list.
+
+    Deliberately NOT the same queryset as `root_forms` in the data
+    generator: that one must stay registration-only, because it is what
+    a datapoint is created against and monitoring children hang off it.
+    """
+    return Forms.objects.filter(
+        status=FormStatus.published, tenant=tenant
+    )
+
+
 def pick_role(data_access, level, tenant):
     """A role at this level, or any role with the same access.
 
@@ -274,9 +295,8 @@ def create_approver_user(administration, org, tenant):
     )
     approver.set_password(DEFAULT_PASSWORD)
     approver.save()
-    forms = Forms.objects.filter(parent__isnull=True, tenant=tenant)
-    for form in forms:
-        approver.user_form.create(form=form)
+    for form in assignable_forms(tenant):
+        approver.user_form.get_or_create(form=form)
     approver.save()
 
     role = pick_role(da, administration.level, tenant)
@@ -521,8 +541,8 @@ class Command(BaseCommand):
                         )
 
                     if not user.user_form.exists():
-                        for form in root_forms:
-                            user.user_form.create(form=form)
+                        for form in assignable_forms(tenant):
+                            user.user_form.get_or_create(form=form)
                         user.save()
 
                     p = f"{parent_adm.path}{parent_adm.id}."
