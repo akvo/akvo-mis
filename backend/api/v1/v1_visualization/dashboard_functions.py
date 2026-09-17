@@ -653,9 +653,12 @@ def _validate_widget(
                 index,
                 "config.value_question",
             )
-        if value_question.type != QuestionTypes.number:
+        if value_question.type not in [
+            QuestionTypes.number,
+            QuestionTypes.autofield,
+        ]:
             return _error(
-                "value question must be a number question",
+                "value question must be a number or autofield question",
                 index,
                 "config.value_question",
             )

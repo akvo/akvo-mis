@@ -50,6 +50,8 @@ import {
   tableColumnOptions,
   monitoringForms,
   MAP_QUESTION_TYPES,
+  NUMERIC_QUESTION_TYPES,
+  STACK_QUESTION_TYPES,
   TOOLBOX_POSITION_PRESETS,
   DEFAULT_TOOLBOX_FEATURES,
 } from "./builderConstants";
@@ -122,6 +124,19 @@ const IconSite = () => (
   </svg>
 );
 
+const IconAutofield = () => (
+  <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 32 32">
+    <path
+      fill="currentColor"
+      d="M26 4H6a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM6 6h20v4H6zm0 20v-14h20v14z"
+    />
+    <path
+      fill="currentColor"
+      d="M9 15h3v2H9zm5 0h3v2h-3zm5 0h4v2h-4zm-10 4h3v2H9zm5 0h3v2h-3zm5 0h4v2h-4z"
+    />
+  </svg>
+);
+
 // The merged Break down by list mixes questions with fixed choices, so
 // the fixed ones carry a glyph of their own rather than sitting bare
 // beside icons.
@@ -135,6 +150,7 @@ const QUESTION_TYPE_ICON = {
   option: <IconOption />,
   multiple_option: <IconCheckbox />,
   date: <IconDate />,
+  autofield: <IconAutofield />,
 };
 
 /** A fixed breakdown choice: its own glyph, or none for "None". */
@@ -300,7 +316,7 @@ const BuilderInspector = ({
     // on `range` rather than `quantity` is the new default (#387) —
     // clustering is opted into, never inherited — but a map already set
     // to `quantity` was set there on purpose and must survive.
-    const isValue = picked?.type === "number";
+    const isValue = NUMERIC_QUESTION_TYPES.has(picked?.type);
     const drawable = isValue ? ["range", "quantity"] : ["category"];
     if (drawable.includes(stored)) {
       return;
@@ -629,7 +645,7 @@ const BuilderInspector = ({
   const allQuestions = showQuestion ? questionsForForm(widget.form) : [];
   const questions =
     wType === "scatter" || wType === "line"
-      ? allQuestions.filter((q) => q.type === "number")
+      ? allQuestions.filter((q) => NUMERIC_QUESTION_TYPES.has(q.type))
       : wType === "map"
       ? // A map reads its question one of two ways: colour by an option
         // question's answer, or size by a number question's. /sources
@@ -640,16 +656,17 @@ const BuilderInspector = ({
         allQuestions.filter((q) => MAP_QUESTION_TYPES.has(q.type))
       : allQuestions;
   const dateQuestions = allQuestions.filter((q) => q.type === "date");
-  const optionQuestions = allQuestions.filter(
-    (q) => q.type === "option" || q.type === "multiple_option"
+  const optionQuestions = allQuestions.filter((q) =>
+    STACK_QUESTION_TYPES.has(q.type)
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
-  // A map bound to a NUMBER question sizes its circles by the answer
+  // A map bound to a NUMBER or AUTOFIELD question sizes its circles by the answer
   // rather than colouring them by a status (#382). Derived from the
   // question's type rather than read back from `config.map_mode`, so the
   // controls can never disagree with the question actually picked; the
   // stored flag exists for the viewer, which has no question types.
-  const isValueMap = wType === "map" && selectedQuestion?.type === "number";
+  const isValueMap =
+    wType === "map" && NUMERIC_QUESTION_TYPES.has(selectedQuestion?.type);
   // Clustering is the opt-in (#387). Off, the map draws every site and
   // colours it by band; on, nearby sites merge into one circle sized by
   // their combined value.
@@ -714,7 +731,7 @@ const BuilderInspector = ({
     if (breakdownChoices.length === 0) {
       return "Pick a question first";
     }
-    if (selectedQuestion?.type === "number") {
+    if (NUMERIC_QUESTION_TYPES.has(selectedQuestion?.type)) {
       return (
         "A number question is already the measure, so it can only be" +
         " broken down by time or site. To split it by an option" +
@@ -964,9 +981,9 @@ const BuilderInspector = ({
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
               {wType === "scatter"
-                ? "X axis (number question)"
+                ? "X axis (number or autofield)"
                 : wType === "line"
-                ? "Y axis (number question)"
+                ? "Y axis (number or autofield)"
                 : "Question"}
             </label>
             <Select
@@ -979,7 +996,7 @@ const BuilderInspector = ({
                   // number has no options, so the status colours left
                   // behind by a previous option question are cleared
                   // rather than kept as dead config.
-                  if (q?.type === "number") {
+                  if (NUMERIC_QUESTION_TYPES.has(q?.type)) {
                     // Ranges, not clustering (#387). Clustering answers
                     // "how much in total here" and hides the sites; it
                     // is opted into, never landed on by picking a
@@ -1173,7 +1190,7 @@ const BuilderInspector = ({
         {NEEDS_SCATTER_Y.has(wType) && widget.form && (
           <div className="builder-inspector-field">
             <label className="builder-inspector-label">
-              Y axis (number question)
+              Y axis (number or autofield)
             </label>
             <Select
               value={wConfig.question_y || null}
@@ -1321,7 +1338,7 @@ const BuilderInspector = ({
           wConfig.stack_by !== "administration" && (
             <div className="builder-inspector-field">
               <label className="builder-inspector-label">
-                Category (option question)
+                Category (option or autofield)
               </label>
               <Select
                 value={wConfig.category_question_id || null}
