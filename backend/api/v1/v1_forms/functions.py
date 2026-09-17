@@ -616,6 +616,54 @@ def restore_from_snapshot(form, pv):
     )
 
 
+def _geo_config_issues(geo_config):
+    """Return [(subpath, message)] for one question's `extra.geoConfig`.
+
+    Ranges come from GEO-010 §6. Bad values are rejected rather than
+    coerced: the device reads these numbers to decide whether a captured
+    polygon is acceptable, so a silently-defaulted threshold is
+    indistinguishable from a configured one — for the designer who set it
+    and for anyone later asking why validation behaved oddly.
+
+    An absent key is legal and means "use the default". An unknown key is
+    left alone, so a form authored against a newer builder still imports.
+    """
+    if not isinstance(geo_config, dict):
+        return [("extra.geoConfig", "must be an object")]
+
+    issues = []
+
+    # Checked against the real booleans, not for truthiness.
+    # api/v1/v1_mobile/geometry.py gates overlap detection on
+    # `extra__geoConfig__detectOverlaps=True`, a JSON-encoded lookup that
+    # matches `true` and not `"true"`, `["true"]` or `1`. Accepting those
+    # here would store a config that reads as enabled in the builder and
+    # as off on the device — the exact silent failure this feature exists
+    # to prevent.
+    detect = geo_config.get("detectOverlaps")
+    if detect is not None and not isinstance(detect, bool):
+        issues.append(
+            ("extra.geoConfig.detectOverlaps", "must be true or false")
+        )
+
+    # (key, upper bound) — accuracy is a distance in metres with no
+    # meaningful ceiling, overlap is a percentage.
+    for key, upper in (("accuracyThreshold", None), ("overlapThreshold", 100)):
+        value = geo_config.get(key)
+        if value is None:
+            continue
+        # `bool` subclasses `int` in Python, so True would otherwise pass
+        # as the number 1.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            issues.append((f"extra.geoConfig.{key}", "must be a number"))
+        elif value <= 0 or (upper is not None and value > upper):
+            bound = f" and at most {upper}" if upper else ""
+            issues.append(
+                (f"extra.geoConfig.{key}", f"must be greater than 0{bound}")
+            )
+    return issues
+
+
 def validate_form_payload(data, partial=False):
     """Return list of error strings, empty if valid.
 
@@ -639,6 +687,15 @@ def validate_form_payload(data, partial=False):
                 errors.append(
                     f"question_group[{gi}].question[{qi}].type: "
                     f"Invalid question type: {q_type!r}"
+                )
+            # Checked on whatever question carries a geoConfig, not only on
+            # geoshape: a config on the wrong question type is already a
+            # mistake, and silently skipping it would hide it.
+            extra = q.get("extra")
+            if isinstance(extra, dict) and "geoConfig" in extra:
+                errors.extend(
+                    f"question_group[{gi}].question[{qi}].{sub}: {msg}"
+                    for sub, msg in _geo_config_issues(extra["geoConfig"])
                 )
     return errors
 
@@ -1120,6 +1177,19 @@ def validate_form_definition(norm, check_entities=True):
                         ),
                         "level": "error",
                     }
+                )
+
+            # The builder API is not the only way into these rows, so the
+            # same geoConfig rules apply here (GEO-010 D-1).
+            if "geoConfig" in extra:
+                issues.extend(
+                    {
+                        "code": "invalid_geo_config",
+                        "path": f"{q_path}.{sub}",
+                        "message": msg,
+                        "level": "error",
+                    }
+                    for sub, msg in _geo_config_issues(extra["geoConfig"])
                 )
 
             fn = q.get("fn") or {}
