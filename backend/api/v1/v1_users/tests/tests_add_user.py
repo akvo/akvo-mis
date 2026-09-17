@@ -17,6 +17,21 @@ from api.v1.v1_users.models import Tenant
 from unittest import mock
 
 
+def expected_assignment(form_ids):
+    """The forms a user ends up assigned to.
+
+    The ones asked for, plus every published monitoring form under them:
+    the user screen only ever offers registration forms, so the API
+    derives the children (see `with_monitoring_children`). Asserting a
+    literal count here would just encode how many children the seeder
+    happened to make.
+    """
+    children = Forms.objects.filter(
+        parent_id__in=form_ids, status=FormStatus.published
+    ).values_list("id", flat=True)
+    return set(form_ids) | set(children)
+
+
 @override_settings(USE_TZ=False, TEST_ENV=True)
 class AddUserTestCase(TestCase):
     def setUp(self):
@@ -85,8 +100,11 @@ class AddUserTestCase(TestCase):
         self.assertEqual(data, {"message": "User added successfully"})
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, True)
-        # Total forms should be 2
-        self.assertEqual(user.user_form.count(), 2)
+        # The two parents asked for, plus their published children.
+        self.assertEqual(
+            set(user.user_form.values_list("form_id", flat=True)),
+            expected_assignment(forms),
+        )
 
     def test_add_user_with_single_role(self):
         # Get role by level 2 and read, submit access
@@ -127,7 +145,10 @@ class AddUserTestCase(TestCase):
         self.assertEqual(data, {"message": "User added successfully"})
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, False)
-        self.assertEqual(user.user_form.count(), 1)
+        self.assertEqual(
+            set(user.user_form.values_list("form_id", flat=True)),
+            expected_assignment([form.id]),
+        )
 
         # Test role assignments with the new multiple roles structure
         user_roles = user.user_user_role.all()
@@ -188,7 +209,10 @@ class AddUserTestCase(TestCase):
         self.assertEqual(data, {"message": "User added successfully"})
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, False)
-        self.assertEqual(user.user_form.count(), 1)
+        self.assertEqual(
+            set(user.user_form.values_list("form_id", flat=True)),
+            expected_assignment([form.id]),
+        )
 
         # Test multiple role assignments
         user_roles = user.user_user_role.all().order_by("role__id")
@@ -243,7 +267,10 @@ class AddUserTestCase(TestCase):
         self.assertEqual(data, {"message": "User added successfully"})
         user = SystemUser.objects.get(email=payload["email"])
         self.assertEqual(user.is_superuser, False)
-        self.assertEqual(user.user_form.count(), 1)
+        self.assertEqual(
+            set(user.user_form.values_list("form_id", flat=True)),
+            expected_assignment([form.id]),
+        )
         user_roles = user.user_user_role.all()
         self.assertEqual(user_roles.count(), 1)
         assigned_role = user_roles.first()
