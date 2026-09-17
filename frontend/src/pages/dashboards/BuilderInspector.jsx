@@ -50,6 +50,8 @@ import {
   tableColumnOptions,
   monitoringForms,
   MAP_QUESTION_TYPES,
+  NUMERIC_QUESTION_TYPES,
+  STACK_QUESTION_TYPES,
   TOOLBOX_POSITION_PRESETS,
   DEFAULT_TOOLBOX_FEATURES,
 } from "./builderConstants";
@@ -314,7 +316,7 @@ const BuilderInspector = ({
     // on `range` rather than `quantity` is the new default (#387) —
     // clustering is opted into, never inherited — but a map already set
     // to `quantity` was set there on purpose and must survive.
-    const isValue = picked?.type === "number" || picked?.type === "autofield";
+    const isValue = NUMERIC_QUESTION_TYPES.has(picked?.type);
     const drawable = isValue ? ["range", "quantity"] : ["category"];
     if (drawable.includes(stored)) {
       return;
@@ -643,9 +645,7 @@ const BuilderInspector = ({
   const allQuestions = showQuestion ? questionsForForm(widget.form) : [];
   const questions =
     wType === "scatter" || wType === "line"
-      ? allQuestions.filter(
-          (q) => q.type === "number" || q.type === "autofield"
-        )
+      ? allQuestions.filter((q) => NUMERIC_QUESTION_TYPES.has(q.type))
       : wType === "map"
       ? // A map reads its question one of two ways: colour by an option
         // question's answer, or size by a number question's. /sources
@@ -656,11 +656,8 @@ const BuilderInspector = ({
         allQuestions.filter((q) => MAP_QUESTION_TYPES.has(q.type))
       : allQuestions;
   const dateQuestions = allQuestions.filter((q) => q.type === "date");
-  const optionQuestions = allQuestions.filter(
-    (q) =>
-      q.type === "option" ||
-      q.type === "multiple_option" ||
-      q.type === "autofield"
+  const optionQuestions = allQuestions.filter((q) =>
+    STACK_QUESTION_TYPES.has(q.type)
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
   // A map bound to a NUMBER or AUTOFIELD question sizes its circles by the answer
@@ -669,9 +666,7 @@ const BuilderInspector = ({
   // controls can never disagree with the question actually picked; the
   // stored flag exists for the viewer, which has no question types.
   const isValueMap =
-    wType === "map" &&
-    (selectedQuestion?.type === "number" ||
-      selectedQuestion?.type === "autofield");
+    wType === "map" && NUMERIC_QUESTION_TYPES.has(selectedQuestion?.type);
   // Clustering is the opt-in (#387). Off, the map draws every site and
   // colours it by band; on, nearby sites merge into one circle sized by
   // their combined value.
@@ -736,7 +731,7 @@ const BuilderInspector = ({
     if (breakdownChoices.length === 0) {
       return "Pick a question first";
     }
-    if (selectedQuestion?.type === "number") {
+    if (NUMERIC_QUESTION_TYPES.has(selectedQuestion?.type)) {
       return (
         "A number question is already the measure, so it can only be" +
         " broken down by time or site. To split it by an option" +
@@ -1001,7 +996,7 @@ const BuilderInspector = ({
                   // number has no options, so the status colours left
                   // behind by a previous option question are cleared
                   // rather than kept as dead config.
-                  if (q?.type === "number" || q?.type === "autofield") {
+                  if (NUMERIC_QUESTION_TYPES.has(q?.type)) {
                     // Ranges, not clustering (#387). Clustering answers
                     // "how much in total here" and hides the sites; it
                     // is opted into, never landed on by picking a

@@ -213,6 +213,8 @@ export const STACK_QUESTION_TYPES = new Set([
   "autofield",
 ]);
 
+export const NUMERIC_QUESTION_TYPES = new Set(["number", "autofield"]);
+
 // Types whose grouping differs from the plain count of submissions.
 export const SUPPORTED_GROUP_QUESTION_TYPES = new Set([
   "option",
@@ -429,7 +431,7 @@ export const valueQuestionOptions = (questions = [], question = null) => {
     return [];
   }
   return (questions || [])
-    .filter((q) => q.type === "number" || q.type === "autofield")
+    .filter((q) => NUMERIC_QUESTION_TYPES.has(q.type))
     .map((q) => ({ value: q.id, label: q.label || q.name, type: q.type }));
 };
 
