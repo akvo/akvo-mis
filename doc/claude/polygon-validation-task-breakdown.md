@@ -1466,6 +1466,15 @@ Suggested allocation once phase 3 begins:
 | Backend | — | — | T2 (1d), T9 (0.5d) |
 | Frontend | — | — | T8 (1d) |
 
+> **Superseded for T6/T7, 2026-09-17.** Both were delivered, and the design docs are the source
+> of truth for what they became: **GEO-002 6.75h (Mobile + Frontend, was 2.5h Mobile)** and
+> **GEO-003 2.5h**, together ~8.75h rather than the 4.75h assumed here. The growth is a
+> severity-resolution layer, two device settings with a migration, a web badge, an opt-in
+> `maxAreaHa` ceiling and a `@turf/kinks` dependency on both platforms — none of which existed
+> when this breakdown was written. T6/T7 also no longer end at the mobile boundary. The phase-1
+> figures below are left as the original estimate, not corrected in place, so the delta stays
+> visible.
+
 **Critical path**
 - Phase 1: T1 → T6/T7 = **17h ≈ 2 days**
 - Through phase 3: T1 → T3 → T4 → T5 = **32h ≈ 4 days** of mobile work, with T2 needing to land

@@ -1,5 +1,9 @@
+import { kinks } from "@turf/kinks";
+
 const EARTH_RADIUS_M = 6378137;
 const SQM_PER_HECTARE = 10000;
+// Guard only - the rule's threshold lives in polygon-rules.js.
+const MIN_RING_POINTS = 3;
 
 /**
  * Coerce a stored geoshape answer to `[[lat, lng], ...]`.
@@ -50,3 +54,35 @@ export const polygonArea = (points = []) => {
 
 export const polygonAreaHectares = (points = []) =>
   polygonArea(points) / SQM_PER_HECTARE;
+
+/**
+ * ARF's `[[lat, lng], ...]` (unclosed) -> a closed GeoJSON linear ring in `[lng, lat]`.
+ *
+ * GeoJSON is longitude-first and a linear ring must repeat its first coordinate; our stored
+ * format does neither. Both conversions live here so no caller has to remember either.
+ *
+ * Twin: `app/src/form/lib/geometry.js`.
+ */
+export const toGeoJsonRing = (points = []) => {
+  const ring = toPolygonPoints(points).map(([lat, lng]) => [lng, lat]);
+  const [first] = ring;
+  const last = ring[ring.length - 1];
+  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
+    return [...ring, [...first]];
+  }
+  return ring;
+};
+
+/** Does the boundary cross itself? False below three points rather than throwing. */
+export const selfIntersects = (points = []) => {
+  const ring = toPolygonPoints(points);
+  if (ring.length < MIN_RING_POINTS) {
+    return false;
+  }
+  const feature = {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Polygon", coordinates: [toGeoJsonRing(ring)] },
+  };
+  return kinks(feature).features.length > 0;
+};

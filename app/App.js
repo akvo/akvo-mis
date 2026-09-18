@@ -31,7 +31,7 @@ import {
 import { tables, openDatabase } from './src/database';
 import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09, m10 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10, m11 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -132,6 +132,8 @@ const handleInitConfig = async (db) => {
     geoLocationTimeout,
     imageQuality,
     saveToGallery,
+    validatePolygonShape,
+    validatePolygonArea,
     appVersion,
   } = BuildParamsState.getRawState();
   const configExist = await crudConfig.getConfig(db);
@@ -147,6 +149,8 @@ const handleInitConfig = async (db) => {
       geoLocationTimeout,
       imageQuality,
       saveToGallery,
+      validatePolygonShape,
+      validatePolygonArea,
     });
   }
   if (serverURL) {
@@ -166,6 +170,11 @@ const handleInitConfig = async (db) => {
       s.geoLocationTimeout = configExist.geoLocationTimeout;
       s.imageQuality = configExist.imageQuality || 'low';
       s.saveToGallery = configExist.saveToGallery || 0;
+      // `??`, not `||`: 0 is the meaningful "warn instead of block" value here, and `||` would
+      // silently restore it to 1 on every launch. Null only for a row written before
+      // migration 11, which backfills to 1 anyway.
+      s.validatePolygonShape = configExist.validatePolygonShape ?? 1;
+      s.validatePolygonArea = configExist.validatePolygonArea ?? 1;
     });
 
     UserState.update((s) => {
@@ -296,6 +305,13 @@ const migrateDbIfNeeded = async (db) => {
       await txDb.execAsync('PRAGMA user_version = 10');
     });
     currentDbVersion = 10;
+  }
+  if (currentDbVersion === 10) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m11.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 11');
+    });
+    currentDbVersion = 11;
   }
 
   // Every DATABASE_VERSION bump sends exactly one launch down this path. Without

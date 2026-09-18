@@ -238,6 +238,10 @@ const styles = StyleSheet.create({
     opacity: 0,
     marginBottom: -16,
   },
+  polygonWarningText: {
+    color: '#b26a00',
+    fontSize: 13,
+  },
   geoButtonGroup: {
     display: 'flex',
     flexDirection: 'column',

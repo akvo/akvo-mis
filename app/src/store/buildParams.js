@@ -24,6 +24,11 @@ const BuildParamsState = new Store({
   // still be recovered. Off by default: it needs a media permission and puts
   // site photos where any app can read them.
   saveToGallery: 0,
+  // Polygon validation severity switches. ON (1) means a failed rule BLOCKS submission; OFF
+  // means it warns instead. The rule always runs either way - there is no value here that
+  // skips a check. Default strict; GEO-002 D-4.
+  validatePolygonShape: 1,
+  validatePolygonArea: 1,
 });
 
 export default BuildParamsState;
