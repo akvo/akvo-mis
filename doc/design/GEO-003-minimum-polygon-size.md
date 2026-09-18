@@ -280,6 +280,12 @@ area becoming an authoritative figure (a certificate, a payment), not turf merel
 ### Backward Compatibility
 - [x] Existing datapoints unaffected — validation runs at capture
 
+> **Checked against GEO-014, 2026-09-18: nothing here changes.** From phase 2 a vertex may carry
+> an optional third element (`[lat, lng, accuracy]`). `polygonArea` destructures `([lat, lng])`
+> and `reduce((sum, [lat]) => …)`, so the extra element is dropped before any arithmetic and both
+> the area figure and `maxAreaHa` behave identically. Recorded so that this does not get
+> re-audited.
+
 ### Mobile App Impact
 - [x] Sync endpoints affected: **none**
 - [x] SQLite schema changes: the switch column shared with GEO-002, migration 11

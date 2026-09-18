@@ -3,8 +3,8 @@
 **Task ID**: GEO-011
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
-**Covers**: GEO-001 … GEO-010
+**Status**: Draft — **revised 2026-09-18 by GEO-014** (QA-504 rewritten, QA-603b/c and QA-504b/c added, QA-607 revised)
+**Covers**: GEO-001 … GEO-010, GEO-014
 
 ---
 
@@ -295,14 +295,38 @@ for. **FAIL if** the button appears dead with no explanation.
 **Expected**: the live GPS position is visually distinct from recorded vertices, and the current
 accuracy is shown.
 
-### QA-504 — Poor accuracy is skipped, visibly
+### QA-504 — Poor accuracy is recorded and marked, visibly
+
+> **Rewritten 2026-09-18 (GEO-014 D-3).** This test previously expected the point count to
+> **stop advancing** while accuracy was poor. Bad fixes are now kept and marked instead of
+> dropped, so a stalled counter is now a *failure*, not the expected result.
 
 1. While recording, walk somewhere with obstructed sky — beside a building, under trees
-2. Watch the point count and the accuracy reading
+2. Watch the point count, the vertex colours and the accuracy reading
 
-**Expected**: the count **stops advancing** while accuracy is poor, and the accuracy display
-makes it obvious why. **FAIL if** it silently appears frozen with no explanation — the enumerator
-will assume the app has crashed.
+**Expected**: the count **keeps advancing**, and vertices recorded above the accuracy threshold
+are drawn **in red** while the good ones stay in the normal colour. The accuracy display makes
+it obvious why. **FAIL if** the count stalls, or if a bad vertex is indistinguishable from a
+good one — the whole point is that the enumerator can see which vertices to re-walk while still
+standing on the plot.
+
+### QA-504b — Red vertices are legible outdoors
+
+1. With several red vertices on screen, hold the phone in direct sunlight
+2. On a dense boundary, check a red vertex partly covered by later ones
+
+**Expected**: the distinction survives glare and overlap. **FAIL if** red is only discernible
+indoors — this test exists because the whole mechanism is a colour on a small screen outdoors.
+
+### QA-504c — Accuracy survives the round trip
+
+1. Complete a walked polygon and submit it
+2. After sync, open the same datapoint on another device or re-sync it back
+
+**Expected**: the polygon returns intact. A tapped polygon is equally intact. **FAIL if** the
+submission is refused — a 400 here means the backend has not been patched for the optional third
+element (GEO-014 §4, D-7), and `background-task.js` will have turned the submission back into a
+draft on the handset.
 
 ### QA-505 — Record on demand
 
@@ -312,11 +336,15 @@ will assume the app has crashed.
 
 ### QA-506 — Mixed capture
 
+> Use a question with `detectOverlaps` **off**. From phase 3, tapping is unavailable when it is
+> on (GEO-014 D-4), so mixed capture is not reachable there — see QA-6xx.
+
 1. Record several points by walking
 2. Stop, then **tap** the map to add one more
 3. Save
 
-**Expected**: both kinds of point sit in one ordered list, in the order created.
+**Expected**: both kinds of point sit in one ordered list, in the order created. The walked
+points carry an accuracy reading and the tapped one does not; both are valid.
 
 ### QA-507 — 🔴 Teardown — no orphaned GPS watch
 
@@ -375,6 +403,43 @@ that is ticked — an overlap threshold.
 **Expected**: the device receives the configured values. **FAIL if** it silently falls back to
 defaults — this is the failure mode that reports nothing.
 
+### QA-603b — 🔴 `detectOverlaps` disables tapping on mobile (GEO-014 D-4)
+
+1. On the device, open a geoshape question with `detectOverlaps` **on**
+2. Open the **Input method** dialog
+
+**Expected**: "Placement by tapping" is **disabled**; only the GPS recording modes are
+selectable. **FAIL if** tapping is available — an enumerator blocked by poor GPS could otherwise
+redraw the plot by hand and bypass the accuracy rules entirely, producing a boundary traced from
+imagery with nothing recording that it was.
+
+3. Open a geoshape question with `detectOverlaps` **off**
+
+**Expected**: tapping is available and default, exactly as in phase 1.
+
+4. Open the **same** `detectOverlaps` question in the **webform**
+
+**Expected**: drawing by tapping works normally. This is deliberate, not a leak — see GEO-014
+D-4. Note that a polygon entered this way is never overlap-checked at all.
+
+### QA-603c — Submit gate on poor accuracy (GEO-014 D-6)
+
+1. With `detectOverlaps` **on** and `accuracyThreshold` set deliberately low (e.g. 3 m), walk a
+   short boundary
+2. Attempt to submit while red vertices remain
+
+**Expected**: submission is refused and the message identifies the accuracy problem. Remove or
+re-walk the red vertices; submission then succeeds.
+
+3. Repeat on a question with `detectOverlaps` **off** and the same low threshold
+
+**Expected**: red vertices still appear, but submission **succeeds** (GEO-014 D-9). **FAIL if**
+it blocks — the gate is tied to `detectOverlaps`, so a form that never asked for overlap rigour
+is never blocked on accuracy.
+
+> Run this in phase 3 only. In phase 2 the threshold is hardcoded at 15 m and marks without
+> blocking, precisely so that field testing is not deadlocked by terrain (GEO-004 D-3).
+
 ### QA-604 — Sync brings geometry (GEO-005 / GEO-006)
 
 1. On a clean device, sync **F3**
@@ -405,10 +470,25 @@ it is worse than an error.
 
 ### QA-607 — Threshold boundary
 
-1. Capture a polygon overlapping an existing plot by **~10 %** → Validate
-2. Capture one overlapping by **~40 %** → Validate
+> **Revised 2026-09-18 (GEO-014 D-5).** The threshold is no longer a flat 20 %. It is derived
+> from both polygons' accuracy and **clamped by** the authored `overlapThreshold`, so 20 % is
+> now a ceiling. On a small plot the clamp binds and behaviour matches the original test; on a
+> large one the effective threshold is tighter.
 
-**Expected**: 10 % passes, 40 % fails (with the threshold at 20 %).
+1. On a **small** plot (≈0,1 ha): overlap by **~10 %** → Validate, then by **~40 %** → Validate
+
+**Expected**: 10 % passes, 40 % fails — the ceiling binds, so this behaves as a flat 20 %.
+
+2. On a **large** plot (≈10 ha) walked with good accuracy: overlap by **~15 %** → Validate
+
+**Expected**: **fails.** With accuracy of a few metres over a 10 ha plot the derived threshold is
+well below 20 %, and a 15 % overlap on a plot that size is 1,5 ha — far more than GPS error can
+explain. **FAIL if** it passes: that is the gap this decision exists to close.
+
+3. Confirm the effective threshold never exceeds the authored value
+
+**Expected**: no configuration produces detection **looser** than `overlapThreshold`. The
+adaptive rule may only tighten.
 
 ### QA-608 — Multiple overlaps all reported
 

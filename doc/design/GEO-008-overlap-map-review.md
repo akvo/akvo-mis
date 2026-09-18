@@ -5,7 +5,7 @@
 **Task ID**: GEO-008 (breakdown ref: T5)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
+**Status**: Draft — **note added 2026-09-18 (GEO-014)**
 **Phase**: 3 — Overlap detection
 **Estimate**: 4.5h ≈ 0.5 day (Mobile)
 **Depends on**: GEO-001, GEO-007
@@ -137,6 +137,14 @@ compensating benefit. The enumerator reviews here and corrects in the field.
 - [ ] Offline, is a polygons-only view acceptable? Without imagery the enumerator sees *that*
       A intersects B but not the river or treeline that would settle the dispute — see
       `doc/claude/offline-satellite-imagery-plan.md`
+- [ ] Should this screen **show the accuracy** behind each polygon? Since GEO-014 every vertex
+      may carry one, and the adaptive threshold (GEO-007 D-3) already uses it — so the screen can
+      now distinguish *"these two really intersect"* from *"these two were measured loosely"*
+      without any new data. Worth deciding before build: adding it later is a second pass over
+      the same rendering code.
+      **Caveat if it is added**: accuracy raises the cost of fabricating a boundary; it does not
+      prove attendance, and must not be labelled as proof (GEO-014 §8). A polygon entered through
+      the webform carries none at all and is never overlap-checked in the first place.
 
 ---
 

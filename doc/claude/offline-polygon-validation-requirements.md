@@ -174,14 +174,25 @@ premise to re-examine if D4 is ever revisited (§11).
   (open path) question types instead of falling through to a text input.
 - **FR-1.2** The answer value is an ordered array of `[lat, lng]` numeric pairs, **identical
   to ARF's format**, so a datapoint collected on mobile and one collected on web are
-  indistinguishable to the backend.
+  shape-compatible to the backend. Each pair may carry an **optional** third element — GPS
+  accuracy in metres, FR-1.4b — whose absence means *not measured*. A tapped vertex omits it on
+  either client, so the encoding stays shared rather than becoming a mobile dialect.
 - **FR-1.3** Three capture modes, matching ARF:
   - **FR-1.3a Tap** — tap the map to append a point.
   - **FR-1.3b Manual** — drag a marker to a position, press Record to append it.
   - **FR-1.3c Auto-record** — a GPS watch appends the current position on a fixed interval
     (10 s in ARF) while the enumerator walks the boundary.
 - **FR-1.4** In auto-record, a fix whose accuracy is worse than the configured threshold is
-  **discarded, not appended** (ARF `TypeGeoDrawing.jsx:318`).
+  **recorded and drawn in red, not discarded**. The point count keeps advancing; from phase 3
+  an unresolved red vertex blocks submission.
+
+  > **Revised 2026-09-18 — `doc/design/GEO-014-per-vertex-accuracy.md` D-3/D-6.** Previously
+  > *"discarded, not appended (ARF `TypeGeoDrawing.jsx:318`)"*. We deliberately diverge from ARF
+  > here; the value format stays compatible with it in both directions (GEO-014 D-2).
+
+- **FR-1.4b** Each recorded vertex carries its accuracy as an **optional** third element,
+  `[lat, lng, accuracy]`. A tapped vertex omits it, and its absence means *not measured* — so
+  every polygon captured before this requirement existed stays valid without migration.
 - **FR-1.5** The accuracy threshold comes from `extra.geoConfig.accuracyThreshold` when the
   form defines it, and is then read-only. Otherwise the enumerator may adjust it, defaulting
   to 15 m (ARF FR-AUTO-17/18).
@@ -329,13 +340,30 @@ published question-level contract. Question level costs none of those.
 
 #### FR-5.A — The complete `geoConfig` contract
 
-Exactly **three** keys are authored in the form builder. Everything else is a hardcoded floor.
+Exactly **three** keys are authored in the form builder. Everything else is a hardcoded floor —
+or, since 2026-09-18, **read but not authored**: `overlapThresholdFloor` (default `5`,
+GEO-014 D-8) joins `validateShape`, `validateArea` and `maxAreaHa` in that category. Not
+hardcoded, so field data can move it without a mobile release; not authored, so it costs no
+upstream release today.
 
 | Key | Type | Default | Configurable in arf-editor? |
 |---|---|---|---|
 | `accuracyThreshold` | number (m) | `15` | ✅ **Yes** — already exists in ARF #192 |
 | `detectOverlaps` | boolean | `false` | ✅ **Yes** — master switch; also gates the geometry sync (FR-7) |
 | `overlapThreshold` | number (%) | `20` | ✅ **Yes** — revealed only when `detectOverlaps` is ticked |
+
+> **Meanings widened 2026-09-18 (GEO-014); the panel, the keys, the types, the defaults and the
+> validation ranges are all unchanged, so no upstream release is needed.**
+>
+> | Key | Now also means |
+> |---|---|
+> | `accuracyThreshold` | marks vertices red everywhere; **blocks submission** only in phase 3 and only when `detectOverlaps` is on — FR-1.4, D-6, D-9 |
+> | `overlapThreshold` | the **ceiling** of an accuracy-derived threshold, not the threshold — FR-5.1, D-5 |
+> | `detectOverlaps` | additionally **disables tap-to-draw on mobile**, so a boundary must be walked — D-4 |
+>
+> The third is the one the UI does not announce: the checkbox label says nothing about drawing.
+> The app enforces it either way; adding it to the help text is an upstream release for one
+> string, left open in GEO-014 §10.
 
 ```json
 "extra": {
@@ -362,7 +390,20 @@ constants in code and never appear in `geoConfig` or in the builder UI:
 This is why there are **no** `validateShape` / `validateMinArea` / `minPoints` / `minAreaSqm`
 keys: an enable-checkbox for "should this be a valid polygon?" has no meaningful *off* state.
 
-- **FR-5.1** Overlap threshold is read from `extra.geoConfig.overlapThreshold`.
+- **FR-5.1** The overlap threshold is **derived from the accuracy of both polygons** and clamped
+  between `extra.geoConfig.overlapThresholdFloor` (default `5`) and
+  `extra.geoConfig.overlapThreshold` (default `20`, the **ceiling**):
+  `clamp(combined_accuracy / √min_area, overlapThresholdFloor, overlapThreshold)`. When either
+  polygon has no measured accuracy it falls back to `overlapThreshold` — today's behaviour.
+  `overlapThresholdFloor` is **read but not authored** in the form builder (GEO-014 D-8),
+  following the precedent of `validateShape`, `validateArea` and `maxAreaHa`.
+
+  > **Revised 2026-09-18 — GEO-014 D-5.** Previously *"read from
+  > `extra.geoConfig.overlapThreshold`"* and used flat. A flat percentage is wrong in both
+  > directions because GPS noise scales as `accuracy / √area`: too strict below ~1 ha, and on a
+  > 10 ha plot it lets 2 ha of real encroachment pass. As a ceiling, the authored value can only
+  > ever make detection stricter than before — no configuration changes meaning and there is no
+  > regression path. No `akvo-react-form-editor` change is needed.
 - **FR-5.2** Shape and minimum-area rules are fixed constants (FR-5.B), not read from config.
 - **FR-5.3** Defaults when a question omits `geoConfig`: overlap 20% (D3), accuracy 15 m (ARF's
   default), `detectOverlaps` off. Defaults are applied client-side, so a device that has never

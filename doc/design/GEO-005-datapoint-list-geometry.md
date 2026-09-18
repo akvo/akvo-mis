@@ -5,10 +5,12 @@
 **Task ID**: GEO-005 (breakdown ref: T2)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
+**Status**: Draft — **revised 2026-09-18 by GEO-014** (vertex carries optional accuracy)
 **Phase**: 3 — Overlap detection
-**Estimate**: 5.5h ≈ 1 day (Backend)
+**Estimate**: 6h ≈ 1 day (Backend)
 **Blocks**: GEO-006
+**Reads**: GEO-014 — this payload is the only route by which a *candidate* polygon's accuracy
+reaches the device, which is why accuracy has to be stored at all
 
 ---
 
@@ -99,12 +101,28 @@ than one that errors.**
   "geometry": {
     "question_id": 987,
     "coordinates": [[9.03, 38.74], [9.04, 38.74], [9.04, 38.75]],
-    "bbox": { "min_lat": 9.03, "max_lat": 9.04, "min_lon": 38.74, "max_lon": 38.75 }
+    "bbox": { "min_lat": 9.03, "max_lat": 9.04, "min_lon": 38.74, "max_lon": 38.75 },
+    "accuracy": { "max": 6.8, "measured": true }
   }
 }
 
 // Row for a form WITHOUT the flag — unchanged, no `geometry` key at all
 ```
+
+**Coordinates on this endpoint are sent as two-element vertices**, and accuracy travels as a
+**per-polygon summary** instead (GEO-014 D-10). GEO-007's adaptive threshold consumes
+`accA + accB`, where `accA` is one number per polygon — so a candidate's 180 per-vertex readings
+would be data no consumer on this path reads. The summary costs ~30 bytes per polygon where
+per-vertex accuracy would cost ~720.
+
+`measured: false` means the polygon was never GPS-measured — a webform answer, or a row captured
+before GEO-014. The device then falls back to the authored `overlapThreshold` (GEO-007 D-3).
+
+Per-vertex accuracy is **still stored** and still travels on `/sync`; only this list summarises.
+
+⚠️ `bounding_box()` at `v1_mobile/geometry.py:58` unpacks `zip(*coordinates)` into two names and
+raises `ValueError` on a three-element vertex. It reads **stored** rows, which do carry three
+elements, so it must be fixed regardless of what this endpoint emits (GEO-014 §4, D-7).
 
 **Completeness signal** — returned alongside pagination so the device can gate validation:
 
@@ -183,7 +201,9 @@ enumerator must receive geometry only for datapoints they could already see.
 
 | Test Type | Coverage |
 |-----------|----------|
-| Unit | Bbox computation for known polygons |
+| Unit | Bbox computation for known polygons — including 3-element and mixed-length vertices |
+| Unit | Accuracy summary: `measured: false` when no vertex carries a reading; `max` over a mixed ring ignores the unmeasured ones |
+| Integration | A legacy 2-element answer and a 3-element one appear side by side, both with a correct summary |
 | Integration | Flag off → byte-identical response; flag on → geometry present |
 | Integration | **Tenant/assignment scoping** — an enumerator cannot see another tenant's geometry |
 | Integration | Pagination and `last_updated` cursor still behave |
@@ -194,11 +214,12 @@ enumerator must receive geometry only for datapoints they could already see.
 |---|---|
 | Serializer: geometry + bbox fields on the list response | 0.5 |
 | Server-side bbox computation | 1 |
+| Per-polygon accuracy summary (GEO-014 D-10) | 0.5 |
 | Gate on `extra.geoConfig.detectOverlaps` | 0.5 |
 | Completeness signal | 1 |
 | Tests — tenant scoping, gating on/off, pagination | 1.5 |
 | Migration, if bbox is denormalised | 1 |
-| **Total** | **5.5** |
+| **Total** | **6** |
 
 ---
 
@@ -206,7 +227,14 @@ enumerator must receive geometry only for datapoints they could already see.
 
 - [ ] D-2: bbox denormalised on write, or computed per request?
 - [ ] Payload growth with ~180-vertex polygons — if pages get large, send bbox only in the list
-      and fetch full coordinates lazily for the few candidates a bbox query returns
+      and fetch full coordinates lazily for the few candidates a bbox query returns.
+      **Largely defused 2026-09-18 by GEO-014 D-10**: accuracy is summarised per polygon rather
+      than per vertex, so this endpoint grows by ~30 bytes per row instead of ~720. The original
+      concern — that ~180-vertex coordinate lists are big on their own — is unchanged, and the
+      lazy-fetch option above remains the lever for it
+- [ ] Which statistic the `accuracy` summary carries. `max` is conservative, but one bad vertex
+      on an otherwise well-walked boundary dominates it and tightens the threshold for the whole
+      polygon. Mean under-reports the opposite way. Decide with field data (GEO-014 §10)
 - [ ] ⚠️ **The completeness signal is the piece most likely to be dropped as "nice to have".
       It is the reason this task exists.**
 

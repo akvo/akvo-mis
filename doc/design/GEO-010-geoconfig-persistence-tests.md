@@ -127,6 +127,22 @@ describes half-open. XLSForm import needs nothing: its converter has no way to e
 | `accuracyThreshold` | number | > 0 |
 | `detectOverlaps` | boolean | — |
 | `overlapThreshold` | number | 0 < x ≤ 100 |
+| `overlapThresholdFloor` | number | 0 < x ≤ 100 — added 2026-09-18, GEO-014 D-8 |
+
+> **Note, 2026-09-18 (GEO-014).** One key is **added** to the namespace —
+> `overlapThresholdFloor`, number, `0 < x ≤ 100`, default `5` (GEO-014 D-8). It follows the same
+> rule as `overlapThreshold`, so `_geo_config_issues()` should validate it identically and the
+> parametrised rejection cases here extend to cover it. Everything else below is unchanged.
+>
+> The remaining changes are downstream meaning only, with no code or range impact:
+> `overlapThreshold` is now the *ceiling* of an accuracy-derived threshold (GEO-014 D-5) rather
+> than the threshold itself, and `detectOverlaps` additionally disables tap-to-draw on mobile
+> (GEO-014 D-4). Neither affects what this document validates.
+>
+> A separate change **does** touch the write boundary this document is about, in a different
+> serializer: `is_coordinate_ring()` (`v1_data/serializers.py:75`) must accept a third,
+> optional element on each vertex. That guards *answers*, not `geoConfig`, so it belongs with
+> GEO-014 §4 — but it is worth knowing the two live next door to each other.
 
 ---
 

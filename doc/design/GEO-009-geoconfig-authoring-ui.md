@@ -41,6 +41,33 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 | ☑ Detect overlaps with other answers to this question | `detectOverlaps` | boolean | `false` |
 | … overlap threshold % *(revealed only when ticked)* | `overlapThreshold` | number | `20` |
 
+> **Correction, 2026-09-18 (GEO-014).** The panel is unchanged and needs no further upstream
+> release, but two of these keys now mean more than they did when it shipped.
+>
+> | Key | Meaning at release | Meaning now |
+> |---|---|---|
+> | `overlapThreshold` | the overlap ratio tolerated | the **most** overlap ever tolerated — a ceiling on a threshold derived from GPS accuracy (GEO-014 D-5) |
+> | `accuracyThreshold` | fixes worse than this are discarded at capture | fixes worse than this are **recorded and marked red**, and from phase 3 block submission (GEO-014 D-3, D-6) |
+> | `detectOverlaps` | enables the overlap check | additionally **disables tap-to-draw on mobile** (GEO-014 D-4) |
+>
+> Nothing about the fields, their types, defaults or validation ranges changes, so no programme's
+> saved configuration changes meaning in a way that loosens anything: as a ceiling,
+> `overlapThreshold` can only ever make detection *stricter* than it was.
+>
+> `detectOverlaps` growing a second effect is the one place this is arguably under-communicated
+> — the checkbox label says nothing about drawing. Adding that to the help text is an upstream
+> release for one string, and the app enforces it regardless.
+>
+> **Decided 2026-09-18: deferred, and this panel is not touched.** Recorded as known debt rather
+> than an oversight, so nobody re-discovers it as a bug.
+>
+> One further key joins the "read but not authored" list that the 2026-09-17 correction above
+> describes: **`overlapThresholdFloor`** (default `5`, GEO-014 D-8), the lower bound of the
+> adaptive overlap threshold. It follows exactly the precedent set by `validateShape`,
+> `validateArea` and `maxAreaHa` — free to read, an upstream release to author, and no programme
+> needs to set it to get sensible behaviour. **The three-field contract this document specifies
+> therefore still stands as a description of the UI.**
+
 ```json
 "extra": {
   "geoConfig": {

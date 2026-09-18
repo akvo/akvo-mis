@@ -31,6 +31,12 @@ Goal:
   indistinguishable to the backend.
 ```
 
+> **Refined 2026-09-18 (GEO-014 D-2).** Still true of what this feature produces. From phase 2 a
+> vertex may carry an optional third element (GPS accuracy), but a **tapped** vertex — all this
+> feature makes — omits it on both clients, so tap-captured values stay byte-identical across
+> web and mobile. What becomes distinguishable is a *walked* boundary, which is new information
+> rather than a divergent encoding.
+
 **This is the prerequisite for every other GEO task.** Nothing else on mobile can be
 integrated or demoed without it.
 
@@ -76,12 +82,22 @@ integrated or demoed without it.
 The polygon is stored as an ordinary answer in the existing `datapoints.json` blob
 (`{questionId: answer}`), exactly like any other question type.
 
+> **Follow-up, 2026-09-18 (GEO-014).** Still no schema change, but the *value shape* gains an
+> optional third element per vertex — `[lat, lng, accuracy]` — from phase 2. **Nothing shipped
+> here changes**: a tapped vertex has no GPS measurement and keeps writing two elements, so
+> `map-draw.html:844` stays as it is and every polygon captured by this feature stays valid
+> permanently. D-1b is extended, not reversed.
+
 ---
 
 ## 4. API Contract
 
 **No API change.** `geoshape` (type 14) already exists in `QuestionTypes` and is already
 serialized to mobile by `WebFormDetailSerializer`.
+
+> **Follow-up, 2026-09-18 (GEO-014 §4).** Two backend validators must be relaxed before any
+> client emits a third element — `is_coordinate_ring()` and `bounding_box()`. That work belongs
+> to GEO-014 and phase 2; this feature's own contract is unaffected.
 
 ---
 
@@ -340,6 +356,18 @@ floating control column on the right, `Points entered: N` status bar along the b
 | Placement by tapping | **enabled**, the default | GEO-001 |
 | Manual location recording | listed, disabled, "Coming soon" | **GEO-004** |
 | Automatic location recording | listed, disabled, "Coming soon" | **GEO-004** |
+
+> **Follow-up, 2026-09-18 (GEO-014 D-4).** From phase 3 this table gains a condition. On a
+> question with `geoConfig.detectOverlaps = true`, **"Placement by tapping" is disabled** and the
+> two GPS modes are the only choices — a traced boundary is not evidence where a land dispute is
+> at stake, and no real GPS fix reads 0 m.
+>
+> The dialog is the right home for that rule: the mode list and the `inputMethod` state already
+> exist here, so phase 3 changes a row's enabled state rather than adding UI. Nothing changes
+> for a question without the flag, which is every question until phase 3.
+>
+> This is mobile only. The webform keeps tapping — see GEO-014 D-4 on why browser geolocation is
+> not a number worth enforcing against.
 
 **Rationale**: enumerators in this sector are trained on ODK/Kobo. Matching the layout and the
 option order means the two apps stay learnable together rather than each needing its own training.

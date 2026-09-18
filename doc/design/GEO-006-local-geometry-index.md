@@ -5,10 +5,26 @@
 **Task ID**: GEO-006 (breakdown ref: T3)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
+**Status**: Draft — **note added 2026-09-18 (GEO-014)**
 **Phase**: 3 — Overlap detection
 **Estimate**: 8h ≈ 1 day (Mobile)
-**Depends on**: GEO-005 · **Blocks**: GEO-007
+**Depends on**: GEO-005, GEO-014 · **Blocks**: GEO-007
+
+> **🔴 The index must carry an accuracy summary, and two paths fill it differently.**
+> GEO-007's threshold is derived from the accuracy of **both** polygons (GEO-014 D-5), and for a
+> candidate that number can only come from here.
+>
+> ```mermaid
+> flowchart LR
+>     A["GEO-005 sync<br/>2-element coords +<br/>accuracy summary"] -->|"store as given"| C[(geometry_index)]
+>     B["Backfill / local create / local edit<br/>per-vertex accuracy in datapoints.json"] -->|"compute the summary"| C
+>     C --> D[GEO-007 threshold]
+> ```
+>
+> Both paths must produce **the same shape**. If the backfill path forgets to derive the summary
+> — the natural omission, since it is busy computing a bbox — locally captured polygons index
+> with `accuracyMeasured = 0`, GEO-007 falls back to the flat authored ceiling for exactly the
+> plots the enumerator just walked, every query still works, and nothing reports an error.
 
 ---
 
@@ -30,7 +46,12 @@ Goal:
 
 ### Technical Acceptance Criteria
 - [ ] One row per geoshape answer: `uuid`, `datapointId`, `formId`, `questionId`, `name`,
-      coordinates, and `minLat` / `maxLat` / `minLon` / `maxLon`
+      coordinates, `minLat` / `maxLat` / `minLon` / `maxLon`, and the accuracy summary
+      `accuracyMax` / `accuracyMeasured`
+- [ ] The summary is **stored as given** when it arrives from GEO-005, and **computed from
+      per-vertex accuracy** on backfill, local create and local edit — the same shape either way
+- [ ] A locally captured polygon indexes with `accuracyMeasured = 1`. A test must assert this;
+      it is the failure that degrades GEO-007 silently
 - [ ] **Single-column** indexes on each bbox column (see D-1)
 - [ ] Stays correct on: local create, local edit, sync arrival, re-sync of a changed datapoint
 - [ ] Existing installs backfilled on migration
@@ -54,9 +75,11 @@ Goal:
     formId: 'INTEGER NOT NULL',
     questionId: 'INTEGER NOT NULL',
     name: 'VARCHAR(255)',          // for the FR-4.1 error message
-    coordinates: 'TEXT',           // JSON [[lat,lng],…]
+    coordinates: 'TEXT',           // JSON [[lat,lng],…]; may carry a 3rd element locally
     minLat: 'REAL', maxLat: 'REAL',
     minLon: 'REAL', maxLon: 'REAL',
+    accuracyMax: 'REAL NULL',      // metres — GEO-014 D-10 summary
+    accuracyMeasured: 'TINYINT DEFAULT 0',
     isComplete: 'TINYINT DEFAULT 0',
     createdAt: 'DATETIME',
   },

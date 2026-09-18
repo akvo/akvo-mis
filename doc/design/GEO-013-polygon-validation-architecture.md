@@ -441,6 +441,17 @@ No backend call, no stored flag, no migration — GEO-002 D-7.
    despite D-3. The web still resolves no severity.
 2. **Gating is broader than `parseable`** — see D-2's 2026-09-17 refinement.
 
+> **Note, 2026-09-18 (GEO-014).** `points` may now carry an optional third element per vertex,
+> `[lat, lng, accuracy]`. **No shipped rule needs changing**: `shape.selfIntersects` and the area
+> rules reach geometry through `toGeoJsonRing` and `polygonArea`, both of which destructure
+> `([lat, lng])` and drop the rest.
+>
+> The contract itself is already sufficient for what phase 3 needs. GEO-007's overlap rule
+> derives its threshold from the accuracy of *both* polygons (GEO-014 D-5), and it reads that
+> from `points` and from the candidate it fetches — not from `ctx`. `configKey`/`settingKey` keep
+> resolving severity exactly as specified. This is the second time D-1's contract has absorbed a
+> requirement phase 1 did not anticipate without widening.
+
 ---
 
 ## 11. References

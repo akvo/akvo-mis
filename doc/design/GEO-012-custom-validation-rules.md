@@ -129,8 +129,8 @@ Ordered by strength of evidence, not by build order. **None of this is scheduled
 |---|---|---|---|
 | No self-intersection | `validateShape` | ODK forum; reference validator | ✅ built, GEO-002 |
 | Minimum area | `validateArea` | Survey123 acreage thread; reference validator | ✅ built, GEO-003 |
-| No overlap with other answers | `detectOverlaps`, `overlapThreshold` | Survey123; MAST | 🔜 GEO-007 |
-| GPS accuracy threshold | `accuracyThreshold` | ARF #192 | ✅ exists |
+| No overlap with other answers | `detectOverlaps`, `overlapThreshold` | Survey123; MAST | 🔜 GEO-007 — `overlapThreshold` is now a **ceiling** on an accuracy-derived threshold (GEO-014 D-5) |
+| GPS accuracy threshold | `accuracyThreshold` | ARF #192 | ✅ exists — becomes a **submit gate** in phase 3 (GEO-014 D-6) |
 | **Maximum** area | `maxAreaHa` | Survey123 *"between 0 and 10 acres"*; tap-at-low-zoom | ✅ **built 2026-09-17**, GEO-003 D-5 — reading only, not yet authorable |
 | **Stricter** minimum area | `minAreaSqm` (with a floor of its own) | GEO-003 D-2, GEO-003 §10 | ❌ unbuilt |
 | Inside a boundary / geofence | boundary reference + predicate | `ODK_Geofencing` across 5 platforms; GEO-007's "bounded collection area" question | ❌ unbuilt, **largest** — needs a boundary source, sync and storage |

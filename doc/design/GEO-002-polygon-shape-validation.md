@@ -591,6 +591,12 @@ not `||`, since `0` is the meaningful value.
 - [x] Forms without polygon questions unaffected
 - [x] Existing datapoints unaffected — validation runs at capture, not retroactively
 
+> **Checked against GEO-014, 2026-09-18: nothing here changes.** From phase 2 a vertex may carry
+> an optional third element (`[lat, lng, accuracy]`). The self-intersection rule reaches geometry
+> only through `toGeoJsonRing`, which destructures `([lat, lng])` and drops the rest before turf
+> sees it, so both the shipped behaviour and the existing fixtures remain correct. Recorded so
+> that this does not get re-audited.
+
 ### Mobile App Impact
 - [x] Sync endpoints affected: **none**
 - [x] SQLite schema changes: **yes, additive** — two `config` columns via migration 11, both

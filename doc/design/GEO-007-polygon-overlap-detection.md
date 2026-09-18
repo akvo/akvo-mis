@@ -5,10 +5,10 @@
 **Task ID**: GEO-007 (breakdown ref: T4)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
+**Status**: Draft — **revised 2026-09-18 by GEO-014**, which supersedes D-3
 **Phase**: 3 — Overlap detection *(moved down on reviewer feedback)*
 **Estimate**: 7.5h ≈ 1 day (Mobile)
-**Depends on**: GEO-001, GEO-006, GEO-009
+**Depends on**: GEO-001, GEO-006, GEO-009, **GEO-014**
 
 ---
 
@@ -78,7 +78,10 @@ GEO-005, GEO-006, GEO-008 and GEO-009 moved with it — they exist only to serve
 ### Technical Acceptance Criteria
 
 - [ ] Overlap ratio = `intersection_area / min(new_area, existing_area)`
-- [ ] Threshold from `extra.geoConfig.overlapThreshold`, default **20 %**
+- [ ] Threshold is **derived from the accuracy of both polygons** and clamped by
+      `extra.geoConfig.overlapThreshold` (default **20 %**) as its **ceiling** — GEO-014 D-5
+- [ ] When either polygon has no measured accuracy, the threshold falls back to
+      `overlapThreshold` — i.e. exactly today's behaviour
 - [ ] ≤ 500 ms against 10,000 stored plots
 - [ ] `geoshape` only
 - [ ] The datapoint being edited is excluded from its own check
@@ -128,16 +131,49 @@ polygon. A button makes the expensive path user-initiated and bounded.
 region produces false negatives on boundary plots and on mis-selected regions, and defeats fraud
 detection. A plot re-registered under a different region label must still be caught.
 
-### D-3: Threshold is a percentage of the *smaller* polygon, default 20 %
+### D-3: Threshold is a percentage of the *smaller* polygon, ~~default 20 %~~ **capped at the authored value**
 
-**Decision**: `intersection / min(areaA, areaB)`, default 20 %.
+**Decision (revised 2026-09-18 by GEO-014 D-5)**: the ratio is still
+`intersection / min(areaA, areaB)`. The threshold it is compared against is no longer the flat
+authored percentage:
+
+```
+combined  = accA + accB                             // metres, conservative sum
+computed  = combined / sqrt(min(areaA, areaB))
+threshold = clamp(computed, overlapThresholdFloor, overlapThreshold)
+```
 
 **Rationale**: The source documents conflict — 20 % in one, 5 % in two others. 20 % carries the
 documented reasoning: it allows minor boundary touching from GPS drift while blocking
 significant overlap. Two genuinely adjacent plots will always show a sliver of intersection.
 
+> **Why that reasoning does not survive contact with arithmetic.** Spurious overlap from GPS
+> error is a band of width ≈ accuracy along a shared edge, so the noise ratio is ≈
+> `accuracy / √area` — it *shrinks* as plots grow. A single percentage is therefore wrong in
+> both directions, and only happens to be right near 1 ha:
+>
+> | Plot area | Noise ratio at 30 m combined | Flat 20 % means |
+> |---|---|---|
+> | 0,01 ha | 300 % | every small plot false-positives |
+> | 0,1 ha | 95 % | still far too strict |
+> | 1 ha | 30 % | roughly right — the one size it fits |
+> | 10 ha | 9,5 % | **2 ha of real encroachment passes** |
+> | 50 ha | 4,2 % | **10 ha of real encroachment passes** |
+>
+> Treating the authored number as a **ceiling** rather than the threshold keeps one property
+> worth stating plainly: **the adaptive rule can never be more permissive than today.** It
+> tightens where accuracy permits and falls back to the authored value everywhere else, so no
+> existing programme's configuration changes meaning and there is no regression path.
+>
+> The clamp is not optional: without a ceiling a 0,01 ha plot computes 300 % and *no overlap can
+> ever fail*. Fail-open is the exact failure GEO-005 §2 exists to prevent.
+
 **Impact**: 20 % is inherited from a farm-plot context and has **not** been measured against our
-terrain. It is configurable per question for exactly this reason.
+terrain. It is configurable per question for exactly this reason — and as a ceiling it now
+degrades gracefully when the measurement is better than the guess.
+
+**No upstream change.** `overlapThreshold` keeps its name, type, `20` default and GEO-009 panel;
+only its documented meaning moves from "overlap tolerated" to "most overlap ever tolerated".
 
 ### D-4: `@turf` scoped submodules, not the full bundle
 
@@ -208,8 +244,19 @@ distributed to devices. Those need their own design.
 
 | Setting | Key | Default |
 |---|---|---|
-| Overlap threshold | `extra.geoConfig.overlapThreshold` | `20` (%) |
+| Overlap threshold **ceiling** | `extra.geoConfig.overlapThreshold` | `20` (%) |
+| Overlap threshold **floor** | `extra.geoConfig.overlapThresholdFloor` | `5` (%) — read, not authored (GEO-014 D-8) |
 | Enable | `extra.geoConfig.detectOverlaps` | `false` |
+| Own polygon's accuracy | `vertex[2]`, optional third element | absent = not measured (GEO-014 §3) |
+| Candidate's accuracy | `geometry.accuracy` summary from GEO-005 | `measured: false` = not measured (GEO-014 D-10) |
+
+The two accuracy sources are deliberately different shapes. The polygon being validated is local,
+so its per-vertex readings are in hand. A candidate arrives through the datapoint list, which
+summarises — `accA + accB` needs one number per polygon, not 180.
+
+On mobile, `detectOverlaps = true` also disables tap-to-draw (GEO-014 D-4), so in practice both
+polygons in a check carry measured accuracy. The fallback branch exists for legacy rows and for
+answers entered through the webform, which is not an overlap-checked route.
 
 ---
 
@@ -239,6 +286,8 @@ distributed to devices. Those need their own design.
 | Test Type | Coverage |
 |-----------|----------|
 | Unit | Ratio maths at threshold boundary: 19.9 % passes, 20.1 % fails |
+| Unit | Adaptive threshold clamps to the ceiling on a small plot, tightens below it on a large one, and never exceeds `overlapThreshold` |
+| Unit | Threshold falls back to `overlapThreshold` when either polygon has no measured accuracy |
 | Unit | Identical polygons → 100 %; disjoint → no candidates |
 | Unit | Self-exclusion when editing an existing datapoint |
 | Integration | Multiple simultaneous overlaps all reported |
@@ -268,18 +317,33 @@ invisible to unit tests:
 | ~~Spike: verify `@turf` submodules work in React Native~~ — **moved to GEO-002 D-6**, which now adds `@turf/kinks` in phase 1 | 0 |
 | bbox range query + candidate fetch | 0.5 |
 | Intersection ratio vs threshold | 0.5 |
+| Adaptive threshold from vertex accuracy, with clamp and fallback (GEO-014 D-5) | 1 |
 | "Validate now" button, 3 states, progress | 1 |
 | State reset on edit; submit gate reads stored result | 1 |
 | Error assembly — multiple conflicts, repeat instance | 0.5 |
 | Unit tests with known fixtures | 1.5 |
 | **Perf test at 10,000 plots** | 1.5 |
-| **Total** | **6.5** — was 7.5; the `@turf` spike relocated to GEO-002 |
+| **Total** | **7.5** |
+
+Back to the original 7.5: the `@turf` spike moved out to GEO-002 (−1) and the adaptive threshold
+moved in (+1). They cancel exactly, which is a coincidence rather than a plan.
 
 ---
 
 ## 10. Open Questions
 
-- [ ] Is 20 % right for the first real programme? Inherited, not measured
+- [x] Is 20 % right for the first real programme? Inherited, not measured. **Partly answered
+      2026-09-18**: it is now a ceiling, not the threshold, so being too permissive matters much
+      less — the adaptive value tightens it wherever accuracy allows. Being too *strict* on a
+      sub-hectare plot is still possible and still unmeasured
+- [x] `FLOOR` for the adaptive threshold → **answered 2026-09-18 (GEO-014 D-8)**:
+      `geoConfig.overlapThresholdFloor`, default **5 %**, read by the app but not authored in
+      the editor yet.
+      Worth noting *why* 5: D-3 above records that the source implementations disagreed —
+      *"20 % in one, 5 % in two others"* — and resolved it by discarding the 5. With a clamp both
+      numbers get a home, **20 as the ceiling and 5 as the floor**, which suggests the two
+      references were answering different questions rather than one of them being wrong. The
+      default is still unmeasured against our terrain, exactly as 20 is
 - [ ] What does the UI do when the candidate set is **incomplete** (GEO-005)? Refuse to
       validate, or validate with a visible caveat? Silently passing is not an option
 - [x] Does `@turf` behave on a real device? **Answered by phase 1**: GEO-002 D-6 adds

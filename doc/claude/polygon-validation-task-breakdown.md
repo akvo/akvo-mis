@@ -35,6 +35,7 @@ and product back-and-forth. These are real and should be added by whoever schedu
 | T1 | [GEO-001 — Polygon capture: draw on the map](../design/GEO-001-polygon-capture-draw-on-map.md) | 🟢 1 |
 | T6 | [GEO-002 — Polygon shape validation](../design/GEO-002-polygon-shape-validation.md) | 🟢 1 |
 | T7 | [GEO-003 — Minimum polygon size](../design/GEO-003-minimum-polygon-size.md) | 🟢 1 |
+| **T13** | [GEO-014 — Per-vertex GPS accuracy](../design/GEO-014-per-vertex-accuracy.md) *(decision record + backend validators; **blocks T12**)* | 🟡 2 |
 | T12 | [GEO-004 — GPS boundary walking](../design/GEO-004-gps-boundary-walking.md) | 🟡 2 |
 | T2 | [GEO-005 — Datapoint list geometry](../design/GEO-005-datapoint-list-geometry.md) | 🔵 3 |
 | T3 | [GEO-006 — Local geometry index](../design/GEO-006-local-geometry-index.md) | 🔵 3 |
@@ -228,29 +229,55 @@ guaranteed to be a valid shape. No backend change, no sync change, no configurat
 | **T7** | Minimum polygon size validation | Mobile | **2.25** | **0.25** | — |
 | | **Phase 1 total** | | **~17h** | **~2 days** | **~6h (35%)** |
 
-### Phase 2 — GPS boundary walking · **8h ≈ 1 day** (+1 day background)
+### Phase 2 — GPS boundary walking · **11h ≈ 1.5 days**
 
-*Adds the Kobo-style capture mode. Still no backend or sync work.*
+*Adds the Kobo-style capture mode. **Revised 2026-09-18**: no longer mobile-only — vertices now
+carry GPS accuracy (GEO-014), and the backend validators must accept it **before** any client
+emits it.*
 
 | ID | Task | Component | Hours | Days |
 |---|---|---|---|---|
-| **T12** | Polygon capture — **walk the boundary (GPS)** | Mobile | **8** | **1** |
-| **T12-bg** | …continuing to record when backgrounded | Mobile | **7** | **1** |
+| **T13** | Accept an optional third vertex element — **ships first** | **Backend** | **1.5** | **0.5** |
+| **T12** | Polygon capture — **walk the boundary (GPS)** | Mobile | **9.5** | **1** |
+| | **Phase 2 total** | | **11h** | **~1.5 days** |
 
-### Phase 3 — Overlap detection · **33h ≈ 4 days**
+*`T12-bg` (background recording, 7h) used to sit here as an optional increment. It is now
+**counted in phase 3**, where GEO-014 D-4 makes it mandatory.*
+
+> **T13 before T12 is a one-way door.** A client emitting three elements against an unpatched
+> backend is refused with 400, and `background-task.js:379` turns each refusal into a draft on
+> the enumerator's handset — so the symptom is completed field work reverting, not a log entry.
+> See GEO-014 D-7.
+>
+> T12 rises from 8h to 9.5h: +0.5 writing accuracy into the vertex, +1 marking bad vertices red,
+> +1 for record-and-mark being written rather than ported from ARF, −0.5 because a stalled point
+> count no longer needs explaining (GEO-014 D-3).
+
+### Phase 3 — Overlap detection · **33.5h ≈ 4 days** · **+7h prerequisite = 40.5h**
 
 *The whole overlap capability, moved down the list on reviewer feedback. Everything here exists
 only to serve overlap detection — including the sync and configuration work.*
 
 | ID | Task | Component | Hours | Days | of which non-code |
 |---|---|---|---|---|---|
-| **T2** | Extend datapoint list with geometry + bbox | Backend | **5.5** | **1** | — |
+| **T12-bg** | Background recording — **now a prerequisite**, see below | Mobile | **7** | **1** | 3h device testing |
+| **T2** | Extend datapoint list with geometry + bbox + accuracy summary | Backend | **6** | **1** | — |
 | **T3** | Local geometry index + sync consumption | Mobile | **8** | **1** | 2h volume testing |
 | **T8** | `geoConfig` authoring UI (3 fields) | Frontend (upstream + host) | **5** | **1** | 2h upstream release |
 | **T9** | Backend persistence + API tests for `geoConfig` | Backend | **2.5** | **0.5** | — |
-| **T4** | **Polygon overlap detection** | Mobile | **7.5** | **1** | 2.5h spike + perf test |
+| **T4** | **Polygon overlap detection** (+1 adaptive threshold, −1 spike) | Mobile | **7.5** | **1** | 1.5h perf test |
 | **T5** | Overlap map review screen | Mobile | **4.5** | **0.5** | 1.5h device pass |
-| | **Phase 3 total** | | **~33h** | **~4 days** | **~6h** |
+| | **Phase 3 subtotal** *(excl. T12-bg)* | | **~33.5h** | **~4 days** | **~7h** |
+| | **Phase 3 total** *(incl. the T12-bg prerequisite)* | | **~40.5h** | **~5 days** | **~10h** |
+
+> **T12-bg moved here from "optional" 2026-09-18.** GEO-014 D-4 disables tap-to-draw on mobile
+> when `detectOverlaps` is on, so a boundary walk becomes the only way to enter data — and
+> GEO-004 D-2's assessment then binds: *"without background recording the enumerator must keep
+> the screen awake and the app foregrounded for an entire boundary walk, which they will not
+> do."* It also forces a development build; **Expo Go cannot run phase 3 at all.**
+>
+> T2 +0.5 for the per-polygon accuracy summary (GEO-014 D-10); T4 +1 for the adaptive threshold
+> (GEO-014 D-5).
 
 ### Deferred — gated on a decision, not on engineering
 
@@ -281,8 +308,25 @@ validation run at fixed floors (FR-5.B), so there is nothing to author. Phase 1 
 tasks — 17 hours — and it still delivers something real: a polygon question that works on mobile
 and cannot produce an invalid shape.
 
-**Phase 1: ~2 days.** Phase 2 adds 1–2 days. Phase 3 adds ~4 days.
-Total is unchanged at ~50h + GPS; the ordering is what changed.
+**Phase 1: ~2 days.** Phase 2 adds ~1.5 days. Phase 3 adds ~5 days.
+
+> **Revised 2026-09-18 (GEO-014).** The old line read *"Total is unchanged at ~50h + GPS"* — that
+> 50h being phase 1 + phase 3, with GPS counted separately. Updated:
+>
+> | | Was | Now | Why |
+> |---|---|---|---|
+> | Phase 1 | 17h | **17h** | unchanged — verified against the code; no shipped rule reads accuracy |
+> | Phase 2 | 8h | **11h** | +1.5 T13 backend validators, +1.5 net on T12 (GEO-014 D-3) |
+> | Phase 3 | 33h | **33.5h** | +0.5 accuracy summary (T2); T4's +1 adaptive threshold cancels the `@turf` spike that left for GEO-002 |
+> | T12-bg | optional +7h | **inside phase 3** | tap is disabled when `detectOverlaps` is on, so a boundary walk is the only route (GEO-014 D-4) |
+>
+> **Phase 1 + phase 3 = ~57.5h, plus GPS (phase 2) 11h → ~68.5h.** The rise is mostly T12-bg
+> moving from optional to required, not new work.
+>
+> Two structural changes matter more than the hours. **Phase 2 is no longer mobile-only** — the
+> sentence above, *"phase 1 needs no configuration and no backend work at all"*, stays true of
+> phase 1 and stops being true of phase 2. And **phase 3 can no longer be tested in Expo Go**,
+> because background recording forces a development build.
 
 > **Read these numbers correctly.** They are *build* hours under AI-assisted implementation
 > against a working reference (ARF #192 for capture, the reference validator for the geometry
@@ -619,6 +663,17 @@ backend, or overlap detection compares incompatible shapes.
 `[[lat, lng], …]` value format exactly. No mobile-specific encoding.
 → *Owned by*: T1.
 
+> **Refined 2026-09-18 (GEO-014 D-2).** C9 holds, but "indistinguishable" needs to be the right
+> word for the right thing. **Shapes stay compatible** — which is all the stated concern is
+> about. Every geometry consumer destructures `([lat, lng])` and drops anything further before
+> any maths runs, so a 2-element and a 3-element ring compare identically.
+>
+> What is now *deliberately* distinguishable is **capture provenance**: a GPS-measured vertex
+> carries an optional third element and a tapped one does not. That is new information, not a
+> divergent encoding — and the encoding stays shared, which is why D-2 chose "absent" over a
+> padded `null`: a tapped vertex from mobile is byte-identical to a tapped vertex from ARF.
+> "No mobile-specific encoding" is still the rule.
+
 **C10 · Configuration can be lost silently.**
 If `extra` is filtered anywhere in the publish path, mobile receives defaults, every threshold
 the designer set is ignored, and **nothing reports an error**.
@@ -717,9 +772,10 @@ reference for *validation ordering*, not for parsing code to port.
 | Server-side bbox computation (decide denormalised vs per-request) | 1 |
 | Gate on `extra.geoConfig.detectOverlaps` | 0.5 |
 | Completeness signal | 1 |
+| Per-polygon accuracy summary (GEO-014 D-10) | 0.5 |
 | Tests — tenant scoping, gating on/off, pagination | 1.5 |
 | Migration, if bbox is denormalised | 1 |
-| **Total** | **5.5** |
+| **Total** | **6** |
 
 Implements "sync the least possible to make this work" — by **extending the endpoint that
 already exists**, not adding a new one.
@@ -1011,9 +1067,11 @@ the first — the key already exists in ARF #192 anyway, so it costs nothing to 
 | `form.setFieldsValue({ [id]: … })` | `FormState.update((s) => { s.currentValues = … })` |
 | `uiText` prop | existing `i18n.text(activeLang)` |
 
-**Value format — the cross-client contract**: `[[lat, lng], [lat, lng], …]`. A datapoint
-collected on mobile and one collected on web must be **indistinguishable to the backend**.
-Do not invent a mobile-specific encoding.
+**Value format — the cross-client contract**: `[[lat, lng], [lat, lng], …]`, with an **optional**
+third element per vertex carrying GPS accuracy in metres (GEO-014 §3, from T12). Its absence
+means *not measured*, which is what a tapped vertex is on either client. A datapoint collected on
+mobile and one collected on web must remain **shape-compatible to the backend**. Do not invent a
+mobile-specific encoding — the third element is shared and optional, not a mobile dialect.
 
 **i18n**: ARF already defines ~40 `geoDrawing*` keys, translated to en/id/in/fr/de in
 `src/locale/*.json`. **Reuse the key names** so translations transfer rather than being
@@ -1106,12 +1164,13 @@ realistic captures, not 5-point test shapes.
 | **Spike: verify `@turf` submodules work in React Native** | 1 |
 | bbox range query + candidate fetch | 0.5 |
 | Intersection ratio vs threshold | 0.5 |
+| Adaptive threshold from accuracy, with clamp and fallback (GEO-014 D-5) | 1 |
 | "Validate now" button, 3 states, progress | 1 |
 | State reset on edit; submit gate reads stored result | 1 |
 | Error assembly — multiple conflicts, repeat instance | 0.5 |
 | Unit tests with known fixtures | 1.5 |
 | **Perf test at 10,000 plots** | 1.5 |
-| **Total** | **7.5** |
+| **Total** | **7.5** — the `@turf` spike left (−1) and the adaptive threshold arrived (+1) |
 
 **Geometry library**: `@turf/turf` is already a declared dependency in
 [`frontend/package.json:9`](../../frontend/package.json#L9) and is **pure JS, so it runs in
@@ -1260,19 +1319,25 @@ plumbing; if scheduled together, the combined cost is closer to **3 days than 4*
 
 ---
 
-### T12 — Polygon capture: walk the boundary (GPS) · **8h ≈ 1 day** · 🟡 **phase 2**
+### T12 — Polygon capture: walk the boundary (GPS) · **9.5h ≈ 1 day** · 🟡 **phase 2**
+
+> **Blocked by T13** (GEO-014, 1.5h Backend). Deploy the relaxed vertex validators first, or
+> every geoshape submission 400s and reverts to a draft on the handset.
 
 **Hours** (AI-assisted; ~0.5h per generated-and-reviewed unit):
 
 | Unit | h |
 |---|---|
-| Satellite-lock / fix-quality gating before recording starts | 1 |
+| Satellite-lock / fix-quality gating before recording starts | 0.5 |
 | `watchPositionAsync` + interval capture | 1 |
 | Record-on-click at current position | 0.5 |
 | Live position marker + accuracy display | 0.5 |
 | Lifecycle teardown (unmount, group change, submit) | 1 |
+| Write accuracy into the vertex (GEO-014 §3) | 0.5 |
+| Mark out-of-threshold vertices red on the map | 1 |
+| Record-and-mark logic — written, not ported from ARF (GEO-014 D-3) | 1 |
 | **Field testing — physically walking a boundary** | 4 |
-| **Total** | **8** |
+| **Total** | **9.5** |
 
 Over half of this task is someone walking around outside with a phone. That part does not compress, and it is the only way to find out whether the accuracy gating behaves.
 
@@ -1298,15 +1363,26 @@ which already implements `watchPosition` + interval capture + accuracy filtering
 - **Satellite lock before start.** Recording cannot begin on a stale or absent fix; the
   enumerator is told what is being waited for rather than seeing a dead button.
 - **Accuracy threshold.** A fix worse than `geoConfig.accuracyThreshold` (default 15 m) is
-  **discarded, not appended** — matching ARF `TypeGeoDrawing.jsx:318`. The point count must not
-  advance on a rejected fix, and the enumerator must be able to see why.
+  **recorded and drawn in red, not discarded**. The point count keeps advancing, and the
+  enumerator can see which vertices are the problem while still standing on the plot. From
+  phase 3 a submit gate makes it binding.
+
+  > **Revised 2026-09-18 — see `doc/design/GEO-014-per-vertex-accuracy.md` D-3.** This
+  > previously read *"**discarded, not appended** — matching ARF `TypeGeoDrawing.jsx:318`. The
+  > point count must not advance on a rejected fix."* The concern is unchanged — a boundary
+  > polluted with 40 m vertices looks plausible and is wrong — but marking answers it more
+  > directly than dropping, and it removes the "why has the counter frozen?" problem the old
+  > wording had to compensate for. This is also where T12 stops being a verbatim ARF port.
 - **Interval capture.** Points appended every N seconds while walking (10 s in ARF).
 - **Record on click.** A manual "record this point" action for corners and boundary markers,
   independent of the interval.
 - **Live feedback.** Current GPS position shown distinctly from recorded vertices, with its
   accuracy, so the enumerator can judge whether to keep walking or wait for a better fix.
 - **Mixed capture.** Points from GPS and points placed by tapping (T1) converge on one ordered
-  list — the value format does not record which mode produced a vertex.
+  list — and since 2026-09-18 **the value format does record which mode produced a vertex**: a
+  measured point carries an optional third element `[lat, lng, accuracy]`, a tapped one does not
+  (GEO-014 D-1/D-2). From phase 3, tapping is unavailable altogether on a question with
+  `detectOverlaps` on, so mixed capture is reachable only where it is off (GEO-014 D-4).
 - **Teardown.** No path may leave a GPS watch or interval running. This is the most likely
   field complaint if missed: a forgotten subscription drains the battery silently.
 
