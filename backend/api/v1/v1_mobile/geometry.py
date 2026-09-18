@@ -21,11 +21,11 @@ from api.v1.v1_forms.models import Questions
 def enabled_geoshape_question_ids(form):
     """Geoshape questions on this form that opted into overlap detection.
 
-    The gate is deliberately strict. GEO-010 has not validated
-    `extra.geoConfig` yet, and the write boundary is untrusted: an
-    import or a hand-edited payload can carry `"true"` or `["true"]`
-    instead of the real boolean. Anything that is not the real boolean
-    means off. Failing open would hand the device a candidate set
+    The gate is deliberately strict. GEO-010 now rejects `"true"` and
+    `["true"]` at the write boundary, but rows written before it did are
+    still out there, and this is the last thing standing between them and
+    a silently incomplete candidate set. Anything that is not the real
+    boolean means off. Failing open would hand the device a candidate set
     nobody promised was complete, which is the exact failure this
     feature exists to prevent.
 

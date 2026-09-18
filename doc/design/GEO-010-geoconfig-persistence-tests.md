@@ -5,7 +5,7 @@
 **Task ID**: GEO-010 (breakdown ref: T9)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft
+**Status**: Implemented — `backend/api/v1/v1_forms/tests/tests_geoconfig_persistence.py`
 **Phase**: 3 — Overlap detection
 **Estimate**: 2.5h ≈ 0.5 day (Backend)
 **Depends on**: GEO-009
@@ -34,16 +34,18 @@ reports an error**. The form looks configured and behaves as though it is not.
 ## 2. Requirements
 
 ### Technical Acceptance Criteria
-- [ ] `extra.geoConfig` survives form create → publish → mobile fetch, byte-identical
-- [ ] Out-of-range values rejected: negative area, threshold outside 0–100, non-numeric
-- [ ] `geoConfig` is carried into the `FormPublishedVersion` snapshot, not dropped
-- [ ] No model change required — confirm, do not assume
+- [x] `extra.geoConfig` survives form create → publish → mobile fetch, byte-identical
+- [x] Out-of-range values rejected: negative area, threshold outside 0–100, non-numeric
+- [x] `geoConfig` is carried into the `FormPublishedVersion` snapshot, not dropped
+- [x] No model change required — **confirmed**: the persistence tests passed before any
+      validation code existed, so the chain was already intact rather than assumed to be
 
 ---
 
 ## 3. Data Model Changes
 
-**None expected.** This task's first job is to *verify* that claim.
+**None.** Verified, not assumed — the round-trip tests were written first and passed
+against unmodified code.
 
 | Model | Field | Status |
 |-------|-------|--------|
@@ -51,19 +53,31 @@ reports an error**. The form looks configured and behaves as though it is not.
 | `FormDetailQuestionSerializer` | lists `extra` | Exists |
 | `WebFormDetailSerializer` | serves web **and** mobile | Exists |
 
-If publish-path filtering is found, a fix is in scope here.
+No publish-path filtering was found. `extra` is carried verbatim by
+`_build_schema_snapshot` (`functions.py:682`), `store_version_snapshot` and
+`restore_from_snapshot` (`functions.py:549`), so no fix was needed.
 
 ---
 
 ## 4. API Contract
 
-**No new endpoints.** Existing:
+**No new endpoints.** Existing (the URLs below are the real ones — an earlier draft of
+this section named `/api/v1/form`, which is read-only and never a write path):
 
 | Method | URL | Assertion |
 |--------|-----|-----------|
-| POST | `/api/v1/form` | `extra.geoConfig` persisted as sent |
-| GET | `/api/v1/form/{id}` | Builder sees the same values back |
-| GET | mobile form detail | `extra.geoConfig` present and unchanged |
+| POST | `/api/v1/manage/forms` | `extra.geoConfig` persisted as sent; nonsense rejected 400 |
+| PUT | `/api/v1/manage/forms/{id}` | Same validation on edit, draft and published alike |
+| POST | `/api/v1/manage/forms/{id}/publish` | `geoConfig` reaches the snapshot **and** back into live rows |
+| GET | `/api/v1/manage/forms/{id}` | Builder sees the same values back |
+| GET | `/api/v1/device/form/{id}` | `extra.geoConfig` present and unchanged |
+
+**The device and the builder read different rows.** `/device/form/{id}` serializes live
+`Questions` rows; a GET on a published form reads the active snapshot. A PUT on a published
+form writes a *pending* snapshot only (FB-002B D-6), so until someone publishes, the builder
+shows the new threshold and the device is still serving the old one. That is existing
+behaviour for every question field, not a `geoConfig` bug, and there is now a test pinning it
+so it stays deliberate.
 
 ---
 
@@ -82,6 +96,27 @@ call, and a threshold of `-5` or `500` would silently produce nonsense validatio
 
 **Rationale**: Failing open is the worst outcome for a validation feature — it looks like it
 worked. This is enforced on the device too, but the API should not have let it through.
+
+### D-3: An explicit `null` means "not set", not "invalid"
+
+**Decision**: `{"overlapThreshold": null}` is accepted and stored; `"20"`, `-5` and `101` are
+rejected.
+
+**Rationale**: `null` is how the builder spells an unset value, and every other nullable
+question field on the model behaves that way. Rejecting it would refuse payloads the editor
+legitimately produces, while the values D-1 is actually aimed at — a string, a negative, an
+out-of-range percentage — all still fail. An absent key and a null key mean the same thing:
+use the default.
+
+### D-4: Validation covers the JSON import boundary too
+
+**Decision**: The same rules run in `validate_form_definition` (`functions.py`), blocking an
+import with `level: "error"` and code `invalid_geo_config`.
+
+**Rationale**: D-1's own rationale names import as a way form JSON arrives. It reaches the
+same rows through a different validator, so leaving it out would have left the hole D-1
+describes half-open. XLSForm import needs nothing: its converter has no way to express
+`geoConfig`, so none can arrive that way.
 
 ---
 
@@ -132,12 +167,20 @@ worked. This is enforced on the device too, but the API should not have let it t
 | Verify `extra` survives the `FormPublishedVersion` snapshot | 1 |
 | **Total** | **2.5** |
 
+**The test that matters most** is not in the original list: publishing a pending snapshot
+copies it back over the live rows, and `enabled_geoshape_question_ids`
+(`v1_mobile/geometry.py`) reads those rows to decide which questions get overlap detection at
+all. A `geoConfig` lost there would switch the feature off for every published form with no
+error anywhere, so that assertion runs through the gate function rather than comparing dicts.
+
 ---
 
 ## 10. Open Questions
 
-- [ ] Does form **import** (`FB-016-xlsform-import`) preserve `extra.geoConfig`? Out of scope
-      here, but worth a follow-up if XLSForm round-tripping matters for polygon questions
+- [x] Does form **import** preserve `extra.geoConfig`? Answered. JSON import (FB-007) does
+      preserve it and now validates it (D-4). XLSForm import (FB-016) cannot carry a
+      `geoConfig` in either direction — there is no cell for it — so round-tripping one
+      through XLSForm remains a genuine follow-up if it is ever wanted.
 
 ---
 
