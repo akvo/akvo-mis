@@ -3,8 +3,35 @@ import * as Yup from 'yup';
 // expo-notifications, native modules this pure-logic module never uses.
 import i18n from '../../lib/i18n';
 import { QUESTION_TYPES } from '../../lib/constants';
+import FormState from '../../store/forms';
+import BuildParamsState from '../../store/buildParams';
+import { blockingMessage, isNoAnswer, runPolygonRules } from './polygon-rules';
 
 export * from './geometry';
+export * from './polygon-rules';
+
+/**
+ * Polygon rules, layered on top of Yup rather than inside it.
+ *
+ * Runs only when Yup has already passed AND there is an answer to judge: an absent required
+ * polygon is Yup's error to report, and adding "a shape needs at least 3 points" next to
+ * "... is required." would state the same absence twice (GEO-002 section 2.1.2).
+ *
+ * `trans` and the device settings are read here, at the caller, so the rules themselves stay
+ * pure and testable without a store (GEO-013 D-1). Reading `lang` at call time also means a
+ * language switch mid-form produces the message in the new language.
+ *
+ * Returns the blocking string, or null when nothing blocks - a `warn` never reaches this
+ * surface; its channel is the inline hint (GEO-002 D-8).
+ */
+const polygonFeedback = (currentValue, field) => {
+  if (field?.type !== QUESTION_TYPES.geoshape || isNoAnswer(currentValue)) {
+    return null;
+  }
+  const { lang } = FormState.getRawState();
+  const results = runPolygonRules(currentValue, field, BuildParamsState.getRawState());
+  return blockingMessage(results, i18n.text(lang), field?.label);
+};
 
 export const intersection = (array1, array2) => {
   const set1 = new Set(array1);
@@ -397,14 +424,14 @@ export const generateValidationSchemaFieldLevel = async (currentValue, field) =>
   }
   try {
     await yupType.validateSync(currentValue);
-    return {
-      [field?.id]: true,
-    };
   } catch (error) {
     return {
       [field?.id]: error.message,
     };
   }
+  return {
+    [field?.id]: polygonFeedback(currentValue, field) || true,
+  };
 };
 
 export const generateDataPointName = (forms, currentValues, cascades = {}, datapoint = null) => {

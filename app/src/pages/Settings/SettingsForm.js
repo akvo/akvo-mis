@@ -32,6 +32,8 @@ const SettingsForm = ({ route }) => {
     geoLocationTimeout,
     imageQuality,
     saveToGallery,
+    validatePolygonShape,
+    validatePolygonArea,
   } = BuildParamsState.useState((s) => s);
   const { password, authenticationCode, useAuthenticationCode } = AuthState.useState((s) => s);
   const { lang, isDarkMode, fontSize } = UIState.useState((s) => s);
@@ -61,6 +63,8 @@ const SettingsForm = ({ route }) => {
     geoLocationTimeout,
     imageQuality,
     saveToGallery,
+    validatePolygonShape,
+    validatePolygonArea,
   });
 
   const nonEnglish = lang !== 'en';
@@ -100,6 +104,8 @@ const SettingsForm = ({ route }) => {
       'geoLocationTimeout',
       'imageQuality',
       'saveToGallery',
+      'validatePolygonShape',
+      'validatePolygonArea',
     ];
     if (configFields.includes(field)) {
       await crudConfig.updateConfig(db, { [field]: value });

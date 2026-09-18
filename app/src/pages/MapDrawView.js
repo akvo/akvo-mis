@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,6 +14,12 @@ import { FormState, UserState } from '../store';
 import i18n from '../lib/i18n';
 import loadMapDrawHtml from '../lib/map-draw-html';
 import { polygonAreaHectares } from '../form/lib/geometry';
+import {
+  areaIsAmbiguous,
+  failedRules,
+  formatRuleFailure,
+  runPolygonRules,
+} from '../form/lib/polygon-rules';
 import { QUESTION_TYPES } from '../lib/constants';
 
 const CLEAR_CONFIRM_THRESHOLD = 3;
@@ -32,13 +38,19 @@ const INPUT_METHODS = [
 ];
 
 const MapDrawView = ({ navigation, route }) => {
-  const { id: questionID, value: initialValue = [], type = QUESTION_TYPES.geoshape } = route.params;
+  const {
+    id: questionID,
+    value: initialValue = [],
+    type = QUESTION_TYPES.geoshape,
+    extra = null,
+  } = route.params;
   // geoshape is a closed ring with an enclosed area; geotrace is an open line with
   // neither. Capture - tap, drag, undo, clear - is identical for both.
   const isClosed = type !== QUESTION_TYPES.geotrace;
   const [htmlContent, setHtmlContent] = useState(null);
   const [points, setPoints] = useState(initialValue || []);
   const [showInputMethod, setShowInputMethod] = useState(false);
+  const [showWarnings, setShowWarnings] = useState(false);
   const [inputMethod, setInputMethod] = useState('tapping');
   const [started, setStarted] = useState(false);
   const webViewRef = useRef(null);
@@ -53,6 +65,19 @@ const MapDrawView = ({ navigation, route }) => {
 
   // Home.js already runs a watchPositionAsync into UserState, so accuracy is live here for free.
   const accuracy = savedLocation?.coords?.accuracy;
+
+  /**
+   * Advisory only - severity belongs to the submit gate, which this screen is not
+   * (GEO-002 2.1.5). Recomputed on every vertex change, which is the point: this is the one
+   * surface where the offending vertex is still on screen and still draggable.
+   */
+  const failures = useMemo(
+    () => failedRules(runPolygonRules(points, { type, extra })),
+    [points, type, extra],
+  );
+  // A self-crossing ring has no well-defined area, so the figure below is marked rather than
+  // stated. GEO-003 D-6.
+  const areaUnreliable = areaIsAmbiguous(failures);
 
   const loadHtml = useCallback(async () => {
     /**
@@ -111,13 +136,19 @@ const MapDrawView = ({ navigation, route }) => {
         setShowInputMethod(false);
         return true;
       }
+      // Without this a back press behind the warnings dialog would discard the polygon rather
+      // than dismiss the dialog - the same trap the input-method branch above exists to avoid.
+      if (showWarnings) {
+        setShowWarnings(false);
+        return true;
+      }
       if (navigation.canGoBack()) {
         navigation.goBack();
       }
       return true;
     });
     return () => backHandler.remove();
-  }, [navigation, showInputMethod]);
+  }, [navigation, showInputMethod, showWarnings]);
 
   const command = (commandType, data) => {
     webViewRef.current?.postMessage(JSON.stringify({ type: commandType, data: data || {} }));
@@ -240,11 +271,49 @@ const MapDrawView = ({ navigation, route }) => {
           {trans.pointsEntered}: {points.length}
         </Text>
         {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
-          <Text style={styles.statusText} testID="text-area">
-            {trans.polygonArea}: {polygonAreaHectares(points).toFixed(2)} ha
+          <Text
+            style={[styles.statusText, areaUnreliable && styles.statusWarningText]}
+            testID="text-area"
+          >
+            {trans.polygonArea}: {areaUnreliable ? '~' : ''}
+            {polygonAreaHectares(points).toFixed(2)} ha
           </Text>
         )}
+        {/*
+          A count, not the sentences. The status bar is a single row sharing its width with the
+          point count and the area, and a full message ran off the right edge of the screen with
+          no way to read the rest of it. The count always fits; the sentences live one tap away.
+        */}
+        {failures.length > 0 && (
+          <TouchableOpacity onPress={() => setShowWarnings(true)} testID="button-polygon-warnings">
+            <Text style={[styles.statusText, styles.statusWarningText]}>
+              {`\u26A0 ${trans.polygonInvalidCount.replace('{count}', failures.length)}`}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      <Dialog
+        isVisible={showWarnings}
+        onBackdropPress={() => setShowWarnings(false)}
+        testID="dialog-polygon-warnings"
+      >
+        <Dialog.Title title={trans.polygonInvalidTitle} />
+        {failures.map((failure) => (
+          <Text
+            key={failure.key}
+            style={styles.warningRow}
+            testID={`text-polygon-warning-${failure.key}`}
+          >
+            {`⚠ ${formatRuleFailure(failure, trans)}`}
+          </Text>
+        ))}
+        <Dialog.Actions>
+          <Button onPress={() => setShowWarnings(false)} testID="button-close-polygon-warnings">
+            {trans.buttonOk}
+          </Button>
+        </Dialog.Actions>
+      </Dialog>
 
       <Dialog isVisible={showInputMethod} testID="dialog-input-method">
         <Dialog.Title title={trans.inputMethodTitle} />
@@ -341,6 +410,13 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#ffffff',
     fontSize: 14,
+  },
+  statusWarningText: {
+    color: '#ffcc80',
+  },
+  warningRow: {
+    fontSize: 15,
+    paddingVertical: 8,
   },
   methodRow: {
     flexDirection: 'row',

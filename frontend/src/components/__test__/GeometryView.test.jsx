@@ -89,13 +89,42 @@ describe("GeometryView", () => {
   test("summarises point count and area", () => {
     const { container } = render(<GeometryView value={triangle} />);
     expect(container.textContent).toContain("Points: 3");
-    expect(container.textContent).toContain("ha");
+    expect(container.textContent).toMatch(/Area: [\d.]+ ha/);
   });
 
+  /*
+    Asserted on "Area:" rather than on the bare substring "ha": the validation badge added by
+    GEO-002 D-7 can legitimately render words containing those two letters ("shape"), and a
+    test that passes only because no other text happens to contain a common digraph is a trap
+    for the next person, not a check on this component.
+  */
   test("withholds the area below three points", () => {
     const { container } = render(<GeometryView value={triangle.slice(0, 2)} />);
     expect(container.textContent).toContain("Points: 2");
-    expect(container.textContent).not.toContain("ha");
+    expect(container.textContent).not.toContain("Area:");
+  });
+
+  test("badges a self-intersecting shape without claiming it was blocked", () => {
+    const bowtie = [
+      [0, 0],
+      [0.01, 0.01],
+      [0.01, 0],
+      [0, 0.01],
+    ];
+    const { getByTestId, container } = render(<GeometryView value={bowtie} />);
+    expect(getByTestId("geometry-warning-selfIntersection")).toHaveTextContent(
+      "Boundary crosses itself"
+    );
+    // Severity was settled on the device at capture; the web must not imply it knows.
+    expect(container.textContent).not.toMatch(
+      /blocked|rejected|invalid submission/i
+    );
+  });
+
+  test("shows no badge for geometry that passes", () => {
+    const { queryByTestId } = render(<GeometryView value={triangle} />);
+    expect(queryByTestId("geometry-warning-selfIntersection")).toBeNull();
+    expect(queryByTestId("geometry-warning-minArea")).toBeNull();
   });
 
   /**

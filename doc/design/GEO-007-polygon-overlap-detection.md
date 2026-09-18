@@ -265,7 +265,7 @@ invisible to unit tests:
 
 | Unit | h |
 |---|---|
-| **Spike: verify `@turf` submodules work in React Native** | 1 |
+| ~~Spike: verify `@turf` submodules work in React Native~~ — **moved to GEO-002 D-6**, which now adds `@turf/kinks` in phase 1 | 0 |
 | bbox range query + candidate fetch | 0.5 |
 | Intersection ratio vs threshold | 0.5 |
 | "Validate now" button, 3 states, progress | 1 |
@@ -273,7 +273,7 @@ invisible to unit tests:
 | Error assembly — multiple conflicts, repeat instance | 0.5 |
 | Unit tests with known fixtures | 1.5 |
 | **Perf test at 10,000 plots** | 1.5 |
-| **Total** | **7.5** |
+| **Total** | **6.5** — was 7.5; the `@turf` spike relocated to GEO-002 |
 
 ---
 
@@ -282,7 +282,10 @@ invisible to unit tests:
 - [ ] Is 20 % right for the first real programme? Inherited, not measured
 - [ ] What does the UI do when the candidate set is **incomplete** (GEO-005)? Refuse to
       validate, or validate with a visible caveat? Silently passing is not an option
-- [ ] Does `@turf` behave on a real device? **Spike this before committing the estimate**
+- [x] Does `@turf` behave on a real device? **Answered by phase 1**: GEO-002 D-6 adds
+      `@turf/kinks` to `app/` and carries the spike. If it fails there, this task learns about it
+      two phases early — which is the point of the relocation. `@turf/intersect` is a larger
+      module than `kinks`, so a green spike de-risks but does not fully settle this one.
 
 ### Raised in design review, needing follow-up
 
@@ -295,8 +298,11 @@ invisible to unit tests:
       This is a scoping mechanism this design does not yet have. It also interacts with D-2
       (region is never a *filter*): a **collection-area boundary for sync scope** is not the same
       as **filtering candidates by administrative label**, and the distinction must stay explicit
-- [ ] **Per-tenant custom rules** (D-8) — needs its own design: registration, distribution to
-      devices, and safe execution
+- [x] **Per-tenant custom rules** (D-8) — needs its own design: registration, distribution to
+      devices, and safe execution. Opened as **GEO-012**; researched 2026-09-17 and answered as a
+      **parameterised catalogue, not an expression DSL**, so registration and safe execution fall
+      away. The registry contract D-8 demands is now specified in **GEO-013**, which this task
+      implements against rather than invents
 - [ ] **Lines / multi-geometry.** Review settled on *polygons only for now*, with lines
       (fences, boundaries) likely later. D-8's rule list should not assume a polygon-only shape
 
