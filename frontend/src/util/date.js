@@ -1,5 +1,35 @@
 import moment from "moment";
 
+/**
+ * How the API renders datetimes: `REST_FRAMEWORK.DATETIME_FORMAT` is `"%d-%m-%Y %H:%M:%S"`
+ * project-wide (backend/mis/settings.py) — day first, and with no timezone offset.
+ */
+export const API_DATETIME_FORMAT = "DD-MM-YYYY HH:mm:ss";
+
+/**
+ * Parse an API datetime and render it in the viewer's locale.
+ *
+ * **Never hand one of these to `new Date()`.** It does not read day-first, so it falls back to
+ * a month-first guess: `"11-09-2026"` silently becomes 9 November instead of 11 September, and
+ * `"15-09-2026"` becomes `Invalid Date` as soon as the day passes 12. The visible failure is the
+ * lucky half — the quiet one is a wrong date that looks entirely plausible.
+ *
+ * Both parses are **strict**, and an unrecognised value returns the fallback rather than a
+ * guess. ISO is tried second so that dropping `DATETIME_FORMAT` from the backend settings one
+ * day improves this function instead of breaking it.
+ */
+export const formatApiDateTime = (value, fallback = "—") => {
+  if (!value) {
+    return fallback;
+  }
+  const asApiFormat = moment(value, API_DATETIME_FORMAT, true);
+  if (asApiFormat.isValid()) {
+    return asApiFormat.toDate().toLocaleString();
+  }
+  const asIso = moment(value, moment.ISO_8601, true);
+  return asIso.isValid() ? asIso.toDate().toLocaleString() : fallback;
+};
+
 export const getDateRange = ({
   startDate,
   endDate,
