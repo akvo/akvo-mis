@@ -684,6 +684,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
       .vertex-first {
         background: #1651b6;
       }
+      /* A fix worse than the accuracy threshold is kept and marked, never dropped
+         (GEO-014 D-3). Solid red rather than a red ring: this is read at arm's length, in
+         sunlight, by someone still standing on the plot who has to decide whether to walk that
+         stretch again. A thicker border keeps it distinguishable when vertices overlap on a
+         dense boundary. */
+      .vertex-poor {
+        background: #ec003f;
+        border-color: #7a0020;
+        border-width: 4px;
+      }
     </style>
     <script>
 /* leaflet:js:start */
@@ -704,6 +714,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       data-readonly="{{readonly}}"
       data-mylocation="{{myLocation}}"
       data-closed="{{closed}}"
+      data-accuracy-threshold="{{accuracyThreshold}}"
     ></div>
     <script>
       (function () {
@@ -717,6 +728,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         // the input-method dialog, matching ODK. Until then the map only pans and zooms, so a
         // stray touch while positioning cannot drop a point.
         var tapping = false;
+        // Metres. 0 disables red marking entirely, which is what the read-only preview wants.
+        var accuracyThreshold = Number(root.getAttribute('data-accuracy-threshold')) || 0;
 
         var map = L.map('map', {
           zoomControl: false,
@@ -793,10 +806,29 @@ svg.leaflet-image-layer.leaflet-interactive path {
           send('polygonChanged', { points: points });
         }
 
-        function vertexIcon(index) {
+        // A vertex is [lat, lng] or [lat, lng, accuracy]; the third element is optional and its
+        // ABSENCE means "not measured" (GEO-014 D-2). A tapped vertex is therefore never poor -
+        // it makes no claim about accuracy, so marking it red would tell the enumerator to
+        // re-walk a point that was never walked.
+        function isPoor(point) {
+          if (!accuracyThreshold) {
+            return false;
+          }
+          var metres = point && point.length > 2 ? Number(point[2]) : NaN;
+          return isFinite(metres) && metres > 0 && metres > accuracyThreshold;
+        }
+
+        function vertexIcon(index, point) {
+          var classes = 'vertex';
+          if (index === 0) {
+            classes += ' vertex-first';
+          }
+          if (isPoor(point)) {
+            classes += ' vertex-poor';
+          }
           return L.divIcon({
             className: '',
-            html: '<div class="vertex' + (index === 0 ? ' vertex-first' : '') + '"></div>',
+            html: '<div class="' + classes + '"></div>',
             iconSize: [16, 16],
           });
         }
@@ -806,18 +838,35 @@ svg.leaflet-image-layer.leaflet-interactive path {
             map.removeLayer(m);
           });
           markers = points.map(function (p, index) {
-            var marker = L.marker(p, { draggable: !readonly, icon: vertexIcon(index) }).addTo(map);
+            // Leaflet reads a third element as altitude and ignores it for rendering, so a
+            // measured vertex needs no special handling to draw in the right place.
+            var marker = L.marker(p, {
+              draggable: !readonly,
+              icon: vertexIcon(index, p),
+            }).addTo(map);
             if (readonly) {
               return marker;
             }
             // No message while the finger moves - Leaflet redraws locally and only the
             // finished gesture crosses the bridge.
+            //
+            // Dragging DROPS the accuracy, on purpose. Once a vertex has been moved by hand it
+            // is no longer where the GPS said it was, so the reading no longer describes it -
+            // keeping the old metres would claim a measurement for a hand-placed point and
+            // feed a number GEO-007's threshold would trust. It becomes a tapped vertex,
+            // which is exactly what it now is.
             marker.on('drag', function (e) {
               var ll = e.target.getLatLng();
               points[index] = [ll.lat, ll.lng];
               polygon.setLatLngs(points);
             });
-            marker.on('dragend', publish);
+            // Redraw, not just publish: the drag above turned a measured vertex into a tapped
+            // one, and without rebuilding the icon it would keep whatever colour its old
+            // accuracy earned it - a red marker the enumerator can no longer clear by moving.
+            marker.on('dragend', function () {
+              draw();
+              publish();
+            });
             marker.on('click', function () {
               points.splice(index, 1);
               draw();
@@ -872,6 +921,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
             points.push([c.lat, c.lng]);
             draw();
             publish();
+          }
+          if (message.type === 'addPoint') {
+            // A GPS vertex, from the interval or from "record this point". The native side
+            // has already decided the arity - two elements when the fix carried no usable
+            // accuracy - so it is appended verbatim rather than rebuilt here, and there is
+            // exactly one place that decides what "measured" means.
+            if (Array.isArray(message.data.point) && message.data.point.length >= 2) {
+              points.push(message.data.point);
+              draw();
+              publish();
+            }
+          }
+          if (message.type === 'setAccuracyThreshold') {
+            accuracyThreshold = Number(message.data.threshold) || 0;
+            draw();
           }
           if (message.type === 'centreOnMe') {
             // Recentre only - must never append a vertex.

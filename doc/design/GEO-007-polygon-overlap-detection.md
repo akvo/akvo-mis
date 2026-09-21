@@ -254,9 +254,11 @@ The two accuracy sources are deliberately different shapes. The polygon being va
 so its per-vertex readings are in hand. A candidate arrives through the datapoint list, which
 summarises — `accA + accB` needs one number per polygon, not 180.
 
-On mobile, `detectOverlaps = true` also disables tap-to-draw (GEO-014 D-4), so in practice both
-polygons in a check carry measured accuracy. The fallback branch exists for legacy rows and for
-answers entered through the webform, which is not an overlap-checked route.
+`detectOverlaps` controls detection only. Whether a boundary may be traced rather than walked is
+a separate key, `allowTapping` (GEO-014 D-4, revised 2026-09-21), so a polygon reaching this check
+may legitimately carry no accuracy at all — the fallback branch is a normal path, not an edge case
+for legacy rows. It also covers answers entered through the webform, which is not an
+overlap-checked route.
 
 ---
 

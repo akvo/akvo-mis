@@ -15,16 +15,23 @@ const loadMapDrawHtml = async ({
   readonly = false,
   myLocation = null,
   closed = true,
+  accuracyThreshold = 0,
 }) => {
   // eslint-disable-next-line global-require
   const [{ localUri }] = await Asset.loadAsync(require('../../assets/map-draw.html'));
   const template = await FileSystem.readAsStringAsync(localUri);
-  return template
-    .replace('{{points}}', () => escapeAttribute(points))
-    .replace('{{center}}', () => escapeAttribute(center))
-    .replace('{{readonly}}', () => `${readonly}`)
-    .replace('{{myLocation}}', () => escapeAttribute(myLocation))
-    .replace('{{closed}}', () => `${closed}`);
+  return (
+    template
+      .replace('{{points}}', () => escapeAttribute(points))
+      .replace('{{center}}', () => escapeAttribute(center))
+      .replace('{{readonly}}', () => `${readonly}`)
+      .replace('{{myLocation}}', () => escapeAttribute(myLocation))
+      .replace('{{closed}}', () => `${closed}`)
+      // Baked in rather than posted, like everything else here: a vertex must never render in
+      // the wrong colour for the window between load and the first bridge message. 0 disables
+      // the marking entirely, which is what the read-only preview wants.
+      .replace('{{accuracyThreshold}}', () => `${accuracyThreshold}`)
+  );
 };
 
 export default loadMapDrawHtml;

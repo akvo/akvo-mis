@@ -640,11 +640,18 @@ def _geo_config_issues(geo_config):
     # here would store a config that reads as enabled in the builder and
     # as off on the device — the exact silent failure this feature exists
     # to prevent.
-    detect = geo_config.get("detectOverlaps")
-    if detect is not None and not isinstance(detect, bool):
-        issues.append(
-            ("extra.geoConfig.detectOverlaps", "must be true or false")
-        )
+    # `allowTapping` joined on 2026-09-21 (GEO-014 D-4). It defaults to
+    # true and only `false` does anything, so a `"false"` string slipping
+    # through would read as ENABLED here and as disabled to nobody - the
+    # same silent mismatch the strict check above exists for. Tap capture
+    # used to be tied to `detectOverlaps`; separating them means one flag
+    # no longer does two unrelated jobs.
+    for key in ("detectOverlaps", "allowTapping"):
+        value = geo_config.get(key)
+        if value is not None and not isinstance(value, bool):
+            issues.append(
+                (f"extra.geoConfig.{key}", "must be true or false")
+            )
 
     # (key, upper bound) — accuracy is a distance in metres with no
     # meaningful ceiling, overlap is a percentage.

@@ -193,9 +193,24 @@ premise to re-examine if D4 is ever revisited (§11).
 - **FR-1.4b** Each recorded vertex carries its accuracy as an **optional** third element,
   `[lat, lng, accuracy]`. A tapped vertex omits it, and its absence means *not measured* — so
   every polygon captured before this requirement existed stays valid without migration.
-- **FR-1.5** The accuracy threshold comes from `extra.geoConfig.accuracyThreshold` when the
-  form defines it, and is then read-only. Otherwise the enumerator may adjust it, defaulting
-  to 15 m (ARF FR-AUTO-17/18).
+- **FR-1.5** The accuracy value is chosen by the enumerator in the capture dialog, from
+  **None, 3, 5, 10, 15, 20 m**, defaulting to **15 m**. When the form sets
+  `extra.geoConfig.accuracyThreshold` that value becomes a **ceiling**: looser options are not
+  offered and `None` is withdrawn. The enumerator may tighten it, never loosen it.
+
+  > **Revised 2026-09-18 (GEO-004 D-7).** Previously *"read-only when the form defines it"*.
+  > A ceiling keeps the form's intent intact while still letting someone working in open sky
+  > ask for better than the form demanded. It is also what stops phase 3's submission gate
+  > being switched off from inside the screen it gates.
+
+- **FR-1.5b** The control sits where ODK Collect puts `Accuracy requirement`, but **its label
+  must not copy ODK's**. ODK's value *filters* fixes; ours *flags* them (FR-1.4). A matching
+  label over differing behaviour is worse than an unfamiliar one, because it removes the prompt
+  to check.
+
+- **FR-1.5c** The recording interval is chosen by the enumerator from **1, 5, 10, 20, 30 s and
+  1, 5, 10, 20, 30 min**, defaulting to **10 s**, in ODK's position and order. Neither choice
+  persists between captures.
 - **FR-1.6** During auto-record the live GPS position is shown distinctly from recorded
   points, along with its current accuracy.
 - **FR-1.7** Recorded points are individually visible; the enumerator can remove a single
@@ -359,7 +374,8 @@ upstream release today.
 > |---|---|
 > | `accuracyThreshold` | marks vertices red everywhere; **blocks submission** only in phase 3 and only when `detectOverlaps` is on — FR-1.4, D-6, D-9 |
 > | `overlapThreshold` | the **ceiling** of an accuracy-derived threshold, not the threshold — FR-5.1, D-5 |
-> | `detectOverlaps` | additionally **disables tap-to-draw on mobile**, so a boundary must be walked — D-4 |
+> | `detectOverlaps` | unchanged — it enables the overlap check and nothing else |
+> | `allowTapping` | **new, 2026-09-21**, boolean, default `true`. `false` disables tap-to-draw on mobile, so a boundary must be walked — D-4. Read but not authored |
 >
 > The third is the one the UI does not announce: the checkbox label says nothing about drawing.
 > The app enforces it either way; adding it to the help text is an upstream release for one

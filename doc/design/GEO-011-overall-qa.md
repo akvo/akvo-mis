@@ -3,7 +3,9 @@
 **Task ID**: GEO-011
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft — **revised 2026-09-18 by GEO-014** (QA-504 rewritten, QA-603b/c and QA-504b/c added, QA-607 revised)
+**Status**: Draft — revised **2026-09-18** (QA-504 rewritten; QA-504b/c, QA-603b/c added;
+QA-607 revised) and **2026-09-21** (QA-501b added for the dead-Start regression; QA-504d/e added
+for ODK's dropdowns; QA-603b rewritten around `allowTapping`; QA-603f added)
 **Covers**: GEO-001 … GEO-010, GEO-014
 
 ---
@@ -281,6 +283,19 @@ failed one does.
 **Expected**: recording does not start silently. The enumerator is told a fix is being waited
 for. **FAIL if** the button appears dead with no explanation.
 
+### QA-501b — 🔴 The Start button must become enabled outdoors
+
+> Regression. The gate was circular: Start waited for a fix, the watch waited for Start.
+
+1. Grant location permission, go outdoors, open a geoshape question
+2. Open the input method dialog and select **Automatic location recording**
+3. Wait, without pressing anything
+
+**Expected**: a spinner appears with "Searching for satellites...", then "Improving the fix -
+N m so far..." once a position arrives, and **Start becomes enabled** within a minute.
+**FAIL if** Start stays disabled indefinitely, or if the message never changes — the second is
+what made the first hard to diagnose in the field.
+
 ### QA-502 — Walking records points
 
 1. Go outdoors with a clear sky view
@@ -328,6 +343,39 @@ submission is refused — a 400 here means the backend has not been patched for 
 element (GEO-014 §4, D-7), and `background-task.js` will have turned the submission back into a
 draft on the handset.
 
+### QA-504d — ODK's two dropdowns, and the one label that differs
+
+> Parity matters here because enumerators move between the two apps. GEO-004 D-6/D-7.
+
+1. Open the input method dialog and select **Automatic location recording**
+
+**Expected**: a `Recording interval` dropdown appears, offering 1 s, 5 s, 10 s, 20 s, 30 s,
+1 min, 5 min, 10 min, 20 min, 30 min, with **10 s** selected. An accuracy dropdown appears
+offering None, 3, 5, 10, 15, 20 m with **15 m** selected.
+
+2. Read the accuracy dropdown's label
+
+**Expected**: it says the value **flags** vertices. **FAIL if** it reads "Accuracy requirement"
+like ODK's — the behaviour differs (ours records and marks, ODK's filters), and a familiar label
+over unfamiliar behaviour removes the prompt to check.
+
+3. Set the interval to 30 min, start recording, walk for a few minutes
+
+**Expected**: no vertex is appended automatically. The pin button still appends on demand.
+
+### QA-504e — The form's threshold caps the enumerator's choice
+
+1. Author `geoConfig.accuracyThreshold: 5` on the question, publish, re-sync
+2. Open the capture screen and inspect the accuracy dropdown
+
+**Expected**: 5 m is selected; 10, 15, 20 and **None** are not offered. **FAIL if** any looser
+value can be chosen — in phase 3 that same threshold blocks submission, and a loose choice would
+switch the gate off from inside the screen it gates (GEO-004 D-7).
+
+3. Remove `accuracyThreshold` from the question, re-sync, reopen
+
+**Expected**: the full list returns, `None` included, with 15 m selected.
+
 ### QA-505 — Record on demand
 
 1. While walking, press "record this point" at a corner
@@ -336,8 +384,9 @@ draft on the handset.
 
 ### QA-506 — Mixed capture
 
-> Use a question with `detectOverlaps` **off**. From phase 3, tapping is unavailable when it is
-> on (GEO-014 D-4), so mixed capture is not reachable there — see QA-6xx.
+> Use a question that leaves `allowTapping` unset (the default). Tapping is unavailable where a
+> form sets `allowTapping: false` (GEO-014 D-4), so mixed capture is not reachable there — see
+> QA-603b.
 
 1. Record several points by walking
 2. Stop, then **tap** the map to add one more
@@ -403,9 +452,9 @@ that is ticked — an overlap threshold.
 **Expected**: the device receives the configured values. **FAIL if** it silently falls back to
 defaults — this is the failure mode that reports nothing.
 
-### QA-603b — 🔴 `detectOverlaps` disables tapping on mobile (GEO-014 D-4)
+### QA-603b — 🔴 `allowTapping: false` disables tapping on mobile (GEO-014 D-4)
 
-1. On the device, open a geoshape question with `detectOverlaps` **on**
+1. On the device, open a geoshape question with `geoConfig.allowTapping: false`
 2. Open the **Input method** dialog
 
 **Expected**: "Placement by tapping" is **disabled**; only the GPS recording modes are
@@ -413,14 +462,28 @@ selectable. **FAIL if** tapping is available — an enumerator blocked by poor G
 redraw the plot by hand and bypass the accuracy rules entirely, producing a boundary traced from
 imagery with nothing recording that it was.
 
-3. Open a geoshape question with `detectOverlaps` **off**
+3. Open a geoshape question that leaves `allowTapping` unset
 
-**Expected**: tapping is available and default, exactly as in phase 1.
+**Expected**: tapping is available and default, exactly as in phase 1. **This is also true when
+`detectOverlaps` is on** — the two keys are independent since 2026-09-21, so overlap detection
+alone no longer restricts capture.
 
-4. Open the **same** `detectOverlaps` question in the **webform**
+4. Open the **same** question in the **webform**
 
 **Expected**: drawing by tapping works normally. This is deliberate, not a leak — see GEO-014
 D-4. Note that a polygon entered this way is never overlap-checked at all.
+
+### QA-603f — The two keys must be set together to get the old protection
+
+> Not a bug report — a configuration check. Until the authoring UI pairs them, this is how a
+> programme discovers it has half the protection it thinks it has.
+
+1. Author `detectOverlaps: true` and leave `allowTapping` unset. Publish, re-sync
+2. On the device, capture a polygon by **tapping**, then submit
+
+**Expected**: it is accepted. Overlap detection is on, but the boundary was traced and nothing
+prevented that. **This is the documented consequence of separating the keys (GEO-014 D-4), not a
+defect** — flag it to the programme rather than filing it.
 
 ### QA-603c — Submit gate on poor accuracy (GEO-014 D-6)
 

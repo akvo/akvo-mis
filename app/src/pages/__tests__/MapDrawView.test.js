@@ -191,16 +191,34 @@ describe('MapDrawView input method dialog', () => {
     expect(getByTestId('option-input-method-automatic')).toBeDefined();
   });
 
-  it('enables only tapping - both recording modes land with GEO-004', () => {
+  it('enables all three modes - GEO-004 filled the two recording rows in', () => {
     const { getByTestId } = renderScreen();
     fireEvent.press(getByTestId('button-add-point'));
-    expect(getByTestId('option-input-method-tapping').props.accessibilityState.disabled).toBe(
-      false,
-    );
-    expect(getByTestId('option-input-method-manual').props.accessibilityState.disabled).toBe(true);
-    expect(getByTestId('option-input-method-automatic').props.accessibilityState.disabled).toBe(
-      true,
-    );
+    ['tapping', 'manual', 'automatic'].forEach((mode) => {
+      expect(getByTestId(`option-input-method-${mode}`).props.accessibilityState.disabled).toBe(
+        false,
+      );
+    });
+  });
+
+  it('names what it is waiting for rather than leaving Start dead', () => {
+    /**
+     * A fix is required to START recording; a GOOD fix is not. Demanding accuracy under the
+     * threshold would refuse to start under canopy - which is where boundaries are walked -
+     * and would contradict D-1, where poor fixes are recorded and marked, not prevented.
+     */
+    UserState.update((s) => {
+      s.currentLocation = null;
+    });
+    const { getByTestId, queryByTestId } = renderScreen();
+    fireEvent.press(getByTestId('button-add-point'));
+
+    fireEvent.press(getByTestId('option-input-method-automatic'));
+    expect(getByTestId('text-waiting-for-fix')).toBeDefined();
+    expect(getByTestId('button-start-input-method').props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.press(getByTestId('option-input-method-tapping'));
+    expect(queryByTestId('text-waiting-for-fix')).toBeNull();
   });
 
   it('dismisses without leaving the screen or adding a point', async () => {

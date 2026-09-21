@@ -47,19 +47,24 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 > | Key | Meaning at release | Meaning now |
 > |---|---|---|
 > | `overlapThreshold` | the overlap ratio tolerated | the **most** overlap ever tolerated — a ceiling on a threshold derived from GPS accuracy (GEO-014 D-5) |
-> | `accuracyThreshold` | fixes worse than this are discarded at capture | fixes worse than this are **recorded and marked red**, and from phase 3 block submission (GEO-014 D-3, D-6) |
-> | `detectOverlaps` | enables the overlap check | additionally **disables tap-to-draw on mobile** (GEO-014 D-4) |
+> | `accuracyThreshold` | fixes worse than this are discarded at capture | fixes worse than this are **recorded and marked red**, and from phase 3 block submission (GEO-014 D-3, D-6). It is also a **ceiling** on the enumerator's own choice in the capture dialog — they may tighten it, never loosen it (GEO-004 D-7) |
+> | `detectOverlaps` | enables the overlap check | unchanged — it enables the overlap check and nothing else (GEO-014 D-4, revised 2026-09-21) |
 >
 > Nothing about the fields, their types, defaults or validation ranges changes, so no programme's
 > saved configuration changes meaning in a way that loosens anything: as a ceiling,
 > `overlapThreshold` can only ever make detection *stricter* than it was.
 >
-> `detectOverlaps` growing a second effect is the one place this is arguably under-communicated
-> — the checkbox label says nothing about drawing. Adding that to the help text is an upstream
-> release for one string, and the app enforces it regardless.
+> `detectOverlaps` growing a second effect was the one place this was arguably
+> under-communicated — the checkbox label says nothing about drawing.
 >
-> **Decided 2026-09-18: deferred, and this panel is not touched.** Recorded as known debt rather
-> than an oversight, so nobody re-discovers it as a bug.
+> **Resolved 2026-09-21 by removing the cause rather than documenting it.** GEO-014 D-4 moves
+> tap-disabling onto its own key, `allowTapping`, so `detectOverlaps` no longer has a second
+> effect to announce. That debt is closed and the help-text change is not needed.
+>
+> A smaller, better-shaped question replaces it. The protection the coupling used to give for
+> free now needs **two** keys set together, and only the authoring UI can make that pairing
+> visible at the moment it matters. Revealing `allowTapping` beside `detectOverlaps` is the
+> natural follow-up — and unlike a help-text string, it would earn its release.
 >
 > One further key joins the "read but not authored" list that the 2026-09-17 correction above
 > describes: **`overlapThresholdFloor`** (default `5`, GEO-014 D-8), the lower bound of the

@@ -123,6 +123,44 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
             "min_lon": 38.74, "max_lon": 38.75,
         })
 
+    def test_bbox_of_a_walked_polygon_carrying_accuracy(self):
+        """GEO-014: a vertex may have a third element. `zip(*coords)`
+        raised `ValueError: too many values to unpack` on it and took
+        this whole response down - every row, for every device, not just
+        the offending one."""
+        walked = [[9.03, 38.74, 4.2], [9.04, 38.74, 6.8], [9.04, 38.75, 5.1]]
+        self.make_datapoint(self.form, "Plot Walked", walked)
+        response = self.get_list(f"?form_id={self.form.id}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = {r["name"]: r for r in response.json()["data"]}
+        self.assertEqual(rows["Plot Walked"]["geometry"][0]["bbox"], {
+            "min_lat": 9.03, "max_lat": 9.04,
+            "min_lon": 38.74, "max_lon": 38.75,
+        })
+
+    def test_accuracy_is_passed_through_to_the_device(self):
+        """The candidate polygon's accuracy is the half GEO-007 cannot
+        measure locally, so it has to survive this serializer intact."""
+        walked = [[9.03, 38.74, 4.2], [9.04, 38.74], [9.04, 38.75, 5.1]]
+        self.make_datapoint(self.form, "Plot Mixed", walked)
+        response = self.get_list(f"?form_id={self.form.id}")
+        rows = {r["name"]: r for r in response.json()["data"]}
+        self.assertEqual(
+            rows["Plot Mixed"]["geometry"][0]["coordinates"], walked
+        )
+
+    def test_a_mixed_length_ring_still_yields_a_bbox(self):
+        """A polygon may hold walked and tapped vertices at once, so the
+        bbox cannot assume a uniform arity."""
+        mixed = [[9.03, 38.74], [9.04, 38.74, 6.8], [9.04, 38.75]]
+        self.make_datapoint(self.form, "Plot Half", mixed)
+        response = self.get_list(f"?form_id={self.form.id}")
+        rows = {r["name"]: r for r in response.json()["data"]}
+        self.assertEqual(rows["Plot Half"]["geometry"][0]["bbox"], {
+            "min_lat": 9.03, "max_lat": 9.04,
+            "min_lon": 38.74, "max_lon": 38.75,
+        })
+
     def test_no_geometry_key_when_the_flag_is_off(self):
         """The flag-off response keeps exactly today's shape."""
         self.make_datapoint(self.plain_form, "Plain A", ADDIS_PLOT)
