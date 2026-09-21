@@ -85,16 +85,6 @@ BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 # scripting hole the separate origin exists to prevent.
 EMBED_HOST = environ.get("EMBED_HOST", "")
 
-# Subdomains of the workspaces entitled to embedding, comma-separated,
-# e.g. "acme,globex". Empty entitles nobody. See `tenant_may_embed()`,
-# which is the only reader and explains why both this and EMBED_HOST
-# are required.
-EMBED_TENANTS = frozenset(
-    part.strip().lower()
-    for part in environ.get("EMBED_TENANTS", "").split(",")
-    if part.strip()
-)
-
 
 ALLOWED_HOSTS = ["*"]
 

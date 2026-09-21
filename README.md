@@ -42,7 +42,6 @@ APK_UPLOAD_SECRET="123456789AU"
 STORAGE_PATH="./storage"
 BASE_DOMAIN=
 EMBED_HOST=
-EMBED_TENANTS=
 SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
 SENTRY_MOBILE_DSN="<<your_sentry_mobile_DSN>>"
@@ -125,39 +124,27 @@ exists.
 | `EMBED_HOST` | Behaviour |
 |---|---|
 | empty (**default**) | Embedding is off for the whole deployment. The create dialog does not offer it, the embed route answers 404, and any embedded dashboards that already exist stay listed while reporting that their content cannot be shown. Every other kind of dashboard is unaffected. |
-| e.g. `https://embed.example.com` | The deployment *can* render embedded dashboards. Which workspaces actually may is `EMBED_TENANTS`, below. The host must resolve, serve TLS, and route `/api` to the backend the way the app's own host does. |
+| e.g. `https://embed.example.com` | The deployment *can* render embedded dashboards. Which workspaces actually may is a per-workspace entitlement, below. The host must resolve, serve TLS, and route `/api` to the backend the way the app's own host does. |
 
 **Leaving it empty is a supported state**, not a broken one. Set it only
 for deployments that want embedded dashboards.
 
-**`EMBED_TENANTS` decides which workspaces get the feature.** Embedding
+**The entitlement decides which workspaces get the feature.** Embedding
 is a paid tier, so having somewhere safe to render a snippet is not the
-same as being entitled to one. It is a comma-separated list of
-workspace subdomains:
+same as being entitled to one. It is a per-workspace switch a platform
+operator turns on from the admin console, stored on the workspace
+itself rather than in configuration — selling the feature to a customer
+used to mean a deploy.
 
-```
-EMBED_TENANTS=acme,globex
-```
+**Both halves are required.** `EMBED_HOST` alone renders nothing, and so
+does the entitlement alone. No workspace is entitled by default.
 
-| `EMBED_TENANTS` | Behaviour |
-|---|---|
-| empty (**default**) | No workspace may embed, whatever `EMBED_HOST` says. |
-| e.g. `acme,globex` | Those two workspaces may create and render embedded dashboards. Every other workspace is told the feature is not available. |
-
-**Both settings are required.** `EMBED_HOST` alone renders nothing, and
-`EMBED_TENANTS` alone renders nothing.
-
-Single-tenant and legacy deployments are not exempt: after the tenant
-backfill their one workspace is called `default`, so they need
-`EMBED_TENANTS=default`.
-
-Removing a workspace from the list **stops its embedded dashboards
+Revoking the entitlement **stops that workspace's embedded dashboards
 rendering immediately** — including tabs already open, since the check
 runs on every request for the embed document rather than only when the
 URL is minted. Nothing is deleted: the dashboards stay listed and their
-snippets are kept, so putting the workspace back restores them with no
-action from the author. Changing the list needs a restart, as any
-environment variable does.
+snippets are kept, so restoring the entitlement restores them with no
+action from the author, and no restart.
 
 **Choosing a value.** Any hostname that is not the app's own will do.
 With `BASE_DOMAIN` set, a name one level under it — `embed.<BASE_DOMAIN>`

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 
+from api.v1.v1_profile.constants import FeatureFlags
 from api.v1.v1_users.models import Tenant
 
 
@@ -85,21 +86,22 @@ def tenant_may_embed(tenant):
     its own there is nowhere safe to run a third-party snippet, so no
     workspace can embed however it was sold.
 
-    `EMBED_TENANTS` is the commercial entitlement. Membership is by
-    subdomain, which is the tenant identifier that survives being
-    written down in an environment variable -- a primary key would not
-    survive a restore into a fresh database.
+    `Tenant.features` holds the commercial entitlement, which an
+    operator toggles from the console. It used to be `EMBED_TENANTS`,
+    an environment variable keyed by subdomain, so selling the feature
+    meant a deploy -- and it was the last thing keyed by the subdomain
+    string, which is what a rename invalidates.
 
     A tenant of None is not entitled. That is the honest answer for the
-    base domain and for a deployment with no tenant rows, and it also
-    means a single-host install must name its workspace in
-    `EMBED_TENANTS` like any other. Defaulting the tenant-less case to
-    "allowed" would have made the base domain the one place the
-    entitlement did not apply.
+    base domain and for a deployment with no tenant rows. Defaulting
+    the tenant-less case to "allowed" would have made the base domain
+    the one place the entitlement did not apply.
     """
     if not settings.EMBED_HOST or tenant is None:
         return False
-    return (tenant.subdomain or "").lower() in settings.EMBED_TENANTS
+    return bool(
+        (tenant.features or {}).get(FeatureFlags.embedded_dashboard)
+    )
 
 
 def resolve_tenant_from_host(host):

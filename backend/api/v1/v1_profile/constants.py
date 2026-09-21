@@ -171,3 +171,18 @@ BBOX_ATTRIBUTE_NAME = "Bounding Box"
 # notebook cannot do -- it has no database ids -- so the CSV path is
 # name-keyed instead.
 ATTRIBUTE_COLUMN_PREFIX = "attr_"
+
+
+class FeatureFlags:
+    """Per-workspace commercial entitlements.
+
+    Keys are strings because they are stored in a JSON column rather
+    than as integers in a table: a renamed constant would orphan every
+    row that used it, so these values are permanent once shipped.
+    """
+
+    embedded_dashboard = "embedded_dashboard"
+
+    FieldStr = {
+        embedded_dashboard: "Embedded Dashboard",
+    }

@@ -17,7 +17,10 @@ from django.test.utils import override_settings
 
 from api.v1.v1_forms.constants import FormStatus, FormTypes
 from api.v1.v1_forms.models import Forms
-from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_profile.tests.mixins import (
+    ProfileTestHelperMixin,
+    set_embedding,
+)
 from api.v1.v1_users.models import Tenant
 from api.v1.v1_visualization.constants import (
     DashboardKind,
@@ -33,9 +36,7 @@ PUBLISHED = "<iframe src='https://app.powerbi.com/view?r=published'></iframe>"
 EDITED = "<iframe src='https://app.powerbi.com/view?r=edited'></iframe>"
 
 
-@override_settings(
-    USE_TZ=False, EMBED_HOST=EMBED_ORIGIN, EMBED_TENANTS={"default"}
-)
+@override_settings(USE_TZ=False, EMBED_HOST=EMBED_ORIGIN)
 class EmbedDocumentTestCase(TestCase, ProfileTestHelperMixin):
     def setUp(self):
         call_command("administration_seeder", "--test")
@@ -46,6 +47,7 @@ class EmbedDocumentTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         self.dashboard = Dashboard.objects.create(
             name="Sales",
             slug="sales",
@@ -188,9 +190,7 @@ class EmbedDocumentTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIsNone(self.url(widgets))
 
 
-@override_settings(
-    USE_TZ=False, EMBED_HOST=EMBED_ORIGIN, EMBED_TENANTS={"default"}
-)
+@override_settings(USE_TZ=False, EMBED_HOST=EMBED_ORIGIN)
 class EmbedPreviewTestCase(TestCase, ProfileTestHelperMixin):
     """Preview must show what a viewer sees, including unsaved markup."""
 
@@ -204,6 +204,7 @@ class EmbedPreviewTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         token = RefreshToken.for_user(self.user).access_token
         self.header = {"HTTP_AUTHORIZATION": "Bearer {0}".format(token)}
         self.embed = Dashboard.objects.create(
@@ -344,9 +345,7 @@ class EmbedSubdomainReservationTestCase(TestCase):
         self.assertLess(res.status_code, 300, res.content)
 
 
-@override_settings(
-    USE_TZ=False, EMBED_HOST=EMBED_ORIGIN, EMBED_TENANTS={"default"}
-)
+@override_settings(USE_TZ=False, EMBED_HOST=EMBED_ORIGIN)
 class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
     """Embedding is a commercial tier, and losing it stops the render.
 
@@ -368,6 +367,7 @@ class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         token = RefreshToken.for_user(self.user).access_token
         self.header = {"HTTP_AUTHORIZATION": "Bearer {0}".format(token)}
         self.dashboard = Dashboard.objects.create(
@@ -393,11 +393,11 @@ class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
 
     # ── minting ──
 
-    @override_settings(EMBED_TENANTS={"someone-else"})
     def test_a_workspace_off_the_whitelist_gets_no_url(self):
         # Indistinguishable from the deployment having no embed host at
         # all, which is deliberate: a reader learns nothing about the
         # workspace's commercial tier from a public page.
+        set_embedding(self.user.tenant, False)
         self.assertIsNone(self.retrieve()["embed_url"])
 
     # ── serving: revocation stops rendering everywhere ──
@@ -405,18 +405,19 @@ class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
     def test_a_token_minted_while_entitled_stops_working_when_revoked(self):
         url = self.retrieve()["embed_url"]
         self.assertEqual(self.fetch(url).status_code, 200)
-        with self.settings(EMBED_TENANTS={"someone-else"}):
-            # Same URL, same signature, still inside MAX_AGE. The
-            # entitlement is re-read at serve time, so it 404s.
-            self.assertEqual(self.fetch(url).status_code, 404)
+        set_embedding(self.user.tenant, False)
+        # Same URL, same signature, still inside MAX_AGE. The
+        # entitlement is re-read at serve time, so it 404s.
+        self.assertEqual(self.fetch(url).status_code, 404)
 
     def test_revocation_is_reversible(self):
         # Nothing is destroyed by a revocation: the dashboard, its
         # snapshot and its markup all survive, so restoring the
         # entitlement restores the render with no author action.
         url = self.retrieve()["embed_url"]
-        with self.settings(EMBED_TENANTS=set()):
-            self.assertEqual(self.fetch(url).status_code, 404)
+        set_embedding(self.user.tenant, False)
+        self.assertEqual(self.fetch(url).status_code, 404)
+        set_embedding(self.user.tenant, True)
         self.assertEqual(self.fetch(url).status_code, 200)
 
     # ── preview ──
@@ -431,8 +432,8 @@ class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
             **self.header
         )
 
-    @override_settings(EMBED_TENANTS={"someone-else"})
     def test_preview_is_refused_for_an_unentitled_workspace(self):
+        set_embedding(self.user.tenant, False)
         res = self.preview("<iframe src='https://x/'></iframe>")
         self.assertEqual(res.status_code, 503)
         # The same words a deployment with no embed host gets. A manager
@@ -446,15 +447,15 @@ class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
         draft = "<iframe src='https://public.tableau.com/draft'></iframe>"
         url = self.preview(draft).json()["embed_url"]
         self.assertEqual(self.fetch(url).status_code, 200)
-        with self.settings(EMBED_TENANTS=set()):
-            # The tenant rides inside the signed token: the embed host
-            # is nobody's subdomain and resolves no tenant of its own.
-            self.assertEqual(self.fetch(url).status_code, 404)
+        set_embedding(self.user.tenant, False)
+        # The tenant rides inside the signed token: the embed host is
+        # nobody's subdomain and resolves no tenant of its own.
+        self.assertEqual(self.fetch(url).status_code, 404)
 
     # ── authoring ──
 
-    @override_settings(EMBED_TENANTS={"someone-else"})
     def test_an_unentitled_workspace_cannot_create_an_embed(self):
+        set_embedding(self.user.tenant, False)
         res = self.client.post(
             "/api/v1/manage/dashboards",
             json.dumps({
@@ -468,10 +469,10 @@ class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(res.status_code, 400)
         self.assertEqual(res.json()["field"], "kind")
 
-    @override_settings(EMBED_TENANTS={"someone-else"})
     def test_an_existing_embed_survives_revocation_and_stays_readable(self):
         # A revocation is not a deletion. The row, its snippet and its
         # snapshot are all still there — only the rendering stops.
+        set_embedding(self.user.tenant, False)
         body = self.retrieve()
         self.assertEqual(body["slug"], "sales")
         self.dashboard.refresh_from_db()
