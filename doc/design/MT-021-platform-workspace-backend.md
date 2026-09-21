@@ -98,10 +98,19 @@ anonymous marketing surface puts the `AUTH_TOKEN` cookie (which is not
 `HttpOnly`) within reach of any script later added to that page.
 
 `resolve_tenant_from_host()` must never resolve this host to a tenant. That is
-free once registration reserves the label, but **the migration must verify
-that no `Tenant` row already holds `subdomain="admin"`** and fail loudly if one
-does. `RegisterSerializer.validate_subdomain` gains the reservation beside the
-existing `EMBED_HOST` collision check, for the same reason that one exists.
+free once registration reserves the label:
+`RegisterSerializer.validate_subdomain` gains the reservation beside the
+existing `EMBED_HOST` collision check, for the same reason that one exists, and
+the rename endpoint applies the same rule.
+
+**The migration deliberately does not enforce it.** An earlier draft had it
+refuse to apply when a `Tenant` row already held `subdomain="admin"`. That
+hardcodes one label into an irreversible place: which label the console answers
+on is a decision this deployment may revisit — `platform` is as plausible as
+`admin` — and a migration keyed to the string would turn a later change of mind
+into a schema problem. `ADMIN_SUBDOMAIN` is a single constant in
+`utils/tenant_host.py`, and with no migration referencing it, changing it is a
+one-line edit. A pre-existing row is renamed by hand instead.
 
 With `BASE_DOMAIN` unset — mohhs, unicef-fsm, and the whole test suite —
 `is_admin_host()` is false for every host and the console is unreachable.
@@ -377,7 +386,7 @@ Each row is an independently testable commit. `→` marks its dependency.
 |---|---|---|
 | 1 | `is_platform_admin` + migration, `IsPlatformAdmin`, `createplatformadmin` | — |
 | 2 | `is_admin_host()`, `admin` reservation, middleware branch, `login()` relaxation | 1 |
-| 3 | `Tenant.is_active`/`deleted_at`/`features` + migration + `admin`-collision guard; lifecycle filter in `resolve_tenant_from_host` | — |
+| 3 | `Tenant.is_active`/`deleted_at`/`features` + migration; lifecycle filter in `resolve_tenant_from_host` | — |
 | 4 | `FeatureFlags`, `tenant_may_embed` reads JSON, `EMBED_TENANTS` data migration, delete the setting | 3 |
 | 5 | `api/v1/v1_admin/` app: tenant list, detail, deactivate/activate, soft-delete, features | 2, 3 |
 | 6 | `GET /admin/tenants/summary`, single annotated query | 5 |
@@ -400,8 +409,14 @@ before release.
 If support tickets about broken devices follow the first rename, build it
 before the second.
 
-**`admin` may already be taken.** The migration guard turns that into a loud
-failure rather than a console that silently shadows a customer's workspace.
+**`admin` may already be taken**, on a deployment that predates the
+reservation. Nothing blocks it, and nothing needs to: the collision cannot be
+escalated. The host resolves to that workspace, so the console's checks refuse
+the operator and the workspace's own checks refuse its owner — both are locked
+out of that one host, neither gains the other's powers, and every other
+workspace is untouched. It is loud, local, and fixed by renaming the workspace.
+`tests_platform_admin_host.AdminHostCollisionTestCase` pins all three
+properties, because no guard does.
 
 ## Out of scope
 
