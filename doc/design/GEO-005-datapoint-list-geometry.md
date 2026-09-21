@@ -5,7 +5,14 @@
 **Task ID**: GEO-005 (breakdown ref: T2)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft — **revised 2026-09-18 by GEO-014** (vertex carries optional accuracy)
+**Status**: **Implemented** — `geometry_answers` / `bounding_box` / `geometry_by_data_id` in
+`v1_mobile/geometry.py`, 25 tests in `tests_mobile_datapoint_geometry.py`. Revised 2026-09-18 by
+GEO-014; the per-polygon accuracy summary (D-10) is the one part **not yet built**
+
+> **Status corrected 2026-09-21.** This still read "Draft" long after the endpoint shipped. The
+> stale line was found by cross-checking each GEO document's header against the code rather than
+> against the other documents — worth repeating, because a "Draft" that is really delivered is
+> the one kind of staleness no reader questions.
 **Phase**: 3 — Overlap detection
 **Estimate**: 6h ≈ 1 day (Backend)
 **Blocks**: GEO-006
@@ -48,13 +55,17 @@ Concern 1 is the reason this task exists: **a validation feature that silently p
 than one that errors.**
 
 ### Technical Acceptance Criteria
-- [ ] With `detectOverlaps` off, the response is **byte-identical to today**
+- [x] With `detectOverlaps` off, the response is **byte-identical to today**
 - [ ] With it on, the device builds GEO-006's index **without fetching any per-datapoint JSON**
       and without parsing coordinates to derive bboxes
-- [ ] The device can distinguish a complete candidate set from a partial one
-- [ ] Existing pagination (`page_size=100` max) and `last_updated` cursor reused — no second
+- [x] The device can distinguish a complete candidate set from a partial one
+- [x] Existing pagination (`page_size=100` max) and `last_updated` cursor reused — no second
       sync loop on the device
-- [ ] Tenant and mobile-assignment scoping unchanged
+- [x] Tenant and mobile-assignment scoping unchanged
+
+> Two criteria above stay unticked on purpose. The **device** half — building GEO-006's index
+> from this payload — belongs to GEO-006, which is unbuilt; and the accuracy summary added by
+> GEO-014 D-10 is specified here but not yet served.
 
 ---
 
