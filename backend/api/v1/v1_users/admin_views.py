@@ -29,8 +29,9 @@ from api.v1.v1_users.admin_serializers import (
     TenantListSerializer,
     TenantRenameSerializer,
     TenantSummarySerializer,
+    TenantUserSerializer,
 )
-from api.v1.v1_users.models import Tenant
+from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_generator import sqlite_path
 from utils.custom_permissions import IsPlatformAdmin
@@ -275,3 +276,51 @@ def _move_master_data(previous, tenant):
             "Could not move master data from %s to %s; the files will "
             "regenerate on the next device sync.", old_dir, new_dir,
         )
+
+
+@extend_schema(responses={200: TenantUserSerializer(many=True)},
+               tags=CONSOLE_TAG, summary="People in one workspace")
+@api_view(["GET"])
+@permission_classes([IsPlatformAdmin])
+def tenant_users(request, version, tenant_id):
+    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    users = SystemUser.objects_with_deleted.filter(
+        tenant=tenant
+    ).prefetch_related("mobile_assignments").order_by("email")
+    return Response(
+        TenantUserSerializer(users, many=True).data,
+        status=status.HTTP_200_OK,
+    )
+
+
+@extend_schema(responses={200: TenantUserSerializer}, tags=CONSOLE_TAG,
+               summary="Deactivate a workspace user")
+@api_view(["POST"])
+@permission_classes([IsPlatformAdmin])
+def deactivate_user(request, version, user_id):
+    return _set_user_active(user_id, False)
+
+
+@extend_schema(responses={200: TenantUserSerializer}, tags=CONSOLE_TAG,
+               summary="Reactivate a workspace user")
+@api_view(["POST"])
+@permission_classes([IsPlatformAdmin])
+def activate_user(request, version, user_id):
+    return _set_user_active(user_id, True)
+
+
+def _set_user_active(user_id, active):
+    """Flip one workspace user's is_active.
+
+    Scoped to accounts that belong to a workspace. An operator reached
+    through here would turn "deactivate a user" into a way to lock every
+    operator out of the console; they are managed on their own page.
+    """
+    user = get_object_or_404(
+        SystemUser.objects.filter(tenant__isnull=False), pk=user_id
+    )
+    user.is_active = active
+    user.save(update_fields=["is_active"])
+    return Response(
+        TenantUserSerializer(user).data, status=status.HTTP_200_OK
+    )

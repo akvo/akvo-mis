@@ -9,7 +9,7 @@ from django.conf import settings
 from rest_framework import serializers
 
 from api.v1.v1_profile.constants import FeatureFlags
-from api.v1.v1_users.models import Tenant
+from api.v1.v1_users.models import SystemUser, Tenant
 from utils.tenant_host import ADMIN_SUBDOMAIN, embed_hostname
 
 
@@ -137,3 +137,26 @@ class TenantRenameSerializer(serializers.Serializer):
                     "This subdomain is reserved."
                 )
         return value
+
+
+class TenantUserSerializer(serializers.ModelSerializer):
+    """A person in a workspace, as the console sees them.
+
+    Identity and status only. Nothing here touches what they submitted.
+    """
+
+    name = serializers.CharField(read_only=True)
+    devices = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SystemUser
+        fields = ["id", "name", "email", "state", "devices", "last_login"]
+
+    def get_devices(self, instance):
+        return instance.mobile_assignments.count()
+
+    def get_state(self, instance):
+        if instance.deleted_at:
+            return "deleted"
+        return "active" if instance.is_active else "deactivated"

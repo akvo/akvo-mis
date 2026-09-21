@@ -25,12 +25,15 @@ from api.v1.v1_users.views import (
 )
 from api.v1.v1_users.admin_views import (
     activate_tenant,
+    activate_user,
     deactivate_tenant,
+    deactivate_user,
     list_tenants,
     rename_tenant,
     set_tenant_features,
     tenant_detail,
     tenant_rename_impact,
+    tenant_users,
     tenants_summary,
 )
 from api.v1.v1_profile.views import list_entity_data
@@ -65,6 +68,18 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/rename$",
         rename_tenant,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/users$",
+        tenant_users,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/users/(?P<user_id>[0-9]+)/deactivate$",
+        deactivate_user,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/users/(?P<user_id>[0-9]+)/activate$",
+        activate_user,
     ),
     re_path(
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)$",
