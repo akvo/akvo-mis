@@ -1,0 +1,173 @@
+/* Chrome for the MT-022 mockups.
+ *
+ * Deliberately unlike the mockups themselves — dark bar, system font —
+ * so there is never a question about which pixels are the proposed
+ * design and which are the scaffolding around it. Everything the
+ * mockups style lives under `.artboard`.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #22262e;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.chrome {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 12px 24px;
+  background: #15181d;
+  border-bottom: 1px solid #333a45;
+}
+
+.chrome .home {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.chrome nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chrome nav a {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #b9bec9;
+  text-decoration: none;
+}
+
+.chrome nav a:hover {
+  color: #ffffff;
+  background: #262b34;
+}
+
+.chrome nav a.here {
+  color: #15181d;
+  background: #ffffff;
+  font-weight: 600;
+}
+
+/* The artboards are fixed-width desktop comps (1440px), so the stage
+ * scrolls rather than reflowing them. Squeezing a 1440px console into a
+ * phone would be inventing a responsive design nobody has agreed to.
+ */
+.stage {
+  display: flex;
+  justify-content: center;
+  padding: 32px;
+  overflow-x: auto;
+}
+
+.artboard {
+  flex: none;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- index page ---------- */
+
+.intro {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 24px 8px;
+  color: #d5d9e0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.intro h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  color: #ffffff;
+}
+
+.intro .lede {
+  color: #9aa2ae;
+  margin: 0 0 24px;
+}
+
+.intro code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  background: #15181d;
+  border: 1px solid #333a45;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.intro a {
+  color: #8ab4ff;
+}
+
+.cards {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 24px 56px;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  display: block;
+  padding: 18px 20px;
+  background: #1b1f26;
+  border: 1px solid #333a45;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.card:hover {
+  border-color: #5b6575;
+  background: #20252d;
+}
+
+.card h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #ffffff;
+}
+
+.card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #9aa2ae;
+}
+
+.card .doc {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6f7885;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.note {
+  max-width: 760px;
+  margin: 0 auto 56px;
+  padding: 16px 20px;
+  background: #1b1f26;
+  border: 1px solid #333a45;
+  border-left: 3px solid #874d00;
+  border-radius: 6px;
+  color: #9aa2ae;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.note strong {
+  color: #d5d9e0;
+}

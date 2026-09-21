@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tenants — MT-022 mockup</title>
+<link rel="stylesheet" href="mockup.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap">
+<style>
+.artboard{font-family:'Poppins',sans-serif;background:#f0f2f5;color:#141414}
+.artboard a{color:#1651b6;text-decoration:none}.artboard a:hover{color:#113d89}
+.artboard table{border-collapse:collapse;width:100%}
+.artboard th{text-align:left;font-size:12px;font-weight:600;color:#141414;padding:13px 14px;background:#fafafa;border-bottom:1px solid #f0f0f0;white-space:nowrap}
+.artboard td{padding:14px;border-bottom:1px solid #f0f0f0;font-size:14px;vertical-align:middle;white-space:nowrap}
+.artboard .num{text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+  <header class="chrome">
+    <a class="home" href="index.html">MT-022 mockups</a>
+    <nav>
+      <a href="tenants.html" class="here">Tenants</a>
+      <a href="tenant-detail.html">Tenant detail</a>
+      <a href="rename.html">Rename dialog</a>
+      <a href="operators.html">Operators</a>
+      <a href="inspecting.html">Inspecting</a>
+    </nav>
+  </header>
+  <main class="stage">
+    <div class="artboard">
+<div style="width: 1440px; height: 900px; box-sizing: border-box; background: #f0f2f5; display: flex; flex-direction: column;">
+
+  <!-- The app's own header: white, 86px, thin rule. Not a console chrome. -->
+  <div style="height: 86px; flex-shrink: 0; background: #ffffff; border-bottom: 1px solid rgba(0,0,0,.06); display: flex; align-items: center; padding: 0 50px; gap: 34px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="width: 38px; height: 38px; border-radius: 8px; background: #1651b6; display: flex; align-items: center; justify-content: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 20h18"></path><path d="M6 20V10"></path><path d="M12 20V4"></path><path d="M18 20v-7"></path></svg>
+      </div>
+      <span style="font-size: 16px; font-weight: 600; color: #141414;">Platform Console</span>
+    </div>
+    <nav style="display: flex; align-items: center; gap: 28px; flex-grow: 1; font-size: 14px; font-weight: 500;">
+      <a href="tenants.html" style="color: #1651b6; padding: 31px 0; border-bottom: 2px solid #1651b6;">Tenants</a>
+      <a href="operators.html" style="color: #666666;">Operators</a>
+    </nav>
+    <span style="font-size: 14px; font-weight: 600; color: #141414;">john.doe@akvo.org</span>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+  </div>
+
+  <div style="flex-grow: 1; padding: 24px 50px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+    <div style="display: flex; align-items: flex-end; gap: 12px;">
+      <div style="flex-grow: 1;">
+        <h1 style="margin: 0 0 4px 0; font-size: 20px; font-weight: 600;">Tenants</h1>
+        <div style="font-size: 13px; color: #666666;">6 workspaces &middot; 4 active &middot; 1 suspended &middot; 1 deleted</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #ffffff; border: 1px solid #d9d9d9; border-radius: 6px; width: 250px; box-sizing: border-box;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#666666" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <label for="t-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Search workspaces</label>
+          <input id="t-search" type="search" placeholder="Search subdomain or name" style="border: 0; outline: 0; font-family: inherit; font-size: 14px; width: 100%; background: transparent; color: #141414;">
+        </div>
+        <div style="display: flex; border: 1px solid #d9d9d9; border-radius: 6px; overflow: hidden; background: #ffffff;">
+          <button type="button" style="padding: 7px 15px; font-size: 13px; font-weight: 500; font-family: inherit; border: 0; background: #1651b6; color: #ffffff; cursor: pointer;">All</button>
+          <button type="button" style="padding: 7px 15px; font-size: 13px; font-family: inherit; border: 0; border-left: 1px solid #d9d9d9; background: transparent; color: #141414; cursor: pointer;">Active</button>
+          <button type="button" style="padding: 7px 15px; font-size: 13px; font-family: inherit; border: 0; border-left: 1px solid #d9d9d9; background: transparent; color: #141414; cursor: pointer;">Suspended</button>
+          <button type="button" style="padding: 7px 15px; font-size: 13px; font-family: inherit; border: 0; border-left: 1px solid #d9d9d9; background: transparent; color: #141414; cursor: pointer;">Deleted</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border-radius: 6px; box-shadow: 0px 1px 4px rgba(21,34,50,.08); overflow: hidden;">
+      <table>
+        <thead>
+          <tr>
+            <th>Workspace</th><th>Status</th>
+            <th class="num">Users</th><th class="num">Forms</th><th class="num">Dashboards</th>
+            <th class="num">Datapoints</th><th class="num">Devices</th>
+            <th>Last activity</th><th>Features</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr>
+            <td>
+              <a href="tenant-detail.html" style="font-size: 14px; font-weight: 600;">acme</a>
+              <div style="font-size: 12px; color: #666666; margin-top: 2px;">Acme Corporation</div>
+            </td>
+            <td><span style="display: inline-block; padding: 2px 10px; font-size: 12px; color: #135200; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px;">Active</span></td>
+            <td class="num">47</td><td class="num">12</td><td class="num">5</td>
+            <td class="num">128,430</td><td class="num">23</td>
+            <td style="color: #666666;">2 hours ago</td>
+            <td><span style="display: inline-block; padding: 2px 9px; font-size: 12px; color: #1651b6; background: #f5faff; border: 1px solid #c5d4ed; border-radius: 4px;">Embed</span></td>
+            <td style="text-align: right;"><a href="inspecting.html" style="font-size: 14px; font-weight: 500;">Inspect</a></td>
+          </tr>
+
+          <tr>
+            <td>
+              <a href="tenant-detail.html" style="font-size: 14px; font-weight: 600;">globex</a>
+              <div style="font-size: 12px; color: #666666; margin-top: 2px;">Globex Corporation</div>
+            </td>
+            <td><span style="display: inline-block; padding: 2px 10px; font-size: 12px; color: #135200; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px;">Active</span></td>
+            <td class="num">31</td><td class="num">8</td><td class="num">3</td>
+            <td class="num">84,112</td><td class="num">17</td>
+            <td style="color: #666666;">5 hours ago</td>
+            <td style="color: #bfbfbf;">&mdash;</td>
+            <td style="text-align: right;"><a href="inspecting.html" style="font-size: 14px; font-weight: 500;">Inspect</a></td>
+          </tr>
+
+          <tr>
+            <td>
+              <a href="tenant-detail.html" style="font-size: 14px; font-weight: 600;">initech</a>
+              <div style="font-size: 12px; color: #666666; margin-top: 2px;">Initech</div>
+            </td>
+            <td><span style="display: inline-block; padding: 2px 10px; font-size: 12px; color: #135200; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px;">Active</span></td>
+            <td class="num">19</td><td class="num">6</td><td class="num">4</td>
+            <td class="num">41,908</td><td class="num">11</td>
+            <td style="color: #666666;">Yesterday</td>
+            <td><span style="display: inline-block; padding: 2px 9px; font-size: 12px; color: #1651b6; background: #f5faff; border: 1px solid #c5d4ed; border-radius: 4px;">Embed</span></td>
+            <td style="text-align: right;"><a href="inspecting.html" style="font-size: 14px; font-weight: 500;">Inspect</a></td>
+          </tr>
+
+          <tr>
+            <td>
+              <a href="tenant-detail.html" style="font-size: 14px; font-weight: 600;">umbrella</a>
+              <div style="font-size: 12px; color: #666666; margin-top: 2px;">Umbrella Corporation</div>
+            </td>
+            <td><span style="display: inline-block; padding: 2px 10px; font-size: 12px; color: #135200; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px;">Active</span></td>
+            <td class="num">5</td><td class="num">2</td><td class="num">0</td>
+            <td class="num">1,240</td><td class="num">2</td>
+            <td style="color: #666666;">3 days ago</td>
+            <td style="color: #bfbfbf;">&mdash;</td>
+            <td style="text-align: right;"><a href="inspecting.html" style="font-size: 14px; font-weight: 500;">Inspect</a></td>
+          </tr>
+
+          <tr style="background: #fffdf7;">
+            <td>
+              <a href="tenant-detail.html" style="font-size: 14px; font-weight: 600;">hooli</a>
+              <div style="font-size: 12px; color: #666666; margin-top: 2px;">Hooli</div>
+            </td>
+            <td><span style="display: inline-block; padding: 2px 10px; font-size: 12px; color: #874d00; background: #fff7e6; border: 1px solid #ffd591; border-radius: 4px;">Suspended</span></td>
+            <td class="num">8</td><td class="num">3</td><td class="num">1</td>
+            <td class="num">12,004</td><td class="num">4</td>
+            <td style="color: #666666;">21 days ago</td>
+            <td style="color: #bfbfbf;">&mdash;</td>
+            <td style="text-align: right;"><span style="font-size: 14px; color: #bfbfbf;">Inspect</span></td>
+          </tr>
+
+          <tr style="background: #fafafa;">
+            <td>
+              <span style="font-size: 14px; font-weight: 600; color: #8c8c8c; text-decoration: line-through;">pilot-2024</span>
+              <div style="font-size: 12px; color: #8c8c8c; margin-top: 2px;">Pilot Programme</div>
+            </td>
+            <td><span style="display: inline-block; padding: 2px 10px; font-size: 12px; color: #666666; background: #f5f5f5; border: 1px solid #d9d9d9; border-radius: 4px;">Deleted</span></td>
+            <td class="num" style="color: #8c8c8c;">2</td><td class="num" style="color: #8c8c8c;">1</td><td class="num" style="color: #8c8c8c;">0</td>
+            <td class="num" style="color: #8c8c8c;">88</td><td class="num" style="color: #8c8c8c;">0</td>
+            <td style="color: #8c8c8c;">94 days ago</td>
+            <td style="color: #bfbfbf;">&mdash;</td>
+            <td style="text-align: right;"><span style="font-size: 14px; color: #bfbfbf;">Inspect</span></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin: 0; font-size: 12px; color: #666666; line-height: 1.7;">
+      Counts come from one annotated query on <strong style="font-weight: 600;">GET /api/v1/admin/tenants/summary</strong>.
+      Inspect opens the workspace immediately &mdash; no prompt. A suspended or deleted workspace cannot be inspected: its host no longer resolves.
+    </p>
+
+  </div>
+
+</div>
+    </div>
+  </main>
+</body>
+</html>
