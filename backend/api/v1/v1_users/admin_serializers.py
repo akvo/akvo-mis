@@ -5,10 +5,12 @@ workspace, which nothing else in this app is allowed to do. Keeping
 them apart makes the unscoped surface one file a reviewer can hold in
 their head.
 """
+from django.conf import settings
 from rest_framework import serializers
 
 from api.v1.v1_profile.constants import FeatureFlags
 from api.v1.v1_users.models import Tenant
+from utils.tenant_host import ADMIN_SUBDOMAIN, embed_hostname
 
 
 class TenantListSerializer(serializers.ModelSerializer):
@@ -101,3 +103,37 @@ class TenantSummarySerializer(TenantListSerializer):
         fields = TenantListSerializer.Meta.fields + [
             "users", "forms", "dashboards", "datapoints", "devices",
         ]
+
+
+class TenantRenameSerializer(serializers.Serializer):
+    """The same rules registration applies, applied again.
+
+    A rename reaches the same namespace by a different door, so the
+    DNS-label shape, the console's reserved label and the embed-host
+    collision all have to be re-checked here. Uniqueness is left to the
+    database, exactly as `register()` leaves it: a pre-check would only
+    be a read before a write.
+    """
+
+    subdomain = serializers.RegexField(
+        regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        max_length=63,
+        error_messages={
+            "invalid": (
+                "Subdomain may only contain lowercase letters, digits "
+                "and hyphens, and cannot start or end with a hyphen"
+            )
+        },
+    )
+
+    def validate_subdomain(self, value):
+        if value.lower() == ADMIN_SUBDOMAIN:
+            raise serializers.ValidationError("This subdomain is reserved.")
+        embed = embed_hostname()
+        if embed and settings.BASE_DOMAIN:
+            candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
+            if candidate == embed:
+                raise serializers.ValidationError(
+                    "This subdomain is reserved."
+                )
+        return value

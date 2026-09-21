@@ -10,6 +10,9 @@ Nothing here returns a workspace's data. There is no delete endpoint
 for datapoints or dashboards anywhere under /admin/ -- the absence is
 the enforcement, not a flag.
 """
+import logging
+import os
+
 from django.db import IntegrityError
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -19,13 +22,21 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from api.v1.v1_mobile.models import MobileAssignment
+from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.admin_serializers import (
     TenantFeaturesSerializer,
     TenantListSerializer,
+    TenantRenameSerializer,
     TenantSummarySerializer,
 )
 from api.v1.v1_users.models import Tenant
+from api.v1.v1_visualization.models import Dashboard
+from utils.custom_generator import sqlite_path
 from utils.custom_permissions import IsPlatformAdmin
+from utils.tenant_host import tenant_may_embed
+
+logger = logging.getLogger(__name__)
 
 CONSOLE_TAG = ["Platform Console"]
 
@@ -174,3 +185,93 @@ def tenants_summary(request, version):
         TenantSummarySerializer(queryset, many=True).data,
         status=status.HTTP_200_OK,
     )
+
+
+def rename_impact(tenant):
+    """What renaming this workspace will break.
+
+    Counted from the workspace rather than stated generally, because a
+    dialog that names 23 devices is not clicked through the way a
+    generic warning is.
+    """
+    return {
+        # Every enrolled device stores serverURL locally and never
+        # re-fetches it; MobileAssignmentToken lasts 99999 days, so
+        # they never re-authenticate either. Each one has to be
+        # reconfigured by hand.
+        "mobile_devices": MobileAssignment.objects.filter(
+            user__tenant=tenant
+        ).count(),
+        "published_dashboards": Dashboard.objects.filter(
+            tenant=tenant, deleted_at=None
+        ).exclude(published_config=None).count(),
+        "embedded_dashboards": (
+            Dashboard.objects.filter(tenant=tenant, deleted_at=None)
+            .exclude(embed_snippet=None)
+            .exclude(embed_snippet="")
+            .count()
+            if tenant_may_embed(tenant)
+            else 0
+        ),
+    }
+
+
+@extend_schema(tags=CONSOLE_TAG,
+               summary="What a rename would break for this workspace")
+@api_view(["GET"])
+@permission_classes([IsPlatformAdmin])
+def tenant_rename_impact(request, version, tenant_id):
+    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    return Response(rename_impact(tenant), status=status.HTTP_200_OK)
+
+
+@extend_schema(request=TenantRenameSerializer,
+               responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+               summary="Change a workspace's address")
+@api_view(["POST"])
+@permission_classes([IsPlatformAdmin])
+def rename_tenant(request, version, tenant_id):
+    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    serializer = TenantRenameSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {"message": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    previous = tenant.subdomain
+    tenant.subdomain = serializer.validated_data["subdomain"]
+    try:
+        tenant.save(update_fields=["subdomain"])
+    except IntegrityError:
+        # Uniqueness is the database's, as it is at registration. A
+        # pre-check would only be a read before a write.
+        return Response(
+            {"message": "Subdomain is already registered"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    _move_master_data(previous, tenant)
+    return Response(
+        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+    )
+
+
+def _move_master_data(previous, tenant):
+    """Follow the device SQLite files to the new subdomain.
+
+    Best effort, and deliberately not fatal. `download_sqlite_file`
+    regenerates a missing file on the next device sync, so the worst
+    case here is one slow sync and some orphaned files -- while failing
+    the rename after the row has moved would leave the workspace half
+    renamed, which is far worse.
+    """
+    new_dir = os.path.dirname(sqlite_path(Administration, tenant=tenant))
+    old_dir = os.path.join(os.path.dirname(new_dir), previous)
+    if not os.path.isdir(old_dir) or os.path.exists(new_dir):
+        return
+    try:
+        os.rename(old_dir, new_dir)
+    except OSError:
+        logger.warning(
+            "Could not move master data from %s to %s; the files will "
+            "regenerate on the next device sync.", old_dir, new_dir,
+        )

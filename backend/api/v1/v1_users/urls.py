@@ -27,8 +27,10 @@ from api.v1.v1_users.admin_views import (
     activate_tenant,
     deactivate_tenant,
     list_tenants,
+    rename_tenant,
     set_tenant_features,
     tenant_detail,
+    tenant_rename_impact,
     tenants_summary,
 )
 from api.v1.v1_profile.views import list_entity_data
@@ -55,6 +57,15 @@ urlpatterns = [
     # would not match today, but the ordering makes that a property of
     # the list rather than of the regex.
     re_path(r"^(?P<version>(v1))/admin/tenants/summary$", tenants_summary),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/"
+        r"rename-impact$",
+        tenant_rename_impact,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/rename$",
+        rename_tenant,
+    ),
     re_path(
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)$",
         tenant_detail,
