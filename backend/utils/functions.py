@@ -38,6 +38,8 @@ def get_answer_value(answer: Answers, webform: bool = False):
         QuestionTypes.option,
         QuestionTypes.multiple_option,
         QuestionTypes.tree,
+        QuestionTypes.geoshape,
+        QuestionTypes.geotrace,
     ]:
         return answer.options
     elif answer.question.type == QuestionTypes.number:
@@ -68,6 +70,8 @@ def get_answer_history(answer_history: AnswerHistory):
         QuestionTypes.option,
         QuestionTypes.multiple_option,
         QuestionTypes.tree,
+        QuestionTypes.geoshape,
+        QuestionTypes.geotrace,
     ]:
         value = answer_history.options
     elif answer_history.question.type == QuestionTypes.number:

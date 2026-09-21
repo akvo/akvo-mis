@@ -8,6 +8,7 @@ import {
   getLastAnswerDisplayValue,
 } from "../lib";
 import { isEqual } from "lodash";
+import GeometryView from "./GeometryView";
 const { Option } = Select;
 import { UndoOutlined, SaveOutlined } from "@ant-design/icons";
 import moment from "moment";
@@ -36,6 +37,12 @@ const EditableCell = ({
   const isImageType =
     [QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(record?.type) ||
     (fileExtension && IMAGE_EXTENSIONS.includes(fileExtension));
+  // geoshape and geotrace differ only in closure; both arrive as [lat, lng] pairs and
+  // both render as an unreadable run of digits without a map.
+  const isGeometry = [
+    QUESTION_TYPES.geoshape,
+    QUESTION_TYPES.geotrace,
+  ].includes(record?.type);
 
   useEffect(() => {
     if (
@@ -71,6 +78,10 @@ const EditableCell = ({
     [
       QUESTION_TYPES.cascade,
       QUESTION_TYPES.geo,
+      // Without these a click opens the default text Input holding the flattened
+      // coordinate array, and saving PUTs that string over the geometry.
+      QUESTION_TYPES.geoshape,
+      QUESTION_TYPES.geotrace,
       QUESTION_TYPES.image,
       QUESTION_TYPES.attachment,
       QUESTION_TYPES.signature,
@@ -272,6 +283,12 @@ const EditableCell = ({
         <span className={lastValue ? null : "blue"}>
           {record.type === QUESTION_TYPES.cascade && !record?.api?.endpoint ? (
             locationName
+          ) : isGeometry ? (
+            <GeometryView
+              value={lastValue ? oldValue : value}
+              type={record.type}
+              geoConfig={record?.extra?.geoConfig}
+            />
           ) : isImageType && value && !lastValue ? (
             <Image src={value} width={100} />
           ) : isImageType && lastValue && oldValue ? (

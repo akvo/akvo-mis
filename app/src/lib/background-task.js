@@ -246,7 +246,7 @@ const processBatch = async (
   db,
   activeJob,
   session,
-  counts = { success: 0, failed: 0, skipped: 0 },
+  counts = { success: 0, failed: 0, skipped: 0, rejected: 0 },
 ) => {
   const data = await crudDataPoints.selectSubmissionToSync(db, BATCH_SIZE);
   if (!data?.length) {
@@ -366,6 +366,25 @@ const processBatch = async (
       }
       counts.success += 1;
     } catch (error) {
+      const httpStatus = error?.response?.status;
+      /**
+       * A 4xx is the server refusing the content, so every retry sends the same bytes
+       * and gets the same refusal — the row would sync forever (and nothing bounds it:
+       * exhausting MAX_ATTEMPT deletes the job, and the next tick creates a fresh one
+       * at attempt 0). Hand it back as a draft instead: the loop stops, the answers are
+       * kept, and the enumerator can open it, fix what the server objected to and submit
+       * again. Anything else — no response at all, 5xx, a timeout — is transient and
+       * keeps the existing retry behaviour.
+       */
+      if (httpStatus >= 400 && httpStatus < 500) {
+        counts.rejected += 1;
+        const reason = error?.response?.data?.message || `HTTP ${httpStatus}`;
+        Sentry.captureMessage(
+          `[background-task] submission refused (${httpStatus}) dataID ${d.id}: ${reason}`,
+        );
+        await crudDataPoints.saveAsDraft(db, d.id);
+        return;
+      }
       counts.failed += 1;
       Sentry.captureException(error);
       await crudDataPoints.saveAsPending(db, d.id);
@@ -391,11 +410,11 @@ const syncFormSubmission = async (db, activeJob = {}) => {
     const session = await crudUsers.getActiveUser(db);
     api.setToken(session.token);
 
-    const { success: totalSuccess, failed: totalFailed } = await processBatch(
-      db,
-      activeJob,
-      session,
-    );
+    const {
+      success: totalSuccess,
+      failed: totalFailed,
+      rejected: totalRejected,
+    } = await processBatch(db, activeJob, session);
 
     // Status updates ONCE after all batches
     if (activeJob?.id && totalFailed === 0) {
@@ -427,6 +446,23 @@ const syncFormSubmission = async (db, activeJob = {}) => {
           bgColor: '#ec003f',
           icon: 'alert-sharp',
           failedCount: totalFailed,
+        };
+      });
+    }
+
+    /**
+     * Rejected rows are no longer syncing and no longer failing — they are waiting on the
+     * enumerator. Said last so it wins over the generic failure banner: "try again" is
+     * wrong advice for a submission that will be refused identically every time.
+     */
+    if (totalRejected > 0) {
+      UIState.update((s) => {
+        s.isManualSynced = false;
+        s.refreshPage = true;
+        s.statusBar = {
+          type: SYNC_STATUS.rejected,
+          bgColor: '#d97706',
+          icon: 'alert-sharp',
         };
       });
     }

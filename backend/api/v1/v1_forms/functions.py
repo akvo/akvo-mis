@@ -616,6 +616,119 @@ def restore_from_snapshot(form, pv):
     )
 
 
+# Defaults from GEO-014 D-5/D-8. Named here because the pair check below
+# has to reason about the clamp an absent key produces, not only about
+# the values a payload happens to carry.
+DEFAULT_OVERLAP_THRESHOLD = 20
+DEFAULT_OVERLAP_THRESHOLD_FLOOR = 5
+
+# Severity keys (GEO-002 D-4, GEO-003 D-4, GEO-007 D-9) plus the two
+# capture switches. All strict booleans, for one reason: every one of
+# them is read as "is this the literal `true`/`false`", so a `"false"`
+# string reads as ENABLED to a naive check and as disabled to nobody.
+# `detectOverlaps` is the sharpest case - the device gate is a
+# JSON-encoded `extra__geoConfig__detectOverlaps=True` lookup that
+# matches `true` and not `"true"`, `["true"]` or `1`.
+_GEO_CONFIG_BOOLEANS = (
+    "detectOverlaps",
+    "allowTapping",
+    "validateShape",
+    "validateArea",
+    "validateOverlap",
+)
+
+# (key, upper bound). Distances in metres and areas in hectares have no
+# meaningful ceiling; the two overlap ratios are percentages.
+_GEO_CONFIG_NUMBERS = (
+    ("accuracyThreshold", None),
+    ("maxAreaHa", None),
+    ("overlapThreshold", 100),
+    ("overlapThresholdFloor", 100),
+)
+
+
+def _geo_config_issues(geo_config) -> list:
+    """Return [(subpath, message)] for one question's `extra.geoConfig`.
+
+    Ranges come from GEO-010 §6. Bad values are rejected rather than
+    coerced: the device reads these numbers to decide whether a captured
+    polygon is acceptable, so a silently-defaulted threshold is
+    indistinguishable from a configured one — for the designer who set it
+    and for anyone later asking why validation behaved oddly.
+
+    An absent key is legal and means "use the default". An unknown key is
+    left alone, so a form authored against a newer builder still imports.
+
+    Coverage widened 2026-09-21. This validated four keys while the
+    others could only arrive by hand-edited JSON. `akvo-react-form-editor`
+    2.0.6 made all nine authorable, so D-1's rationale — *"the builder UI
+    is one client"* — stopped being the only argument and became the
+    weakest one.
+    """
+    if not isinstance(geo_config, dict):
+        return [("extra.geoConfig", "must be an object")]
+
+    issues = []
+
+    for key in _GEO_CONFIG_BOOLEANS:
+        value = geo_config.get(key)
+        if value is not None and not isinstance(value, bool):
+            issues.append(
+                (f"extra.geoConfig.{key}", "must be true or false")
+            )
+
+    for key, upper in _GEO_CONFIG_NUMBERS:
+        value = geo_config.get(key)
+        if value is None:
+            continue
+        # `bool` subclasses `int` in Python, so True would otherwise pass
+        # as the number 1.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            issues.append((f"extra.geoConfig.{key}", "must be a number"))
+        elif value <= 0 or (upper is not None and value > upper):
+            bound = f" and at most {upper}" if upper else ""
+            issues.append(
+                (f"extra.geoConfig.{key}", f"must be greater than 0{bound}")
+            )
+
+    issues.extend(_overlap_clamp_issues(geo_config))
+    return issues
+
+
+def _overlap_clamp_issues(geo_config) -> list:
+    """The one rule here that spans two keys.
+
+    GEO-014 D-5 clamps the overlap threshold between a floor and a
+    ceiling. Each passes its own `0 < x ≤ 100` check in isolation, so an
+    inverted pair — floor 50, ceiling 20 — satisfies every other check
+    above and hands `clamp()` its bounds the wrong way round.
+
+    Compared as **effective** values, not merely as authored ones: a
+    floor of 50 with no ceiling clamps against the default 20 and is just
+    as inverted as a floor of 50 beside an explicit 20. That mirrors what
+    the editor's panel does, and it is why the defaults are named above
+    rather than inlined.
+
+    Runs only on values that already passed their range check, so a pair
+    containing `"20"` reports the type error alone instead of adding a
+    comparison against a string.
+    """
+    def usable(key, default):
+        value = geo_config.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return default if value is None else None
+        return value if 0 < value <= 100 else None
+
+    floor = usable("overlapThresholdFloor", DEFAULT_OVERLAP_THRESHOLD_FLOOR)
+    ceiling = usable("overlapThreshold", DEFAULT_OVERLAP_THRESHOLD)
+    if floor is None or ceiling is None or floor <= ceiling:
+        return []
+    return [(
+        "extra.geoConfig.overlapThresholdFloor",
+        "must be less than or equal to overlapThreshold",
+    )]
+
+
 def validate_form_payload(data, partial=False):
     """Return list of error strings, empty if valid.
 
@@ -639,6 +752,15 @@ def validate_form_payload(data, partial=False):
                 errors.append(
                     f"question_group[{gi}].question[{qi}].type: "
                     f"Invalid question type: {q_type!r}"
+                )
+            # Checked on whatever question carries a geoConfig, not only on
+            # geoshape: a config on the wrong question type is already a
+            # mistake, and silently skipping it would hide it.
+            extra = q.get("extra")
+            if isinstance(extra, dict) and "geoConfig" in extra:
+                errors.extend(
+                    f"question_group[{gi}].question[{qi}].{sub}: {msg}"
+                    for sub, msg in _geo_config_issues(extra["geoConfig"])
                 )
     return errors
 
@@ -1120,6 +1242,19 @@ def validate_form_definition(norm, check_entities=True):
                         ),
                         "level": "error",
                     }
+                )
+
+            # The builder API is not the only way into these rows, so the
+            # same geoConfig rules apply here (GEO-010 D-1).
+            if "geoConfig" in extra:
+                issues.extend(
+                    {
+                        "code": "invalid_geo_config",
+                        "path": f"{q_path}.{sub}",
+                        "message": msg,
+                        "level": "error",
+                    }
+                    for sub, msg in _geo_config_issues(extra["geoConfig"])
                 )
 
             fn = q.get("fn") or {}
