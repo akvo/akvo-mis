@@ -119,6 +119,13 @@ INVALID_GEO_CONFIGS = [
     {"detectOverlaps": "true"},
     {"detectOverlaps": ["true"]},
     {"detectOverlaps": 1},
+    # `allowTapping` (GEO-014 D-4) is checked as strictly as
+    # `detectOverlaps`: it defaults to true and only `false` does
+    # anything, so a truthy `"false"` would read as enabled here and as
+    # disabled to nobody.
+    {"allowTapping": "false"},
+    {"allowTapping": ["false"]},
+    {"allowTapping": 0},
     "not an object",
     [],
 ]
@@ -381,6 +388,10 @@ class GeoConfigPersistenceTestCase(TestCase, AssignmentTokenTestHelperMixin):
         for config in (
             {"accuracyThreshold": 8},
             {"detectOverlaps": True, "overlapThreshold": None},
+            {"allowTapping": False},
+            # Independent since 2026-09-21: overlap detection on while
+            # tapping stays allowed is a legal, deliberate combination.
+            {"detectOverlaps": True, "allowTapping": True},
             {**GEO_CONFIG, "futureKnob": "whatever"},
         ):
             with self.subTest(config=config):

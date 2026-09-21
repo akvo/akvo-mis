@@ -128,7 +128,13 @@ describes half-open. XLSForm import needs nothing: its converter has no way to e
 | `detectOverlaps` | boolean | — |
 | `overlapThreshold` | number | 0 < x ≤ 100 |
 | `overlapThresholdFloor` | number | 0 < x ≤ 100 — added 2026-09-18, GEO-014 D-8 |
+| `allowTapping` | boolean | — default `true`; added 2026-09-21, GEO-014 D-4 |
 
+> **Note, 2026-09-21 (GEO-014 D-4).** `allowTapping` joins the namespace as a boolean. Validate
+> it exactly as `detectOverlaps` is validated — against the real booleans, not for truthiness.
+> The same argument applies: a `"false"` string would read as *enabled* to a naive check and as
+> *disabled* to nobody, which is the silent mismatch these tests exist to catch.
+>
 > **Note, 2026-09-18 (GEO-014).** One key is **added** to the namespace —
 > `overlapThresholdFloor`, number, `0 < x ≤ 100`, default `5` (GEO-014 D-8). It follows the same
 > rule as `overlapThreshold`, so `_geo_config_issues()` should validate it identically and the
@@ -136,8 +142,9 @@ describes half-open. XLSForm import needs nothing: its converter has no way to e
 >
 > The remaining changes are downstream meaning only, with no code or range impact:
 > `overlapThreshold` is now the *ceiling* of an accuracy-derived threshold (GEO-014 D-5) rather
-> than the threshold itself, and `detectOverlaps` additionally disables tap-to-draw on mobile
-> (GEO-014 D-4). Neither affects what this document validates.
+> than the threshold itself. (An earlier version of this note also said `detectOverlaps` disables
+> tap-to-draw; that coupling was removed on 2026-09-21 — see the note above.) Neither affects
+> what this document validates.
 >
 > A separate change **does** touch the write boundary this document is about, in a different
 > serializer: `is_coordinate_ring()` (`v1_data/serializers.py:75`) must accept a third,

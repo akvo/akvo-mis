@@ -54,8 +54,16 @@ def bounding_box(coordinates):
     Known limitation: a polygon crossing the antimeridian gets a bbox
     spanning the globe. Plot boundaries do not, and GEO-006's range
     queries could not use such a bbox anyway.
+
+    Indexed rather than unpacked with `zip(*coordinates)`: since
+    GEO-014 a vertex may carry a third element (GPS accuracy in metres),
+    and `zip(*)` would raise `ValueError: too many values to unpack` on
+    it - taking the whole form's datapoint-list response down rather
+    than one row. Slicing off the first two axes is length-agnostic, so
+    a ring that mixes walked and tapped vertices works too.
     """
-    latitudes, longitudes = zip(*coordinates)
+    latitudes = [point[0] for point in coordinates]
+    longitudes = [point[1] for point in coordinates]
     return {
         "min_lat": min(latitudes),
         "max_lat": max(latitudes),

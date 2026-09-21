@@ -114,8 +114,10 @@ class GeoshapeValidationTestCase(TestCase):
             self.validate([["a", "b"]])
 
     def test_a_wrong_arity_row_is_rejected(self):
-        with self.assertRaises(ValidationError):
-            self.validate([[1.0, 2.0, 3.0]])
+        for bad in ([[1.0]], [[1.0, 2.0, 3.0, 4.0]]):
+            with self.subTest(value=bad):
+                with self.assertRaises(ValidationError):
+                    self.validate(bad)
 
     def test_a_boolean_is_not_a_coordinate(self):
         """`isinstance(True, int)` is True, so a naive number check
@@ -124,10 +126,69 @@ class GeoshapeValidationTestCase(TestCase):
             self.validate([[True, False]])
 
     def test_malformed_rows_are_rejected_on_drafts_too(self):
-        for bad in ([9.03, 38.74], [["a", "b"]], [[1.0, 2.0, 3.0]]):
+        for bad in ([9.03, 38.74], [["a", "b"]], [[1.0]]):
             with self.subTest(value=bad):
                 with self.assertRaises(ValidationError):
                     self.validate(bad, is_draft=True)
+
+    # --- GEO-014: the optional third element (GPS accuracy) ---
+
+    def test_a_vertex_may_carry_accuracy(self):
+        """A three-element vertex used to be rejected as "wrong arity".
+        GEO-014 D-2 makes the third element the vertex's GPS accuracy in
+        metres."""
+        walked = [[9.03, 38.74, 4.2], [9.04, 38.74, 6.8], [9.04, 38.75, 5.1]]
+        self.assertEqual(self.validate(walked)["value"], walked)
+
+    def test_a_ring_may_mix_measured_and_tapped_vertices(self):
+        """One polygon can hold both: a boundary walked with GPS and
+        corners tapped in by hand. Arity is per vertex, not per ring."""
+        mixed = [[9.03, 38.74, 4.2], [9.04, 38.74], [9.04, 38.75, 5.1]]
+        self.assertEqual(self.validate(mixed)["value"], mixed)
+
+    def test_an_explicit_null_accuracy_is_accepted(self):
+        """`null` and an absent element both mean "not measured", so
+        refusing one of the two spellings would only surprise clients."""
+        value = [[9.03, 38.74, None], [9.04, 38.74], [9.04, 38.75, None]]
+        self.assertEqual(self.validate(value)["value"], value)
+
+    def test_a_two_element_ring_is_still_accepted(self):
+        """Every row written before GEO-014, and everything the webform
+        produces, has two elements. It is valid permanently - there is no
+        migration and no deprecation."""
+        self.assertEqual(self.validate(ADDIS_PLOT)["value"], ADDIS_PLOT)
+
+    def test_a_zero_accuracy_is_rejected(self):
+        """ODK writes 0 for a manually placed point, meaning "not
+        measured". Stored as a number it would read as *perfect*
+        precision to GEO-007's adaptive threshold, making a traced
+        polygon the most trusted geometry in the system. No real fix
+        reads 0 m, so nothing legitimate is refused."""
+        with self.assertRaises(ValidationError):
+            self.validate([[9.03, 38.74, 0]])
+
+    def test_a_negative_accuracy_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            self.validate([[9.03, 38.74, -1.5]])
+
+    def test_a_non_numeric_accuracy_is_rejected(self):
+        for bad in ("4.2", True, []):
+            with self.subTest(accuracy=bad):
+                with self.assertRaises(ValidationError):
+                    self.validate([[9.03, 38.74, bad]])
+
+    def test_a_flat_point_pair_is_still_rejected_with_the_wider_arity(self):
+        """The guard `is_coordinate_ring` exists for. Widening arity to
+        2-or-3 must not let `[9.03, 38.74]` through - it is caught by the
+        list check on each member, never by the length."""
+        with self.assertRaises(ValidationError):
+            self.validate([9.03, 38.74])
+
+    def test_accuracy_rings_are_accepted_on_drafts_too(self):
+        walked = [[9.03, 38.74, 4.2], [9.04, 38.74], [9.04, 38.75, None]]
+        self.assertEqual(
+            self.validate(walked, is_draft=True)["value"], walked
+        )
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)

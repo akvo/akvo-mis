@@ -8,6 +8,7 @@ import BuildParamsState from '../../store/buildParams';
 import { blockingMessage, isNoAnswer, runPolygonRules } from './polygon-rules';
 
 export * from './geometry';
+export * from './gps-vertex';
 export * from './polygon-rules';
 
 /**

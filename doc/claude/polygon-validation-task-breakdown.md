@@ -229,17 +229,17 @@ guaranteed to be a valid shape. No backend change, no sync change, no configurat
 | **T7** | Minimum polygon size validation | Mobile | **2.25** | **0.25** | — |
 | | **Phase 1 total** | | **~17h** | **~2 days** | **~6h (35%)** |
 
-### Phase 2 — GPS boundary walking · **11h ≈ 1.5 days**
+### Phase 2 — GPS boundary walking · **12h ≈ 2 days**
 
 *Adds the Kobo-style capture mode. **Revised 2026-09-18**: no longer mobile-only — vertices now
 carry GPS accuracy (GEO-014), and the backend validators must accept it **before** any client
 emits it.*
 
-| ID | Task | Component | Hours | Days |
-|---|---|---|---|---|
-| **T13** | Accept an optional third vertex element — **ships first** | **Backend** | **1.5** | **0.5** |
-| **T12** | Polygon capture — **walk the boundary (GPS)** | Mobile | **9.5** | **1** |
-| | **Phase 2 total** | | **11h** | **~1.5 days** |
+| ID | Task | Component | Hours | Days | Status |
+|---|---|---|---|---|---|
+| **T13** | Accept an optional third vertex element — **ships first** | **Backend** | **1.5** | **0.5** | ✅ done |
+| **T12** | Polygon capture — **walk the boundary (GPS)** | Mobile | **10.5** | **1.5** | 🟡 recording done; ODK dropdowns + field pass outstanding |
+| | **Phase 2 total** | | **12h** | **~2 days** | |
 
 *`T12-bg` (background recording, 7h) used to sit here as an optional increment. It is now
 **counted in phase 3**, where GEO-014 D-4 makes it mandatory.*
@@ -249,32 +249,37 @@ emits it.*
 > the enumerator's handset — so the symptom is completed field work reverting, not a log entry.
 > See GEO-014 D-7.
 >
-> T12 rises from 8h to 9.5h: +0.5 writing accuracy into the vertex, +1 marking bad vertices red,
-> +1 for record-and-mark being written rather than ported from ARF, −0.5 because a stalled point
-> count no longer needs explaining (GEO-014 D-3).
+> T12 rises from 8h to 10.5h: +0.5 writing accuracy into the vertex, +1 marking bad vertices
+> red, +1 for record-and-mark being written rather than ported from ARF, +1 for ODK's two
+> dropdowns (GEO-004 D-6/D-7), −0.5 because a stalled point count no longer needs explaining
+> (GEO-014 D-3).
 
-### Phase 3 — Overlap detection · **33.5h ≈ 4 days** · **+7h prerequisite = 40.5h**
+### Phase 3 — Overlap detection · **33.5h ≈ 4 days** · **+7h conditional**
 
 *The whole overlap capability, moved down the list on reviewer feedback. Everything here exists
 only to serve overlap detection — including the sync and configuration work.*
 
 | ID | Task | Component | Hours | Days | of which non-code |
 |---|---|---|---|---|---|
-| **T12-bg** | Background recording — **now a prerequisite**, see below | Mobile | **7** | **1** | 3h device testing |
 | **T2** | Extend datapoint list with geometry + bbox + accuracy summary | Backend | **6** | **1** | — |
 | **T3** | Local geometry index + sync consumption | Mobile | **8** | **1** | 2h volume testing |
 | **T8** | `geoConfig` authoring UI (3 fields) | Frontend (upstream + host) | **5** | **1** | 2h upstream release |
 | **T9** | Backend persistence + API tests for `geoConfig` | Backend | **2.5** | **0.5** | — |
 | **T4** | **Polygon overlap detection** (+1 adaptive threshold, −1 spike) | Mobile | **7.5** | **1** | 1.5h perf test |
 | **T5** | Overlap map review screen | Mobile | **4.5** | **0.5** | 1.5h device pass |
-| | **Phase 3 subtotal** *(excl. T12-bg)* | | **~33.5h** | **~4 days** | **~7h** |
-| | **Phase 3 total** *(incl. the T12-bg prerequisite)* | | **~40.5h** | **~5 days** | **~10h** |
+| | **Phase 3 total** | | **~33.5h** | **~4 days** | **~7h** |
+| | **T12-bg** — background recording, **conditional**, see below | Mobile | **+7** | **+1** | 3h device testing |
 
-> **T12-bg moved here from "optional" 2026-09-18.** GEO-014 D-4 disables tap-to-draw on mobile
-> when `detectOverlaps` is on, so a boundary walk becomes the only way to enter data — and
-> GEO-004 D-2's assessment then binds: *"without background recording the enumerator must keep
-> the screen awake and the app foregrounded for an entire boundary walk, which they will not
-> do."* It also forces a development build; **Expo Go cannot run phase 3 at all.**
+> **T12-bg: in the baseline on 2026-09-18, back out on 2026-09-21.** The 18th tied tap-disabling
+> to `detectOverlaps`, which made a boundary walk the only way in for every overlap-enabled form
+> and put 7 h into this phase unconditionally. GEO-014 D-4 now puts tapping on its own key, so
+> the hours are **conditional on a programme setting `allowTapping: false`** rather than on
+> turning overlap detection on.
+>
+> Where it does apply, GEO-004 D-2's assessment binds: *"without background recording the
+> enumerator must keep the screen awake and the app foregrounded for an entire boundary walk,
+> which they will not do."* It also forces a development build, so **Expo Go cannot test those
+> forms** — but a phase-3 deployment that leaves `allowTapping` alone can still run in Expo Go.
 >
 > T2 +0.5 for the per-polygon accuracy summary (GEO-014 D-10); T4 +1 for the adaptive threshold
 > (GEO-014 D-5).
@@ -308,7 +313,8 @@ validation run at fixed floors (FR-5.B), so there is nothing to author. Phase 1 
 tasks — 17 hours — and it still delivers something real: a polygon question that works on mobile
 and cannot produce an invalid shape.
 
-**Phase 1: ~2 days.** Phase 2 adds ~1.5 days. Phase 3 adds ~5 days.
+**Phase 1: ~2 days.** Phase 2 adds ~2 days. Phase 3 adds ~4 days, **+1 day where a programme
+sets `allowTapping: false`**.
 
 > **Revised 2026-09-18 (GEO-014).** The old line read *"Total is unchanged at ~50h + GPS"* — that
 > 50h being phase 1 + phase 3, with GPS counted separately. Updated:
@@ -316,12 +322,13 @@ and cannot produce an invalid shape.
 > | | Was | Now | Why |
 > |---|---|---|---|
 > | Phase 1 | 17h | **17h** | unchanged — verified against the code; no shipped rule reads accuracy |
-> | Phase 2 | 8h | **11h** | +1.5 T13 backend validators, +1.5 net on T12 (GEO-014 D-3) |
+> | Phase 2 | 8h | **12h** | +1.5 T13 backend validators, +2.5 net on T12 (GEO-014 D-3, GEO-004 D-6/D-7) |
 > | Phase 3 | 33h | **33.5h** | +0.5 accuracy summary (T2); T4's +1 adaptive threshold cancels the `@turf` spike that left for GEO-002 |
-> | T12-bg | optional +7h | **inside phase 3** | tap is disabled when `detectOverlaps` is on, so a boundary walk is the only route (GEO-014 D-4) |
+> | T12-bg | optional +7h | **conditional +7h** | needed only where a programme sets `allowTapping: false`, which makes a boundary walk the only route (GEO-014 D-4, revised 2026-09-21) |
 >
-> **Phase 1 + phase 3 = ~57.5h, plus GPS (phase 2) 11h → ~68.5h.** The rise is mostly T12-bg
-> moving from optional to required, not new work.
+> **Phase 1 + phase 3 = ~50.5h, plus GPS (phase 2) 12h → ~62.5h**, with **+7h (T12-bg)
+> conditional** on a programme setting `allowTapping: false`. An earlier revision folded that 7 h
+> into the baseline; separating the keys puts it back where it belongs, as a per-programme cost.
 >
 > Two structural changes matter more than the hours. **Phase 2 is no longer mobile-only** — the
 > sentence above, *"phase 1 needs no configuration and no backend work at all"*, stays true of
@@ -1319,7 +1326,7 @@ plumbing; if scheduled together, the combined cost is closer to **3 days than 4*
 
 ---
 
-### T12 — Polygon capture: walk the boundary (GPS) · **9.5h ≈ 1 day** · 🟡 **phase 2**
+### T12 — Polygon capture: walk the boundary (GPS) · **10.5h ≈ 1.5 days** · 🟡 **phase 2**
 
 > **Blocked by T13** (GEO-014, 1.5h Backend). Deploy the relaxed vertex validators first, or
 > every geoshape submission 400s and reverts to a draft on the handset.
@@ -1336,8 +1343,9 @@ plumbing; if scheduled together, the combined cost is closer to **3 days than 4*
 | Write accuracy into the vertex (GEO-014 §3) | 0.5 |
 | Mark out-of-threshold vertices red on the map | 1 |
 | Record-and-mark logic — written, not ported from ARF (GEO-014 D-3) | 1 |
+| Interval + accuracy dropdowns, ODK parity with the ceiling filter (GEO-004 D-6/D-7) | 1 |
 | **Field testing — physically walking a boundary** | 4 |
-| **Total** | **9.5** |
+| **Total** | **10.5** |
 
 Over half of this task is someone walking around outside with a phone. That part does not compress, and it is the only way to find out whether the accuracy gating behaves.
 
@@ -1373,7 +1381,10 @@ which already implements `watchPosition` + interval capture + accuracy filtering
   > polluted with 40 m vertices looks plausible and is wrong — but marking answers it more
   > directly than dropping, and it removes the "why has the counter frozen?" problem the old
   > wording had to compensate for. This is also where T12 stops being a verbatim ARF port.
-- **Interval capture.** Points appended every N seconds while walking (10 s in ARF).
+- **Interval capture.** Points appended every N seconds while walking. **The enumerator picks N**
+  from ODK's list (1/5/10/20/30 s, 1/5/10/20/30 min), defaulting to 10 s — GEO-004 D-6. A second
+  dropdown sits where ODK puts `Accuracy requirement`, with ODK's options but a label saying it
+  **flags** rather than filters, capped by the form's `accuracyThreshold` — GEO-004 D-7.
 - **Record on click.** A manual "record this point" action for corners and boundary markers,
   independent of the interval.
 - **Live feedback.** Current GPS position shown distinctly from recorded vertices, with its
@@ -1382,7 +1393,8 @@ which already implements `watchPosition` + interval capture + accuracy filtering
   list — and since 2026-09-18 **the value format does record which mode produced a vertex**: a
   measured point carries an optional third element `[lat, lng, accuracy]`, a tapped one does not
   (GEO-014 D-1/D-2). From phase 3, tapping is unavailable altogether on a question with
-  `detectOverlaps` on, so mixed capture is reachable only where it is off (GEO-014 D-4).
+  `allowTapping: false`, so mixed capture is reachable wherever a programme leaves that key
+  alone — including on forms with overlap detection on (GEO-014 D-4, revised 2026-09-21).
 - **Teardown.** No path may leave a GPS watch or interval running. This is the most likely
   field complaint if missed: a forgotten subscription drains the battery silently.
 

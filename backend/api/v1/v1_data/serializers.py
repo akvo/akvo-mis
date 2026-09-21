@@ -72,19 +72,49 @@ class SubmitFormDataSerializer(serializers.ModelSerializer):
 # either: the payload and `geometry_total` have to describe the same
 # set, so a skip there would reintroduce a mismatch the device can never
 # reconcile. The write boundary is the only place this can be refused.
-def is_coordinate_ring(value):
+def _is_number(value) -> bool:
+    # `isinstance(True, int)` is True in Python, and a boolean is not a
+    # latitude.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_accuracy(value) -> bool:
+    """The optional third element of a vertex (GEO-014 D-2).
+
+    Absent is the normal case and is handled by the arity check; an
+    explicit `null` is accepted because it means the same thing. A
+    literal `0` is refused on purpose. ODK writes 0 for a manually
+    placed point, meaning "not measured", but GEO-007's adaptive
+    threshold reads accuracy as a number and would take 0 for *perfect*
+    precision - making a traced polygon the most trusted geometry in the
+    system. There is no physical fix with 0 m error, so nothing
+    legitimate is being turned away. Clients that cannot measure omit
+    the element instead.
+    """
+    return value is None or (_is_number(value) and value > 0)
+
+
+def is_coordinate_ring(value) -> bool:
     # The `isinstance(value, list)` clause is load-bearing: it is why
     # geoshape and geotrace are absent from the plain list-check branches
     # in `validate` below. Do not drop it and do not re-add them there.
+    #
+    # Arity is 2 or 3, not 2 (GEO-014 D-2). The third element is GPS
+    # accuracy in metres and is optional *permanently*: `akvo-react-form`
+    # runs on a desk and can never produce one, and every row written
+    # before GEO-014 has two. A ring may mix both lengths, because a
+    # polygon may mix walked and tapped vertices.
+    #
+    # Widening it does not weaken the guard this function exists for.
+    # The flat `geo` point `[9.03, 38.74]` is still refused by the
+    # `isinstance(point, (list, tuple))` clause - its members are floats,
+    # not pairs - which is what catches that case, never the length.
     return isinstance(value, list) and all(
         isinstance(point, (list, tuple))
-        and len(point) == 2
-        # `isinstance(True, int)` is True in Python, and a boolean is
-        # not a latitude.
-        and all(
-            isinstance(axis, (int, float)) and not isinstance(axis, bool)
-            for axis in point
-        )
+        and len(point) in (2, 3)
+        and _is_number(point[0])
+        and _is_number(point[1])
+        and (len(point) == 2 or _is_accuracy(point[2]))
         for point in value
     )
 

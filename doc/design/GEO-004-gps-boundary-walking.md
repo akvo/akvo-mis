@@ -5,9 +5,11 @@
 **Task ID**: GEO-004 (breakdown ref: T12)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft — **revised 2026-09-18 by GEO-014**, which supersedes D-1 and §3/§4/§7
+**Status**: **Implemented and device-verified 2026-09-21** (foreground recording). Superseded in
+part by GEO-014 (D-1 and §3/§4/§7). Deviations from the criteria below are deliberate and
+recorded in D-4, D-5, D-8 and D-9. Background recording (+7h) is **not** included.
 **Phase**: 2 — GPS capture
-**Estimate**: 9.5h ≈ 1 day, **+7h ≈ 1 day** for background recording
+**Estimate**: 10.5h ≈ 1.5 days, **+7h ≈ 1 day** for background recording
 **Depends on**: GEO-001, **GEO-014 (T13 — backend validators must be deployed first)**
 **Reads**: GEO-014 (per-vertex accuracy) — several decisions below were reversed there
 
@@ -38,14 +40,24 @@ ships connected-only (GEO-001 D-3), this is the task that removes that constrain
 ## 2. Requirements
 
 ### User Acceptance Criteria
-- [ ] Recording cannot start without an adequate satellite fix; the enumerator is told what is
-      being waited for rather than seeing a dead button
-- [ ] Points are appended automatically on an interval while walking
-- [ ] A "record this point" action appends a vertex on demand, for corners and markers
-- [ ] The live GPS position is shown distinctly from recorded vertices, with its accuracy
-- [ ] Fixes worse than the accuracy threshold are **recorded and drawn in red**, and the
-      enumerator can see which vertices are the problem while still standing on the plot
-- [ ] Points drawn by tapping (GEO-001) and points from GPS converge on one ordered list
+- [x] Recording cannot start without an adequate satellite fix; the enumerator is told what is
+      being waited for rather than seeing a dead button — `text-waiting-for-fix`, and Start is
+      disabled until `hasSatelliteLock` passes
+- [x] Points are appended automatically on an interval while walking
+- [x] **The enumerator chooses the recording interval and the accuracy control from the input
+      method dialog, in ODK's position and order** — D-6, D-7
+- [x] Where the form sets `geoConfig.allowTapping: false`, "Placement by tapping" is unavailable
+      and the row says why — GEO-014 D-4
+- [x] A wait for satellite lock reports progress rather than sitting still — D-9
+- [x] A "record this point" action appends a vertex on demand, for corners and markers — the
+      pin button appends at the enumerator's **position** while recording, not at the map
+      centre; recording from the crosshair would let a plot be mapped from the far side of a
+      fence
+- [x] The live GPS position is shown distinctly from recorded vertices, with its accuracy
+- [x] Fixes worse than the accuracy threshold are **recorded and drawn in red**, and the
+      enumerator can see which vertices are the problem while still standing on the plot —
+      `.vertex-poor`, plus a separate count in the status bar
+- [x] Points drawn by tapping (GEO-001) and points from GPS converge on one ordered list
 
 > **Correction, 2026-09-18 (GEO-014 D-3).** The second criterion previously read *"fixes worse
 > than the accuracy threshold are **skipped**, and the enumerator can see why the count is not
@@ -54,16 +66,16 @@ ships connected-only (GEO-001 D-3), this is the task that removes that constrain
 > and is now answered by marking plus a submit gate. See D-1 below.
 
 ### Technical Acceptance Criteria
-- [ ] Each recorded vertex carries its accuracy as an optional third element,
+- [x] Each recorded vertex carries its accuracy as an optional third element,
       `[lat, lng, accuracy]` — GEO-014 §3. A tapped vertex keeps writing two elements
-- [ ] Accuracy threshold default 15 m (ARF's default) — used to **mark** in this phase; the
-      gate that blocks submission arrives in phase 3 (GEO-014 D-6)
-- [ ] No path leaves a GPS watch or interval running
-- [ ] Reuses GEO-001's WebView map host and bridge — none of it re-paid
-- [ ] Enables the two disabled rows in GEO-001's Input method dialog rather than adding a new
+- [x] Accuracy threshold default 15 m (ARF's default) — used to **mark** in this phase; the
+      gate that blocks submission arrives in phase 3 (GEO-014 D-6). **Read from
+      `extra.geoConfig.accuracyThreshold` when the form sets one — see D-5**
+- [x] No path leaves a GPS watch or interval running
+- [x] Reuses GEO-001's WebView map host and bridge — none of it re-paid
+- [x] Enables the two disabled rows in GEO-001's Input method dialog rather than adding a new
       entry point; `addAtCenter` is already wired for "record this point"
-- [ ] Does **not** open a second GPS watch — `Home.js` already runs one into
-      `UserState.currentLocation`, which GEO-001's accuracy strip reads
+- [ ] ⚠️ Does **not** open a second GPS watch — **not met, deliberately. See D-4.**
 
 ---
 
@@ -147,17 +159,23 @@ Metro; only the client on the handset changes.
 and the app foregrounded for an entire boundary walk, which they will not do.
 **Foreground-only GPS capture is usable for a demo and frustrating in the field.**
 
-> **Status change, 2026-09-18 (GEO-014 D-4).** The +7h stays outside *this* task, but it is no
-> longer optional overall. From phase 3, a question with `geoConfig.detectOverlaps = true`
-> disables tap-to-draw on mobile, making a boundary walk the only way to enter data — so the
-> assessment above stops being a warning and becomes a blocker.
+> **Status change, 2026-09-18, revised 2026-09-21 (GEO-014 D-4).** The +7h stays outside *this*
+> task, but it stops being optional for some programmes. A question with
+> `geoConfig.allowTapping: false` disables tap-to-draw on mobile, making a boundary walk the only
+> way to enter data — so for those forms the assessment above stops being a warning and becomes a
+> blocker.
 >
 > | | Before | After |
 > |---|---|---|
 > | Phase 2 (this task) | optional | **still optional** |
-> | Phase 3 (overlap) | optional | **prerequisite** |
+> | Phase 3, `allowTapping` unset | optional | **still optional** |
+> | Any phase, `allowTapping: false` | optional | **prerequisite** |
 >
-> Do not move the +7h into this task. Budget it in phase 3, and see §10.
+> The 2026-09-18 version of this note tied it to `detectOverlaps`, which made it unconditional
+> across phase 3 and put 7 h into that baseline. With tapping on a key of its own it is a
+> per-programme answer, so the hours move back out of the baseline into a conditional line.
+>
+> Do not move the +7h into this task. Budget it where it applies, and see §10.
 
 ### D-3: Where `accuracyThreshold` comes from in phase 2
 
@@ -171,14 +189,147 @@ forward only to make one number editable is not worth an upstream npm release.
 > as a submission block it would deadlock §9's four hours of field walking, where 20–40 m under
 > canopy is ordinary and no knob exists yet to loosen it.
 
+### D-4: A dedicated GPS watch during recording, after all
+
+**Decision (found during implementation, 2026-09-18)**: the recording session opens its own
+`watchPositionAsync` and removes it when recording stops. §2's criterion *"does not open a
+second GPS watch"* is **not met**.
+
+**Rationale**: the criterion rested on a premise that does not hold. `Home.js` feeds
+`UserState.currentLocation`, but it watches on `buildParams.gpsInterval` — **60 seconds**. A
+10-second capture interval reading that store would append the same stale fix six times in a
+row, producing a boundary of duplicated points that looks like a walk and is not one.
+
+The criterion §2 actually cares about is the one next to it — *"no path leaves a GPS watch or
+interval running"* — and that is what the teardown is written against. Note that the two
+criteria only make sense together if a watch exists to be torn down.
+
+**Impact**: two watches coexist while recording. `expo-location` merges subscriptions to the
+most demanding, so the cost is the accuracy level, not a doubled fix rate. Idle, nothing
+changes: the accuracy strip and the live dot read `Home.js`'s fix exactly as in GEO-001.
+
+The teardown is the risk this creates, and it is guarded in three places:
+`watchPositionAsync` resolves *after* a screen may have been popped, so a `cancelled` flag
+removes a subscription created after cleanup ran; the effect returns a cleanup function on
+every branch, not only when a watch was opened; and clearing `recordingMode` — which is what
+Stop, Save and back all do — re-runs that cleanup.
+
+### D-5: `accuracyThreshold` is read from `geoConfig`, not hardcoded
+
+**Decision (revises D-3, 2026-09-18)**: the threshold comes from
+`extra.geoConfig.accuracyThreshold` when the form sets one, falling back to ARF's 15 m.
+
+**Rationale**: D-3's reasoning was *"not worth an upstream npm release"* — the release being
+the `akvo-react-form-editor` panel that would author the key. **That release has shipped**
+(GEO-009 is Delivered as 2.0.5, and the host depends on it), so the key is already authorable
+and reading it costs one line rather than a release.
+
+It also supplies the knob D-3's own 2026-09-18 reaffirmation worried about not having: §9
+budgets four hours of walking a real boundary, and under canopy 20–40 m is ordinary. With the
+threshold hardcoded, every vertex of that test would render red with no way to tune it.
+
+**Impact**: none on behaviour where no `geoConfig` is set, which is every form until one is
+authored. D-3's conclusion — that phase 2 must not *block* on the threshold — is untouched;
+that is GEO-014 D-6 and remains phase 3.
+
+### D-6: The recording interval is chosen by the enumerator, matching ODK
+
+**Decision**: `Recording interval` becomes a dropdown in the input method dialog, revealed when
+**Automatic location recording** is selected — the same control, in the same place, as ODK
+Collect. Options: **1 s, 5 s, 10 s, 20 s, 30 s, 1 min, 5 min, 10 min, 20 min, 30 min**.
+
+**Default stays 10 s**, not ODK's 20 s. The number is ours and keeping it costs no transition:
+the enumerator finds a dropdown where they expect one, and its starting value is not something
+carried over from another app.
+
+**Rationale**: this is the straightforward half of ODK parity — no behavioural difference to
+reconcile, only a control we had not built. It also answers §10's open question *"is 10 s the
+right interval, or should it vary by expected plot size?"* better than a second constant would:
+the person who knows the plot size is standing on it.
+
+**Impact**: the long end of the range is not padding. At 30 min a boundary walk records a
+handful of corners, which is how a large concession gets mapped on foot without producing the
+~180-vertex captures RISK-5 warns about.
+
+### D-7: The accuracy control is ODK's, the label is not
+
+**Decision**: a second dropdown sits where ODK puts `Accuracy requirement`, with ODK's options —
+**None, 3 m, 5 m, 10 m, 15 m, 20 m** — and a default of **15 m**, ours. Its label states what it
+does here: it **flags** vertices, it does not filter them.
+
+**Rationale**: ODK's `Accuracy requirement` is a capture gate — a fix worse than it is never
+recorded. That is precisely the behaviour GEO-014 D-3 reversed, on the argument that the
+enumerator must see *which* vertices are bad while still standing on the plot.
+
+So the control should be copied and the label must not be. Someone arriving from ODK would read
+"Accuracy requirement: 10 meters", conclude poor fixes are being excluded, and have no reason to
+check — the dialog looks exactly like the one they already know.
+
+**A familiar label over unfamiliar behaviour is worse than no label at all**, because it removes
+the prompt to look. Copying the *position* is what makes the transition easy; copying the
+*sentence* is what would make it dangerous.
+
+**Precedence — the form's value is a ceiling, not merely a default**: options looser than
+`extra.geoConfig.accuracyThreshold` are not selectable, and `None` disappears entirely once a
+form sets one. The enumerator may tighten what the form asked for; they may not loosen it.
+
+Phase 2 only colours vertices, so this costs little today. It matters in phase 3, where the same
+threshold **blocks submission** (GEO-014 D-6, D-9): without the ceiling, choosing `None` would
+switch that gate off from inside the capture screen — the one place it must not be switchable
+from.
+
+**`None` means no marking at all**, and is valid only where the form expressed no opinion.
+
+**Not persisted.** Both dropdowns reset to their defaults on each capture. ODK remembers the
+last choice; doing the same needs a settings column and a migration, and nothing yet says an
+enumerator resents re-picking once per plot. Listed in §10 rather than built.
+
+### D-8: The watch opens while the enumerator is still choosing
+
+**Decision (found on device, 2026-09-18)**: selecting either recording mode in the dialog opens
+the GPS watch immediately, in a `standby` mode that records nothing. The satellite-lock gate is
+evaluated against that watch's own fixes.
+
+**Rationale**: the first build made the gate **circular**. Start stayed disabled until a fix
+arrived; the watch only opened once `recordingMode` was set; and `recordingMode` was only set by
+pressing Start. Nothing could ever satisfy the condition.
+
+The screen fell back to `UserState.currentLocation`, which `Home.js` refreshes on
+`buildParams.gpsInterval` — **60 seconds**, and not at all until location permission has been
+granted. `LOCK_MAX_AGE_MS` was 30 s, *half* that cadence, so even a working GPS looked stale most
+of the time. On device the button was simply dead, under a message that named no cause.
+
+**Two fixes, both needed**: the standby watch above, and `LOCK_MAX_AGE_MS` raised to 90 s so the
+fallback path cannot be stale by construction. A window shorter than the cadence feeding it is a
+bug regardless of what else is fixed, and there is now a regression test pinning the relationship.
+
+**Impact**: this is also what ODK does — it shows live accuracy while you choose a mode, for the
+same reason. The watch is torn down if the dialog is cancelled, and it restarts once when Start
+promotes `standby` to a real mode; `fixRef` survives that restart, so no fix is lost.
+
+### D-9: Waiting states say what is happening
+
+**Decision**: the wait shows a spinner and reports progress — *"Searching for satellites…"* with
+no fix, then *"Improving the fix — 24 m so far…"* once one arrives.
+
+**Rationale**: the first build showed a static *"Waiting for a GPS fix…"* with no motion and no
+numbers. Nothing distinguished "acquiring normally" from "this will never work", and the only
+honest description of the experience is the one it drew from field testing: stressful.
+
+A GPS wait is the one moment on this screen where the app has information the enumerator does
+not, and withholding it is what turns a 20-second wait into an unbounded one.
+
 ---
 
 ## 6. Type/Constant Mappings
 
 | Setting | Phase 2 source | Phase 3 source |
 |---|---|---|
-| Accuracy threshold | Hardcoded 15 m — **marks red only** | `extra.geoConfig.accuracyThreshold` (GEO-009) — marks everywhere, **blocks submission only when `detectOverlaps` is on** (GEO-014 D-9) |
-| Interval | Hardcoded 10 s | not configurable |
+| Accuracy threshold | Enumerator's choice, **capped by** `extra.geoConfig.accuracyThreshold`; 15 m default (D-5, D-7) — marks red only | same, and **blocks submission when `detectOverlaps` is on** (GEO-014 D-9) |
+| Accuracy options | `None, 3, 5, 10, 15, 20` m — those looser than the form's value are not offered (D-7) | unchanged |
+| Interval | Enumerator's choice, 10 s default (D-6) | unchanged |
+| Interval options | `1, 5, 10, 20, 30` s and `1, 5, 10, 20, 30` min (D-6) | unchanged |
+| Tap-to-draw | available unless `extra.geoConfig.allowTapping` is `false` (GEO-014 D-4) | unchanged |
 | Vertex format | `[lat, lng, accuracy]`, third element optional (GEO-014 §3) | unchanged |
 
 ---
@@ -222,15 +373,39 @@ forward only to make one number editable is not worth an upstream npm release.
 
 ## 9. Testing Strategy
 
-| Test Type | Coverage |
-|-----------|----------|
-| Unit | A poor fix is **recorded and flagged**, not dropped; ordered merge of tapped + GPS points |
-| Unit | Accuracy written into the third element; a tapped vertex stays at two |
-| Integration | Round-trip: capture → `/sync` → `datapoint-list`, third element intact |
-| Integration | A legacy 2-element answer still syncs and still validates |
-| Manual (field) | **Physically walk a boundary.** No substitute exists |
-| Manual (field) | Red vertices appear at the right moment and are legible in sunlight |
-| Manual (device) | Teardown: leave group / submit / background / kill — no watch survives |
+| Test Type | Coverage | Status |
+|-----------|----------|---|
+| Unit | A poor fix is **recorded and flagged**, not dropped; a tapped vertex is never flagged | ✅ `gps-vertex.test.js` |
+| Unit | Accuracy written into the third element; a tapped vertex stays at two; a 0/negative/NaN reading writes **no** third element rather than `0` | ✅ 21 tests |
+| Unit | Satellite lock needs *a* fix, not a good one; a stale fix is not a lock | ✅ |
+| Unit | Accuracy options looser than the form's threshold are filtered out, and `None` disappears once a form sets one (D-7) | ✅ |
+| Unit | Interval and accuracy option lists match ODK's, with **our** defaults selected | ✅ |
+| Unit | `None` marks nothing — a null threshold must not coerce to `> 0` and redden every measured vertex | ✅ |
+| Unit | `allowTapping` defaults to true and withdraws tapping only on a literal `false` (GEO-014 D-4) | ✅ |
+| Unit | 🔴 `LOCK_MAX_AGE_MS` stays above `gpsInterval` — regression for the dead Start button (D-8) | ✅ |
+| Unit (backend) | `allowTapping` is validated as a real boolean, like `detectOverlaps` | ✅ 12 tests |
+| Manual (field) | A 30 min interval records corners, not a dense track (D-6) | ⬜ |
+| Unit (backend) | `is_coordinate_ring` takes 2-, 3- and mixed-length rings, still refuses a flat point, a 0 and a non-numeric accuracy | ✅ 28 tests |
+| Unit (backend) | `bounding_box` over 3-element and mixed rings | ✅ 25 tests |
+| Integration | Round-trip: capture → `/sync` → `datapoint-list`, third element intact | ✅ backend half |
+| Integration | A legacy 2-element answer still syncs and still validates | ✅ |
+| Component | Dialog enables all three modes; Start disabled without a fix | ⚠️ **cannot run** — see below |
+| Manual (field) | **Physically walk a boundary.** No substitute exists | ⬜ |
+| Manual (field) | Red vertices appear at the right moment and are legible in sunlight | ⬜ |
+| Manual (device) | Teardown: leave group / submit / background / kill — no watch survives | ⬜ |
+| Manual (device) | Start becomes enabled outdoors, and the wait reports progress (D-8, D-9) | ✅ device-verified 2026-09-21 |
+
+> ⚠️ **The component suite cannot run, and this predates the task.** `app/package.json` pairs
+> React 19 with `react-test-renderer ^18.2.0`, so `MapDrawView.test.js` fails at import with
+> `Cannot read properties of undefined (reading 'ReactCurrentOwner')` — the same breakage the
+> GEO-002 commit recorded across 69 of 83 suites. The assertions here were updated to match the
+> new behaviour and will pass once the pairing is fixed, but they are **not** evidence today.
+>
+> That is why the logic most worth testing was put in `form/lib/gps-vertex.js` rather than in
+> the screen: what counts as measured, what counts as poor, and what counts as a lock are all
+> exercised by a suite that does run. What is **not** covered by any automated test is the
+> teardown of the watch and the interval — D-4's main risk — which rests on review and on the
+> device pass below.
 
 **Hours breakdown**
 
@@ -244,8 +419,9 @@ forward only to make one number editable is not worth an upstream npm release.
 | Write accuracy into the vertex (GEO-014 §3) | 0.5 |
 | Mark out-of-threshold vertices red on the map | 1 |
 | Record-and-mark logic — written, not ported from ARF (D-1) | 1 |
+| Interval + accuracy dropdowns in the input method dialog, with the ceiling filter (D-6, D-7) | 1 |
 | **Field testing — physically walking a boundary** | 4 |
-| **Total** | **9.5** |
+| **Total** | **10.5** |
 
 Gating drops from 1h to 0.5h because D-1 removes the need to explain a stalled point count.
 
@@ -267,9 +443,17 @@ backgrounded device testing (3h). Optional in phase 2, **prerequisite in phase 3
 
 - [x] Is background recording in scope for the first field deployment? (D-2 — it is +1 day and
       forces a development build) **Answered 2026-09-18: yes, if phase 3 ships.** GEO-014 D-4
-      disables tapping when `detectOverlaps` is on, so a boundary walk becomes the only route
-      into a handset and foreground-only recording stops being viable
-- [ ] Is 10 s the right interval, or should it vary by expected plot size?
+      ties tapping to `allowTapping`, so where a programme sets it to `false` a boundary walk is
+      the only route into a handset and foreground-only recording stops being viable. **Revised
+      2026-09-21**: conditional on that key rather than on `detectOverlaps`, so this is a
+      per-programme answer, not a phase-wide one
+- [x] Is 10 s the right interval, or should it vary by expected plot size? **Answered
+      2026-09-18 (D-6): neither.** The enumerator picks it, as in ODK. 10 s is the default, not
+      the rule, and the range runs to 30 min so a large concession can be walked corner to
+      corner
+- [ ] Should the two dropdown choices persist between captures? ODK remembers them; we reset
+      each time (D-7). Persisting needs a settings column and a migration, so it waits for
+      someone to actually ask
 - [ ] Does the red marking need a matching entry in the vertex list, or is the map enough? A
       vertex buried under later ones can be hard to spot on a dense boundary
 

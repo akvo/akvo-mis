@@ -5,7 +5,8 @@
 **Task ID**: GEO-014
 **Author**: Iwan Firmawan
 **Date**: 2026-09-18
-**Status**: Draft — decision record **and one buildable backend task**
+**Status**: **Backend task (T13) implemented 2026-09-18**; the decisions below are the record.
+Consumed by GEO-004 (done, phase 2) and by GEO-005/006/007 (phase 3, not started)
 **Phase**: 2 — must ship before GEO-004 (D-7); consumed in phase 3
 **Estimate**: **1.5h (Backend)** for §4's two validator changes. The rest of this document
 redistributes hours across GEO-004, GEO-005, GEO-006 and GEO-007
@@ -70,7 +71,7 @@ conclusion missed the server-supplied half of the comparison and is void.
 - [ ] Points worse than `accuracyThreshold` are recorded and marked, never silently dropped
 - [ ] Submission is refused while any point exceeds `accuracyThreshold` — phase 3, and only when
       `detectOverlaps` is on (D-6, D-9). Everywhere else the threshold marks without blocking
-- [ ] On **mobile**, tapping is unavailable on a question with `geoConfig.detectOverlaps = true`
+- [ ] On **mobile**, tapping is unavailable when `geoConfig.allowTapping` is `false` (D-4)
 - [ ] The overlap threshold is derived from accuracy and can never exceed the authored
       `overlapThreshold`
 
@@ -192,35 +193,62 @@ advances. That removes a UX risk and part of the work costed for it.
 discovered at submit time, a single `accuracyThreshold` suffices. An earlier two-number scheme
 (a soft discard limit plus a hard submit limit) is unnecessary.
 
-### D-4: Tapping is disabled when `detectOverlaps` is on — on mobile only
+### D-4: Tapping is disabled by `allowTapping`, not by `detectOverlaps`
 
-**Decision**: On the **mobile app**, a geoshape question with `geoConfig.detectOverlaps = true`
-offers GPS capture only; the tap-to-draw input method is unavailable. The **webform is
-unchanged** and keeps tapping.
+**Decision (revised 2026-09-21)**: `geoConfig.allowTapping` is a boolean of its own, defaulting
+to **`true`**. Setting it to `false` removes the tap-to-draw input method on the **mobile app**,
+leaving GPS capture as the only way in. The **webform is unchanged** and keeps tapping.
 
-**Rationale**: No real GPS fix has 0 m error, so an unmeasured vertex is proof the shape was
-traced from imagery — possibly without the enumerator ever visiting the plot. Where overlap
-detection is on, a land dispute is at stake, and a traced boundary is not evidence. It also
-closes the bypass this would otherwise open: an enumerator blocked by poor GPS cannot simply
-redraw by tapping, because an absent accuracy can never exceed a threshold.
+`detectOverlaps` no longer affects capture at all. It switches overlap detection on; nothing else.
+
+> **Previously**: *"a geoshape question with `geoConfig.detectOverlaps = true` offers GPS capture
+> only."* The rationale below is unchanged — what changed is that one flag no longer silently
+> does two jobs.
+
+**Rationale for the separation**: the two rules answer different questions. *Should this answer
+be checked against its neighbours?* and *may this boundary be traced rather than walked?* are
+decisions a programme can reasonably take independently, and coupling them made the checkbox do
+something its label did not mention (GEO-009 recorded that as known debt). An author who wants
+overlap detection on a dataset that was legitimately digitised from imagery now has a way to say
+so; previously they had to choose between the two.
+
+**Rationale for the rule itself, unchanged**: no real GPS fix has 0 m error, so an unmeasured
+vertex is evidence the shape was traced from imagery — possibly without the enumerator ever
+visiting the plot. Where a land dispute is at stake, a traced boundary is not evidence.
 
 **Why mobile only**: field staff use the mobile app, not a browser. Browser geolocation falls
 back to Wi-Fi and IP triangulation when signal is weak, so its accuracy figure is not comparable
-to a native reading — enforcing the same rule there would produce false refusals against a
-number we do not trust in the first place.
+to a native reading — enforcing the same rule there would produce false refusals against a number
+we do not trust in the first place.
 
-**Impact**: ⚠️ **This makes GEO-004's background-recording increment a prerequisite of phase 3.**
-GEO-004 D-2 defers it as an optional +7h because tapping remains available. Once tapping is off,
-a boundary walk is the only way to enter data on a handset, and GEO-004 D-2's own assessment
-applies: *"without background recording the enumerator must keep the screen awake and the app
-foregrounded for an entire boundary walk, which they will not do."* Phase 2 is unaffected —
-`detectOverlaps` does not exist until phase 3.
+**Why the default is `true`**: it is the behaviour every existing form already has, so no
+published form changes meaning, and `allowTapping: false` is the only value an author ever needs
+to write.
+
+**⚠️ What the separation costs**: the bypass the old coupling closed is now the author's
+responsibility. With `detectOverlaps: true` and `allowTapping` left unset, an enumerator blocked
+by poor GPS can delete the polygon, redraw it by tapping, and pass — an absent accuracy can never
+exceed a threshold. The two keys have to be set together to get the protection that one key used
+to give automatically.
+
+That is a real weakening, stated here rather than left to be discovered. It is defensible
+because the alternative — a flag with an unannounced second effect — is the failure mode this
+epic keeps finding. It should be answered where it belongs, in the authoring UI: reveal
+`allowTapping` beside `detectOverlaps`, defaulted off, so the pairing is obvious at the moment
+of authoring rather than implied by a rule nobody can see.
+
+**Impact on the plan**: GEO-004's background-recording increment (+7h) is **no longer an
+unconditional prerequisite of phase 3.** It becomes one only for a programme that sets
+`allowTapping: false`, because a boundary walk is then the only way to enter data and GEO-004
+D-2's assessment binds: *"without background recording the enumerator must keep the screen awake
+and the app foregrounded for an entire boundary walk, which they will not do."* Phase 3's budget
+moves the 7 h back out of the baseline and into a conditional line.
 
 **Known gap, accepted**: a polygon entered through the webform carries no accuracy and is not
 subject to this rule. It is also never checked for overlap at all — GEO-005/006/007 are entirely
-device-side, and no overlap rule exists in `frontend/src/lib/polygon-rules.js`. The web was
-never an overlap-checked path; this decision does not narrow it, but documents that it is not
-one. Do not describe overlap detection as covering every route into the system.
+device-side, and no overlap rule exists in `frontend/src/lib/polygon-rules.js`. The web was never
+an overlap-checked path; this decision does not narrow it, but documents that it is not one. Do
+not describe overlap detection as covering every route into the system.
 
 ### D-5: The overlap threshold is derived from accuracy, bounded by the authored value
 
@@ -330,6 +358,15 @@ is never uninformed — only unblocked.
 it is asked for, the home is already there: GEO-013's severity contract resolves
 `configKey → 'block' | 'warn'`, so this becomes one more key, not a new mechanism.
 
+> **Addendum, 2026-09-18 (GEO-004 D-7).** The capture screen now lets the enumerator choose the
+> accuracy value, matching ODK's dialog. `accuracyThreshold` therefore becomes a **ceiling**
+> rather than the value itself: looser options are not offered, and "None" disappears once a
+> form sets one. The enumerator may tighten what the form asked for and may not loosen it.
+>
+> This matters here rather than in phase 2. While the threshold only colours vertices, a loose
+> choice costs nothing; once it **blocks submission**, an unrestricted dropdown would let the
+> gate be switched off from inside the screen it is supposed to gate.
+
 ### D-10: GEO-005 carries a per-polygon accuracy summary, not per-vertex accuracy
 
 **Decision**: `/device/datapoint-list` sends `coordinates` as 2-element vertices plus a separate
@@ -374,7 +411,8 @@ makes even that moot on this endpoint.
 | `accuracyThreshold` | number, > 0 | red-mark limit (phase 2), submit block (phase 3) | `extra.geoConfig`, GEO-009 |
 | `overlapThreshold` | number, 0 < x ≤ 100 | **ceiling** of the adaptive threshold | `extra.geoConfig`, GEO-009 |
 | `overlapThresholdFloor` | number, 0 < x ≤ 100, default `5` | **floor** of the adaptive threshold | `extra.geoConfig` — read, **not authored** (D-8) |
-| `detectOverlaps` | boolean | enables overlap detection; on mobile also disables tapping (D-4) and turns the accuracy block on (D-9) | `extra.geoConfig`, GEO-009 |
+| `detectOverlaps` | boolean | enables overlap detection, and turns the accuracy block on (D-9). **No longer affects capture** (D-4) | `extra.geoConfig`, GEO-009 |
+| `allowTapping` | boolean, default `true` | `false` removes tap-to-draw on mobile (D-4) | `extra.geoConfig` — read, **not authored** yet |
 
 ---
 
@@ -422,8 +460,8 @@ makes even that moot on this endpoint.
 
 | Test Type | Coverage |
 |---|---|
-| Unit (backend) | `is_coordinate_ring` accepts 2- and 3-element vertices and a mixed ring; still rejects a flat `[9.03, 38.74]` and a non-numeric third element |
-| Unit (backend) | `bounding_box` over 3-element and mixed vertices |
+| Unit (backend) | `is_coordinate_ring` accepts 2- and 3-element vertices and a mixed ring; still rejects a flat `[9.03, 38.74]`, a `0`, a negative and a non-numeric third element — ✅ `tests_geoshape_answers.py` |
+| Unit (backend) | `bounding_box` over 3-element and mixed vertices — ✅ `tests_mobile_datapoint_geometry.py` |
 | Unit (backend) | `_geo_config_issues` validates `overlapThresholdFloor` on the same rules as `overlapThreshold` (GEO-010 §6) |
 | Unit (mobile/web) | `toGeoJsonRing`, `polygonArea`, `selfIntersects` unchanged on 3-element input |
 | Unit | Adaptive threshold: clamps at the ceiling for small plots, tightens for large ones, falls back to `overlapThreshold` when accuracy is absent |

@@ -144,6 +144,22 @@ const uiText = {
     polygonNoPoints: 'No shape captured yet',
     polygonInvalidCount: '{count} invalid',
     polygonInvalidTitle: 'Shape problems',
+    polygonPoorAccuracyCount: '{count} low accuracy',
+    gpsWaitingForFix: 'Searching for satellites...',
+    gpsImprovingFix: 'Improving the fix - {accuracy} m so far...',
+    gpsRecording: 'Recording',
+    gpsIntervalLabel: 'Recording interval:',
+    gpsIntervalSeconds: '{count} seconds',
+    gpsIntervalMinutes: '{count} mins',
+    /**
+     * Deliberately NOT ODK's "Accuracy requirement". That control filters fixes; this one only
+     * marks them (GEO-004 D-7). Reusing the familiar wording over unfamiliar behaviour would
+     * remove the very prompt to look that an unfamiliar label provides.
+     */
+    gpsAccuracyFlagLabel: 'Flag points worse than:',
+    gpsAccuracyNone: 'None',
+    gpsAccuracyCapped: 'This form requires {threshold} m or better.',
+    gpsTappingDisabled: 'This form requires the boundary to be walked, not drawn.',
     geoRuleParseable: 'This answer is not a valid shape.',
     geoRuleMinVertices: 'A shape needs at least {threshold} points - this one has {actual}.',
     geoRuleSelfIntersection: 'The boundary crosses itself.',
@@ -351,6 +367,17 @@ const uiText = {
     polygonNoPoints: 'Aucune forme enregistree',
     polygonInvalidCount: '{count} non valide(s)',
     polygonInvalidTitle: 'Problèmes de forme',
+    polygonPoorAccuracyCount: '{count} peu précis',
+    gpsWaitingForFix: 'Recherche de satellites...',
+    gpsImprovingFix: 'Amelioration du signal - {accuracy} m pour l\u2019instant...',
+    gpsRecording: 'Enregistrement',
+    gpsIntervalLabel: 'Intervalle d\u2019enregistrement :',
+    gpsIntervalSeconds: '{count} secondes',
+    gpsIntervalMinutes: '{count} min',
+    gpsAccuracyFlagLabel: 'Signaler les points au-dela de :',
+    gpsAccuracyNone: 'Aucun',
+    gpsAccuracyCapped: 'Ce formulaire exige {threshold} m ou mieux.',
+    gpsTappingDisabled: 'Ce formulaire exige de parcourir la limite, pas de la dessiner.',
     geoRuleParseable: "Cette réponse n'est pas une forme valide.",
     geoRuleMinVertices:
       'Une forme doit avoir au moins {threshold} points - celle-ci en a {actual}.',

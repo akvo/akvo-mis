@@ -357,10 +357,14 @@ floating control column on the right, `Points entered: N` status bar along the b
 | Manual location recording | listed, disabled, "Coming soon" | **GEO-004** |
 | Automatic location recording | listed, disabled, "Coming soon" | **GEO-004** |
 
-> **Follow-up, 2026-09-18 (GEO-014 D-4).** From phase 3 this table gains a condition. On a
-> question with `geoConfig.detectOverlaps = true`, **"Placement by tapping" is disabled** and the
-> two GPS modes are the only choices — a traced boundary is not evidence where a land dispute is
-> at stake, and no real GPS fix reads 0 m.
+> **Follow-up, 2026-09-21 (GEO-014 D-4).** This table gains a condition. On a question with
+> `geoConfig.allowTapping: false`, **"Placement by tapping" is disabled** and the two GPS modes
+> are the only choices — a traced boundary is not evidence where a land dispute is at stake, and
+> no real GPS fix reads 0 m.
+>
+> An earlier revision tied this to `detectOverlaps` instead. That made one checkbox do two
+> unrelated jobs, so the control moved to a key of its own; `allowTapping` defaults to `true`,
+> which is what every form already does.
 >
 > The dialog is the right home for that rule: the mode list and the `inputMethod` state already
 > exist here, so phase 3 changes a row's enabled state rather than adding UI. Nothing changes
@@ -368,6 +372,16 @@ floating control column on the right, `Points entered: N` status bar along the b
 >
 > This is mobile only. The webform keeps tapping — see GEO-014 D-4 on why browser geolocation is
 > not a number worth enforcing against.
+
+> **Follow-up, 2026-09-18 (GEO-004 D-6/D-7).** The dialog is no longer three radio rows and two
+> buttons. Selecting **Automatic location recording** reveals a `Recording interval` dropdown,
+> and both recording modes reveal an accuracy dropdown, in ODK's positions — the parity argument
+> above extends from the mode list to the controls under it.
+>
+> One label deliberately departs from ODK. Its `Accuracy requirement` *filters* fixes; ours
+> *flags* them (GEO-014 D-3), so the sentence had to change even though the control did not.
+> Matching the word over different behaviour would remove the very prompt to look that an
+> unfamiliar label provides.
 
 **Rationale**: enumerators in this sector are trained on ODK/Kobo. Matching the layout and the
 option order means the two apps stay learnable together rather than each needing its own training.
