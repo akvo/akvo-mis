@@ -5,7 +5,7 @@
 **Task ID**: GEO-009 (breakdown ref: T8)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Delivered — panel merged upstream (akvo/akvo-react-form-editor#76) and released as 2.0.5; host depends on it
+**Status**: Delivered — panel merged upstream (akvo/akvo-react-form-editor#76) and released as 2.0.5; **extended to the full rule catalogue in 2.0.6**, see the 2026-09-21 correction in §2; host must bump to `^2.0.6`
 **Phase**: 3 — Overlap detection
 **Estimate**: 5h ≈ 1 day (Frontend — **upstream repo + host**)
 **Blocks**: GEO-007
@@ -33,7 +33,7 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 
 ## 2. Requirements
 
-### The complete configurable set — exactly three fields
+### The complete configurable set — three fields at release, nine since 2.0.6
 
 | Control | Key | Type | Default |
 |---|---|---|---|
@@ -83,6 +83,75 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 }
 ```
 
+> **Correction, 2026-09-21 — the three-field contract is superseded by 2.0.6.**
+>
+> Every correction above ends by reaffirming that the panel authors three fields and that the
+> remaining keys cost an upstream release nobody had asked for. Five such deferrals had
+> accumulated, and GEO-012 D-3's rule decided it: *"batching matters more than the rules'
+> individual sizes"*. They shipped together.
+>
+> **The panel now authors nine keys**, and is no longer a list of fields. It is a table of the
+> rules the app evaluates, grouped by the severity key that governs each group:
+>
+> | Group | Severity key | Rules it governs | Parameters in the group |
+> |---|---|---|---|
+> | Shape | `validateShape` | `parseable`, `minVertices`, `selfIntersection` | — |
+> | Area | `validateArea` | `minArea`, `maxArea` | `maxAreaHa` |
+> | Overlap | `validateOverlap` *(new)* | overlap detection | `overlapThreshold`, `overlapThresholdFloor` |
+>
+> Capture settings sit outside the table: `accuracyThreshold` and `allowTapping`.
+>
+> **Why grouped and not one row per rule.** `validateShape` carries `configKey` on all three
+> shape rules in `app/src/form/lib/polygon-rules.js`, not just self-crossing. A flat table showed
+> a severity beside each rule and so implied they could differ; they cannot. The group header
+> carries the one control, and its rules are indented beneath it, so the blast radius of changing
+> it is visible rather than implied.
+>
+> **`validateOverlap` is new and has no reader yet.** See the note in §2.1.
+>
+> **What did not change**: the keys' names, types, ranges and defaults; the `geoshape`-only
+> scoping of D-3; and the rule that absent means "use the default". No published form changes
+> meaning.
+
+### 2.1 `validateOverlap` — authored in 2.0.6, read by nobody *(2026-09-21)*
+
+Every other key in the panel was already read by the app before it became authorable. This one
+reverses that order, and the asymmetry is worth stating plainly rather than discovering later.
+
+**Why it exists.** The panel labelled overlap's severity as fixed. That was wrong in both
+directions: FR-4.4 says an overlap failure *"does block submission via `validateAllGroups()`"*
+and FR-4.7.6 makes a passing validation a submit requirement, so the honest fixed label was
+**block**, not warn. But GEO-007 D-7 already establishes that severity is a policy question
+answered per question, and GEO-012 §2.4 found the land-tenure posture — in MAST *"an overlap is
+the start of an adjudication, not a validation error"* — that a programme may legitimately want.
+A fixed label could not express it.
+
+**The contract**, identical to `validateShape` and `validateArea`:
+
+| | |
+|---|---|
+| Key | `extra.geoConfig.validateOverlap` |
+| `true` | overlap failure blocks submission |
+| `false` | overlap failure warns |
+| Absent | `block` — today's behaviour exactly |
+
+**Nothing changes until the app reads it.** The panel's default writes no key, so a form authored
+now behaves precisely as it does today. Only an author who explicitly chooses *Warn only* stores
+a value, and until GEO-007 resolves it that value is inert.
+
+**Not merged into `detectOverlaps`, deliberately.** The obvious simplification — one key with
+`false`/`"warn"`/`"block"` — is closed off: `enabled_geoshape_question_ids`
+(`v1_mobile/geometry.py:40`) gates the feature on `extra__geoConfig__detectOverlaps=True`, a JSON
+lookup matching literal `true`. A string there matches nothing, so the whole feature would
+silently switch off for every form — the exact failure GEO-010 §2 exists to prevent. The two keys
+also answer different questions: *should this run at all* has a real cost (it syncs every other
+response's geometry to the device), *how bad is a failure* does not. Collapsing them would repeat
+the coupling GEO-014 D-4 spent a decision undoing.
+
+The editor presents them as **one control with four options** — *Do not check · Use device
+default · Warn only · Block submission* — so the author sees one posture rather than two widgets
+that only make sense together, while the stored keys stay separate.
+
 ### Everything else is a hardcoded floor — build no UI for it
 
 | Rule | Value | Why no checkbox |
@@ -128,6 +197,20 @@ delivered-as-asked. That instruction applies here: the request was
 understood, considered, and deliberately not built, because it would double
 the panel and let a form ship with polygon validation disabled.
 
+> **Correction, 2026-09-21.** Half of this is delivered in 2.0.6, and the half that is not is
+> still refused for the same reason. The author now **sees the rule list** — every rule the app
+> evaluates is named in the panel, which is what closes the comprehension gap this section's last
+> paragraph describes. What they still cannot do is switch a rule **off**: shape and area offer
+> severity only, because *"should this be a valid polygon?"* has no meaningful off state
+> (GEO-002 D-1, narrowed but not reversed by D-4).
+>
+> Overlap is the one exception, and it always was one — `detectOverlaps` has been an enable
+> switch since release, because that rule genuinely costs something to run.
+>
+> So the accurate statement is no longer *"there is no rule dropdown and no off switch"*. It is:
+> **there is a rule table, severity is selectable per group, and there is no off switch except
+> for overlap.**
+
 **Consequence for GEO-007.** Its acceptance criterion that the Validate
 button is hidden "when the question has no validation rules configured"
 cannot be satisfied by anything this task writes. A plain geoshape question
@@ -146,6 +229,27 @@ longer part of this task's diff.
 ### Technical Acceptance Criteria
 - [x] Values written as **numbers**, nested under `extra.geoConfig` — not strings, not top level
 - [x] Panel appears on **`geoshape` only** — not `geo`, not `geotrace`, not any other type
+
+**Added 2026-09-21 (2.0.6).** Three of these are the assertions most easily got wrong, so each
+has a test naming the failure rather than the success:
+
+- [x] Booleans are written as **real booleans** — `detectOverlaps` especially, because the
+      backend gate matches literal `true` and nothing else
+- [x] Unticking "Require GPS capture" leaves `allowTapping` **absent**, never `true`. The panel
+      never stores a default
+- [x] Choosing the neutral option **removes** the severity key rather than storing `false`,
+      which would assert *warn* through a gesture that reads as undo
+
+> **The option's label outlived what it referred to.** It says *"Use device default"*, and the
+> device layer was removed on 2026-09-21 (GEO-002 D-4) — the key's absence now resolves straight
+> to `block`. The **behaviour is still correct**: removing the key is exactly right, and it is
+> what the neutral choice must do. Only the wording is stale, and rewording it costs an upstream
+> release for one string. Recorded as known debt, to ride along with the next one.
+- [x] Switching overlap off clears `validateOverlap` but keeps the typed thresholds
+- [x] `overlapThresholdFloor` cannot be authored above `overlapThreshold`, so GEO-014 D-5's
+      clamp cannot be handed inverted bounds
+- [x] `maxAreaHa` accepts decimals — `0.001` ha is the 10 m² floor and smallholder plots are
+      routinely sub-hectare, so an integer-only input would make the ceiling unusable
 
 ---
 
@@ -235,6 +339,10 @@ Nothing regresses; geotrace gains no new configurability.
 ### Upstream/Release
 - [x] `akvo-react-form-editor` PR + version bump + npm release — PR #76 merged; released as **2.0.5**, a patch rather than the 2.1.0 anticipated here, since the panel is additive
 - [x] `frontend/package.json` bump and round-trip verification — both done: round trip verified against a running stack, and the host now depends on `^2.0.5`
+- [ ] **2.0.6 (2026-09-21)** — the rule catalogue. Additive again, so again a patch: every new
+      key is absent by default and every default is today's behaviour
+- [ ] `frontend/package.json` bump to `^2.0.6`. **Not done** — the host still pins `^2.0.5`, so
+      the new panel is not reachable in Akvo MIS until it is bumped
 
 ---
 

@@ -195,52 +195,6 @@ export const config = [
           },
         ],
       },
-      {
-        id: 44,
-        type: 'switch',
-        name: 'validatePolygonShape',
-        label: 'Block invalid shapes',
-        description: {
-          name: 'When off, an invalid shape is flagged but can still be submitted',
-          translations: [
-            {
-              language: 'fr',
-              name: 'Désactivé, une forme invalide est signalée mais peut être envoyée',
-            },
-          ],
-        },
-        key: 'BuildParamsState.validatePolygonShape',
-        editable: true,
-        translations: [
-          {
-            language: 'fr',
-            name: 'Bloquer les formes invalides',
-          },
-        ],
-      },
-      {
-        id: 45,
-        type: 'switch',
-        name: 'validatePolygonArea',
-        label: 'Block shapes outside the allowed size',
-        description: {
-          name: 'When off, a shape that is too small or too large is flagged but can still be submitted',
-          translations: [
-            {
-              language: 'fr',
-              name: 'Désactivé, une forme trop petite ou trop grande est signalée mais peut être envoyée',
-            },
-          ],
-        },
-        key: 'BuildParamsState.validatePolygonArea',
-        editable: true,
-        translations: [
-          {
-            language: 'fr',
-            name: 'Bloquer les formes hors limites de taille',
-          },
-        ],
-      },
     ],
   },
   {

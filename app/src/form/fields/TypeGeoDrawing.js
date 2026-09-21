@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Text, Button } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
-import { FormState, BuildParamsState } from '../../store';
+import { FormState } from '../../store';
 // Imported directly, not via '../support': that barrel re-exports FormNavigation, which
 // pulls the lib barrel and with it expo-background-task - a native module a form field has
 // no use for.
@@ -40,7 +40,6 @@ const TypeGeoDrawing = ({
   const navigation = useNavigation();
   const activeLang = FormState.useState((s) => s.lang);
   const feedback = FormState.useState((s) => s.feedback?.[id]);
-  const settings = BuildParamsState.useState((s) => s);
   const trans = i18n.text(activeLang);
 
   // Memoised so the empty-array fallback keeps its identity across renders: without this the
@@ -56,8 +55,8 @@ const TypeGeoDrawing = ({
    * gate's question, and the gate answers it below the field.
    */
   const failures = useMemo(
-    () => failedRules(runPolygonRules(points, { type, required, extra }, settings)),
-    [points, type, required, extra, settings],
+    () => failedRules(runPolygonRules(points, { type, required, extra })),
+    [points, type, required, extra],
   );
   /**
    * Once the gate has spoken, the red message under the field owns the sentence; repeating it

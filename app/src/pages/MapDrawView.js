@@ -373,20 +373,30 @@ const MapDrawView = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
+      {/*
+        Two columns, not one row of everything: the live GPS state on the left, the running
+        count on the right. The count moved up here from the status bar because that bar had
+        run out of width - see the note on `statusBar` below.
+      */}
       <View style={[styles.accuracyBar, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.accuracyText} testID="text-accuracy">
-          {trans.accuracyLabel}: {accuracy ? `${Math.round(accuracy)} m` : '-'}
-        </Text>
-        {/*
-          Recording is the one state worth announcing on this bar: a boundary walk can run for
-          half an hour, and "am I still recording?" is otherwise unanswerable without counting
-          vertices. A live dot alone does not distinguish recording from idle.
-        */}
-        {recordingMode && (
-          <Text style={[styles.accuracyText, styles.recordingText]} testID="text-recording">
-            {`\u25CF ${trans.gpsRecording}`}
+        <View style={styles.accuracyBarLeft}>
+          <Text style={styles.accuracyText} testID="text-accuracy">
+            {trans.accuracyLabel}: {accuracy ? `${Math.round(accuracy)} m` : '-'}
           </Text>
-        )}
+          {/*
+            Recording is the one state worth announcing on this bar: a boundary walk can run for
+            half an hour, and "am I still recording?" is otherwise unanswerable without counting
+            vertices. A live dot alone does not distinguish recording from idle.
+          */}
+          {recordingMode && (
+            <Text style={[styles.accuracyText, styles.recordingText]} testID="text-recording">
+              {`\u25CF ${trans.gpsRecording}`}
+            </Text>
+          )}
+        </View>
+        <Text style={styles.accuracyText} testID="text-point-count">
+          {trans.pointsEntered}: {points.length}
+        </Text>
       </View>
 
       <View style={styles.mapWrapper}>
@@ -415,10 +425,14 @@ const MapDrawView = ({ navigation, route }) => {
         </View>
       </View>
 
+      {/*
+        Verdicts only. The point count moved to the top bar because this row ran out of width:
+        count + area + poor-accuracy + invalid overflowed on a 360 dp screen and clipped the
+        last item mid-word, which is the one that matters most. `flexWrap` is the backstop -
+        a longer translation or a three-digit count wraps to a second line rather than
+        disappearing off the edge.
+      */}
       <View style={[styles.statusBar, { paddingBottom: insets.bottom + 8 }]}>
-        <Text style={styles.statusText} testID="text-point-count">
-          {trans.pointsEntered}: {points.length}
-        </Text>
         {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
           <Text
             style={[styles.statusText, areaUnreliable && styles.statusWarningText]}
@@ -429,20 +443,19 @@ const MapDrawView = ({ navigation, route }) => {
           </Text>
         )}
         {/*
-          A count, not the sentences. The status bar is a single row sharing its width with the
-          point count and the area, and a full message ran off the right edge of the screen with
-          no way to read the rest of it. The count always fits; the sentences live one tap away.
-        */}
-        {/*
-          Counted separately from the shape failures above, and never folded into them. A poor
-          vertex is not an invalid shape - the ring is fine, one measurement is not - and the
-          fix is different too: walk that stretch again rather than redraw the boundary.
+          Counted separately from the shape failures beside it, and never folded into them. A
+          poor vertex is not an invalid shape - the ring is fine, one measurement is not - and
+          the fix differs too: walk that stretch again rather than redraw the boundary.
         */}
         {poorCount > 0 && (
           <Text style={[styles.statusText, styles.statusPoorText]} testID="text-poor-accuracy">
             {`\u25CF ${trans.polygonPoorAccuracyCount.replace('{count}', poorCount)}`}
           </Text>
         )}
+        {/*
+          A count, not the sentences: a full message never fit here at any width, and the
+          sentences live one tap away in the dialog. GEO-002 D-9.
+        */}
         {failures.length > 0 && (
           <TouchableOpacity onPress={() => setShowWarnings(true)} testID="button-polygon-warnings">
             <Text style={[styles.statusText, styles.statusWarningText]}>
@@ -585,8 +598,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#0d1b2a',
   },
   accuracyBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 8,
+  },
+  // `flex-start` above, not `center`: the left column grows a second line while recording, and
+  // centring would slide the count down with it for no reason.
+  accuracyBarLeft: {
+    flexShrink: 1,
   },
   accuracyText: {
     color: '#ffffff',
@@ -628,7 +650,10 @@ const styles = StyleSheet.create({
   },
   statusBar: {
     flexDirection: 'row',
-    gap: 16,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    rowGap: 4,
+    columnGap: 16,
     paddingHorizontal: 16,
     paddingTop: 8,
   },

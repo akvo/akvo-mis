@@ -4,7 +4,6 @@ import * as Yup from 'yup';
 import i18n from '../../lib/i18n';
 import { QUESTION_TYPES } from '../../lib/constants';
 import FormState from '../../store/forms';
-import BuildParamsState from '../../store/buildParams';
 import { blockingMessage, isNoAnswer, runPolygonRules } from './polygon-rules';
 
 export * from './geometry';
@@ -18,9 +17,12 @@ export * from './polygon-rules';
  * polygon is Yup's error to report, and adding "a shape needs at least 3 points" next to
  * "... is required." would state the same absence twice (GEO-002 section 2.1.2).
  *
- * `trans` and the device settings are read here, at the caller, so the rules themselves stay
- * pure and testable without a store (GEO-013 D-1). Reading `lang` at call time also means a
- * language switch mid-form produces the message in the new language.
+ * `trans` is read here, at the caller, so the rules themselves stay pure and testable without a
+ * store (GEO-013 D-1). Reading `lang` at call time also means a language switch mid-form
+ * produces the message in the new language.
+ *
+ * The device-settings argument went with the Settings switches on 2026-09-21 - severity is the
+ * form author's call now, resolved from `geoConfig` alone.
  *
  * Returns the blocking string, or null when nothing blocks - a `warn` never reaches this
  * surface; its channel is the inline hint (GEO-002 D-8).
@@ -30,7 +32,7 @@ const polygonFeedback = (currentValue, field) => {
     return null;
   }
   const { lang } = FormState.getRawState();
-  const results = runPolygonRules(currentValue, field, BuildParamsState.getRawState());
+  const results = runPolygonRules(currentValue, field);
   return blockingMessage(results, i18n.text(lang), field?.label);
 };
 

@@ -237,6 +237,26 @@ epic keeps finding. It should be answered where it belongs, in the authoring UI:
 `allowTapping` beside `detectOverlaps`, defaulted off, so the pairing is obvious at the moment
 of authoring rather than implied by a rule nobody can see.
 
+> **Delivered 2026-09-21 in editor 2.0.6, with one deliberate departure.** `allowTapping` is
+> authorable, as *"Require GPS capture (disable tap-to-draw)"* — inverted, so ticking writes
+> `false` and unticking **removes** the key. The panel never stores `true`, because this
+> decision establishes that absent already means it and *"`allowTapping: false` is the only value
+> an author ever needs to write."*
+>
+> **The departure**: it is **not** revealed by `detectOverlaps`. Doing so would re-couple in the
+> UI exactly what this decision decoupled in the model — and it would make unauthorable the case
+> this decision names, a programme wanting overlap detection on data legitimately digitised from
+> imagery. The control sits with the other capture settings and is always visible.
+>
+> The pairing is surfaced as a **warning instead**: with detection on and tapping still allowed,
+> the panel states the bypass and its mechanism — an enumerator can delete the shape, redraw it
+> by tapping, and pass, because an absent accuracy can never exceed a threshold. The warning
+> disappears once `allowTapping: false`. That meets the requirement that the pairing be *"obvious
+> at the moment of authoring"* without asserting a dependency that does not exist.
+>
+> The checkbox states it affects the **mobile app only**, per this decision's *"why mobile
+> only"*.
+
 **Impact on the plan**: GEO-004's background-recording increment (+7h) is **no longer an
 unconditional prerequisite of phase 3.** It becomes one only for a programme that sets
 `allowTapping: false`, because a boundary walk is then the only way to enter data and GEO-004
@@ -261,7 +281,8 @@ threshold    = clamp(computed, overlapThresholdFloor, overlapThreshold)
 ```
 
 `overlapThreshold` — the value GEO-009 already ships — becomes the **ceiling**.
-`overlapThresholdFloor` is the floor, default `5`, read but not yet authorable (D-8).
+`overlapThresholdFloor` is the floor, default `5`, read but not yet authorable (D-8) —
+*authorable since editor 2.0.6, see the note on D-8*.
 
 **Supersedes**: GEO-007 D-3's fixed 20 %.
 
@@ -328,6 +349,22 @@ handset. The asymmetry makes the ordering a one-way door.
 **Decision**: the clamp's lower bound is `geoConfig.overlapThresholdFloor`, defaulting to **5**
 (%). The app reads it from phase 3. **The ARF-editor panel is not changed** — the key is
 readable but not yet authorable.
+
+> **Superseded 2026-09-21 by editor 2.0.6.** The key is authorable, revealed beside
+> `overlapThreshold` once overlap detection is on. This decision's own impact line — *"a
+> programme that needs a different floor edits form JSON or waits for the panel"* — resolves to
+> the second option.
+>
+> The panel additionally enforces what neither this decision nor GEO-010 validated at the time:
+> **the floor cannot be authored above the ceiling.** Each input is bounded by the other, falling
+> back to the documented defaults (5 and 20) rather than to 1/100, so a floor cannot slip above a
+> ceiling that is merely unset.
+>
+> **Closed on the API side the same day.** Both values pass their own `0 < x ≤ 100` range check
+> independently, so the panel was briefly the only thing catching an inverted pair —
+> `_overlap_clamp_issues()` now catches it at the write boundary too, comparing effective values
+> so the defaults participate exactly as the panel's do. GEO-010 D-1 is why the panel could not
+> be left as the only guard: *"the builder UI is one client."*
 
 **Rationale**: this follows the pattern GEO-009's own correction note already established for
 `validateShape`, `validateArea` and `maxAreaHa` — *"the key costs nothing to read and an upstream
@@ -410,9 +447,9 @@ makes even that moot on this endpoint.
 | `vertex[2]` | number > 0, optional | accuracy in metres; absent = not measured | this document |
 | `accuracyThreshold` | number, > 0 | red-mark limit (phase 2), submit block (phase 3) | `extra.geoConfig`, GEO-009 |
 | `overlapThreshold` | number, 0 < x ≤ 100 | **ceiling** of the adaptive threshold | `extra.geoConfig`, GEO-009 |
-| `overlapThresholdFloor` | number, 0 < x ≤ 100, default `5` | **floor** of the adaptive threshold | `extra.geoConfig` — read, **not authored** (D-8) |
+| `overlapThresholdFloor` *(authorable since editor 2.0.6)* | number, 0 < x ≤ 100, default `5` | **floor** of the adaptive threshold | `extra.geoConfig` — read, **not authored** (D-8) |
 | `detectOverlaps` | boolean | enables overlap detection, and turns the accuracy block on (D-9). **No longer affects capture** (D-4) | `extra.geoConfig`, GEO-009 |
-| `allowTapping` | boolean, default `true` | `false` removes tap-to-draw on mobile (D-4) | `extra.geoConfig` — read, **not authored** yet |
+| `allowTapping` *(authorable since editor 2.0.6)* | boolean, default `true` | `false` removes tap-to-draw on mobile (D-4) | `extra.geoConfig` — read, **not authored** yet |
 
 ---
 
@@ -477,7 +514,8 @@ makes even that moot on this endpoint.
 what makes the decisions re-checkable.
 
 - [x] `FLOOR` value for the adaptive threshold → **D-8**. Default `5`, read from
-      `geoConfig.overlapThresholdFloor`, not hardcoded and not authored in the editor yet
+      `geoConfig.overlapThresholdFloor`, not hardcoded and — since editor 2.0.6 — authored in
+      the editor too
 - [x] Does `accuracyThreshold` do anything on a question with `detectOverlaps = false`?
       → **D-9**. Yes — it marks vertices red. It does not block submission there
 - [x] GEO-005 payload growth → **D-10**. Send a per-polygon accuracy summary on the list
@@ -501,7 +539,7 @@ what makes the decisions re-checkable.
 
 - Decisions superseded: GEO-004 D-1, GEO-007 D-3
 - Consumers: GEO-005 (payload), GEO-006 (index), GEO-007 (threshold), GEO-008 (review)
-- Config surface: GEO-009 (shipped as `akvo-react-form-editor` 2.0.5), GEO-010 (validation)
+- Config surface: GEO-009 (shipped as `akvo-react-form-editor` 2.0.5, extended in 2.0.6), GEO-010 (validation)
 - Task breakdown: `doc/claude/polygon-validation-task-breakdown.md` (T12)
 - Requirements: `doc/claude/offline-polygon-validation-requirements.md` (FR-1.5, FR-5)
 

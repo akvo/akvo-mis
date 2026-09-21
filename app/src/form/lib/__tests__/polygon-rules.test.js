@@ -278,22 +278,21 @@ describe('resolveSeverity', () => {
   const [shapeRule] = POLYGON_RULES;
 
   it('defaults to block when nothing is configured', () => {
-    expect(resolveSeverity(shapeRule, question(), {})).toBe(SEVERITY.block);
+    expect(resolveSeverity(shapeRule, question())).toBe(SEVERITY.block);
   });
 
-  it('lets geoConfig outrank the device setting, both ways', () => {
-    const settings = { validatePolygonShape: 0 };
+  it('reads geoConfig, both ways', () => {
     const on = question({ extra: { geoConfig: { validateShape: true } } });
     const off = question({ extra: { geoConfig: { validateShape: false } } });
-    expect(resolveSeverity(shapeRule, on, settings)).toBe(SEVERITY.block);
-    expect(resolveSeverity(shapeRule, off, { validatePolygonShape: 1 })).toBe(SEVERITY.warn);
+    expect(resolveSeverity(shapeRule, on)).toBe(SEVERITY.block);
+    expect(resolveSeverity(shapeRule, off)).toBe(SEVERITY.warn);
   });
 
-  it('falls back to the device setting when geoConfig is absent', () => {
-    expect(resolveSeverity(shapeRule, question(), { validatePolygonShape: 0 })).toBe(SEVERITY.warn);
-    expect(resolveSeverity(shapeRule, question(), { validatePolygonShape: 1 })).toBe(
-      SEVERITY.block,
-    );
+  it('reads validateArea for the area rules, not validateShape', () => {
+    const areaRule = POLYGON_RULES.find((r) => r.key === 'minArea');
+    const q = question({ extra: { geoConfig: { validateArea: false, validateShape: true } } });
+    expect(resolveSeverity(areaRule, q)).toBe(SEVERITY.warn);
+    expect(resolveSeverity(shapeRule, q)).toBe(SEVERITY.block);
   });
 
   it.each([
@@ -301,24 +300,33 @@ describe('resolveSeverity', () => {
     ['an array', ['true']],
     ['a number', 1],
     ['a quoted false', 'false'],
-  ])('treats %s as malformed and falls through, never straight to warn', (_label, value) => {
+  ])('treats %s as malformed and falls back to block, never to warn', (_label, value) => {
     const q = question({ extra: { geoConfig: { validateShape: value } } });
-    expect(resolveSeverity(shapeRule, q, {})).toBe(SEVERITY.block);
-    expect(resolveSeverity(shapeRule, q, { validatePolygonShape: 0 })).toBe(SEVERITY.warn);
+    expect(resolveSeverity(shapeRule, q)).toBe(SEVERITY.block);
   });
 
   it('clamps an optional question to warn, whatever the config says', () => {
     const q = question({ required: false, extra: { geoConfig: { validateShape: true } } });
-    expect(resolveSeverity(shapeRule, q, { validatePolygonShape: 1 })).toBe(SEVERITY.warn);
+    expect(resolveSeverity(shapeRule, q)).toBe(SEVERITY.warn);
   });
 
-  it('never upgrades: the switch off warns even on a required question (GEO-002 D-4)', () => {
-    const results = runPolygonRules(BOWTIE, question(), { validatePolygonShape: 0 });
-    expect(byKey(results, 'selfIntersection').severity).toBe(SEVERITY.warn);
-    expect(hasBlockingFailure(results)).toBe(false);
+  it('ignores a leftover device setting entirely', () => {
+    /**
+     * The device switch was removed on 2026-09-21 — severity is the form author's call now.
+     * A device where someone once toggled it off still carries `0` in its `config` row, because
+     * GEO-002 D-4's retreat deliberately leaves the columns and migration 11 in place. That
+     * value must not reach the resolver, or a single handset would keep downgrading every form
+     * invisibly to the programme — the exact failure D-4 called the device layer's weakness.
+     */
+    expect(resolveSeverity(shapeRule, question(), { validatePolygonShape: 0 })).toBe(
+      SEVERITY.block,
+    );
+    expect(
+      hasBlockingFailure(runPolygonRules(BOWTIE, question(), { validatePolygonShape: 0 })),
+    ).toBe(true);
   });
 
-  it('blocks that same polygon in the default configuration', () => {
-    expect(hasBlockingFailure(runPolygonRules(BOWTIE, question(), {}))).toBe(true);
+  it('blocks a bowtie on a required question by default', () => {
+    expect(hasBlockingFailure(runPolygonRules(BOWTIE, question()))).toBe(true);
   });
 });

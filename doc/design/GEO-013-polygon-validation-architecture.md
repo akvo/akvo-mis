@@ -89,7 +89,6 @@ Rule {
   key         'shape.selfIntersects'   stable id: i18n key suffix AND test fixture name
   appliesTo   ['geoshape']             question types; geotrace is excluded here, once
   configKey   'validateShape'          extra.geoConfig.<configKey>, or null if not switchable
-  settingKey  'validatePolygonShape'   BuildParamsState.<settingKey>, or null
   evaluate    (points, ctx) => { pass: boolean, params?: object }
 }
 
@@ -126,6 +125,23 @@ what follows them, because each establishes a precondition the next one's maths 
 | `noSelfIntersection` | ✅ | A bowtie's area is mathematically ambiguous — the argument GEO-002 §1 makes for why this task precedes GEO-007 |
 | `minArea` | ❌ | Nothing follows it in phase 1 |
 
+> **Note, 2026-09-21 — the registry now has a second consumer.** Editor 2.0.6 renders this list
+> in the form builder, grouped by `configKey`, so an author sees which rules run and can set one
+> severity per group. Two properties of this design turned out to carry that weight unchanged:
+> `configKey` already expressed that **three** rules share `validateShape`, and the array order
+> is already the order a human should read.
+>
+> The editor mirrors the registry rather than importing it — separate repositories, no shared
+> package — carrying only the authoring metadata (`key`, `labelKey`, `configKey`), never
+> `evaluate`. Rule keys match by name so the two can be diffed by eye. **Adding a rule is now two
+> edits, not one**: the registry here, and the mirror there plus a release.
+>
+> One rule in the builder's table is **not** in this registry: overlap. It is evaluated
+> device-side (GEO-005/006/007), not by `runPolygonRules`, but it has a severity key
+> (`validateOverlap`, GEO-007 D-9) and an enable key, so the builder shows it alongside these
+> five. Worth knowing the builder's table is *the rules a geoshape question carries*, which is a
+> slightly wider set than *the rules this registry evaluates*.
+
 **Kept as one boolean, not a dependency graph**: each rule carries `gating: true|false`, and a
 failed gating rule skips every *later* entry. That preserves the array — D-5's ponytail ceiling
 warned that rules depending on named other rules would turn this into a graph and invalidate the
@@ -142,9 +158,14 @@ in **GEO-002 §2.1.3**.
 `evaluate` and renders every failure as informational.
 
 **Rationale**: severity answers *"may this be submitted?"*, a question that is already settled by
-the time the web sees the record. Worse, the inputs are unavailable: the device setting lives in
-the enumerator's SQLite and never syncs, and `required` belongs to the form version in force at
-capture. A web badge that guessed severity would be asserting something it cannot know.
+the time the web sees the record. Worse, an input is unavailable: `required` belongs to the form
+version in force at capture. A web badge that guessed severity would be asserting something it
+cannot know.
+
+> **Revised 2026-09-21.** This decision's other argument was that *"the device setting lives in
+> the enumerator's SQLite and never syncs"*. That layer no longer exists (GEO-002 D-4), which
+> removes the argument and leaves the decision standing on `required` alone — still enough, and
+> the conclusion is unchanged.
 
 **Impact**:
 - `evaluate` functions are shared in **spirit** between the two repos but duplicated in **code** —
@@ -269,7 +290,7 @@ graph TD
     A1["form/lib/polygon-rules.js<br/>registry · resolver · runner"]
     A2["form/lib/geometry.js<br/>polygonArea (merged)<br/>+ selfIntersects, toGeoJsonRing"]
     A3["form/lib/index.js<br/>generateValidationSchemaFieldLevel"]
-    A4["store/buildParams.js<br/>validatePolygonShape / …Area"]
+    A4["store/buildParams.js<br/>(no polygon severity keys<br/>since 2026-09-21)"]
     A5["lib/i18n<br/>geoRule.* keys"]
     A1 --> A2
     A3 --> A1
@@ -333,26 +354,33 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-  S["resolveSeverity(rule, question, settings)"] --> C1{"rule.configKey set<br/>AND extra.geoConfig[configKey]<br/>is a real boolean?"}
+  S["resolveSeverity(rule, question)"] --> C3{"question.required?"}
+  C3 -- "no" --> W2["warn — clamp, GEO-007 D-7"]
+  C3 -- "yes" --> C1{"rule.configKey set<br/>AND extra.geoConfig[configKey]<br/>is a real boolean?"}
   C1 -- "true" --> B["block"]
   C1 -- "false" --> W["warn"]
-  C1 -- "absent / malformed" --> C2{"rule.settingKey set<br/>AND settings[settingKey] === 0?"}
-  C2 -- "yes" --> W
-  C2 -- "no" --> B
-  B --> C3{"question.required?"}
-  W --> C3
-  C3 -- "no" --> W2["warn — clamp, GEO-007 D-7"]
-  C3 -- "yes" --> OUT["severity as resolved"]
+  C1 -- "absent / malformed" --> B
 
   style B fill:#fde8e8
   style W fill:#fff4e5
   style W2 fill:#fff4e5
 ```
 
+> **Revised 2026-09-21 — the device layer is removed.** `settingKey` and the `settings` argument
+> are gone from D-1's contract, from every rule, and from `runPolygonRules`. Editor 2.0.6 made
+> `validateShape` and `validateArea` authorable, so severity is the form author's call; GEO-002
+> D-4 owns the reasoning and the exact scope of the retreat.
+>
+> The clamp is drawn **first** because that is where the code checks it. Equivalent either way —
+> the clamp only ever downgrades — but drawing it last, as this diagram used to, hides a
+> consequence worth seeing: on an **optional** question the `geoConfig` branch is never reached.
+> An author who writes `validateShape: true` there still gets `warn`.
+
 **"a real boolean"** carries the same strictness the backend already applies at
 `api/v1/v1_mobile/geometry.py:enabled_geoshape_question_ids` — `"true"`, `["true"]` and `1` are
-malformed, not truthy. Malformed falls through to the next layer, never to `warn`
-(GEO-002 D-4, GEO-009 §7).
+malformed, not truthy. Malformed now falls through to `block`, the only remaining layer, never to
+`warn` (GEO-002 D-4, GEO-009 §7). Since 2026-09-21 the write boundary refuses those values
+outright (GEO-010 §6), so this branch guards form versions captured before that check existed.
 
 ### 6.4 Web badge data flow
 
@@ -390,6 +418,10 @@ No backend call, no stored flag, no migration — GEO-002 D-7.
       That property is what GEO-012 would change, and why it is deferred
 - [x] `geoConfig` arrives from the server and is untrusted: the resolver treats any non-boolean
       as absent rather than coercing it
+- [x] **Both halves of that posture are now enforced.** From 2026-09-21 the write boundary also
+      refuses a non-boolean severity key (GEO-010 §6), so a `"false"` string can no longer be
+      stored at all. The resolver's tolerance stays as the second line — a device may hold a form
+      version captured before the check existed
 
 ---
 
@@ -448,8 +480,8 @@ No backend call, no stored flag, no migration — GEO-002 D-7.
 >
 > The contract itself is already sufficient for what phase 3 needs. GEO-007's overlap rule
 > derives its threshold from the accuracy of *both* polygons (GEO-014 D-5), and it reads that
-> from `points` and from the candidate it fetches — not from `ctx`. `configKey`/`settingKey` keep
-> resolving severity exactly as specified. This is the second time D-1's contract has absorbed a
+> from `points` and from the candidate it fetches — not from `ctx`. `configKey` keeps resolving
+> severity exactly as specified (`settingKey` was removed on 2026-09-21, GEO-002 D-4). This is the second time D-1's contract has absorbed a
 > requirement phase 1 did not anticipate without widening.
 
 ---

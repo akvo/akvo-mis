@@ -118,6 +118,18 @@ unit-testable with fixtures rather than only observable at runtime.
 an accepted limit. The catalogue can grow by one entry — one array element and one i18n key
 (GEO-013 D-2) — which is a far smaller ask than a code change today.
 
+> **Note, 2026-09-21.** The catalogue is now *visible*, not just configurable: editor 2.0.6
+> renders the app's rule list in the form builder, so an author can see which rules run on a
+> geoshape question instead of inferring it. The editor carries its own mirror of the registry
+> (`src/lib/geo-rules.js`) with rule keys matching `app/src/form/lib/polygon-rules.js` by name,
+> so a rule traces across both repositories.
+>
+> **The mirror is a copy, and copies drift.** Adding a rule to the app does not make it appear in
+> the builder; that is a second edit in a second repository and a release. The cost is one array
+> element in each, but it is two. This is the same duplication GEO-002 D-7 records for polygon
+> maths across `app/` and `frontend/` — noted, not solved, and for the same reason: there is no
+> shared package.
+
 **What would reopen Option 1**: a *specific* rule request that cannot be expressed as a
 parameterised predicate. Not a general wish for flexibility — a named rule with a named requester.
 
@@ -131,7 +143,7 @@ Ordered by strength of evidence, not by build order. **None of this is scheduled
 | Minimum area | `validateArea` | Survey123 acreage thread; reference validator | ✅ built, GEO-003 |
 | No overlap with other answers | `detectOverlaps`, `overlapThreshold` | Survey123; MAST | 🔜 GEO-007 — `overlapThreshold` is now a **ceiling** on an accuracy-derived threshold (GEO-014 D-5) |
 | GPS accuracy threshold | `accuracyThreshold` | ARF #192 | ✅ exists — becomes a **submit gate** in phase 3 (GEO-014 D-6) |
-| **Maximum** area | `maxAreaHa` | Survey123 *"between 0 and 10 acres"*; tap-at-low-zoom | ✅ **built 2026-09-17**, GEO-003 D-5 — reading only, not yet authorable |
+| **Maximum** area | `maxAreaHa` | Survey123 *"between 0 and 10 acres"*; tap-at-low-zoom | ✅ **built 2026-09-17**, GEO-003 D-5 — **authorable since editor 2.0.6** |
 | **Stricter** minimum area | `minAreaSqm` (with a floor of its own) | GEO-003 D-2, GEO-003 §10 | ❌ unbuilt |
 | Inside a boundary / geofence | boundary reference + predicate | `ODK_Geofencing` across 5 platforms; GEO-007's "bounded collection area" question | ❌ unbuilt, **largest** — needs a boundary source, sync and storage |
 
@@ -156,6 +168,33 @@ the rules' individual sizes**.
 
 **Impact**: if `maxAreaSqm` and a stricter `minAreaSqm` are ever wanted, ship them in one editor
 release with whatever else is pending.
+
+> **This happened, 2026-09-21 — editor 2.0.6.** Five keys had accumulated on the "read but not
+> authored" list (`validateShape`, `validateArea`, `maxAreaHa`, `overlapThresholdFloor`,
+> `allowTapping`), each deferred on its own with the same sentence. This decision is what
+> resolved the standoff: none of them justified a release alone, all of them together did.
+>
+> The release also carried a sixth key in the opposite direction — `validateOverlap` (GEO-007
+> D-9) is **authorable before it is readable**, reversing the "reading is free, authoring is
+> expensive" asymmetry this decision is built on. That is not a counter-example to the rule; it
+> is what the rule looks like when the cheap half has not been scheduled yet. The cost still
+> landed on the release, which is why it rode along with five others rather than waiting.
+>
+> **The lesson for the next expansion** is narrower than "batch things". It is that the list of
+> deferred keys is itself the trigger: each deferral was individually correct and collectively
+> produced a panel that could not author most of what the app read. Worth checking the list, not
+> just the next rule's size.
+>
+> **A second list behaves the same way, and it was found the same day.** Making five keys
+> authorable made five *unvalidated* keys reachable: `_geo_config_issues()` checked four of nine,
+> because a key that only import could write had never justified a range check on its own. The
+> deferrals there were individually correct too, for the same reason and with the same collective
+> result. Closed on 2026-09-21 (GEO-010 §6).
+>
+> So the trigger generalises: **authoring a key and validating it are two lists that must be
+> closed together.** A rule added to this catalogue now costs one registry entry, one editor
+> mirror entry, and one validator entry — and the third is the one with no UI to make its absence
+> visible.
 
 ---
 

@@ -616,7 +616,38 @@ def restore_from_snapshot(form, pv):
     )
 
 
-def _geo_config_issues(geo_config):
+# Defaults from GEO-014 D-5/D-8. Named here because the pair check below
+# has to reason about the clamp an absent key produces, not only about
+# the values a payload happens to carry.
+DEFAULT_OVERLAP_THRESHOLD = 20
+DEFAULT_OVERLAP_THRESHOLD_FLOOR = 5
+
+# Severity keys (GEO-002 D-4, GEO-003 D-4, GEO-007 D-9) plus the two
+# capture switches. All strict booleans, for one reason: every one of
+# them is read as "is this the literal `true`/`false`", so a `"false"`
+# string reads as ENABLED to a naive check and as disabled to nobody.
+# `detectOverlaps` is the sharpest case - the device gate is a
+# JSON-encoded `extra__geoConfig__detectOverlaps=True` lookup that
+# matches `true` and not `"true"`, `["true"]` or `1`.
+_GEO_CONFIG_BOOLEANS = (
+    "detectOverlaps",
+    "allowTapping",
+    "validateShape",
+    "validateArea",
+    "validateOverlap",
+)
+
+# (key, upper bound). Distances in metres and areas in hectares have no
+# meaningful ceiling; the two overlap ratios are percentages.
+_GEO_CONFIG_NUMBERS = (
+    ("accuracyThreshold", None),
+    ("maxAreaHa", None),
+    ("overlapThreshold", 100),
+    ("overlapThresholdFloor", 100),
+)
+
+
+def _geo_config_issues(geo_config) -> list:
     """Return [(subpath, message)] for one question's `extra.geoConfig`.
 
     Ranges come from GEO-010 §6. Bad values are rejected rather than
@@ -627,35 +658,26 @@ def _geo_config_issues(geo_config):
 
     An absent key is legal and means "use the default". An unknown key is
     left alone, so a form authored against a newer builder still imports.
+
+    Coverage widened 2026-09-21. This validated four keys while the
+    others could only arrive by hand-edited JSON. `akvo-react-form-editor`
+    2.0.6 made all nine authorable, so D-1's rationale — *"the builder UI
+    is one client"* — stopped being the only argument and became the
+    weakest one.
     """
     if not isinstance(geo_config, dict):
         return [("extra.geoConfig", "must be an object")]
 
     issues = []
 
-    # Checked against the real booleans, not for truthiness.
-    # api/v1/v1_mobile/geometry.py gates overlap detection on
-    # `extra__geoConfig__detectOverlaps=True`, a JSON-encoded lookup that
-    # matches `true` and not `"true"`, `["true"]` or `1`. Accepting those
-    # here would store a config that reads as enabled in the builder and
-    # as off on the device — the exact silent failure this feature exists
-    # to prevent.
-    # `allowTapping` joined on 2026-09-21 (GEO-014 D-4). It defaults to
-    # true and only `false` does anything, so a `"false"` string slipping
-    # through would read as ENABLED here and as disabled to nobody - the
-    # same silent mismatch the strict check above exists for. Tap capture
-    # used to be tied to `detectOverlaps`; separating them means one flag
-    # no longer does two unrelated jobs.
-    for key in ("detectOverlaps", "allowTapping"):
+    for key in _GEO_CONFIG_BOOLEANS:
         value = geo_config.get(key)
         if value is not None and not isinstance(value, bool):
             issues.append(
                 (f"extra.geoConfig.{key}", "must be true or false")
             )
 
-    # (key, upper bound) — accuracy is a distance in metres with no
-    # meaningful ceiling, overlap is a percentage.
-    for key, upper in (("accuracyThreshold", None), ("overlapThreshold", 100)):
+    for key, upper in _GEO_CONFIG_NUMBERS:
         value = geo_config.get(key)
         if value is None:
             continue
@@ -668,7 +690,43 @@ def _geo_config_issues(geo_config):
             issues.append(
                 (f"extra.geoConfig.{key}", f"must be greater than 0{bound}")
             )
+
+    issues.extend(_overlap_clamp_issues(geo_config))
     return issues
+
+
+def _overlap_clamp_issues(geo_config) -> list:
+    """The one rule here that spans two keys.
+
+    GEO-014 D-5 clamps the overlap threshold between a floor and a
+    ceiling. Each passes its own `0 < x ≤ 100` check in isolation, so an
+    inverted pair — floor 50, ceiling 20 — satisfies every other check
+    above and hands `clamp()` its bounds the wrong way round.
+
+    Compared as **effective** values, not merely as authored ones: a
+    floor of 50 with no ceiling clamps against the default 20 and is just
+    as inverted as a floor of 50 beside an explicit 20. That mirrors what
+    the editor's panel does, and it is why the defaults are named above
+    rather than inlined.
+
+    Runs only on values that already passed their range check, so a pair
+    containing `"20"` reports the type error alone instead of adding a
+    comparison against a string.
+    """
+    def usable(key, default):
+        value = geo_config.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return default if value is None else None
+        return value if 0 < value <= 100 else None
+
+    floor = usable("overlapThresholdFloor", DEFAULT_OVERLAP_THRESHOLD_FLOOR)
+    ceiling = usable("overlapThreshold", DEFAULT_OVERLAP_THRESHOLD)
+    if floor is None or ceiling is None or floor <= ceiling:
+        return []
+    return [(
+        "extra.geoConfig.overlapThresholdFloor",
+        "must be less than or equal to overlapThreshold",
+    )]
 
 
 def validate_form_payload(data, partial=False):

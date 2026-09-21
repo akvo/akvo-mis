@@ -129,6 +129,46 @@ describes half-open. XLSForm import needs nothing: its converter has no way to e
 | `overlapThreshold` | number | 0 < x ≤ 100 |
 | `overlapThresholdFloor` | number | 0 < x ≤ 100 — added 2026-09-18, GEO-014 D-8 |
 | `allowTapping` | boolean | — default `true`; added 2026-09-21, GEO-014 D-4 |
+| `validateShape` | boolean | — severity, GEO-002 D-4 |
+| `validateArea` | boolean | — severity, GEO-003 |
+| `validateOverlap` | boolean | — severity, GEO-007 D-9; added 2026-09-21 |
+| `maxAreaHa` | number | > 0, **no upper bound** — hectares, GEO-003 D-5 |
+| *(pair)* | — | `overlapThresholdFloor` ≤ `overlapThreshold` |
+
+> **Note, 2026-09-21 — the divergence below is CLOSED.** `_geo_config_issues()` now validates
+> all nine keys and the pair rule. What follows is kept as the record of why, because the
+> reasoning is what makes the next added key obvious.
+>
+> It previously validated four: `detectOverlaps`, `allowTapping`, `accuracyThreshold`,
+> `overlapThreshold`. It did not validate `overlapThresholdFloor` (specified here since
+> 2026-09-18, never implemented), the three severity booleans, or `maxAreaHa` — which never
+> reached this table at all, a gap dating to GEO-003 D-5 shipping the key without one.
+>
+> That was harmless while no client could write them. **Editor 2.0.6 makes all of them
+> writable**, so D-1's rationale now applies in full: *"a threshold of `-5` or `500` would
+> silently produce nonsense validation on device."*
+>
+> The severity keys need the strict-boolean treatment for the reason already recorded for
+> `detectOverlaps` and `allowTapping` — a `"false"` string reads as *enabled* to a naive check
+> and as *disabled* to nobody.
+>
+> **The pair rule is new in kind.** Every other check here validates one key in isolation, so an
+> inverted clamp — `overlapThresholdFloor: 50` with `overlapThreshold: 20` — passes both range
+> checks and hands GEO-014 D-5's `clamp()` bounds in the wrong order. The editor bounds each
+> input by the other, but D-1 settles why that is not enough: *"the builder UI is one client"*,
+> and form JSON also arrives by import and by direct API call.
+>
+> It lives in its own function, `_overlap_clamp_issues()`, for that reason — a reviewer asking
+> *"what is different about this rule"* should find it stated rather than inferred.
+>
+> **Two behaviours worth knowing**, both chosen so one mistake produces one message:
+>
+> - It compares **effective** values. A floor of 50 with no ceiling clamps against the default
+>   20 and is just as inverted as an explicit pair, so the documented defaults (5 and 20)
+>   participate in the comparison. This is also what the editor's panel does.
+> - It runs **only on values that already passed their range check**. A pair containing `"20"`
+>   reports the type error alone; adding a comparison against a string would report one mistake
+>   twice and read as two.
 
 > **Note, 2026-09-21 (GEO-014 D-4).** `allowTapping` joins the namespace as a boolean. Validate
 > it exactly as `detectOverlaps` is validated — against the real booleans, not for truthiness.

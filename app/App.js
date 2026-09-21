@@ -132,8 +132,6 @@ const handleInitConfig = async (db) => {
     geoLocationTimeout,
     imageQuality,
     saveToGallery,
-    validatePolygonShape,
-    validatePolygonArea,
     appVersion,
   } = BuildParamsState.getRawState();
   const configExist = await crudConfig.getConfig(db);
@@ -149,8 +147,6 @@ const handleInitConfig = async (db) => {
       geoLocationTimeout,
       imageQuality,
       saveToGallery,
-      validatePolygonShape,
-      validatePolygonArea,
     });
   }
   if (serverURL) {
@@ -170,11 +166,13 @@ const handleInitConfig = async (db) => {
       s.geoLocationTimeout = configExist.geoLocationTimeout;
       s.imageQuality = configExist.imageQuality || 'low';
       s.saveToGallery = configExist.saveToGallery || 0;
-      // `??`, not `||`: 0 is the meaningful "warn instead of block" value here, and `||` would
-      // silently restore it to 1 on every launch. Null only for a row written before
-      // migration 11, which backfills to 1 anyway.
-      s.validatePolygonShape = configExist.validatePolygonShape ?? 1;
-      s.validatePolygonArea = configExist.validatePolygonArea ?? 1;
+      // `validatePolygonShape` / `validatePolygonArea` are deliberately NOT restored, and the
+      // columns are deliberately still there. Polygon severity is the form author's call from
+      // 2026-09-21 (`geoConfig.validateShape` / `validateArea`), so a leftover device value must
+      // not reach the resolver - a device where someone once toggled the old switch off would
+      // otherwise keep downgrading every form, invisibly to the programme. GEO-002 D-4
+      // specified this retreat and specified leaving the columns: migration 11 is a rung in the
+      // version ladder, and dropping it would strand any device still on user_version 10.
     });
 
     UserState.update((s) => {

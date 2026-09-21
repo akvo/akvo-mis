@@ -26,6 +26,7 @@ from django.test import TestCase
 from django.test.utils import override_settings
 
 from api.v1.v1_forms.functions import (
+    _geo_config_issues,
     normalize_form_definition,
     validate_form_definition,
 )
@@ -126,6 +127,25 @@ INVALID_GEO_CONFIGS = [
     {"allowTapping": "false"},
     {"allowTapping": ["false"]},
     {"allowTapping": 0},
+    # Authorable since editor 2.0.6 (GEO-010 §6). Each was specified
+    # long before anything could write it; the panel closed that gap on
+    # the authoring side and left this one open on the storage side.
+    {"validateShape": "true"},
+    {"validateArea": 1},
+    {"validateOverlap": ["false"]},
+    {"maxAreaHa": 0},
+    {"maxAreaHa": -20},
+    {"maxAreaHa": "20"},
+    {"maxAreaHa": True},
+    {"overlapThresholdFloor": 0},
+    {"overlapThresholdFloor": 101},
+    {"overlapThresholdFloor": "5"},
+    # The pair rule: each value passes its own range check, and the
+    # clamp still receives its bounds inverted (GEO-014 D-5).
+    {"overlapThresholdFloor": 50, "overlapThreshold": 20},
+    # Inverted against the DEFAULT ceiling, with none authored - the
+    # effective clamp is just as broken as the explicit pair above.
+    {"overlapThresholdFloor": 50},
     "not an object",
     [],
 ]
@@ -389,6 +409,15 @@ class GeoConfigPersistenceTestCase(TestCase, AssignmentTokenTestHelperMixin):
             {"accuracyThreshold": 8},
             {"detectOverlaps": True, "overlapThreshold": None},
             {"allowTapping": False},
+            {"validateShape": False, "validateArea": True},
+            {"validateOverlap": False},
+            {"maxAreaHa": 0.001},
+            # Equal bounds are a degenerate clamp, not an inverted one:
+            # the threshold is pinned rather than undefined.
+            {"overlapThresholdFloor": 20, "overlapThreshold": 20},
+            {"overlapThresholdFloor": 5, "overlapThreshold": 60},
+            # A floor under the default ceiling needs no ceiling authored.
+            {"overlapThresholdFloor": 3},
             # Independent since 2026-09-21: overlap detection on while
             # tapping stays allowed is a legal, deliberate combination.
             {"detectOverlaps": True, "allowTapping": True},
@@ -458,3 +487,59 @@ class GeoConfigImportValidationTestCase(TestCase):
                 ]
                 self.assertTrue(errors, "import must refuse this config")
                 self.assertIn("geoConfig", errors[0]["path"])
+
+
+class GeoConfigPairValidationTestCase(TestCase):
+    """The clamp pair, isolated.
+
+    Every other check in `_geo_config_issues` reads one key. This one
+    reads two, which is why it lives in its own function and gets its
+    own case: a reviewer looking for "what is different about this rule"
+    should find it stated once rather than inferred from a parametrised
+    list.
+    """
+
+    def test_an_inverted_pair_is_reported_once_on_the_floor(self):
+        issues = _geo_config_issues(
+            {"overlapThresholdFloor": 50, "overlapThreshold": 20}
+        )
+        self.assertEqual(len(issues), 1)
+        subpath, message = issues[0]
+        self.assertEqual(subpath, "extra.geoConfig.overlapThresholdFloor")
+        self.assertIn("overlapThreshold", message)
+
+    def test_a_malformed_value_reports_its_type_error_alone(self):
+        """No comparison against a string on top of the type error.
+        Two messages about one mistake reads as two mistakes."""
+        issues = _geo_config_issues(
+            {"overlapThresholdFloor": "50", "overlapThreshold": 20}
+        )
+        self.assertEqual(len(issues), 1)
+        self.assertIn("must be a number", issues[0][1])
+
+    def test_an_out_of_range_value_is_not_also_compared(self):
+        issues = _geo_config_issues(
+            {"overlapThresholdFloor": 101, "overlapThreshold": 20}
+        )
+        self.assertEqual(len(issues), 1)
+        self.assertIn("greater than 0", issues[0][1])
+
+    def test_defaults_participate_in_the_comparison(self):
+        """A floor of 50 with no ceiling clamps against the default 20,
+        so it is inverted in effect even though only one key was
+        authored. The editor bounds each input by the other and reaches
+        the same answer; D-1 is why the API cannot rely on that."""
+        self.assertEqual(
+            len(_geo_config_issues({"overlapThresholdFloor": 50})), 1
+        )
+        self.assertEqual(
+            _geo_config_issues({"overlapThresholdFloor": 3}), []
+        )
+
+    def test_a_ceiling_alone_is_never_inverted(self):
+        """The default floor is 5, below every legal ceiling."""
+        for ceiling in (5, 20, 100):
+            with self.subTest(ceiling=ceiling):
+                self.assertEqual(
+                    _geo_config_issues({"overlapThreshold": ceiling}), []
+                )

@@ -221,6 +221,59 @@ otherwise entitled to submit.
 the question's `required` flag. This also closes the "never validated" hole from D-1 for the
 case that matters — required questions.
 
+### D-9: Overlap severity is a key this task must resolve — `validateOverlap` *(2026-09-21)*
+
+**Raised by**: editor 2.0.6, which made overlap severity authorable before anything reads it.
+That inversion is deliberate and is recorded in GEO-009 §2.1; this decision is the app-side half.
+
+**The problem it fixes**: the editor's first draft of the rule table labelled overlap's severity
+as fixed. Both candidate labels were defensible from *some* document and only one was right —
+FR-4.4 (*"it **does** block submission via `validateAllGroups()`"*) and FR-4.7.6 make it
+**block**, while GEO-012 §2.4's MAST evidence argues for warn. That is not a documentation
+conflict to resolve once; it is a genuine policy difference between programmes, which is exactly
+what GEO-002 D-4 invented severity keys for.
+
+**Decision**: overlap resolves severity the same way every other rule does.
+
+| # | Source | Value | Severity |
+|---|---|---|---|
+| 1 | `question.extra.geoConfig.validateOverlap` | `true` / `false` | `block` / `warn` |
+| ~~2~~ | ~~Device setting `validatePolygonOverlap`~~ | — | **struck, see below** |
+| 3 | *(not present)* | — | `block` |
+| 4 | **Clamp**: question is not `required` | — | `warn`, per D-7 |
+
+> **Row 2 is struck, 2026-09-21 — do not build it.** The device layer was removed from
+> `resolveSeverity` the same day (GEO-002 D-4), on the argument D-4 itself made: a device-wide
+> toggle is *"invisible to the programme and travels with the enumerator across every form"*,
+> and is only defensible while the programme has no way to say this per question. Editor 2.0.6
+> gave it one.
+>
+> Adding `validatePolygonOverlap` now would reintroduce exactly the layer just removed, for the
+> one rule whose stakes are highest — a land dispute. The *"work this implies"* list below is
+> shortened accordingly: resolve `validateOverlap` through the existing helper, and build no
+> device setting.
+>
+> Resolution is two layers for every rule: `geoConfig` → `block`, then the `required` clamp.
+
+Row 3 is today's behaviour, so a form authored before the app honours the key behaves
+identically. Row 4 is D-7 unchanged — this decision does not alter the `required` clamp, it
+places overlap under the same resolution the shape and area rules already use.
+
+**`false` never means skip.** Detection is switched off by `detectOverlaps`, never by a severity.
+The two keys stay separate because they answer different questions, and because
+`enabled_geoshape_question_ids` gates on `detectOverlaps=True` as a literal-boolean JSON lookup —
+a tri-valued key there would silently disable the feature for every form (GEO-009 §2.1).
+
+**Work this implies**:
+- Resolve `validateOverlap` where overlap failures are graded, reusing the helper GEO-002 D-4
+  added for `validateShape` / `validateArea` rather than a second code path
+- ~~A `validatePolygonOverlap` device setting~~ — **struck 2026-09-21**, see the note above.
+  There is no device layer left to add it to
+- `_geo_config_issues()` must validate it as a strict boolean (GEO-010 §6)
+
+**Until then**: an author who picks *Warn only* stores a value the device ignores. The default
+stores nothing, so this is a gap for programmes that opt in, not a regression for anyone else.
+
 ### D-8: Validation rules must be extensible beyond the initial four
 
 **Decision**: Model validation as a **list of rules**, each producing a pass/fail with its own
@@ -245,8 +298,9 @@ distributed to devices. Those need their own design.
 | Setting | Key | Default |
 |---|---|---|
 | Overlap threshold **ceiling** | `extra.geoConfig.overlapThreshold` | `20` (%) |
-| Overlap threshold **floor** | `extra.geoConfig.overlapThresholdFloor` | `5` (%) — read, not authored (GEO-014 D-8) |
+| Overlap threshold **floor** | `extra.geoConfig.overlapThresholdFloor` | `5` (%) — authorable since editor 2.0.6 |
 | Enable | `extra.geoConfig.detectOverlaps` | `false` |
+| **Severity** | `extra.geoConfig.validateOverlap` | absent → `block`. **Authorable since editor 2.0.6; no reader yet — see D-9.** There is no device layer to fall through to; it was removed on 2026-09-21 (GEO-002 D-4) |
 | Own polygon's accuracy | `vertex[2]`, optional third element | absent = not measured (GEO-014 §3) |
 | Candidate's accuracy | `geometry.accuracy` summary from GEO-005 | `measured: false` = not measured (GEO-014 D-10) |
 
@@ -339,8 +393,8 @@ moved in (+1). They cancel exactly, which is a coincidence rather than a plan.
       less — the adaptive value tightens it wherever accuracy allows. Being too *strict* on a
       sub-hectare plot is still possible and still unmeasured
 - [x] `FLOOR` for the adaptive threshold → **answered 2026-09-18 (GEO-014 D-8)**:
-      `geoConfig.overlapThresholdFloor`, default **5 %**, read by the app but not authored in
-      the editor yet.
+      `geoConfig.overlapThresholdFloor`, default **5 %**, read by the app and **authorable in
+      the editor since 2.0.6**.
       Worth noting *why* 5: D-3 above records that the source implementations disagreed —
       *"20 % in one, 5 % in two others"* — and resolved it by discarding the 5. With a clamp both
       numbers get a home, **20 as the ceiling and 5 as the floor**, which suggests the two

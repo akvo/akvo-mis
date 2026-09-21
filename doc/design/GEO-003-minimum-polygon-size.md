@@ -116,8 +116,9 @@ clamp. Read that decision; it is the single source of truth and is not restated 
 
 | Layer | Key | Type | Default | Authorable in the form builder? |
 |---|---|---|---|---|
-| Question | `extra.geoConfig.validateArea` | boolean | *(absent)* | No — read only, GEO-002 D-5 |
-| Device | `BuildParamsState.validatePolygonArea` | TINYINT `0`/`1` | `1` | n/a — app Settings › Geolocation |
+| Question | `extra.geoConfig.validateArea` | boolean | *(absent)* | **Yes**, since editor 2.0.6 |
+
+> **The device row is gone, 2026-09-21.** See GEO-002 D-4, which owns this mechanism.
 
 **Why the threshold is treated differently from the switch**: a severity switch cannot produce
 bad data, only differently-gated data. A configurable `minAreaSqm` can — set it to `0` and the
@@ -128,6 +129,12 @@ minimum of its own, not a reinterpretation of this one.
 **Settings label**: *"Block shapes outside the allowed size"*, default ON. Not *"Validate
 polygon area"* — the rule runs either way, so that label would be wrong in the off position, and
 not *"undersized"* either, since D-5 added an upper bound governed by the same switch.
+
+> **Removed 2026-09-21, with the shape switch.** `validateArea` became authorable in editor
+> 2.0.6, so severity is the form author's call and the device toggle is gone. The careful label
+> above is now of historical interest only — it was right, and the control it named no longer
+> exists. Reasoning and the exact scope of the retreat are in **GEO-002 D-4**, which owns this
+> mechanism; nothing about the *threshold* changes.
 
 **Key renamed 2026-09-17**: `validateMinArea` → `validateArea`. One severity switch governs both
 bounds, so a name naming only the lower one would have been a permanent misnomer. Free to change
@@ -177,7 +184,7 @@ meet it.
 |---|---|
 | Key | `extra.geoConfig.maxAreaHa` — **hectares**, not m² |
 | Absent, non-numeric, or ≤ 0 | The rule does not apply. No ceiling |
-| Severity | Shares `validateArea` / `validatePolygonArea` with the floor — one switch, both bounds |
+| Severity | Shares `validateArea` with the floor — one switch, both bounds |
 | Gating | No. Mutually exclusive with `minArea`, so at most one of the two can fail |
 
 **Why hectares in the key name**: authoring 20 ha as `200000` invites a lost zero and a 10×
@@ -189,6 +196,28 @@ both unreadable.
 **Ships without an authoring UI**, exactly as GEO-002 D-5 established: reading a key is free,
 authoring one costs an upstream editor release. Absent means inert, so no existing form changes
 behaviour. A form can carry the key today via import.
+
+> **Superseded 2026-09-21 by editor 2.0.6.** `maxAreaHa` is authorable, in the Area group beside
+> the hardcoded floor — one row for the rule, one severity for both bounds, as this decision's
+> contract table specifies.
+>
+> Two details of that contract drove the control's shape. The unit is in the label
+> (*"Maximum area (ha)"*), because this decision's own argument — that authoring 20 ha as
+> `200000` *"invites a lost zero and a 10× error"* — applies most at the point a human types the
+> number. And the input **accepts decimals** where every other numeric field in the panel does
+> not: `0.001` ha is the 10 m² floor, and smallholder plots are routinely sub-hectare, so an
+> integer-only field would have made the ceiling unusable for exactly the plots the floor was
+> designed around.
+>
+> Clearing the field removes the key, so *"absent, non-numeric, or ≤ 0 → the rule does not
+> apply"* stays reachable from the UI.
+>
+> **And validated at the API boundary from 2026-09-21.** `maxAreaHa` shipped in this decision
+> without a row in GEO-010 §6, so nothing checked it server-side — harmless while only import
+> could write it, reachable once the panel could. It is now checked as a positive number with no
+> upper bound, matching this contract. The device's own *"non-numeric or ≤ 0 means no ceiling"*
+> tolerance stays, because D-2's posture is that malformed config falls back to a default rather
+> than disabling a check.
 
 ### D-6: A self-crossing shape's area is **marked, not stated** *(2026-09-17)*
 
@@ -270,7 +299,7 @@ area becoming an authoritative figure (a certificate, a payment), not turf merel
 |---|---|---|
 | Minimum area | `10 m²` | Constant in mobile validation module |
 | Area maths | — | `polygonArea()` in `app/src/form/lib/geometry.js` (already merged, GEO-001) |
-| Severity | `block` | `extra.geoConfig.validateArea` › `validatePolygonArea` device setting › `block` |
+| Severity | `block` | `extra.geoConfig.validateArea` › `block` (device layer removed 2026-09-21, GEO-002 D-4) |
 | Maximum area | *(absent)* | `extra.geoConfig.maxAreaHa` — opt-in, no ceiling unless authored (D-5) |
 
 ---

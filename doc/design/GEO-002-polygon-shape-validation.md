@@ -62,8 +62,9 @@ overlap maths meaningless. This task is the precondition that makes GEO-007 trus
 ### Technical Acceptance Criteria
 - [x] The rule **always runs**; only its *severity* is configurable (see D-4) — no configuration
       path skips the check
-- [x] Severity resolves form-config → device setting → default `block` (D-4), with the full
-      truth table under test including malformed config
+- [x] Severity resolves form-config → default `block` (D-4), with the full truth table under
+      test including malformed config. *The device-setting layer between them was removed on
+      2026-09-21 — see D-4.*
 - [x] `geoshape` only — `geotrace` is exempt
 - [x] Runs fully offline — `@turf/kinks` is pure JS, no network, no native module
 - [x] Geometry maths unit-tested independently of React Native rendering — 91 mobile tests run
@@ -90,7 +91,7 @@ flowchart TD
   SEEN -- "yes" --> SUMMARY["Form summary line:<br/>points · area · any failures"]
 
   DRAW["Tap 'Draw on map' → MapDrawView"] --> ADD["Add / undo / clear points"]
-  ADD --> LIVE["Status bar, recomputed every change:<br/>Points: 7 · Area: 0.42 ha · ⚠ crosses itself"]
+  ADD --> LIVE["Top: Accuracy · Points entered<br/>Bottom, recomputed every change:<br/>Area: 0.42 ha · ⚠ crosses itself"]
   LIVE --> ADD
   LIVE --> SAVE["Save polygon"]
   SAVE --> SUMMARY
@@ -122,7 +123,7 @@ flowchart TD
   R1 -- "no" --> N["Nothing. Not an error."]
 
   V -- "yes" --> RUN["Polygon rules run"]
-  RUN --> SEV["Severity resolved per rule:<br/>geoConfig › device setting › block"]
+  RUN --> SEV["Severity resolved per rule:<br/>geoConfig › block"]
   SEV --> CLAMP{"required?"}
   CLAMP -- "yes" --> KEEP["Severity unchanged"]
   CLAMP -- "no" --> DOWN["Downgraded to warn"]
@@ -187,7 +188,7 @@ Correct-and-sequential beats simultaneous-and-meaningless.
 | E-6 | Valid shape, 4 m² | `minArea` fails at its resolved severity |
 | E-7 | Mixed severity on one question (shape `block`, area `warn`) | Any blocking failure blocks. Warnings appear in the same message but gate nothing |
 | E-8 | Optional question, any rule fails | Clamped to `warn`. Hint shown, submit allowed |
-| E-9 | `geoConfig.validateShape` is `"true"`, `["true"]` or `1` | Malformed → ignored → device setting → `block`. **Never** `warn` |
+| E-9 | `geoConfig.validateShape` is `"true"`, `["true"]` or `1` | Malformed → ignored → `block`. **Never** `warn`. Since 2026-09-21 the write boundary refuses these outright (GEO-010 §6), so this guards form versions captured earlier |
 | E-10 | Language switched mid-form | Messages re-render in the new language — rules return params, not strings (GEO-013 D-1) |
 | E-11 | Geometry edited after passing | Phase 1 recomputes on every render; no stale state. Phase 3's overlap result **does** go stale → "not validated" (GEO-007) |
 | E-12 | Repeatable group, several polygons | Each instance is its own question id — `123`, `123-1`, `123-2` (`app/src/form/lib/index.js:197`) — so hints and feedback never collide |
@@ -243,19 +244,33 @@ the Draw button. `err-validation-text` is rendered by `QuestionField` *after* th
 │    └───────────────────────────────┘    │   │ itself.                                 │
 └─────────────────────────────────────────┘   └─────────────────────────────────────────┘
 
-┌─ C. Required, never opened (E-2) ───────┐   ┌─ D. MapDrawView status bar ─────────────┐
-│ 3. Plot boundary *                   ⓘ │   │  [map]                                  │
-│                                         │   │                                         │
-│    No points captured yet               │   │  Points: 4 · Area: 0.00 ha · ⚠ 1 invalid│
-│                                         │   └─────────────────────────────────────────┘
-│    ┌───────────────────────────────┐    │       tap the count ↓
-│    │        Draw on map            │    │   ┌─ D2. Warnings dialog ───────────────────┐
-│    └───────────────────────────────┘    │   │  Shape problems                         │
-│ Plot boundary is required.              │   │                                         │
-└─────────────────────────────────────────┘   │  ⚠ The boundary crosses itself.         │
-   Yup only — no polygon rule ran              │                                  [ OK ] │
+┌─ C. Required, never opened (E-2) ───────┐   ┌─ D. MapDrawView, revised 2026-09-21 ────┐
+│ 3. Plot boundary *                   ⓘ │   │  Accuracy: 10 m       Points entered: 4 │
+│                                         │   │  ● Recording                            │
+│    No points captured yet               │   │─────────────────────────────────────────│
+│                                         │   │  [map]                                  │
+│    ┌───────────────────────────────┐    │   │─────────────────────────────────────────│
+│    │        Draw on map            │    │   │  Area: ~0.21 ha · ● 1 low · ⚠ 1 invalid │
+│    └───────────────────────────────┘    │   └─────────────────────────────────────────┘
+│ Plot boundary is required.              │       tap the invalid count ↓
+└─────────────────────────────────────────┘   ┌─ D2. Warnings dialog ───────────────────┐
+   Yup only — no polygon rule ran              │  Shape problems                         │
+                                               │                                         │
+                                               │  ⚠ The boundary crosses itself.         │
+                                               │                                  [ OK ] │
                                                └─────────────────────────────────────────┘
 ```
+
+> **The point count moved to the top bar, 2026-09-21.** GEO-004 added two more verdicts to the
+> status row — the live area, then a poor-accuracy count — and on a 360 dp screen
+> `count + area + low accuracy + invalid` overflowed and clipped the **last** item mid-word.
+> That item is the invalid count, the one D-9 below put there precisely because it is the one
+> that must always fit.
+>
+> Counting is not a verdict, so it was the right thing to move: the top bar already carries live
+> capture state (accuracy, recording), and the bottom bar is now only *what is wrong with this
+> shape*. The row also gained `flexWrap`, so a longer translation or a three-digit count wraps to
+> a second line instead of disappearing off the edge.
 
 The area carries a `~` and turns amber whenever the ring crosses itself — the figure is
 algebraic there and can read anything from 0 to the true extent, so it is marked rather than
@@ -264,7 +279,13 @@ stated (GEO-003 D-6).
 **D-9: the map's status bar shows a count, not the sentence.** Found on a real device during
 implementation: `styles.statusBar` is a single `flexDirection: 'row'` sharing its width with the
 point count and the area, so *"⚠ The boundary crosses itself"* ran off the right edge with no way
-to reach the rest of it. A count always fits at any message length and in any language; the
+to reach the rest of it.
+
+> **The same pressure returned in phase 2 and was answered structurally.** Shortening the message
+> to a count bought room for two verdicts, not four; GEO-004 added the area and a poor-accuracy
+> count and the row clipped again. Moving the point count out and adding `flexWrap` addresses the
+> cause rather than the symptom — see the note under mockup D. **The count-not-sentence decision
+> stands**: this row is now narrower in purpose, not wider in space. A count always fits at any message length and in any language; the
 sentences move into a dialog one tap away. Back-press dismisses that dialog rather than
 discarding the polygon — the same trap the input-method dialog already guards against.
 
@@ -375,8 +396,7 @@ not the authority.
 |---|---|---|---|
 | 1 | `question.extra.geoConfig.validateShape` | `true` | `block` |
 | 1 | `question.extra.geoConfig.validateShape` | `false` | `warn` |
-| 2 | Device setting `validatePolygonShape` | `1` | `block` |
-| 2 | Device setting `validatePolygonShape` | `0` | `warn` |
+| ~~2~~ | ~~Device setting `validatePolygonShape`~~ | — | **removed 2026-09-21, see below** |
 | 3 | *(neither present)* | — | `block` |
 | 4 | **Clamp**: question is not `required` | — | `warn`, per GEO-007 D-7 |
 
@@ -388,7 +408,7 @@ from running or removes its entry from the validation report.
   shape"*, default ON — not *"Validate polygon shape"*, which would be a lie in the off position
 - `extra.geoConfig.validateShape` is **read from day one but authored by nobody**: no upstream
   `akvo-react-form-editor` panel is built for it in phase 1 (see D-5). A form can still carry it
-  via import or a later editor release
+  via import or a later editor release — *which arrived: editor 2.0.6, 2026-09-21*
 - The app must tolerate the key being absent, non-boolean, or the whole `geoConfig` being
   malformed, and fall back to `block` — never to `warn` (GEO-009 §7 already requires this posture)
 
@@ -405,7 +425,60 @@ no entry to toggle, the stored value stays at its `1` default and every rule res
 — so hiding is a safe, reversible retreat that needs no migration and no data change. Removing
 the columns is neither necessary nor advisable; leave them.
 
+> **Exercised 2026-09-21 — the device layer is gone.** Not because the switch misfired, but
+> because the reason for it did. D-4 called the device control *"the weakest of the three layers
+> available, because it is invisible to the programme and travels with the enumerator across
+> every form"*, and accepted it only as a fallback for a key nobody could author. Editor 2.0.6
+> made `validateShape` and `validateArea` authorable, so the programme can now answer this per
+> question — and a device-wide toggle silently downgrading every form is precisely the
+> invisibility this decision named as its weakness.
+>
+> **Resolution is now two layers**: `geoConfig` → `block`, then the `required` clamp.
+>
+> The retreat took the shape specified above, with one addition. The Settings entries, the
+> `BuildParamsState` defaults, the `SettingsForm` plumbing and `resolveSeverity`'s middle branch
+> are all removed; **the SQLite columns and migration 11 stay**, exactly as this paragraph
+> instructs — migration 11 is a rung in the version ladder, and dropping it would strand any
+> device still on `user_version` 10.
+>
+> The addition is that `App.js` no longer *restores* those columns into the store. Leaving the
+> read in place would have let a handset where someone once toggled the switch off keep
+> downgrading every form it ever opens, which is the failure this removal exists to prevent. A
+> test pins that: a leftover `validatePolygonShape: 0` reaching `resolveSeverity` must not
+> change the answer.
+>
+> **§2.1.2's consequence 2 and E-15 no longer describe a reachable state.** With no switch,
+> `required` plus an absent `geoConfig` always blocks. The remaining way to get a warn on a
+> required question is for the form author to write `validateShape: false` — visible to the
+> programme, which is the whole point.
+
 ### D-5: No `akvo-react-form-editor` release for `validateShape` in phase 1
+
+> **Superseded 2026-09-21 by editor 2.0.6.** `validateShape` is now authorable. The reasoning
+> below was correct and its own condition was met: *"when one does, the checkbox joins whatever
+> upstream release is next, and the app already honours it."* Five deferred keys accumulated and
+> shipped as one release, per GEO-012 D-3.
+>
+> It arrived as a **Select, not a checkbox** — *Use device default · Block submission · Warn
+> only*. D-4's resolution order is tri-state, and a checkbox cannot return to unset: ticking then
+> unticking would store `false` and silently override the device setting, through a gesture that
+> reads as undo. Choosing "use device default" removes the key.
+>
+> D-4's labelling requirement is met by the table's shape rather than by wording. The rule is
+> named in one column and the consequence in another, so the *"Validate polygon shape"* phrasing
+> that D-4 calls *"a lie in the off position"* cannot occur.
+>
+> One correction to this decision's framing: `validateShape` governs **three** rules —
+> `parseable`, `minVertices` and `selfIntersection` all carry it as their `configKey`. The panel
+> therefore shows one control for the group, not one per rule.
+>
+> **Nothing in the app changes.** It has honoured the key since phase 1.
+>
+> One thing on the **backend** did change, on 2026-09-21: `validateShape` is now validated as a
+> strict boolean at the write boundary (GEO-010 §6). Until the editor could author it, the key
+> only arrived by hand-edited JSON and the gap was theoretical. D-4's own requirement — *"the app
+> must tolerate the key being … non-boolean … and fall back to `block`, never to `warn`"* — is
+> now enforced on both sides rather than only defended on one.
 
 **Decision**: read the key; build no authoring UI yet.
 
@@ -555,8 +628,15 @@ full bundle — mobile bundle size.
 
 | Layer | Key | Type | Default | Authorable in the form builder? |
 |---|---|---|---|---|
-| Question | `extra.geoConfig.validateShape` | boolean | *(absent)* | No — read only, D-5 |
-| Device | `BuildParamsState.validatePolygonShape` | TINYINT `0`/`1` | `1` | n/a — app Settings › Geolocation |
+| Question | `extra.geoConfig.validateShape` | boolean | *(absent)* | **Yes**, since editor 2.0.6 |
+
+> **The device row is gone, 2026-09-21 (D-4).** Severity is the form author's call now. The
+> SQLite column and migration 11 remain — the migration is a rung in the version ladder — but
+> nothing reads them, and `App.js` deliberately no longer restores them into the store.
+
+The touch-point table below is kept **as a record, not as instructions**. Its trap is the reason
+it survives the feature it documented: steps 4/5 and 7/8 are how a device *setting* gets missed,
+and the next one added will hit them again.
 
 Device-setting touch points — **eight, not six**; the original count missed the two that make a
 migration actually run, and the omission shipped (see §9):

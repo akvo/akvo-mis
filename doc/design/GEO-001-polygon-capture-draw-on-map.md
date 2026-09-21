@@ -348,7 +348,8 @@ regressions get shipped. Worth its own ticket.
 ### D-9: ODK/Kobo capture UI, with GEO-004's modes present but disabled
 
 **Decision**: `MapDrawView` mirrors ODK Collect's geoshape screen — accuracy strip along the top,
-floating control column on the right, `Points entered: N` status bar along the bottom, and an
+floating control column on the right, `Points entered: N` status bar along the bottom *(moved
+to the top bar beside the accuracy on 2026-09-21 — see GEO-002 §2.1.5)*, and an
 **Input method** dialog on entry offering ODK's three modes in ODK's order:
 
 | Mode | State in GEO-001 | Lands with |

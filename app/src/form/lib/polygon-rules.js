@@ -65,7 +65,6 @@ export const POLYGON_RULES = [
     key: 'parseable',
     appliesTo: POLYGON_TYPES,
     configKey: 'validateShape',
-    settingKey: 'validatePolygonShape',
     gating: true,
     evaluate: (points) => ({
       pass: Array.isArray(points) && points.every(isPair),
@@ -75,7 +74,6 @@ export const POLYGON_RULES = [
     key: 'minVertices',
     appliesTo: POLYGON_TYPES,
     configKey: 'validateShape',
-    settingKey: 'validatePolygonShape',
     gating: true,
     evaluate: (points) => ({
       pass: points.length >= MIN_VERTICES,
@@ -86,7 +84,6 @@ export const POLYGON_RULES = [
     key: 'selfIntersection',
     appliesTo: POLYGON_TYPES,
     configKey: 'validateShape',
-    settingKey: 'validatePolygonShape',
     gating: true,
     evaluate: (points) => ({ pass: !selfIntersects(points) }),
   },
@@ -94,7 +91,6 @@ export const POLYGON_RULES = [
     key: 'minArea',
     appliesTo: POLYGON_TYPES,
     configKey: 'validateArea',
-    settingKey: 'validatePolygonArea',
     gating: false,
     evaluate: (points) => {
       const actual = polygonArea(points);
@@ -108,7 +104,6 @@ export const POLYGON_RULES = [
     key: 'maxArea',
     appliesTo: POLYGON_TYPES,
     configKey: 'validateArea',
-    settingKey: 'validatePolygonArea',
     gating: false,
     /**
      * Inert unless the question authors `maxAreaHa`. Reported in hectares rather than m2 because
@@ -132,27 +127,35 @@ export const POLYGON_RULES = [
 const isRealBoolean = (value) => value === true || value === false;
 
 /**
- * Which severity does this rule carry for this question, on this device?
+ * Which severity does this rule carry for this question?
  *
- * Order, first match wins: question `geoConfig` -> device setting -> `block`. Then one clamp:
- * an optional question never blocks (GEO-007 D-7). The clamp only ever DOWNGRADES - `required`
- * does not upgrade a warn, so a device with the switch off warns even on a required question.
- * That is the escape hatch working as designed, and it is approved: GEO-002 D-4.
+ * Question `geoConfig` -> `block`. Then one clamp: an optional question never blocks
+ * (GEO-007 D-7), and the clamp only ever DOWNGRADES - `required` does not upgrade a warn.
  *
  * Anything that is not a real boolean - `"true"`, `["true"]`, `1` - is malformed config, not a
- * value. It falls through to the next layer, never straight to `warn`, mirroring the strictness
- * the backend already applies in `api/v1/v1_mobile/geometry.py`.
+ * value, and falls through to `block` rather than straight to `warn`. Failing toward "ask a
+ * human" is the posture GEO-010 D-2 sets, and since 2026-09-21 the write boundary refuses those
+ * values outright, so this branch guards form versions captured before that check existed.
+ *
+ * **The device layer is gone (2026-09-21).** GEO-002 D-4 gave the enumerator a switch that
+ * downgraded any rule to `warn`, and called it "the weakest of the three layers available,
+ * because it is invisible to the programme and travels with the enumerator across every form".
+ * Editor 2.0.6 made `validateShape` and `validateArea` authorable, so the programme can now say
+ * this per question - and a device-wide toggle silently overriding every form is exactly the
+ * invisibility D-4 warned about. Authority moves to the form author.
+ *
+ * D-4 anticipated this retreat and specified its shape: *"hide the two Settings entries … the
+ * stored value stays at its `1` default and every rule resolves to `block`"*. The SQLite columns
+ * and migration 11 stay for that reason - the migration is a rung in the version ladder, and
+ * removing it would strand any device still on `user_version` 10.
  */
-export const resolveSeverity = (rule, question = {}, settings = {}) => {
+export const resolveSeverity = (rule, question = {}) => {
   if (!question?.required) {
     return SEVERITY.warn;
   }
   const configured = rule.configKey ? question?.extra?.geoConfig?.[rule.configKey] : null;
   if (isRealBoolean(configured)) {
     return configured ? SEVERITY.block : SEVERITY.warn;
-  }
-  if (rule.settingKey && settings?.[rule.settingKey] === 0) {
-    return SEVERITY.warn;
   }
   return SEVERITY.block;
 };
@@ -164,7 +167,7 @@ export const resolveSeverity = (rule, question = {}, settings = {}) => {
  * report can say "could not check area: the boundary crosses itself" instead of showing a green
  * tick. Returns `[]` when there is no answer to judge.
  */
-export const runPolygonRules = (points, question = {}, settings = {}) => {
+export const runPolygonRules = (points, question = {}) => {
   if (isNoAnswer(points)) {
     return [];
   }
@@ -191,7 +194,7 @@ export const runPolygonRules = (points, question = {}, settings = {}) => {
             pass,
             params,
             skipped: false,
-            severity: resolveSeverity(rule, question, settings),
+            severity: resolveSeverity(rule, question),
           },
         ],
       };
