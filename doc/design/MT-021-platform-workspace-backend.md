@@ -274,9 +274,28 @@ remain, and they are the whole of the mobile work:
    `is_active` but not `deleted_at`, so a soft-deleted user's device keeps
    syncing indefinitely. A pre-existing bug this epic's requirement makes
    visible; one-line fix, and it gets a test of its own.
-2. **The app's handling of a mid-sync 403 is unverified.** It must surface
-   "account deactivated" rather than retry silently forever. Investigate
-   first; change code only if the handling is wrong.
+2. **The app's handling of a mid-sync 403 was wrong**, as the investigation
+   this called for found. `syncFormVersion` caught the 403, sent it to Sentry
+   and returned, so the background task rescheduled and the device polled
+   indefinitely; submission sync showed a generic red "failed"; the datapoint
+   sync showed a raw error toast. Nothing named the cause.
+
+   The guard is an axios response interceptor, because all three sync paths
+   share one client and a check per caller is a check the fourth caller
+   forgets. It lives in `background-task.js`, not `api.js`: the client is
+   imported by most of the app and most of its test suite, and pulling
+   `expo-background-task` into it would make every one of those imports need
+   a native module. A 403 reaches this app from `IsMobileAssignment` and
+   nowhere else, so there is no other meaning to disambiguate.
+
+   It notifies once and unregisters both sync tasks — repeating the message
+   every 15 minutes nags about something only an administrator can undo, and
+   polling an endpoint that will keep refusing costs battery and load for
+   nothing. That forced a second change: `handleOnRegisterTask` re-registered
+   only tasks already registered, so unregistering would have left sync
+   permanently dead rather than dormant. It now registers the two sync tasks
+   when absent, which is what makes reactivating an account and reopening the
+   app resume syncing.
 
 ### 8. Console API
 
@@ -289,10 +308,17 @@ tenant-less user filters `tenant IS NULL`, so an operator hitting any
 *ordinary* endpoint gets nothing back. Cross-tenant reading has to be opted
 into explicitly, and MT-023 is the only opt-in.
 
+Console code lives in `admin_views.py` and `admin_serializers.py` inside
+`v1_users` rather than in an app of its own. It has no models, and
+`v1_visualization` already establishes the several-view-modules-per-app
+pattern; a new app would mean an `INSTALLED_APPS` entry and an `apps.py` for
+nothing. Keeping them in their own two files is what makes the unscoped
+surface something a reviewer can hold in their head.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/admin/tenants` | List, search, filter by state |
-| `GET` | `/admin/tenants/summary` | Counts for every tenant, one query |
+| `GET` | `/admin/tenants/summary` | Counts for every tenant, at a cost that does not grow |
 | `GET` | `/admin/tenants/<id>` | Detail |
 | `POST` | `/admin/tenants/<id>/deactivate` · `/activate` | Suspend / restore |
 | `DELETE` | `/admin/tenants/<id>` | Soft-delete |
@@ -304,17 +330,35 @@ into explicitly, and MT-023 is the only opt-in.
 | `GET`/`POST` | `/admin/operators` | List / invite |
 | `DELETE` | `/admin/operators/<id>` | Revoke |
 
-The summary is one annotated query, never N+1:
+The counts are one annotated query, never N+1:
 
     Tenant.objects.annotate(
-        users      = Count("users", distinct=True,
-                           filter=Q(users__deleted_at=None)),
-        forms      = Count("forms", distinct=True),
-        dashboards = Count("dashboards", distinct=True,
-                           filter=Q(dashboards__deleted_at=None)),
-        datapoints = Count("forms__form_form_data", distinct=True,
-                           filter=Q(forms__form_form_data__deleted_at=None)),
+        users_count      = Count("users", distinct=True,
+                                 filter=Q(users__deleted_at=None)),
+        forms_count      = Count("forms", distinct=True,
+                                 filter=Q(forms__deleted_at=None)),
+        dashboards_count = Count("dashboards", distinct=True,
+                                 filter=Q(dashboards__deleted_at=None)),
+        datapoints_count = Count("forms__form_form_data", distinct=True,
+                                 filter=Q(
+                                     forms__form_form_data__deleted_at=None)),
+        devices_count    = Count("users__mobile_assignments", distinct=True),
     )
+
+The `_count` suffixes are not decoration: Django refuses an annotation whose
+name collides with a field or reverse accessor, and `users`, `forms` and
+`dashboards` are all reverse accessors on `Tenant`. The serializer sources the
+plain names from them, so the wire format is unaffected.
+
+The root-unit name needs a `prefetch_related` and must be filtered in Python.
+A queryset filter on a related manager ignores the prefetch cache and issues
+its own query, so `get_name` doing `.filter(parent=None)` would be one query
+per workspace — the very N+1 the annotation exists to avoid.
+
+**The endpoint is not a single query overall**, and no test should claim it
+is: host resolution, JWT authentication and the `last_login` stamp each cost
+one before the view is entered. What matters, and what is pinned, is that
+adding a workspace adds nothing.
 
 There is no delete endpoint for data or dashboards anywhere under `/admin/`.
 The absence is the enforcement; no flag guards it.
@@ -349,28 +393,47 @@ base domain is itself worth a test.
 New modules under `backend/api/v1/v1_users/tests/`, named `tests_*.py` per
 repo convention, reusing `TenantTestHelperMixin.create_tenant` / `.bearer`:
 
+- `tests_platform_admin_identity.py` — the flag defaults to false;
+  `createplatformadmin` creates a tenant-less operator who is not a
+  superadmin, and refuses a duplicate tenant-less address.
 - `tests_platform_admin_host.py` — the admin host resolves to no tenant;
-  registration refuses `admin`; a non-operator gets 403 on `/admin/tenants`;
-  everything is inert with `BASE_DOMAIN` unset.
+  registration refuses `admin`; everything is inert with `BASE_DOMAIN` unset;
+  and a workspace that already holds the label locks that host for both sides
+  without handing either one the other's powers.
 - `tests_platform_admin_login.py` — an operator signs in on the admin host; a
   workspace account is refused there; an operator is refused on a tenant host.
 - `tests_tenant_lifecycle.py` — a deactivated tenant 404s at the host, refuses
-  login, refuses mobile sync, and kills an already-issued JWT on its next
-  request; the same for deleted; reactivation restores all of it.
-- `tests_tenant_summary.py` — counts match hand-built fixtures across two
-  tenants with overlapping shapes, soft-deleted rows excluded, and
-  `assertNumQueries` pins the endpoint to one query.
-- `tests_tenant_rename.py` — impact counts match fixtures; the regex and
+  login, and kills an already-issued JWT on its next request; the same for
+  deleted; reactivation restores all of it.
+- `tests_tenant_features.py` — `tenant_may_embed` follows the JSON column, and
+  every flag has a label.
+- `tests_admin_tenants.py` — the console lists workspaces the operator belongs
+  to none of; a workspace user gets 403; deactivate, activate and soft-delete;
+  an unknown feature key is a 400.
+- `tests_admin_summary.py` — counts match hand-built fixtures across two
+  tenants with overlapping shapes, soft-deleted rows excluded, and adding a
+  workspace costs no extra query.
+- `tests_admin_rename.py` — impact counts match fixtures; the regex and
   reserved words are enforced; a collision is a 400; the master-data directory
   moves, and a failure to move it still leaves the workspace usable.
-- `tests_tenant_features.py` — `tenant_may_embed` follows the JSON column; an
-  unknown key is a 400; the `EMBED_TENANTS` data migration produces the same
-  answers the setting did.
-- `tests_user_deactivation_cascade.py` — deactivating a user fails
-  `IsMobileAssignment` on the next device call; **soft-deleting one does too**
-  (the §7 gap); reactivating restores sync.
-- `tests_operators.py` — invite, activate, revoke; revoking ends sessions;
-  `createplatformadmin` creates a tenant-less operator.
+- `tests_admin_users.py` — the listing is scoped to one workspace; deactivate
+  and reactivate; an operator cannot be reached through it.
+- `tests_admin_operators.py` — invite, revoke, no self-revoke, and the
+  invitation links to the console rather than the base domain.
+
+Outside `v1_users`:
+
+- `api/v1/v1_mobile/tests/tests_deactivation_cascade.py` — deactivating a user
+  fails `IsMobileAssignment` on the next device call; **soft-deleting one does
+  too** (the §7 gap); reactivating restores sync.
+- `app/src/lib/__test__/account-deactivated.test.js` — a refused device names
+  the cause, stops polling, and says it once rather than every interval.
+
+Two existing modules moved with the entitlement. `override_settings` against a
+setting that no longer exists is still legal — Django simply adds it — so
+every test that said `EMBED_TENANTS=...` would have gone on passing while
+silently exercising an *unentitled* workspace. They now write the column
+through one `set_embedding` helper.
 
 Run with:
 
@@ -388,7 +451,7 @@ Each row is an independently testable commit. `→` marks its dependency.
 | 2 | `is_admin_host()`, `admin` reservation, middleware branch, `login()` relaxation | 1 |
 | 3 | `Tenant.is_active`/`deleted_at`/`features` + migration; lifecycle filter in `resolve_tenant_from_host` | — |
 | 4 | `FeatureFlags`, `tenant_may_embed` reads JSON, `EMBED_TENANTS` data migration, delete the setting | 3 |
-| 5 | `api/v1/v1_admin/` app: tenant list, detail, deactivate/activate, soft-delete, features | 2, 3 |
+| 5 | `admin_views.py` / `admin_serializers.py` in `v1_users`: tenant list, detail, deactivate/activate, soft-delete, features | 2, 3 |
 | 6 | `GET /admin/tenants/summary`, single annotated query | 5 |
 | 7 | Rename + `rename-impact` + master-data directory move | 4, 5 |
 | 8 | Tenant user list, user deactivate/activate; `IsMobileAssignment` `deleted_at` fix | 5 |
