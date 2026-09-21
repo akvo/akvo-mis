@@ -55,12 +55,14 @@ const VizScatter = ({ config, data, filters }) => {
         name: xLabel,
         nameLocation: "center",
         nameGap: 30,
+        nameTextStyle: { fontWeight: "bold", fontSize: 13 },
       },
       yAxis: {
         type: "value",
         name: yLabel,
         nameLocation: "center",
-        nameGap: 40,
+        nameGap: 70,
+        nameTextStyle: { fontWeight: "bold", fontSize: 13 },
       },
       series: [
         {

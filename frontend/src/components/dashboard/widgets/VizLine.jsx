@@ -60,13 +60,23 @@ const CategoryLine = ({ config, data, filters }) => {
         type: "category",
         data: chartData.map((d) => d.label),
         ...(xLabel
-          ? { name: xLabel, nameLocation: "center", nameGap: 30 }
+          ? {
+              name: xLabel,
+              nameLocation: "center",
+              nameGap: 30,
+              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+            }
           : {}),
       },
       yAxis: {
         type: "value",
         ...(yLabel
-          ? { name: yLabel, nameLocation: "center", nameGap: 40 }
+          ? {
+              name: yLabel,
+              nameLocation: "center",
+              nameGap: 70,
+              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+            }
           : {}),
       },
       series: labels.map((name, idx) => ({
@@ -166,13 +176,23 @@ const VizLine = ({ config, data, filters }) => {
         type: "category",
         data: chartData.map((d) => d.label),
         ...(xAxisLabel
-          ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
+          ? {
+              name: xAxisLabel,
+              nameLocation: "center",
+              nameGap: 30,
+              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+            }
           : {}),
       },
       yAxis: {
         type: "value",
         ...(yAxisLabel
-          ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
+          ? {
+              name: yAxisLabel,
+              nameLocation: "center",
+              nameGap: 70,
+              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+            }
           : {}),
       },
       series: stackLabels.map((name, idx) => ({
@@ -215,13 +235,23 @@ const VizLine = ({ config, data, filters }) => {
       type: "category",
       data: chartData.map((d) => d[categoryKey]),
       ...(xAxisLabel
-        ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
+        ? {
+            name: xAxisLabel,
+            nameLocation: "center",
+            nameGap: 30,
+            nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+          }
         : {}),
     },
     yAxis: {
       type: "value",
       ...(yAxisLabel
-        ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
+        ? {
+            name: yAxisLabel,
+            nameLocation: "center",
+            nameGap: 70,
+            nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+          }
         : {}),
     },
     series: [

@@ -85,7 +85,12 @@ const VizBar = ({ config, data, filters }) => {
           ? { axisLabel: { formatter: "{value}%" } }
           : {}),
         ...(xAxisLabel
-          ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
+          ? {
+              name: xAxisLabel,
+              nameLocation: "center",
+              nameGap: 30,
+              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+            }
           : {}),
       },
       yAxis: {
@@ -95,7 +100,12 @@ const VizBar = ({ config, data, filters }) => {
           ? { axisLabel: { formatter: "{value}%" } }
           : {}),
         ...(yAxisLabel
-          ? { name: yAxisLabel, nameLocation: "center", nameGap: 50 }
+          ? {
+              name: yAxisLabel,
+              nameLocation: "center",
+              nameGap: 70,
+              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+            }
           : {}),
       },
       series: stackLabels.map((name, idx) => ({
@@ -140,7 +150,12 @@ const VizBar = ({ config, data, filters }) => {
         ? { axisLabel: { formatter: "{value}%" } }
         : {}),
       ...(xAxisLabel
-        ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
+        ? {
+            name: xAxisLabel,
+            nameLocation: "center",
+            nameGap: 30,
+            nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+          }
         : {}),
     },
     yAxis: {
@@ -150,7 +165,12 @@ const VizBar = ({ config, data, filters }) => {
         ? { axisLabel: { formatter: "{value}%" } }
         : {}),
       ...(yAxisLabel
-        ? { name: yAxisLabel, nameLocation: "center", nameGap: 50 }
+        ? {
+            name: yAxisLabel,
+            nameLocation: "center",
+            nameGap: 70,
+            nameTextStyle: { fontWeight: "bold", fontSize: 13 },
+          }
         : {}),
     },
     series: [

@@ -54,7 +54,7 @@ describe("VizScatter widget", () => {
       expect(lastOption.xAxis.nameGap).toBe(30);
       expect(lastOption.yAxis.name).toBe("Number of datapoints");
       expect(lastOption.yAxis.nameLocation).toBe("center");
-      expect(lastOption.yAxis.nameGap).toBe(40);
+      expect(lastOption.yAxis.nameGap).toBe(70);
       expect(lastOption.series[0].data).toEqual([
         [10, 25, "Well 1"],
         [20, 50, "Well 2"],

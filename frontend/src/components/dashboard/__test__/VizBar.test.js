@@ -227,7 +227,7 @@ describe("VizBar widget", () => {
       expect(raw.xAxis.nameGap).toBe(30);
       expect(raw.yAxis.name).toBe("Number of submissions");
       expect(raw.yAxis.nameLocation).toBe("center");
-      expect(raw.yAxis.nameGap).toBe(50);
+      expect(raw.yAxis.nameGap).toBe(70);
       expect(raw.grid.bottom).toBe(60);
     });
 
