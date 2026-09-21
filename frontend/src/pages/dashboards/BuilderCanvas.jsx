@@ -4,6 +4,7 @@ import { Button, Skeleton } from "antd";
 import {
   ArrowUpOutlined,
   ArrowDownOutlined,
+  CopyOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
 import WidgetRenderer from "../../components/dashboard/widgets/WidgetRenderer";
@@ -33,6 +34,7 @@ const CanvasWidgetCard = memo(
     isSelected,
     onSelect,
     onMove,
+    onDuplicate,
     onDelete,
     onDragStart,
     onDragOver,
@@ -126,6 +128,16 @@ const CanvasWidgetCard = memo(
               <ArrowDownOutlined />
             </button>
             <button
+              className="builder-widget-btn"
+              title="Duplicate"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate(widget.id);
+              }}
+            >
+              <CopyOutlined />
+            </button>
+            <button
               className="builder-widget-btn builder-widget-btn--danger"
               title="Delete"
               onClick={(e) => {
@@ -165,6 +177,7 @@ CanvasWidgetCard.propTypes = {
   isSelected: PropTypes.bool.isRequired,
   onSelect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
+  onDuplicate: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
   onDragStart: PropTypes.func.isRequired,
   onDragOver: PropTypes.func.isRequired,
@@ -184,6 +197,7 @@ const BuilderCanvas = ({
   onSelect,
   onDeselect,
   onMove,
+  onDuplicate,
   onDelete,
   onReorder,
 }) => {
@@ -271,6 +285,7 @@ const BuilderCanvas = ({
                 isSelected={w.id === selectedId}
                 onSelect={onSelect}
                 onMove={onMove}
+                onDuplicate={onDuplicate}
                 onDelete={onDelete}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -295,6 +310,7 @@ BuilderCanvas.propTypes = {
   onSelect: PropTypes.func.isRequired,
   onDeselect: PropTypes.func.isRequired,
   onMove: PropTypes.func.isRequired,
+  onDuplicate: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
   onReorder: PropTypes.func.isRequired,
 };
