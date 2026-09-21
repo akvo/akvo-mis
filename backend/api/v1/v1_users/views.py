@@ -70,7 +70,11 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
-from utils.tenant_host import tenant_may_embed, tenant_web_url
+from utils.tenant_host import (
+    is_admin_host,
+    tenant_may_embed,
+    tenant_web_url,
+)
 
 
 # A week is long enough to survive a weekend and a spam folder, short
@@ -222,9 +226,16 @@ def signing_in_elsewhere(request, user):
 @api_view(["POST"])
 def login(request, version):
     # On a SaaS deployment the main site signs people up; signing in
-    # happens at the workspace's own address. Refusing here, before the
+    # happens at the workspace's own address. The console is the single
+    # exception, because its operators belong to no workspace and so
+    # have no workspace address to use. Refusing here, before the
     # serializer, means the credentials are never even evaluated.
-    if settings.BASE_DOMAIN and getattr(request, "tenant", None) is None:
+    on_admin_host = is_admin_host(request.get_host())
+    if (
+        settings.BASE_DOMAIN
+        and getattr(request, "tenant", None) is None
+        and not on_admin_host
+    ):
         return Response(
             {
                 "message": "Sign in at your workspace address, not the main "
@@ -255,6 +266,21 @@ def login(request, version):
         password=serializer.validated_data["password"],
         tenant=getattr(request, "tenant", None),
     )
+
+    # The console is for operators. A workspace account whose
+    # credentials happen to land here is refused before any session is
+    # minted, and told exactly what the base domain tells it -- so this
+    # host reveals nothing about which addresses exist where.
+    if user and on_admin_host and not (
+        user.is_platform_admin and user.tenant_id is None
+    ):
+        return Response(
+            {
+                "message": "Sign in at your workspace address, not the main "
+                "site"
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     if user:
         if user.deleted_at:

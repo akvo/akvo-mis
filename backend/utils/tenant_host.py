@@ -34,6 +34,25 @@ def is_base_domain(host):
     return _normalize(host) in (base, f"www.{base}")
 
 
+# The label the platform console answers on. Reserved at registration,
+# and refused by the migration that introduces it, so no workspace can
+# ever shadow it.
+ADMIN_SUBDOMAIN = "admin"
+
+
+def is_admin_host(host):
+    """Does this host serve the platform console?
+
+    A third host class beside the base domain and a workspace. Like
+    `is_embed_host`, it is inert without BASE_DOMAIN -- a single-host
+    install is one workspace and has no console.
+    """
+    if not settings.BASE_DOMAIN:
+        return False
+    admin = f"{ADMIN_SUBDOMAIN}.{settings.BASE_DOMAIN}".lower()
+    return _normalize(host) == admin
+
+
 def embed_hostname():
     """Hostname of the origin that serves embedded content, or "".
 
