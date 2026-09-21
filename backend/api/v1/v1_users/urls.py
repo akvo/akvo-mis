@@ -29,6 +29,7 @@ from api.v1.v1_users.admin_views import (
     list_tenants,
     set_tenant_features,
     tenant_detail,
+    tenants_summary,
 )
 from api.v1.v1_profile.views import list_entity_data
 
@@ -50,6 +51,10 @@ urlpatterns = [
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/features$",
         set_tenant_features,
     ),
+    # Before the numeric-id pattern. `summary` is not a number so it
+    # would not match today, but the ordering makes that a property of
+    # the list rather than of the regex.
+    re_path(r"^(?P<version>(v1))/admin/tenants/summary$", tenants_summary),
     re_path(
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)$",
         tenant_detail,

@@ -27,9 +27,19 @@ class TenantListSerializer(serializers.ModelSerializer):
         /register/configure creates, rather than a column of its own:
         the subdomain is the name, and a second field would be a
         synonym that drifts.
+
+        Filtered in Python rather than with `.filter(parent=None)` on
+        purpose. A queryset filter on a related manager ignores the
+        prefetch cache and issues its own query, which is one query per
+        workspace on a list -- exactly the N+1 the callers prefetch to
+        avoid. `.all()` is what reads the cache.
         """
-        root = instance.administrations.filter(parent__isnull=True).first()
-        return root.name if root else ""
+        roots = [
+            unit
+            for unit in instance.administrations.all()
+            if unit.parent_id is None
+        ]
+        return roots[0].name if roots else ""
 
     def get_state(self, instance):
         if instance.deleted_at:
@@ -60,3 +70,34 @@ class TenantFeaturesSerializer(serializers.Serializer):
                 )
             )
         return {key: bool(value) for key, value in payload.items()}
+
+
+class TenantSummarySerializer(TenantListSerializer):
+    """One row per workspace: identity, state, and five counts.
+
+    The counts arrive already annotated onto the queryset, so this
+    serializer must never compute one itself -- a SerializerMethodField
+    that queried would reintroduce the N+1 the annotation exists to
+    avoid.
+    """
+
+    # Sourced from `*_count` aliases: Django refuses an annotation whose
+    # name collides with a field or reverse accessor, and `users`,
+    # `forms` and `dashboards` are all reverse accessors on Tenant. The
+    # wire names stay what the console reads.
+    users = serializers.IntegerField(read_only=True, source="users_count")
+    forms = serializers.IntegerField(read_only=True, source="forms_count")
+    dashboards = serializers.IntegerField(
+        read_only=True, source="dashboards_count"
+    )
+    datapoints = serializers.IntegerField(
+        read_only=True, source="datapoints_count"
+    )
+    devices = serializers.IntegerField(
+        read_only=True, source="devices_count"
+    )
+
+    class Meta(TenantListSerializer.Meta):
+        fields = TenantListSerializer.Meta.fields + [
+            "users", "forms", "dashboards", "datapoints", "devices",
+        ]

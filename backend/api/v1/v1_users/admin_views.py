@@ -11,6 +11,7 @@ for datapoints or dashboards anywhere under /admin/ -- the absence is
 the enforcement, not a flag.
 """
 from django.db import IntegrityError
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -21,6 +22,7 @@ from rest_framework.response import Response
 from api.v1.v1_users.admin_serializers import (
     TenantFeaturesSerializer,
     TenantListSerializer,
+    TenantSummarySerializer,
 )
 from api.v1.v1_users.models import Tenant
 from utils.custom_permissions import IsPlatformAdmin
@@ -33,8 +35,16 @@ def console_tenants():
 
     The console is the one reader that must see a deleted workspace:
     it is the only place its state can be explained.
+
+    The prefetch is for `TenantListSerializer.get_name`, which reads the
+    root administration unit of every row. Without it the cost of
+    listing is one query per workspace.
     """
-    return Tenant.objects.all().order_by("subdomain")
+    return (
+        Tenant.objects.all()
+        .prefetch_related("administrations")
+        .order_by("subdomain")
+    )
 
 
 @extend_schema(responses={200: TenantListSerializer(many=True)},
@@ -123,4 +133,44 @@ def set_tenant_features(request, version, tenant_id):
         )
     return Response(
         TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+    )
+
+
+@extend_schema(responses={200: TenantSummarySerializer(many=True)},
+               tags=CONSOLE_TAG, summary="Counts for every workspace")
+@api_view(["GET"])
+@permission_classes([IsPlatformAdmin])
+def tenants_summary(request, version):
+    """How much is in each workspace, at a cost that does not grow.
+
+    Every Count carries distinct=True because the joins multiply:
+    counting forms and users in the same query without it returns
+    forms x users for both. The soft-delete filters are part of the
+    count rather than applied afterwards, so a deleted datapoint is
+    never counted and never has to be subtracted.
+    """
+    queryset = console_tenants().annotate(
+        # `_count` suffixes because Django refuses an annotation that
+        # shadows a field or reverse accessor, and three of these five
+        # are reverse accessors on Tenant. The serializer sources the
+        # plain names from these.
+        users_count=Count(
+            "users", distinct=True, filter=Q(users__deleted_at=None)
+        ),
+        forms_count=Count(
+            "forms", distinct=True, filter=Q(forms__deleted_at=None)
+        ),
+        dashboards_count=Count(
+            "dashboards", distinct=True,
+            filter=Q(dashboards__deleted_at=None),
+        ),
+        datapoints_count=Count(
+            "forms__form_form_data", distinct=True,
+            filter=Q(forms__form_form_data__deleted_at=None),
+        ),
+        devices_count=Count("users__mobile_assignments", distinct=True),
+    )
+    return Response(
+        TenantSummarySerializer(queryset, many=True).data,
+        status=status.HTTP_200_OK,
     )
