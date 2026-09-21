@@ -160,3 +160,31 @@ class TenantUserSerializer(serializers.ModelSerializer):
         if instance.deleted_at:
             return "deleted"
         return "active" if instance.is_active else "deactivated"
+
+
+class OperatorSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(read_only=True)
+    state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SystemUser
+        fields = ["id", "name", "email", "state", "date_joined",
+                  "last_login"]
+
+    def get_state(self, instance):
+        # An invited operator is inactive until the activation link is
+        # followed, which is the same state a registrant sits in.
+        return "active" if instance.is_active else "pending"
+
+
+class OperatorInviteSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        if SystemUser.objects_with_deleted.filter(
+            email=value, tenant__isnull=True
+        ).exists():
+            raise serializers.ValidationError(
+                "A tenant-less account already exists for this address."
+            )
+        return value

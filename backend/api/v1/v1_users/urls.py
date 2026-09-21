@@ -28,6 +28,8 @@ from api.v1.v1_users.admin_views import (
     activate_user,
     deactivate_tenant,
     deactivate_user,
+    operators,
+    revoke_operator,
     list_tenants,
     rename_tenant,
     set_tenant_features,
@@ -43,6 +45,11 @@ urlpatterns = [
     # patterns in this file are mostly unanchored prefixes -- `users`
     # would otherwise swallow `admin/tenants/1/users`.
     re_path(r"^(?P<version>(v1))/admin/tenants$", list_tenants),
+    re_path(r"^(?P<version>(v1))/admin/operators$", operators),
+    re_path(
+        r"^(?P<version>(v1))/admin/operators/(?P<operator_id>[0-9]+)$",
+        revoke_operator,
+    ),
     re_path(
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/"
         r"deactivate$",

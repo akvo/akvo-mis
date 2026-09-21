@@ -1,9 +1,12 @@
 import json
 import os
+import tempfile
+from unittest import mock
 
 from django.test import TestCase, override_settings
 
 from api.v1.v1_mobile.models import MobileAssignment
+from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
 from api.v1.v1_users.models import SystemUser
 from utils.custom_generator import sqlite_path
@@ -30,6 +33,18 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         MobileAssignment.objects.create_assignment(
             user=self.acme.admin, name="device-1"
         )
+        # The master-data root is a real directory shared by every test
+        # process and left behind between runs, so a rename test that
+        # used it would depend on whether a previous run had already
+        # created the destination -- and `_move_master_data` refuses to
+        # clobber one that exists.
+        root = tempfile.TemporaryDirectory()
+        self.addCleanup(root.cleanup)
+        patch = mock.patch(
+            "utils.custom_generator.MASTER_DATA", root.name
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def base(self):
         return f"/api/v1/admin/tenants/{self.acme.tenant.pk}"
@@ -71,8 +86,6 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(self.rename("Not Valid").status_code, 400)
 
     def test_moves_the_master_data_directory(self):
-        from api.v1.v1_profile.models import Administration
-
         old = sqlite_path(Administration, tenant=self.acme.tenant)
         os.makedirs(os.path.dirname(old), exist_ok=True)
         with open(old, "w") as handle:
@@ -87,8 +100,8 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         # The files regenerate lazily on the next device sync, so a
         # failed move must not fail the rename -- leaving a workspace
         # half-renamed would be far worse than a slow first sync.
-        from unittest import mock
-
+        old = sqlite_path(Administration, tenant=self.acme.tenant)
+        os.makedirs(os.path.dirname(old), exist_ok=True)
         with mock.patch(
             "api.v1.v1_users.admin_views.os.rename",
             side_effect=OSError("nope"),

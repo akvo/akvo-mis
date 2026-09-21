@@ -71,6 +71,7 @@ from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 from utils.tenant_host import (
+    console_web_url,
     is_admin_host,
     tenant_may_embed,
     tenant_web_url,
@@ -88,15 +89,19 @@ def send_activation_email(user):
     #
     # The link points at the registrant's own workspace host, because
     # everything past it is bound to that host: activation hands back a
-    # session, and that session is only valid there.
+    # session, and that session is only valid there. An operator has no
+    # workspace but does have a host -- the console -- and sending them
+    # to the base domain instead would hand them a session on the one
+    # origin that refuses to sign them in.
+    if user.is_platform_admin and user.tenant_id is None:
+        base = console_web_url()
+    else:
+        base = tenant_web_url(user.tenant)
     send_email(
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
-            "button_url": (
-                f"{tenant_web_url(user.tenant)}"
-                f"/activate/{signing.dumps(user.pk)}"
-            ),
+            "button_url": f"{base}/activate/{signing.dumps(user.pk)}",
         },
     )
 

@@ -25,6 +25,8 @@ from rest_framework.response import Response
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.admin_serializers import (
+    OperatorInviteSerializer,
+    OperatorSerializer,
     TenantFeaturesSerializer,
     TenantListSerializer,
     TenantRenameSerializer,
@@ -32,6 +34,10 @@ from api.v1.v1_users.admin_serializers import (
     TenantUserSerializer,
 )
 from api.v1.v1_users.models import SystemUser, Tenant
+# Imported by name rather than called through `views`, so that a test
+# patching `admin_views.send_activation_email` patches what this module
+# actually calls.
+from api.v1.v1_users.views import send_activation_email
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_generator import sqlite_path
 from utils.custom_permissions import IsPlatformAdmin
@@ -323,4 +329,79 @@ def _set_user_active(user_id, active):
     user.save(update_fields=["is_active"])
     return Response(
         TenantUserSerializer(user).data, status=status.HTTP_200_OK
+    )
+
+
+@extend_schema(responses={200: OperatorSerializer(many=True)},
+               tags=CONSOLE_TAG, summary="List platform operators")
+@api_view(["GET", "POST"])
+@permission_classes([IsPlatformAdmin])
+def operators(request, version):
+    if request.method == "POST":
+        return _invite_operator(request)
+    queryset = SystemUser.objects.filter(
+        is_platform_admin=True, tenant__isnull=True
+    ).order_by("email")
+    return Response(
+        OperatorSerializer(queryset, many=True).data,
+        status=status.HTTP_200_OK,
+    )
+
+
+def _invite_operator(request):
+    """Create an inactive operator and email them an activation link.
+
+    The same two steps registration uses, for the same reason: prove
+    the address, then let them set a password. Nothing here sets one.
+    """
+    serializer = OperatorInviteSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {"message": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    invited = SystemUser.objects.create(
+        email=serializer.validated_data["email"],
+        first_name="",
+        last_name="",
+        tenant=None,
+        is_platform_admin=True,
+        is_active=False,
+    )
+    invited.set_unusable_password()
+    invited.save()
+    send_activation_email(invited)
+    return Response(
+        OperatorSerializer(invited).data, status=status.HTTP_200_OK
+    )
+
+
+@extend_schema(responses={200: OperatorSerializer}, tags=CONSOLE_TAG,
+               summary="Revoke a platform operator")
+@api_view(["DELETE"])
+@permission_classes([IsPlatformAdmin])
+def revoke_operator(request, version, operator_id):
+    """Clear the flag; keep the account.
+
+    MT-023 adds a TenantInspection table whose operator FK is PROTECT,
+    so deleting the account would raise. Clearing the flag is also what
+    ends their sessions, because every console request re-checks it.
+    """
+    if int(operator_id) == request.user.pk:
+        # The last operator revoking themselves locks everyone out, and
+        # the only way back in is a shell.
+        return Response(
+            {"message": "You cannot revoke your own operator access"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    operator = get_object_or_404(
+        SystemUser.objects.filter(
+            is_platform_admin=True, tenant__isnull=True
+        ),
+        pk=operator_id,
+    )
+    operator.is_platform_admin = False
+    operator.save(update_fields=["is_platform_admin"])
+    return Response(
+        OperatorSerializer(operator).data, status=status.HTTP_200_OK
     )

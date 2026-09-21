@@ -134,18 +134,38 @@ def tenant_web_url(tenant):
     enforced to that host. Sending it to the base domain would strand
     the registrant one click from a login they cannot use.
 
-    `WEBDOMAIN` keeps supplying the scheme and port — which differ
-    between local development and production — while `BASE_DOMAIN`
-    supplies the host. With no base domain or no tenant there is only
-    one address, and it is `WEBDOMAIN` unchanged.
+    With no base domain or no tenant there is only one address, and it
+    is `WEBDOMAIN` unchanged. An operator is tenant-less but does have
+    an address of their own -- see `console_web_url`.
     """
     if not settings.BASE_DOMAIN or not tenant:
         return settings.WEBDOMAIN
+    return _web_url_for_label(tenant.subdomain)
+
+
+def _web_url_for_label(label):
+    """A sibling host of the base domain, as a full URL.
+
+    `WEBDOMAIN` keeps supplying the scheme and port -- which differ
+    between local development and production -- while `BASE_DOMAIN`
+    supplies the host.
+    """
     parsed = urlparse(settings.WEBDOMAIN)
     port = f":{parsed.port}" if parsed.port else ""
-    return (
-        f"{parsed.scheme}://{tenant.subdomain}.{settings.BASE_DOMAIN}{port}"
-    )
+    return f"{parsed.scheme}://{label}.{settings.BASE_DOMAIN}{port}"
+
+
+def console_web_url():
+    """Where the platform console lives -- for operator invitations.
+
+    An operator belongs to no workspace, so `tenant_web_url` would send
+    them to the base domain: the public signup page, and the one origin
+    where `login` refuses them. Their activation link has to land on the
+    console, which is also where the session it hands back is usable.
+    """
+    if not settings.BASE_DOMAIN:
+        return settings.WEBDOMAIN
+    return _web_url_for_label(ADMIN_SUBDOMAIN)
 
 
 def public_tenant(request):
