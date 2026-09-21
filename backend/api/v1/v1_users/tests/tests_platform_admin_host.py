@@ -1,6 +1,7 @@
 from django.test import TestCase, override_settings
 
-from api.v1.v1_users.models import Tenant
+from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
+from api.v1.v1_users.models import SystemUser, Tenant
 from utils.tenant_host import (
     is_admin_host,
     resolve_tenant_from_host,
@@ -53,6 +54,57 @@ class AdminHostTestCase(TestCase):
             HTTP_HOST="app.com",
         )
         self.assertEqual(response.status_code, 400)
+
+
+@override_settings(BASE_DOMAIN="app.com")
+class AdminHostCollisionTestCase(TestCase, TenantTestHelperMixin):
+    """A workspace registered at the console's label before it was
+    reserved.
+
+    Nothing blocks this: which label the console uses is a decision the
+    deployment may revisit, so refusing to migrate over a pre-existing
+    row would trade a rare operational chore for a permanent
+    constraint. The fix is to rename that workspace.
+
+    What matters is that the collision cannot be turned into an
+    escalation. It locks the host for everyone -- the squatter cannot
+    reach their workspace and the operator cannot reach the console --
+    rather than handing either one the other's powers.
+    """
+
+    def setUp(self):
+        self.squatter = self.create_tenant("admin", ["Country"], "Kenya")
+        self.operator = SystemUser.objects.create(
+            email="ops@akvo.org", is_platform_admin=True, tenant=None
+        )
+
+    def test_the_squatting_workspace_gains_no_console_access(self):
+        response = self.client.get(
+            "/api/v1/admin/tenants",
+            HTTP_HOST="admin.app.com",
+            **self.bearer(self.squatter.admin),
+        )
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_the_operator_cannot_be_impersonated_into_that_workspace(self):
+        # The host resolves to the squatter, so the middleware sees a
+        # tenant-less account on a workspace host and refuses it. An
+        # operator locked out is the right side to fail on.
+        response = self.client.get(
+            "/api/v1/admin/tenants",
+            HTTP_HOST="admin.app.com",
+            **self.bearer(self.operator),
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_every_other_workspace_is_unaffected(self):
+        beta = self.create_tenant("beta", ["Country"], "Uganda")
+        response = self.client.get(
+            "/api/v1/profile",
+            HTTP_HOST="beta.app.com",
+            **self.bearer(beta.admin),
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 class AdminHostInertTestCase(TestCase):

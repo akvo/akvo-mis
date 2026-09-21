@@ -34,9 +34,12 @@ def is_base_domain(host):
     return _normalize(host) in (base, f"www.{base}")
 
 
-# The label the platform console answers on. Reserved at registration,
-# and refused by the migration that introduces it, so no workspace can
-# ever shadow it.
+# The label the platform console answers on. Registration and rename
+# both refuse it, so no workspace can take it from here on. A row that
+# predates the reservation is possible and is left to be renamed by
+# hand rather than blocked by a migration: which label the console uses
+# is a decision this deployment may revisit, and a migration that
+# hardcoded one would make revisiting it a schema problem.
 ADMIN_SUBDOMAIN = "admin"
 
 
@@ -112,7 +115,13 @@ def resolve_tenant_from_host(host):
     # resolve to nothing useful, or worse, to a tenant it is not.
     if not label or "." in label:
         return None
-    return Tenant.objects.filter(subdomain=label).first()
+    # Suspension and deletion are enforced here and nowhere else. A
+    # workspace that stops resolving 404s at the middleware, which also
+    # kills sessions already holding a valid 12-hour token -- filtering
+    # only at login would leave those running for the rest of the day.
+    return Tenant.objects.filter(
+        subdomain=label, is_active=True, deleted_at=None
+    ).first()
 
 
 def tenant_web_url(tenant):
