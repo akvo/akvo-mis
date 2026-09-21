@@ -77,6 +77,13 @@ class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
     # and invited users active; only registrants start inactive, until they
     # follow the activation link.
     is_active = models.BooleanField(default=True)
+    # Platform operator, not workspace owner. Deliberately a second
+    # flag rather than a reuse of is_superuser, which every permission
+    # class in this codebase reads as "owns this workspace" -- an
+    # operator holding it would pass those checks the moment a tenant
+    # was in scope. An operator has tenant=None; the two flags are
+    # independent and no code path sets both.
+    is_platform_admin = models.BooleanField(default=False)
     updated = models.DateTimeField(default=None, null=True)
     organisation = models.ForeignKey(
         to=Organisation,
