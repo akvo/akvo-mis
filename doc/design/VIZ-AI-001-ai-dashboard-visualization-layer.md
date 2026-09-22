@@ -100,11 +100,21 @@ sequenceDiagram
 
 ---
 
-## 5. Technology Strategy
+## 5. Technology Strategy & Schema Parity Matrix
 
 - **Primary Engine**: OpenAI `gpt-4o-mini` with JSON Schema Structured Outputs, utilizing the existing project `settings.OPENAI_API_KEY`.
 - **Deterministic Heuristic Fallback**: An internal rule-based recommendation engine that generates valid chart configurations from question types if external AI services are unreachable or unconfigured.
-- **Payload Compatibility**: Suggestions are transient payloads conforming directly to `DashboardWidget` models and are committed through standard dashboard save endpoints (`PUT /manage/dashboards/{id}`).
+- **Payload & Schema Parity**: All suggested widget objects are contract-identical to `DashboardWidgetSerializer`, `builderConstants.js`, and `BuilderInspector.jsx`, using canonical keys:
+  - `type`: `"kpi"` | `"bar"` | `"line"` | `"pie"` | `"table"` | `"map"` | `"scatter"`
+  - `col_span`: integer (6, 8, 12, 24)
+  - `title`: string (<= 255 chars)
+  - `color`: string (<= 32 chars) | null
+  - `form`: integer (valid form ID in family)
+  - `question`: integer | null (valid question ID belonging to form)
+  - `config`: object strictly matching widget defaults in `builderConstants.js` and validated by backend `validate_dashboard_payload` (e.g. `value_type`, `repeat_agg`, `group_by`, `stack_by`, `date_question_id`, `map_mode`, `color_scheme`, `columns`, `criteria`).
+  - `rationale`: string (human-readable insight rationale).
+
+Because the output shape matches `DashboardWidget` exactly, suggested widgets drop directly into the frontend `widgets` state array and save seamlessly via standard `PUT /manage/dashboards/{id}` with zero client-side translation or data loss.
 
 ---
 

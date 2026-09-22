@@ -99,37 +99,40 @@ def extract_family_metadata(root_form, user) -> dict:
 
 ### 4.2. Prompt Engineering & JSON Schema (`ai_prompts.py`)
 - **System Instructions**: Instructs the model that it is an expert data visualization architect for Akvo MIS.
-- **Output Schema**:
-  - `suggested_name`: string
+- **Output Schema**: Conforms directly to `DashboardWidgetSerializer` and `validate_dashboard_payload`:
+  - `suggested_name`: string (<= 255 chars)
   - `description`: string
-  - `widgets`: array of objects matching the frontend `DashboardWidget` shape:
-    - `type`: `kpi` | `bar` | `line` | `pie` | `table` | `map` | `scatter`
-    - `title`: string
+  - `widgets`: array of objects:
+    - `type`: `"kpi"` | `"bar"` | `"line"` | `"pie"` | `"table"` | `"map"` | `"scatter"`
+    - `title`: string (<= 255 chars)
     - `col_span`: integer (6, 8, 12, 24)
-    - `form_id`: integer
-    - `question_id`: integer | null
-    - `config`: object (group_by, repeat_agg, variant, etc.)
-    - `rationale`: string (1-sentence explanation of the insight)
+    - `color`: string (<= 32 chars) | null
+    - `form`: integer (ID of root_form or its monitoring child)
+    - `question`: integer | null (ID of question belonging to form)
+    - `config`: object (exact keys conforming to `builderConstants.js` / `dashboard_functions.py`)
+    - `rationale`: string (1-sentence explanation of why this chart is insightful)
 
 ### 4.3. Deterministic Heuristic Engine (`ai_heuristics.py`)
-Provides deterministic recommendations when OpenAI is unavailable:
-- **KPI Generation**: Creates KPI count of registered sites, plus Average/Sum KPIs for numeric questions.
-- **Categorical Charts**:
-  - `option` question with ≤ 5 choices -> `pie` (variant: `doughnut`, `group_by: "option"`).
-  - `option` question with > 5 choices -> `bar` (`group_by: "option"`).
+Provides deterministic recommendations when OpenAI is unavailable, respecting all frontend widget defaults:
+- **KPI Generation**:
+  - Site count KPI: `form: root_form.id, question: null, config: { value_type: "number" }`
+  - Numeric KPI: `form: form.id, question: q.id, config: { value_type: "number", repeat_agg: "sum" | "average" }`
+- **Categorical Distribution**:
+  - `option` / `multiple_option` (<= 5 options) -> `pie` with `config: { group_by: "option", variant: "doughnut", color_scheme: "categorical" }`
+  - `option` / `multiple_option` (> 5 options) -> `bar` with `config: { group_by: "option", stack_by: null, color_scheme: "categorical" }`
 - **Temporal Trends**:
-  - `date` question on monitoring form -> `line` (`group_by: "month"`).
+  - `date` question on monitoring form -> `line` with `config: { group_by: "month", date_question_id: q.id, color_scheme: "categorical" }`
 - **Geographic Map**:
-  - If form contains geolocation and an option question -> `map` (`map_mode: "category"`).
+  - Form containing coordinates and a categorical question -> `map` with `config: { map_mode: "category", color_scheme: "categorical" }`
 - **Table Overview**:
-  - If monitoring form has multiple status/inspection questions -> `table` with standard columns.
+  - Monitoring form -> `table` with `question: null, config: { columns: [...], criteria: [] }`
 
 ### 4.4. Referential Integrity & Sanitization Filter (`ai_service.py`)
 Ensures model hallucinations are strictly caught before returning:
-1. `form_id` must match `root_form` or a valid child monitoring form.
-2. `question_id` (if present) must exist on the specified form.
+1. `form` must match `root_form` or one of its child monitoring forms in `Forms.objects.for_user(user)`.
+2. `question` (if present) must belong to the specified `form` and have a type in `SUPPORTED_QUESTION_TYPES`.
 3. `type` must be a valid member of `WidgetTypes`.
-4. Stacking and grouping questions must match supported types (`STACK_QUESTION_TYPES`, `SUPPORTED_GROUP_QUESTION_TYPES`).
+4. `config` fields (e.g. `group_by`, `stack_by`, `date_question_id`) must refer to valid questions and allowed enum values in `constants.py`.
 
 ---
 
@@ -139,7 +142,7 @@ Ensures model hallucinations are strictly caught before returning:
 - **Request**:
   ```json
   {
-    "root_form_id": 42,
+    "root_form": 42,
     "user_intent": "Monitor water supply functionality and maintenance trends"
   }
   ```
@@ -153,27 +156,40 @@ Ensures model hallucinations are strictly caught before returning:
         "type": "kpi",
         "title": "Total Registered Points",
         "col_span": 6,
-        "form_id": 42,
-        "question_id": null,
-        "config": {"value_type": "number"},
+        "color": null,
+        "form": 42,
+        "question": null,
+        "config": {
+          "value_type": "number"
+        },
         "rationale": "High-level inventory count."
       },
       {
         "type": "pie",
         "title": "Functionality Status",
         "col_span": 8,
-        "form_id": 42,
-        "question_id": 102,
-        "config": {"group_by": "option", "variant": "doughnut"},
+        "color": null,
+        "form": 42,
+        "question": 102,
+        "config": {
+          "group_by": "option",
+          "variant": "doughnut",
+          "color_scheme": "categorical"
+        },
         "rationale": "Proportional distribution of functional vs defective points."
       },
       {
         "type": "line",
         "title": "Monthly Monitoring Submissions",
         "col_span": 12,
-        "form_id": 45,
-        "question_id": 120,
-        "config": {"group_by": "month", "date_question_id": 120},
+        "color": null,
+        "form": 45,
+        "question": 120,
+        "config": {
+          "group_by": "month",
+          "date_question_id": 120,
+          "color_scheme": "categorical"
+        },
         "rationale": "Tracking monitoring activity frequency over time."
       }
     ]
@@ -196,9 +212,14 @@ Ensures model hallucinations are strictly caught before returning:
         "type": "bar",
         "title": "Water Quality Compliance Breakdown",
         "col_span": 12,
-        "form_id": 45,
-        "question_id": 108,
-        "config": {"group_by": "option", "color_scheme": "categorical"},
+        "color": null,
+        "form": 45,
+        "question": 108,
+        "config": {
+          "group_by": "option",
+          "stack_by": null,
+          "color_scheme": "categorical"
+        },
         "rationale": "Compares test results across compliance classifications."
       }
     ]
@@ -207,7 +228,24 @@ Ensures model hallucinations are strictly caught before returning:
 
 ---
 
-## 6. Verification & Test Plan
+## 6. Dashboard Visualization Schema & Frontend Config Parity Matrix
+
+To ensure 100% compatibility with `frontend/src/pages/dashboards/builderConstants.js`, `BuilderInspector.jsx`, and backend `validate_dashboard_payload`, all generated widgets adhere to the canonical schema:
+
+| Widget Type | `form` Requirement | `question` Requirement | Valid `config` Keys & Constraints |
+|---|---|---|---|
+| `kpi` | Root or Monitoring Form | `number`, `autofield`, or `null` (count) | `value_type`: `"number"` \| `"percentage"`<br>`repeat_agg`: `"sum"` \| `"average"` \| `"max"` \| `"min"` \| `"last"` (monitoring only)<br>`color_scheme`: `"categorical"` |
+| `bar` | Root or Monitoring Form | `option`, `multiple_option`, `number`, `autofield` | `group_by`: `"option"` \| `"month"` \| `"date"` \| `"parent_id"`<br>`stack_by`: `null` \| `"option"` \| `"parent_id"` \| `"administration"`<br>`stack_question`: question ID (if `stack_by: "option"`)<br>`color_scheme`: `"categorical"` |
+| `line` | Root or Monitoring Form | `date` or `number` | `group_by`: `"month"` \| `"date"`<br>`date_question_id`: `date` question ID<br>`category_question_id`: `option` question ID (optional breakdown)<br>`admin_level`: `1` (optional)<br>`color_scheme`: `"categorical"` |
+| `pie` | Root or Monitoring Form | `option`, `multiple_option`, `autofield` | `group_by`: `"option"`<br>`variant`: `"pie"` \| `"doughnut"`<br>`color_scheme`: `"categorical"` |
+| `scatter` | Root or Monitoring Form | `number` or `autofield` (x-axis) | `x_question_id`: question ID<br>`y_question_id`: question ID (`number` or `autofield`)<br>`color_scheme`: `"categorical"` |
+| `map` | Form with coordinates | `option`, `multiple_option`, `number`, `autofield` | `map_mode`: `"category"` (for option) \| `"quantity"` (for number)<br>`color_scheme`: `"categorical"` |
+| `table` | Monitoring Form | `null` | `columns`: `[{ key, source, title, question }]`<br>`criteria`: `[{ type, question, value }]` |
+| `section_title` | `null` | `null` | `text`: string |
+
+---
+
+## 7. Verification & Test Plan
 
 ### Automated Test Cases (`backend/api/v1/v1_visualization/tests/test_ai_visualization.py`):
 1. `test_heuristic_starter_generation`: Verifies deterministic layout produced for standard registration + monitoring forms.
@@ -226,7 +264,7 @@ Ensures model hallucinations are strictly caught before returning:
 
 ---
 
-## 7. Task Breakdown & Estimation
+## 8. Task Breakdown & Estimation
 
 | Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total |
 |---|---|:---:|:---:|:---:|:---:|
