@@ -2,7 +2,9 @@ import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 import useEChartsOption from "./useEChartsOption";
 import { buildToolboxConfig } from "./toolboxHelper";
+import { valueAxisLabel } from "./axisHelper";
 import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
+import AxisLabelWrap from "./AxisLabelWrap";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
@@ -46,21 +48,17 @@ const VizScatter = ({ config, data, filters }) => {
       grid: {
         top: isTopToolbox ? 55 : 35,
         right: 20,
-        bottom: isBottomToolbox ? 75 : 50,
-        left: 60,
+        bottom: isBottomToolbox ? 75 : 30,
+        left: 20,
         containLabel: true,
       },
       xAxis: {
         type: "value",
-        name: xLabel,
-        nameLocation: "center",
-        nameGap: 30,
+        axisLabel: valueAxisLabel(),
       },
       yAxis: {
         type: "value",
-        name: yLabel,
-        nameLocation: "center",
-        nameGap: 40,
+        axisLabel: valueAxisLabel(),
       },
       series: [
         {
@@ -83,7 +81,11 @@ const VizScatter = ({ config, data, filters }) => {
     );
   }
 
-  return <div ref={boxRef} style={{ width: "100%", height: "100%" }} />;
+  return (
+    <AxisLabelWrap xLabel={xLabel} yLabel={yLabel}>
+      <div ref={boxRef} style={{ width: "100%", height: "100%" }} />
+    </AxisLabelWrap>
+  );
 };
 
 VizScatter.propTypes = {
