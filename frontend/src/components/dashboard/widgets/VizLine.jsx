@@ -16,11 +16,12 @@ const truncate = (s) =>
 const CategoryLine = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
-  const wc = config?.config || {};
-  const xLabel = wc.x_axis_label || null;
-  const yLabel = wc.y_axis_label || null;
+  const widgetConfig = config?.config || {};
+  const xLabel = widgetConfig.x_axis_label || null;
+  const yLabel = widgetConfig.y_axis_label || null;
 
   const option = useMemo(() => {
+    const wc = config?.config || {};
     const colors = wc.chart_colors || DEFAULT_COLORS;
     const catColors = wc.category_colors || {};
     const labels = wc.stackMapping?.stack || [];
@@ -73,7 +74,7 @@ const CategoryLine = ({ config, data, filters }) => {
         itemStyle: { color: seriesColors[idx] },
       })),
     };
-  }, [chartData, config, wc]);
+  }, [chartData, config]);
 
   const { boxRef } = useEChartsOption(option);
 
