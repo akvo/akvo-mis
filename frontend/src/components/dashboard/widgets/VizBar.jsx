@@ -4,6 +4,8 @@ import useChartResize from "./useChartResize";
 import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Bar, StackBar } from "akvo-charts";
 import { buildToolboxConfig } from "./toolboxHelper";
+import { valueAxisLabel } from "./axisHelper";
+import AxisLabelWrap from "./AxisLabelWrap";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 
@@ -69,44 +71,24 @@ const VizBar = ({ config, data, filters }) => {
     const rawConfig = {
       color: colors,
       tooltip,
-      legend: { show: true, data: stackLabels, bottom: xAxisLabel ? 15 : 0 },
+      legend: { show: true, data: stackLabels, bottom: 0 },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 35,
         right: 20,
-        bottom: isBottomToolbox ? 65 : xAxisLabel ? 70 : 40,
+        bottom: isBottomToolbox ? 65 : 40,
         left: 50,
         containLabel: true,
       },
       xAxis: {
         type: horizontal ? "value" : "category",
         data: horizontal ? null : chartData.map((d) => d.label),
-        ...(horizontal && isPercentage
-          ? { axisLabel: { formatter: "{value}%" } }
-          : {}),
-        ...(xAxisLabel
-          ? {
-              name: xAxisLabel,
-              nameLocation: "center",
-              nameGap: 30,
-              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
-            }
-          : {}),
+        ...(horizontal ? { axisLabel: valueAxisLabel(isPercentage) } : {}),
       },
       yAxis: {
         type: horizontal ? "category" : "value",
         data: horizontal ? chartData.map((d) => d.label) : null,
-        ...(!horizontal && isPercentage
-          ? { axisLabel: { formatter: "{value}%" } }
-          : {}),
-        ...(yAxisLabel
-          ? {
-              name: yAxisLabel,
-              nameLocation: "center",
-              nameGap: 70,
-              nameTextStyle: { fontWeight: "bold", fontSize: 13 },
-            }
-          : {}),
+        ...(!horizontal ? { axisLabel: valueAxisLabel(isPercentage) } : {}),
       },
       series: stackLabels.map((name, idx) => ({
         name,
@@ -120,9 +102,11 @@ const VizBar = ({ config, data, filters }) => {
     };
 
     return (
-      <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
-        <Component ref={chartRef} rawConfig={rawConfig} />
-      </div>
+      <AxisLabelWrap xLabel={xAxisLabel} yLabel={yAxisLabel}>
+        <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
+          <Component ref={chartRef} rawConfig={rawConfig} />
+        </div>
+      </AxisLabelWrap>
     );
   }
 
@@ -139,39 +123,19 @@ const VizBar = ({ config, data, filters }) => {
     grid: {
       top: isTopToolbox ? 55 : 35,
       right: 20,
-      bottom: isBottomToolbox ? 55 : xAxisLabel ? 60 : 40,
+      bottom: isBottomToolbox ? 55 : 40,
       left: 50,
       containLabel: true,
     },
     xAxis: {
       type: horizontal ? "value" : "category",
       data: horizontal ? null : chartData.map((d) => d[categoryKey]),
-      ...(horizontal && isPercentage
-        ? { axisLabel: { formatter: "{value}%" } }
-        : {}),
-      ...(xAxisLabel
-        ? {
-            name: xAxisLabel,
-            nameLocation: "center",
-            nameGap: 30,
-            nameTextStyle: { fontWeight: "bold", fontSize: 13 },
-          }
-        : {}),
+      ...(horizontal ? { axisLabel: valueAxisLabel(isPercentage) } : {}),
     },
     yAxis: {
       type: horizontal ? "category" : "value",
       data: horizontal ? chartData.map((d) => d[categoryKey]) : null,
-      ...(!horizontal && isPercentage
-        ? { axisLabel: { formatter: "{value}%" } }
-        : {}),
-      ...(yAxisLabel
-        ? {
-            name: yAxisLabel,
-            nameLocation: "center",
-            nameGap: 70,
-            nameTextStyle: { fontWeight: "bold", fontSize: 13 },
-          }
-        : {}),
+      ...(!horizontal ? { axisLabel: valueAxisLabel(isPercentage) } : {}),
     },
     series: [
       {
@@ -183,9 +147,11 @@ const VizBar = ({ config, data, filters }) => {
   };
 
   return (
-    <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
-      <Bar ref={chartRef} rawConfig={rawConfig} />
-    </div>
+    <AxisLabelWrap xLabel={xAxisLabel} yLabel={yAxisLabel}>
+      <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
+        <Bar ref={chartRef} rawConfig={rawConfig} />
+      </div>
+    </AxisLabelWrap>
   );
 };
 
