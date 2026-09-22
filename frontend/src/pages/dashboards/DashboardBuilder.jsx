@@ -171,6 +171,28 @@ const DashboardBuilder = () => {
     setDirty(true);
   }, []);
 
+  // Duplicate widget
+  const handleDuplicate = useCallback((id) => {
+    setWidgets((prev) => {
+      const idx = prev.findIndex((w) => w.id === id);
+      if (idx === -1) {
+        return prev;
+      }
+      nextTempId -= 1;
+      const source = prev[idx];
+      const clone = {
+        ...source,
+        id: nextTempId,
+        title: source.title ? `${source.title} (copy)` : "",
+        config: { ...(source.config || {}) },
+      };
+      const next = [...prev];
+      next.splice(idx + 1, 0, clone);
+      return next;
+    });
+    setDirty(true);
+  }, []);
+
   // Delete widget
   const handleDelete = useCallback(
     (id) => {
@@ -588,6 +610,7 @@ const DashboardBuilder = () => {
                 onSelect={handleSelect}
                 onDeselect={handleDeselect}
                 onMove={handleMove}
+                onDuplicate={handleDuplicate}
                 onDelete={handleDelete}
                 onReorder={handleReorder}
               />

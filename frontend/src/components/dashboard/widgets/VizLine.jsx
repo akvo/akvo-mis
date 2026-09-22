@@ -5,6 +5,8 @@ import useEChartsOption from "./useEChartsOption";
 import useEmptyWidgetMessage from "./useEmptyWidgetMessage";
 import { Line, StackLine } from "akvo-charts";
 import { buildToolboxConfig } from "./toolboxHelper";
+import { valueAxisLabel } from "./axisHelper";
+import AxisLabelWrap from "./AxisLabelWrap";
 
 const DEFAULT_COLORS = ["#1890ff", "#64A73B", "#F5A623", "#e41a1c", "#9b59b6"];
 const MAX_LEGEND_LEN = 15;
@@ -14,14 +16,15 @@ const truncate = (s) =>
 const CategoryLine = ({ config, data, filters }) => {
   const emptyMessage = useEmptyWidgetMessage(filters);
   const chartData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const widgetConfig = config?.config || {};
+  const xLabel = widgetConfig.x_axis_label || null;
+  const yLabel = widgetConfig.y_axis_label || null;
 
   const option = useMemo(() => {
     const wc = config?.config || {};
     const colors = wc.chart_colors || DEFAULT_COLORS;
     const catColors = wc.category_colors || {};
     const labels = wc.stackMapping?.stack || [];
-    const xLabel = wc.x_axis_label || null;
-    const yLabel = wc.y_axis_label || null;
     if (chartData.length === 0 || labels.length === 0) {
       return null;
     }
@@ -45,29 +48,24 @@ const CategoryLine = ({ config, data, filters }) => {
       legend: {
         type: "scroll",
         data: labels,
-        bottom: xLabel ? 15 : 0,
+        bottom: 0,
         formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 30,
         right: 20,
-        bottom: isBottomToolbox ? 65 : xLabel ? 70 : 40,
-        left: 40,
+        bottom: isBottomToolbox ? 65 : 40,
+        left: 20,
         containLabel: true,
       },
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
-        ...(xLabel
-          ? { name: xLabel, nameLocation: "center", nameGap: 30 }
-          : {}),
       },
       yAxis: {
         type: "value",
-        ...(yLabel
-          ? { name: yLabel, nameLocation: "center", nameGap: 40 }
-          : {}),
+        axisLabel: valueAxisLabel(),
       },
       series: labels.map((name, idx) => ({
         name,
@@ -88,7 +86,11 @@ const CategoryLine = ({ config, data, filters }) => {
     );
   }
 
-  return <div ref={boxRef} style={{ width: "100%", height: "100%" }} />;
+  return (
+    <AxisLabelWrap xLabel={xLabel} yLabel={yLabel}>
+      <div ref={boxRef} style={{ width: "100%", height: "100%" }} />
+    </AxisLabelWrap>
+  );
 };
 
 CategoryLine.propTypes = {
@@ -151,29 +153,24 @@ const VizLine = ({ config, data, filters }) => {
         show: true,
         type: "scroll",
         data: stackLabels,
-        bottom: xAxisLabel ? 15 : 0,
+        bottom: 0,
         formatter: truncate,
       },
       toolbox: toolbox || { show: false, feature: {} },
       grid: {
         top: isTopToolbox ? 55 : 35,
         right: 20,
-        bottom: isBottomToolbox ? 65 : xAxisLabel ? 70 : 40,
-        left: 50,
+        bottom: isBottomToolbox ? 65 : 40,
+        left: 20,
         containLabel: true,
       },
       xAxis: {
         type: "category",
         data: chartData.map((d) => d.label),
-        ...(xAxisLabel
-          ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
-          : {}),
       },
       yAxis: {
         type: "value",
-        ...(yAxisLabel
-          ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
-          : {}),
+        axisLabel: valueAxisLabel(),
       },
       series: stackLabels.map((name, idx) => ({
         name,
@@ -187,9 +184,11 @@ const VizLine = ({ config, data, filters }) => {
     };
 
     return (
-      <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
-        <Component ref={chartRef} rawConfig={rawConfig} />
-      </div>
+      <AxisLabelWrap xLabel={xAxisLabel} yLabel={yAxisLabel}>
+        <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
+          <Component ref={chartRef} rawConfig={rawConfig} />
+        </div>
+      </AxisLabelWrap>
     );
   }
 
@@ -207,22 +206,17 @@ const VizLine = ({ config, data, filters }) => {
     grid: {
       top: isTopToolbox ? 55 : 35,
       right: 20,
-      bottom: isBottomToolbox ? 55 : xAxisLabel ? 60 : 40,
-      left: 50,
+      bottom: isBottomToolbox ? 55 : 40,
+      left: 20,
       containLabel: true,
     },
     xAxis: {
       type: "category",
       data: chartData.map((d) => d[categoryKey]),
-      ...(xAxisLabel
-        ? { name: xAxisLabel, nameLocation: "center", nameGap: 30 }
-        : {}),
     },
     yAxis: {
       type: "value",
-      ...(yAxisLabel
-        ? { name: yAxisLabel, nameLocation: "center", nameGap: 40 }
-        : {}),
+      axisLabel: valueAxisLabel(),
     },
     series: [
       {
@@ -235,9 +229,11 @@ const VizLine = ({ config, data, filters }) => {
   };
 
   return (
-    <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
-      <Component ref={chartRef} rawConfig={rawConfig} />
-    </div>
+    <AxisLabelWrap xLabel={xAxisLabel} yLabel={yAxisLabel}>
+      <div ref={boxRef} style={{ width: "100%", height: "100%" }}>
+        <Component ref={chartRef} rawConfig={rawConfig} />
+      </div>
+    </AxisLabelWrap>
   );
 };
 
