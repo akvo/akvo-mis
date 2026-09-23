@@ -2,8 +2,8 @@
 
 **Task ID**: VIZ-AI-002  
 **Parent Epic**: [VIZ-AI-001](file:///Users/galihpratama/Sites/akvo-mis/doc/design/VIZ-AI-001-ai-dashboard-visualization-layer.md)  
-**Issue**: [#452](https://github.com/akvo/akvo-mis/issues/452)  
-**Branch**: `epic/452-viz-ai-dashboard-visualization-layer`  
+**Issue**: [#457](https://github.com/akvo/akvo-mis/issues/457) (Parent Epic: [#452](https://github.com/akvo/akvo-mis/issues/452))  
+**Branch**: `feature/457-viz-ai-002-backend-ai-recommendation-engine-suggestion-endpoints`  
 **Feature Name**: Backend AI Recommendation Service & APIs  
 **Author**: Akvo Engineering Team  
 **Date**: 2026-09-22  
