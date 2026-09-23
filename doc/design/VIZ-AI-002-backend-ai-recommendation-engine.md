@@ -3,7 +3,7 @@
 **Task ID**: VIZ-AI-002  
 **Parent Epic**: [VIZ-AI-001](file:///Users/galihpratama/Sites/akvo-mis/doc/design/VIZ-AI-001-ai-dashboard-visualization-layer.md)  
 **Issue**: [#452](https://github.com/akvo/akvo-mis/issues/452)  
-**Branch**: `feature/452-viz-ai-dashboard-visualization-layer`  
+**Branch**: `epic/452-viz-ai-dashboard-visualization-layer`  
 **Feature Name**: Backend AI Recommendation Service & APIs  
 **Author**: Akvo Engineering Team  
 **Date**: 2026-09-22  
@@ -118,16 +118,34 @@ flowchart TD
 ### 5.1. Metadata Extraction (`ai_service.py`)
 Extracts structural schema from the active form family without querying any submission rows:
 ```python
-def extract_family_metadata(root_form, user) -> dict:
+def extract_family_metadata(root_form_id, user) -> dict:
     """
     Returns a compact metadata dict containing form names, hierarchy,
     and question definitions (id, label, type, option choices).
-    No submission answers or PII are accessed.
+    Uses prefetch_related to prevent N+1 database queries.
+    Zero submission answers, GPS values, or PII are accessed.
+    
+    Optimizations:
+    - High-cardinality option lists are truncated to top 15 items with
+      {"option_count": total, "options": [...]}.
+    - Excludes non-visualizable freeform questions (e.g. photos/signatures).
+    - Detects if form family has monitoring children (has_monitoring: bool).
     """
+    root_form = Forms.objects.filter(id=root_form_id).prefetch_related(
+        'form_question__question_option',
+        'child_forms__form_question__question_option'
+    ).first()
 ```
 
 ### 5.2. Prompt Engineering & JSON Schema (`ai_prompts.py`)
-- **System Instructions**: Instructs the model that it is an expert data visualization architect for Akvo MIS.
+- **System Instructions**:
+  - Instructs the model that it is an expert data visualization architect for Akvo MIS.
+  - **Multi-Lingual Parity**: Explicitly commands: *"Generate all widget titles, descriptions, and rationales in the exact natural language used in the form question labels (e.g., French, Spanish, Bahasa Indonesia, English)."*
+  - **Visual Diversity Constraint**: Maximum 2 widgets of the same type in a starter layout; must blend headline KPIs, categorical distributions, and temporal trends/maps.
+  - **Registration-Only Guardrail**: If `has_monitoring` is false, forbidden from generating Table widgets or `measure: current_state`.
+- **Input Sanitization & Boundary Isolation**:
+  - `user_intent` / `prompt_hint` truncated to max 250 characters and sanitized against control characters.
+  - Wrapped in structural XML boundary tags: `<user_intent>{sanitized_intent}</user_intent>` to prevent prompt injection.
 - **Output Schema**: Conforms directly to `DashboardWidgetSerializer` and `validate_dashboard_payload`:
   - `suggested_name`: string (<= 255 chars)
   - `description`: string
@@ -143,25 +161,37 @@ def extract_family_metadata(root_form, user) -> dict:
 
 ### 5.3. Deterministic Heuristic Engine (`ai_heuristics.py`)
 Provides deterministic recommendations when OpenAI is unavailable, respecting all frontend widget defaults:
-- **KPI Generation**:
-  - Site count KPI: `form: root_form.id, question: null, config: { value_type: "number" }`
-  - Numeric KPI: `form: form.id, question: q.id, config: { value_type: "number", repeat_agg: "sum" | "average" }`
-- **Categorical Distribution**:
-  - `option` / `multiple_option` (<= 5 options) -> `pie` with `config: { group_by: "option", variant: "doughnut", color_scheme: "categorical" }`
-  - `option` / `multiple_option` (> 5 options) -> `bar` with `config: { group_by: "option", stack_by: null, color_scheme: "categorical" }`
-- **Temporal Trends**:
-  - `date` question on monitoring form -> `line` with `config: { group_by: "month", date_question_id: q.id, color_scheme: "categorical" }`
-- **Geographic Map**:
-  - Form containing coordinates and a categorical question -> `map` with `config: { map_mode: "category", color_scheme: "categorical" }`
-- **Table Overview**:
-  - Monitoring form -> `table` with `question: null, config: { columns: [...], criteria: [] }`
+- **Registration-Only Guardrail**: If `has_monitoring` is false, `measure` is `null` and Table widgets are never generated.
+- **Visual Diversity Rule**: Assembles a balanced multi-tier palette:
+  1. Top Tier (Headline): 2 KPIs (`col_span: 6` or `12`).
+  2. Middle Tier (Distributions): 1-2 Pie/Bar charts (`col_span: 8` or `12`).
+  3. Bottom Tier (Overview / Geospatial / Trends): 1 Line trend chart or Map (`col_span: 12` or `24`), or Table (`col_span: 24` if monitoring form exists).
 
-### 5.4. Referential Integrity & Sanitization Filter (`ai_service.py`)
-Ensures model hallucinations are strictly caught before returning:
-1. `form` must match `root_form` or one of its child monitoring forms in `Forms.objects.for_user(user)`.
-2. `question` (if present) must belong to the specified `form` and have a type in `SUPPORTED_QUESTION_TYPES`.
-3. `type` must be a valid member of `WidgetTypes`.
-4. `config` fields (e.g. `group_by`, `stack_by`, `date_question_id`) must refer to valid questions and allowed enum values in `constants.py`.
+### 5.4. Referential Integrity & 24-Column Grid Normalizer (`ai_service.py`)
+Ensures model hallucinations are strictly caught and grid layouts are balanced before returning:
+1. **Referential Integrity**:
+   - `form` must match `root_form` or one of its child monitoring forms in `Forms.objects.for_user(user)`.
+   - `question` (if present) must belong to the specified `form` and have a type in `SUPPORTED_QUESTION_TYPES`.
+   - `type` must be a valid member of `WidgetTypes`.
+   - `config` fields must refer to valid questions and allowed enum values in `constants.py`.
+2. **24-Column Grid Normalization**:
+   - Normalizes consecutive widget `col_span` values so each visual row cleanly sums to 24 (e.g. `[6, 6, 12]`, `[8, 8, 8]`, `[12, 12]`, `[24]`), eliminating ragged 2-column blank spaces.
+
+### 5.5. Circuit Breaker & Network Resilience (`ai_service.py`)
+Protects backend worker threads against upstream OpenAI latency spikes or outages:
+- **Granular Timeouts**: `connect_timeout=2.0s`, `read_timeout=4.0s` (strict total cap: 5.0s).
+- **In-Memory Circuit Breaker**:
+  - If 3 consecutive OpenAI calls fail (network error, timeout, or 429/500), the circuit trips for 60 seconds.
+  - While tripped, incoming requests immediately route to `ai_heuristics.py` with 0ms delay, preventing thread starvation.
+
+### 5.6. Scoped Rate Limiting (`dashboard_builder_views.py`)
+- Attached DRF throttle class `DashboardAIThrottle`:
+  - `scope = 'dashboard_ai'` (configured to `15/minute`, `100/day` per authenticated user).
+  - Throttled requests receive standard `429 Too Many Requests`.
+
+### 5.7. Stateless Backend & Canvas Draft Lifecycle
+- **Stateless Operation**: The backend does not maintain temporary suggestion cache tables or external Redis locks.
+- **Canvas Persistence**: Suggestions land in the browser canvas as unsaved state. When the author clicks "Save Draft", standard `Dashboard(status=DashboardStatus.draft)` and `DashboardWidget` records are persisted in PostgreSQL.
 
 ---
 

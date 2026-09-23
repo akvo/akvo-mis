@@ -3,7 +3,7 @@
 **Task ID**: VIZ-AI-003  
 **Parent Epic**: [VIZ-AI-001](file:///Users/galihpratama/Sites/akvo-mis/doc/design/VIZ-AI-001-ai-dashboard-visualization-layer.md)  
 **Issue**: [#452](https://github.com/akvo/akvo-mis/issues/452)  
-**Branch**: `feature/452-viz-ai-dashboard-visualization-layer`  
+**Branch**: `epic/452-viz-ai-dashboard-visualization-layer`  
 **Feature Name**: Frontend Dashboard Builder AI Experience & UI Integration  
 **Author**: Akvo Engineering Team  
 **Date**: 2026-09-22  
@@ -116,23 +116,28 @@ sequenceDiagram
 import api from "./api";
 
 export const dashboardAi = {
-  suggestDashboard: (payload) =>
-    api.post("/manage/dashboards/ai/suggest-dashboard", payload),
+  suggestDashboard: (payload, signal) =>
+    api.post("/manage/dashboards/ai/suggest-dashboard", payload, { signal }),
 
-  suggestWidgets: (dashboardId, payload) =>
-    api.post(`/manage/dashboards/${dashboardId}/ai/suggest-widgets`, payload),
+  suggestWidgets: (dashboardId, payload, signal) =>
+    api.post(`/manage/dashboards/${dashboardId}/ai/suggest-widgets`, payload, { signal }),
 };
 ```
 
 ### 5.2. `CreateDashboardModal.jsx` Updates
 - When `kind === "widgets"` and a `root_form` is selected, an Ant Design `Switch` or checkbox is displayed:
   `[⚡ Auto-generate starter dashboard with AI]`
-- When enabled, the modal calls `dashboardAi.suggestDashboard({ root_form })`.
-- Upon success, the dashboard is created via `dashboardApi.create` with the suggested widgets pre-populated in the initial save payload.
+- When enabled, the modal calls `dashboardAi.suggestDashboard({ root_form })` passing an `AbortController.signal`.
+- If the user cancels or closes the modal, `abortController.abort()` cancels the request immediately.
+- Upon success, the dashboard is created via `dashboardApi.create` with the suggested widgets pre-populated in the initial save payload as `status: draft`.
 
 ### 5.3. `AISuggestionDrawer.jsx` (New Component)
 - Ant Design `Drawer` placed on the right side of the screen.
 - Header: "AI Widget Recommendations" with a badge indicating "Powered by OpenAI / Smart Heuristics".
+- **In-Session React State Caching**:
+  - Suggestions are stored in component state for the active editing session.
+  - If the user closes and re-opens the drawer without modifying widgets, cached suggestions are shown instantly with zero network delay.
+  - A "Refresh / Regenerate" button allows the user to explicitly fetch fresh live recommendations.
 - Content:
   - Optional natural language search/hint input (e.g. "Suggest water quality charts").
   - List of suggestion cards showing:
@@ -142,14 +147,16 @@ export const dashboardAi = {
     - "Add to Dashboard" primary button.
 - Empty & Error States:
   - Friendly message if all questions in the form family are already visualized.
-  - Non-blocking error notification if the network request fails.
+  - Non-blocking error notification if the network request fails, with fallback to heuristic recommendations.
 
 ### 5.4. State Management in `DashboardBuilder.jsx`
 - Adding a suggestion:
-  - Generates a unique temporary ID (`temp_id: --nextTempId`).
+  - Generates a unique collision-proof negative temporary ID (`temp_id: -Date.now() - Math.floor(Math.random() * 1000)`).
   - Sets `order` to `widgets.length`.
   - Merges into `widgets` state and sets `dirty = true`.
   - Automatically selects `selectedId = newWidget.id` so `BuilderInspector` immediately opens for fine-tuning.
+- Saving Draft:
+  - Clicking "Save" calls standard `PUT /api/v1/manage/dashboards/{id}` with all widgets, keeping the dashboard safely in `status: draft` in PostgreSQL.
 
 ---
 

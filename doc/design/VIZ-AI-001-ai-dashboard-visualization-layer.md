@@ -2,7 +2,7 @@
 
 **Task ID**: VIZ-AI-001  
 **Issue**: [#452](https://github.com/akvo/akvo-mis/issues/452)  
-**Branch**: `feature/452-viz-ai-dashboard-visualization-layer`  
+**Branch**: `epic/452-viz-ai-dashboard-visualization-layer`  
 **Feature Name**: AI Layer on the Visualisation Feature  
 **Author**: Akvo Engineering Team  
 **Date**: 2026-09-22  
@@ -122,6 +122,13 @@ sequenceDiagram
 
 - **Primary Engine**: OpenAI `gpt-4o-mini` with JSON Schema Structured Outputs, utilizing the existing project `settings.OPENAI_API_KEY`.
 - **Deterministic Heuristic Fallback**: An internal rule-based recommendation engine that generates valid chart configurations from question types if external AI services are unreachable or unconfigured.
+- **Architectural & Quality Safeguards**:
+  1. **24-Column Grid Normalization**: Layout rows are automatically balanced into standard multiples (KPIs: 6/12, Charts: 8/12, Maps/Tables: 24) preventing ragged gaps.
+  2. **Multi-Lingual Parity**: System prompt instructs the model to match the natural language of the form schema for widget titles and rationales.
+  3. **High-Cardinality Token Defense**: Option lists in metadata prompts are capped at top 15 choices to minimize input tokens and latency.
+  4. **Visual Diversity Rule**: Prompts and heuristics enforce complementary chart distributions (max 2 of any single chart type; balanced mix of KPI, categorical, temporal/geo, and table).
+  5. **Registration-Only Form Guardrail**: For forms without monitoring children, `measure` is forced to `null` and Table widgets are omitted.
+  6. **Collision-Proof Temp IDs**: Frontend creates unsaved canvas widgets using `-Date.now() - index` avoiding state collision.
 - **Payload & Schema Parity**: All suggested widget objects are contract-identical to `DashboardWidgetSerializer`, `builderConstants.js`, and `BuilderInspector.jsx`, using canonical keys:
   - `type`: `"kpi"` | `"bar"` | `"line"` | `"pie"` | `"table"` | `"map"` | `"scatter"`
   - `col_span`: integer (6, 8, 12, 24)
