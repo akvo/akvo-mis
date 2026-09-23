@@ -53,7 +53,8 @@ describe("VizScatter widget", () => {
       expect(lastOption.yAxis.name).toBeUndefined();
       expect(lastOption.xAxis.axisLabel.formatter(1500000)).toBe("1.5M");
       expect(lastOption.yAxis.axisLabel.formatter(3000000000)).toBe("3B");
-      expect(screen.getByText("Number of datapoints")).toBeInTheDocument();
+      // Both axes default to the same label, rendered once per axis
+      expect(screen.getAllByText("Number of datapoints")).toHaveLength(2);
       expect(lastOption.series[0].data).toEqual([
         [10, 25, "Well 1"],
         [20, 50, "Well 2"],
