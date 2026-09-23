@@ -4,6 +4,19 @@
 |---|---|
 | [`akvo-mis-workspace-from-data`](akvo-mis-workspace-from-data/SKILL.md) | Turning a spreadsheet into a working MIS workspace: analysing the data, proposing forms and an administration hierarchy, creating the workspace, and loading the records |
 
+## Running it
+
+Install it first (see [Install](#install)), then use one of these:
+
+| Where | How to start |
+|---|---|
+| Claude Code | Type `/akvo-mis-workspace-from-data`, or `/akvo-mis-workspace-from-data path/to/data.xlsx` |
+| Claude Code, Desktop or claude.ai | Just ask, e.g. *"Set up an MIS PoC workspace from this spreadsheet"*, and attach or point to the file |
+| If the skill doesn't kick in | Name it: *"Use the akvo-mis-workspace-from-data skill"* |
+
+Started without a file, Claude replies with a short welcome message. It
+explains what will happen and what you need, then asks for the file.
+
 ## How it works
 
 1. **Share the data.** Give Claude the Excel or CSV file and say you want an MIS workspace from it.

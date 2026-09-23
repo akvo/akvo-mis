@@ -32,6 +32,30 @@ Files in this skill:
 
 Read both references before writing a plan.
 
+## Starting
+
+**If the user hasn't shared a data file yet**, for example when they typed
+`/akvo-mis-workspace-from-data` alone, reply with this welcome message and
+nothing else. Adapt the wording if you like, but keep all four parts:
+
+> 👋 I'll help you turn a spreadsheet into a working Akvo MIS workspace.
+>
+> **How it works:** I look at your data and propose the forms and the
+> administration (places) in plain language. Once you approve, I create
+> the workspace, set it up and load your records. Nothing is created
+> before you say yes.
+>
+> **Have these ready:**
+> - your Excel or CSV file (several sheets or files are fine)
+> - the email address for the workspace admin
+> - a short name for the address, e.g. `who` for `who.mis.akvotest.org`
+>
+> **To start, share or attach your file**, and tell me in a sentence what the
+> data is about.
+
+**If a file was shared**, say in one sentence what you are about to do, then
+start step 1.
+
 ## Workflow
 
 1. **Profile.** Run `python scripts/profile_data.py <files> --json profile.json`, then look at the data yourself too. The profiler proposes:
