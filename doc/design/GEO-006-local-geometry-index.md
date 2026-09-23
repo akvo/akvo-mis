@@ -208,6 +208,15 @@ column for the handful of candidates that survive the bbox filter:
 SELECT json FROM datapoints WHERE id IN (…5–50 ids…)
 ```
 
+> **`id`, not `uuid` — and the first implementation got this wrong.** A uuid identifies a
+> **plot**, not a row: monitoring datapoints inherit their registration's uuid and differ only by
+> `form`, which is exactly what `getMonitoringStats` groups on. Selecting by uuid returns the
+> whole form family, and keying the result by uuid keeps whichever row the query returned last.
+> A monitoring submission does not prefill the polygon, so the candidate's coordinates went
+> missing, the candidate was skipped, and the overlap was never reported — a **false pass** in
+> the one check whose whole purpose is to prevent them. `geometry_index.datapointId` holds the
+> local row id and is populated on every write path, so it is the key. (Fixed 2026-09-23.)
+
 **Rationale**: Storing coordinates in the index duplicates data the device already holds. At
 180 vertices a polygon is ~4.3 KB of JSON text; at 5,000 per form that is ~21 MB duplicated,
 and every row exceeds SQLite's per-page payload limit, so each row spills into overflow pages.

@@ -11,7 +11,7 @@ import { signatureOf } from '../overlap';
 jest.mock('../../../database/crud', () => ({
   crudConfig: { getConfig: jest.fn() },
   crudSyncQueue: { hasIncomplete: jest.fn(), getAllProgress: jest.fn() },
-  crudDataPoints: { countSyncedByFormId: jest.fn(), selectJsonByUuids: jest.fn() },
+  crudDataPoints: { countSyncedByFormId: jest.fn(), selectJsonByIds: jest.fn() },
   crudGeometryIndex: { findOverlapCandidates: jest.fn() },
 }));
 
@@ -36,6 +36,7 @@ const PLOT = square(0, 0.001);
 
 const indexRow = (overrides = {}) => ({
   uuid: 'neighbour-uuid',
+  datapointId: 11,
   name: 'Plot A',
   questionId: QUESTION.id,
   repeatIndex: 0,
@@ -48,8 +49,8 @@ const indexRow = (overrides = {}) => ({
   ...overrides,
 });
 
-const candidateAnswers = (points, uuid = 'neighbour-uuid') => [
-  { id: 7, uuid, json: JSON.stringify({ [`${QUESTION.id}`]: points }) },
+const candidateAnswers = (points, id = 11, uuid = 'neighbour-uuid') => [
+  { id, uuid, json: JSON.stringify({ [`${QUESTION.id}`]: points }) },
 ];
 
 const healthy = () => {
@@ -113,12 +114,12 @@ describe('runOverlapCheck', () => {
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.passed);
     expect(result.conflicts).toEqual([]);
-    expect(crudDataPoints.selectJsonByUuids).not.toHaveBeenCalled();
+    expect(crudDataPoints.selectJsonByIds).not.toHaveBeenCalled();
   });
 
   it('fails on an identical polygon and names the other datapoint', async () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow()]);
-    crudDataPoints.selectJsonByUuids.mockResolvedValue(candidateAnswers(PLOT));
+    crudDataPoints.selectJsonByIds.mockResolvedValue(candidateAnswers(PLOT));
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.failed);
     expect(result.conflicts).toHaveLength(1);
@@ -129,13 +130,13 @@ describe('runOverlapCheck', () => {
   it('passes just under the threshold and fails just over it', async () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow()]);
 
-    crudDataPoints.selectJsonByUuids.mockResolvedValue(
+    crudDataPoints.selectJsonByIds.mockResolvedValue(
       candidateAnswers(square(0.00081, 0.00181)), // ~19 % of the smaller plot
     );
     const under = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(under.status).toBe(OVERLAP_STATUS.passed);
 
-    crudDataPoints.selectJsonByUuids.mockResolvedValue(
+    crudDataPoints.selectJsonByIds.mockResolvedValue(
       candidateAnswers(square(0.00079, 0.00179)), // ~21 %
     );
     const over = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
@@ -157,12 +158,12 @@ describe('runOverlapCheck', () => {
 
   it('reports every simultaneous overlap, not just the first', async () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([
-      indexRow({ uuid: 'a', name: 'Plot A' }),
-      indexRow({ uuid: 'b', name: 'Plot B' }),
+      indexRow({ uuid: 'a', datapointId: 21, name: 'Plot A' }),
+      indexRow({ uuid: 'b', datapointId: 22, name: 'Plot B' }),
     ]);
-    crudDataPoints.selectJsonByUuids.mockResolvedValue([
-      ...candidateAnswers(PLOT, 'a'),
-      ...candidateAnswers(PLOT, 'b'),
+    crudDataPoints.selectJsonByIds.mockResolvedValue([
+      ...candidateAnswers(PLOT, 21, 'a'),
+      ...candidateAnswers(PLOT, 22, 'b'),
     ]);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.conflicts.map((c) => c.name)).toEqual(['Plot A', 'Plot B']);
@@ -170,12 +171,66 @@ describe('runOverlapCheck', () => {
 
   it('reads a repeat instance by its suffixed answer key', async () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow({ repeatIndex: 2 })]);
-    crudDataPoints.selectJsonByUuids.mockResolvedValue([
-      { id: 7, uuid: 'neighbour-uuid', json: JSON.stringify({ [`${QUESTION.id}-2`]: PLOT }) },
+    crudDataPoints.selectJsonByIds.mockResolvedValue([
+      { id: 11, uuid: 'neighbour-uuid', json: JSON.stringify({ [`${QUESTION.id}-2`]: PLOT }) },
     ]);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.failed);
     expect(result.conflicts[0].repeatIndex).toBe(2);
+  });
+
+  /**
+   * The regression this keying exists for. A uuid identifies a plot, not a row: the monitoring
+   * submission inherits the registration's uuid and differs only by `form`. Fetching by uuid
+   * returned both, a uuid-keyed map kept whichever came last, and a monitoring row carries no
+   * polygon — so the real overlap was never measured and the plot passed.
+   */
+  it('measures the registration row even when a monitoring row shares its uuid', async () => {
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([
+      indexRow({ uuid: 'shared-uuid', datapointId: 41, name: 'Registered plot' }),
+    ]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue([
+      { id: 41, uuid: 'shared-uuid', json: JSON.stringify({ [`${QUESTION.id}`]: PLOT }) },
+      // Same uuid, different form: a monitoring submission, which prefills no polygon.
+      { id: 42, uuid: 'shared-uuid', json: JSON.stringify({ 555: 'a monitoring answer' }) },
+    ]);
+    const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
+    expect(result.status).toBe(OVERLAP_STATUS.failed);
+    expect(result.conflicts[0].percent).toBeCloseTo(100, 0);
+  });
+
+  it('fetches answers by local row id, never by uuid', async () => {
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow({ datapointId: 41 })]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue(candidateAnswers(PLOT, 41));
+    await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
+    expect(crudDataPoints.selectJsonByIds).toHaveBeenCalledWith({}, [41]);
+  });
+
+  it('refuses when the index names a candidate whose answers are not on the device', async () => {
+    // geometry_index is a subset of datapoints by construction (GEO-006 D-6); if it is not,
+    // the two have drifted and measuring what is left would report a confident "no overlap".
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow({ datapointId: 41 })]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue([]);
+    const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
+    expect(result.status).toBe(OVERLAP_STATUS.unavailable);
+    expect(result.cause).toBe(UNAVAILABLE_CAUSE.localFailure);
+  });
+
+  it('skips a neighbour stored with too few vertices instead of blocking on it', async () => {
+    // One or two vertices enclose no area and cannot overlap. That is the neighbour's data
+    // quality, not local corruption, so it must not trap this enumerator behind a Reset.
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow({ datapointId: 41 })]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue(
+      candidateAnswers(
+        [
+          [0, 0],
+          [0, 0.001],
+        ],
+        41,
+      ),
+    );
+    const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
+    expect(result.status).toBe(OVERLAP_STATUS.passed);
   });
 
   it('refuses rather than passes when the index query throws', async () => {
@@ -192,7 +247,7 @@ describe('runOverlapCheck', () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([
       indexRow({ accuracyMax: 1, accuracyMeasured: 1 }),
     ]);
-    crudDataPoints.selectJsonByUuids.mockResolvedValue(
+    crudDataPoints.selectJsonByIds.mockResolvedValue(
       candidateAnswers(square(0.0009, 0.0019)), // ~10 %, under the flat ceiling
     );
     const walked = PLOT.map(([lat, lng]) => [lat, lng, 1]);
@@ -296,12 +351,12 @@ describe('the failure message', () => {
 
   it('numbers conflicts worst first, matching the order runOverlapCheck returns', async () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([
-      indexRow({ uuid: 'small', name: 'Plot small' }),
-      indexRow({ uuid: 'big', name: 'Plot big' }),
+      indexRow({ uuid: 'small', datapointId: 31, name: 'Plot small' }),
+      indexRow({ uuid: 'big', datapointId: 32, name: 'Plot big' }),
     ]);
-    crudDataPoints.selectJsonByUuids.mockResolvedValue([
-      ...candidateAnswers(square(0.0007, 0.0017), 'small'), // ~30 %
-      ...candidateAnswers(PLOT, 'big'), // 100 %
+    crudDataPoints.selectJsonByIds.mockResolvedValue([
+      ...candidateAnswers(square(0.0007, 0.0017), 31, 'small'), // ~30 %
+      ...candidateAnswers(PLOT, 32, 'big'), // 100 %
     ]);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.conflicts[0].uuid).toBe('big');

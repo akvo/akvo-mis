@@ -285,22 +285,28 @@ const dataPointsQuery = () => ({
     return res;
   },
   /**
-   * Answers for a handful of datapoints, by uuid.
+   * Answers for a handful of datapoints, by local row id.
    *
    * GEO-006 D-5 keeps coordinates out of `geometry_index`, so GEO-007 reads them back from here
-   * for the 5-50 candidates that survive the bbox filter. Keyed on uuid rather than id because
-   * uuid is the index row's identity and is populated on every write path.
+   * for the 5-50 candidates that survive the bbox filter.
+   *
+   * **By id, not uuid.** A uuid identifies a plot, not a row: monitoring datapoints inherit
+   * their registration's uuid and differ only by `form`, which is what `getMonitoringStats`
+   * groups on. Selecting by uuid therefore returned the whole family, and a caller keying the
+   * result by uuid kept whichever row came last. A monitoring submission does not prefill the
+   * polygon, so the candidate's coordinates went missing and the overlap was never reported —
+   * a false pass, in a check that exists to prevent exactly that.
    */
-  selectJsonByUuids: async (db, uuids = []) => {
-    if (!uuids?.length) {
+  selectJsonByIds: async (db, ids = []) => {
+    if (!ids?.length) {
       return [];
     }
-    const placeholders = uuids.map(() => '?').join(', ');
+    const placeholders = ids.map(() => '?').join(', ');
     return sql.safeExecuteQuery(
       db,
-      `SELECT id, uuid, json FROM datapoints WHERE uuid IN (${placeholders})`,
-      uuids,
-      'datapoints.selectJsonByUuids',
+      `SELECT id, uuid, json FROM datapoints WHERE id IN (${placeholders})`,
+      ids,
+      'datapoints.selectJsonByIds',
     );
   },
   getByUUID: async (db, { uuid, form }) => {

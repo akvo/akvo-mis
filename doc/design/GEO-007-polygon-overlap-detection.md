@@ -318,7 +318,14 @@ branch (because each would otherwise report a confident "no overlap"):
 | **Index not ready** (upgrade / post-reset) | `config.geometryIndexReady = 0` (GEO-006 D-4) | Yes | Start / resume datapoint sync |
 | **Download incomplete or interrupted** | Sync queue still has forms with `lastPage < totalPage`, or datapoint sync is in progress | Yes | Resume datapoint sync |
 | **Gapped index after a "finished" sync** | Local `geometry_index` row count for the form ≠ server `geometry_total` (GEO-005) | Yes | Force a full geometry re-pull (e.g. `geometry_full=true` / clear cursor and sync again) |
-| **Local SQLite failure** | Index query throws, or the table is missing after migration should have created it | No | No Retry — message points to Reset / re-login. A second tap cannot heal a corrupt DB |
+| **Local SQLite failure** | Index query throws, the table is missing after migration should have created it, or the index names a candidate whose answers are not on the device | No | No Retry — message points to Reset / re-login. A second tap cannot heal a corrupt DB |
+
+The last of those deserves its own line: GEO-006 D-6 makes `geometry_index` a subset of
+`datapoints` by writing both in one transaction, so a candidate with no answers means the two
+have **drifted**. Measuring the remaining candidates and reporting "no overlap" would be a false
+pass; refusing is the only safe reading. A neighbour stored with one or two vertices is a
+different thing and is skipped, not refused — it encloses no area and cannot overlap anything,
+so blocking this enumerator behind someone else's data quality would be wrong.
 
 The page-level `complete: false` on early pages of a listing is **normal during sync**; it is
 not itself a validation-time signal. Validation-time gates are the rows above.

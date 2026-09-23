@@ -106,20 +106,21 @@ export const overlapPreflight = async (db, { formId } = {}) => {
  * are never materialised (GEO-006 D-5, D-7).
  */
 const coordinatesForCandidates = async (db, candidates) => {
-  const uuids = [...new Set(candidates.map((row) => row.uuid).filter(Boolean))];
-  if (!uuids.length) {
+  const ids = [...new Set(candidates.map((row) => row.datapointId).filter(Boolean))];
+  if (!ids.length) {
     return {};
   }
-  const rows = await crudDataPoints.selectJsonByUuids(db, uuids);
+  const rows = await crudDataPoints.selectJsonByIds(db, ids);
   return rows.reduce((acc, row) => {
     try {
-      acc[row.uuid] = typeof row.json === 'string' ? JSON.parse(row.json) : row.json;
+      acc[row.id] = typeof row.json === 'string' ? JSON.parse(row.json) : row.json;
     } catch {
       /**
-       * A candidate whose answers will not parse cannot be measured. Dropping it here would be
-       * a silent false pass, so it is left out of the map and the caller raises a local failure.
+       * A candidate whose answers will not parse cannot be measured. It stays in the map as
+       * `null` rather than being left out, so the caller can tell "unparseable" apart from
+       * "never fetched" — both refuse, but only one of them means the index has drifted.
        */
-      acc[row.uuid] = null;
+      acc[row.id] = null;
     }
     return acc;
   }, {});
@@ -186,20 +187,47 @@ export const runOverlapCheck = async (
     if (!candidates?.length) {
       return { status: OVERLAP_STATUS.passed, conflicts: [] };
     }
-    const answersByUuid = await coordinatesForCandidates(db, candidates);
+    const answersById = await coordinatesForCandidates(db, candidates);
     const geoConfig = question?.extra?.geoConfig;
+    /**
+     * Keyed by `datapointId`, the local row id — never by uuid. A uuid identifies a plot, and
+     * monitoring datapoints inherit their registration's, so a uuid-keyed map collapsed a whole
+     * form family into one entry and handed back whichever row the query returned last.
+     */
+    let drifted = false;
     const conflicts = candidates.reduce((acc, row) => {
-      const answers = answersByUuid[row.uuid];
+      const answers = answersById[row.datapointId];
       if (!answers) {
+        /**
+         * The index named a candidate whose answers are not on this device. GEO-006 D-6 makes
+         * `geometry_index` a subset of `datapoints` by writing both in one transaction, so this
+         * means the two have drifted — and measuring what is left would report "no overlap" for
+         * a plot nobody looked at. Refuse instead (D-10).
+         */
+        drifted = true;
         return acc;
       }
       const candidatePoints = answers[answerKey(row.questionId, row.repeatIndex)];
-      if (!Array.isArray(candidatePoints) || candidatePoints.length < 3) {
+      if (!Array.isArray(candidatePoints)) {
+        // Indexed as a geoshape answer, absent from the answers: drift again, not thin data.
+        drifted = true;
+        return acc;
+      }
+      if (candidatePoints.length < 3) {
+        /**
+         * A stored answer of one or two vertices. `boundingBox` accepts those, so it can be
+         * indexed, but it encloses no area and cannot overlap anything. That is a neighbour's
+         * data quality, not our corruption, so it is skipped rather than blocking this
+         * enumerator behind a message about resetting the app.
+         */
         return acc;
       }
       const conflict = conflictFrom(row, candidatePoints, points, geoConfig);
       return conflict ? [...acc, conflict] : acc;
     }, []);
+    if (drifted) {
+      return unavailable(UNAVAILABLE_CAUSE.localFailure);
+    }
     return {
       status: conflicts.length ? OVERLAP_STATUS.failed : OVERLAP_STATUS.passed,
       /**
