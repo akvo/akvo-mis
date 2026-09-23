@@ -253,6 +253,8 @@ def validate_and_sanitize_widgets(
     }
 
     for item in raw_widgets:
+        if not isinstance(item, dict):
+            continue
         raw_type = item.get("type")
         w_type = type_map.get(raw_type)
         if not w_type:

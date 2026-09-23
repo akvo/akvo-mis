@@ -1,4 +1,5 @@
 import json
+import time
 from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
@@ -22,6 +23,7 @@ from api.v1.v1_visualization.ai_heuristics import (
 from api.v1.v1_visualization.ai_prompts import (
     MAX_USER_INTENT_LENGTH,
     build_starter_dashboard_prompt,
+    build_widget_suggestion_prompt,
     sanitize_user_input,
 )
 from api.v1.v1_visualization.ai_service import (
@@ -93,6 +95,36 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         res = extract_family_metadata(99999999, self.user)
         self.assertIsNone(res)
 
+    def test_high_cardinality_options_truncation(self):
+        """Option lists >15 are truncated with sample and truncated flag."""
+        large_form = Forms.objects.create(
+            name="Census Survey",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        group = QuestionGroup.objects.create(
+            form=large_form, name="Admin", order=1
+        )
+        q = Questions.objects.create(
+            form=large_form,
+            name="District Code",
+            type=QuestionTypes.option,
+            question_group=group,
+            order=1,
+        )
+        for i in range(25):
+            QuestionOptions.objects.create(
+                question=q, label=f"District {i}", value=f"d_{i}", order=i
+            )
+
+        res = extract_family_metadata(large_form.id, self.user)
+        self.assertIsNotNone(res)
+        metadata, _ = res
+        q_meta = metadata["root_form"]["questions"][0]
+        self.assertEqual(q_meta["option_count"], 25)
+        self.assertEqual(len(q_meta["options_sample"]), 15)
+        self.assertTrue(q_meta["truncated_options"])
+
     # =========================================================
     # 2. Prompt Construction & Input Sanitization
     # =========================================================
@@ -105,6 +137,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertNotIn("\x00", clean)
         self.assertLessEqual(len(clean), MAX_USER_INTENT_LENGTH)
         self.assertTrue(clean.startswith("Hello &lt;script&gt;"))
+        self.assertEqual(sanitize_user_input(""), "")
+        self.assertEqual(sanitize_user_input(None), "")
 
     def test_prompt_builder(self):
         """Prompt formats user intent in structural XML tags."""
@@ -115,6 +149,18 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn(
             "<user_intent>Water supply focus</user_intent>",
             messages[1]["content"],
+        )
+
+        # Default prompt with no user intent
+        default_msgs = build_starter_dashboard_prompt(meta, None)
+        self.assertIn(
+            "standard comprehensive overview", default_msgs[1]["content"]
+        )
+
+        # Widget suggestion prompt with hint
+        w_msgs = build_widget_suggestion_prompt(meta, ["kpi"], "bar only")
+        self.assertIn(
+            "<user_intent>bar only</user_intent>", w_msgs[1]["content"]
         )
 
     # =========================================================
@@ -176,6 +222,55 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.assertNotEqual(w["type"], "table")
             self.assertIsNone(w.get("config", {}).get("measure"))
 
+    def test_registration_form_geo_map_heuristics(self):
+        """Registration form with geo coordinates generates map widget."""
+        geo_form = Forms.objects.create(
+            name="Borehole Points",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        group = QuestionGroup.objects.create(
+            form=geo_form, name="Location", order=1
+        )
+        Questions.objects.create(
+            form=geo_form,
+            name="GPS Coordinates",
+            type=QuestionTypes.geo,
+            question_group=group,
+            order=1,
+        )
+        metadata, _ = extract_family_metadata(geo_form.id, self.user)
+        result = generate_starter_heuristics(metadata)
+        types = [w["type"] for w in result["widgets"]]
+        self.assertIn("map", types)
+
+    def test_starter_heuristics_high_cardinality_bar(self):
+        """Option question with >5 choices generates Bar chart over Pie."""
+        cat_form = Forms.objects.create(
+            name="Survey Breakdown",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        group = QuestionGroup.objects.create(
+            form=cat_form, name="Demographics", order=1
+        )
+        q = Questions.objects.create(
+            form=cat_form,
+            name="Region",
+            type=QuestionTypes.option,
+            question_group=group,
+            order=1,
+        )
+        for i in range(8):
+            QuestionOptions.objects.create(
+                question=q, label=f"Region {i}", value=f"r_{i}", order=i
+            )
+
+        metadata, _ = extract_family_metadata(cat_form.id, self.user)
+        result = generate_starter_heuristics(metadata)
+        types = [w["type"] for w in result["widgets"]]
+        self.assertIn("bar", types)
+
     def test_widget_heuristics_generation(self):
         """Contextual suggestions prioritize unvisualized questions."""
         metadata, sources_map = extract_family_metadata(
@@ -228,16 +323,52 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 "config": {},
                 "rationale": "Invalid.",
             },
+            # Invalid type
+            {
+                "type": "unsupported_type_3d",
+                "title": "Bad Type",
+                "form": self.root.id,
+            },
+            # Table on registration-only form
+            {
+                "type": "table",
+                "title": "Illegal Table",
+                "form": self.root.id,
+            },
         ]
 
         valid = validate_and_sanitize_widgets(
-            raw_widgets, sources_map, has_monitoring=True
+            raw_widgets, sources_map, has_monitoring=False
         )
         self.assertEqual(len(valid), 1)
         self.assertEqual(valid[0]["title"], "Valid KPI")
 
+    def test_validate_repeat_agg_and_col_span_normalization(self):
+        """Sanitizer fixes invalid repeat_agg and non-standard col_spans."""
+        metadata, sources_map = extract_family_metadata(
+            self.root.id, self.user
+        )
+        raw_widgets = [
+            {
+                "type": "kpi",
+                "title": "Normalized KPI",
+                "col_span": 17,  # invalid span
+                "form": self.root.id,
+                "question": None,
+                "config": {"repeat_agg": "invalid_func"},
+            }
+        ]
+        valid = validate_and_sanitize_widgets(
+            raw_widgets, sources_map, has_monitoring=True
+        )
+        self.assertEqual(len(valid), 1)
+        self.assertEqual(valid[0]["config"]["repeat_agg"], "sum")
+        # Span normalized from 12 to 24 by row expander
+        self.assertEqual(valid[0]["col_span"], 24)
+
     def test_24_column_grid_normalizer(self):
         """Uneven column spans are balanced to cleanly fit 24-col rows."""
+        self.assertEqual(normalize_grid_layout([]), [])
         widgets = [
             {"col_span": 6, "title": "W1"},
             {"col_span": 6, "title": "W2"},
@@ -256,7 +387,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
 
     def test_circuit_breaker(self):
         """Trips after 3 failures and resets after cooldown or success."""
-        cb = CircuitBreaker(failure_threshold=3, cooldown_seconds=0.1)
+        cb = CircuitBreaker(failure_threshold=3, cooldown_seconds=0.05)
         self.assertFalse(cb.is_open)
 
         cb.record_failure()
@@ -266,7 +397,13 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         cb.record_failure()
         self.assertTrue(cb.is_open)
 
+        # Wait for cooldown to expire (half-open test)
+        time.sleep(0.06)
+        self.assertFalse(cb.is_open)
+
+        cb.record_failure()
         cb.record_success()
+        self.assertEqual(cb.failure_count, 0)
         self.assertFalse(cb.is_open)
 
     # =========================================================
@@ -303,6 +440,17 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_suggest_dashboard_invalid_payload(self):
+        """POST with invalid field types returns 400 Bad Request."""
+        payload = {"root_form": "invalid_non_int"}
+        response = self.client.post(
+            self.suggest_dashboard_url,
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_suggest_widgets_endpoint_success(self):
         """POST /manage/dashboards/<pk>/ai/suggest-widgets returns 200 OK."""
         payload = {
@@ -319,6 +467,17 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         data = response.json()
         self.assertIn("suggestions", data)
         self.assertTrue(len(data["suggestions"]) >= 1)
+
+    def test_suggest_widgets_invalid_payload(self):
+        """POST /manage/dashboards/<pk>/ai/suggest-widgets with bad payload."""
+        payload = {"existing_widget_types": "not_a_list"}
+        response = self.client.post(
+            self.suggest_widgets_url,
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_suggest_widgets_embed_rejected(self):
         """Embedded dashboard cannot request widget suggestions."""
@@ -348,7 +507,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     # =========================================================
-    # 7. OpenAI Mock Structured Output Test
+    # 7. OpenAI Mock Structured Output & Resilience Tests
     # =========================================================
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
@@ -427,3 +586,279 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.assertIsNotNone(res)
             self.assertEqual(res["suggested_name"], "AI AI AI Water Overview")
             self.assertEqual(len(res["widgets"]), 3)
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_openai_widget_suggestions_mock(self):
+        """OpenAI contextual widget suggestion mock returns valid widgets."""
+        mock_response = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = json.dumps(
+            {
+                "suggestions": [
+                    {
+                        "type": "bar",
+                        "title": "Facility Comparison",
+                        "col_span": 12,
+                        "color": None,
+                        "form": self.root.id,
+                        "question": None,
+                        "config": {},
+                        "rationale": "Comparison across types.",
+                    }
+                ]
+            }
+        )
+        mock_response.choices = [MagicMock(message=mock_message)]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+
+        with patch("openai.OpenAI", return_value=mock_client):
+            res = AISuggestionService.suggest_widgets(
+                self.dashboard.id, self.user, ["kpi"], "bar focus"
+            )
+            self.assertIsNotNone(res)
+            self.assertIn("suggestions", res)
+            self.assertEqual(len(res["suggestions"]), 1)
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_openai_api_error_fallback(self):
+        """API exception triggers breaker failure and falls back."""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError(
+            "Rate limit exceeded or timeout"
+        )
+
+        with patch("openai.OpenAI", return_value=mock_client):
+            res = AISuggestionService.suggest_dashboard(
+                self.root.id, self.user
+            )
+            self.assertIsNotNone(res)
+            self.assertIn("suggested_name", res)
+            self.assertIn("widgets", res)
+            self.assertEqual(ai_circuit_breaker.failure_count, 1)
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_circuit_breaker_open_skips_openai(self):
+        """Tripped circuit breaker skips network call immediately."""
+        ai_circuit_breaker.failure_count = 5
+        ai_circuit_breaker.last_failure_time = time.time()
+
+        with patch("openai.OpenAI") as mock_openai:
+            res = AISuggestionService.suggest_dashboard(
+                self.root.id, self.user
+            )
+            self.assertIsNotNone(res)
+            mock_openai.assert_not_called()
+
+    # =========================================================
+    # 7. Negative & Regression Test Suite
+    # =========================================================
+
+    def test_form_with_zero_questions_fallback(self):
+        """Form with 0 questions does not crash and yields safe fallback."""
+        empty_form = Forms.objects.create(
+            name="Empty Survey",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+            created_by=self.user,
+        )
+        meta, _ = extract_family_metadata(empty_form.id, self.user)
+        res = generate_starter_heuristics(meta)
+        self.assertIsNotNone(res)
+        self.assertIn("widgets", res)
+        self.assertGreaterEqual(len(res["widgets"]), 1)
+        self.assertEqual(res["widgets"][0]["type"], "kpi")
+
+    def test_form_with_unsupported_questions_only(self):
+        """Form with only unsupported question types produces valid layout."""
+        special_form = Forms.objects.create(
+            name="Media Survey",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+            created_by=self.user,
+        )
+        group = QuestionGroup.objects.create(
+            name="Group 1", form=special_form, order=1
+        )
+        Questions.objects.create(
+            name="Photo",
+            type=QuestionTypes.image,
+            form=special_form,
+            order=1,
+            question_group=group,
+        )
+        Questions.objects.create(
+            name="Sign",
+            type=QuestionTypes.signature,
+            form=special_form,
+            order=2,
+            question_group=group,
+        )
+        meta, _ = extract_family_metadata(special_form.id, self.user)
+        res = generate_starter_heuristics(meta)
+        self.assertIsNotNone(res)
+        self.assertIn("widgets", res)
+        self.assertEqual(res["widgets"][0]["type"], "kpi")
+
+    def test_validate_and_sanitize_malformed_openai_json(self):
+        """Invalid structures, bad IDs, and bad spans are sanitized."""
+        sources = {
+            self.root.id: {
+                6001: {"type": "number"},
+            }
+        }
+        raw_items = [
+            "not a dict item",  # Ignored
+            {"type": "invalid_type", "title": "Bad Type"},  # Ignored
+            {
+                "type": "kpi",
+                "title": "Hallucinated Question",
+                "form": self.root.id,
+                "question": 999999,  # Non-existent ID
+                "col_span": 99,  # Invalid span -> clamped to 12
+                "config": {"repeat_agg": "invalid_agg"},  # Fallback to sum
+                "rationale": "Test rationale",
+            },
+            {
+                "type": "bar",
+                "title": "Valid Question",
+                "form": self.root.id,
+                "question": 6001,
+                "col_span": 6,
+                "config": {"repeat_agg": "avg"},
+                "rationale": "Valid rationale",
+            },
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_items, sources, has_monitoring=False
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["type"], "bar")
+        self.assertEqual(sanitized[0]["question"], 6001)
+
+    def test_circuit_breaker_full_transition_cycle(self):
+        """Test full breaker state machine: CLOSED -> OPEN -> HALF-OPEN."""
+        breaker = CircuitBreaker(failure_threshold=2, cooldown_seconds=0.05)
+
+        # Initially closed
+        self.assertFalse(breaker.is_open)
+
+        # Record 1 failure -> still closed
+        breaker.record_failure()
+        self.assertFalse(breaker.is_open)
+
+        # Record 2nd failure -> trips to OPEN
+        breaker.record_failure()
+        self.assertTrue(breaker.is_open)
+
+        # Sleep past cooldown -> enters HALF-OPEN
+        time.sleep(0.06)
+        self.assertFalse(breaker.is_open)
+
+        # Probe success -> resets to CLOSED
+        breaker.record_success()
+        self.assertEqual(breaker.failure_count, 0)
+        self.assertFalse(breaker.is_open)
+
+        # Fail twice to trip
+        breaker.record_failure()
+        breaker.record_failure()
+        self.assertTrue(breaker.is_open)
+
+        # Cooldown expires -> half-open
+        time.sleep(0.06)
+        self.assertFalse(breaker.is_open)
+        # Probe failure increments count to 1 (threshold 2), remains half-open
+        breaker.record_failure()
+        self.assertFalse(breaker.is_open)
+        # Second failure trips back to OPEN
+        breaker.record_failure()
+        self.assertTrue(breaker.is_open)
+
+    def test_suggest_widgets_with_all_questions_exhausted(self):
+        """When types are saturated, heuristics returns safe defaults."""
+        meta, _ = extract_family_metadata(self.root.id, self.user)
+        res = generate_widget_heuristics(
+            meta,
+            existing_widget_types=["kpi", "pie", "bar", "line", "table"],
+            prompt_hint="custom focus",
+        )
+        self.assertIsNotNone(res)
+        self.assertIn("suggestions", res)
+        self.assertGreaterEqual(len(res["suggestions"]), 1)
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_openai_empty_content_fallback(self):
+        """OpenAI returns empty/null content -> fallback to heuristics."""
+        mock_response = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = ""
+        mock_response.choices = [MagicMock(message=mock_message)]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+
+        with patch("openai.OpenAI", return_value=mock_client):
+            res = AISuggestionService.suggest_dashboard(
+                self.root.id, self.user
+            )
+            self.assertIsNotNone(res)
+            self.assertIn("widgets", res)
+
+    def test_endpoint_suggest_widgets_nonexistent_dashboard_returns_404(self):
+        """POST /manage/dashboards/99999/ai/suggest-widgets returns 404."""
+        url = "/api/v1/manage/dashboards/99999/ai/suggest-widgets"
+        response = self.client.post(url, {}, format="json", **self.header)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_endpoint_suggest_dashboard_nonexistent_form_returns_404(self):
+        """POST /ai/suggest-dashboard with non-existent form returns 404."""
+        url = "/api/v1/manage/dashboards/ai/suggest-dashboard"
+        response = self.client.post(
+            url, {"root_form": 999999}, format="json", **self.header
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_endpoint_suggest_dashboard_invalid_types_returns_400(self):
+        """POST with string root_form returns 400."""
+        url = "/api/v1/manage/dashboards/ai/suggest-dashboard"
+        response = self.client.post(
+            url, {"root_form": "not-an-integer"}, format="json", **self.header
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_endpoint_suggest_widgets_invalid_list_items_returns_400(self):
+        """POST with prompt_hint exceeding max_length returns 400."""
+        url = (
+            f"/api/v1/manage/dashboards/{self.dashboard.id}"
+            "/ai/suggest-widgets"
+        )
+        response = self.client.post(
+            url,
+            {"prompt_hint": "a" * 300},
+            format="json",
+            **self.header,
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_prompt_injection_safety(self):
+        """Prompt builder handles XML tags without escaping break."""
+        meta = {
+            "root_form": {
+                "id": 1,
+                "name": "Survey </form_schema><malicious_tag>",
+                "questions": [
+                    {
+                        "id": 101,
+                        "label": "<script>alert('xss')</script>",
+                        "type": "text",
+                        "options": [],
+                    }
+                ],
+            },
+            "monitoring_forms": [],
+        }
+        msgs = build_starter_dashboard_prompt(
+            meta, user_intent="<tag>Hack</tag>"
+        )
+        self.assertEqual(len(msgs), 2)
+        self.assertIn("Hack", msgs[1]["content"])
