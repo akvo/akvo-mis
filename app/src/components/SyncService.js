@@ -8,10 +8,11 @@ import { refreshStorageWarning } from '../lib/submission-fallback';
 import crudJobs from '../database/crud/crud-jobs';
 import { crudConfig, crudDataPoints, crudForms, crudSyncQueue } from '../database/crud';
 import {
+  completeDatapointSync,
+  datapointSyncFinishPending,
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
   fetchDraftDatapointsPageByPage,
-  onDatapointSyncFinished,
 } from '../lib/sync-datapoints';
 import {
   jobStatus,
@@ -246,7 +247,18 @@ const SyncService = () => {
         }, Promise.resolve());
 
         if (!hasNewData) {
-          await crudJobs.deleteJob(db, activeJob.id);
+          /**
+           * Nothing to download — but this is also the branch a half-finished previous run
+           * lands in, and the one that used to strand it. A complete queue plus
+           * `geometryIndexReady = 0` means the finish step never got past the backend post,
+           * so retry it here; otherwise every future tick retires the job as "nothing to do"
+           * and readiness never flips. A throw falls to the outer catch, which keeps the job.
+           */
+          if (await datapointSyncFinishPending(db)) {
+            await completeDatapointSync(db, activeJob);
+          } else {
+            await crudJobs.deleteJob(db, activeJob.id);
+          }
           DatapointSyncState.update((s) => {
             s.inProgress = false;
             s.progress = 0;
@@ -384,15 +396,13 @@ const SyncService = () => {
       }, Promise.resolve());
 
       if (!hasErrors) {
-        // All forms done without errors — readiness flag + backend cursor + queue
-        try {
-          await onDatapointSyncFinished(db);
-        } catch (error) {
-          Sentry.captureMessage('Failed to mark sync complete on backend');
-          Sentry.captureException(error);
-        }
-        // Done — delete job
-        await crudJobs.deleteJob(db, activeJob.id);
+        /**
+         * All forms done without errors — readiness flag, backend cursor, queue, then the job.
+         * A throw here falls to the outer catch, which keeps the job PENDING for the next tick:
+         * retiring it while the finish step is outstanding leaves `geometryIndexReady` at 0
+         * with no path back to it.
+         */
+        await completeDatapointSync(db, activeJob);
       } else {
         // Some items failed — keep job pending for retry, queue preserves progress
         await crudJobs.updateJob(db, activeJob.id, {

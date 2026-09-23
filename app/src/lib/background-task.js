@@ -7,15 +7,16 @@ import api from './api';
 import { openDatabase } from '../database';
 import { crudForms, crudDataPoints, crudUsers, crudConfig, crudSyncQueue } from '../database/crud';
 import {
+  completeDatapointSync,
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
-  onDatapointSyncFinished,
 } from './sync-datapoints';
 import notification from './notification';
 import cascades from './cascades';
 import crudJobs from '../database/crud/crud-jobs';
 import { UIState, DatapointSyncState } from '../store';
 import {
+  jobStatus,
   QUESTION_TYPES,
   SYNC_DATAPOINT_BACKGROUND_TASK_NAME,
   SYNC_DATAPOINT_JOB_NAME,
@@ -532,10 +533,20 @@ const syncDatapointsBackground = async () => {
 
     const incompleteForms = await crudSyncQueue.getIncompleteForms(db);
     if (!incompleteForms.length) {
-      await crudJobs.deleteJob(db, activeJob.id);
+      /**
+       * The job used to be deleted before the finish step ran, so a failed backend post left
+       * `geometryIndexReady` at 0 with the job already gone and no run that would try again —
+       * overlap validation stayed unavailable until a Reset. Retire the job only once the
+       * finish step succeeds, and count the attempt otherwise so `MAX_ATTEMPT` still applies.
+       */
       try {
-        await onDatapointSyncFinished(db);
+        await completeDatapointSync(db, activeJob);
       } catch (err) {
+        await crudJobs.updateJob(db, activeJob.id, {
+          status: jobStatus.PENDING,
+          attempt: activeJob.attempt + 1,
+          info: 'Sync finished but the readiness update failed',
+        });
         Sentry.captureException(err);
       }
       return;

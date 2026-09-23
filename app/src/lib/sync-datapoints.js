@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/react-native';
-import { crudDataPoints, crudForms, crudJobs, crudSyncQueue } from '../database/crud';
+import { crudConfig, crudDataPoints, crudForms, crudJobs, crudSyncQueue } from '../database/crud';
 import sql from '../database/sql';
 import api from './api';
 import { jobStatus, SYNC_DATAPOINT_JOB_NAME } from './constants';
@@ -127,6 +127,37 @@ export const onDatapointSyncFinished = async (db) =>
     markSyncComplete,
     clearQueue: crudSyncQueue.clearQueue,
   });
+
+/**
+ * Finish the sync **and** retire its job — in that order, and only together.
+ *
+ * Deleting the job first, or deleting it regardless of whether the finish step threw, wedges
+ * overlap validation permanently. `finishDatapointSync` posts the backend cursor, clears the
+ * queue and sets `geometryIndexReady` last (GEO-006 D-4); if the post fails, the queue survives
+ * marked complete while readiness stays `0`. With the job gone, the next run's quick-check finds
+ * a complete queue and no new data, retires itself, and never reaches the finish step again —
+ * so GEO-007 refuses to validate for good, and only a Reset clears it.
+ *
+ * Throwing rather than swallowing is the point: the caller keeps the job PENDING so the next
+ * tick retries, and `MAX_ATTEMPT` still retires a job whose finish step never succeeds.
+ */
+export const completeDatapointSync = async (db, activeJob) => {
+  await onDatapointSyncFinished(db);
+  await crudJobs.deleteJob(db, activeJob.id);
+};
+
+/**
+ * Did a previous run leave the finish step half-done?
+ *
+ * Only meaningful where the queue is present and complete: a cleared queue means the finish
+ * step got as far as clearing it, and an empty one on a fresh install has never had a sync to
+ * finish. In that narrow spot `geometryIndexReady !== 1` means the readiness update never
+ * landed, and the run must retry it instead of retiring the job as "nothing to do".
+ */
+export const datapointSyncFinishPending = async (db) => {
+  const config = await crudConfig.getConfig(db);
+  return config?.geometryIndexReady !== 1;
+};
 
 /**
  * Downloads and saves a single datapoint's JSON data.

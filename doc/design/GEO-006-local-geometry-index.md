@@ -384,6 +384,22 @@ new table, no second writer and no reset change — but affords only one bbox pe
   sync queue, (3) sets `config.geometryIndexReady = 1` — readiness last, so a failed backend
   call leaves GEO-007 gated off. Re-setting `1` on later incremental syncs is idempotent; reset
   truncates `config` back to default `0`.
+
+  > **Gating off is only safe if something later gates it back on — fixed 2026-09-23.**
+  > Both call sites retired the sync job whether or not the finish step succeeded, and the
+  > background one deleted it *first*. A failed `POST /sync-complete` therefore left the queue
+  > complete, `geometryIndexReady` at `0`, and no job. The next run's quick-check sees a
+  > complete queue and no new data, retires itself, and never reaches the finish step again —
+  > overlap validation unavailable until a Reset, with only a Sentry line to say why.
+  >
+  > `completeDatapointSync(db, job)` in `sync-datapoints.js` now finishes *then* retires, and
+  > throws instead of swallowing, so the caller keeps the job PENDING and `MAX_ATTEMPT` still
+  > applies. The quick-check additionally asks `datapointSyncFinishPending(db)` before retiring
+  > a job with nothing to download — a complete queue plus readiness `0` is exactly the
+  > half-finished state, and is the only path back to it.
+  >
+  > The general shape is worth remembering: a flag that fails closed needs a retry path, or
+  > "fails closed" becomes "fails permanently".
 - ~~Should reset warn when unsynced datapoints exist?~~ — **Out of scope** for GEO-006. Release
   note only: "Sync pending submissions before Reset / logout." A confirmation that blocks reset
   when unsynced work exists can land separately.
