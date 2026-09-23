@@ -170,6 +170,7 @@ const uiText = {
     geoRuleOverlapNotValidated: 'Not checked for overlaps yet - press Validate before submitting.',
     geoRuleOverlapNotReady: 'Nearby plots have not been downloaded yet - sync before validating.',
     geoRuleOverlapSyncing: 'Nearby plots are still downloading - retry sync before validating.',
+    geoRuleOverlapSyncRunning: 'Sync is running - validate again once it finishes.',
     geoRuleOverlapGapped: 'Some nearby plots are missing - retry sync before validating.',
     geoRuleOverlapDamaged: 'The plot index is damaged - reset the app and sync again.',
     buttonValidatePolygon: 'Validate',
@@ -403,6 +404,7 @@ const uiText = {
       'Les parcelles voisines ne sont pas encore téléchargées - synchronisez avant de valider.',
     geoRuleOverlapSyncing:
       'Les parcelles voisines sont en cours de téléchargement - réessayez la synchronisation.',
+    geoRuleOverlapSyncRunning: 'Synchronisation en cours - validez à nouveau une fois terminée.',
     geoRuleOverlapGapped:
       'Certaines parcelles voisines sont manquantes - réessayez la synchronisation.',
     geoRuleOverlapDamaged: "L'index des parcelles est endommagé - réinitialisez l'application.",

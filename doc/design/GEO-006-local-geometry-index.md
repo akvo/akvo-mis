@@ -409,6 +409,19 @@ new table, no second writer and no reset change — but affords only one bbox pe
   >
   > The general shape is worth remembering: a flag that fails closed needs a retry path, or
   > "fails closed" becomes "fails permanently".
+  >
+  > **Second fix, same day:** the background task treated an *empty* queue as "all forms
+  > finished" and set readiness — having downloaded nothing. `requestDatapointSync` only
+  > enqueues a job; the queue rows appear when the foreground sync's first page lands, so a
+  > background run arriving in between marked an **empty** index trustworthy. After a Reset that
+  > is the exact state this gate exists to catch. An empty queue now means "never started", and
+  > the job is left for the foreground sync, which owns queue setup.
+  >
+  > **Third, a cost rather than a correctness bug:** `markFormComplete` is a full
+  > `UPDATE … WHERE formId = ?`, and it ran inside the per-datapoint writer where `isComplete`
+  > is true for every item on the last page — 100 sweeps over up to 5,000 rows, each in its own
+  > transaction. It is now `markFormGeometryComplete`, called once per form by the caller that
+  > knows the last page landed.
 - ~~Should reset warn when unsynced datapoints exist?~~ — **Out of scope** for GEO-006. Release
   note only: "Sync pending submissions before Reset / logout." A confirmation that blocks reset
   when unsynced work exists can land separately.

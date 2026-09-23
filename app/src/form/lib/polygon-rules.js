@@ -243,6 +243,7 @@ const I18N_KEYS = {
   overlapMany: 'geoRuleOverlapMany',
   overlapNotValidated: 'geoRuleOverlapNotValidated',
   overlapUnavailable_indexNotReady: 'geoRuleOverlapNotReady',
+  overlapUnavailable_syncRunning: 'geoRuleOverlapSyncRunning',
   overlapUnavailable_syncIncomplete: 'geoRuleOverlapSyncing',
   overlapUnavailable_indexGapped: 'geoRuleOverlapGapped',
   overlapUnavailable_localFailure: 'geoRuleOverlapDamaged',

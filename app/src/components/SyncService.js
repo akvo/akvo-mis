@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/react-native';
 import { BuildParamsState, DatapointSyncState, UIState, UserState } from '../store';
 import { backgroundTask } from '../lib';
 import { refreshStorageWarning } from '../lib/submission-fallback';
+import { markFormGeometryComplete } from '../lib/geometry-index-writer';
 import crudJobs from '../database/crud/crud-jobs';
 import { crudConfig, crudDataPoints, crudForms, crudSyncQueue } from '../database/crud';
 import {
@@ -305,10 +306,12 @@ const SyncService = () => {
         // Fresh cache for THIS form only
         const formCache = new Map();
         let formItemsProcessed = queueRow ? allProgress[formId]?.processed || 0 : 0;
+        let formComplete = false;
 
         await fetchFormDatapointsPageByPage(
           formId,
           async (pageData, page, totalPage, total, complete) => {
+            formComplete = complete === true;
             // On first page response: upsert queue with actual API totals
             if (page === startPage) {
               await crudSyncQueue.upsertQueue(db, [
@@ -382,6 +385,16 @@ const SyncService = () => {
           startPage,
           SYNC_PAGE_SIZE,
         );
+
+        /**
+         * One completion sweep per form, after its last page — not one per datapoint.
+         * `isComplete` is true for every item on the final page, so running the sweep inside
+         * the per-datapoint writer issued a full `UPDATE ... WHERE formId = ?` a hundred times
+         * over, each in its own transaction (GEO-006, fixed 2026-09-23).
+         */
+        if (formComplete) {
+          await markFormGeometryComplete(db, formId);
+        }
 
         // Clear cache for this form to free memory
         formCache.clear();

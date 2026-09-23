@@ -318,7 +318,24 @@ branch (because each would otherwise report a confident "no overlap"):
 | **Index not ready** (upgrade / post-reset) | `config.geometryIndexReady = 0` (GEO-006 D-4) | Yes | Start / resume datapoint sync |
 | **Download incomplete or interrupted** | Sync queue still has forms with `lastPage < totalPage`, or datapoint sync is in progress | Yes | Resume datapoint sync |
 | **Gapped index after a "finished" sync** | Local `geometry_index` row count for the form ≠ server `geometry_total` (GEO-005) | Yes | Force a full geometry re-pull (e.g. `geometry_full=true` / clear cursor and sync again) |
+| **A sync is running** | A `sync-form-datapoints` job is `ON_PROGRESS` | — | No Retry: one is already running. Copy says to validate again when it finishes |
 | **Local SQLite failure** | Index query throws, the table is missing after migration should have created it, or the index names a candidate whose answers are not on the device | No | No Retry — message points to Reset / re-login. A second tap cannot heal a corrupt DB |
+
+**Why an in-flight sync needs its own gate.** `finishDatapointSync` clears the sync queue when
+a sync completes, and the next sync writes no queue row until its first page lands — seconds
+later on a field connection. In that window `hasIncomplete()` is false and readiness is still
+`1` from the previous run, so validation measured the **pre-refresh** index and returned a
+confident pass. The Retry button leads straight into it: it kicks a sync and invites the
+enumerator to press Validate again. The gate is on `ON_PROGRESS` only — a PENDING job is one
+that has not started (offline, or waiting for the next tick), and refusing then would break the
+offline case this feature exists for.
+
+**Repeat instances query the base question id.** `transformForm` renders repeat *n* with the id
+`"987-1"`, while `geometry_index` stores `987` plus `repeatIndex`. Passing the suffixed id into
+`WHERE questionId = ?` compares an INTEGER column against text SQLite cannot coerce, so it
+matched **nothing** — every repeated polygon passed with no candidate examined. Fixed
+2026-09-23; `baseQuestionId` in `overlap.js` strips the suffix, and the repeat index is still
+used to read the candidate's answer.
 
 The last of those deserves its own line: GEO-006 D-6 makes `geometry_index` a subset of
 `datapoints` by writing both in one transaction, so a candidate with no answers means the two

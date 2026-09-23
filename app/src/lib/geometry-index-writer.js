@@ -17,9 +17,19 @@ export const writeIndexFromListGeometry = async (
     .map((entry) => rowFromListGeometry(entry, { datapointId, name, isComplete }))
     .filter((row) => row.questionId != null && Number.isFinite(row.minLat));
   await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows });
-  if (isComplete) {
-    await crudGeometryIndex.markFormComplete(db, formId);
-  }
+};
+
+/**
+ * Flip every row of a form to complete, once the form's last page has landed.
+ *
+ * This used to run inside `writeIndexFromListGeometry`, where `isComplete` is true for every
+ * item on the final page — so a 100-row last page issued 100 full `UPDATE ... WHERE formId = ?`
+ * sweeps over what can be 5,000 rows, each in its own datapoint transaction. The rows written
+ * on that page already carry the right value; the sweep exists only to flip the EARLIER pages,
+ * so it belongs once per form, at the end.
+ */
+export const markFormGeometryComplete = async (db, formId) => {
+  await crudGeometryIndex.markFormComplete(db, formId);
 };
 
 /**

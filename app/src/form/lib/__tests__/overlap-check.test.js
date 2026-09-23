@@ -13,6 +13,7 @@ jest.mock('../../../database/crud', () => ({
   crudSyncQueue: { hasIncomplete: jest.fn(), getAllProgress: jest.fn() },
   crudDataPoints: { countSyncedByFormId: jest.fn(), selectJsonByIds: jest.fn() },
   crudGeometryIndex: { findOverlapCandidates: jest.fn() },
+  crudJobs: { getActiveJob: jest.fn() },
 }));
 
 const {
@@ -20,6 +21,7 @@ const {
   crudSyncQueue,
   crudDataPoints,
   crudGeometryIndex,
+  crudJobs,
 } = require('../../../database/crud');
 
 const FORM_ID = 123;
@@ -58,6 +60,7 @@ const healthy = () => {
   crudSyncQueue.hasIncomplete.mockResolvedValue(false);
   crudSyncQueue.getAllProgress.mockResolvedValue({ [FORM_ID]: { total: 10 } });
   crudDataPoints.countSyncedByFormId.mockResolvedValue(10);
+  crudJobs.getActiveJob.mockResolvedValue(null);
 };
 
 beforeEach(() => {
@@ -72,6 +75,28 @@ describe('overlapPreflight', () => {
     expect(result.status).toBe(OVERLAP_STATUS.unavailable);
     expect(result.cause).toBe(UNAVAILABLE_CAUSE.indexNotReady);
     expect(result.retryable).toBe(true);
+  });
+
+  /**
+   * The window the queue cannot see: `finishDatapointSync` clears the queue, and the next sync
+   * writes no row until its first page lands. Readiness is still 1 from last time, so without
+   * this gate Validate measured the pre-refresh index and passed — and the Retry button leads
+   * the enumerator straight into it.
+   */
+  it('refuses while a datapoint sync is actually running', async () => {
+    crudJobs.getActiveJob.mockResolvedValue({ id: 1, status: 2 });
+    const result = await overlapPreflight({}, { formId: FORM_ID });
+    expect(result.cause).toBe(UNAVAILABLE_CAUSE.syncRunning);
+    // Nothing to retry: a sync is already running, so the button would be a lie.
+    expect(result.retryable).toBe(false);
+  });
+
+  it('does not refuse for a sync job that has not started', async () => {
+    // PENDING means offline or waiting for the next tick. The index still reflects the last
+    // completed sync, which is the ordinary offline state this feature exists to serve.
+    crudJobs.getActiveJob.mockResolvedValue({ id: 1, status: 1 });
+    const result = await overlapPreflight({}, { formId: FORM_ID });
+    expect(result.status).toBe(OVERLAP_STATUS.passed);
   });
 
   it('refuses while a datapoint sync is still unfinished', async () => {
@@ -142,6 +167,33 @@ describe('runOverlapCheck', () => {
     const over = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(over.status).toBe(OVERLAP_STATUS.failed);
     expect(over.conflicts[0].threshold).toBe(20);
+  });
+
+  /**
+   * Repeat instances are rendered with ids like "987-1", while the index stores 987 plus
+   * `repeatIndex`. Passing the suffixed id into `WHERE questionId = ?` matched nothing, so
+   * every repeated polygon passed with no candidates examined.
+   */
+  it('queries the base question id for a repeat instance', async () => {
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([]);
+    await runOverlapCheck(
+      {},
+      { points: PLOT, question: { ...QUESTION, id: '987-1' }, formId: FORM_ID },
+    );
+    expect(crudGeometryIndex.findOverlapCandidates).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ questionId: 987 }),
+    );
+  });
+
+  it('finds a neighbour when validating a repeat instance', async () => {
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow()]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue(candidateAnswers(PLOT));
+    const result = await runOverlapCheck(
+      {},
+      { points: PLOT, question: { ...QUESTION, id: '987-2' }, formId: FORM_ID },
+    );
+    expect(result.status).toBe(OVERLAP_STATUS.failed);
   });
 
   it('excludes the datapoint being edited from its own check', async () => {

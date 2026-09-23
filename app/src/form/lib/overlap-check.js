@@ -6,7 +6,14 @@
  * GEO-007 D-10 (refuse, never caveat-pass) and GEO-006 D-5 (the index carries bounding boxes,
  * not coordinates).
  */
-import { crudConfig, crudDataPoints, crudGeometryIndex, crudSyncQueue } from '../../database/crud';
+import {
+  crudConfig,
+  crudDataPoints,
+  crudGeometryIndex,
+  crudJobs,
+  crudSyncQueue,
+} from '../../database/crud';
+import { jobStatus, SYNC_DATAPOINT_JOB_NAME } from '../../lib/constants';
 import { boundingBox, summarizeAccuracy } from '../../lib/geometry-index';
 import { polygonArea } from './geometry';
 import {
@@ -14,6 +21,7 @@ import {
   OVERLAP_RULE_KEY,
   adaptiveThreshold,
   answerKey,
+  baseQuestionId,
   overlapPercent,
   signatureOf,
 } from './overlap';
@@ -39,6 +47,7 @@ export const OVERLAP_STATUS = {
  */
 export const UNAVAILABLE_CAUSE = {
   indexNotReady: 'indexNotReady',
+  syncRunning: 'syncRunning',
   syncIncomplete: 'syncIncomplete',
   indexGapped: 'indexGapped',
   localFailure: 'localFailure',
@@ -70,6 +79,27 @@ export const overlapPreflight = async (db, { formId } = {}) => {
     const config = await crudConfig.getConfig(db);
     if (!config || config.geometryIndexReady !== 1) {
       return unavailable(UNAVAILABLE_CAUSE.indexNotReady);
+    }
+    /**
+     * A sync in flight is not visible in the queue yet.
+     *
+     * `finishDatapointSync` clears the queue when a sync completes, and the next sync does not
+     * write a row until its first page lands — seconds later on a field connection. In that
+     * window `hasIncomplete()` is false and readiness is still `1` from last time, so Validate
+     * measured against the pre-refresh index and returned a confident pass. The Retry button
+     * leads straight into it: it kicks a sync and invites the enumerator to press Validate
+     * again. The job is ON_PROGRESS for the whole of that window, so gate on the job.
+     *
+     * On `ON_PROGRESS` only, deliberately. A PENDING job is one that has not started — offline,
+     * or waiting for the next tick — and the index then still reflects the last completed sync,
+     * which is the ordinary offline state this whole feature exists to serve. Blocking on
+     * PENDING would refuse validation for `MAX_ATTEMPT` ticks every time an enumerator pressed
+     * sync out of coverage. A job left ON_PROGRESS by a killed app does block until the next
+     * sync run resets it, which is the safe direction and clears itself.
+     */
+    const syncJob = await crudJobs.getActiveJob(db, SYNC_DATAPOINT_JOB_NAME);
+    if (syncJob?.status === jobStatus.ON_PROGRESS) {
+      return unavailable(UNAVAILABLE_CAUSE.syncRunning);
     }
     if (await crudSyncQueue.hasIncomplete(db)) {
       return unavailable(UNAVAILABLE_CAUSE.syncIncomplete);
@@ -180,7 +210,9 @@ export const runOverlapCheck = async (
   try {
     const candidates = await crudGeometryIndex.findOverlapCandidates(db, {
       formId,
-      questionId: question?.id,
+      // Repeat instances arrive as "987-1"; the index stores 987 + repeatIndex (see
+      // `baseQuestionId`). `row.questionId` below needs no stripping — it comes FROM the index.
+      questionId: baseQuestionId(question?.id),
       ...bbox,
       excludeUuid,
     });

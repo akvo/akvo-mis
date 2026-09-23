@@ -11,6 +11,7 @@ import {
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
 } from './sync-datapoints';
+import { markFormGeometryComplete } from './geometry-index-writer';
 import notification from './notification';
 import cascades from './cascades';
 import crudJobs from '../database/crud/crud-jobs';
@@ -532,6 +533,22 @@ const syncDatapointsBackground = async () => {
     }
 
     const incompleteForms = await crudSyncQueue.getIncompleteForms(db);
+    /**
+     * An empty queue is ambiguous, and reading it as "finished" was a way to trust an index
+     * that had never been filled. `requestDatapointSync` (the Retry button) only enqueues a
+     * job — the queue rows appear when the foreground sync's first page lands. A background
+     * run that arrived in between saw no incomplete forms, posted sync-complete and set
+     * readiness, having downloaded nothing. After a Reset that means an EMPTY index marked
+     * trustworthy, which is precisely the state GEO-006 D-4's gate exists to catch.
+     *
+     * This task can only ever continue a form the queue already knows about — it has no path
+     * that populates the queue — so with no entries the right move is to leave the job for the
+     * foreground sync, which owns that setup.
+     */
+    const hasQueueEntries = await crudSyncQueue.hasEntries(db);
+    if (!hasQueueEntries) {
+      return;
+    }
     if (!incompleteForms.length) {
       /**
        * The job used to be deleted before the finish step ran, so a failed backend post left
@@ -557,10 +574,12 @@ const syncDatapointsBackground = async () => {
     const { formId } = queueRow;
     const startPage = queueRow.lastPage + 1;
     const formCache = new Map();
+    let formComplete = false;
 
     await fetchFormDatapointsPageByPage(
       formId,
       async (pageData, page, totalPage, total, complete) => {
+        formComplete = complete === true;
         if (page === startPage) {
           await crudSyncQueue.upsertQueue(db, [
             {
@@ -601,6 +620,16 @@ const syncDatapointsBackground = async () => {
       startPage,
       100,
     );
+
+    /**
+     * One completion sweep per form, after its last page — not one per datapoint.
+     * `isComplete` is true for every item on the final page, so running the sweep inside
+     * the per-datapoint writer issued a full `UPDATE ... WHERE formId = ?` a hundred times
+     * over, each in its own transaction (GEO-006, fixed 2026-09-23).
+     */
+    if (formComplete) {
+      await markFormGeometryComplete(db, formId);
+    }
 
     formCache.clear();
   } catch (err) {

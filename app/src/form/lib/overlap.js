@@ -145,6 +145,20 @@ export const adaptiveThreshold = ({ accA, accB, areaA, areaB, geoConfig } = {}) 
 };
 
 /**
+ * The numeric question id, with any repeat suffix stripped.
+ *
+ * `transformForm` renders repeat instance *n* with the id `"987-1"`, and that string reaches
+ * every field prop. `geometry_index.questionId` is the bare INTEGER, with the instance kept
+ * separately in `repeatIndex`, so passing the suffixed id into `WHERE questionId = ?` compares
+ * an INTEGER column against text SQLite cannot coerce: **zero rows, every time**. The polygon
+ * then passes with no candidates examined — silently, and only ever for repeat instances.
+ */
+export const baseQuestionId = (id) => {
+  const parsed = parseInt(`${id}`.split('-')[0], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
  * Answers are keyed `"<questionId>"` at repeat 0 and `"<questionId>-<n>"` after — the same
  * convention `geoshapeAnswersFromJson` reads when the index is written (GEO-006).
  */

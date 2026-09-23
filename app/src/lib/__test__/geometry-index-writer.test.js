@@ -1,5 +1,6 @@
 import {
   finishDatapointSync,
+  markFormGeometryComplete,
   writeIndexFromAnswers,
   writeIndexFromListGeometry,
 } from '../geometry-index-writer';
@@ -141,6 +142,16 @@ describe('geometry-index-writer', () => {
       );
 
       expect(crudGeometryIndex.replaceForDatapoint).toHaveBeenCalled();
+      /**
+       * The per-datapoint writer must NOT sweep the form: `isComplete` is true for every item
+       * on the last page, so doing it here issued a full table UPDATE once per row.
+       */
+      expect(crudGeometryIndex.markFormComplete).not.toHaveBeenCalled();
+    });
+
+    it('sweeps the form exactly once, from the caller, when its last page lands', async () => {
+      await markFormGeometryComplete({}, 10);
+      expect(crudGeometryIndex.markFormComplete).toHaveBeenCalledTimes(1);
       expect(crudGeometryIndex.markFormComplete).toHaveBeenCalledWith({}, 10);
     });
   });
