@@ -29,11 +29,29 @@ Goal:
 - Structure implementation into progressive task sequences, each with its own detailed design spec.
 ```
 
+## 2. Requirements & Acceptance Criteria
+
+### 2.1. User Acceptance Criteria (UAC)
+- [ ] **Starter Generation**: When creating a new dashboard for a selected form family, authors can generate a complete starter layout of complementary widgets with one click.
+- [ ] **Contextual Suggestions**: While editing a dashboard, authors can view ranked recommendations for next widgets based on unvisualized form questions and existing widgets.
+- [ ] **1-Click Canvas Placement**: Authors can add any recommended widget directly to the canvas without manual configuration errors.
+- [ ] **Actionable Insights**: Every suggestion includes a descriptive title and a 1-sentence rationale explaining the analytical insight.
+- [ ] **Zero Disruption / Offline Fallback**: Authors never experience UI freezes or broken states if AI services or API keys are unavailable (deterministic heuristic fallback).
+- [ ] **Tenant Isolation**: Authors cannot see or suggest visualizations from forms outside their assigned tenant workspace.
+
+### 2.2. Technical Acceptance Criteria (TAC)
+- [ ] **Zero-PII Transmission**: Only structural schema metadata (Form names, question labels, question types, option choices) is transmitted to external LLMs; zero individual submissions or GPS answers are sent.
+- [ ] **Strict Tenant Scoping**: All form and dashboard resolutions are strictly filtered through `Forms.objects.for_user(request.user)` and `Dashboard.objects.for_user(request.user)`.
+- [ ] **100% Wire Schema Parity**: All suggested widget payloads strictly conform to `DashboardWidgetSerializer` and pass `validate_dashboard_payload` without client-side key translation.
+- [ ] **Deterministic Offline Fallback**: An internal rule-based engine generates valid widget recommendations when `OPENAI_API_KEY` is missing or external calls fail/time out.
+- [ ] **Referential Integrity**: All suggested `form` and `question` IDs are validated against the active form family (`serialize_sources`), pruning hallucinations.
+- [ ] **Test Coverage**: Minimum 80% automated test coverage across new backend endpoints and frontend components.
+
 ---
 
-## 2. Core Capabilities
+## 3. Core Capabilities
 
-### 2.1. Capability A: Dashboard-Level Starter Recommendation
+### 3.1. Capability A: Dashboard-Level Starter Recommendation
 When an author initiates a new dashboard for a selected Root Form (and its monitoring children), the AI layer inspects the form family structure and produces a comprehensive starter dashboard layout consisting of:
 - High-level metric summary KPIs.
 - Categorical and status distribution charts (Pie/Bar).
@@ -41,7 +59,7 @@ When an author initiates a new dashboard for a selected Root Form (and its monit
 - Geographic distribution maps (where coordinate questions exist).
 - Recommended layout spans (`col_span`) and descriptive titles.
 
-### 2.2. Capability B: In-Canvas Widget Suggestions
+### 3.2. Capability B: In-Canvas Widget Suggestions
 While actively editing a dashboard in the Dashboard Builder:
 - The author can request context-aware widget recommendations.
 - The AI layer evaluates remaining/unvisualized questions in the form family alongside existing widgets.
@@ -49,7 +67,7 @@ While actively editing a dashboard in the Dashboard Builder:
 
 ---
 
-## 3. High-Level Architecture & Data Flow
+## 4. High-Level Architecture & Data Flow
 
 ```mermaid
 sequenceDiagram
@@ -87,7 +105,7 @@ sequenceDiagram
 
 ---
 
-## 4. Privacy & Multi-Tenancy Boundary Principles 🛡️
+## 5. Privacy & Multi-Tenancy Boundary Principles 🛡️
 
 > [!IMPORTANT]
 > **Zero-PII / Zero-Raw Data Transmission Rule**:
@@ -100,7 +118,7 @@ sequenceDiagram
 
 ---
 
-## 5. Technology Strategy & Schema Parity Matrix
+## 6. Technology Strategy & Schema Parity Matrix
 
 - **Primary Engine**: OpenAI `gpt-4o-mini` with JSON Schema Structured Outputs, utilizing the existing project `settings.OPENAI_API_KEY`.
 - **Deterministic Heuristic Fallback**: An internal rule-based recommendation engine that generates valid chart configurations from question types if external AI services are unreachable or unconfigured.
@@ -118,7 +136,7 @@ Because the output shape matches `DashboardWidget` exactly, suggested widgets dr
 
 ---
 
-## 6. Implementation Roadmap & Task Sequence (Max 3 Tasks)
+## 7. Implementation Roadmap & Task Sequence (Max 3 Tasks)
 
 The total estimated time for each task comprehensively includes **core implementation, automated test suites (TEA), manual testing/smoke verification during development, and code review**.
 

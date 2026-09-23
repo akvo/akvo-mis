@@ -45,7 +45,36 @@ Goal:
 
 ---
 
-## 3. Architecture & Module Design
+## 3. Requirements & Acceptance Criteria
+
+### 3.1. User Acceptance Criteria (UAC)
+- [ ] **Starter Layout API**: An authenticated user can submit `{ root_form: <id> }` and receive a cohesive starter dashboard layout of 4-6 valid widgets with generated titles and rationales.
+- [ ] **Contextual Suggestions API**: An authenticated user can submit `{ existing_widget_types: [...] }` to an existing dashboard and receive ranked widget recommendations prioritized for unvisualized questions.
+- [ ] **Insight Rationales**: Every suggested widget provides a clear, 1-sentence analytical rationale explaining the value of the chart.
+- [ ] **Appropriate Visual Encoding**:
+  - Site counts & numeric metrics -> KPIs (Sum/Average).
+  - Categorical questions (<= 5 choices) -> Pie / Donut.
+  - Categorical questions (> 5 choices) -> Bar charts.
+  - Temporal date questions on monitoring forms -> Line trend charts.
+  - Geolocation questions -> Maps.
+  - Monitoring records -> Escalation overview Tables.
+- [ ] **Seamless Offline Heuristic Mode**: If OpenAI is unconfigured or unavailable, requests return valid rule-based heuristic layouts with zero error status codes (200 OK).
+
+### 3.2. Technical Acceptance Criteria (TAC)
+- [ ] **Endpoint Contracts**:
+  - `POST /api/v1/manage/dashboards/ai/suggest-dashboard` accepts `root_form` (int) and optional `user_intent` (str, <=250 chars), returning `{ suggested_name, description, widgets }`.
+  - `POST /api/v1/manage/dashboards/{id}/ai/suggest-widgets` accepts `existing_widget_types` (list) and optional `prompt_hint` (str, <=250 chars), returning `{ suggestions }`.
+- [ ] **Zero-PII Payload**: Prompt construction queries only `Forms` and `Questions` schema; zero `Answers`, `FormData`, or free-text answers are accessed.
+- [ ] **Tenant Scoping & Security**: Root form and dashboard resolution must enforce `Forms.objects.for_user(request.user)` and `Dashboard.objects.for_user(request.user)`. Cross-tenant requests return `404 Not Found`.
+- [ ] **Referential Integrity Filter**: Prunes any model hallucinations where `form` does not belong to the active form family or `question` does not belong to `form`.
+- [ ] **Domain Measure Constraint**: Enforces `measure = "current_state"` strictly for `FormTypes.monitoring`, and `measure = null` for registration forms.
+- [ ] **Table Form Binding**: Table suggestions bind strictly to monitoring forms.
+- [ ] **OpenAI & Fallback Timeout**: External OpenAI calls timeout after 5 seconds, automatically falling back to `ai_heuristics.py`.
+- [ ] **Automated Test Gate**: Minimum 85% test coverage in `test_ai_visualization.py` covering OpenAI mocks, rate limit fallbacks, hallucination filtering, and tenant isolation.
+
+---
+
+## 4. Architecture & Module Design
 
 ```
 backend/api/v1/v1_visualization/
@@ -84,9 +113,9 @@ flowchart TD
 
 ---
 
-## 4. Detailed Component Specifications
+## 5. Detailed Component Specifications
 
-### 4.1. Metadata Extraction (`ai_service.py`)
+### 5.1. Metadata Extraction (`ai_service.py`)
 Extracts structural schema from the active form family without querying any submission rows:
 ```python
 def extract_family_metadata(root_form, user) -> dict:
@@ -97,7 +126,7 @@ def extract_family_metadata(root_form, user) -> dict:
     """
 ```
 
-### 4.2. Prompt Engineering & JSON Schema (`ai_prompts.py`)
+### 5.2. Prompt Engineering & JSON Schema (`ai_prompts.py`)
 - **System Instructions**: Instructs the model that it is an expert data visualization architect for Akvo MIS.
 - **Output Schema**: Conforms directly to `DashboardWidgetSerializer` and `validate_dashboard_payload`:
   - `suggested_name`: string (<= 255 chars)
@@ -112,7 +141,7 @@ def extract_family_metadata(root_form, user) -> dict:
     - `config`: object (exact keys conforming to `builderConstants.js` / `dashboard_functions.py`)
     - `rationale`: string (1-sentence explanation of why this chart is insightful)
 
-### 4.3. Deterministic Heuristic Engine (`ai_heuristics.py`)
+### 5.3. Deterministic Heuristic Engine (`ai_heuristics.py`)
 Provides deterministic recommendations when OpenAI is unavailable, respecting all frontend widget defaults:
 - **KPI Generation**:
   - Site count KPI: `form: root_form.id, question: null, config: { value_type: "number" }`
@@ -127,7 +156,7 @@ Provides deterministic recommendations when OpenAI is unavailable, respecting al
 - **Table Overview**:
   - Monitoring form -> `table` with `question: null, config: { columns: [...], criteria: [] }`
 
-### 4.4. Referential Integrity & Sanitization Filter (`ai_service.py`)
+### 5.4. Referential Integrity & Sanitization Filter (`ai_service.py`)
 Ensures model hallucinations are strictly caught before returning:
 1. `form` must match `root_form` or one of its child monitoring forms in `Forms.objects.for_user(user)`.
 2. `question` (if present) must belong to the specified `form` and have a type in `SUPPORTED_QUESTION_TYPES`.
@@ -136,9 +165,9 @@ Ensures model hallucinations are strictly caught before returning:
 
 ---
 
-## 5. API Endpoints
+## 6. API Endpoints
 
-### 5.1. `POST /api/v1/manage/dashboards/ai/suggest-dashboard`
+### 6.1. `POST /api/v1/manage/dashboards/ai/suggest-dashboard`
 - **Request**:
   ```json
   {
@@ -196,7 +225,7 @@ Ensures model hallucinations are strictly caught before returning:
   }
   ```
 
-### 5.2. `POST /api/v1/manage/dashboards/{id}/ai/suggest-widgets`
+### 6.2. `POST /api/v1/manage/dashboards/{id}/ai/suggest-widgets`
 - **Request**:
   ```json
   {
@@ -228,7 +257,7 @@ Ensures model hallucinations are strictly caught before returning:
 
 ---
 
-## 6. Dashboard Visualization Schema & Frontend Config Parity Matrix
+## 7. Dashboard Visualization Schema & Frontend Config Parity Matrix
 
 To ensure 100% compatibility with `frontend/src/pages/dashboards/builderConstants.js`, `BuilderInspector.jsx`, and backend `validate_dashboard_payload`, all generated widgets adhere to the canonical schema:
 
@@ -245,7 +274,7 @@ To ensure 100% compatibility with `frontend/src/pages/dashboards/builderConstant
 
 ---
 
-## 7. Verification & Test Plan
+## 8. Verification & Test Plan
 
 ### Automated Test Cases (`backend/api/v1/v1_visualization/tests/test_ai_visualization.py`):
 1. `test_heuristic_starter_generation`: Verifies deterministic layout produced for standard registration + monitoring forms.
@@ -264,7 +293,7 @@ To ensure 100% compatibility with `frontend/src/pages/dashboards/builderConstant
 
 ---
 
-## 8. Task Breakdown & Estimation
+## 9. Task Breakdown & Estimation
 
 | Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total |
 |---|---|:---:|:---:|:---:|:---:|

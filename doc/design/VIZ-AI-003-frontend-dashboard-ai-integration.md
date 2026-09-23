@@ -43,7 +43,24 @@ Goal:
 
 ---
 
-## 3. UI/UX Workflows & Component Hierarchy
+## 3. Requirements & Acceptance Criteria
+
+### 3.1. User Acceptance Criteria (UAC)
+- [ ] **Modal Starter Generation**: In `CreateDashboardModal`, authors selecting a registration form family can toggle "Auto-generate Starter Dashboard with AI" and immediately land on a canvas pre-populated with 4-6 valid widgets.
+- [ ] **Suggestion Drawer**: In `DashboardBuilder`, authors can click "AI Suggestions" in the palette to open a slide-over drawer showing ranked widget recommendations.
+- [ ] **1-Click Insertion**: Clicking "Add to Dashboard" on any suggestion card appends the widget to the canvas, marks the dashboard `dirty`, and automatically selects it in `BuilderInspector` for editing.
+- [ ] **Non-Blocking Fallback UX**: If AI calls fail or timeout, the author sees a friendly notification while manual dashboard creation and editing remain completely functional.
+
+### 3.2. Technical Acceptance Criteria (TAC)
+- [ ] **API Client Wrapper**: `dashboardAi.js` implements `suggestDashboard({ root_form, user_intent })` and `suggestWidgets(dashboardId, { existing_widget_types, prompt_hint })` with standard error handling.
+- [ ] **Negative Temporary IDs**: Newly added suggestions use decremented negative integer IDs (`--nextTempId`) to avoid collisions with existing database primary keys.
+- [ ] **Strict Config Conformity**: Suggested widgets conform directly to `builderConstants.js` defaults, allowing seamless saving via `handleSave` without client-side key translation.
+- [ ] **Error Isolation**: All widgets render inside `WidgetErrorBoundary` so isolated runtime calculation errors do not crash the builder canvas.
+- [ ] **Automated Jest Tests**: Component tests for `CreateDashboardModal` AI flow, `AISuggestionDrawer`, and `dashboardAi.js` pass with ≥80% coverage.
+
+---
+
+## 4. UI/UX Workflows & Component Hierarchy
 
 ```
 frontend/src/
@@ -92,9 +109,9 @@ sequenceDiagram
 
 ---
 
-## 4. Detailed Component Design
+## 5. Detailed Component Design
 
-### 4.1. `dashboardAi.js` API Helper
+### 5.1. `dashboardAi.js` API Helper
 ```javascript
 import api from "./api";
 
@@ -107,13 +124,13 @@ export const dashboardAi = {
 };
 ```
 
-### 4.2. `CreateDashboardModal.jsx` Updates
+### 5.2. `CreateDashboardModal.jsx` Updates
 - When `kind === "widgets"` and a `root_form` is selected, an Ant Design `Switch` or checkbox is displayed:
   `[⚡ Auto-generate starter dashboard with AI]`
-- When enabled, the modal calls `dashboardAi.suggestDashboard({ root_form_id })`.
+- When enabled, the modal calls `dashboardAi.suggestDashboard({ root_form })`.
 - Upon success, the dashboard is created via `dashboardApi.create` with the suggested widgets pre-populated in the initial save payload.
 
-### 4.3. `AISuggestionDrawer.jsx` (New Component)
+### 5.3. `AISuggestionDrawer.jsx` (New Component)
 - Ant Design `Drawer` placed on the right side of the screen.
 - Header: "AI Widget Recommendations" with a badge indicating "Powered by OpenAI / Smart Heuristics".
 - Content:
@@ -127,7 +144,7 @@ export const dashboardAi = {
   - Friendly message if all questions in the form family are already visualized.
   - Non-blocking error notification if the network request fails.
 
-### 4.4. State Management in `DashboardBuilder.jsx`
+### 5.4. State Management in `DashboardBuilder.jsx`
 - Adding a suggestion:
   - Generates a unique temporary ID (`temp_id: --nextTempId`).
   - Sets `order` to `widgets.length`.
@@ -136,7 +153,7 @@ export const dashboardAi = {
 
 ---
 
-## 5. Verification & Testing Strategy
+## 6. Verification & Testing Strategy
 
 ### Automated Jest Tests:
 1. `dashboardAi.test.js`: Verifies correct API endpoints, error handling, and timeout behavior.
@@ -161,7 +178,7 @@ export const dashboardAi = {
 
 ---
 
-## 6. Task Breakdown & Estimation
+## 7. Task Breakdown & Estimation
 
 | Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total |
 |---|---|:---:|:---:|:---:|:---:|
