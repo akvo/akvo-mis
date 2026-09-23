@@ -55,6 +55,22 @@ const geometryIndexQuery = () => ({
     );
   },
 
+  /**
+   * Indexed geoshape answers for a form — the number `geometry_total` is compared against.
+   *
+   * Rows, not datapoints: one datapoint can hold several geoshape answers, and a single missing
+   * one is exactly the gap a datapoint-level count cannot see.
+   */
+  countByForm: async (db, formId) => {
+    const res = await sql.safeGetFirstRow(
+      db,
+      `SELECT COUNT(*) AS total FROM ${tableName} WHERE formId = ?`,
+      [formId],
+      'geometryIndex.countByForm',
+    );
+    return res?.total || 0;
+  },
+
   selectByUuid: async (db, { uuid, formId }) => {
     const formClause = formId ? ' AND formId = ?' : '';
     const params = formId ? [uuid, formId] : [uuid];

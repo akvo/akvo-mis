@@ -78,8 +78,59 @@ export const writeIndexFromAnswers = async (
  * update fails — otherwise GEO-007 would validate against a partial set
  * while the next sync still thinks nothing finished.
  */
-export const finishDatapointSync = async (db, { markSyncComplete, clearQueue }) => {
+export const finishDatapointSync = async (db, { markSyncComplete, clearQueue, full = false }) => {
   await markSyncComplete();
   await clearQueue(db);
-  await crudConfig.updateConfig(db, { geometryIndexReady: 1 });
+  if (full) {
+    await crudConfig.updateConfig(db, { geometryIndexReady: 1 });
+  }
+};
+
+/**
+ * Does the index still owe a full geometry pull?
+ *
+ * Readiness means "a full pull has landed since the migration or the last reset" — not "a sync
+ * finished". The distinction is the whole gate: `/datapoint-list` is cursor-based, so an
+ * upgraded device that synced yesterday receives **nothing**, the sync completes instantly, and
+ * a flag set on that would declare an EMPTY post-migration index trustworthy. That is precisely
+ * the state GEO-006 D-4 exists to refuse. So a sync run asks this first and, when it is true,
+ * requests `geometry_full=true` for every form and only then may flip readiness.
+ */
+export const geometryIndexNeedsFullPull = async (db) => {
+  const config = await crudConfig.getConfig(db);
+  return config?.geometryIndexReady !== 1;
+};
+
+/**
+ * The server's absolute geoshape count per form, kept across the queue being cleared.
+ *
+ * Stored as a JSON map on the config row because the sync queue — the obvious home — is wiped
+ * the moment a sync finishes, which is exactly when validation needs the number.
+ */
+export const recordGeometryTotal = async (db, formId, total) => {
+  if (!Number.isFinite(total)) {
+    return;
+  }
+  const config = await crudConfig.getConfig(db);
+  let totals = {};
+  try {
+    totals = JSON.parse(config?.geometryTotals || '{}') || {};
+  } catch {
+    totals = {};
+  }
+  if (totals[`${formId}`] === total) {
+    return;
+  }
+  await crudConfig.updateConfig(db, {
+    geometryTotals: JSON.stringify({ ...totals, [`${formId}`]: total }),
+  });
+};
+
+export const readGeometryTotals = async (db) => {
+  const config = await crudConfig.getConfig(db);
+  try {
+    return JSON.parse(config?.geometryTotals || '{}') || {};
+  } catch {
+    return {};
+  }
 };

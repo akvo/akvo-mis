@@ -10,6 +10,8 @@ import {
   completeDatapointSync,
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
+  geometryIndexNeedsFullPull,
+  recordGeometryTotal,
 } from './sync-datapoints';
 import { markFormGeometryComplete } from './geometry-index-writer';
 import notification from './notification';
@@ -532,6 +534,8 @@ const syncDatapointsBackground = async () => {
       return;
     }
 
+    // Same question the foreground asks: readiness may only flip after a cursor-free pull.
+    const needsFullGeometry = await geometryIndexNeedsFullPull(db);
     const incompleteForms = await crudSyncQueue.getIncompleteForms(db);
     /**
      * An empty queue is ambiguous, and reading it as "finished" was a way to trust an index
@@ -557,7 +561,7 @@ const syncDatapointsBackground = async () => {
        * finish step succeeds, and count the attempt otherwise so `MAX_ATTEMPT` still applies.
        */
       try {
-        await completeDatapointSync(db, activeJob);
+        await completeDatapointSync(db, activeJob, { full: needsFullGeometry });
       } catch (err) {
         await crudJobs.updateJob(db, activeJob.id, {
           status: jobStatus.PENDING,
@@ -578,8 +582,9 @@ const syncDatapointsBackground = async () => {
 
     await fetchFormDatapointsPageByPage(
       formId,
-      async (pageData, page, totalPage, total, complete) => {
+      async (pageData, page, totalPage, total, complete, geometryTotal) => {
         formComplete = complete === true;
+        await recordGeometryTotal(db, formId, geometryTotal);
         if (page === startPage) {
           await crudSyncQueue.upsertQueue(db, [
             {
@@ -619,6 +624,7 @@ const syncDatapointsBackground = async () => {
       },
       startPage,
       100,
+      needsFullGeometry,
     );
 
     /**

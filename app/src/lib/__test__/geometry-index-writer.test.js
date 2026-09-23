@@ -1,6 +1,9 @@
 import {
   finishDatapointSync,
+  geometryIndexNeedsFullPull,
   markFormGeometryComplete,
+  readGeometryTotals,
+  recordGeometryTotal,
   writeIndexFromAnswers,
   writeIndexFromListGeometry,
 } from '../geometry-index-writer';
@@ -8,6 +11,7 @@ import {
 jest.mock('../../database/crud', () => ({
   crudConfig: {
     updateConfig: jest.fn(() => Promise.resolve()),
+    getConfig: jest.fn(() => Promise.resolve({})),
   },
   crudGeometryIndex: {
     replaceForDatapoint: jest.fn(() => Promise.resolve()),
@@ -156,6 +160,61 @@ describe('geometry-index-writer', () => {
     });
   });
 
+  describe('readiness and geometry totals', () => {
+    /**
+     * The gate that makes GEO-006 D-4 real rather than cosmetic. `/datapoint-list` is
+     * cursor-based, so an upgraded device that synced yesterday receives nothing at all: the
+     * sync completes instantly and, before this, declared an EMPTY post-migration index
+     * trustworthy.
+     */
+    it('does not set readiness after a sync that was not a full pull', async () => {
+      await finishDatapointSync(
+        {},
+        { markSyncComplete: jest.fn(), clearQueue: jest.fn(), full: false },
+      );
+      expect(crudConfig.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('needs a full pull until readiness is 1', async () => {
+      crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 0 });
+      await expect(geometryIndexNeedsFullPull({})).resolves.toBe(true);
+      crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 1 });
+      await expect(geometryIndexNeedsFullPull({})).resolves.toBe(false);
+    });
+
+    it('needs a full pull when there is no config row at all', async () => {
+      // Fail toward pulling everything rather than toward declaring the index ready.
+      crudConfig.getConfig.mockResolvedValue(false);
+      await expect(geometryIndexNeedsFullPull({})).resolves.toBe(true);
+    });
+
+    it('keeps the per-form geometry total across the queue being cleared', async () => {
+      crudConfig.getConfig.mockResolvedValue({ geometryTotals: '{"123":4}' });
+      await recordGeometryTotal({}, 456, 9);
+      expect(crudConfig.updateConfig).toHaveBeenCalledWith(
+        {},
+        { geometryTotals: JSON.stringify({ 123: 4, 456: 9 }) },
+      );
+    });
+
+    it('does not rewrite an unchanged total', async () => {
+      crudConfig.getConfig.mockResolvedValue({ geometryTotals: '{"123":4}' });
+      await recordGeometryTotal({}, 123, 4);
+      expect(crudConfig.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('ignores a missing geometry_total rather than storing a NaN', async () => {
+      crudConfig.getConfig.mockResolvedValue({ geometryTotals: '{}' });
+      await recordGeometryTotal({}, 123, undefined);
+      expect(crudConfig.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('reads back an empty map when the column is corrupt', async () => {
+      crudConfig.getConfig.mockResolvedValue({ geometryTotals: 'not json' });
+      await expect(readGeometryTotals({})).resolves.toEqual({});
+    });
+  });
+
   describe('finishDatapointSync', () => {
     it('marks sync complete, clears the queue, then sets geometryIndexReady', async () => {
       const order = [];
@@ -169,7 +228,7 @@ describe('geometry-index-writer', () => {
         order.push('ready');
       });
 
-      await finishDatapointSync({}, { markSyncComplete, clearQueue });
+      await finishDatapointSync({}, { markSyncComplete, clearQueue, full: true });
 
       expect(crudConfig.updateConfig).toHaveBeenCalledWith({}, { geometryIndexReady: 1 });
       expect(markSyncComplete).toHaveBeenCalled();

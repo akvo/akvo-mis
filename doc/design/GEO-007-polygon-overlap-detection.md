@@ -319,6 +319,7 @@ branch (because each would otherwise report a confident "no overlap"):
 | **Download incomplete or interrupted** | Sync queue still has forms with `lastPage < totalPage`, or datapoint sync is in progress | Yes | Resume datapoint sync |
 | **Gapped index after a "finished" sync** | Local `geometry_index` row count for the form ≠ server `geometry_total` (GEO-005) | Yes | Force a full geometry re-pull (e.g. `geometry_full=true` / clear cursor and sync again) |
 | **A sync is running** | A `sync-form-datapoints` job is `ON_PROGRESS` | — | No Retry: one is already running. Copy says to validate again when it finishes |
+| **Index drifted** | A candidate's answers are not on the device, breaking GEO-006 D-6's subset invariant | Yes | Resync rebuilds both sides |
 | **Local SQLite failure** | Index query throws, the table is missing after migration should have created it, or the index names a candidate whose answers are not on the device | No | No Retry — message points to Reset / re-login. A second tap cannot heal a corrupt DB |
 
 **Why an in-flight sync needs its own gate.** `finishDatapointSync` clears the sync queue when

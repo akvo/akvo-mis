@@ -7,7 +7,8 @@
 **Date**: 2026-09-09
 **Status**: **Implemented** — `geometry_answers` / `bounding_box` / `geometry_by_data_id` in
 `v1_mobile/geometry.py`, 25 tests in `tests_mobile_datapoint_geometry.py`. Revised 2026-09-18 by
-GEO-014; the per-polygon accuracy summary (D-10) is the one part **not yet built**. Revised again
+GEO-014; the per-polygon accuracy summary (D-10) ~~is the one part **not yet built**~~ **shipped
+2026-09-23** as `accuracy_summary()`. Revised again
 2026-09-23 by GEO-006: response example corrected to a list, and `coordinates` **removed** from
 the payload along with the new `accuracy_summary()` (see §4)
 

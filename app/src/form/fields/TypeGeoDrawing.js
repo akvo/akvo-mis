@@ -17,7 +17,12 @@ import {
   runPolygonRules,
 } from '../lib/polygon-rules';
 import { detectOverlapsEnabled, signatureOf } from '../lib/overlap';
-import { OVERLAP_STATUS, overlapResults, runOverlapCheck } from '../lib/overlap-check';
+import {
+  OVERLAP_STATUS,
+  notValidatedResult,
+  overlapResults,
+  runOverlapCheck,
+} from '../lib/overlap-check';
 import { requestDatapointSync } from '../../lib/sync-datapoints';
 import { QUESTION_TYPES } from '../../lib/constants';
 import styles from '../styles';
@@ -108,6 +113,24 @@ const TypeGeoDrawing = ({
     }
     return all.filter((failure) => failure.severity !== SEVERITY.block);
   }, [status, failures, stored, showHint]);
+
+  /**
+   * "Not checked yet" needs a channel of its own.
+   *
+   * For a REQUIRED question the submit gate eventually says it, but only once the enumerator
+   * tries to submit. For an OPTIONAL one it is never said at all: the result resolves to `warn`
+   * (D-7), and `blockingMessage` keeps only `block`. The acceptance table has always promised
+   * "Not required / Not validated -> warn only", and that row was simply not implemented.
+   *
+   * Shown as an amber hint beside the Validate button, on the same `showHint` rule as the other
+   * advisory lines, so it never duplicates a sentence the gate is already printing.
+   */
+  const pendingNotice = useMemo(() => {
+    if (!showValidate || status !== OVERLAP_STATUS.notValidated || !showHint) {
+      return null;
+    }
+    return formatRuleFailure(notValidatedResult(question), trans);
+  }, [showValidate, status, showHint, question, trans]);
 
   const handleValidate = useCallback(async () => {
     setChecking(true);
@@ -232,6 +255,11 @@ const TypeGeoDrawing = ({
             {checking && (
               <Text testID="text-polygon-checking" style={styles.polygonReportChecking}>
                 {trans.polygonValidating}
+              </Text>
+            )}
+            {!checking && pendingNotice && (
+              <Text testID="text-polygon-not-validated" style={styles.polygonWarningText}>
+                {`\u26A0 ${pendingNotice}`}
               </Text>
             )}
             {!checking && status === OVERLAP_STATUS.passed && (

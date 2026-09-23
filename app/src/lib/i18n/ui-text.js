@@ -172,6 +172,7 @@ const uiText = {
     geoRuleOverlapSyncing: 'Nearby plots are still downloading - retry sync before validating.',
     geoRuleOverlapSyncRunning: 'Sync is running - validate again once it finishes.',
     geoRuleOverlapGapped: 'Some nearby plots are missing - retry sync before validating.',
+    geoRuleOverlapDrifted: 'Plot records are out of step - sync again before validating.',
     geoRuleOverlapDamaged: 'The plot index is damaged - reset the app and sync again.',
     buttonValidatePolygon: 'Validate',
     buttonRetrySync: 'Retry sync',
@@ -407,6 +408,8 @@ const uiText = {
     geoRuleOverlapSyncRunning: 'Synchronisation en cours - validez à nouveau une fois terminée.',
     geoRuleOverlapGapped:
       'Certaines parcelles voisines sont manquantes - réessayez la synchronisation.',
+    geoRuleOverlapDrifted:
+      'Les enregistrements de parcelles sont désynchronisés - synchronisez à nouveau.',
     geoRuleOverlapDamaged: "L'index des parcelles est endommagé - réinitialisez l'application.",
     buttonValidatePolygon: 'Valider',
     buttonRetrySync: 'Réessayer la synchronisation',

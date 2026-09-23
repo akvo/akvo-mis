@@ -12,8 +12,12 @@ jest.mock('../../../database/crud', () => ({
   crudConfig: { getConfig: jest.fn() },
   crudSyncQueue: { hasIncomplete: jest.fn(), getAllProgress: jest.fn() },
   crudDataPoints: { countSyncedByFormId: jest.fn(), selectJsonByIds: jest.fn() },
-  crudGeometryIndex: { findOverlapCandidates: jest.fn() },
+  crudGeometryIndex: { findOverlapCandidates: jest.fn(), countByForm: jest.fn() },
   crudJobs: { getActiveJob: jest.fn() },
+}));
+
+jest.mock('../../../lib/geometry-index-writer', () => ({
+  readGeometryTotals: jest.fn(),
 }));
 
 const {
@@ -23,6 +27,7 @@ const {
   crudGeometryIndex,
   crudJobs,
 } = require('../../../database/crud');
+const { readGeometryTotals } = require('../../../lib/geometry-index-writer');
 
 const FORM_ID = 123;
 const QUESTION = { id: 987, required: true, extra: { geoConfig: { detectOverlaps: true } } };
@@ -61,6 +66,8 @@ const healthy = () => {
   crudSyncQueue.getAllProgress.mockResolvedValue({ [FORM_ID]: { total: 10 } });
   crudDataPoints.countSyncedByFormId.mockResolvedValue(10);
   crudJobs.getActiveJob.mockResolvedValue(null);
+  readGeometryTotals.mockResolvedValue({ [FORM_ID]: 4 });
+  crudGeometryIndex.countByForm.mockResolvedValue(4);
 };
 
 beforeEach(() => {
@@ -106,11 +113,23 @@ describe('overlapPreflight', () => {
     expect(result.retryable).toBe(true);
   });
 
-  it('refuses when a finished sync left fewer rows than the server reported', async () => {
-    crudDataPoints.countSyncedByFormId.mockResolvedValue(9);
+  /**
+   * Compared against `geometry_total` — the server's cursor-free count of geoshape ANSWERS.
+   * The old comparison counted datapoints from the sync queue, which could not see a datapoint
+   * that arrived missing one of several polygons, and went blind entirely once the queue was
+   * cleared, which is every time it mattered.
+   */
+  it('refuses when fewer geometry rows are indexed than the server holds', async () => {
+    crudGeometryIndex.countByForm.mockResolvedValue(3);
     const result = await overlapPreflight({}, { formId: FORM_ID });
     expect(result.cause).toBe(UNAVAILABLE_CAUSE.indexGapped);
     expect(result.retryable).toBe(true);
+  });
+
+  it('passes when every geoshape answer the server holds is indexed', async () => {
+    crudGeometryIndex.countByForm.mockResolvedValue(4);
+    const result = await overlapPreflight({}, { formId: FORM_ID });
+    expect(result.status).toBe(OVERLAP_STATUS.passed);
   });
 
   it('offers no Retry for a local database failure', async () => {
@@ -148,7 +167,7 @@ describe('runOverlapCheck', () => {
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.failed);
     expect(result.conflicts).toHaveLength(1);
-    expect(result.conflicts[0].percent).toBeCloseTo(100, 0);
+    expect(result.conflicts[0].percent).toBe('100.0');
     expect(result.conflicts[0].name).toBe('Plot A');
   });
 
@@ -166,7 +185,7 @@ describe('runOverlapCheck', () => {
     );
     const over = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(over.status).toBe(OVERLAP_STATUS.failed);
-    expect(over.conflicts[0].threshold).toBe(20);
+    expect(over.conflicts[0].threshold).toBe('20.0');
   });
 
   /**
@@ -248,7 +267,7 @@ describe('runOverlapCheck', () => {
     ]);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.failed);
-    expect(result.conflicts[0].percent).toBeCloseTo(100, 0);
+    expect(result.conflicts[0].percent).toBe('100.0');
   });
 
   it('fetches answers by local row id, never by uuid', async () => {
@@ -265,7 +284,9 @@ describe('runOverlapCheck', () => {
     crudDataPoints.selectJsonByIds.mockResolvedValue([]);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.unavailable);
-    expect(result.cause).toBe(UNAVAILABLE_CAUSE.localFailure);
+    // Drift is not a dead database: a resync rebuilds both sides, so Retry is offered.
+    expect(result.cause).toBe(UNAVAILABLE_CAUSE.indexDrifted);
+    expect(result.retryable).toBe(true);
   });
 
   it('skips a neighbour stored with too few vertices instead of blocking on it', async () => {
@@ -309,7 +330,7 @@ describe('runOverlapCheck', () => {
     );
     expect(result.status).toBe(OVERLAP_STATUS.failed);
     expect(result.conflicts[0].adaptive).toBe(true);
-    expect(result.conflicts[0].threshold).toBeLessThan(20);
+    expect(Number(result.conflicts[0].threshold)).toBeLessThan(20);
   });
 });
 
@@ -353,8 +374,9 @@ describe('the failure message', () => {
     uuid: `u-${percent}`,
     name: 'A very long generated datapoint name - with - many - segments',
     repeatIndex: 0,
-    percent,
-    threshold,
+    percent: percent.toFixed(1),
+    threshold: threshold.toFixed(1),
+    rawPercent: percent,
   });
 
   it('says one plot without a list when there is a single overlap', () => {
@@ -363,7 +385,7 @@ describe('the failure message', () => {
       QUESTION,
     );
     expect(result.key).toBe('overlap');
-    expect(result.params).toMatchObject({ count: 1, actual: 28.3, threshold: '20' });
+    expect(result.params).toMatchObject({ count: 1, actual: '28.3', threshold: '20.0' });
   });
 
   it('numbers several overlaps in one line rather than repeating a line each', () => {
@@ -376,7 +398,7 @@ describe('the failure message', () => {
     );
     expect(results).toHaveLength(1);
     expect(results[0].key).toBe('overlapMany');
-    expect(results[0].params.list).toBe('#1 (34%), #2 (28.3%), #3 (22.5%)');
+    expect(results[0].params.list).toBe('#1 (34.0%), #2 (28.3%), #3 (22.5%)');
     expect(results[0].params.count).toBe(3);
   });
 
@@ -398,7 +420,7 @@ describe('the failure message', () => {
       },
       QUESTION,
     );
-    expect(result.params.threshold).toBe('9.5-20');
+    expect(result.params.threshold).toBe('9.5-20.0');
   });
 
   it('numbers conflicts worst first, matching the order runOverlapCheck returns', async () => {
@@ -412,6 +434,6 @@ describe('the failure message', () => {
     ]);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.conflicts[0].uuid).toBe('big');
-    expect(result.conflicts[0].percent).toBeGreaterThan(result.conflicts[1].percent);
+    expect(result.conflicts[0].rawPercent).toBeGreaterThan(result.conflicts[1].rawPercent);
   });
 });

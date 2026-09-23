@@ -15,6 +15,7 @@ import {
 } from '../../database/crud';
 import { jobStatus, SYNC_DATAPOINT_JOB_NAME } from '../../lib/constants';
 import { boundingBox, summarizeAccuracy } from '../../lib/geometry-index';
+import { readGeometryTotals } from '../../lib/geometry-index-writer';
 import { polygonArea } from './geometry';
 import {
   OVERLAP_CONFIG_KEY,
@@ -50,6 +51,9 @@ export const UNAVAILABLE_CAUSE = {
   syncRunning: 'syncRunning',
   syncIncomplete: 'syncIncomplete',
   indexGapped: 'indexGapped',
+  /** The index and `datapoints` disagree. A resync rebuilds both, so this is recoverable. */
+  indexDrifted: 'indexDrifted',
+  /** SQLite itself refused — a missing table, a dead handle. Syncing cannot mend that. */
   localFailure: 'localFailure',
 };
 
@@ -58,6 +62,7 @@ const RETRYABLE = [
   UNAVAILABLE_CAUSE.indexNotReady,
   UNAVAILABLE_CAUSE.syncIncomplete,
   UNAVAILABLE_CAUSE.indexGapped,
+  UNAVAILABLE_CAUSE.indexDrifted,
 ];
 
 const unavailable = (cause) => ({
@@ -106,19 +111,20 @@ export const overlapPreflight = async (db, { formId } = {}) => {
     }
     /**
      * A sync that reported itself finished can still have gaps — a page that 200'd with the web
-     * app's index.html, a datapoint whose json fetch was skipped. Comparing what the server said
-     * the form holds against what landed catches that.
+     * app's index.html, a datapoint whose json fetch was skipped, a datapoint that landed
+     * without one of its several polygons.
      *
-     * ponytail: this counts datapoints, not geometries. GEO-005 would have to publish a
-     * `geometry_total` for a tighter comparison; until it does, a form whose missing rows all
-     * happen to be non-geoshape datapoints reports a gap it does not have — refusing too often,
-     * never passing wrongly, which is the correct direction to be wrong in.
+     * Compared against `geometry_total`: the server's cursor-free count of geoshape ANSWERS,
+     * which the backend publishes for exactly this check and warns must not be confused with
+     * the page `total`. An earlier version compared datapoint counts from the sync queue, which
+     * could not see a single missing polygon inside a datapoint that did arrive — and read as
+     * "complete" the moment the queue was cleared, which is every time it mattered.
      */
-    const progress = await crudSyncQueue.getAllProgress(db);
-    const expected = progress?.[formId]?.total;
+    const totals = await readGeometryTotals(db);
+    const expected = totals?.[`${formId}`];
     if (Number.isFinite(expected) && expected > 0) {
-      const local = await crudDataPoints.countSyncedByFormId(db, formId);
-      if (local < expected) {
+      const indexed = await crudGeometryIndex.countByForm(db, formId);
+      if (indexed < expected) {
         return unavailable(UNAVAILABLE_CAUSE.indexGapped);
       }
     }
@@ -177,8 +183,14 @@ const conflictFrom = (row, candidatePoints, points, geoConfig) => {
     name: row.name || null,
     questionId: row.questionId,
     repeatIndex: row.repeatIndex ?? 0,
-    percent: Number(percent.toFixed(1)),
-    threshold: Number(threshold.toFixed(1)),
+    /**
+     * Strings, not numbers, and deliberately. `Number((34).toFixed(1))` is `34`, so a list read
+     * `#1 (34%), #2 (28.3%)` — the same quantity printed two ways in one sentence. Sorting and
+     * comparison are done before this point, on the raw values.
+     */
+    percent: percent.toFixed(1),
+    threshold: threshold.toFixed(1),
+    rawPercent: percent,
     adaptive,
   };
 };
@@ -258,7 +270,7 @@ export const runOverlapCheck = async (
       return conflict ? [...acc, conflict] : acc;
     }, []);
     if (drifted) {
-      return unavailable(UNAVAILABLE_CAUSE.localFailure);
+      return unavailable(UNAVAILABLE_CAUSE.indexDrifted);
     }
     return {
       status: conflicts.length ? OVERLAP_STATUS.failed : OVERLAP_STATUS.passed,
@@ -267,7 +279,7 @@ export const runOverlapCheck = async (
        * `#1 (34.0%), #2 (22.5%)`. GEO-008's map review must label its polygons from this same
        * array, or `#2` on screen and `#2` on the map are different plots.
        */
-      conflicts: [...conflicts].sort((a, b) => b.percent - a.percent),
+      conflicts: [...conflicts].sort((a, b) => b.rawPercent - a.rawPercent),
     };
   } catch {
     /**

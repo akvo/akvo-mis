@@ -1,10 +1,15 @@
 import * as Sentry from '@sentry/react-native';
-import { crudConfig, crudDataPoints, crudForms, crudJobs, crudSyncQueue } from '../database/crud';
+import { crudDataPoints, crudForms, crudJobs, crudSyncQueue } from '../database/crud';
 import sql from '../database/sql';
 import api from './api';
 import { jobStatus, SYNC_DATAPOINT_JOB_NAME } from './constants';
 import DatapointSyncState from '../store/datapoint-sync';
-import { finishDatapointSync, writeIndexFromListGeometry } from './geometry-index-writer';
+import {
+  finishDatapointSync,
+  geometryIndexNeedsFullPull,
+  recordGeometryTotal,
+  writeIndexFromListGeometry,
+} from './geometry-index-writer';
 
 /**
  * Iteratively fetches datapoints page by page, calling the processor callback
@@ -85,6 +90,7 @@ export const fetchFormDatapointsPageByPage = async (
   onPageReceived,
   startPage = 1,
   pageSize = 100,
+  geometryFull = false,
 ) => {
   let totalProcessed = 0;
   let lastTotal = 0;
@@ -94,14 +100,32 @@ export const fetchFormDatapointsPageByPage = async (
     if (currentPage > totalPages) {
       return;
     }
+    /**
+     * `geometry_full=true` makes the backend ignore its `last_synced_at` cursor for this
+     * listing. Without it an upgraded device receives no changed datapoints at all and its
+     * post-migration index stays empty — see `geometryIndexNeedsFullPull`.
+     */
+    const fullParam = geometryFull ? '&geometry_full=true' : '';
     const { data: apiData } = await api.get(
-      `/datapoint-list?form_id=${formId}&page=${currentPage}&page_size=${pageSize}`,
+      `/datapoint-list?form_id=${formId}&page=${currentPage}&page_size=${pageSize}${fullParam}`,
     );
-    const { data, total_page: totalPage, current: page, total, complete } = apiData;
+    const {
+      data,
+      total_page: totalPage,
+      current: page,
+      total,
+      complete,
+      /**
+       * The cursor-free count of geoshape answers, which is a different number from `total`
+       * (the delta). It is the only thing that can tell a gapped index from a complete one,
+       * including a datapoint that lost one of several polygons.
+       */
+      geometry_total: geometryTotal,
+    } = apiData;
 
     lastTotal = total;
     lastTotalPage = totalPage;
-    await onPageReceived(data, page, totalPage, total, complete);
+    await onPageReceived(data, page, totalPage, total, complete, geometryTotal);
     totalProcessed += data.length;
     await fetchPage(page + 1, totalPage);
   };
@@ -122,11 +146,14 @@ export const markSyncComplete = async () => {
  * Full datapoint sync finished — readiness flag + backend cursor + queue clear.
  * Single call site for SyncService and the background task (GEO-006 §10).
  */
-export const onDatapointSyncFinished = async (db) =>
+export const onDatapointSyncFinished = async (db, { full = false } = {}) =>
   finishDatapointSync(db, {
     markSyncComplete,
     clearQueue: crudSyncQueue.clearQueue,
+    full,
   });
+
+export { geometryIndexNeedsFullPull, recordGeometryTotal };
 
 /**
  * Finish the sync **and** retire its job — in that order, and only together.
@@ -141,22 +168,9 @@ export const onDatapointSyncFinished = async (db) =>
  * Throwing rather than swallowing is the point: the caller keeps the job PENDING so the next
  * tick retries, and `MAX_ATTEMPT` still retires a job whose finish step never succeeds.
  */
-export const completeDatapointSync = async (db, activeJob) => {
-  await onDatapointSyncFinished(db);
+export const completeDatapointSync = async (db, activeJob, { full = false } = {}) => {
+  await onDatapointSyncFinished(db, { full });
   await crudJobs.deleteJob(db, activeJob.id);
-};
-
-/**
- * Did a previous run leave the finish step half-done?
- *
- * Only meaningful where the queue is present and complete: a cleared queue means the finish
- * step got as far as clearing it, and an empty one on a fresh install has never had a sync to
- * finish. In that narrow spot `geometryIndexReady !== 1` means the readiness update never
- * landed, and the run must retry it instead of retiring the job as "nothing to do".
- */
-export const datapointSyncFinishPending = async (db) => {
-  const config = await crudConfig.getConfig(db);
-  return config?.geometryIndexReady !== 1;
 };
 
 /**

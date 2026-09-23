@@ -199,6 +199,22 @@ GEO-005's `complete: false`. Reset clears it back to `0` along with the rest of 
    but the confirmation dialog does not enforce it. This needs a release-note line at minimum;
    warning when unsynced work exists would be better, and is out of scope here.
 
+### D-9: Completeness is measured against `geometry_total`, not datapoint counts *(2026-09-23)*
+
+**Decision**: `config.geometryTotals` (migration 13) holds the server's `geometry_total` per
+form, and GEO-007's preflight compares it against `geometry_index` row count for that form.
+
+**Rationale**: the first implementation compared `datapoint_sync_queue.totalData` against a
+count of synced datapoints. That is wrong twice over. It counts **datapoints**, so a datapoint
+that arrived missing one of several geoshape answers looks complete. And the queue is cleared
+the moment a sync finishes, so `expected` was `undefined` and the check silently did nothing —
+from exactly the point at which it was supposed to start working.
+
+`geometry_total` is the backend's cursor-free count of geoshape **answers**, published for this
+purpose; its own comment warns that `complete` means only "this response delivered the last
+page" and must not be read as "your index is complete". The totals live on the config row rather
+than the queue precisely because the queue does not survive the moment they are needed.
+
 ### D-5: The index stores a bounding box, not coordinates
 
 **Decision**: No `coordinates` column. GEO-007 fetches coordinates from the `datapoints.json`
@@ -416,6 +432,17 @@ new table, no second writer and no reset change — but affords only one bbox pe
   > background run arriving in between marked an **empty** index trustworthy. After a Reset that
   > is the exact state this gate exists to catch. An empty queue now means "never started", and
   > the job is left for the foreground sync, which owns queue setup.
+  >
+  > **The gate was cosmetic until 2026-09-23.** `finishDatapointSync` flipped readiness whenever
+  > *a* sync completed. But `/datapoint-list` is cursor-based, so an upgraded device that synced
+  > yesterday receives **nothing**: the sync finishes instantly and declares the empty
+  > post-migration index trustworthy — the exact state this decision exists to refuse.
+  >
+  > Readiness now means "a **full** geometry pull has landed since the migration or the last
+  > reset". A run asks `geometryIndexNeedsFullPull` first; when it is true every form is fetched
+  > with `geometry_full=true`, which the backend already supports (it ignores `last_synced_at`
+  > for that listing), and only then may the flag be set. The foreground quick-check also stops
+  > short-circuiting while a full pull is owed, or the job would retire before doing one.
   >
   > **Third, a cost rather than a correctness bug:** `markFormComplete` is a full
   > `UPDATE … WHERE formId = ?`, and it ran inside the per-datapoint writer where `isComplete`

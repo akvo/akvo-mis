@@ -10,10 +10,11 @@ import crudJobs from '../database/crud/crud-jobs';
 import { crudConfig, crudDataPoints, crudForms, crudSyncQueue } from '../database/crud';
 import {
   completeDatapointSync,
-  datapointSyncFinishPending,
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
   fetchDraftDatapointsPageByPage,
+  geometryIndexNeedsFullPull,
+  recordGeometryTotal,
 } from '../lib/sync-datapoints';
 import {
   jobStatus,
@@ -216,6 +217,13 @@ const SyncService = () => {
     });
 
     try {
+      /**
+       * Asked once for the whole run: readiness is only allowed to flip after a pull that
+       * ignored the backend cursor, so the answer decides both what we request and whether
+       * the finish step may set the flag (GEO-006 D-4).
+       */
+      const needsFullGeometry = await geometryIndexNeedsFullPull(db);
+
       // Get registration forms from local SQLite
       const registrationForms = await crudForms.selectLatestFormVersion(db, {
         user: activeJob.user,
@@ -247,19 +255,14 @@ const SyncService = () => {
           }
         }, Promise.resolve());
 
-        if (!hasNewData) {
-          /**
-           * Nothing to download — but this is also the branch a half-finished previous run
-           * lands in, and the one that used to strand it. A complete queue plus
-           * `geometryIndexReady = 0` means the finish step never got past the backend post,
-           * so retry it here; otherwise every future tick retires the job as "nothing to do"
-           * and readiness never flips. A throw falls to the outer catch, which keeps the job.
-           */
-          if (await datapointSyncFinishPending(db)) {
-            await completeDatapointSync(db, activeJob);
-          } else {
-            await crudJobs.deleteJob(db, activeJob.id);
-          }
+        /**
+         * The shortcut is only safe once the index is proven. A complete queue with no new
+         * datapoints still means an empty index on a device that has migrated but never done a
+         * full pull, and taking the shortcut there retired the job and left readiness at 0
+         * forever. When a full pull is owed, fall through and do the sync.
+         */
+        if (!hasNewData && !needsFullGeometry) {
+          await crudJobs.deleteJob(db, activeJob.id);
           DatapointSyncState.update((s) => {
             s.inProgress = false;
             s.progress = 0;
@@ -310,8 +313,9 @@ const SyncService = () => {
 
         await fetchFormDatapointsPageByPage(
           formId,
-          async (pageData, page, totalPage, total, complete) => {
+          async (pageData, page, totalPage, total, complete, geometryTotal) => {
             formComplete = complete === true;
+            await recordGeometryTotal(db, formId, geometryTotal);
             // On first page response: upsert queue with actual API totals
             if (page === startPage) {
               await crudSyncQueue.upsertQueue(db, [
@@ -384,6 +388,7 @@ const SyncService = () => {
           },
           startPage,
           SYNC_PAGE_SIZE,
+          needsFullGeometry,
         );
 
         /**
@@ -415,7 +420,7 @@ const SyncService = () => {
          * retiring it while the finish step is outstanding leaves `geometryIndexReady` at 0
          * with no path back to it.
          */
-        await completeDatapointSync(db, activeJob);
+        await completeDatapointSync(db, activeJob, { full: needsFullGeometry });
       } else {
         // Some items failed — keep job pending for retry, queue preserves progress
         await crudJobs.updateJob(db, activeJob.id, {

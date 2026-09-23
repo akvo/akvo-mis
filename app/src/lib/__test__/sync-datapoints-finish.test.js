@@ -1,4 +1,4 @@
-import { completeDatapointSync, datapointSyncFinishPending } from '../sync-datapoints';
+import { completeDatapointSync } from '../sync-datapoints';
 
 jest.mock('../../database/crud', () => ({
   crudConfig: { getConfig: jest.fn() },
@@ -16,10 +16,12 @@ jest.mock('../api', () => ({
 
 jest.mock('../geometry-index-writer', () => ({
   finishDatapointSync: jest.fn(),
+  geometryIndexNeedsFullPull: jest.fn(),
+  recordGeometryTotal: jest.fn(),
   writeIndexFromListGeometry: jest.fn(),
 }));
 
-const { crudConfig, crudJobs } = require('../../database/crud');
+const { crudJobs } = require('../../database/crud');
 const { finishDatapointSync } = require('../geometry-index-writer');
 
 const JOB = { id: 7, attempt: 0 };
@@ -29,6 +31,18 @@ beforeEach(() => {
 });
 
 describe('completeDatapointSync', () => {
+  it('passes the full-pull flag through to the finish step', async () => {
+    finishDatapointSync.mockResolvedValue(undefined);
+    await completeDatapointSync({}, JOB, { full: true });
+    expect(finishDatapointSync).toHaveBeenCalledWith({}, expect.objectContaining({ full: true }));
+  });
+
+  it('defaults to NOT full, so an ordinary sync cannot flip readiness', async () => {
+    finishDatapointSync.mockResolvedValue(undefined);
+    await completeDatapointSync({}, JOB);
+    expect(finishDatapointSync).toHaveBeenCalledWith({}, expect.objectContaining({ full: false }));
+  });
+
   it('retires the job once the finish step succeeds', async () => {
     finishDatapointSync.mockResolvedValue(undefined);
     await completeDatapointSync({}, JOB);
@@ -44,23 +58,5 @@ describe('completeDatapointSync', () => {
     finishDatapointSync.mockRejectedValue(new Error('sync-complete 500'));
     await expect(completeDatapointSync({}, JOB)).rejects.toThrow('sync-complete 500');
     expect(crudJobs.deleteJob).not.toHaveBeenCalled();
-  });
-});
-
-describe('datapointSyncFinishPending', () => {
-  it('is true while the readiness flag has not been set', async () => {
-    crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 0 });
-    await expect(datapointSyncFinishPending({})).resolves.toBe(true);
-  });
-
-  it('is false once a full sync has set it', async () => {
-    crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 1 });
-    await expect(datapointSyncFinishPending({})).resolves.toBe(false);
-  });
-
-  it('is true when there is no config row at all', async () => {
-    // Fail toward retrying rather than toward declaring the index ready.
-    crudConfig.getConfig.mockResolvedValue(false);
-    await expect(datapointSyncFinishPending({})).resolves.toBe(true);
   });
 });
