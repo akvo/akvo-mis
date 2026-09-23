@@ -9,7 +9,7 @@ import { crudForms, crudDataPoints, crudUsers, crudConfig, crudSyncQueue } from 
 import {
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
-  markSyncComplete,
+  onDatapointSyncFinished,
 } from './sync-datapoints';
 import notification from './notification';
 import cascades from './cascades';
@@ -534,8 +534,7 @@ const syncDatapointsBackground = async () => {
     if (!incompleteForms.length) {
       await crudJobs.deleteJob(db, activeJob.id);
       try {
-        await markSyncComplete();
-        await crudSyncQueue.clearQueue(db);
+        await onDatapointSyncFinished(db);
       } catch (err) {
         Sentry.captureException(err);
       }
@@ -550,7 +549,7 @@ const syncDatapointsBackground = async () => {
 
     await fetchFormDatapointsPageByPage(
       formId,
-      async (pageData, page, totalPage, total) => {
+      async (pageData, page, totalPage, total, complete) => {
         if (page === startPage) {
           await crudSyncQueue.upsertQueue(db, [
             {
@@ -571,6 +570,9 @@ const syncDatapointsBackground = async () => {
                 formId: item.form_id,
                 administrationId: item.administration_id,
                 lastUpdated: item.last_updated,
+                geometry: item.geometry,
+                name: item.name,
+                isComplete: complete === true,
               },
               session.id,
               formCache,

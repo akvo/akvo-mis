@@ -18,6 +18,7 @@ import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
 import { BaseLayout } from '../components';
 import { crudDataPoints } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
+import { writeIndexFromAnswers } from '../lib/geometry-index-writer';
 import { UserState, UIState, FormState } from '../store';
 import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
 import { i18n } from '../lib';
@@ -101,6 +102,29 @@ const FormPage = ({ navigation, route }) => {
     });
   }, [formJSON]);
 
+  /**
+   * Publish what the geoshape field needs for overlap detection, and drop the previous form's
+   * verdicts.
+   *
+   * `polygonValidation` is cleared rather than left: FormState outlives this screen, and a
+   * stored pass keyed on a question id from the last form would be read by this one's submit
+   * gate. The signature check would catch it, but a verdict belonging to another submission
+   * should not be in reach at all.
+   *
+   * `overlapFormId` is the form being filled. GEO-007 D-6 wants candidates scoped to
+   * REGISTRATION plots, which for a monitoring form means its parent — but whether
+   * `forms.parentId` holds a backend form id or a local one is not settled here, and guessing
+   * wrong scopes the query to a form with no rows, which reports "no overlap" for every plot.
+   * Same-form scoping is the conservative, well-defined behaviour until that is confirmed.
+   */
+  useEffect(() => {
+    FormState.update((s) => {
+      s.submissionUuid = submissionUuidRef.current;
+      s.overlapFormId = selectedForm?.formId || null;
+      s.polygonValidation = {};
+    });
+  }, [selectedForm]);
+
   useEffect(() => {
     // FormState is global and outlives this screen, so a flag left raised by the last
     // form would make the very first back press prompt. Reset on mount.
@@ -176,12 +200,37 @@ const FormPage = ({ navigation, route }) => {
   // Shared tail for both save paths. 'saved' and 'fallback' are durable, so leaving
   // the screen is safe; 'failed' means the answers exist only in the Pullstate store,
   // and navigating away would discard them.
-  const finishSave = async (result, successText) => {
+  const finishSave = async (result, successText, { answers, name } = {}) => {
     if (result === 'failed') {
       if (Platform.OS === 'android') {
         ToastAndroid.show(trans.saveFailedKeepOpenText, ToastAndroid.LONG);
       }
       return;
+    }
+    // GEO-006: keep the geometry index aligned with the datapoint we just wrote.
+    // Failures here must not undo a successful save — Sentry and move on.
+    try {
+      const backendFormId = selectedForm?.formId;
+      if (backendFormId && answers) {
+        const row = await crudDataPoints.getByUUID(db, {
+          uuid: submissionUuidRef.current,
+          form: currentFormId,
+        });
+        if (row?.id) {
+          await writeIndexFromAnswers(db, {
+            uuid: submissionUuidRef.current,
+            formId: backendFormId,
+            datapointId: row.id,
+            name: name || row.name,
+            answers,
+            formJson: formJSON,
+            isComplete: true,
+          });
+        }
+      }
+    } catch (error) {
+      Sentry.captureMessage('[FormPage] geometry index write failed after save');
+      Sentry.captureException(error);
     }
     if (Platform.OS === 'android') {
       ToastAndroid.show(
@@ -224,7 +273,10 @@ const FormPage = ({ navigation, route }) => {
         ...(sendToWeb ? { sendToWeb: 1 } : {}),
       };
       const result = await persistSubmission(db, payload, isNewSubmission);
-      await finishSave(result, trans.successSaveDatapoint);
+      await finishSave(result, trans.successSaveDatapoint, {
+        answers: jsonAnswers,
+        name: dpName || trans.untitled,
+      });
     } catch (error) {
       Sentry.captureMessage('[FormPage] Cannot save draft submissions');
       Sentry.captureException(error);
@@ -279,7 +331,10 @@ const FormPage = ({ navigation, route }) => {
          */
         await queueSyncJob(route.params?.uuid);
       }
-      await finishSave(result, trans.successSubmitted);
+      await finishSave(result, trans.successSubmitted, {
+        answers,
+        name: datapoitName,
+      });
     } catch (error) {
       Sentry.captureMessage('[FormPage] Cannot submit submissions');
       Sentry.captureException(error);

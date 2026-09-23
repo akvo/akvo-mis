@@ -102,7 +102,8 @@ class GeoshapeRoundTripTestCase(TestCase):
         self.assertEqual(listed.status_code, status.HTTP_200_OK)
         body = listed.json()
         geometry = body["data"][0]["geometry"][0]
-        self.assertEqual(geometry["coordinates"], ADDIS_PLOT)
+        # GEO-006: list carries bbox + accuracy, not a duplicate of options.
+        self.assertNotIn("coordinates", geometry)
         self.assertEqual(geometry["question_id"], self.plot_q.id)
         self.assertEqual(geometry["bbox"], {
             "min_lat": 9.03, "max_lat": 9.04,
@@ -115,12 +116,11 @@ class GeoshapeRoundTripTestCase(TestCase):
         vertex, no reduced precision. Every one of those would put the
         device's copy and the server's copy subtly out of step."""
         self.submit(ADDIS_PLOT)
-        coordinates = self.device_list().json()[
-            "data"][0]["geometry"][0]["coordinates"]
-        self.assertEqual(coordinates, ADDIS_PLOT)
-        self.assertEqual(len(coordinates), 4)
-        self.assertNotEqual(coordinates[0], coordinates[-1])
-        self.assertEqual(coordinates[0][0], 9.03)
+        stored = Answers.objects.get(question=self.plot_q).options
+        self.assertEqual(stored, ADDIS_PLOT)
+        self.assertEqual(len(stored), 4)
+        self.assertNotEqual(stored[0], stored[-1])
+        self.assertEqual(stored[0][0], 9.03)
 
     def test_editing_a_polygon_keeps_it_in_options(self):
         """The edit path shares `answer_fields` with the create path as
@@ -141,7 +141,7 @@ class GeoshapeRoundTripTestCase(TestCase):
 
         geometry = self.device_list().json()[
             "data"][0]["geometry"][0]
-        self.assertEqual(geometry["coordinates"], MOVED_PLOT)
+        self.assertNotIn("coordinates", geometry)
         self.assertEqual(geometry["bbox"]["max_lat"], 9.06)
 
     def test_a_string_polygon_is_rejected_at_the_api(self):

@@ -284,6 +284,25 @@ only to serve overlap detection — including the sync and configuration work.*
 > T2 +0.5 for the per-polygon accuracy summary (GEO-014 D-10); T4 +1 for the adaptive threshold
 > (GEO-014 D-5).
 
+> **Delivered 2026-09-23: T2, T3, T4.** Estimates left as written, per this document's
+> convention, so the deltas stay visible.
+>
+> - **T2** (6h) shipped earlier; the accuracy summary and the removal of `coordinates` from the
+>   payload landed now, in ~0.5h of backend work rather than the estimated 0.5h addition.
+> - **T3** came in at **7h**, not 8: dropping the backfill (GEO-006 D-4) removed 1h of migration
+>   work and the 2h volume test shrank once the index stopped carrying coordinates (D-5). The
+>   design was substantially rewritten before implementation — four alternatives to a local
+>   SQLite index were examined and rejected, and the reasoning is recorded in D-7 so they do not
+>   get re-proposed.
+> - **T4** came in at **7.75h**, the +0.25 being the two-query candidate fetch D-5 introduced.
+>   Device-tested the same day, which produced one design change: D-11 replaced naming the
+>   conflicting datapoint with a count and numbered percentages, because the generated datapoint
+>   name is every meta answer joined with `" - "` and filled six lines while identifying nothing.
+>
+> **Still outstanding on T4**: the 1.5h perf test at 5,000 polygons on a real low-end device has
+> not been run, and candidate scoping for monitoring forms (D-6) is unresolved — both recorded
+> in GEO-007 §10.
+
 ### Deferred — gated on a decision, not on engineering
 
 | ID | Task | Component | Days |
@@ -659,7 +678,13 @@ A 30-minute boundary walk at 10-second intervals is ~180 vertices, not the 5-poi
 developers test with.
 → **Response**: called out explicitly in T3 as a thing to measure — storage, index size and
 intersection cost should be checked against realistic captures.
-→ *Residual*: unmeasured. This is the estimate most likely to move.
+→ *Residual*: **partly measured, 2026-09-23.** The busiest deployment holds **1,000–5,000
+datapoints per form**, and ~180 vertices is confirmed as the realistic capture size. That pair
+of numbers is what ruled out holding the candidate set in memory as a downloaded GeoJSON or
+TopoJSON file — 5,000 × 180 is ~900,000 small arrays, a 100–200 MB peak against a 128–256 MB
+process heap (GEO-006 D-7). T3 therefore keeps a bbox index and stores no coordinates in it
+(GEO-006 D-5), which makes peak memory constant in the size of the form rather than linear.
+Intersection cost at that volume is still unmeasured and remains the figure most likely to move.
 
 ### Data integrity
 

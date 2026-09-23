@@ -11,7 +11,7 @@ import {
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
   fetchDraftDatapointsPageByPage,
-  markSyncComplete,
+  onDatapointSyncFinished,
 } from '../lib/sync-datapoints';
 import {
   jobStatus,
@@ -296,7 +296,7 @@ const SyncService = () => {
 
         await fetchFormDatapointsPageByPage(
           formId,
-          async (pageData, page, totalPage, total) => {
+          async (pageData, page, totalPage, total, complete) => {
             // On first page response: upsert queue with actual API totals
             if (page === startPage) {
               await crudSyncQueue.upsertQueue(db, [
@@ -334,6 +334,9 @@ const SyncService = () => {
                     formId: item.form_id,
                     administrationId: item.administration_id,
                     lastUpdated: item.last_updated,
+                    geometry: item.geometry,
+                    name: item.name,
+                    isComplete: complete === true,
                   },
                   activeJob.user,
                   formCache,
@@ -381,12 +384,9 @@ const SyncService = () => {
       }, Promise.resolve());
 
       if (!hasErrors) {
-        // All forms done without errors — notify backend to update last_synced_at
+        // All forms done without errors — readiness flag + backend cursor + queue
         try {
-          await markSyncComplete();
-          // Clear queue after successful sync so next sync starts fresh
-          // (backend uses last_synced_at to return only new data)
-          await crudSyncQueue.clearQueue(db);
+          await onDatapointSyncFinished(db);
         } catch (error) {
           Sentry.captureMessage('Failed to mark sync complete on backend');
           Sentry.captureException(error);

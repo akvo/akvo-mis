@@ -5,7 +5,13 @@
 **Task ID**: GEO-007 (breakdown ref: T4)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft — **revised 2026-09-18 by GEO-014**, which supersedes D-3
+**Status**: **Implemented 2026-09-23**, device-verified the same day — `form/lib/overlap.js`
+(ratio + adaptive threshold), `form/lib/overlap-check.js` (preflight, candidate query, rule
+results), the Validate button and report in `form/fields/TypeGeoDrawing.js`, and the stored
+verdict read by the submit gate in `form/lib/index.js`. 48 unit and integration tests.
+Revised 2026-09-18 by GEO-014, which supersedes D-3; **D-10** (incomplete candidate set →
+refuse + Retry) and **D-11** (the error counts and numbers overlaps instead of naming them,
+after the first device test) both added 2026-09-23
 **Phase**: 3 — Overlap detection *(moved down on reviewer feedback)*
 **Estimate**: 7.5h ≈ 1 day (Mobile)
 **Depends on**: GEO-001, GEO-006, GEO-009, **GEO-014**
@@ -45,9 +51,12 @@ GEO-005, GEO-006, GEO-008 and GEO-009 moved with it — they exist only to serve
 ### User Acceptance Criteria — detection
 
 - [ ] A new polygon overlapping an existing one by ≥ threshold → validation fails
-- [ ] The error names both datapoints:
-      `New plot for <current> overlaps with plot for <existing>`
-- [ ] **All** simultaneous overlaps are reported, not just the first
+- [ ] ~~The error names both datapoints: `New plot for <current> overlaps with plot for
+      <existing>`~~ — **superseded 2026-09-23 by D-11.** The error carries a **count and
+      numbered percentages**, no names: `Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%)
+      (limit 20%)`
+- [ ] **All** simultaneous overlaps are reported, not just the first — as one numbered line,
+      not one line each (D-11)
 - [ ] Below threshold → passes
 - [ ] Works with the radio off
 - [ ] Resolving the overlap clears the error and allows submission
@@ -74,6 +83,8 @@ GEO-005, GEO-006, GEO-008 and GEO-009 moved with it — they exist only to serve
 | Not required | Not validated | ⚠️ Warn only |
 
 - [ ] Re-validating after a fix replaces the previous report rather than appending to it
+- [ ] **Incomplete candidate set → refuse, never pass** (D-10). Show why; offer **Retry** when
+      sync can fix it. Same submit gate as "not validated" for required questions
 
 ### Technical Acceptance Criteria
 
@@ -291,6 +302,86 @@ means rewriting the report UI and the submit gate as well.
 **Out of scope here**: per-tenant rule registration, user-authored rules, and how a rule would be
 distributed to devices. Those need their own design.
 
+### D-10: Incomplete candidate set → refuse + Retry *(2026-09-23)*
+
+**Question was**: refuse to validate, or validate with a visible caveat? Silently passing is not
+an option.
+
+**Decision**: **Refuse.** Never caveat-pass. Name the cause. Offer **Retry** when the cause is a
+sync gap; do not offer a useless Retry for local corruption.
+
+**What "incomplete" actually means** — three different failures that must share one refuse
+branch (because each would otherwise report a confident "no overlap"):
+
+| Cause | How the device knows | Recoverable by sync? | Retry does |
+|---|---|---|---|
+| **Index not ready** (upgrade / post-reset) | `config.geometryIndexReady = 0` (GEO-006 D-4) | Yes | Start / resume datapoint sync |
+| **Download incomplete or interrupted** | Sync queue still has forms with `lastPage < totalPage`, or datapoint sync is in progress | Yes | Resume datapoint sync |
+| **Gapped index after a "finished" sync** | Local `geometry_index` row count for the form ≠ server `geometry_total` (GEO-005) | Yes | Force a full geometry re-pull (e.g. `geometry_full=true` / clear cursor and sync again) |
+| **Local SQLite failure** | Index query throws, or the table is missing after migration should have created it | No | No Retry — message points to Reset / re-login. A second tap cannot heal a corrupt DB |
+
+The page-level `complete: false` on early pages of a listing is **normal during sync**; it is
+not itself a validation-time signal. Validation-time gates are the rows above.
+
+**UI**:
+- Pressing Validate (or hitting the submit gate) enters an **unavailable / error** state — not
+  pass, not a soft warning that still records a pass
+- Copy names the cause in plain language, e.g. *"Nearby plots are still downloading — retry
+  sync before validating"* vs *"Plot index is damaged — reset the app and sync again"*
+- **Retry** is shown only for the recoverable rows; it kicks datapoint sync and returns the
+  enumerator to the form (they press Validate again when sync finishes — do not auto-pass)
+- Required questions: same submit block as "not validated" (D-1 / D-7)
+
+**Why not caveat-pass**: field users treat green as done; a recorded "pass (incomplete)" is
+indistinguishable from a real pass once the submission leaves the device. That is the false
+pass GEO-005 and GEO-006 D-4 exist to prevent (QA-605).
+
+**Impact on hours**: small — one shared preflight before the bbox query, a message + optional
+Retry wired to the existing datapoint-sync job. No new sync protocol.
+
+### D-11: The error counts and numbers the overlaps; it does not name them *(2026-09-23)*
+
+**Supersedes** the acceptance criterion `New plot for <current> overlaps with plot for
+<existing>`, which came from the reference validator.
+
+**Raised by**: the first device test. A single overlap rendered as
+
+> Overlaps the plot for First plot - 916464 - Indonesia - Jakarta - East Jakarta - Kramat Jati -
+> Cawang - wife__husband__partner,children by 28.3% (limit 20%).
+
+Six lines, and the enumerator still cannot tell which plot is meant. The cause is structural,
+not a bad test fixture: the name is `generateDataPointName` output, every `meta` answer joined
+with `" - "`, so on any form with an administration cascade it is always an administrative path.
+The reference validator could name plots because it held its own short `instanceName`; we do not.
+
+**Decision**: the message carries a **count** and **numbered percentages**.
+
+```
+1 overlap    Overlaps 1 plot by 28.3% (limit 20%).
+3 overlaps   Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%) (limit 20%).
+```
+
+**One result, not one per conflict.** Every overlap is still reported — that criterion is
+unchanged — but as one sentence. Three near-identical lines said no more than one numbered line
+does, and cost three times the screen on a phone.
+
+**The numbers are positions in the conflict array, ordered worst first**, and that ordering is
+part of the contract rather than an implementation detail: **GEO-008 must label its map polygons
+from the same array**, or `#2` in the text and `#2` on the map are different plots. Identity
+moves there, which is where it is actually usable — a name in a sentence never told the
+enumerator where to walk.
+
+**The limit may be a range.** Each pair computes its own threshold from the accuracy and area of
+*both* polygons (GEO-014 D-5), so two conflicts on one plot can legitimately be judged at 9.5 %
+and 20 %. A uniform set prints one number; a mixed set prints `limit 9.5-20%`. Printing one of
+them would misstate why the other failed.
+
+**Also fixed here**: the report was printing blocking failures that the submit gate prints again
+a few pixels below, prefixed with the question label — the overlap appeared twice on screen.
+Blocking lines now drop out of the report once the gate has spoken, which is the rule
+`showHint` already applied to the amber hints (GEO-002 D-8). Warnings stay, since a warn never
+reaches the gate.
+
 ---
 
 ## 6. Type/Constant Mappings
@@ -326,6 +417,20 @@ overlap-checked route.
 - [ ] SQLite schema changes: none here (GEO-006 owns the index)
 - [x] Depends on GEO-005's completeness signal — **must not validate against a partial set**
 
+> **Added 2026-09-23 — two things GEO-006 now hands this task.**
+>
+> **1. The index has no `coordinates` column** (GEO-006 D-5). The bbox range query returns
+> identifiers and bounding boxes; coordinates for the 5–50 survivors are read from the local
+> `datapoints.json` in a second query keyed on their ids, then parsed. This is what keeps peak
+> memory constant in the size of the form instead of linear in it — the candidate fetch is no
+> longer a single query, and the hours below assume both.
+>
+> **2. There is a second reason to refuse to validate.** Alongside GEO-005's `complete: false`,
+> `config.geometryIndexReady = 0` means the local index predates the feature and is empty while
+> `datapoints` is full (GEO-006 D-4 — existing installs are not backfilled). Querying it returns
+> no candidates and would report a confident **"no overlap"**. Both conditions must route into
+> the same refusal branch; neither may fall through to a pass.
+
 ---
 
 ## 8. Security Considerations
@@ -346,8 +451,12 @@ overlap-checked route.
 | Unit | Threshold falls back to `overlapThreshold` when either polygon has no measured accuracy |
 | Unit | Identical polygons → 100 %; disjoint → no candidates |
 | Unit | Self-exclusion when editing an existing datapoint |
-| Integration | Multiple simultaneous overlaps all reported |
+| Integration | Multiple simultaneous overlaps all reported, as one numbered line, worst first (D-11) |
+| Unit | The message never contains the other datapoint's name (D-11) |
+| Unit | Mixed per-pair thresholds print as a range, not as one of them (D-11) |
+| Integration | A blocking failure appears once, not in both the report and the gate (D-11) |
 | Integration | State machine: edit after pass → *not validated* → submit blocked |
+| Integration | Incomplete set refuses validation; Retry resumes sync; SQLite failure has no Retry (D-10) |
 | **Performance** | See below |
 
 ### What the performance test is
@@ -371,18 +480,24 @@ invisible to unit tests:
 | Unit | h |
 |---|---|
 | ~~Spike: verify `@turf` submodules work in React Native~~ — **moved to GEO-002 D-6**, which now adds `@turf/kinks` in phase 1 | 0 |
-| bbox range query + candidate fetch | 0.5 |
+| bbox range query + candidate fetch from `datapoints.json` (GEO-006 D-5) | 0.75 |
 | Intersection ratio vs threshold | 0.5 |
 | Adaptive threshold from vertex accuracy, with clamp and fallback (GEO-014 D-5) | 1 |
 | "Validate now" button, 3 states, progress | 1 |
 | State reset on edit; submit gate reads stored result | 1 |
 | Error assembly — multiple conflicts, repeat instance | 0.5 |
 | Unit tests with known fixtures | 1.5 |
-| **Perf test at 10,000 plots** | 1.5 |
-| **Total** | **7.5** |
+| **Perf test at 5,000 plots (observed ceiling), 10,000 as headroom** | 1.5 |
+| **Total** | **7.75** |
 
-Back to the original 7.5: the `@turf` spike moved out to GEO-002 (−1) and the adaptive threshold
-moved in (+1). They cancel exactly, which is a coincidence rather than a plan.
+The `@turf` spike moved out to GEO-002 (−1) and the adaptive threshold moved in (+1); those
+cancel exactly, which is a coincidence rather than a plan. The remaining +0.25 over the original
+7.5 is the two-query candidate fetch that GEO-006 D-5 introduces.
+
+**On the volume figures** (recorded 2026-09-23): the busiest deployment holds **1,000–5,000
+datapoints per form**, not 10,000. The larger number stays in the test as headroom, but the
+5,000 case is the one that must pass — and it is the number the GEO-006 D-7 memory arithmetic
+is built on.
 
 ---
 
@@ -400,12 +515,32 @@ moved in (+1). They cancel exactly, which is a coincidence rather than a plan.
       numbers get a home, **20 as the ceiling and 5 as the floor**, which suggests the two
       references were answering different questions rather than one of them being wrong. The
       default is still unmeasured against our terrain, exactly as 20 is
-- [ ] What does the UI do when the candidate set is **incomplete** (GEO-005)? Refuse to
+- [x] What does the UI do when the candidate set is **incomplete** (GEO-005)? Refuse to
       validate, or validate with a visible caveat? Silently passing is not an option
+      → **Answered 2026-09-23 (D-10)**: **refuse**, never caveat-pass. Distinguish causes
+      (index not ready / incomplete download / count mismatch / SQLite damage). **Retry** only
+      when sync can fix it; Reset for local corruption.
 - [x] Does `@turf` behave on a real device? **Answered by phase 1**: GEO-002 D-6 adds
       `@turf/kinks` to `app/` and carries the spike. If it fails there, this task learns about it
       two phases early — which is the point of the relocation. `@turf/intersect` is a larger
       module than `kinks`, so a green spike de-risks but does not fully settle this one.
+
+### Left open by the implementation
+
+- [ ] 🔴 **Candidates are scoped to the form being filled, not to its registration parent.**
+      D-6 wants registration plots, which for a monitoring form means its parent. Whether
+      `forms.parentId` holds a backend form id or a local one is not settled, and guessing wrong
+      scopes the bbox query to a form with no rows — which reports a confident "no overlap" for
+      every plot. Same-form scoping is the conservative, well-defined behaviour shipped in
+      `FormPage.js`; it is marked in the code and needs deciding before a monitoring form with
+      `detectOverlaps` reaches a programme
+- [ ] **D-10's third cause uses a datapoint count, not a geometry count.** The design compares
+      local `geometry_index` rows against a server `geometry_total`; GEO-005 publishes no such
+      field, so the shipped preflight compares local synced datapoints against the sync queue's
+      `totalData`. It refuses too often rather than passing wrongly — the correct direction —
+      but a form whose missing rows are all non-geoshape reports a gap it does not have
+- [ ] **The performance test has not been run.** 5,000 polygons on a real low-end device,
+      target < 500 ms (§9). Everything below the bbox pre-filter rests on it
 
 ### Raised in design review, needing follow-up
 

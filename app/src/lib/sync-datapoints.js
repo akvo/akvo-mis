@@ -1,7 +1,10 @@
 import * as Sentry from '@sentry/react-native';
-import { crudDataPoints, crudForms } from '../database/crud';
+import { crudDataPoints, crudForms, crudJobs, crudSyncQueue } from '../database/crud';
 import sql from '../database/sql';
 import api from './api';
+import { jobStatus, SYNC_DATAPOINT_JOB_NAME } from './constants';
+import DatapointSyncState from '../store/datapoint-sync';
+import { finishDatapointSync, writeIndexFromListGeometry } from './geometry-index-writer';
 
 /**
  * Iteratively fetches datapoints page by page, calling the processor callback
@@ -72,7 +75,7 @@ export const fetchDraftDatapointsPageByPage = async (onPageReceived, pageSize = 
  * Only one page of data is in memory at a time, reducing peak memory usage.
  *
  * @param {number} formId - backend form ID to filter by
- * @param {Function} onPageReceived - async callback(pageData, page, totalPage, total)
+ * @param {Function} onPageReceived - async callback(pageData, page, totalPage, total, complete)
  * @param {number} startPage - page to start from (for resume, default 1)
  * @param {number} pageSize - page size to request (default 100, backend max)
  * @returns {Promise<{totalProcessed: number, totalPage: number, total: number}>}
@@ -94,11 +97,11 @@ export const fetchFormDatapointsPageByPage = async (
     const { data: apiData } = await api.get(
       `/datapoint-list?form_id=${formId}&page=${currentPage}&page_size=${pageSize}`,
     );
-    const { data, total_page: totalPage, current: page, total } = apiData;
+    const { data, total_page: totalPage, current: page, total, complete } = apiData;
 
     lastTotal = total;
     lastTotalPage = totalPage;
-    await onPageReceived(data, page, totalPage, total);
+    await onPageReceived(data, page, totalPage, total, complete);
     totalProcessed += data.length;
     await fetchPage(page + 1, totalPage);
   };
@@ -116,17 +119,29 @@ export const markSyncComplete = async () => {
 };
 
 /**
+ * Full datapoint sync finished — readiness flag + backend cursor + queue clear.
+ * Single call site for SyncService and the background task (GEO-006 §10).
+ */
+export const onDatapointSyncFinished = async (db) =>
+  finishDatapointSync(db, {
+    markSyncComplete,
+    clearQueue: crudSyncQueue.clearQueue,
+  });
+
+/**
  * Downloads and saves a single datapoint's JSON data.
  * Network call is outside the transaction to avoid holding DB lock during I/O.
+ * Geometry index rows are written inside the same transaction as the datapoint
+ * (GEO-006 D-6), from the list payload's precomputed bbox — no extra fetch.
  *
  * @param {Object} db - database connection
- * @param {Object} datapointInfo - { formId, administrationId, url, lastUpdated }
+ * @param {Object} datapointInfo - { formId, administrationId, url, lastUpdated, geometry, name, isComplete }
  * @param {string|number} user - user id
  * @param {Map|null} formCache - optional Map<formId, { dbRecord, parsedGroups }> for caching
  */
 export const downloadDatapointsJson = async (
   db,
-  { formId, administrationId, url, lastUpdated },
+  { formId, administrationId, url, lastUpdated, geometry, name: listName, isComplete },
   user,
   formCache = null,
 ) => {
@@ -172,7 +187,9 @@ export const downloadDatapointsJson = async (
     return;
   }
 
-  // DB operations INSIDE the transaction
+  const datapointName = name || listName || null;
+
+  // DB operations INSIDE the transaction — datapoint + geometry_index together
   await sql.withTransaction(db, async (txDb) => {
     const repeats = {};
     let repeatIndex = 0;
@@ -198,6 +215,8 @@ export const downloadDatapointsJson = async (
       }
     });
 
+    let datapointId = existing?.id;
+
     if (existing) {
       await crudDataPoints.updateByUUID(txDb, {
         uuid,
@@ -206,27 +225,65 @@ export const downloadDatapointsJson = async (
         syncedAt: lastUpdated,
         repeats: JSON.stringify(repeats),
       });
-      return;
+    } else {
+      // Insert new datapoint only if it doesn't exist. The local id is left to
+      // SQLite: the backend's id draws from the same small-integer space, so
+      // reusing it would overwrite an unrelated local row. Identity is uuid + form.
+      const datapointData = {
+        uuid,
+        user,
+        geo,
+        name: datapointName,
+        administrationId,
+        form: form?.id,
+        submitted: 1,
+        duration: 0,
+        createdAt: new Date().toISOString(),
+        json: answers,
+        syncedAt: lastUpdated,
+        repeats: JSON.stringify(repeats),
+      };
+
+      datapointId = await crudDataPoints.saveDataPoint(txDb, datapointData);
     }
 
-    // Insert new datapoint only if it doesn't exist. The local id is left to
-    // SQLite: the backend's id draws from the same small-integer space, so
-    // reusing it would overwrite an unrelated local row. Identity is uuid + form.
-    const datapointData = {
-      uuid,
-      user,
-      geo,
-      name,
-      administrationId,
-      form: form?.id,
-      submitted: 1,
-      duration: 0,
-      createdAt: new Date().toISOString(),
-      json: answers,
-      syncedAt: lastUpdated,
-      repeats: JSON.stringify(repeats),
-    };
+    // Index write only when the list carried geometry (detectOverlaps forms).
+    // Absent geometry → no indexing work for this form.
+    if (geometry !== undefined && geometry !== null) {
+      await writeIndexFromListGeometry(txDb, {
+        uuid,
+        formId,
+        datapointId,
+        name: datapointName,
+        geometry,
+        isComplete: Boolean(isComplete),
+      });
+    }
+  });
+};
 
-    await crudDataPoints.saveDataPoint(txDb, datapointData);
+/**
+ * Ask for a datapoint sync from somewhere that is not the Home screen.
+ *
+ * GEO-007 D-10 offers **Retry** when the overlap candidate set is incomplete, and Retry has to
+ * do what the Home sync button does. Adding the job only when none is active matters: a second
+ * job would race the running one and both would write the same rows.
+ *
+ * ponytail: Home still inlines its own copy of this, together with the form-submission job it
+ * also queues. Worth collapsing into here, but not while the only change under test is the
+ * overlap path.
+ */
+export const requestDatapointSync = async (db, userId) => {
+  const existing = await crudJobs.getActiveJob(db, SYNC_DATAPOINT_JOB_NAME);
+  if (!existing) {
+    await crudJobs.addJob(db, {
+      user: userId,
+      type: SYNC_DATAPOINT_JOB_NAME,
+      status: jobStatus.PENDING,
+    });
+  }
+  DatapointSyncState.update((s) => {
+    s.added = true;
+    s.inProgress = true;
   });
 };

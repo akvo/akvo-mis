@@ -284,6 +284,25 @@ const dataPointsQuery = () => ({
     );
     return res;
   },
+  /**
+   * Answers for a handful of datapoints, by uuid.
+   *
+   * GEO-006 D-5 keeps coordinates out of `geometry_index`, so GEO-007 reads them back from here
+   * for the 5-50 candidates that survive the bbox filter. Keyed on uuid rather than id because
+   * uuid is the index row's identity and is populated on every write path.
+   */
+  selectJsonByUuids: async (db, uuids = []) => {
+    if (!uuids?.length) {
+      return [];
+    }
+    const placeholders = uuids.map(() => '?').join(', ');
+    return sql.safeExecuteQuery(
+      db,
+      `SELECT id, uuid, json FROM datapoints WHERE uuid IN (${placeholders})`,
+      uuids,
+      'datapoints.selectJsonByUuids',
+    );
+  },
   getByUUID: async (db, { uuid, form }) => {
     const formVal = form ? { form } : {};
     const res = await sql.getFirstRow(db, 'datapoints', { uuid, ...formVal });

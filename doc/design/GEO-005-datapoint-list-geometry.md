@@ -7,7 +7,9 @@
 **Date**: 2026-09-09
 **Status**: **Implemented** — `geometry_answers` / `bounding_box` / `geometry_by_data_id` in
 `v1_mobile/geometry.py`, 25 tests in `tests_mobile_datapoint_geometry.py`. Revised 2026-09-18 by
-GEO-014; the per-polygon accuracy summary (D-10) is the one part **not yet built**
+GEO-014; the per-polygon accuracy summary (D-10) is the one part **not yet built**. Revised again
+2026-09-23 by GEO-006: response example corrected to a list, and `coordinates` **removed** from
+the payload along with the new `accuracy_summary()` (see §4)
 
 > **Status corrected 2026-09-21.** This still read "Draft" long after the endpoint shipped. The
 > stale line was found by cross-checking each GEO document's header against the code rather than
@@ -109,16 +111,40 @@ than one that errors.**
   "url": "https://.../datapoints/uuid.json",
   "last_updated": "2026-09-01T10:00:00Z",
 
-  "geometry": {
-    "question_id": 987,
-    "coordinates": [[9.03, 38.74], [9.04, 38.74], [9.04, 38.75]],
-    "bbox": { "min_lat": 9.03, "max_lat": 9.04, "min_lon": 38.74, "max_lon": 38.75 },
-    "accuracy": { "max": 6.8, "measured": true }
-  }
+  "geometry": [
+    {
+      "question_id": 987,
+      "index": 0,
+      "bbox": { "min_lat": 9.03, "max_lat": 9.04, "min_lon": 38.74, "max_lon": 38.75 },
+      "accuracy": { "max": 6.8, "measured": true }
+    }
+  ]
 }
 
 // Row for a form WITHOUT the flag — unchanged, no `geometry` key at all
 ```
+
+> **Example corrected 2026-09-23.** This block showed `geometry` as a single object. The shipped
+> code returns a **list** — `geometry_by_data_id` appends one entry per answer and the field is a
+> `serializers.ListField` — because a datapoint can hold more than one geoshape answer: a second
+> geoshape question, or a geoshape inside a repeatable group. Each entry therefore carries
+> `index` (the repeat index) as well as `question_id`. GEO-006 stores it as `repeatIndex`
+> (D-8); without it, two repeat instances of one question collide in the index.
+
+> **Narrowed 2026-09-23 (GEO-006 D-5) — shipped.** `coordinates` is **gone** from this payload;
+> `bbox` and `accuracy` stay, and `accuracy_summary()` was added beside `bounding_box()` in
+> `v1_mobile/geometry.py` to produce the per-polygon summary GEO-014 D-10 specified.
+>
+> The device indexes bounding boxes only and reads coordinates from its local `datapoints.json`
+> for the 5–50 candidates that survive the bbox filter. Before this, the coordinates travelled
+> **twice** — once here and again in `{uuid}.json` — so a page of 100 rows drops from roughly
+> 430 KB to ~10 KB. It was safe to remove because no shipped app version had ever read the
+> `geometry` field.
+>
+> The second reason is the one that matters more than the bytes: coordinates in the list
+> invited an index row written from the page whose coordinates were not yet on the device, which
+> GEO-007 would have read as a candidate it could not measure. GEO-006 D-6 closes that by
+> writing the index row inside the datapoint's own transaction.
 
 **Coordinates on this endpoint are sent as two-element vertices**, and accuracy travels as a
 **per-polygon summary** instead (GEO-014 D-10). GEO-007's adaptive threshold consumes

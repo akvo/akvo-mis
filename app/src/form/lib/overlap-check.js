@@ -1,0 +1,327 @@
+/**
+ * The database half of overlap detection: is the candidate set trustworthy, and what does it
+ * contain?
+ *
+ * Split from `overlap.js` so the maths stays testable without a database. Reasoning:
+ * GEO-007 D-10 (refuse, never caveat-pass) and GEO-006 D-5 (the index carries bounding boxes,
+ * not coordinates).
+ */
+import { crudConfig, crudDataPoints, crudGeometryIndex, crudSyncQueue } from '../../database/crud';
+import { boundingBox, summarizeAccuracy } from '../../lib/geometry-index';
+import { polygonArea } from './geometry';
+import {
+  OVERLAP_CONFIG_KEY,
+  OVERLAP_RULE_KEY,
+  adaptiveThreshold,
+  answerKey,
+  overlapPercent,
+  signatureOf,
+} from './overlap';
+import { resolveSeverity } from './polygon-rules';
+
+/** Reported like a rule so the report renders one list, not three special cases. */
+export const UNAVAILABLE_RULE_KEY = 'overlapUnavailable';
+export const NOT_VALIDATED_RULE_KEY = 'overlapNotValidated';
+/** One overlap and several read differently enough to deserve separate sentences. */
+export const OVERLAP_MANY_RULE_KEY = 'overlapMany';
+
+export const OVERLAP_STATUS = {
+  notValidated: 'notValidated',
+  checking: 'checking',
+  passed: 'passed',
+  failed: 'failed',
+  unavailable: 'unavailable',
+};
+
+/**
+ * Why the candidate set cannot be trusted. Each of these would otherwise report a confident
+ * "no overlap", which is why they share one refuse branch rather than falling through (D-10).
+ */
+export const UNAVAILABLE_CAUSE = {
+  indexNotReady: 'indexNotReady',
+  syncIncomplete: 'syncIncomplete',
+  indexGapped: 'indexGapped',
+  localFailure: 'localFailure',
+};
+
+/** Retry only helps where sync can close the gap. A corrupt database cannot be tapped better. */
+const RETRYABLE = [
+  UNAVAILABLE_CAUSE.indexNotReady,
+  UNAVAILABLE_CAUSE.syncIncomplete,
+  UNAVAILABLE_CAUSE.indexGapped,
+];
+
+const unavailable = (cause) => ({
+  status: OVERLAP_STATUS.unavailable,
+  cause,
+  retryable: RETRYABLE.includes(cause),
+  conflicts: [],
+});
+
+/**
+ * Is the local candidate set complete enough to draw a conclusion from?
+ *
+ * Runs before the bbox query, once, and is the only thing standing between an empty index and a
+ * green tick. Order matters: the cheapest and most decisive check first, so an upgraded device
+ * that has not resynced never reaches the row-count query.
+ */
+export const overlapPreflight = async (db, { formId } = {}) => {
+  try {
+    const config = await crudConfig.getConfig(db);
+    if (!config || config.geometryIndexReady !== 1) {
+      return unavailable(UNAVAILABLE_CAUSE.indexNotReady);
+    }
+    if (await crudSyncQueue.hasIncomplete(db)) {
+      return unavailable(UNAVAILABLE_CAUSE.syncIncomplete);
+    }
+    /**
+     * A sync that reported itself finished can still have gaps — a page that 200'd with the web
+     * app's index.html, a datapoint whose json fetch was skipped. Comparing what the server said
+     * the form holds against what landed catches that.
+     *
+     * ponytail: this counts datapoints, not geometries. GEO-005 would have to publish a
+     * `geometry_total` for a tighter comparison; until it does, a form whose missing rows all
+     * happen to be non-geoshape datapoints reports a gap it does not have — refusing too often,
+     * never passing wrongly, which is the correct direction to be wrong in.
+     */
+    const progress = await crudSyncQueue.getAllProgress(db);
+    const expected = progress?.[formId]?.total;
+    if (Number.isFinite(expected) && expected > 0) {
+      const local = await crudDataPoints.countSyncedByFormId(db, formId);
+      if (local < expected) {
+        return unavailable(UNAVAILABLE_CAUSE.indexGapped);
+      }
+    }
+    return { status: OVERLAP_STATUS.passed, conflicts: [] };
+  } catch {
+    return unavailable(UNAVAILABLE_CAUSE.localFailure);
+  }
+};
+
+/**
+ * Coordinates for the candidates that survived the bbox filter.
+ *
+ * One query for every survivor, then one parse each — 5–50 of them. This is what keeps peak
+ * memory constant in the size of the form rather than linear in it: the other 9,950 datapoints
+ * are never materialised (GEO-006 D-5, D-7).
+ */
+const coordinatesForCandidates = async (db, candidates) => {
+  const uuids = [...new Set(candidates.map((row) => row.uuid).filter(Boolean))];
+  if (!uuids.length) {
+    return {};
+  }
+  const rows = await crudDataPoints.selectJsonByUuids(db, uuids);
+  return rows.reduce((acc, row) => {
+    try {
+      acc[row.uuid] = typeof row.json === 'string' ? JSON.parse(row.json) : row.json;
+    } catch {
+      /**
+       * A candidate whose answers will not parse cannot be measured. Dropping it here would be
+       * a silent false pass, so it is left out of the map and the caller raises a local failure.
+       */
+      acc[row.uuid] = null;
+    }
+    return acc;
+  }, {});
+};
+
+const conflictFrom = (row, candidatePoints, points, geoConfig) => {
+  const percent = overlapPercent(points, candidatePoints);
+  if (!(percent > 0)) {
+    return null;
+  }
+  const local = summarizeAccuracy(points);
+  const { threshold, adaptive } = adaptiveThreshold({
+    accA: local.accuracyMeasured ? local.accuracyMax : null,
+    accB: row.accuracyMeasured ? row.accuracyMax : null,
+    areaA: polygonArea(points),
+    areaB: polygonArea(candidatePoints),
+    geoConfig,
+  });
+  if (percent < threshold) {
+    return null;
+  }
+  return {
+    uuid: row.uuid,
+    name: row.name || null,
+    questionId: row.questionId,
+    repeatIndex: row.repeatIndex ?? 0,
+    percent: Number(percent.toFixed(1)),
+    threshold: Number(threshold.toFixed(1)),
+    adaptive,
+  };
+};
+
+/**
+ * Run the overlap check for one polygon.
+ *
+ * `formId` is the form whose datapoints are candidates, and the caller chooses it: GEO-007 D-6
+ * wants **registration** plots, so a monitoring form must pass its parent's id rather than its
+ * own. Resolving that here would mean guessing at a form relationship this function cannot see.
+ *
+ * `excludeUuid` is the datapoint being edited — without it every edit overlaps itself by 100 %.
+ */
+export const runOverlapCheck = async (
+  db,
+  { points, question, formId, excludeUuid = null } = {},
+) => {
+  if (!Array.isArray(points) || points.length < 3) {
+    return { status: OVERLAP_STATUS.passed, conflicts: [] };
+  }
+  const preflight = await overlapPreflight(db, { formId });
+  if (preflight.status === OVERLAP_STATUS.unavailable) {
+    return preflight;
+  }
+  const bbox = boundingBox(points);
+  if (!bbox) {
+    return { status: OVERLAP_STATUS.passed, conflicts: [] };
+  }
+  try {
+    const candidates = await crudGeometryIndex.findOverlapCandidates(db, {
+      formId,
+      questionId: question?.id,
+      ...bbox,
+      excludeUuid,
+    });
+    if (!candidates?.length) {
+      return { status: OVERLAP_STATUS.passed, conflicts: [] };
+    }
+    const answersByUuid = await coordinatesForCandidates(db, candidates);
+    const geoConfig = question?.extra?.geoConfig;
+    const conflicts = candidates.reduce((acc, row) => {
+      const answers = answersByUuid[row.uuid];
+      if (!answers) {
+        return acc;
+      }
+      const candidatePoints = answers[answerKey(row.questionId, row.repeatIndex)];
+      if (!Array.isArray(candidatePoints) || candidatePoints.length < 3) {
+        return acc;
+      }
+      const conflict = conflictFrom(row, candidatePoints, points, geoConfig);
+      return conflict ? [...acc, conflict] : acc;
+    }, []);
+    return {
+      status: conflicts.length ? OVERLAP_STATUS.failed : OVERLAP_STATUS.passed,
+      /**
+       * Worst first, and that order is the numbering the enumerator sees: the report says
+       * `#1 (34.0%), #2 (22.5%)`. GEO-008's map review must label its polygons from this same
+       * array, or `#2` on screen and `#2` on the map are different plots.
+       */
+      conflicts: [...conflicts].sort((a, b) => b.percent - a.percent),
+    };
+  } catch {
+    /**
+     * A throwing index query, a missing table, or turf refusing a degenerate ring. None of them
+     * mean "no overlap", so none of them may return a pass.
+     */
+    return unavailable(UNAVAILABLE_CAUSE.localFailure);
+  }
+};
+
+/** `#1 (34.0%), #2 (22.5%)` — position in the worst-first array, which is the map's label too. */
+const conflictList = (conflicts) =>
+  conflicts.map((conflict, index) => `#${index + 1} (${conflict.percent}%)`).join(', ');
+
+/**
+ * The limit to print, which is not one number when accuracy varies between candidates.
+ *
+ * Each pair computes its own threshold from the accuracy and area of **both** polygons
+ * (GEO-014 D-5), so two conflicts on one plot can legitimately be judged at 9.5 % and 20 %.
+ * Printing only one of them would misstate why the other failed, so a mixed set prints a range.
+ * The uniform case — neither polygon measured, everything falling back to the ceiling — is the
+ * common one and still reads as a single number.
+ */
+const thresholdLabel = (conflicts) => {
+  const values = [...new Set(conflicts.map((conflict) => conflict.threshold))].sort(
+    (a, b) => a - b,
+  );
+  if (values.length === 1) {
+    return `${values[0]}`;
+  }
+  return `${values[0]}-${values[values.length - 1]}`;
+};
+
+/**
+ * Turn a check result into rule results, in the same shape the synchronous rules produce.
+ *
+ * **One result for all conflicts, not one per conflict.** Every overlap is still reported —
+ * GEO-007 requires that — but as one numbered sentence rather than a stack of near-identical
+ * lines. Device testing on 2026-09-23 showed why: the datapoint name is `generateDataPointName`
+ * output, every meta answer joined with " - ", so a single failure filled six lines with an
+ * administrative path and the enumerator still could not tell which plot was meant. Positions
+ * carry that job now, and GEO-008's map will carry the identity.
+ *
+ * Severity resolves through the same helper and the same `required` clamp as every other rule
+ * (D-9) — overlap is not special-cased.
+ */
+export const overlapResults = (checkResult, question = {}) => {
+  const severity = resolveSeverity(
+    { key: OVERLAP_RULE_KEY, configKey: OVERLAP_CONFIG_KEY },
+    question,
+  );
+  if (checkResult?.status === OVERLAP_STATUS.unavailable) {
+    return [
+      {
+        key: `${UNAVAILABLE_RULE_KEY}_${checkResult.cause}`,
+        id: `${UNAVAILABLE_RULE_KEY}-${checkResult.cause}`,
+        pass: false,
+        skipped: false,
+        severity,
+        params: { cause: checkResult.cause },
+      },
+    ];
+  }
+  const conflicts = checkResult?.conflicts || [];
+  if (!conflicts.length) {
+    return [];
+  }
+  const single = conflicts.length === 1;
+  return [
+    {
+      key: single ? OVERLAP_RULE_KEY : OVERLAP_MANY_RULE_KEY,
+      id: OVERLAP_RULE_KEY,
+      pass: false,
+      skipped: false,
+      severity,
+      params: {
+        count: conflicts.length,
+        actual: conflicts[0].percent,
+        list: conflictList(conflicts),
+        threshold: thresholdLabel(conflicts),
+      },
+    },
+  ];
+};
+
+/**
+ * "Never validated" is a reachable state by design (D-1) and must not read as a pass. For a
+ * required question it blocks submission exactly as a failure does; for an optional one it warns.
+ */
+export const notValidatedResult = (question = {}) => ({
+  key: NOT_VALIDATED_RULE_KEY,
+  id: NOT_VALIDATED_RULE_KEY,
+  pass: false,
+  skipped: false,
+  severity: resolveSeverity({ key: OVERLAP_RULE_KEY, configKey: OVERLAP_CONFIG_KEY }, question),
+  params: {},
+});
+
+/**
+ * What the submit gate should treat as failing, given whatever the Validate button last stored.
+ *
+ * Absent or stale state is **not** a pass — it is the "never validated" state D-1 creates, and
+ * closing it is what stops the button from becoming an opt-out from the whole feature.
+ */
+export const storedOverlapFailures = (stored, question = {}, points = null) => {
+  const stale = points !== null && stored?.signature !== signatureOf(points);
+  if (!stored || stale || stored.status === OVERLAP_STATUS.notValidated) {
+    return [notValidatedResult(question)];
+  }
+  if (stored.status === OVERLAP_STATUS.checking) {
+    return [notValidatedResult(question)];
+  }
+  if (stored.status === OVERLAP_STATUS.passed) {
+    return [];
+  }
+  return stored.results || [];
+};
