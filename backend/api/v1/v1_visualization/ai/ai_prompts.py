@@ -48,7 +48,7 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "\"categorical\"}`.\n"
     "   - Geographic Maps:\n"
     "     - If form has geolocation coordinates and categorical status "
-    "questions: Use `type: \"map\"` (col_span: 12 or 24), `config: "
+    "questions: Use `type: \"map\"` (col_span: 24), `config: "
     "{\"map_mode\": \"category\", \"color_scheme\": \"categorical\"}`.\n"
     "   - Escalation / Monitoring Tables:\n"
     "     - Use `type: \"table\"` (col_span: 24), `question: null`, ONLY on "

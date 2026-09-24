@@ -200,7 +200,9 @@ def normalize_grid_layout(widgets: List[Dict]) -> List[Dict]:
         return []
 
     for w in widgets:
-        if w.get("col_span") not in (6, 8, 12, 24):
+        if w.get("type") in ("table", "map"):
+            w["col_span"] = 24
+        elif w.get("col_span") not in (6, 8, 12, 24):
             w["col_span"] = 12
 
     # Group widgets into rows
@@ -462,7 +464,9 @@ def validate_and_sanitize_widgets(
             config.pop("measure", None)
 
         col_span = item.get("col_span", 12)
-        if col_span not in (6, 8, 12, 24):
+        if w_type in ("table", "map"):
+            col_span = 24
+        elif col_span not in (6, 8, 12, 24):
             col_span = 12
 
         default_title = f"{w_type.capitalize()} Widget"

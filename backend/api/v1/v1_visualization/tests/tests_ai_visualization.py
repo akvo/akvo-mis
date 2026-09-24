@@ -245,6 +245,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         result = generate_starter_heuristics(metadata)
         types = [w["type"] for w in result["widgets"]]
         self.assertIn("map", types)
+        map_widget = next(w for w in result["widgets"] if w["type"] == "map")
+        self.assertEqual(map_widget["col_span"], 24)
 
     def test_starter_heuristics_high_cardinality_bar(self):
         """Option question with >5 choices generates Bar chart over Pie."""
@@ -469,6 +471,41 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(normalized[2]["col_span"], 12)
         # Second row is 12, expanded to 24
         self.assertEqual(normalized[3]["col_span"], 24)
+
+    def test_table_and_map_enforced_24_col_span(self):
+        """Table and Map widgets are always enforced to col_span 24."""
+        metadata, sources_map = extract_family_metadata(
+            self.root.id, self.user
+        )
+        raw_widgets = [
+            {
+                "type": "table",
+                "title": "Shrunk Table",
+                "col_span": 12,  # AI returned 12
+                "form": self.monitoring.id,
+                "question": None,
+                "config": {"columns": []},
+            },
+            {
+                "type": "map",
+                "title": "Shrunk Map",
+                "col_span": 8,  # AI returned 8
+                "form": self.root.id,
+                "question": None,
+                "config": {},
+            },
+        ]
+        valid = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(valid), 2)
+        self.assertEqual(valid[0]["type"], "table")
+        self.assertEqual(valid[0]["col_span"], 24)
+        self.assertEqual(valid[1]["type"], "map")
+        self.assertEqual(valid[1]["col_span"], 24)
 
     # =========================================================
     # 5. Circuit Breaker Resilience Tests

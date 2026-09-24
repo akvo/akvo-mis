@@ -127,7 +127,7 @@ def _create_map_widget(
     form_id: int,
     title: str,
     rationale: str,
-    col_span: int = 12,
+    col_span: int = 24,
 ) -> Dict:
     return {
         "type": "map",
@@ -343,7 +343,7 @@ def generate_starter_heuristics(
                 form_id=m_id,
                 title=f"Recent {m_name} Log",
                 rationale=f"Detailed log of submissions for {m_name}.",
-                col_span=24 if len(widgets) % 2 == 0 else 12,
+                col_span=24,
                 questions=m_questions,
                 root_questions=root_questions,
             )

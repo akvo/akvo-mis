@@ -124,11 +124,12 @@ const DashboardBuilder = () => {
         type === "table"
           ? sources?.forms?.find((f) => f.type === "monitoring")
           : sources?.forms?.[0];
+      const isFullWidthType = type === "table" || type === "map";
       const newWidget = {
         id: nextTempId,
         order: widgets.length + 1,
         type,
-        col_span: defaults.col_span || 24,
+        col_span: isFullWidthType ? 24 : defaults.col_span || 24,
         title: "",
         color: defaults.color || null,
         form: type !== "section_title" && firstForm ? firstForm.id : null,
@@ -161,11 +162,15 @@ const DashboardBuilder = () => {
     (suggestion) => {
       nextTempId -= 1;
       const defaults = WIDGET_DEFAULTS[suggestion.type] || {};
+      const isFullWidthType =
+        suggestion.type === "table" || suggestion.type === "map";
       const newWidget = {
         id: nextTempId,
         order: widgets.length + 1,
         type: suggestion.type,
-        col_span: suggestion.col_span || defaults.col_span || 24,
+        col_span: isFullWidthType
+          ? 24
+          : suggestion.col_span || defaults.col_span || 24,
         title: suggestion.title || "",
         color: suggestion.color || defaults.color || null,
         form: suggestion.form || null,
