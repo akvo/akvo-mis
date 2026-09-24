@@ -436,4 +436,25 @@ describe("AISuggestionDrawer", () => {
       await screen.findByRole("button", { name: /all added/i })
     ).toBeDisabled();
   });
+
+  it("enforces max length 250 and displays character count on search input", async () => {
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    const searchInput = screen.getByPlaceholderText(
+      /Ask AI for specific widgets/i
+    );
+    expect(searchInput).toHaveAttribute("maxlength", "250");
+
+    await userEvent.type(searchInput, "Focus on wells");
+    expect(await screen.findByText("14 / 250")).toBeInTheDocument();
+  });
 });

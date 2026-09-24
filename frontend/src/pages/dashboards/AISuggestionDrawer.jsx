@@ -278,9 +278,10 @@ const AISuggestionDrawer = ({
       <div className="ai-suggestion-drawer-body">
         <div className="ai-suggestion-search-box">
           <Input.Search
-            placeholder="Ask AI for specific widgets (e.g. 'Focus on population')..."
+            placeholder="Ask AI for specific widgets (max 250 chars)..."
             allowClear
             enterButton="Suggest"
+            maxLength={250}
             value={promptHint}
             onChange={(e) => {
               const val = e.target.value;
@@ -292,6 +293,11 @@ const AISuggestionDrawer = ({
             onSearch={handleSearch}
             loading={loading}
           />
+          {promptHint && (
+            <div className="ai-suggestion-char-count">
+              {promptHint.length} / 250
+            </div>
+          )}
           <div className="ai-suggestion-chips">
             <span className="ai-suggestion-chips-label">Try:</span>
             {PROMPT_CHIPS.map((chip) => (
