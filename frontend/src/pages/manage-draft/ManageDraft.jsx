@@ -11,6 +11,7 @@ import {
   Space,
   Select,
   Modal,
+  Typography,
 } from "antd";
 import { useNavigate } from "react-router-dom";
 import {
@@ -30,6 +31,8 @@ import FormDropdown from "../../components/filters/FormDropdown";
 import DraftDetail from "./DraftDetail";
 import { useNotification } from "../../util/hooks";
 import { Can } from "../../components/can";
+
+const { Text } = Typography;
 
 const ManageDraft = () => {
   const [loading, setLoading] = useState(false);
@@ -301,7 +304,16 @@ const ManageDraft = () => {
                   {
                     title: "Last Updated",
                     dataIndex: "updated",
-                    render: (cell, row) => cell || row.created,
+                    render: (cell, row) => (
+                      <Space direction="vertical" size={0}>
+                        {cell || row.created}
+                        <Text type="secondary">
+                          {`${text.draftUpdatedByPrefix} ${
+                            row.updated_by || row.created_by
+                          }`}
+                        </Text>
+                      </Space>
+                    ),
                   },
                   {
                     title: "Name",
@@ -315,6 +327,10 @@ const ManageDraft = () => {
                   {
                     title: "Region",
                     dataIndex: "administration",
+                  },
+                  {
+                    title: text.draftCreatedByCol,
+                    dataIndex: "created_by",
                   },
                   Table.EXPAND_COLUMN,
                 ]}

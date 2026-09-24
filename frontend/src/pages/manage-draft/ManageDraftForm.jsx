@@ -220,12 +220,17 @@ const ManageDraftForm = () => {
         : names
       : `${authUser.administration.name} - ${moment().format("MMM YYYY")}`;
 
+    // Without an administration answer, keep the draft's own administration;
+    // the editor's (a super admin's is the national root) would move another
+    // user's draft out of their scope.
+    const fallbackAdministration =
+      editData?.administration || authUser.administration.id;
     const dataPayload = {
       administration: administration
         ? Array.isArray(administration)
           ? administration[administration.length - 1]
           : administration
-        : authUser.administration.id,
+        : fallbackAdministration,
       name: datapointName,
       geo: geo || null,
       ...(uuid && { uuid }),
