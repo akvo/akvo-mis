@@ -46,22 +46,22 @@ describe("VizScatter widget", () => {
       { x: 20, y: 50, name: "Well 2" },
     ];
 
-    test("renders default axis labels when not specified", () => {
+    test("renders axis labels as HTML and abbreviated tick formatters", () => {
       render(<VizScatter config={scatterWidget()} data={data} filters={{}} />);
       expect(lastOption).not.toBeNull();
-      expect(lastOption.xAxis.name).toBe("Number of datapoints");
-      expect(lastOption.xAxis.nameLocation).toBe("center");
-      expect(lastOption.xAxis.nameGap).toBe(30);
-      expect(lastOption.yAxis.name).toBe("Number of datapoints");
-      expect(lastOption.yAxis.nameLocation).toBe("center");
-      expect(lastOption.yAxis.nameGap).toBe(40);
+      expect(lastOption.xAxis.name).toBeUndefined();
+      expect(lastOption.yAxis.name).toBeUndefined();
+      expect(lastOption.xAxis.axisLabel.formatter(1500000)).toBe("1.5M");
+      expect(lastOption.yAxis.axisLabel.formatter(3000000000)).toBe("3B");
+      // Both axes default to the same label, rendered once per axis
+      expect(screen.getAllByText("Number of datapoints")).toHaveLength(2);
       expect(lastOption.series[0].data).toEqual([
         [10, 25, "Well 1"],
         [20, 50, "Well 2"],
       ]);
     });
 
-    test("renders custom xAxis and yAxis labels when configured", () => {
+    test("renders custom axis labels as HTML when configured", () => {
       render(
         <VizScatter
           config={scatterWidget({
@@ -73,8 +73,8 @@ describe("VizScatter widget", () => {
         />
       );
       expect(lastOption).not.toBeNull();
-      expect(lastOption.xAxis.name).toBe("Well Depth (m)");
-      expect(lastOption.yAxis.name).toBe("Turbidity (NTU)");
+      expect(screen.getByText("Well Depth (m)")).toBeInTheDocument();
+      expect(screen.getByText("Turbidity (NTU)")).toBeInTheDocument();
     });
   });
 });

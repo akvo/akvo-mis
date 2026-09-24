@@ -1,6 +1,6 @@
 {
   "name": "akvo-mis-mobile",
-  "version": "4.2.3",
+  "version": "4.3.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start --port 19000",
@@ -25,6 +25,7 @@
     "@rneui/base": "^4.0.0-rc.8",
     "@rneui/themed": "^4.0.0-rc.8",
     "@sentry/react-native": "^6.14.0",
+    "@turf/kinks": "^7.4.0",
     "axios": "^1.4.0",
     "expo": "~53.0.27",
     "expo-application": "~6.1.5",

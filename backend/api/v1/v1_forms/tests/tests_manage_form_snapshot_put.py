@@ -506,3 +506,97 @@ class SnapshotOnlyPutTestCase(TestCase):
             data.get("translations"),
             [{"language": "id", "name": "V1 Terjemahan"}],
         )
+
+    # ─────────────────────────────────────────────
+    # Published GET must not drop question fields
+    # ─────────────────────────────────────────────
+
+    def test_published_get_keeps_geoshape_center_and_geoconfig(self):
+        """GET on a published form reads the active snapshot. It must return
+        every question field the snapshot holds — `center` was being dropped,
+        so the form builder rendered an empty map-centre panel and the next
+        save wrote the centre away."""
+        center = [-7.3898275, 109.4638907]
+        geo_config = {"accuracyThreshold": 20, "detectOverlaps": False}
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"].append({
+            "id": None,
+            "order": 2,
+            "label": "Draw your plot",
+            "short_label": None,
+            "name": "draw_your_plot",
+            "type": "geoshape",
+            "meta": False,
+            "required": True,
+            "rule": None,
+            "dependency": None,
+            "dependency_rule": "AND",
+            "api": None,
+            "extra": {"geoConfig": geo_config},
+            "tooltip": None,
+            "fn": None,
+            "pre": None,
+            "display_only": False,
+            "center": center,
+            "option": [],
+        })
+        form_id = self._create_form(payload)
+        self.assertEqual(
+            self._get(form_id).json()["question_group"][0]["question"][1][
+                "center"
+            ],
+            center,
+            "draft GET must return center",
+        )
+
+        self._publish(form_id)
+
+        geoshape = self._get(form_id).json()["question_group"][0]["question"][
+            1
+        ]
+        self.assertEqual(
+            geoshape.get("center"),
+            center,
+            "published GET must return center from the snapshot",
+        )
+        self.assertEqual(geoshape.get("extra"), {"geoConfig": geo_config})
+
+    def test_published_get_survives_a_save_reload_round_trip(self):
+        """Re-saving a published form must not lose the map centre: the
+        editor sends back whatever GET handed it, so a field missing from the
+        response disappears from the next snapshot."""
+        center = [-7.3898275, 109.4638907]
+        payload = json.loads(json.dumps(FORM_PAYLOAD))
+        payload["question_group"][0]["question"].append({
+            "id": None,
+            "order": 2,
+            "label": "Draw your plot",
+            "name": "draw_your_plot",
+            "type": "geoshape",
+            "meta": False,
+            "required": True,
+            "dependency_rule": "AND",
+            "display_only": False,
+            "center": center,
+            "option": [],
+        })
+        form_id = self._create_form(payload)
+        self._publish(form_id)
+
+        # Round-trip the GET payload straight back through PUT, the way the
+        # editor does, then activate that snapshot.
+        detail = self._get(form_id).json()
+        self._put(form_id, {
+            "name": detail["name"],
+            "question_group": detail["question_group"],
+        })
+        self._publish(form_id)
+
+        geoshape = self._get(form_id).json()["question_group"][0]["question"][
+            1
+        ]
+        self.assertEqual(
+            geoshape.get("center"),
+            center,
+            "center must survive a GET → PUT → publish round trip",
+        )

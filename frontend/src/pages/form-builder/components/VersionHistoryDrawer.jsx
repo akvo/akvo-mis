@@ -1,6 +1,8 @@
 import React from "react";
 import { Button, Drawer, Popconfirm, Space, Table, Tag } from "antd";
 
+import { formatApiDateTime } from "../../../util/date";
+
 const VersionHistoryDrawer = ({
   open,
   onClose,
@@ -31,7 +33,9 @@ const VersionHistoryDrawer = ({
       title: text.formBuilderPublishedAtCol,
       dataIndex: "published_at",
       key: "published_at",
-      render: (v) => (v ? new Date(v).toLocaleString() : "—"),
+      // `new Date(v)` read this day-first string month-first: 11-09-2026 rendered as
+      // 9 November, and anything past the 12th as "Invalid Date". See `formatApiDateTime`.
+      render: (v) => formatApiDateTime(v),
     },
     {
       title: text.formBuilderPublishedByCol,

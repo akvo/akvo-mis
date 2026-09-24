@@ -36,6 +36,16 @@ class MobileDataPointDownloadListSerializer(serializers.Serializer):
     def get_last_updated(self, obj):
         return obj["updated"] if obj["updated"] else obj["created"]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # No "geometry" key in context means geometry is not being served
+        # at all, and the key must not appear. An empty list means "this
+        # datapoint has no polygon". The device needs both.
+        geometry = self.context.get("geometry")
+        if geometry is not None:
+            data["geometry"] = geometry.get(instance["id"], [])
+        return data
+
     class Meta:
         fields = [
             "id",

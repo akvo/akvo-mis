@@ -7,7 +7,8 @@ from datetime import timedelta
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Questions
 from api.v1.v1_data.models import Answers, FormData
-from api.v1.v1_profile.models import Entity, EntityData
+from api.v1.v1_profile.models import Administration, Entity, EntityData
+from api.v1.v1_users.models import Organisation
 from faker import Faker
 
 fake = Faker()
@@ -35,6 +36,61 @@ def create_cache(name, resp, timeout=None):
     today = datetime.now().strftime("%Y%m%d")
     cache_name = f"{today}-{name}"
     cache.set(cache_name, resp, timeout=timeout)
+
+
+def answer_fields(question: Questions, value):
+    """Map a submitted answer value onto Answers' three value columns.
+
+    Every write path routes through here: the three submit serializers
+    and the two edit endpoints. It used to be five copies, and they
+    drifted. The edit copies silently lost the cascade and autofield
+    branches, so editing a cascade answer wiped its stored label and
+    editing an autofield pushed a string into a FloatField. One dispatch
+    is what stops the next question type being missed the same way.
+
+    Returns (name, value, options), in the order the callers assign them.
+    """
+    if question.type in [
+        QuestionTypes.geo,
+        QuestionTypes.option,
+        QuestionTypes.multiple_option,
+        QuestionTypes.geoshape,
+        QuestionTypes.geotrace,
+    ]:
+        return None, None, value
+
+    if question.type in [
+        QuestionTypes.input,
+        QuestionTypes.text,
+        QuestionTypes.image,
+        QuestionTypes.date,
+        QuestionTypes.autofield,
+        QuestionTypes.attachment,
+        QuestionTypes.signature,
+    ]:
+        return value, None, None
+
+    if question.type == QuestionTypes.cascade:
+        endpoint = (question.api or {}).get("endpoint", "")
+        extra_type = (question.extra or {}).get("type")
+        if "organisation" in endpoint:
+            name = Organisation.objects.filter(pk=value).values_list(
+                "name", flat=True
+            ).first()
+            return name, None, None
+        if "entity-data" in endpoint or extra_type == "entity":
+            name = EntityData.objects.filter(pk=value).values_list(
+                "name", flat=True
+            ).first()
+            return name, None, None
+        # An administration cascade keeps both: the label for display and
+        # the integer id for joins.
+        name = Administration.objects.filter(pk=value).values_list(
+            "name", flat=True
+        ).first()
+        return name, value, None
+
+    return None, value, None
 
 
 def set_answer_data(
@@ -132,6 +188,20 @@ def set_answer_data(
         name = (data.created + timedelta(days=days)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         )
+    elif question.type in (QuestionTypes.geoshape, QuestionTypes.geotrace):
+        # A small square around a random point, in the same
+        # latitude-first format a real client sends. Roughly 100 m on a
+        # side, which is plausible for a smallholder plot and keeps
+        # seeded polygons from overlapping by accident.
+        origin_lat = float(fake.latitude())
+        origin_lon = float(fake.longitude())
+        step = 0.001
+        option = [
+            [origin_lat, origin_lon],
+            [origin_lat + step, origin_lon],
+            [origin_lat + step, origin_lon + step],
+            [origin_lat, origin_lon + step],
+        ]
     else:
         pass
 
@@ -161,7 +231,15 @@ def add_fake_answers(data):
         if question.meta:
             if name:
                 meta_name.append(name)
-            elif option and question.type != QuestionTypes.geo:
+            elif option and question.type not in [
+                QuestionTypes.geo,
+                QuestionTypes.geoshape,
+                QuestionTypes.geotrace,
+            ]:
+                # `option` is a flat list of labels for the option
+                # types. For the geometry types it is a list of
+                # coordinate pairs, which `",".join` cannot take and
+                # which has no business in a datapoint name anyway.
                 meta_name.append(",".join(option))
             elif value and question.type != QuestionTypes.cascade:
                 meta_name.append(str(value))

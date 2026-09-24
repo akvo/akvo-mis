@@ -25,6 +25,8 @@ export const QUESTION_TYPES = {
   autofield: "autofield",
   attachment: "attachment",
   signature: "signature",
+  geoshape: "geoshape",
+  geotrace: "geotrace",
 };
 
 export const READ_ACCESS = 1;

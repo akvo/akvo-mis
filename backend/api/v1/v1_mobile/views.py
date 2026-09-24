@@ -51,6 +51,11 @@ from .serializers import (
     SyncDeviceParamsSerializer,
     DraftFormDataSerializer,
 )
+from .geometry import (
+    enabled_geoshape_question_ids,
+    geometry_answers,
+    geometry_by_data_id,
+)
 from .models import MobileAssignment, MobileApk
 from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
 from api.v1.v1_forms.constants import FormStatus
@@ -688,6 +693,35 @@ def get_forms_tree(request, version):
     return Response(result, status=status.HTTP_200_OK)
 
 
+# Documentation only - referenced from `responses=`, never instantiated
+# to serialize a row. It subclasses the real serializer rather than
+# restating its six fields, so the documented row cannot drift from the
+# served one and `url` keeps the `format: uri` its
+# `@extend_schema_field` gives it. `geometry` is declared here and not
+# on the parent because on the parent it would be emitted on every row,
+# including the flag-off and no-form_id responses that have to stay
+# byte-identical to what the device gets today. No docstring, because
+# drf-spectacular would publish it as the schema's description.
+#
+# The entry shape is described in help_text rather than as nested
+# inline_serializers. Spelling it out in the schema cost thirty lines to
+# restate what this endpoint's own response already shows.
+class MobileDataPointDownloadListRowSerializer(
+    MobileDataPointDownloadListSerializer
+):
+    geometry = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        help_text=(
+            "One entry per geoshape answer: question_id, index, "
+            "coordinates as [[lat, lon], ...], and bbox with min_lat, "
+            "max_lat, min_lon, max_lon. Present only with form_id, "
+            "detectOverlaps and the geometry flag on. Empty list means "
+            "no polygon for this datapoint, not that geometry is absent."
+        ),
+    )
+
+
 @extend_schema(
     # Add form_id as query parameter for
     # filtering datapoints related to a specific form
@@ -697,16 +731,58 @@ def get_forms_tree(request, version):
             required=False,
             type=OpenApiTypes.NUMBER,
             location=OpenApiParameter.QUERY,
-        )
+        ),
+        OpenApiParameter(
+            name="geometry_full",
+            required=False,
+            type=OpenApiTypes.BOOL,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "Ignore the sync cursor and return every geometry "
+                "candidate for this form. The device's repair path after "
+                "its indexed row count disagrees with geometry_total. "
+                "Ignored without form_id."
+            ),
+        ),
     ],
     responses={
         (200, "application/json"): inline_serializer(
             "MobileDeviceDownloadDatapointListResponse",
             fields={
-                "total": serializers.IntegerField(),
-                "data": MobileDataPointDownloadListSerializer(many=True),
-                "page": serializers.IntegerField(),
+                "total": serializers.IntegerField(
+                    help_text=(
+                        "Rows matching the sync cursor, i.e. this "
+                        "delta. NOT the candidate count. Under "
+                        "geometry_full=true the cursor is ignored and "
+                        "this becomes the whole candidate count."
+                    )
+                ),
+                "data": MobileDataPointDownloadListRowSerializer(
+                    many=True
+                ),
+                "total_page": serializers.IntegerField(),
                 "current": serializers.IntegerField(),
+                "complete": serializers.BooleanField(
+                    required=False,
+                    help_text=(
+                        "This response delivered the last page of this "
+                        "listing. NOT a claim that the device's stored "
+                        "candidate set is complete - compare "
+                        "geometry_total against the local row count for "
+                        "that. Present only with form_id and "
+                        "detectOverlaps."
+                    ),
+                ),
+                "geometry_total": serializers.IntegerField(
+                    required=False,
+                    help_text=(
+                        "Geoshape answers this assignment can see for "
+                        "this form, ignoring the sync cursor. The device "
+                        "compares this against its own indexed row count "
+                        "and must refuse to validate on mismatch. Present "
+                        "only with form_id and detectOverlaps."
+                    ),
+                ),
             },
         )
     },
@@ -754,16 +830,34 @@ def get_datapoint_download_list(request, version):
     queryset = FormData.objects.for_user(assignment.user).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
     )
-    if assignment.last_synced_at:
-        queryset = queryset.filter(
-            Q(created__gte=assignment.last_synced_at)
-            | Q(updated__gte=assignment.last_synced_at)
-        )
 
+    # Geometry rides only on the per-form path. Without form_id the
+    # response spans every form in the assignment, so a per-form
+    # completeness claim would be meaningless there, and leaving that
+    # branch untouched is what makes "byte-identical when off" provable
+    # rather than argued.
+    geometry_question_ids = (
+        enabled_geoshape_question_ids(find_form) if form_id else []
+    )
     queryset = queryset.filter(
         is_pending=False,
         is_draft=False,
     )
+    # Held before the cursor narrows it. `geometry_total` has to describe
+    # the whole candidate set: a device that lost a page would otherwise
+    # compare its gapped index against an equally gapped count and
+    # conclude it was complete. See spec D-5.
+    candidates = queryset
+
+    geometry_full = (
+        bool(geometry_question_ids)
+        and request.GET.get("geometry_full") == "true"
+    )
+    if assignment.last_synced_at and not geometry_full:
+        queryset = queryset.filter(
+            Q(created__gte=assignment.last_synced_at)
+            | Q(updated__gte=assignment.last_synced_at)
+        )
     queryset = queryset.values(
         "uuid",
         "id",
@@ -775,9 +869,35 @@ def get_datapoint_download_list(request, version):
     ).order_by("-created")
 
     instance = paginator.paginate_queryset(queryset, request)
+    context = {}
+    if geometry_question_ids:
+        context["geometry"] = geometry_by_data_id(
+            [row["id"] for row in instance], geometry_question_ids
+        )
     response = paginator.get_paginated_response(
-        MobileDataPointDownloadListSerializer(instance, many=True).data
+        MobileDataPointDownloadListSerializer(
+            instance, many=True, context=context
+        ).data
     )
+    if geometry_question_ids:
+        # Deliberately from `candidates`, not `queryset`: the cursor-free
+        # set. `total` stays the delta count. These are different numbers
+        # and the API documentation says so, because a reader who
+        # conflates them rebuilds the bug this exists to prevent.
+        response.data["geometry_total"] = geometry_answers(
+            candidates.values("id"), geometry_question_ids
+        ).count()
+        # Scoped deliberately narrowly: "this response delivered the last
+        # page of this listing". It is NOT "your local index is now
+        # complete", and it must not be read that way. The cursor advances
+        # when the final page is delivered rather than confirmed, so a
+        # device that dies mid-page and drains the next run cleanly would
+        # see this true over a gapped index. `geometry_total` is the field
+        # that catches that, because the device can re-check it against its
+        # own row count at validation time.
+        response.data["complete"] = (
+            response.data["current"] == response.data["total_page"]
+        )
     page = response.data["current"]
     total_page = response.data["total_page"]
     if page == total_page and not form_id:

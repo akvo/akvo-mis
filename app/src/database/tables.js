@@ -26,6 +26,8 @@ const tables = [
       imageQuality: "VARCHAR(20) DEFAULT 'low'",
       updateSkippedUntil: 'DATETIME',
       saveToGallery: 'TINYINT DEFAULT 0',
+      validatePolygonShape: 'TINYINT DEFAULT 1',
+      validatePolygonArea: 'TINYINT DEFAULT 1',
     },
   },
   {

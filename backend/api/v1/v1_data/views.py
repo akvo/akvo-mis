@@ -27,6 +27,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.v1.v1_data.functions import answer_fields
 from api.v1.v1_data.models import (
     FormData,
     Answers,
@@ -46,7 +47,6 @@ from api.v1.v1_data.serializers import (
     FormDataSerializer,
     FilterDraftFormDataSerializer,
 )
-from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.constants import DataAccessTypes
@@ -459,27 +459,9 @@ class FormDataAddListView(APIView):
             # prepare updated answer
             question_id = answer.get("question")
             question = Questions.objects.get(id=question_id)
-            name = None
-            value = None
-            option = None
-            if question.type in [
-                QuestionTypes.geo,
-                QuestionTypes.option,
-                QuestionTypes.multiple_option,
-            ]:
-                option = answer.get("value")
-            elif question.type in [
-                QuestionTypes.input,
-                QuestionTypes.text,
-                QuestionTypes.image,
-                QuestionTypes.date,
-                QuestionTypes.attachment,
-                QuestionTypes.signature,
-            ]:
-                name = answer.get("value")
-            else:
-                # for administration,number question type
-                value = answer.get("value")
+            name, value, option = answer_fields(
+                question, answer.get("value")
+            )
             # Update answer
             form_answer.data = data
             form_answer.question = question
@@ -872,27 +854,9 @@ class PendingFormDataView(APIView):
             # prepare updated answer
             question_id = answer.get("question")
             question = Questions.objects.get(id=question_id)
-            name = None
-            value = None
-            option = None
-            if question.type in [
-                QuestionTypes.geo,
-                QuestionTypes.option,
-                QuestionTypes.multiple_option,
-            ]:
-                option = answer.get("value")
-            elif question.type in [
-                QuestionTypes.input,
-                QuestionTypes.text,
-                QuestionTypes.image,
-                QuestionTypes.date,
-                QuestionTypes.attachment,
-                QuestionTypes.signature,
-            ]:
-                name = answer.get("value")
-            else:
-                # for administration,number question type
-                value = answer.get("value")
+            name, value, option = answer_fields(
+                question, answer.get("value")
+            )
             # Update answer
             form_answer.data = pending_data
             form_answer.question = question
@@ -925,6 +889,13 @@ class PendingFormDataView(APIView):
         return Response(
             {"message": "update success"}, status=status.HTTP_200_OK
         )
+
+
+def _can_manage_draft(user, draft) -> bool:
+    # Super admins sit at the top of the hierarchy and may manage any draft
+    # in their tenant; everyone else only their own. Tenant scoping is done
+    # by the caller's FormData.objects.for_user lookup.
+    return user.is_superuser or draft.created_by_id == user.id
 
 
 class DraftFormDataListView(APIView):
@@ -984,10 +955,12 @@ class DraftFormDataListView(APIView):
             )
         page = serializer.validated_data.get("page", 1)
 
-        # Filter draft data for this form and user
+        # Filter draft data for this form; super admins see every user's
+        queryset = FormData.objects_draft.filter(form=form)
+        if not request.user.is_superuser:
+            queryset = queryset.filter(created_by=request.user)
         queryset = (
-            FormData.objects_draft.filter(form=form, created_by=request.user)
-            .annotate(
+            queryset.annotate(
                 total_children=Count(
                     "children",
                     filter=Q(
@@ -1072,7 +1045,7 @@ class DraftFormDataDetailView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {"message": "You are not allowed to perform this action"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1096,7 +1069,7 @@ class DraftFormDataDetailView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {"message": "You are not allowed to perform this action"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1135,7 +1108,7 @@ class DraftFormDataDetailView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {
                     "detail": "You do not have permission to perform this action."  # noqa: E501
@@ -1163,7 +1136,7 @@ class PublishDraftFormDataView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {
                     "detail": "You do not have permission to perform this action."  # noqa: E501

@@ -75,7 +75,7 @@ describe("VizLine widget", () => {
       expect(raw.yAxis.type).toBe("value");
     });
 
-    test("renders xAxis and yAxis labels when configured", () => {
+    test("renders axis labels as HTML elements", () => {
       render(
         <VizLine
           config={normalLineWidget({
@@ -88,13 +88,11 @@ describe("VizLine widget", () => {
       );
       expect(screen.getByTestId("line-chart")).toBeInTheDocument();
       const raw = lastLineProps.rawConfig;
-      expect(raw.xAxis.name).toBe("Submission date");
-      expect(raw.xAxis.nameLocation).toBe("center");
-      expect(raw.xAxis.nameGap).toBe(30);
-      expect(raw.yAxis.name).toBe("Turbidity (NTU)");
-      expect(raw.yAxis.nameLocation).toBe("center");
-      expect(raw.yAxis.nameGap).toBe(40);
-      expect(raw.grid.bottom).toBe(60);
+      expect(raw.xAxis.name).toBeUndefined();
+      expect(raw.yAxis.name).toBeUndefined();
+      expect(screen.getByText("Submission date")).toBeInTheDocument();
+      expect(screen.getByText("Turbidity (NTU)")).toBeInTheDocument();
+      expect(raw.yAxis.axisLabel.formatter(2000000)).toBe("2M");
     });
   });
 
@@ -104,7 +102,7 @@ describe("VizLine widget", () => {
       { label: "2024-02", "District A": 30, "District B": 35 },
     ];
 
-    test("renders stacked line chart with axis labels and legend margin", () => {
+    test("renders stacked line chart with axis labels as HTML", () => {
       render(
         <VizLine
           config={stackedLineWidget({
@@ -117,11 +115,10 @@ describe("VizLine widget", () => {
       );
       expect(screen.getByTestId("stack-line-chart")).toBeInTheDocument();
       const raw = lastStackLineProps.rawConfig;
-      expect(raw.xAxis.name).toBe("Month");
-      expect(raw.xAxis.nameLocation).toBe("center");
-      expect(raw.yAxis.name).toBe("Water Volume (L)");
-      expect(raw.legend.bottom).toBe(15);
-      expect(raw.grid.bottom).toBe(70);
+      expect(raw.xAxis.name).toBeUndefined();
+      expect(raw.yAxis.name).toBeUndefined();
+      expect(screen.getByText("Month")).toBeInTheDocument();
+      expect(screen.getByText("Water Volume (L)")).toBeInTheDocument();
     });
   });
 });

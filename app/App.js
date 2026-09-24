@@ -31,7 +31,7 @@ import {
 import { tables, openDatabase } from './src/database';
 import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09, m10 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10, m11 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -166,6 +166,13 @@ const handleInitConfig = async (db) => {
       s.geoLocationTimeout = configExist.geoLocationTimeout;
       s.imageQuality = configExist.imageQuality || 'low';
       s.saveToGallery = configExist.saveToGallery || 0;
+      // `validatePolygonShape` / `validatePolygonArea` are deliberately NOT restored, and the
+      // columns are deliberately still there. Polygon severity is the form author's call from
+      // 2026-09-21 (`geoConfig.validateShape` / `validateArea`), so a leftover device value must
+      // not reach the resolver - a device where someone once toggled the old switch off would
+      // otherwise keep downgrading every form, invisibly to the programme. GEO-002 D-4
+      // specified this retreat and specified leaving the columns: migration 11 is a rung in the
+      // version ladder, and dropping it would strand any device still on user_version 10.
     });
 
     UserState.update((s) => {
@@ -296,6 +303,13 @@ const migrateDbIfNeeded = async (db) => {
       await txDb.execAsync('PRAGMA user_version = 10');
     });
     currentDbVersion = 10;
+  }
+  if (currentDbVersion === 10) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m11.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 11');
+    });
+    currentDbVersion = 11;
   }
 
   // Every DATABASE_VERSION bump sends exactly one launch down this path. Without

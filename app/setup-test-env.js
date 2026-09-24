@@ -1,4 +1,13 @@
 /* eslint-disable no-undef */
+// Without a SafeAreaProvider in the tree useSafeAreaInsets throws; the library ships this
+// mock for exactly that. Registered globally since several screens and fields read insets.
+// The library's mock is an `export default {...}`, so the interop default is the module body.
+// eslint-disable-next-line global-require
+jest.mock(
+  'react-native-safe-area-context',
+  () => require('react-native-safe-area-context/jest/mock').default,
+);
+
 jest.mock('@sentry/react-native', () => ({
   init: () => jest.fn(),
   wrap: (node) => jest.fn(node),
