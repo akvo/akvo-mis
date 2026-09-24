@@ -24,7 +24,11 @@ import EmbedEditor from "./EmbedEditor";
 import EmbedFrame from "../../components/dashboard/EmbedFrame";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
-import { WIDGET_DEFAULTS, defaultMeasure } from "./builderConstants";
+import {
+  WIDGET_DEFAULTS,
+  defaultMeasure,
+  getDefaultTableColumns,
+} from "./builderConstants";
 import "./builder.scss";
 import "./viewer.scss";
 
@@ -131,6 +135,12 @@ const DashboardBuilder = () => {
         question: null,
         config: { ...(defaults.config || {}) },
       };
+      if (type === "table" && firstForm) {
+        newWidget.config.columns = getDefaultTableColumns(
+          sources?.forms,
+          firstForm.id
+        );
+      }
       // Only for a monitoring form. `/sources` leads with the root
       // registration form, so this is usually null — and seeding
       // current_state anyway is what made every new chart widget fail its
@@ -165,9 +175,8 @@ const DashboardBuilder = () => {
       setWidgets((prev) => [...prev, newWidget]);
       setSelectedId(newWidget.id);
       setDirty(true);
-      message.success(text.dashboardWidgetAdded || "Widget added to dashboard");
     },
-    [widgets.length, text]
+    [widgets.length]
   );
 
   // Select widget
