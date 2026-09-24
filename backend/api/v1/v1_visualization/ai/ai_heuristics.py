@@ -22,7 +22,14 @@ def _create_kpi_widget(
     title: str,
     rationale: str,
     col_span: int = 6,
+    measure: Optional[str] = None,
 ) -> Dict:
+    config: Dict = {
+        "value_type": "number",
+        "repeat_agg": "sum" if question_id else None,
+    }
+    if measure:
+        config["measure"] = measure
     return {
         "type": "kpi",
         "title": title,
@@ -30,10 +37,7 @@ def _create_kpi_widget(
         "color": None,
         "form": form_id,
         "question": question_id,
-        "config": {
-            "value_type": "number",
-            "repeat_agg": "sum" if question_id else None,
-        },
+        "config": config,
         "rationale": rationale,
     }
 
@@ -44,7 +48,15 @@ def _create_pie_widget(
     title: str,
     rationale: str,
     col_span: int = 8,
+    measure: Optional[str] = None,
 ) -> Dict:
+    config: Dict = {
+        "group_by": "option",
+        "variant": "doughnut",
+        "color_scheme": "categorical",
+    }
+    if measure:
+        config["measure"] = measure
     return {
         "type": "pie",
         "title": title,
@@ -52,11 +64,7 @@ def _create_pie_widget(
         "color": None,
         "form": form_id,
         "question": question_id,
-        "config": {
-            "group_by": "option",
-            "variant": "doughnut",
-            "color_scheme": "categorical",
-        },
+        "config": config,
         "rationale": rationale,
     }
 
@@ -67,7 +75,15 @@ def _create_bar_widget(
     title: str,
     rationale: str,
     col_span: int = 8,
+    measure: Optional[str] = None,
 ) -> Dict:
+    config: Dict = {
+        "group_by": "option",
+        "stack_by": None,
+        "color_scheme": "categorical",
+    }
+    if measure:
+        config["measure"] = measure
     return {
         "type": "bar",
         "title": title,
@@ -75,11 +91,7 @@ def _create_bar_widget(
         "color": None,
         "form": form_id,
         "question": question_id,
-        "config": {
-            "group_by": "option",
-            "stack_by": None,
-            "color_scheme": "categorical",
-        },
+        "config": config,
         "rationale": rationale,
     }
 
@@ -90,7 +102,15 @@ def _create_line_widget(
     title: str,
     rationale: str,
     col_span: int = 12,
+    measure: Optional[str] = None,
 ) -> Dict:
+    config: Dict = {
+        "group_by": "month",
+        "date_question_id": date_q_id,
+        "color_scheme": "categorical",
+    }
+    if measure:
+        config["measure"] = measure
     return {
         "type": "line",
         "title": title,
@@ -98,11 +118,7 @@ def _create_line_widget(
         "color": None,
         "form": form_id,
         "question": date_q_id,
-        "config": {
-            "group_by": "month",
-            "date_question_id": date_q_id,
-            "color_scheme": "categorical",
-        },
+        "config": config,
         "rationale": rationale,
     }
 
@@ -133,7 +149,64 @@ def _create_table_widget(
     title: str,
     rationale: str,
     col_span: int = 24,
+    questions: Optional[List[Dict]] = None,
+    root_questions: Optional[List[Dict]] = None,
 ) -> Dict:
+    columns = [
+        {
+            "key": "parent_name",
+            "source": "parent_name",
+            "label": "Datapoint name",
+        },
+        {
+            "key": "administration",
+            "source": "administration",
+            "label": "Administration",
+        },
+    ]
+    qs = questions or []
+    date_qs = _find_questions_by_type(qs, [QuestionTypes.date])
+    date_q_id = None
+    if date_qs:
+        date_q = date_qs[0]
+        date_q_id = date_q["id"]
+        columns.append({
+            "key": f"q_{date_q_id}",
+            "source": "latest_date",
+            "question": date_q_id,
+            "label": "Last submission",
+        })
+
+    indicator_types = [
+        QuestionTypes.option,
+        QuestionTypes.multiple_option,
+        QuestionTypes.number,
+        QuestionTypes.autofield,
+    ]
+    monitoring_indicators = [
+        q for q in _find_questions_by_type(qs, indicator_types)
+        if q.get("id") != date_q_id
+    ]
+    for q in monitoring_indicators[:3]:
+        columns.append({
+            "key": f"q_{q['id']}",
+            "source": "answer",
+            "question": q["id"],
+            "label": q.get("label") or f"Question {q['id']}",
+        })
+
+    if len(monitoring_indicators) < 2 and root_questions:
+        root_indicators = _find_questions_by_type(
+            root_questions, indicator_types
+        )
+        for rq in root_indicators[:2]:
+            columns.append({
+                "key": f"q_{rq['id']}",
+                "source": "parent_answer",
+                "question": rq["id"],
+                "label": rq.get("label") or f"Question {rq['id']}",
+            })
+
     return {
         "type": "table",
         "title": title,
@@ -142,7 +215,7 @@ def _create_table_widget(
         "form": form_id,
         "question": None,
         "config": {
-            "columns": [],
+            "columns": columns,
             "criteria": [],
         },
         "rationale": rationale,
@@ -260,6 +333,7 @@ def generate_starter_heuristics(
                     title=f"{m_name} Activity Over Time",
                     rationale=f"Trend tracking by {date_q['label']}.",
                     col_span=12,
+                    measure="all_submissions",
                 )
             )
 
@@ -270,6 +344,8 @@ def generate_starter_heuristics(
                 title=f"Recent {m_name} Log",
                 rationale=f"Detailed log of submissions for {m_name}.",
                 col_span=24 if len(widgets) % 2 == 0 else 12,
+                questions=m_questions,
+                root_questions=root_questions,
             )
         )
     elif _find_questions_by_type(root_questions, [QuestionTypes.geo]):
@@ -340,8 +416,9 @@ def generate_widget_heuristics(
     if has_monitoring and monitoring_forms:
         m_form = monitoring_forms[0]
         m_id = m_form.get("id")
+        m_questions = m_form.get("questions", [])
         date_qs = _find_questions_by_type(
-            m_form.get("questions", []), [QuestionTypes.date]
+            m_questions, [QuestionTypes.date]
         )
         if date_qs and WidgetTypes.line not in existing_types:
             suggestions.append(
@@ -351,6 +428,7 @@ def generate_widget_heuristics(
                     title="Submission Trends",
                     rationale="Tracks chronological activity over time.",
                     col_span=12,
+                    measure="all_submissions",
                 )
             )
 
@@ -362,6 +440,8 @@ def generate_widget_heuristics(
                     title="Escalation Status Table",
                     rationale="Tabular review for status verification.",
                     col_span=24,
+                    questions=m_questions,
+                    root_questions=root_questions,
                 )
             )
 

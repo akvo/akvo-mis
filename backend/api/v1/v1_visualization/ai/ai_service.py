@@ -83,7 +83,9 @@ ai_circuit_breaker = CircuitBreaker()
 
 
 def extract_family_metadata(
-    root_form_id: int, user
+    root_form_id: int,
+    user,
+    monitoring_form_ids: Optional[List[int]] = None,
 ) -> Optional[Tuple[Dict, Dict]]:
     """Extract compact structural metadata from the active form family.
 
@@ -106,13 +108,16 @@ def extract_family_metadata(
         return None
 
     # Fetch child monitoring forms
+    monitoring_qs = Forms.objects.for_user(user).filter(
+        parent=root_form, type=FormTypes.monitoring
+    )
+    if monitoring_form_ids:
+        monitoring_qs = monitoring_qs.filter(id__in=monitoring_form_ids)
+
     monitoring_forms = list(
-        Forms.objects.for_user(user)
-        .filter(parent=root_form, type=FormTypes.monitoring)
-        .prefetch_related(
+        monitoring_qs.prefetch_related(
             "form_questions__options",
-        )
-        .order_by("id")
+        ).order_by("id")
     )
 
     sources_map: Dict[int, Dict[int, Dict]] = {}
@@ -231,15 +236,91 @@ def normalize_grid_layout(widgets: List[Dict]) -> List[Dict]:
     return normalized
 
 
+def _build_default_table_columns(
+    form_id: Optional[int],
+    root_form_id: Optional[int],
+    sources_map: Dict[int, Dict[int, Dict]],
+) -> List[Dict]:
+    """Construct schema-valid default columns for a table widget."""
+    columns = [
+        {
+            "key": "parent_name",
+            "source": "parent_name",
+            "label": "Datapoint name",
+        },
+        {
+            "key": "administration",
+            "source": "administration",
+            "label": "Administration",
+        },
+    ]
+    form_qs = sources_map.get(form_id or 0, {})
+    # Check date question for latest_date
+    date_qs = [
+        q for q in form_qs.values()
+        if q.get("type") in (QuestionTypes.date, "date")
+    ]
+    date_q_id = None
+    if date_qs:
+        date_q = date_qs[0]
+        date_q_id = date_q["id"]
+        columns.append({
+            "key": f"q_{date_q_id}",
+            "source": "latest_date",
+            "question": date_q_id,
+            "label": "Last submission",
+        })
+
+    indicator_types = {
+        QuestionTypes.option,
+        QuestionTypes.multiple_option,
+        QuestionTypes.number,
+        QuestionTypes.autofield,
+        "option",
+        "multiple_option",
+        "number",
+        "autofield",
+    }
+    m_indicators = [
+        q for q in form_qs.values()
+        if q.get("type") in indicator_types and q.get("id") != date_q_id
+    ]
+    for q in m_indicators[:3]:
+        columns.append({
+            "key": f"q_{q['id']}",
+            "source": "answer",
+            "question": q["id"],
+            "label": q.get("label") or f"Question {q['id']}",
+        })
+
+    if len(m_indicators) < 2 and root_form_id and root_form_id in sources_map:
+        root_qs = sources_map.get(root_form_id, {})
+        r_indicators = [
+            q for q in root_qs.values()
+            if q.get("type") in indicator_types
+        ]
+        for rq in r_indicators[:2]:
+            columns.append({
+                "key": f"q_{rq['id']}",
+                "source": "parent_answer",
+                "question": rq["id"],
+                "label": rq.get("label") or f"Question {rq['id']}",
+            })
+
+    return columns
+
+
 def validate_and_sanitize_widgets(
     raw_widgets: List[Dict],
     sources_map: Dict[int, Dict[int, Dict]],
     has_monitoring: bool,
+    root_form_id: Optional[int] = None,
 ) -> List[Dict]:
     """Sanitize and validate candidate widgets against sources_map.
 
     Drops hallucinations (non-existent forms/questions) and enforces
-    domain rules (e.g. tables require monitoring forms, repeat_agg valid).
+    domain rules (e.g. tables require monitoring forms and valid columns,
+    charts set valid measure on monitoring forms).
     """
     valid_widgets: List[Dict] = []
     type_map = {
@@ -321,6 +402,65 @@ def validate_and_sanitize_widgets(
         if repeat_agg and repeat_agg not in VALID_REPEAT_AGG:
             config["repeat_agg"] = "sum"
 
+        # Table widget columns sanitization & auto-generation
+        if w_type == "table":
+            cols = config.get("columns")
+            valid_cols = []
+            if isinstance(cols, list):
+                for col in cols:
+                    if not isinstance(col, dict):
+                        continue
+                    src = col.get("source")
+                    if src not in (
+                        "parent_name", "administration", "answer",
+                        "parent_answer", "latest_date",
+                    ):
+                        continue
+                    col_qid = col.get("question") or col.get("question_id")
+                    if src in ("answer", "parent_answer", "latest_date"):
+                        target_form = (
+                            root_form_id if src == "parent_answer" else form_id
+                        )
+                        if not col_qid or col_qid not in sources_map.get(
+                            target_form or form_id or 0, {}
+                        ):
+                            # Try other form in sources_map if misplaced
+                            found_fid = None
+                            for fid, qmap in sources_map.items():
+                                if col_qid in qmap:
+                                    found_fid = fid
+                                    break
+                            if not found_fid:
+                                continue
+                            col_qid = int(col_qid)
+                    valid_cols.append({
+                        "key": col.get("key") or f"col_{len(valid_cols)}",
+                        "source": src,
+                        "question": col_qid,
+                        "label": (
+                            col.get("label") or col.get("key") or "Column"
+                        ),
+                    })
+
+            if not valid_cols:
+                valid_cols = _build_default_table_columns(
+                    form_id=form_id,
+                    root_form_id=root_form_id,
+                    sources_map=sources_map,
+                )
+            config["columns"] = valid_cols
+            if not isinstance(config.get("criteria"), list):
+                config["criteria"] = []
+
+        # Ensure measure integrity across monitoring and registration forms
+        if root_form_id and form_id and form_id != root_form_id:
+            if not config.get("measure"):
+                config["measure"] = (
+                    "all_submissions" if w_type == "line" else "current_state"
+                )
+        elif root_form_id and form_id == root_form_id:
+            config.pop("measure", None)
+
         col_span = item.get("col_span", 12)
         if col_span not in (6, 8, 12, 24):
             col_span = 12
@@ -399,9 +539,12 @@ class AISuggestionService:
         root_form_id: int,
         user,
         user_intent: Optional[str] = None,
+        monitoring_form_ids: Optional[List[int]] = None,
     ) -> Optional[Dict]:
         """Generate a complete starter dashboard layout for a root form."""
-        meta_res = extract_family_metadata(root_form_id, user)
+        meta_res = extract_family_metadata(
+            root_form_id, user, monitoring_form_ids=monitoring_form_ids
+        )
         if not meta_res:
             return None
 
@@ -422,7 +565,7 @@ class AISuggestionService:
                 or []
             )
             valid_widgets = validate_and_sanitize_widgets(
-                raw_widgets, sources_map, has_monitoring
+                raw_widgets, sources_map, has_monitoring, root_form_id
             )
             if len(valid_widgets) >= 3:
                 r_name = metadata["root_form"]["name"]
@@ -442,7 +585,7 @@ class AISuggestionService:
         # Fallback to deterministic heuristics
         heuristic_res = generate_starter_heuristics(metadata, user_intent)
         valid_widgets = validate_and_sanitize_widgets(
-            heuristic_res["widgets"], sources_map, has_monitoring
+            heuristic_res["widgets"], sources_map, has_monitoring, root_form_id
         )
         heuristic_res["widgets"] = valid_widgets
         return heuristic_res
@@ -471,6 +614,7 @@ class AISuggestionService:
 
         metadata, sources_map = meta_res
         has_monitoring = metadata.get("has_monitoring", False)
+        root_form_id = dashboard.root_form_id
 
         # Attempt OpenAI generation
         messages = build_widget_suggestion_prompt(
@@ -488,7 +632,7 @@ class AISuggestionService:
                 or []
             )
             valid_suggestions = validate_and_sanitize_widgets(
-                raw_suggestions, sources_map, has_monitoring
+                raw_suggestions, sources_map, has_monitoring, root_form_id
             )
             if valid_suggestions:
                 return {
@@ -500,7 +644,10 @@ class AISuggestionService:
             metadata, existing_widget_types, prompt_hint
         )
         valid_suggestions = validate_and_sanitize_widgets(
-            heuristic_res["suggestions"], sources_map, has_monitoring
+            heuristic_res["suggestions"],
+            sources_map,
+            has_monitoring,
+            root_form_id,
         )
         return {
             "suggestions": valid_suggestions
