@@ -13,11 +13,11 @@ from django.conf import settings
 
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms
-from api.v1.v1_visualization.ai_heuristics import (
+from api.v1.v1_visualization.ai.ai_heuristics import (
     generate_starter_heuristics,
     generate_widget_heuristics,
 )
-from api.v1.v1_visualization.ai_prompts import (
+from api.v1.v1_visualization.ai.ai_prompts import (
     STARTER_DASHBOARD_JSON_SCHEMA,
     WIDGET_SUGGESTION_JSON_SCHEMA,
     build_starter_dashboard_prompt,

@@ -16,17 +16,17 @@ from api.v1.v1_forms.models import (
     Questions,
 )
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
-from api.v1.v1_visualization.ai_heuristics import (
+from api.v1.v1_visualization.ai.ai_heuristics import (
     generate_starter_heuristics,
     generate_widget_heuristics,
 )
-from api.v1.v1_visualization.ai_prompts import (
+from api.v1.v1_visualization.ai.ai_prompts import (
     MAX_USER_INTENT_LENGTH,
     build_starter_dashboard_prompt,
     build_widget_suggestion_prompt,
     sanitize_user_input,
 )
-from api.v1.v1_visualization.ai_service import (
+from api.v1.v1_visualization.ai.ai_service import (
     AISuggestionService,
     CircuitBreaker,
     ai_circuit_breaker,

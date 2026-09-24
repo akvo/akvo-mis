@@ -25,7 +25,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
 
 from api.v1.v1_profile.constants import FeatureAccessTypes
-from api.v1.v1_visualization.ai_service import AISuggestionService
+from api.v1.v1_visualization.ai.ai_service import AISuggestionService
 from api.v1.v1_visualization.constants import (
     DashboardKind,
     DashboardStatus,
