@@ -259,29 +259,36 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             request.data.get("kind"), DashboardKind.widgets
         )
         is_embed = kind == DashboardKind.embed
-        dashboard = Dashboard.objects.create(
-            name=name.strip(),
-            slug=slug,
-            description=request.data.get("description"),
-            # Never from the payload: tenant comes from the
-            # authenticated user, so a caller cannot plant a row in
-            # someone else's workspace (MT-004).
-            tenant=getattr(request.user, "tenant", None),
-            kind=kind,
-            root_form_id=(
-                None if is_embed else request.data.get("root_form")
-            ),
-            embed_snippet=(
-                request.data.get("embed_snippet") if is_embed else None
-            ),
-            created_by=request.user,
-            # An embed has no data of ours to filter, so a stored filter
-            # would be a setting with no effect.
-            default_filters=(
-                {} if is_embed
-                else request.data.get("default_filters") or {}
-            ),
-        )
+        with transaction.atomic():
+            dashboard = Dashboard.objects.create(
+                name=name.strip(),
+                slug=slug,
+                description=request.data.get("description"),
+                # Never from the payload: tenant comes from the
+                # authenticated user, so a caller cannot plant a row in
+                # someone else's workspace (MT-004).
+                tenant=getattr(request.user, "tenant", None),
+                kind=kind,
+                root_form_id=(
+                    None if is_embed else request.data.get("root_form")
+                ),
+                embed_snippet=(
+                    request.data.get("embed_snippet") if is_embed else None
+                ),
+                created_by=request.user,
+                # An embed has no data of ours to filter, so a stored filter
+                # would be a setting with no effect.
+                default_filters=(
+                    {} if is_embed
+                    else request.data.get("default_filters") or {}
+                ),
+            )
+            if (
+                dashboard.kind == DashboardKind.widgets
+                and request.data.get("widgets")
+            ):
+                apply_widgets(dashboard, request.data.get("widgets"))
+
         return Response(
             DashboardDetailSerializer(instance=dashboard).data,
             status=status.HTTP_201_CREATED,

@@ -195,7 +195,7 @@ def generate_starter_heuristics(
 
     # 3. Categorical Distribution (Pie / Bar)
     option_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.option, QuestionTypes.cascade]
+        root_questions, [QuestionTypes.option, QuestionTypes.autofield]
     )
     multi_qs = _find_questions_by_type(
         root_questions, [QuestionTypes.multiple_option]
@@ -317,7 +317,12 @@ def generate_widget_heuristics(
 
     # 1. Check if Bar / Pie is missing
     option_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.option, QuestionTypes.cascade]
+        root_questions,
+        [
+            QuestionTypes.option,
+            QuestionTypes.multiple_option,
+            QuestionTypes.autofield,
+        ],
     )
     if option_qs:
         for opt_q in option_qs[:2]:
