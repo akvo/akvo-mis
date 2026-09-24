@@ -71,7 +71,6 @@ const AISuggestionDrawer = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
-  const [addedIndices, setAddedIndices] = useState(new Set());
   const [error, setError] = useState(null);
   const [promptHint, setPromptHint] = useState("");
 
@@ -87,6 +86,54 @@ const AISuggestionDrawer = ({
 
   const existingWidgetsRef = useRef(existingWidgets);
   existingWidgetsRef.current = existingWidgets;
+
+  // Derive which suggestions are currently present in existingWidgets
+  const addedIndices = useMemo(() => {
+    const set = new Set();
+    if (!Array.isArray(existingWidgets) || !Array.isArray(suggestions)) {
+      return set;
+    }
+    const usedWidgetIds = new Set();
+    suggestions.forEach((sug, idx) => {
+      const matchIndex = existingWidgets.findIndex((w, wIdx) => {
+        const widgetKey =
+          typeof w?.id !== "undefined" && w?.id !== null ? w.id : `idx_${wIdx}`;
+        if (usedWidgetIds.has(widgetKey)) {
+          return false;
+        }
+        if (!w || w.type !== sug.type) {
+          return false;
+        }
+        if (typeof sug.question !== "undefined" && sug.question !== null) {
+          if (String(w.question) !== String(sug.question)) {
+            return false;
+          }
+        }
+        if (typeof sug.form !== "undefined" && sug.form !== null) {
+          if (String(w.form) !== String(sug.form)) {
+            return false;
+          }
+        }
+        if (sug.title && w.title) {
+          if (w.title.trim().toLowerCase() !== sug.title.trim().toLowerCase()) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (matchIndex !== -1) {
+        const matchedWidget = existingWidgets[matchIndex];
+        const widgetKey =
+          typeof matchedWidget?.id !== "undefined" && matchedWidget?.id !== null
+            ? matchedWidget.id
+            : `idx_${matchIndex}`;
+        usedWidgetIds.add(widgetKey);
+        set.add(idx);
+      }
+    });
+    return set;
+  }, [existingWidgets, suggestions]);
 
   // Helper map for question and form labels
   const questionMap = useMemo(() => {
@@ -120,7 +167,6 @@ const AISuggestionDrawer = ({
 
       setLoading(true);
       setError(null);
-      setAddedIndices(new Set());
 
       const existingTypes = (existingWidgetsRef.current || [])
         .map((w) => w.type)
@@ -211,13 +257,8 @@ const AISuggestionDrawer = ({
   }, [fetchSuggestions]);
 
   const handleAddWidget = useCallback(
-    (sug, idx) => {
+    (sug) => {
       onAddWidget(sug);
-      setAddedIndices((prev) => {
-        const next = new Set(prev);
-        next.add(idx);
-        return next;
-      });
       message.success(`Added "${sug.title || "Widget"}" to dashboard`);
     },
     [onAddWidget]
@@ -225,15 +266,12 @@ const AISuggestionDrawer = ({
 
   const handleAddAll = useCallback(() => {
     let count = 0;
-    const nextAdded = new Set(addedIndices);
     suggestions.forEach((sug, idx) => {
-      if (!nextAdded.has(idx)) {
+      if (!addedIndices.has(idx)) {
         onAddWidget(sug);
-        nextAdded.add(idx);
         count += 1;
       }
     });
-    setAddedIndices(nextAdded);
     if (count > 0) {
       message.success(
         `Added ${count} widget${count > 1 ? "s" : ""} to dashboard`
@@ -424,6 +462,7 @@ const AISuggestionDrawer = ({
                     <Button
                       type={isAdded ? "default" : "primary"}
                       size="small"
+                      disabled={isAdded}
                       icon={
                         isAdded ? (
                           <CheckOutlined style={{ color: "#52c41a" }} />
@@ -431,7 +470,7 @@ const AISuggestionDrawer = ({
                           <PlusOutlined />
                         )
                       }
-                      onClick={() => handleAddWidget(sug, idx)}
+                      onClick={() => handleAddWidget(sug)}
                     >
                       {isAdded ? "Added" : "Add to Dashboard"}
                     </Button>

@@ -312,14 +312,17 @@ describe("AISuggestionDrawer", () => {
     ).toBeInTheDocument();
   });
 
-  it("updates button state to 'Added' after clicking Add to Dashboard", async () => {
-    const onAddWidget = jest.fn();
-    render(
+  it("updates button state to 'Added' when widget is present in existingWidgets and re-enables on removal", async () => {
+    let widgetsList = [];
+    const onAddWidget = jest.fn((w) => {
+      widgetsList = [...widgetsList, { ...w, id: 999 }];
+    });
+    const { rerender } = render(
       <AISuggestionDrawer
         visible={true}
         onClose={jest.fn()}
         dashboardId={1}
-        existingWidgets={[]}
+        existingWidgets={widgetsList}
         sources={mockSources}
         onAddWidget={onAddWidget}
       />
@@ -328,12 +331,45 @@ describe("AISuggestionDrawer", () => {
     const addButtons = await screen.findAllByRole("button", {
       name: /add to dashboard/i,
     });
+    expect(addButtons.length).toBe(2);
     fireEvent.click(addButtons[0]);
 
     expect(onAddWidget).toHaveBeenCalledWith(mockSuggestions[0]);
+
+    // Re-render with widget added to dashboard
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={widgetsList}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
     expect(
       await screen.findByRole("button", { name: /added/i })
     ).toBeInTheDocument();
+
+    // Now simulate deleting the widget from dashboard canvas
+    widgetsList = [];
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={widgetsList}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
+    // Button should revert back to "Add to Dashboard"
+    const buttonsAfterRemoval = await screen.findAllByRole("button", {
+      name: /add to dashboard/i,
+    });
+    expect(buttonsAfterRemoval.length).toBe(2);
   });
 
   it("resets prompt hint and reloads default recommendations on Reset click", async () => {
@@ -409,13 +445,16 @@ describe("AISuggestionDrawer", () => {
   });
 
   it("adds all widgets to dashboard when clicking Add All button", async () => {
-    const onAddWidget = jest.fn();
-    render(
+    let widgetsList = [];
+    const onAddWidget = jest.fn((w) => {
+      widgetsList = [...widgetsList, { ...w, id: widgetsList.length + 1 }];
+    });
+    const { rerender } = render(
       <AISuggestionDrawer
         visible={true}
         onClose={jest.fn()}
         dashboardId={1}
-        existingWidgets={[]}
+        existingWidgets={widgetsList}
         sources={mockSources}
         onAddWidget={onAddWidget}
       />
@@ -431,6 +470,17 @@ describe("AISuggestionDrawer", () => {
     expect(onAddWidget).toHaveBeenCalledTimes(2);
     expect(onAddWidget).toHaveBeenNthCalledWith(1, mockSuggestions[0]);
     expect(onAddWidget).toHaveBeenNthCalledWith(2, mockSuggestions[1]);
+
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={widgetsList}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
 
     expect(
       await screen.findByRole("button", { name: /all added/i })
