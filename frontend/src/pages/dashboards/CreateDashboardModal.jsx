@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Modal, Form, Input, Select, Radio, message } from "antd";
+import { Modal, Form, Input, Select, Radio, Switch, message } from "antd";
+import { ThunderboltOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { store, uiText } from "../../lib";
 import dashboardApi from "../../util/dashboardApi";
+import dashboardAi from "../../util/dashboardAi";
 
 const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   const [form] = Form.useForm();
@@ -20,6 +22,7 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   // already exist are unaffected — this gates creating, not reading.
   const canEmbed = Boolean(tenant?.embed_enabled);
   const watchedKind = Form.useWatch("kind", form);
+  const watchedAutoAi = Form.useWatch("auto_generate_ai", form);
   const kind = (canEmbed && watchedKind) || "widgets";
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -60,20 +63,44 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   const handleOk = useCallback(() => {
     form
       .validateFields()
-      .then((values) => {
+      .then(async (values) => {
         setSubmitting(true);
-        return doCreate(
-          values.kind === "embed"
-            ? {
-                name: values.name.trim(),
-                kind: "embed",
-                embed_snippet: values.embed_snippet,
-              }
-            : {
-                name: values.name.trim(),
-                root_form: values.root_form,
-              }
-        );
+        if (values.kind === "embed") {
+          return doCreate({
+            name: values.name.trim(),
+            kind: "embed",
+            embed_snippet: values.embed_snippet,
+          });
+        }
+
+        let starterWidgets = null;
+        if (values.auto_generate_ai && values.root_form) {
+          try {
+            const aiPayload = { root_form: values.root_form };
+            if (values.user_intent && values.user_intent.trim()) {
+              aiPayload.user_intent = values.user_intent.trim();
+            }
+            const aiRes = await dashboardAi.suggestDashboard(aiPayload);
+            if (aiRes?.data?.widgets && Array.isArray(aiRes.data.widgets)) {
+              starterWidgets = aiRes.data.widgets;
+            }
+          } catch (aiErr) {
+            message.warning(
+              text.dashboardAiFallbackWarning ||
+                "Could not generate AI starter widgets. Creating empty dashboard instead."
+            );
+          }
+        }
+
+        const createPayload = {
+          name: values.name.trim(),
+          root_form: values.root_form,
+        };
+        if (starterWidgets) {
+          createPayload.widgets = starterWidgets;
+        }
+
+        return doCreate(createPayload);
       })
       .then((res) => {
         form.resetFields();
@@ -87,7 +114,7 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
       .finally(() => {
         setSubmitting(false);
       });
-  }, [form, onCreate, doCreate]);
+  }, [form, onCreate, doCreate, text]);
 
   const handleCancel = useCallback(() => {
     form.resetFields();
@@ -204,6 +231,58 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
               </div>
             )}
           </Form.Item>
+        )}
+        {kind !== "embed" && registrationForms.length > 0 && (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 8,
+                marginBottom: 16,
+              }}
+            >
+              <span
+                style={{
+                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <ThunderboltOutlined style={{ color: "#1890ff" }} />
+                {text.dashboardAiStarterToggle ||
+                  "Auto-generate starter dashboard with AI"}
+              </span>
+              <Form.Item
+                name="auto_generate_ai"
+                valuePropName="checked"
+                noStyle
+                initialValue={false}
+              >
+                <Switch />
+              </Form.Item>
+            </div>
+            {watchedAutoAi && (
+              <Form.Item
+                name="user_intent"
+                label={
+                  text.dashboardAiIntentLabel ||
+                  "Dashboard Goal & Questions (Optional)"
+                }
+                extra={
+                  text.dashboardAiIntentHint ||
+                  "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown')"
+                }
+              >
+                <Input.TextArea
+                  rows={2}
+                  placeholder="e.g. Overview of borehole functionality and regional water access"
+                />
+              </Form.Item>
+            )}
+          </>
         )}
       </Form>
     </Modal>
