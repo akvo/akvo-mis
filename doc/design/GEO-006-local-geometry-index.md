@@ -134,10 +134,11 @@ migration that has never run on a real device is not a rung anyone can be strand
 
 ## 4. API Contract
 
-**One narrowing to GEO-005** (which is already implemented): drop `geometry[].coordinates`
-from `/device/datapoint-list`. `bbox` and `accuracy` stay — they are what this table stores.
+**One narrowing to GEO-005** (which was already implemented), **shipped 2026-09-23**:
+`geometry[].coordinates` is gone from `/device/datapoint-list`. `bbox` and `accuracy` stay —
+they are what this table stores.
 
-This is a narrowing, not a revert. It is safe to make now because no shipped app version reads
+This is a narrowing, not a revert. It was safe to make because no shipped app version read
 the `geometry` field at all (`sync-datapoints.js` and `crud-datapoints.js` contain no reference
 to it), and it removes a **duplicate** transfer: coordinates travel once in the list and again
 in `{uuid}.json`. At 100 rows per page the page drops from roughly 430 KB to ~10 KB.
@@ -412,8 +413,12 @@ new table, no second writer and no reset change — but affords only one bbox pe
   Both call sites that today call `markSyncComplete()` (foreground `SyncService.js`, background
   `background-task.js`) call this helper instead. It (1) `POST /sync-complete`, (2) clears the
   sync queue, (3) sets `config.geometryIndexReady = 1` — readiness last, so a failed backend
-  call leaves GEO-007 gated off. Re-setting `1` on later incremental syncs is idempotent; reset
-  truncates `config` back to default `0`.
+  call leaves GEO-007 gated off. Reset truncates `config` back to default `0`.
+
+  > **Step (3) is conditional as of 2026-09-23.** Readiness is set only when the run performed a
+  > **full** geometry pull, because `/datapoint-list` is cursor-based: an upgraded device that
+  > synced yesterday receives nothing, completes instantly, and would otherwise declare an empty
+  > post-migration index trustworthy. See the D-4 note below and D-9.
 
   > **Gating off is only safe if something later gates it back on — fixed 2026-09-23.**
   > Both call sites retired the sync job whether or not the finish step succeeded, and the
@@ -424,9 +429,11 @@ new table, no second writer and no reset change — but affords only one bbox pe
   >
   > `completeDatapointSync(db, job)` in `sync-datapoints.js` now finishes *then* retires, and
   > throws instead of swallowing, so the caller keeps the job PENDING and `MAX_ATTEMPT` still
-  > applies. The quick-check additionally asks `datapointSyncFinishPending(db)` before retiring
-  > a job with nothing to download — a complete queue plus readiness `0` is exactly the
-  > half-finished state, and is the only path back to it.
+  > applies. The quick-check also stops retiring a job with nothing to download while readiness is still
+  > `0` — a complete queue plus readiness `0` is exactly the half-finished state, and that
+  > branch is the only path back to it. (The predicate was briefly its own function,
+  > `datapointSyncFinishPending`; it is now `geometryIndexNeedsFullPull`, because the same
+  > question also decides whether the run must request `geometry_full` — see D-9.)
   >
   > The general shape is worth remembering: a flag that fails closed needs a retry path, or
   > "fails closed" becomes "fails permanently".

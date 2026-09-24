@@ -397,7 +397,7 @@ flowchart LR
         P2 --> P3["Sees the shape, point count<br/>and enclosed area on a map"]
         P3 --> P4["Presses 'Validate now'"]
         P4 --> P5{"Shape · Area · Overlap<br/>checked OFFLINE"}
-        P5 -->|conflict| P6["Blocked, with names:<br/>'New plot for X overlaps<br/>with plot for Y'"]
+        P5 -->|conflict| P6["Blocked, counted and numbered:<br/>'Overlaps 2 plots:<br/>#1 (34.0%), #2 (22.5%)'"]
         P6 --> P7[Map review, then redraw]
         P7 --> P4
         P5 -->|clean| P8[Submits a verified boundary]
@@ -511,8 +511,8 @@ sequenceDiagram
         V-->>F: VALID
         F-->>E: Field marked valid, submit unblocked
     else Overlap found
-        V-->>F: FAILED + conflicting datapoint names
-        F-->>E: "New plot for X overlaps with plot for Y"
+        V-->>F: FAILED + conflict count and percentages
+        F-->>E: "Overlaps 2 plots: #1 (34.0%), #2 (22.5%)"
         E->>M: Open map review
         M-->>E: Current polygon vs conflicts, tap for name
         E->>F: Edit the boundary
@@ -1237,10 +1237,14 @@ But that creates a state to close:
   button becomes an opt-out from the whole feature.
 - The submit gate reuses the **stored result**; it does not re-run the geometry work.
 
-**Error message** (D-parent FR-4.1), using the name `generateDataPointName` already produces:
+**Error message** — ~~(D-parent FR-4.1), using the name `generateDataPointName` already
+produces~~ **superseded 2026-09-23 by GEO-007 D-11**, after the first device test showed that
+name is every `meta` answer joined with `" - "`: six lines of administrative path identifying
+nothing. It counts and numbers instead, worst first, and identity moved to the map review:
 
 ```
-New plot for <current datapoint name> overlaps with plot for <existing datapoint name>
+Overlaps 1 plot by 28.3% (limit 20.0%).
+Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%) (limit 20.0%).
 ```
 
 **Scope rules**

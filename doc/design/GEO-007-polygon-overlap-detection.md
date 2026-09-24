@@ -54,7 +54,7 @@ GEO-005, GEO-006, GEO-008 and GEO-009 moved with it — they exist only to serve
 - [ ] ~~The error names both datapoints: `New plot for <current> overlaps with plot for
       <existing>`~~ — **superseded 2026-09-23 by D-11.** The error carries a **count and
       numbered percentages**, no names: `Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%)
-      (limit 20%)`
+      (limit 20.0%)`
 - [ ] **All** simultaneous overlaps are reported, not just the first — as one numbered line,
       not one line each (D-11)
 - [ ] Below threshold → passes
@@ -275,15 +275,17 @@ The two keys stay separate because they answer different questions, and because
 `enabled_geoshape_question_ids` gates on `detectOverlaps=True` as a literal-boolean JSON lookup —
 a tri-valued key there would silently disable the feature for every form (GEO-009 §2.1).
 
-**Work this implies**:
-- Resolve `validateOverlap` where overlap failures are graded, reusing the helper GEO-002 D-4
-  added for `validateShape` / `validateArea` rather than a second code path
-- ~~A `validatePolygonOverlap` device setting~~ — **struck 2026-09-21**, see the note above.
-  There is no device layer left to add it to
-- `_geo_config_issues()` must validate it as a strict boolean (GEO-010 §6)
+**Work this implies** — **all done 2026-09-23**:
+- [x] Resolve `validateOverlap` where overlap failures are graded, reusing the helper GEO-002
+      D-4 added for `validateShape` / `validateArea` rather than a second code path —
+      `OVERLAP_CONFIG_KEY` in `form/lib/overlap.js`, resolved in `form/lib/overlap-check.js`
+- [x] ~~A `validatePolygonOverlap` device setting~~ — **struck 2026-09-21**, see the note above.
+      There is no device layer left to add it to
+- [x] `_geo_config_issues()` must validate it as a strict boolean (GEO-010 §6) — it is in
+      `_GEO_CONFIG_BOOLEANS` in `v1_forms/functions.py`
 
-**Until then**: an author who picks *Warn only* stores a value the device ignores. The default
-stores nothing, so this is a gap for programmes that opt in, not a regression for anyone else.
+The gap this decision opened — an author picking *Warn only* and storing a value the device
+ignored — is closed. Severity now resolves for overlap exactly as it does for shape and area.
 
 ### D-8: Validation rules must be extensible beyond the initial four
 
@@ -382,9 +384,14 @@ The reference validator could name plots because it held its own short `instance
 **Decision**: the message carries a **count** and **numbered percentages**.
 
 ```
-1 overlap    Overlaps 1 plot by 28.3% (limit 20%).
-3 overlaps   Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%) (limit 20%).
+1 overlap    Overlaps 1 plot by 28.3% (limit 20.0%).
+3 overlaps   Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%) (limit 20.0%).
 ```
+
+**Percentages always carry one decimal**, including the threshold. `Number((34).toFixed(1))` is
+`34`, so the first implementation printed `#1 (34%), #2 (28.3%)` — one quantity, two formats, in
+one sentence. The stored values are strings for display; sorting and the pass/fail comparison
+run on the raw numbers before formatting.
 
 **One result, not one per conflict.** Every overlap is still reported — that criterion is
 unchanged — but as one sentence. Three near-identical lines said no more than one numbered line
@@ -416,7 +423,7 @@ reaches the gate.
 | Overlap threshold **ceiling** | `extra.geoConfig.overlapThreshold` | `20` (%) |
 | Overlap threshold **floor** | `extra.geoConfig.overlapThresholdFloor` | `5` (%) — authorable since editor 2.0.6 |
 | Enable | `extra.geoConfig.detectOverlaps` | `false` |
-| **Severity** | `extra.geoConfig.validateOverlap` | absent → `block`. **Authorable since editor 2.0.6; no reader yet — see D-9.** There is no device layer to fall through to; it was removed on 2026-09-21 (GEO-002 D-4) |
+| **Severity** | `extra.geoConfig.validateOverlap` | absent → `block`. Authorable since editor 2.0.6, **read by the app since 2026-09-23** through the same `resolveSeverity` helper as every other rule (D-9). There is no device layer to fall through to; it was removed on 2026-09-21 (GEO-002 D-4) |
 | Own polygon's accuracy | `vertex[2]`, optional third element | absent = not measured (GEO-014 §3) |
 | Candidate's accuracy | `geometry.accuracy` summary from GEO-005 | `measured: false` = not measured (GEO-014 D-10) |
 
@@ -559,11 +566,13 @@ is built on.
       every plot. Same-form scoping is the conservative, well-defined behaviour shipped in
       `FormPage.js`; it is marked in the code and needs deciding before a monitoring form with
       `detectOverlaps` reaches a programme
-- [ ] **D-10's third cause uses a datapoint count, not a geometry count.** The design compares
-      local `geometry_index` rows against a server `geometry_total`; GEO-005 publishes no such
-      field, so the shipped preflight compares local synced datapoints against the sync queue's
-      `totalData`. It refuses too often rather than passing wrongly — the correct direction —
-      but a form whose missing rows are all non-geoshape reports a gap it does not have
+- [x] ~~D-10's third cause uses a datapoint count, not a geometry count.~~ **Closed 2026-09-23.**
+      The claim that GEO-005 published no `geometry_total` was simply wrong — the backend had
+      built it, with a comment explaining that `complete` means only "last page delivered" and
+      that this field is what catches a gapped index. The preflight now compares
+      `geometry_index` rows for the form against it, which also sees a datapoint that arrived
+      missing one of several polygons. The old comparison went inert the moment the sync queue
+      was cleared, which is every time it mattered (GEO-006 D-9)
 - [ ] **The performance test has not been run.** 5,000 polygons on a real low-end device,
       target < 500 ms (§9). Everything below the bbox pre-filter rests on it
 

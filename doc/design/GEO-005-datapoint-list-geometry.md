@@ -59,16 +59,16 @@ than one that errors.**
 
 ### Technical Acceptance Criteria
 - [x] With `detectOverlaps` off, the response is **byte-identical to today**
-- [ ] With it on, the device builds GEO-006's index **without fetching any per-datapoint JSON**
+- [x] With it on, the device builds GEO-006's index **without fetching any per-datapoint JSON**
       and without parsing coordinates to derive bboxes
 - [x] The device can distinguish a complete candidate set from a partial one
 - [x] Existing pagination (`page_size=100` max) and `last_updated` cursor reused — no second
       sync loop on the device
 - [x] Tenant and mobile-assignment scoping unchanged
 
-> Two criteria above stay unticked on purpose. The **device** half — building GEO-006's index
-> from this payload — belongs to GEO-006, which is unbuilt; and the accuracy summary added by
-> GEO-014 D-10 is specified here but not yet served.
+> **All ticked as of 2026-09-23.** The two that waited are now done: GEO-006 builds the index
+> from this payload inside the datapoint's own transaction, and `accuracy_summary()` serves the
+> GEO-014 D-10 summary. The payload also lost `coordinates` in the same change (see §4).
 
 ---
 
@@ -158,9 +158,10 @@ before GEO-014. The device then falls back to the authored `overlapThreshold` (G
 
 Per-vertex accuracy is **still stored** and still travels on `/sync`; only this list summarises.
 
-⚠️ `bounding_box()` at `v1_mobile/geometry.py:58` unpacks `zip(*coordinates)` into two names and
-raises `ValueError` on a three-element vertex. It reads **stored** rows, which do carry three
-elements, so it must be fixed regardless of what this endpoint emits (GEO-014 §4, D-7).
+~~⚠️ `bounding_box()` unpacks `zip(*coordinates)` into two names and raises `ValueError` on a
+three-element vertex.~~ **Fixed.** It now indexes `point[0]` / `point[1]`, which is
+length-agnostic, and its docstring records why — `zip(*)` on an accuracy-carrying vertex would
+have taken the whole form's datapoint-list response down rather than one row (GEO-014 §4, D-7).
 
 **Completeness signal** — returned alongside pagination so the device can gate validation:
 
@@ -263,13 +264,18 @@ enumerator must receive geometry only for datapoints they could already see.
 
 ## 10. Open Questions
 
-- [ ] D-2: bbox denormalised on write, or computed per request?
-- [ ] Payload growth with ~180-vertex polygons — if pages get large, send bbox only in the list
+- [ ] D-2: bbox denormalised on write, or computed per request? **Shipped as per-request**
+      (`bounding_box()` runs over each row's coordinates). D-2 asked for a measurement before
+      choosing and that measurement was never taken, so this stays open as a question about
+      evidence rather than about behaviour
+- [x] Payload growth with ~180-vertex polygons — if pages get large, send bbox only in the list
       and fetch full coordinates lazily for the few candidates a bbox query returns.
       **Largely defused 2026-09-18 by GEO-014 D-10**: accuracy is summarised per polygon rather
-      than per vertex, so this endpoint grows by ~30 bytes per row instead of ~720. The original
-      concern — that ~180-vertex coordinate lists are big on their own — is unchanged, and the
-      lazy-fetch option above remains the lever for it
+      than per vertex, so this endpoint grows by ~30 bytes per row instead of ~720.
+      **Then taken 2026-09-23**: the lazy-fetch option above is exactly what shipped —
+      `coordinates` left this payload entirely and GEO-007 reads them from the device's own
+      `datapoints.json` for the 5–50 candidates a bbox query returns (GEO-006 D-5). A page of
+      100 rows went from roughly 430 KB to ~10 KB
 - [ ] Which statistic the `accuracy` summary carries. `max` is conservative, but one bad vertex
       on an otherwise well-walked boundary dominates it and tightens the threshold for the whole
       polygon. Mean under-reports the opposite way. Decide with field data (GEO-014 §10)

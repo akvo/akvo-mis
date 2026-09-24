@@ -357,9 +357,23 @@ const dataPointsQuery = () => ({
   /**
    * Local-only delete. The server copy, if any, is untouched — a draft with a
    * draftId re-downloads on the next sync, which the confirmation dialog warns about.
+   *
+   * The datapoint's geometry index rows go with it, in the same transaction.
+   * GEO-006 D-6 makes `geometry_index` a subset of `datapoints`, and GEO-007 reads a
+   * candidate with no answers as drift and refuses to validate at all — so an orphaned
+   * index row does not merely linger, it disables overlap checking for that form until
+   * the next resync. FR-7.2 has always required this; nothing implemented it.
    */
   deleteDataPoint: async (db, id) => {
-    await sql.deleteRow(db, 'datapoints', id);
+    await sql.withTransaction(db, async (txDb) => {
+      await sql.safeExecuteQuery(
+        txDb,
+        'DELETE FROM geometry_index WHERE datapointId = ?',
+        [id],
+        'datapoints.deleteDataPoint.geometryIndex',
+      );
+      await sql.deleteRow(txDb, 'datapoints', id);
+    });
     return true;
   },
   /**
