@@ -17,6 +17,7 @@ import {
   AddUserPage,
   MapViewPage,
   MapDrawViewPage,
+  OverlapMapViewPage,
   UsersPage,
   FormDataDetailsPage,
   AddNewForm,
@@ -85,6 +86,7 @@ const RootNavigator = () => {
           <Stack.Screen name="FormPage" component={FormPage} />
           <Stack.Screen name="MapView" component={MapViewPage} />
           <Stack.Screen name="MapDrawView" component={MapDrawViewPage} />
+          <Stack.Screen name="OverlapMapView" component={OverlapMapViewPage} />
           <Stack.Screen name="AddUser" component={AddUserPage} />
           <Stack.Screen name="Users" component={UsersPage} />
           <Stack.Screen name="FormDataDetails" component={FormDataDetailsPage} />
