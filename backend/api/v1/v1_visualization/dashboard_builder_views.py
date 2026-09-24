@@ -596,12 +596,16 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             )
 
         root_form_id = serializer.validated_data["root_form"]
+        monitoring_forms = serializer.validated_data.get(
+            "monitoring_forms", []
+        )
         user_intent = serializer.validated_data.get("user_intent")
 
         result = AISuggestionService.suggest_dashboard(
             root_form_id=root_form_id,
             user=request.user,
             user_intent=user_intent,
+            monitoring_form_ids=monitoring_forms,
         )
         if result is None:
             return Response(

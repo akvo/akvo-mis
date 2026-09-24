@@ -205,6 +205,9 @@ def serialize_sources(dashboard, user):
 
 class SuggestDashboardRequestSerializer(serializers.Serializer):
     root_form = serializers.IntegerField(required=True)
+    monitoring_forms = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list
+    )
     user_intent = serializers.CharField(
         required=False, allow_blank=True, max_length=250, default=""
     )

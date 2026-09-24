@@ -188,6 +188,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.assertIn("col_span", w)
             self.assertIn("rationale", w)
             self.assertIn("config", w)
+            if w["type"] == "table":
+                self.assertTrue(len(w["config"]["columns"]) >= 2)
 
     def test_registration_only_form_heuristics(self):
         """Registration form has no table and null measure."""
@@ -366,6 +368,93 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         # Span normalized from 12 to 24 by row expander
         self.assertEqual(valid[0]["col_span"], 24)
 
+    def test_table_columns_auto_population_on_empty_config(self):
+        """Table widgets with empty columns get default columns."""
+        metadata, sources_map = extract_family_metadata(
+            self.root.id, self.user
+        )
+        raw_widgets = [
+            {
+                "type": "table",
+                "title": "Monitoring Submissions",
+                "col_span": 24,
+                "form": self.monitoring.id,
+                "question": None,
+                "config": {
+                    "columns": [],
+                    "criteria": [],
+                },
+            }
+        ]
+        valid = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(valid), 1)
+        columns = valid[0]["config"]["columns"]
+        self.assertTrue(len(columns) >= 2)
+        sources = [c["source"] for c in columns]
+        self.assertIn("parent_name", sources)
+        self.assertIn("administration", sources)
+
+    def test_monitoring_widget_measure_sanitization(self):
+        """Monitoring charts get measure; root charts have measure removed."""
+        metadata, sources_map = extract_family_metadata(
+            self.root.id, self.user
+        )
+        m_q_id = next(
+            qid for qid, q in sources_map[self.monitoring.id].items()
+            if q["type"] in (
+                QuestionTypes.option,
+                QuestionTypes.multiple_option,
+                QuestionTypes.number,
+            )
+        )
+        r_q_id = next(
+            qid for qid, q in sources_map[self.root.id].items()
+            if q["type"] in (
+                QuestionTypes.option,
+                QuestionTypes.multiple_option,
+                QuestionTypes.number,
+            )
+        )
+        raw_widgets = [
+            # Monitoring bar chart without measure
+            {
+                "type": "bar",
+                "title": "Monitoring Status",
+                "col_span": 12,
+                "form": self.monitoring.id,
+                "question": m_q_id,
+                "config": {"group_by": "option"},
+            },
+            # Root bar chart with invalid measure
+            {
+                "type": "bar",
+                "title": "Facility Type",
+                "col_span": 12,
+                "form": self.root.id,
+                "question": r_q_id,
+                "config": {
+                    "group_by": "option",
+                    "measure": "current_state",
+                },
+            },
+        ]
+        valid = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(valid), 2)
+        # Monitoring form bar widget must have measure="current_state"
+        self.assertEqual(valid[0]["config"].get("measure"), "current_state")
+        # Root form bar widget must NOT have measure
+        self.assertNotIn("measure", valid[1]["config"])
+
     def test_24_column_grid_normalizer(self):
         """Uneven column spans are balanced to cleanly fit 24-col rows."""
         self.assertEqual(normalize_grid_layout([]), [])
@@ -427,6 +516,23 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("suggested_name", data)
         self.assertIn("description", data)
         self.assertIn("widgets", data)
+        self.assertTrue(len(data["widgets"]) >= 3)
+
+    def test_suggest_dashboard_with_monitoring_forms_filter(self):
+        """POST with monitoring_forms filters child forms in suggestions."""
+        payload = {
+            "root_form": self.root.id,
+            "monitoring_forms": [self.monitoring.id],
+            "user_intent": "Focus on monitoring inspections",
+        }
+        response = self.client.post(
+            self.suggest_dashboard_url,
+            data=json.dumps(payload),
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
         self.assertTrue(len(data["widgets"]) >= 3)
 
     def test_suggest_dashboard_endpoint_not_found(self):
