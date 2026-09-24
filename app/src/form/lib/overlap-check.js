@@ -184,6 +184,13 @@ const conflictFrom = (row, candidatePoints, points, geoConfig) => {
     questionId: row.questionId,
     repeatIndex: row.repeatIndex ?? 0,
     /**
+     * The conflicting polygon, arity preserved and never padded. GEO-008's review screen draws
+     * it from here rather than re-reading the datapoint, and its red vertex dot (D-4) turns on
+     * the third element alone — a synthesised `0` or `null` would claim a measurement for a
+     * corner that was tapped, or entered on the webform, and tell the enumerator to re-walk it.
+     */
+    coordinates: candidatePoints,
+    /**
      * Strings, not numbers, and deliberately. `Number((34).toFixed(1))` is `34`, so a list read
      * `#1 (34%), #2 (28.3%)` — the same quantity printed two ways in one sentence. Sorting and
      * comparison are done before this point, on the raw values.
@@ -290,9 +297,33 @@ export const runOverlapCheck = async (
   }
 };
 
-/** `#1 (34.0%), #2 (22.5%)` — position in the worst-first array, which is the map's label too. */
+/**
+ * The `#n` that both the message and the map use: **position in the worst-first array, and
+ * nothing else**. One function, so the two cannot drift — GEO-007 D-11 makes the map's label a
+ * contract with the sentence the enumerator just read, and `#2` meaning a different plot in each
+ * is worse than no number at all.
+ */
+const conflictLabel = (index) => `#${index + 1}`;
+
+/** `#1 (34.0%), #2 (22.5%)` — the numbered sentence, which names nobody on purpose (D-11). */
 const conflictList = (conflicts) =>
-  conflicts.map((conflict, index) => `#${index + 1} (${conflict.percent}%)`).join(', ');
+  conflicts.map((conflict, index) => `${conflictLabel(index)} (${conflict.percent}%)`).join(', ');
+
+/**
+ * The same conflicts, shaped for GEO-008's review screen.
+ *
+ * The name travels with the label because the map is now the only place it appears: on a form
+ * with an administration cascade the generated datapoint name is a path six lines long, which is
+ * useless in a sentence and exactly what you want when it is attached to the polygon it belongs
+ * to. The screen renders it natively, never inside the WebView.
+ */
+export const conflictsForMap = (conflicts) =>
+  (Array.isArray(conflicts) ? conflicts : []).map((conflict, index) => ({
+    label: conflictLabel(index),
+    name: conflict?.name || null,
+    percent: conflict?.percent ?? null,
+    coordinates: conflict?.coordinates,
+  }));
 
 /**
  * The limit to print, which is not one number when accuracy varies between candidates.

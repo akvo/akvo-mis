@@ -1,6 +1,7 @@
 import {
   OVERLAP_STATUS,
   UNAVAILABLE_CAUSE,
+  conflictsForMap,
   overlapPreflight,
   overlapResults,
   runOverlapCheck,
@@ -332,6 +333,29 @@ describe('runOverlapCheck', () => {
     expect(result.conflicts[0].adaptive).toBe(true);
     expect(Number(result.conflicts[0].threshold)).toBeLessThan(20);
   });
+
+  /**
+   * The map review screen draws a conflict from this array rather than re-reading the datapoint,
+   * and its red vertex dot (GEO-008 D-4) needs the accuracy element to survive the trip. Already
+   * in memory when the conflict is built, so carrying it costs nothing.
+   */
+  it("carries the conflicting polygon's coordinates with their accuracy intact", async () => {
+    const walked = PLOT.map(([lat, lng]) => [lat, lng, 4]);
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow({ datapointId: 41 })]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue(candidateAnswers(walked, 41));
+    const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
+    expect(result.conflicts[0].coordinates).toEqual(walked);
+  });
+
+  it('carries an unmeasured conflict as two elements, inventing no accuracy', async () => {
+    // A padded `null` or `0` third element would make the review screen's `isPoor` see a
+    // measurement that was never taken, and mark a tapped corner as needing a re-walk.
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([indexRow({ datapointId: 41 })]);
+    crudDataPoints.selectJsonByIds.mockResolvedValue(candidateAnswers(PLOT, 41));
+    const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
+    expect(result.conflicts[0].coordinates).toEqual(PLOT);
+    expect(result.conflicts[0].coordinates[0]).toHaveLength(2);
+  });
 });
 
 describe('the submit gate', () => {
@@ -435,5 +459,60 @@ describe('the failure message', () => {
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.conflicts[0].uuid).toBe('big');
     expect(result.conflicts[0].rawPercent).toBeGreaterThan(result.conflicts[1].rawPercent);
+  });
+});
+
+describe('the map labels', () => {
+  const CONFLICTS = [
+    {
+      uuid: 'a',
+      name: 'Amina Kebede - Bole - Kebele 3',
+      percent: '34.0',
+      rawPercent: 34,
+      coordinates: [
+        [0, 0],
+        [0, 0.002],
+        [0.002, 0.002],
+      ],
+    },
+    {
+      uuid: 'b',
+      name: 'Dawit Alemu - Bole - Kebele 4',
+      percent: '28.3',
+      rawPercent: 28.3,
+      coordinates: [
+        [-0.004, 0.001],
+        [-0.004, 0.003],
+        [-0.001, 0.003],
+      ],
+    },
+  ];
+
+  /**
+   * The contract GEO-007 D-11 created. The message says `#1 (34.0%), #2 (28.3%)` and names
+   * nobody, so the map is the only way to find out which plot `#2` was - and if the map sorts by
+   * distance, or by name, or by arrival, it points the enumerator at the wrong gate. Asserting
+   * the two renderings of one array against each other is what stops them drifting apart.
+   */
+  it('numbers the polygons exactly as the message numbered them', () => {
+    const [result] = overlapResults(
+      { status: OVERLAP_STATUS.failed, conflicts: CONFLICTS },
+      QUESTION,
+    );
+    const fromMap = conflictsForMap(CONFLICTS)
+      .map((conflict) => `${conflict.label} (${conflict.percent}%)`)
+      .join(', ');
+    expect(fromMap).toBe(result.params.list);
+  });
+
+  it('keeps the name and the coordinates beside the label', () => {
+    const [first] = conflictsForMap(CONFLICTS);
+    expect(first.name).toBe('Amina Kebede - Bole - Kebele 3');
+    expect(first.coordinates).toEqual(CONFLICTS[0].coordinates);
+  });
+
+  it('has nothing to draw when the check passed or refused', () => {
+    expect(conflictsForMap([])).toEqual([]);
+    expect(conflictsForMap(null)).toEqual([]);
   });
 });
