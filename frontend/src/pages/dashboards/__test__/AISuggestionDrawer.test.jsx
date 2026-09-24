@@ -168,6 +168,98 @@ describe("AISuggestionDrawer", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not reload suggestions when drawer is closed and reopened with existing content", async () => {
+    const { rerender } = render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByText("Functionality Breakdown")
+    ).toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+
+    // Close the drawer
+    rerender(
+      <AISuggestionDrawer
+        visible={false}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    // Re-open the drawer
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    // Content should still be present without a new API request
+    expect(screen.getByText("Functionality Breakdown")).toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reload suggestions when a suggested widget is added and existingWidgets updates", async () => {
+    let widgetsList = [];
+    const onAddWidget = jest.fn((w) => {
+      widgetsList = [...widgetsList, w];
+    });
+
+    const { rerender } = render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={widgetsList}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
+    expect(
+      await screen.findByText("Functionality Breakdown")
+    ).toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+
+    const addButtons = await screen.findAllByRole("button", {
+      name: /add to dashboard/i,
+    });
+    fireEvent.click(addButtons[0]);
+
+    expect(onAddWidget).toHaveBeenCalledWith(mockSuggestions[0]);
+
+    // Parent re-renders with new existingWidgets array
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={widgetsList}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
+    // Should NOT have triggered a second API call
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Functionality Breakdown")).toBeInTheDocument();
+  });
+
   it("displays error alert when suggestion API request fails", async () => {
     dashboardAi.suggestWidgets.mockRejectedValue(new Error("Network failure"));
 
@@ -184,6 +276,39 @@ describe("AISuggestionDrawer", () => {
 
     expect(
       await screen.findByText(/Failed to load AI suggestions/i)
+    ).toBeInTheDocument();
+  });
+
+  it("handles unknown questions and empty sources gracefully without crashing", async () => {
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: {
+        suggestions: [
+          {
+            type: "bar",
+            title: "Unknown Metric",
+            form: 9999,
+            question: 8888,
+            col_span: 12,
+            rationale: "Handles unmapped question IDs safely.",
+          },
+        ],
+      },
+    });
+
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={{}}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText("Unknown Metric")).toBeInTheDocument();
+    expect(
+      screen.getByText("Handles unmapped question IDs safely.")
     ).toBeInTheDocument();
   });
 });

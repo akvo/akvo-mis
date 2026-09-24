@@ -42,13 +42,16 @@ const AISuggestionDrawer = ({
 
   const cachedRef = useRef({
     dashboardId: null,
-    widgetsLength: 0,
     data: null,
+    promptHint: "",
   });
 
   const abortControllerRef = useRef(null);
   const promptHintRef = useRef("");
   promptHintRef.current = promptHint;
+
+  const existingWidgetsRef = useRef(existingWidgets);
+  existingWidgetsRef.current = existingWidgets;
 
   // Helper map for question and form labels
   const questionMap = useMemo(() => {
@@ -83,7 +86,7 @@ const AISuggestionDrawer = ({
       setLoading(true);
       setError(null);
 
-      const existingTypes = (existingWidgets || [])
+      const existingTypes = (existingWidgetsRef.current || [])
         .map((w) => w.type)
         .filter(Boolean);
 
@@ -105,13 +108,11 @@ const AISuggestionDrawer = ({
             ? res.data.suggestions
             : [];
           setSuggestions(list);
-          if (!trimmedHint) {
-            cachedRef.current = {
-              dashboardId,
-              widgetsLength: existingWidgets?.length || 0,
-              data: list,
-            };
-          }
+          cachedRef.current = {
+            dashboardId,
+            data: list,
+            promptHint: hintToUse || "",
+          };
         })
         .catch((err) => {
           if (err?.name === "CanceledError" || err?.name === "AbortError") {
@@ -126,26 +127,39 @@ const AISuggestionDrawer = ({
           setLoading(false);
         });
     },
-    [dashboardId, visible, existingWidgets]
+    [dashboardId, visible]
   );
 
-  // Auto-load default recommendations when drawer opens, without re-triggering on promptHint changes
+  // Auto-load default recommendations when drawer opens, and retain existing suggestions across open/close
   useEffect(() => {
     if (visible && dashboardId) {
-      const isCached =
-        cachedRef.current.dashboardId === dashboardId &&
-        cachedRef.current.widgetsLength === (existingWidgets?.length || 0) &&
-        cachedRef.current.data !== null;
+      if (cachedRef.current.dashboardId !== dashboardId) {
+        cachedRef.current = {
+          dashboardId,
+          data: null,
+          promptHint: "",
+        };
+        setPromptHint("");
+        setSuggestions([]);
+        fetchSuggestions("");
+        return;
+      }
 
-      if (isCached) {
-        setSuggestions(cachedRef.current.data);
-      } else {
+      if (cachedRef.current.data !== null) {
+        if (suggestions.length === 0) {
+          setSuggestions(cachedRef.current.data);
+          setPromptHint(cachedRef.current.promptHint || "");
+        }
+        return;
+      }
+
+      if (suggestions.length === 0) {
         fetchSuggestions("");
       }
     } else if (!visible && abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-  }, [visible, dashboardId, existingWidgets?.length, fetchSuggestions]);
+  }, [visible, dashboardId, fetchSuggestions, suggestions.length]);
 
   const handleSearch = useCallback(
     (value) => {
