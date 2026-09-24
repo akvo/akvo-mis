@@ -40,6 +40,7 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   const canEmbed = Boolean(tenant?.embed_enabled);
   const watchedKind = Form.useWatch("kind", form);
   const watchedAutoAi = Form.useWatch("auto_generate_ai", form);
+  const watchedRootForm = Form.useWatch("root_form", form);
   const kind = (canEmbed && watchedKind) || "widgets";
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -51,6 +52,16 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
       ),
     [allForms]
   );
+
+  const availableMonitoringForms = useMemo(() => {
+    if (!watchedRootForm) {
+      return [];
+    }
+    return (allForms || []).filter(
+      (f) =>
+        f.content?.parent === watchedRootForm && f.content?.published !== false
+    );
+  }, [allForms, watchedRootForm]);
 
   const isCancelledRef = useRef(false);
 
@@ -109,6 +120,13 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
         if (values.auto_generate_ai && values.root_form) {
           try {
             const aiPayload = { root_form: values.root_form };
+            if (
+              values.monitoring_forms &&
+              Array.isArray(values.monitoring_forms) &&
+              values.monitoring_forms.length > 0
+            ) {
+              aiPayload.monitoring_forms = values.monitoring_forms;
+            }
             if (values.user_intent && values.user_intent.trim()) {
               aiPayload.user_intent = values.user_intent.trim();
             }
@@ -231,7 +249,11 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
           <Form.Item
             name="embed_snippet"
             label={text.dashboardEmbedLabel}
-            extra={text.dashboardEmbedHint}
+            extra={
+              <span className="dashboards-modal-subhint">
+                {text.dashboardEmbedHint}
+              </span>
+            }
             rules={[{ required: true, message: text.dashboardEmbedRequired }]}
           >
             <Input.TextArea
@@ -244,10 +266,12 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
             name="root_form"
             label={text.dashboardFormLabel || "Data source"}
             extra={
-              registrationForms.length > 0
-                ? text.dashboardFormExtra ||
-                  "This dashboard will show data from this form and its monitoring forms. This cannot be changed later."
-                : null
+              registrationForms.length > 0 ? (
+                <span className="dashboards-modal-subhint">
+                  {text.dashboardFormExtra ||
+                    "This dashboard will show data from this form and its monitoring forms. This cannot be changed later."}
+                </span>
+              ) : null
             }
             rules={[
               {
@@ -336,6 +360,35 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
                     </Tag>
                   ))}
                 </div>
+                {availableMonitoringForms.length > 0 && (
+                  <Form.Item
+                    name="monitoring_forms"
+                    label={
+                      text.dashboardAiMonitoringFormsLabel ||
+                      "Monitoring Forms to Include"
+                    }
+                    extra={
+                      <span className="dashboards-modal-subhint">
+                        {text.dashboardAiMonitoringFormsHint ||
+                          "Optionally choose specific monitoring forms for the AI starter dashboard (defaults to all)"}
+                      </span>
+                    }
+                  >
+                    <Select
+                      mode="multiple"
+                      placeholder="All monitoring forms"
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                    >
+                      {availableMonitoringForms.map((mf) => (
+                        <Select.Option key={mf.id} value={mf.id}>
+                          {mf.name}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                )}
                 <Form.Item
                   name="user_intent"
                   label={
@@ -343,8 +396,10 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
                     "Dashboard Goal & Questions (Optional)"
                   }
                   extra={
-                    text.dashboardAiIntentHint ||
-                    "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown', max 250 chars)"
+                    <span className="dashboards-modal-subhint">
+                      {text.dashboardAiIntentHint ||
+                        "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown', max 250 chars)"}
+                    </span>
                   }
                   rules={[
                     {

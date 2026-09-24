@@ -252,4 +252,56 @@ describe("CreateDashboardModal AI Starter Generation", () => {
     await userEvent.type(textarea, "Focus on wells");
     expect(wrapper).toHaveAttribute("data-count", "14 / 250");
   });
+
+  it("passes selected monitoring forms to suggestDashboard when available", async () => {
+    store.update((s) => {
+      s.allForms = [
+        { id: 6001, name: "Water Points", content: { published: true } },
+        {
+          id: 7001,
+          name: "Monthly Water Inspections",
+          content: { parent: 6001, published: true },
+        },
+      ];
+    });
+
+    dashboardAi.suggestDashboard.mockResolvedValue({
+      data: {
+        widgets: [{ type: "kpi", title: "Total Points", col_span: 6 }],
+      },
+    });
+    dashboardApi.create.mockResolvedValue({
+      data: { id: 20, slug: "multi-form-dashboard" },
+    });
+
+    const onCreate = jest.fn();
+    renderModal(onCreate);
+
+    await userEvent.type(
+      screen.getByLabelText("Dashboard name"),
+      "Multi Form Test"
+    );
+
+    const select = screen.getByRole("combobox");
+    fireEvent.mouseDown(select);
+    const option = await screen.findByText("Water Points");
+    fireEvent.click(option);
+
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    expect(
+      await screen.findByText("Monitoring Forms to Include")
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Create dashboard"));
+
+    await waitFor(() => {
+      expect(dashboardAi.suggestDashboard).toHaveBeenCalledWith(
+        expect.objectContaining({
+          root_form: 6001,
+        })
+      );
+    });
+  });
 });
