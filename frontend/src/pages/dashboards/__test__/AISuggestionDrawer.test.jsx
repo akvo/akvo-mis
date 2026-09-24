@@ -1,0 +1,189 @@
+import React from "react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import "@testing-library/jest-dom";
+import AISuggestionDrawer from "../AISuggestionDrawer";
+import dashboardAi from "../../../util/dashboardAi";
+
+jest.mock("../../../util/dashboardAi");
+
+const mockSources = {
+  forms: [
+    {
+      id: 101,
+      name: "Water Points",
+      type: "registration",
+      questions: [
+        { id: 201, label: "Functionality Status", type: "option" },
+        { id: 202, label: "Community Population", type: "numeric" },
+      ],
+    },
+  ],
+};
+
+const mockSuggestions = [
+  {
+    type: "bar",
+    title: "Functionality Breakdown",
+    rationale: "Compares working vs non-working water points",
+    col_span: 12,
+    form: 101,
+    question: 201,
+    config: { measure: "current_state" },
+  },
+  {
+    type: "kpi",
+    title: "Total Population Served",
+    rationale: "Key summary metric for coverage",
+    col_span: 6,
+    form: 101,
+    question: 202,
+    config: { aggregation: "sum" },
+  },
+];
+
+describe("AISuggestionDrawer", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: { suggestions: mockSuggestions },
+    });
+  });
+
+  it("automatically loads default suggestions on open", async () => {
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByText("Functionality Breakdown")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Compares working vs non-working water points")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Total Population Served")).toBeInTheDocument();
+    expect(
+      screen.getByText("Key summary metric for coverage")
+    ).toBeInTheDocument();
+
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledWith(
+      1,
+      { existing_widget_types: [] },
+      expect.anything()
+    );
+  });
+
+  it("calls onAddWidget when 'Add to Dashboard' button is clicked", async () => {
+    const onAddWidget = jest.fn();
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
+    const addButtons = await screen.findAllByRole("button", {
+      name: /add to dashboard/i,
+    });
+    expect(addButtons.length).toBeGreaterThan(0);
+
+    fireEvent.click(addButtons[0]);
+
+    expect(onAddWidget).toHaveBeenCalledWith(mockSuggestions[0]);
+  });
+
+  it("does not call API while typing, only when user clicks Suggest button", async () => {
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    await screen.findByText("Functionality Breakdown");
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+
+    const searchInput = screen.getByPlaceholderText(
+      /Ask AI for specific widgets/i
+    );
+    await userEvent.type(searchInput, "Focus on population");
+
+    // Typing should NOT trigger any new API calls
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+
+    const generateBtn = screen.getByRole("button", { name: /^suggest$/i });
+    await userEvent.click(generateBtn);
+
+    // Clicking Suggest triggers the second call with the prompt_hint
+    await waitFor(() => {
+      expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(2);
+      expect(dashboardAi.suggestWidgets).toHaveBeenLastCalledWith(
+        1,
+        {
+          existing_widget_types: [],
+          prompt_hint: "Focus on population",
+        },
+        expect.anything()
+      );
+    });
+
+    expect(
+      await screen.findByText("Functionality Breakdown")
+    ).toBeInTheDocument();
+  });
+
+  it("displays empty state when no suggestions are returned", async () => {
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: { suggestions: [] },
+    });
+
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByText(/No recommendations available/i)
+    ).toBeInTheDocument();
+  });
+
+  it("displays error alert when suggestion API request fails", async () => {
+    dashboardAi.suggestWidgets.mockRejectedValue(new Error("Network failure"));
+
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByText(/Failed to load AI suggestions/i)
+    ).toBeInTheDocument();
+  });
+});
