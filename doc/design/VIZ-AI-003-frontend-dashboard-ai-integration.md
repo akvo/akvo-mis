@@ -2,13 +2,14 @@
 
 **Task ID**: VIZ-AI-003  
 **Parent Epic**: [VIZ-AI-001](file:///Users/galihpratama/Sites/akvo-mis/doc/design/VIZ-AI-001-ai-dashboard-visualization-layer.md)  
-**Issue**: [#452](https://github.com/akvo/akvo-mis/issues/452)  
-**Branch**: `epic/452-viz-ai-dashboard-visualization-layer`  
+**Issue**: [#464](https://github.com/akvo/akvo-mis/issues/464) (Parent Epic: [#452](https://github.com/akvo/akvo-mis/issues/452))  
+**Branch**: `feature/464-viz-ai-003-frontend-dashboard-ai-integration`  
 **Feature Name**: Frontend Dashboard Builder AI Experience & UI Integration  
 **Author**: Akvo Engineering Team  
-**Date**: 2026-09-22  
-**Status**: Draft / Review  
-**Estimated Effort**: **7h** (Dev: 3.5h | Testing: 2.0h | Review: 1.5h)  
+**Date**: 2026-09-24  
+**Status**: Completed  
+**Estimated Effort**: **7.0h** (Dev: 3.5h | Testing: 2.0h | Review: 1.5h)  
+**Actual Effort**: **6.0h** (Dev: 3.0h | Testing: 1.8h | Review: 1.2h)  
 
 ---
 
@@ -46,17 +47,17 @@ Goal:
 ## 3. Requirements & Acceptance Criteria
 
 ### 3.1. User Acceptance Criteria (UAC)
-- [ ] **Modal Starter Generation**: In `CreateDashboardModal`, authors selecting a registration form family can toggle "Auto-generate Starter Dashboard with AI" and immediately land on a canvas pre-populated with 4-6 valid widgets.
-- [ ] **Suggestion Drawer**: In `DashboardBuilder`, authors can click "AI Suggestions" in the palette to open a slide-over drawer showing ranked widget recommendations.
-- [ ] **1-Click Insertion**: Clicking "Add to Dashboard" on any suggestion card appends the widget to the canvas, marks the dashboard `dirty`, and automatically selects it in `BuilderInspector` for editing.
-- [ ] **Non-Blocking Fallback UX**: If AI calls fail or timeout, the author sees a friendly notification while manual dashboard creation and editing remain completely functional.
+- [x] **Modal Starter Generation**: In `CreateDashboardModal`, authors selecting a registration form family can toggle "Auto-generate Starter Dashboard with AI" and immediately land on a canvas pre-populated with 4-6 valid widgets.
+- [x] **Suggestion Drawer**: In `DashboardBuilder`, authors can click "AI Suggestions" in the palette to open a slide-over drawer showing ranked widget recommendations.
+- [x] **1-Click Insertion**: Clicking "Add to Dashboard" on any suggestion card appends the widget to the canvas, marks the dashboard `dirty`, and automatically selects it in `BuilderInspector` for editing.
+- [x] **Non-Blocking Fallback UX**: If AI calls fail or timeout, the author sees a friendly notification while manual dashboard creation and editing remain completely functional.
 
 ### 3.2. Technical Acceptance Criteria (TAC)
-- [ ] **API Client Wrapper**: `dashboardAi.js` implements `suggestDashboard({ root_form, user_intent })` and `suggestWidgets(dashboardId, { existing_widget_types, prompt_hint })` with standard error handling.
-- [ ] **Negative Temporary IDs**: Newly added suggestions use decremented negative integer IDs (`--nextTempId`) to avoid collisions with existing database primary keys.
-- [ ] **Strict Config Conformity**: Suggested widgets conform directly to `builderConstants.js` defaults, allowing seamless saving via `handleSave` without client-side key translation.
-- [ ] **Error Isolation**: All widgets render inside `WidgetErrorBoundary` so isolated runtime calculation errors do not crash the builder canvas.
-- [ ] **Automated Jest Tests**: Component tests for `CreateDashboardModal` AI flow, `AISuggestionDrawer`, and `dashboardAi.js` pass with ≥80% coverage.
+- [x] **API Client Wrapper**: `dashboardAi.js` implements `suggestDashboard({ root_form, user_intent })` and `suggestWidgets(dashboardId, { existing_widget_types, prompt_hint })` with standard error handling.
+- [x] **Negative Temporary IDs**: Newly added suggestions use decremented negative integer IDs (`--nextTempId`) to avoid collisions with existing database primary keys.
+- [x] **Strict Config Conformity**: Suggested widgets conform directly to `builderConstants.js` defaults, allowing seamless saving via `handleSave` without client-side key translation.
+- [x] **Error Isolation**: All widgets render inside `WidgetErrorBoundary` so isolated runtime calculation errors do not crash the builder canvas.
+- [x] **Automated Jest Tests**: Component tests for `CreateDashboardModal` AI flow, `AISuggestionDrawer`, and `dashboardAi.js` pass with ≥80% coverage.
 
 ---
 
@@ -187,11 +188,11 @@ export const dashboardAi = {
 
 ## 7. Task Breakdown & Estimation
 
-| Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total |
-|---|---|:---:|:---:|:---:|:---:|
-| **VIZ-AI-003.1** | Frontend API client helper (`util/dashboardAi.js`) & unit tests | 30m | 20m | 10m | **1.0h** |
-| **VIZ-AI-003.2** | Create Dashboard Modal AI starter toggle & creation flow | 45m | 30m | 15m | **1.5h** |
-| **VIZ-AI-003.3** | In-Canvas AI Suggestion Drawer component & card styling | 60m | 35m | 25m | **2.0h** |
-| **VIZ-AI-003.4** | Dashboard Builder state integration, layout placement & inspector binding | 45m | 25m | 20m | **1.5h** |
-| **VIZ-AI-003.5** | End-to-End Jest component test suite & cross-form manual verification | 30m | 40m | 20m | **1.5h** |
-| **TOTAL** | **Full Frontend AI Experience** | **3.5h** | **2.0h** | **1.5h** | **7.0h** |
+| Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total Est. | Actual Time |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| **VIZ-AI-003.1** | Frontend API client helper (`util/dashboardAi.js`) & unit tests | 30m | 20m | 10m | **1.0h** | **0.8h** |
+| **VIZ-AI-003.2** | Create Dashboard Modal AI starter toggle & creation flow | 45m | 30m | 15m | **1.5h** | **1.3h** |
+| **VIZ-AI-003.3** | In-Canvas AI Suggestion Drawer component & card styling | 60m | 35m | 25m | **2.0h** | **1.8h** |
+| **VIZ-AI-003.4** | Dashboard Builder state integration, layout placement & inspector binding | 45m | 25m | 20m | **1.5h** | **1.1h** |
+| **VIZ-AI-003.5** | End-to-End Jest component test suite & cross-form manual verification | 30m | 40m | 20m | **1.5h** | **1.0h** |
+| **TOTAL** | **Full Frontend AI Experience** | **3.5h** | **2.0h** | **1.5h** | **7.0h** | **6.0h** |
