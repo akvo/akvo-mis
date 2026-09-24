@@ -309,6 +309,7 @@ const AISuggestionDrawer = ({
       }
       placement="right"
       width={460}
+      visible={visible}
       open={visible}
       onClose={onClose}
       className="ai-suggestion-drawer"

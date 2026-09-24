@@ -499,7 +499,7 @@ describe("AISuggestionDrawer", () => {
       />
     );
 
-    const searchInput = screen.getByPlaceholderText(
+    const searchInput = await screen.findByPlaceholderText(
       /Ask AI for specific widgets/i
     );
     expect(searchInput).toHaveAttribute("maxlength", "250");
