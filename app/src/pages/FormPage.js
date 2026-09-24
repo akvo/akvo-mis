@@ -127,9 +127,11 @@ const FormPage = ({ navigation, route }) => {
 
   useEffect(() => {
     // FormState is global and outlives this screen, so a flag left raised by the last
-    // form would make the very first back press prompt. Reset on mount.
+    // form would make the very first back press prompt, and the last form's validation
+    // messages would greet a blank new submission. Reset on mount.
     FormState.update((s) => {
       s.hasUnsavedChanges = false;
+      s.feedback = {};
     });
 
     // Subscribing catches every writer — fields, prefill, geo, autofield, map — and

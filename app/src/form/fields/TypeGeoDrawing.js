@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Text, Button } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +25,7 @@ import {
   overlapResults,
   runOverlapCheck,
 } from '../lib/overlap-check';
+import { generateValidationSchemaFieldLevel } from '../lib';
 import { requestDatapointSync } from '../../lib/sync-datapoints';
 import { QUESTION_TYPES } from '../../lib/constants';
 import styles from '../styles';
@@ -91,6 +92,34 @@ const TypeGeoDrawing = ({
    */
   const isStale = !stored || stored.signature !== signatureOf(points);
   const status = isStale ? OVERLAP_STATUS.notValidated : stored.status;
+
+  /**
+   * The gate's red sentence under the field is a snapshot, refreshed only by QuestionGroup's
+   * onChange. Neither way this answer changes goes through it — MapDrawView's Save writes
+   * `currentValues` directly, and Validate writes only `polygonValidation` — so after a retake the
+   * field kept printing the overlap list of a polygon that no longer exists. Recomputed here
+   * whenever the points or the stored verdict move, and, like QuestionGroup, only while an error
+   * is actually showing.
+   */
+  useEffect(() => {
+    let active = true;
+    if (feedback && feedback !== true) {
+      generateValidationSchemaFieldLevel(points, question).then((result) => {
+        const next = result?.[id];
+        if (!active) {
+          return;
+        }
+        FormState.update((s) => {
+          if (s.feedback?.[id] !== next) {
+            s.feedback = { ...s.feedback, [id]: next };
+          }
+        });
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [feedback, points, stored, question, id]);
 
   /** No configured rules means no Validate button at all - a plain geoshape looks like phase 1. */
   const showValidate = hasConfiguredRules({ extra }) && points.length > 0;
@@ -326,12 +355,18 @@ const TypeGeoDrawing = ({
               onPress={handleValidate}
               testID="button-validate-polygon"
               disabled={disabled || checking}
+              color="secondary"
             >
               {trans.buttonValidatePolygon}
             </Button>
           )}
           {!checking && status === OVERLAP_STATUS.unavailable && stored?.retryable && (
-            <Button onPress={handleRetrySync} testID="button-retry-sync" disabled={disabled}>
+            <Button
+              onPress={handleRetrySync}
+              testID="button-retry-sync"
+              disabled={disabled}
+              type="outline"
+            >
               {trans.buttonRetrySync}
             </Button>
           )}
@@ -340,6 +375,7 @@ const TypeGeoDrawing = ({
               onPress={handleReviewOverlaps}
               testID="button-review-overlaps"
               disabled={disabled}
+              type="outline"
             >
               {trans.buttonViewOverlaps}
             </Button>
