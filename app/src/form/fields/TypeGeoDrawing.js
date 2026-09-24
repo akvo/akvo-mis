@@ -17,8 +17,10 @@ import {
   runPolygonRules,
 } from '../lib/polygon-rules';
 import { detectOverlapsEnabled, signatureOf } from '../lib/overlap';
+import { accuracyThreshold as resolveAccuracyThreshold } from '../lib/gps-vertex';
 import {
   OVERLAP_STATUS,
+  conflictsForMap,
   notValidatedResult,
   overlapResults,
   runOverlapCheck,
@@ -163,6 +165,12 @@ const TypeGeoDrawing = ({
             results,
             cause: result.cause || null,
             retryable: Boolean(result.retryable),
+            /**
+             * Kept, worst-first order and all, because the review screen draws from this array
+             * and must never re-run the check to fetch it: a second run could sort differently,
+             * and then `#1` on the map would not be `#1` in the sentence above (GEO-007 D-11).
+             */
+            conflicts: result.conflicts || [],
             signature,
             at: new Date().toISOString(),
           },
@@ -185,6 +193,7 @@ const TypeGeoDrawing = ({
             ),
             cause: 'localFailure',
             retryable: false,
+            conflicts: [],
             signature,
             at: new Date().toISOString(),
           },
@@ -218,6 +227,35 @@ const TypeGeoDrawing = ({
      * no ceiling were configured, which looks identical to "no ceiling set".
      */
     navigation.navigate('MapDrawView', { id, value: points, name: label, type, extra });
+  };
+
+  /**
+   * Offered only while the stored verdict still describes the polygon on screen: `status` is
+   * already `notValidated` once the signature stops matching, so an edit withdraws the button
+   * rather than opening a map of a shape that no longer exists.
+   */
+  const conflicts = stored?.conflicts || [];
+  const showReviewMap = status === OVERLAP_STATUS.failed && conflicts.length > 0;
+
+  const handleReviewOverlaps = () => {
+    navigation.navigate('OverlapMapView', {
+      value: points,
+      /**
+       * Labelled here, at the source, rather than by the screen. `conflictsForMap` and the
+       * message's `conflictList` share one numbering function, so labelling anywhere else is a
+       * chance to drift — and the screen then needs no import of the check that produced this.
+       */
+      conflicts: conflictsForMap(conflicts),
+      name: label,
+      type,
+      /**
+       * The question's own threshold, so the review screen marks a neighbour's loose corner
+       * against the same number the capture screen used (GEO-008 D-4). Resolved here rather
+       * than passed as `extra`: this screen cannot change it, so there is nothing to keep in
+       * step.
+       */
+      accuracyThreshold: resolveAccuracyThreshold(extra),
+    });
   };
 
   return (
@@ -295,6 +333,15 @@ const TypeGeoDrawing = ({
           {!checking && status === OVERLAP_STATUS.unavailable && stored?.retryable && (
             <Button onPress={handleRetrySync} testID="button-retry-sync" disabled={disabled}>
               {trans.buttonRetrySync}
+            </Button>
+          )}
+          {showReviewMap && (
+            <Button
+              onPress={handleReviewOverlaps}
+              testID="button-review-overlaps"
+              disabled={disabled}
+            >
+              {trans.buttonViewOverlaps}
             </Button>
           )}
         </View>

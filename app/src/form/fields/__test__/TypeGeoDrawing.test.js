@@ -320,3 +320,130 @@ describe('TypeGeoDrawing validation report (GEO-007)', () => {
     expect(queryByTestId('text-polygon-validated')).toBeNull();
   });
 });
+
+describe('TypeGeoDrawing overlap review (GEO-008)', () => {
+  const THRESHOLD_EXTRA = { geoConfig: { detectOverlaps: true, accuracyThreshold: 25 } };
+
+  /** Coordinates and all: the screen draws from this array and never re-reads the datapoints. */
+  const CONFLICTS = [
+    {
+      uuid: 'a',
+      name: 'Plot A - Indonesia - Jakarta - Cawang',
+      percent: '41.2',
+      rawPercent: 41.2,
+      threshold: '20.0',
+      coordinates: [
+        [9.031, 38.741, 30],
+        [9.031, 38.751],
+        [9.041, 38.751],
+      ],
+    },
+  ];
+
+  const renderFailed = async () => {
+    runOverlapCheck.mockResolvedValue({ status: OVERLAP_STATUS.failed, conflicts: CONFLICTS });
+    const view = render(
+      <TypeGeoDrawing
+        keyform={0}
+        id={42}
+        label="Plot boundary"
+        value={triangle}
+        extra={THRESHOLD_EXTRA}
+      />,
+    );
+    await act(async () => {
+      fireEvent.press(view.getByTestId('button-validate-polygon'));
+    });
+    return view;
+  };
+
+  beforeEach(() => {
+    // Not clearAllMocks: that resets the manual @react-navigation mock's return value.
+    runOverlapCheck.mockReset();
+    act(() => {
+      FormState.update((s) => {
+        s.lang = 'en';
+        s.polygonValidation = {};
+        s.submissionUuid = 'self-uuid';
+        s.overlapFormId = 123;
+        s.feedback = {};
+      });
+    });
+  });
+
+  it('offers the map once an overlap has been reported', async () => {
+    const { getByTestId } = await renderFailed();
+    expect(getByTestId('button-review-overlaps')).toBeDefined();
+  });
+
+  /**
+   * The error text says `#1 (41.2%)` and names nobody, so the map is the only way to find out
+   * which plot that is. The labels are attached HERE, next to the check that produced them:
+   * `conflictsForMap` and the message share one numbering function, and a screen that labelled
+   * its own polygons could sort them differently and make `#1` mean two plots.
+   */
+  it('hands the map the conflicts already labelled and still carrying coordinates', async () => {
+    const navigation = useNavigation();
+    const { getByTestId } = await renderFailed();
+
+    fireEvent.press(getByTestId('button-review-overlaps'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('OverlapMapView', {
+      value: triangle,
+      conflicts: [
+        {
+          label: '#1',
+          name: 'Plot A - Indonesia - Jakarta - Cawang',
+          percent: '41.2',
+          coordinates: [
+            [9.031, 38.741, 30],
+            [9.031, 38.751],
+            [9.041, 38.751],
+          ],
+        },
+      ],
+      name: 'Plot boundary',
+      type: 'geoshape',
+      accuracyThreshold: 25,
+    });
+  });
+
+  it('offers no map when the check passed', async () => {
+    runOverlapCheck.mockResolvedValue({ status: OVERLAP_STATUS.passed, conflicts: [] });
+    const { getByTestId, queryByTestId } = render(
+      <TypeGeoDrawing
+        keyform={0}
+        id={42}
+        label="Plot boundary"
+        value={triangle}
+        extra={THRESHOLD_EXTRA}
+      />,
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId('button-validate-polygon'));
+    });
+    expect(queryByTestId('button-review-overlaps')).toBeNull();
+  });
+
+  /**
+   * A verdict belongs to the geometry it was computed from. After an edit the stored conflicts
+   * describe a shape that no longer exists, and a map of it would be confidently wrong - the
+   * same reason the green tick drops out.
+   */
+  it('withdraws the map once the polygon is edited', async () => {
+    const { getByTestId, queryByTestId, rerender } = await renderFailed();
+    expect(getByTestId('button-review-overlaps')).toBeDefined();
+
+    const moved = [...triangle.slice(0, 2), [9.041, 38.75]];
+    rerender(
+      <TypeGeoDrawing
+        keyform={0}
+        id={42}
+        label="Plot boundary"
+        value={moved}
+        extra={THRESHOLD_EXTRA}
+      />,
+    );
+    expect(queryByTestId('button-review-overlaps')).toBeNull();
+  });
+});
