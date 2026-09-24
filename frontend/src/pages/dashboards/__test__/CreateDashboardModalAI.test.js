@@ -154,4 +154,102 @@ describe("CreateDashboardModal AI Starter Generation", () => {
       slug: "water-fallback",
     });
   });
+
+  it("populates and appends user intent when clicking quick preset chips", async () => {
+    renderModal();
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    const kpiChip = await screen.findByText("+ Executive KPI Overview");
+    expect(kpiChip).toBeInTheDocument();
+
+    await userEvent.click(kpiChip);
+    const textarea = screen.getByPlaceholderText(
+      /Overview of borehole functionality/i
+    );
+    expect(textarea).toHaveValue("Executive KPI Overview");
+
+    const spatialChip = screen.getByText("+ Regional & Spatial Breakdown");
+    await userEvent.click(spatialChip);
+    expect(textarea).toHaveValue(
+      "Executive KPI Overview, Regional & Spatial Breakdown"
+    );
+  });
+
+  it("aborts creation if user cancels while AI generation is in flight", async () => {
+    let resolveAi;
+    const aiPromise = new Promise((resolve) => {
+      resolveAi = resolve;
+    });
+    dashboardAi.suggestDashboard.mockReturnValue(aiPromise);
+    dashboardApi.create.mockResolvedValue({
+      data: { id: 12, slug: "water-abort" },
+    });
+
+    const onCreate = jest.fn();
+    const onCancel = jest.fn();
+    render(
+      <MemoryRouter>
+        <CreateDashboardModal
+          visible={true}
+          onCancel={onCancel}
+          onCreate={onCreate}
+        />
+      </MemoryRouter>
+    );
+
+    await userEvent.type(
+      screen.getByLabelText("Dashboard name"),
+      "Water Abort"
+    );
+
+    const select = screen.getByRole("combobox");
+    fireEvent.mouseDown(select);
+    const option = await screen.findByText("Water Points");
+    fireEvent.click(option);
+
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    await userEvent.click(screen.getByText("Create dashboard"));
+
+    // Verify loading status is displayed
+    expect(
+      await screen.findByText(
+        "Analyzing form questions and crafting AI starter layout..."
+      )
+    ).toBeInTheDocument();
+
+    // User cancels the modal while AI is in-flight
+    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
+    await userEvent.click(cancelBtn);
+
+    expect(onCancel).toHaveBeenCalled();
+
+    // Now resolve AI in-flight promise
+    resolveAi({
+      data: { widgets: [{ type: "kpi", title: "K", col_span: 6 }] },
+    });
+
+    // Verify dashboardApi.create was NOT called and onCreate was NOT called
+    await waitFor(() => {
+      expect(dashboardApi.create).not.toHaveBeenCalled();
+      expect(onCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  it("enforces max length 250 and renders character count on user intent textarea", async () => {
+    renderModal();
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    const textarea = await screen.findByPlaceholderText(
+      /Overview of borehole functionality/i
+    );
+    const wrapper = textarea.closest(".ant-input-textarea-show-count");
+    expect(wrapper).toHaveAttribute("data-count", "0 / 250");
+
+    await userEvent.type(textarea, "Focus on wells");
+    expect(wrapper).toHaveAttribute("data-count", "14 / 250");
+  });
 });

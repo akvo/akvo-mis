@@ -1,10 +1,27 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { Modal, Form, Input, Select, Radio, Switch, message } from "antd";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Modal,
+  Form,
+  Input,
+  Select,
+  Radio,
+  Switch,
+  Tag,
+  Spin,
+  message,
+} from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { store, uiText } from "../../lib";
 import dashboardApi from "../../util/dashboardApi";
 import dashboardAi from "../../util/dashboardAi";
+
+const INTENT_PRESETS = [
+  "Executive KPI Overview",
+  "Regional & Spatial Breakdown",
+  "Status & Functionality Analysis",
+  "Monthly Trends & Timelines",
+];
 
 const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   const [form] = Form.useForm();
@@ -35,6 +52,20 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
     [allForms]
   );
 
+  const isCancelledRef = useRef(false);
+
+  const handleChipClick = useCallback(
+    (preset) => {
+      const current = form.getFieldValue("user_intent");
+      if (!current || !current.trim()) {
+        form.setFieldsValue({ user_intent: preset });
+      } else if (!current.includes(preset)) {
+        form.setFieldsValue({ user_intent: `${current}, ${preset}` });
+      }
+    },
+    [form]
+  );
+
   const doCreate = useCallback(
     (payload) =>
       dashboardApi.create(payload).catch((err) => {
@@ -61,6 +92,7 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   );
 
   const handleOk = useCallback(() => {
+    isCancelledRef.current = false;
     form
       .validateFields()
       .then(async (values) => {
@@ -81,15 +113,25 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
               aiPayload.user_intent = values.user_intent.trim();
             }
             const aiRes = await dashboardAi.suggestDashboard(aiPayload);
+            if (isCancelledRef.current) {
+              return null;
+            }
             if (aiRes?.data?.widgets && Array.isArray(aiRes.data.widgets)) {
               starterWidgets = aiRes.data.widgets;
             }
           } catch (aiErr) {
+            if (isCancelledRef.current) {
+              return null;
+            }
             message.warning(
               text.dashboardAiFallbackWarning ||
                 "Could not generate AI starter widgets. Creating empty dashboard instead."
             );
           }
+        }
+
+        if (isCancelledRef.current) {
+          return null;
         }
 
         const createPayload = {
@@ -103,6 +145,9 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
         return doCreate(createPayload);
       })
       .then((res) => {
+        if (!res || isCancelledRef.current) {
+          return;
+        }
         form.resetFields();
         onCreate(res.data);
       })
@@ -112,14 +157,25 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
         }
       })
       .finally(() => {
-        setSubmitting(false);
+        if (!isCancelledRef.current) {
+          setSubmitting(false);
+        }
       });
   }, [form, onCreate, doCreate, text]);
 
   const handleCancel = useCallback(() => {
+    isCancelledRef.current = true;
+    setSubmitting(false);
     form.resetFields();
     onCancel();
   }, [form, onCancel]);
+
+  const modalOkText = useMemo(() => {
+    if (submitting && watchedAutoAi) {
+      return text.dashboardGeneratingAi || "Generating with AI...";
+    }
+    return text.dashboardCreateBtn || "Create dashboard";
+  }, [submitting, watchedAutoAi, text]);
 
   return (
     <Modal
@@ -127,7 +183,7 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
       open={visible}
       onOk={handleOk}
       onCancel={handleCancel}
-      okText={text.dashboardCreateBtn || "Create dashboard"}
+      okText={modalOkText}
       cancelText={text.cancel || "Cancel"}
       confirmLoading={submitting}
       okButtonProps={{
@@ -265,22 +321,57 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
               </Form.Item>
             </div>
             {watchedAutoAi && (
-              <Form.Item
-                name="user_intent"
-                label={
-                  text.dashboardAiIntentLabel ||
-                  "Dashboard Goal & Questions (Optional)"
-                }
-                extra={
-                  text.dashboardAiIntentHint ||
-                  "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown')"
-                }
-              >
-                <Input.TextArea
-                  rows={2}
-                  placeholder="e.g. Overview of borehole functionality and regional water access"
-                />
-              </Form.Item>
+              <>
+                <div className="dashboards-modal-intent-chips">
+                  <span className="dashboards-modal-chips-label">
+                    {text.dashboardAiPresetsLabel || "Quick presets:"}
+                  </span>
+                  {INTENT_PRESETS.map((preset) => (
+                    <Tag
+                      key={preset}
+                      className="dashboards-modal-intent-chip"
+                      onClick={() => handleChipClick(preset)}
+                    >
+                      + {preset}
+                    </Tag>
+                  ))}
+                </div>
+                <Form.Item
+                  name="user_intent"
+                  label={
+                    text.dashboardAiIntentLabel ||
+                    "Dashboard Goal & Questions (Optional)"
+                  }
+                  extra={
+                    text.dashboardAiIntentHint ||
+                    "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown', max 250 chars)"
+                  }
+                  rules={[
+                    {
+                      max: 250,
+                      message:
+                        text.dashboardAiIntentMax ||
+                        "Dashboard goal cannot exceed 250 characters",
+                    },
+                  ]}
+                >
+                  <Input.TextArea
+                    rows={2}
+                    maxLength={250}
+                    showCount
+                    placeholder="e.g. Overview of borehole functionality and regional water access"
+                  />
+                </Form.Item>
+                {submitting && (
+                  <div className="dashboards-ai-generating-status">
+                    <Spin size="small" />
+                    <span>
+                      {text.dashboardAiGeneratingStatus ||
+                        "Analyzing form questions and crafting AI starter layout..."}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
