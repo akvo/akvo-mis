@@ -201,3 +201,19 @@ def serialize_sources(dashboard, user):
         serialize_source_form(child, is_root=False) for child in children
     )
     return {"forms": forms}
+
+
+class SuggestDashboardRequestSerializer(serializers.Serializer):
+    root_form = serializers.IntegerField(required=True)
+    user_intent = serializers.CharField(
+        required=False, allow_blank=True, max_length=250, default=""
+    )
+
+
+class SuggestWidgetsRequestSerializer(serializers.Serializer):
+    existing_widget_types = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list
+    )
+    prompt_hint = serializers.CharField(
+        required=False, allow_blank=True, max_length=250, default=""
+    )

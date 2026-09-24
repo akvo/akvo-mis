@@ -22,8 +22,10 @@ from drf_spectacular.utils import (
 from rest_framework import status, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 
 from api.v1.v1_profile.constants import FeatureAccessTypes
+from api.v1.v1_visualization.ai_service import AISuggestionService
 from api.v1.v1_visualization.constants import (
     DashboardKind,
     DashboardStatus,
@@ -32,6 +34,8 @@ from api.v1.v1_visualization.constants import (
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardDetailSerializer,
     DashboardListSerializer,
+    SuggestDashboardRequestSerializer,
+    SuggestWidgetsRequestSerializer,
     serialize_sources,
 )
 from api.v1.v1_visualization.dashboard_functions import (
@@ -48,6 +52,11 @@ from api.v1.v1_visualization.dashboard_snapshot import build_snapshot
 from api.v1.v1_visualization.embed_views import preview_url_for
 from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 from utils.custom_permissions import DashboardAccess
+
+
+class DashboardAIThrottle(UserRateThrottle):
+    scope = "dashboard_ai"
+    rate = "15/minute"
 
 
 class DenyUnmappedAction(BasePermission):
@@ -75,7 +84,7 @@ class DenyUnmappedAction(BasePermission):
 MANAGE = "Manage Dashboards"
 
 DASHBOARD_PK = OpenApiParameter(
-    name="pk",
+    name="id",
     required=True,
     type=OpenApiTypes.INT,
     location=OpenApiParameter.PATH,
@@ -136,6 +145,11 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
     # describes and the merged builder requires.
     pagination_class = None
 
+    def get_throttles(self):
+        if self.action in ("suggest_dashboard", "suggest_widgets"):
+            return [DashboardAIThrottle()]
+        return super().get_throttles()
+
     def get_queryset(self):
         queryset = Dashboard.objects.for_user(self.request.user)
         queryset = queryset.select_related("root_form", "created_by")
@@ -181,6 +195,8 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "visibility": FeatureAccessTypes.dashboard_publish,
         "duplicate": FeatureAccessTypes.dashboard_create,
         "embed_preview": FeatureAccessTypes.dashboard_edit,
+        "suggest_dashboard": FeatureAccessTypes.dashboard_create,
+        "suggest_widgets": BUILDER_ACCESS,
     }
 
     def get_permissions(self):
@@ -554,3 +570,77 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # form is not here the builder cannot offer it, and if it
         # somehow does, validate_dashboard_payload rejects it on save.
         return Response(serialize_sources(dashboard, request.user))
+
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Generate a starter dashboard recommendation with AI",
+        description=(
+            "Generates a 4-6 widget starter layout for a selected root form "
+            "family. Zero PII or submission rows are accessed. Falls back to "
+            "deterministic heuristics if OpenAI is unavailable."
+        ),
+        request=SuggestDashboardRequestSerializer,
+    )
+    def suggest_dashboard(self, request, *args, **kwargs):
+        serializer = SuggestDashboardRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        root_form_id = serializer.validated_data["root_form"]
+        user_intent = serializer.validated_data.get("user_intent")
+
+        result = AISuggestionService.suggest_dashboard(
+            root_form_id=root_form_id,
+            user=request.user,
+            user_intent=user_intent,
+        )
+        if result is None:
+            return Response(
+                {"message": "Form not found or inaccessible"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(result, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Suggest contextual next widgets for an existing dashboard",
+        description=(
+            "Generates 3-5 complementary widget recommendations for an "
+            "existing dashboard canvas, prioritizing unvisualized questions."
+        ),
+        parameters=[DASHBOARD_PK],
+        request=SuggestWidgetsRequestSerializer,
+    )
+    def suggest_widgets(self, request, *args, **kwargs):
+        dashboard = self.get_object()
+        if dashboard.kind == DashboardKind.embed:
+            return Response(
+                {"message": "an embedded dashboard has no form sources"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = SuggestWidgetsRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        existing_types = serializer.validated_data.get(
+            "existing_widget_types", []
+        )
+        prompt_hint = serializer.validated_data.get("prompt_hint")
+
+        result = AISuggestionService.suggest_widgets(
+            dashboard_id=dashboard.id,
+            user=request.user,
+            existing_widget_types=existing_types,
+            prompt_hint=prompt_hint,
+        )
+        if result is None:
+            return Response(
+                {"message": "Dashboard has no associated root form"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(result, status=status.HTTP_200_OK)

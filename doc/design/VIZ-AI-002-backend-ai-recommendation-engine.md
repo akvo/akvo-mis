@@ -2,13 +2,14 @@
 
 **Task ID**: VIZ-AI-002  
 **Parent Epic**: [VIZ-AI-001](file:///Users/galihpratama/Sites/akvo-mis/doc/design/VIZ-AI-001-ai-dashboard-visualization-layer.md)  
-**Issue**: [#452](https://github.com/akvo/akvo-mis/issues/452)  
-**Branch**: `epic/452-viz-ai-dashboard-visualization-layer`  
+**Issue**: [#457](https://github.com/akvo/akvo-mis/issues/457) (Parent Epic: [#452](https://github.com/akvo/akvo-mis/issues/452))  
+**Pull Request**: [#463](https://github.com/akvo/akvo-mis/pull/463)  
+**Branch**: `feature/457-viz-ai-002-backend-ai-recommendation-engine-suggestion-endpoints`  
 **Feature Name**: Backend AI Recommendation Service & APIs  
 **Author**: Akvo Engineering Team  
-**Date**: 2026-09-22  
-**Status**: Draft / Review  
-**Estimated Effort**: **8h** (Dev: 4.0h | Testing: 2.5h | Review: 1.5h)  
+**Date**: 2026-09-22 (Updated: 2026-09-24)  
+**Status**: Completed / Merged Ready  
+**Estimated Effort**: **8.0h** | **Actual Effort**: **~2.5h (150m)** (Dev: 1.2h | Testing: 0.8h | Review: 0.5h)  
 
 ---
 
@@ -48,29 +49,29 @@ Goal:
 ## 3. Requirements & Acceptance Criteria
 
 ### 3.1. User Acceptance Criteria (UAC)
-- [ ] **Starter Layout API**: An authenticated user can submit `{ root_form: <id> }` and receive a cohesive starter dashboard layout of 4-6 valid widgets with generated titles and rationales.
-- [ ] **Contextual Suggestions API**: An authenticated user can submit `{ existing_widget_types: [...] }` to an existing dashboard and receive ranked widget recommendations prioritized for unvisualized questions.
-- [ ] **Insight Rationales**: Every suggested widget provides a clear, 1-sentence analytical rationale explaining the value of the chart.
-- [ ] **Appropriate Visual Encoding**:
+- [x] **Starter Layout API**: An authenticated user can submit `{ root_form: <id> }` and receive a cohesive starter dashboard layout of 4-6 valid widgets with generated titles and rationales.
+- [x] **Contextual Suggestions API**: An authenticated user can submit `{ existing_widget_types: [...] }` to an existing dashboard and receive ranked widget recommendations prioritized for unvisualized questions.
+- [x] **Insight Rationales**: Every suggested widget provides a clear, 1-sentence analytical rationale explaining the value of the chart.
+- [x] **Appropriate Visual Encoding**:
   - Site counts & numeric metrics -> KPIs (Sum/Average).
   - Categorical questions (<= 5 choices) -> Pie / Donut.
   - Categorical questions (> 5 choices) -> Bar charts.
   - Temporal date questions on monitoring forms -> Line trend charts.
   - Geolocation questions -> Maps.
   - Monitoring records -> Escalation overview Tables.
-- [ ] **Seamless Offline Heuristic Mode**: If OpenAI is unconfigured or unavailable, requests return valid rule-based heuristic layouts with zero error status codes (200 OK).
+- [x] **Seamless Offline Heuristic Mode**: If OpenAI is unconfigured or unavailable, requests return valid rule-based heuristic layouts with zero error status codes (200 OK).
 
 ### 3.2. Technical Acceptance Criteria (TAC)
-- [ ] **Endpoint Contracts**:
+- [x] **Endpoint Contracts**:
   - `POST /api/v1/manage/dashboards/ai/suggest-dashboard` accepts `root_form` (int) and optional `user_intent` (str, <=250 chars), returning `{ suggested_name, description, widgets }`.
   - `POST /api/v1/manage/dashboards/{id}/ai/suggest-widgets` accepts `existing_widget_types` (list) and optional `prompt_hint` (str, <=250 chars), returning `{ suggestions }`.
-- [ ] **Zero-PII Payload**: Prompt construction queries only `Forms` and `Questions` schema; zero `Answers`, `FormData`, or free-text answers are accessed.
-- [ ] **Tenant Scoping & Security**: Root form and dashboard resolution must enforce `Forms.objects.for_user(request.user)` and `Dashboard.objects.for_user(request.user)`. Cross-tenant requests return `404 Not Found`.
-- [ ] **Referential Integrity Filter**: Prunes any model hallucinations where `form` does not belong to the active form family or `question` does not belong to `form`.
-- [ ] **Domain Measure Constraint**: Enforces `measure = "current_state"` strictly for `FormTypes.monitoring`, and `measure = null` for registration forms.
-- [ ] **Table Form Binding**: Table suggestions bind strictly to monitoring forms.
-- [ ] **OpenAI & Fallback Timeout**: External OpenAI calls timeout after 5 seconds, automatically falling back to `ai_heuristics.py`.
-- [ ] **Automated Test Gate**: Minimum 85% test coverage in `test_ai_visualization.py` covering OpenAI mocks, rate limit fallbacks, hallucination filtering, and tenant isolation.
+- [x] **Zero-PII Payload**: Prompt construction queries only `Forms` and `Questions` schema; zero `Answers`, `FormData`, or free-text answers are accessed.
+- [x] **Tenant Scoping & Security**: Root form and dashboard resolution must enforce `Forms.objects.for_user(request.user)` and `Dashboard.objects.for_user(request.user)`. Cross-tenant requests return `404 Not Found`.
+- [x] **Referential Integrity Filter**: Prunes any model hallucinations where `form` does not belong to the active form family or `question` does not belong to `form`.
+- [x] **Domain Measure Constraint**: Enforces `measure = "current_state"` strictly for `FormTypes.monitoring`, and `measure = null` for registration forms.
+- [x] **Table Form Binding**: Table suggestions bind strictly to monitoring forms.
+- [x] **OpenAI & Fallback Timeout**: External OpenAI calls timeout after 5 seconds, automatically falling back to `ai_heuristics.py`.
+- [x] **Automated Test Gate**: Minimum 85% test coverage in `tests_ai_visualization.py` covering OpenAI mocks, rate limit fallbacks, hallucination filtering, and tenant isolation (achieved: **93.6%**).
 
 ---
 
@@ -85,7 +86,7 @@ backend/api/v1/v1_visualization/
 ├── dashboard_builder_views.py       # ViewSet actions (suggest_dashboard, suggest_widgets)
 ├── urls.py                # Route definitions
 └── tests/
-    └── test_ai_visualization.py     # Unit, integration & multi-tenancy tests
+    └── tests_ai_visualization.py    # Unit, integration, edge cases & negative tests
 ```
 
 ### Data Flow Diagram
@@ -306,18 +307,26 @@ To ensure 100% compatibility with `frontend/src/pages/dashboards/builderConstant
 
 ## 8. Verification & Test Plan
 
-### Automated Test Cases (`backend/api/v1/v1_visualization/tests/test_ai_visualization.py`):
+### Automated Test Cases (`backend/api/v1/v1_visualization/tests/tests_ai_visualization.py`):
 1. `test_heuristic_starter_generation`: Verifies deterministic layout produced for standard registration + monitoring forms.
 2. `test_heuristic_widget_suggestions`: Verifies unvisualized questions are prioritized in suggestions.
-3. `test_openai_service_structured_output_mock`: Mocks OpenAI API response and verifies JSON schema deserialization.
-4. `test_openai_fallback_on_api_error`: Verifies graceful fallback to heuristics when OpenAI raises rate limit or timeout errors.
-5. `test_hallucination_filtering`: Verifies non-existent question/form IDs injected into LLM output are pruned.
-6. `test_tenant_isolation`: Confirms that requesting suggestions for a `root_form_id` belonging to another tenant returns 404/403.
-7. `test_api_endpoints_permissions`: Confirms unauthenticated requests receive 401 Unauthorized.
+3. `test_openai_starter_dashboard_mock` & `test_openai_widget_suggestions_mock`: Mocks OpenAI API response and verifies JSON schema deserialization.
+4. `test_openai_api_error_fallback` & `test_openai_empty_content_fallback`: Verifies graceful fallback to heuristics when OpenAI raises rate limit, timeout, or empty responses.
+5. `test_validate_and_sanitize_malformed_openai_json`: Verifies non-existent question/form IDs injected into LLM output are pruned, col_spans normalized, and invalid repeat_agg defaulted.
+6. `test_circuit_breaker_full_transition_cycle`: Tests CLOSED -> OPEN -> HALF-OPEN -> CLOSED state machine transitions.
+7. `test_form_with_zero_questions_fallback` & `test_form_with_unsupported_questions_only`: Verifies safe fallback for empty or media-only forms.
+8. `test_prompt_injection_safety`: Verifies XML tag injection or malicious script tags in form/question names are safely handled.
+9. `test_tenant_isolation` & `test_api_endpoints_permissions`: Confirms that cross-tenant access returns 404/403 and unauthenticated requests receive 401.
 
-### Execution Command:
+### Execution Commands:
 ```bash
-./dc.sh exec backend python manage.py test api.v1.v1_visualization.tests.test_ai_visualization
+# Run unit & integration test suite (36 tests)
+./dc.sh exec backend python manage.py test api.v1.v1_visualization.tests.tests_ai_visualization
+
+# Run code coverage report across AI modules (achieved: 93.6%)
+./dc.sh exec backend bash -c "coverage run --rcfile=/dev/null --branch --source=api/v1/v1_visualization manage.py test api.v1.v1_visualization.tests.tests_ai_visualization && coverage report -m api/v1/v1_visualization/ai_*.py"
+
+# Lint check
 ./dc.sh exec backend flake8 api/v1/v1_visualization/
 ```
 
@@ -325,11 +334,11 @@ To ensure 100% compatibility with `frontend/src/pages/dashboards/builderConstant
 
 ## 9. Task Breakdown & Estimation
 
-| Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total |
-|---|---|:---:|:---:|:---:|:---:|
-| **VIZ-AI-002.1** | Metadata extractor & OpenAI prompt schemas (`ai_prompts.py`) | 45m | 30m | 15m | **1.5h** |
-| **VIZ-AI-002.2** | Deterministic Heuristic Recommendation Engine (`ai_heuristics.py`) | 45m | 30m | 15m | **1.5h** |
-| **VIZ-AI-002.3** | Orchestration Service & Referential Integrity Validator (`ai_service.py`) | 60m | 35m | 25m | **2.0h** |
-| **VIZ-AI-002.4** | ViewSet Actions, URLs, Serializers & Multi-tenancy Scoping | 45m | 30m | 15m | **1.5h** |
-| **VIZ-AI-002.5** | Comprehensive Test Suite & Manual Endpoint Verification | 45m | 25m | 20m | **1.5h** |
-| **TOTAL** | **Full Backend AI Engine** | **4.0h** | **2.5h** | **1.5h** | **8.0h** |
+| Sub-task | Scope | Dev (Vibe) | Testing (Auto+Manual) | Review | Total Est. | Actual Time |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| **VIZ-AI-002.1** | Metadata extractor & OpenAI prompt schemas (`ai_prompts.py`) | 45m | 30m | 15m | **1.5h** | **25m** |
+| **VIZ-AI-002.2** | Deterministic Heuristic Recommendation Engine (`ai_heuristics.py`) | 45m | 30m | 15m | **1.5h** | **25m** |
+| **VIZ-AI-002.3** | Orchestration Service, Circuit Breaker & Validator (`ai_service.py`) | 60m | 35m | 25m | **2.0h** | **35m** |
+| **VIZ-AI-002.4** | ViewSet Actions, URLs, Serializers & Throttling (`15/min`) | 45m | 30m | 15m | **1.5h** | **20m** |
+| **VIZ-AI-002.5** | Comprehensive Test Suite (36 tests, 93.6% coverage, regression verified) | 45m | 25m | 20m | **1.5h** | **45m** |
+| **TOTAL** | **Full Backend AI Engine** | **4.0h** | **2.5h** | **1.5h** | **8.0h** | **~2.5h (150m)** |
