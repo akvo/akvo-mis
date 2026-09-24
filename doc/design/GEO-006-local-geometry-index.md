@@ -107,20 +107,25 @@ replaces by that key rather than inserting.
 Rows are ~60 bytes. At the observed ceiling of 5,000 datapoints per form the whole table is
 under 500 KB.
 
-### Config Flag
+### Config Columns
 
 ```javascript
-// added to the existing `config` table
+// added to the existing `config` table by migration 12
 geometryIndexReady: 'TINYINT DEFAULT 0',
+geometryTotals: 'TEXT',          // {"<backendFormId>": <geometry_total>}
 ```
 
-See D-4.
+`geometryIndexReady` is the gate (D-4); `geometryTotals` is what the gap check compares against
+(D-9). Both arrive in **migration 12**, alongside the table itself: they were briefly split
+across 12 and 13 during development and folded back together before either shipped, since a
+migration that has never run on a real device is not a rung anyone can be stranded on.
 
 ### Migration Strategy
 
 ```
 - Add table + 4 single-column bbox indexes
 - Add config.geometryIndexReady, default 0
+- Add config.geometryTotals, NULL
 - NO backfill (D-4)
 - Rollback: drop the table; overlap detection degrades to unavailable, capture still works
 ```
@@ -201,7 +206,7 @@ GEO-005's `complete: false`. Reset clears it back to `0` along with the rest of 
 
 ### D-9: Completeness is measured against `geometry_total`, not datapoint counts *(2026-09-23)*
 
-**Decision**: `config.geometryTotals` (migration 13) holds the server's `geometry_total` per
+**Decision**: `config.geometryTotals` holds the server's `geometry_total` per
 form, and GEO-007's preflight compares it against `geometry_index` row count for that form.
 
 **Rationale**: the first implementation compared `datapoint_sync_queue.totalData` against a

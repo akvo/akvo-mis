@@ -8,4 +8,3 @@ export * as m09 from './09_add_saveToGallery_to_config';
 export * as m10 from './10_add_sendToWeb_to_datapoints';
 export * as m11 from './11_add_polygon_validation_to_config';
 export * as m12 from './12_create_geometry_index';
-export * as m13 from './13_add_geometry_totals';

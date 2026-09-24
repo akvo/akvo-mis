@@ -29,7 +29,7 @@ export const LOW_STORAGE_CLEAR_THRESHOLD = 250 * BYTES_PER_MB; // stand down
 
 // Must equal the highest `user_version` the ladder in App.js reaches. It is the early-return
 // gate in migrateDbIfNeeded, so a new migration that is not matched by a bump here never runs.
-export const DATABASE_VERSION = 13;
+export const DATABASE_VERSION = 12;
 
 // How long the automatic update dialog stays suppressed after "Later".
 export const SKIP_UPDATE_DURATION_MS = 24 * 60 * 60 * 1000;
