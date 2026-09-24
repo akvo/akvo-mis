@@ -23,7 +23,10 @@ from api.v1.v1_visualization.ai_prompts import (
     build_starter_dashboard_prompt,
     build_widget_suggestion_prompt,
 )
-from api.v1.v1_visualization.constants import WidgetTypes
+from api.v1.v1_visualization.constants import (
+    SUPPORTED_QUESTION_TYPES,
+    WidgetTypes,
+)
 from api.v1.v1_visualization.models import Dashboard
 
 logger = logging.getLogger(__name__)
@@ -118,14 +121,16 @@ def extract_family_metadata(
         q_map: Dict[int, Dict] = {}
         q_list: List[Dict] = []
         for q in form_obj.form_questions.all():
-            if q.type in NON_VISUALIZED_TYPES:
+            if (
+                q.type not in SUPPORTED_QUESTION_TYPES
+                and q.type != QuestionTypes.geo
+            ):
                 continue
 
             opts = []
             if q.type in (
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
-                QuestionTypes.cascade,
             ):
                 all_opts = list(q.options.all().order_by("order", "id"))
                 opts = [
@@ -240,16 +245,27 @@ def validate_and_sanitize_widgets(
     type_map = {
         WidgetTypes.kpi: "kpi",
         "kpi": "kpi",
+        "kpi_card": "kpi",
         WidgetTypes.bar: "bar",
         "bar": "bar",
+        "bar_chart": "bar",
+        "stacked_bar_chart": "bar",
+        "column_chart": "bar",
         WidgetTypes.line: "line",
         "line": "line",
+        "line_chart": "line",
         WidgetTypes.pie: "pie",
         "pie": "pie",
+        "pie_chart": "pie",
+        "donut_chart": "pie",
+        "doughnut_chart": "pie",
         WidgetTypes.table: "table",
         "table": "table",
+        "table_view": "table",
         WidgetTypes.map: "map",
         "map": "map",
+        "map_view": "map",
+        "geo_map": "map",
     }
 
     for item in raw_widgets:
@@ -260,8 +276,15 @@ def validate_and_sanitize_widgets(
         if not w_type:
             continue
 
-        form_id = item.get("form")
-        q_id = item.get("question")
+        form_id = item.get("form") or item.get("form_id")
+        q_id = item.get("question") or item.get("question_id")
+
+        # If form_id is not specified but question is present, locate form_id
+        if not form_id and q_id:
+            for fid, qmap in sources_map.items():
+                if q_id in qmap:
+                    form_id = fid
+                    break
 
         # Table cannot exist on registration-only form
         if w_type == "table" and not has_monitoring:
@@ -276,6 +299,17 @@ def validate_and_sanitize_widgets(
             if not form_id:
                 continue
             if q_id not in sources_map.get(form_id, {}):
+                continue
+            q_info = sources_map[form_id][q_id]
+            q_type = q_info.get("type")
+            valid_types = SUPPORTED_QUESTION_TYPES | {
+                "number",
+                "option",
+                "multiple_option",
+                "date",
+                "autofield",
+            }
+            if q_type not in valid_types:
                 continue
 
         config = item.get("config") or {}
@@ -381,7 +415,12 @@ class AISuggestionService:
         )
 
         if openai_result and isinstance(openai_result, dict):
-            raw_widgets = openai_result.get("widgets", [])
+            raw_widgets = (
+                openai_result.get("widgets")
+                or openai_result.get("suggestions")
+                or openai_result.get("recommended_widgets")
+                or []
+            )
             valid_widgets = validate_and_sanitize_widgets(
                 raw_widgets, sources_map, has_monitoring
             )
@@ -442,7 +481,12 @@ class AISuggestionService:
         )
 
         if openai_result and isinstance(openai_result, dict):
-            raw_suggestions = openai_result.get("suggestions", [])
+            raw_suggestions = (
+                openai_result.get("suggestions")
+                or openai_result.get("widgets")
+                or openai_result.get("recommended_widgets")
+                or []
+            )
             valid_suggestions = validate_and_sanitize_widgets(
                 raw_suggestions, sources_map, has_monitoring
             )
