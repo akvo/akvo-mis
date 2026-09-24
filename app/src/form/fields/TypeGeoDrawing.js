@@ -1,20 +1,29 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Text, Button } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
+import * as SQLite from 'expo-sqlite';
+import * as Sentry from '@sentry/react-native';
 
-import { FormState } from '../../store';
-// Imported directly, not via '../support': that barrel re-exports FormNavigation, which
-// pulls the lib barrel and with it expo-background-task - a native module a form field has
-// no use for.
+import { FormState, UserState } from '../../store';
 import FieldLabel from '../support/FieldLabel';
 import { polygonAreaHectares } from '../lib/geometry';
 import {
+  SEVERITY,
   areaIsAmbiguous,
   failedRules,
   formatRuleFailure,
+  hasConfiguredRules,
   runPolygonRules,
 } from '../lib/polygon-rules';
+import { detectOverlapsEnabled, signatureOf } from '../lib/overlap';
+import {
+  OVERLAP_STATUS,
+  notValidatedResult,
+  overlapResults,
+  runOverlapCheck,
+} from '../lib/overlap-check';
+import { requestDatapointSync } from '../../lib/sync-datapoints';
 import { QUESTION_TYPES } from '../../lib/constants';
 import styles from '../styles';
 import i18n from '../../lib/i18n';
@@ -38,16 +47,23 @@ const TypeGeoDrawing = ({
   extra = null,
 }) => {
   const navigation = useNavigation();
+  const db = SQLite.useSQLiteContext();
   const activeLang = FormState.useState((s) => s.lang);
   const feedback = FormState.useState((s) => s.feedback?.[id]);
+  const stored = FormState.useState((s) => s.polygonValidation?.[id]);
+  const submissionUuid = FormState.useState((s) => s.submissionUuid);
+  const overlapFormId = FormState.useState((s) => s.overlapFormId);
+  const userId = UserState.useState((s) => s.id);
+  const [checking, setChecking] = useState(false);
   const trans = i18n.text(activeLang);
 
-  // Memoised so the empty-array fallback keeps its identity across renders: without this the
-  // rule evaluation below re-runs on every render of an unanswered question.
   const points = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const requiredValue = required ? requiredSign : null;
-  // A geotrace is an open line: it encloses nothing, so it has no area to report.
   const isClosed = type !== QUESTION_TYPES.geotrace;
+  const question = useMemo(
+    () => ({ id, type, required, extra, label }),
+    [id, type, required, extra, label],
+  );
 
   /**
    * Advisory only - no severity is presented here, the same way the web badge shows failures
@@ -64,8 +80,135 @@ const TypeGeoDrawing = ({
    * this hint stays visible and remains its only channel. GEO-002 D-8.
    */
   const showHint = !feedback || feedback === true;
-  // See GEO-003 D-6: an area computed over a self-crossing ring is not a measurement.
   const areaUnreliable = areaIsAmbiguous(failures);
+
+  /**
+   * A verdict belongs to the geometry it was computed from. Editing the polygon after a pass
+   * returns the field to "not validated" rather than leaving a stale green tick (GEO-007 D-1),
+   * and the submit gate applies the same comparison so an edit cannot slip past it.
+   */
+  const isStale = !stored || stored.signature !== signatureOf(points);
+  const status = isStale ? OVERLAP_STATUS.notValidated : stored.status;
+
+  /** No configured rules means no Validate button at all - a plain geoshape looks like phase 1. */
+  const showValidate = hasConfiguredRules({ extra }) && points.length > 0;
+
+  /**
+   * The report replaces the amber hints once it exists: re-validating after a fix must replace
+   * the previous report rather than leave two lists of the same failures on screen.
+   *
+   * And once the gate has spoken, the blocking lines drop out of the report for the same reason
+   * `showHint` drops the amber ones - the gate renders the identical sentence a few pixels
+   * below, prefixed with the question label, so keeping both printed the overlap twice on
+   * device. Warnings stay: a warn never reaches the gate, so this is its only channel
+   * (GEO-002 D-8).
+   */
+  const reportFailures = useMemo(() => {
+    if (status === OVERLAP_STATUS.notValidated || status === OVERLAP_STATUS.checking) {
+      return [];
+    }
+    const all = [...failures, ...(stored?.results || [])];
+    if (showHint) {
+      return all;
+    }
+    return all.filter((failure) => failure.severity !== SEVERITY.block);
+  }, [status, failures, stored, showHint]);
+
+  /**
+   * "Not checked yet" needs a channel of its own.
+   *
+   * For a REQUIRED question the submit gate eventually says it, but only once the enumerator
+   * tries to submit. For an OPTIONAL one it is never said at all: the result resolves to `warn`
+   * (D-7), and `blockingMessage` keeps only `block`. The acceptance table has always promised
+   * "Not required / Not validated -> warn only", and that row was simply not implemented.
+   *
+   * Shown as an amber hint beside the Validate button, on the same `showHint` rule as the other
+   * advisory lines, so it never duplicates a sentence the gate is already printing.
+   */
+  const pendingNotice = useMemo(() => {
+    if (!showValidate || status !== OVERLAP_STATUS.notValidated || !showHint) {
+      return null;
+    }
+    return formatRuleFailure(notValidatedResult(question), trans);
+  }, [showValidate, status, showHint, question, trans]);
+
+  const handleValidate = useCallback(async () => {
+    setChecking(true);
+    const signature = signatureOf(points);
+    try {
+      const result = detectOverlapsEnabled({ extra })
+        ? await runOverlapCheck(db, {
+            points,
+            question,
+            formId: overlapFormId,
+            excludeUuid: submissionUuid,
+          })
+        : { status: OVERLAP_STATUS.passed, conflicts: [] };
+      const results = overlapResults(result, question);
+      /**
+       * The shape rules already ran synchronously above; their failures are merged into the
+       * report at render. Only the overlap verdict is stored, because only it is expensive
+       * enough that the submit gate must not re-run it.
+       */
+      const blockedByShape = failures.length > 0;
+      const verdict =
+        result.status === OVERLAP_STATUS.passed && blockedByShape
+          ? OVERLAP_STATUS.failed
+          : result.status;
+      FormState.update((s) => {
+        s.polygonValidation = {
+          ...s.polygonValidation,
+          [id]: {
+            status: verdict,
+            results,
+            cause: result.cause || null,
+            retryable: Boolean(result.retryable),
+            signature,
+            at: new Date().toISOString(),
+          },
+        };
+      });
+    } catch (error) {
+      /**
+       * An unexpected throw must not read as a pass. It is recorded as unavailable with no
+       * Retry, which blocks a required question exactly as a failure does (D-10).
+       */
+      Sentry.captureException(error);
+      FormState.update((s) => {
+        s.polygonValidation = {
+          ...s.polygonValidation,
+          [id]: {
+            status: OVERLAP_STATUS.unavailable,
+            results: overlapResults(
+              { status: OVERLAP_STATUS.unavailable, cause: 'localFailure' },
+              question,
+            ),
+            cause: 'localFailure',
+            retryable: false,
+            signature,
+            at: new Date().toISOString(),
+          },
+        };
+      });
+    } finally {
+      setChecking(false);
+    }
+  }, [db, points, question, extra, overlapFormId, submissionUuid, failures, id]);
+
+  const handleRetrySync = useCallback(async () => {
+    try {
+      await requestDatapointSync(db, userId);
+    } catch (error) {
+      Sentry.captureException(error);
+    }
+    /**
+     * Sync is asynchronous and may take minutes. The enumerator presses Validate again when it
+     * finishes - Retry never auto-passes the question (D-10).
+     */
+    FormState.update((s) => {
+      s.polygonValidation = { ...s.polygonValidation, [id]: null };
+    });
+  }, [db, userId, id]);
 
   const handleDraw = () => {
     /**
@@ -98,20 +241,62 @@ const TypeGeoDrawing = ({
             <Text testID="text-no-points">{trans.polygonNoPoints}</Text>
           )}
           {showHint &&
+            status === OVERLAP_STATUS.notValidated &&
             failures.map((failure) => (
               <Text
-                key={failure.key}
+                key={failure.id || failure.key}
                 testID={`text-polygon-warning-${failure.key}`}
                 style={styles.polygonWarningText}
               >
-                {`\u26A0 ${formatRuleFailure(failure, trans)}`}
+                {`⚠ ${formatRuleFailure(failure, trans)}`}
               </Text>
             ))}
+          <View style={styles.polygonReport}>
+            {checking && (
+              <Text testID="text-polygon-checking" style={styles.polygonReportChecking}>
+                {trans.polygonValidating}
+              </Text>
+            )}
+            {!checking && pendingNotice && (
+              <Text testID="text-polygon-not-validated" style={styles.polygonWarningText}>
+                {`\u26A0 ${pendingNotice}`}
+              </Text>
+            )}
+            {!checking && status === OVERLAP_STATUS.passed && (
+              <Text testID="text-polygon-validated" style={styles.polygonReportPass}>
+                {`✓ ${trans.polygonValidationPassed}`}
+              </Text>
+            )}
+            {!checking &&
+              reportFailures.map((failure) => (
+                <Text
+                  key={failure.id || failure.key}
+                  testID={`text-polygon-report-${failure.key}`}
+                  style={styles.polygonReportFail}
+                >
+                  {formatRuleFailure(failure, trans)}
+                </Text>
+              ))}
+          </View>
         </View>
         <View style={styles.geoButtonGroup}>
           <Button onPress={handleDraw} testID="button-draw-on-map" disabled={disabled}>
             {trans.buttonDrawOnMap}
           </Button>
+          {showValidate && (
+            <Button
+              onPress={handleValidate}
+              testID="button-validate-polygon"
+              disabled={disabled || checking}
+            >
+              {trans.buttonValidatePolygon}
+            </Button>
+          )}
+          {!checking && status === OVERLAP_STATUS.unavailable && stored?.retryable && (
+            <Button onPress={handleRetrySync} testID="button-retry-sync" disabled={disabled}>
+              {trans.buttonRetrySync}
+            </Button>
+          )}
         </View>
       </View>
     </View>

@@ -1,6 +1,9 @@
 # Offline Satellite Imagery — Path Plan (Q1)
 
 **Status**: Decision pending. Product/procurement call, not an engineering one.
+**Still accurate as of 2026-09-24** — nothing here has been built. FR-6's map review screen is
+GEO-008, which is still Draft, so neither Path A nor its §7 seam exists yet. One premise has
+weakened, though: see the **⚠️ note in §6**.
 **Parent**: [offline-polygon-validation-requirements.md](./offline-polygon-validation-requirements.md) — resolves its open question **Q1**.
 **Scope**: What sits *beneath* the polygons on the FR-6 map review screen. Nothing else.
 
@@ -15,7 +18,7 @@ other requirement in the parent spec identically:
 |---|---|
 | Overlap detection maths (FR-3) | ❌ No |
 | Blocking / submit gate (FR-4) | ❌ No |
-| Error messages (FR-4.1) | ❌ No |
+| Error messages (FR-4.1, now GEO-007 D-11) | ❌ No |
 | Polygon capture (FR-1) | ❌ No |
 | Geometry index (FR-7) | ❌ No |
 | Background auto-record (FR-8) | ❌ No |
@@ -143,12 +146,23 @@ Path B′: adopt the native map SDK and its offline tile store, matching the ref
 - The RN↔WebView `postMessage` bridge (parent RISK-6) **disappears** — a genuine simplification.
 - New: SDK licence cost, token handling in the build, a larger FR-6 rewrite.
 
-**Important nuance**: parent decision D8 (background auto-record) already forces a development
-build, so the *build-tooling* objection to a native module is **already spent**. What remains
-against B′ is licence cost and rewrite scope — not "we'd need a dev client."
+**Important nuance**: parent decision D8 (background auto-record) forces a development build, so
+the *build-tooling* objection to a native module is **spent** — but only once D8 ships.
 
-This means B′ is **less unattractive than it looks at first glance**, and it should be
-re-evaluated on its merits rather than dismissed on D4's original reasoning.
+> ⚠️ **That premise has weakened since it was written (checked 2026-09-24).** D8 is **not built**:
+> `expo-dev-client` is not a dependency and the `development` profile in `app/eas.json` still has
+> no `"developmentClient": true`. GEO-004 shipped **foreground** recording only. And GEO-014 D-4
+> moved tap-disabling onto its own `allowTapping` key, which made background recording
+> **conditional** on a programme setting that key to `false` rather than part of the phase-3
+> baseline — so it may never ship at all.
+>
+> Read the nuance as conditional: *if* D8 ships, B′ costs no extra build tooling. Until then, B′
+> still carries the dev-client cost that D4 argued against, and anyone re-opening this decision
+> must check which world they are in rather than inheriting this paragraph.
+
+This means B′ is **less unattractive than it looks at first glance** — provided D8 lands. It
+should be re-evaluated on its merits rather than dismissed on D4's original reasoning, and
+re-costed if D8 does not.
 
 ---
 

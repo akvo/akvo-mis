@@ -31,11 +31,23 @@ the farmer name for each and how it differs from the farmer I am working on."*
 
 ## 2. Requirements
 
+> **🔴 The numbering is a contract with GEO-007, added 2026-09-23 (D-11).**
+> The error message now reads `Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%)` and carries
+> **no names** — on a form with an administration cascade the generated datapoint name is an
+> administrative path six lines long, which identified nothing on device.
+>
+> So identity moved here, and the labels must line up: **this screen labels each polygon by its
+> position in `runOverlapCheck`'s `conflicts` array, which is sorted worst-overlap-first.** Sort
+> the polygons any other way — by distance, by name, by arrival — and `#2` in the error is a
+> different plot from `#2` on the map, which is worse than no number at all.
+
 ### User Acceptance Criteria
 - [ ] Reachable from the overlap error
 - [ ] Current polygon in one colour, overlapping polygons in another
 - [ ] Viewport auto-fits all displayed polygons
-- [ ] Tapping a polygon shows that datapoint's name
+- [ ] **Each overlapping polygon carries its `#n` label**, matching the error text (GEO-007 D-11)
+- [ ] Tapping a polygon shows that datapoint's name — this screen is now the **only** place the
+      name appears, which is also where it is useful
 - [ ] Satellite basemap when online
 - [ ] Offline: polygons still render, with a scale reference and a clear
       "imagery unavailable offline" notice

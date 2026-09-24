@@ -5,13 +5,16 @@ import * as Sentry from '@sentry/react-native';
 import { BuildParamsState, DatapointSyncState, UIState, UserState } from '../store';
 import { backgroundTask } from '../lib';
 import { refreshStorageWarning } from '../lib/submission-fallback';
+import { markFormGeometryComplete } from '../lib/geometry-index-writer';
 import crudJobs from '../database/crud/crud-jobs';
 import { crudConfig, crudDataPoints, crudForms, crudSyncQueue } from '../database/crud';
 import {
+  completeDatapointSync,
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
   fetchDraftDatapointsPageByPage,
-  markSyncComplete,
+  geometryIndexNeedsFullPull,
+  recordGeometryTotal,
 } from '../lib/sync-datapoints';
 import {
   jobStatus,
@@ -214,6 +217,13 @@ const SyncService = () => {
     });
 
     try {
+      /**
+       * Asked once for the whole run: readiness is only allowed to flip after a pull that
+       * ignored the backend cursor, so the answer decides both what we request and whether
+       * the finish step may set the flag (GEO-006 D-4).
+       */
+      const needsFullGeometry = await geometryIndexNeedsFullPull(db);
+
       // Get registration forms from local SQLite
       const registrationForms = await crudForms.selectLatestFormVersion(db, {
         user: activeJob.user,
@@ -245,7 +255,13 @@ const SyncService = () => {
           }
         }, Promise.resolve());
 
-        if (!hasNewData) {
+        /**
+         * The shortcut is only safe once the index is proven. A complete queue with no new
+         * datapoints still means an empty index on a device that has migrated but never done a
+         * full pull, and taking the shortcut there retired the job and left readiness at 0
+         * forever. When a full pull is owed, fall through and do the sync.
+         */
+        if (!hasNewData && !needsFullGeometry) {
           await crudJobs.deleteJob(db, activeJob.id);
           DatapointSyncState.update((s) => {
             s.inProgress = false;
@@ -293,10 +309,13 @@ const SyncService = () => {
         // Fresh cache for THIS form only
         const formCache = new Map();
         let formItemsProcessed = queueRow ? allProgress[formId]?.processed || 0 : 0;
+        let formComplete = false;
 
         await fetchFormDatapointsPageByPage(
           formId,
-          async (pageData, page, totalPage, total) => {
+          async (pageData, page, totalPage, total, complete, geometryTotal) => {
+            formComplete = complete === true;
+            await recordGeometryTotal(db, formId, geometryTotal);
             // On first page response: upsert queue with actual API totals
             if (page === startPage) {
               await crudSyncQueue.upsertQueue(db, [
@@ -334,6 +353,9 @@ const SyncService = () => {
                     formId: item.form_id,
                     administrationId: item.administration_id,
                     lastUpdated: item.last_updated,
+                    geometry: item.geometry,
+                    name: item.name,
+                    isComplete: complete === true,
                   },
                   activeJob.user,
                   formCache,
@@ -366,7 +388,18 @@ const SyncService = () => {
           },
           startPage,
           SYNC_PAGE_SIZE,
+          needsFullGeometry,
         );
+
+        /**
+         * One completion sweep per form, after its last page — not one per datapoint.
+         * `isComplete` is true for every item on the final page, so running the sweep inside
+         * the per-datapoint writer issued a full `UPDATE ... WHERE formId = ?` a hundred times
+         * over, each in its own transaction (GEO-006, fixed 2026-09-23).
+         */
+        if (formComplete) {
+          await markFormGeometryComplete(db, formId);
+        }
 
         // Clear cache for this form to free memory
         formCache.clear();
@@ -381,18 +414,13 @@ const SyncService = () => {
       }, Promise.resolve());
 
       if (!hasErrors) {
-        // All forms done without errors — notify backend to update last_synced_at
-        try {
-          await markSyncComplete();
-          // Clear queue after successful sync so next sync starts fresh
-          // (backend uses last_synced_at to return only new data)
-          await crudSyncQueue.clearQueue(db);
-        } catch (error) {
-          Sentry.captureMessage('Failed to mark sync complete on backend');
-          Sentry.captureException(error);
-        }
-        // Done — delete job
-        await crudJobs.deleteJob(db, activeJob.id);
+        /**
+         * All forms done without errors — readiness flag, backend cursor, queue, then the job.
+         * A throw here falls to the outer catch, which keeps the job PENDING for the next tick:
+         * retiring it while the finish step is outstanding leaves `geometryIndexReady` at 0
+         * with no path back to it.
+         */
+        await completeDatapointSync(db, activeJob, { full: needsFullGeometry });
       } else {
         // Some items failed — keep job pending for retry, queue preserves progress
         await crudJobs.updateJob(db, activeJob.id, {

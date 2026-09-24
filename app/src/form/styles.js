@@ -247,6 +247,24 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 8,
   },
+  /** GEO-007 validation report: a pass says one line, a failure says every line. */
+  polygonReport: {
+    marginTop: 8,
+    gap: 4,
+  },
+  polygonReportPass: {
+    color: '#1b7d3e',
+    fontSize: 13,
+  },
+  polygonReportFail: {
+    color: '#c62828',
+    fontSize: 13,
+  },
+  polygonReportChecking: {
+    color: '#555555',
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
   errorText: {
     color: 'red',
     fontStyle: 'italic',

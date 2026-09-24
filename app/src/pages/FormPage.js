@@ -18,6 +18,7 @@ import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
 import { BaseLayout } from '../components';
 import { crudDataPoints } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
+
 import { UserState, UIState, FormState } from '../store';
 import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
 import { i18n } from '../lib';
@@ -100,6 +101,29 @@ const FormPage = ({ navigation, route }) => {
       });
     });
   }, [formJSON]);
+
+  /**
+   * Publish what the geoshape field needs for overlap detection, and drop the previous form's
+   * verdicts.
+   *
+   * `polygonValidation` is cleared rather than left: FormState outlives this screen, and a
+   * stored pass keyed on a question id from the last form would be read by this one's submit
+   * gate. The signature check would catch it, but a verdict belonging to another submission
+   * should not be in reach at all.
+   *
+   * `overlapFormId` is the form being filled. GEO-007 D-6 wants candidates scoped to
+   * REGISTRATION plots, which for a monitoring form means its parent — but whether
+   * `forms.parentId` holds a backend form id or a local one is not settled here, and guessing
+   * wrong scopes the query to a form with no rows, which reports "no overlap" for every plot.
+   * Same-form scoping is the conservative, well-defined behaviour until that is confirmed.
+   */
+  useEffect(() => {
+    FormState.update((s) => {
+      s.submissionUuid = submissionUuidRef.current;
+      s.overlapFormId = selectedForm?.formId || null;
+      s.polygonValidation = {};
+    });
+  }, [selectedForm]);
 
   useEffect(() => {
     // FormState is global and outlives this screen, so a flag left raised by the last
@@ -223,7 +247,15 @@ const FormPage = ({ navigation, route }) => {
         ...(isNewSubmission ? { locallyCreated: 1 } : {}),
         ...(sendToWeb ? { sendToWeb: 1 } : {}),
       };
-      const result = await persistSubmission(db, payload, isNewSubmission);
+      /**
+       * GEO-006 D-6: the index rows land inside the same transaction as the datapoint, so a
+       * polygon can never exist in `datapoints` without its index row. Null for a form with no
+       * overlap-enabled geoshape, which then takes the plain single-statement path.
+       */
+      const geometryContext = selectedForm?.formId
+        ? { formId: selectedForm.formId, formJson: formJSON }
+        : null;
+      const result = await persistSubmission(db, payload, isNewSubmission, geometryContext);
       await finishSave(result, trans.successSaveDatapoint);
     } catch (error) {
       Sentry.captureMessage('[FormPage] Cannot save draft submissions');
@@ -272,7 +304,15 @@ const FormPage = ({ navigation, route }) => {
         duration: duration === 0 ? 1 : duration,
         syncedAt: null,
       };
-      const result = await persistSubmission(db, payload, isNewSubmission);
+      /**
+       * GEO-006 D-6: the index rows land inside the same transaction as the datapoint, so a
+       * polygon can never exist in `datapoints` without its index row. Null for a form with no
+       * overlap-enabled geoshape, which then takes the plain single-statement path.
+       */
+      const geometryContext = selectedForm?.formId
+        ? { formId: selectedForm.formId, formJson: formJSON }
+        : null;
+      const result = await persistSubmission(db, payload, isNewSubmission, geometryContext);
       if (result !== 'failed') {
         /**
          * Create a new job for syncing form submissions.
