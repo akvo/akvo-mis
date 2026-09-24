@@ -1,7 +1,7 @@
 # Offline Satellite Imagery — Path Plan (Q1)
 
 **Status**: Decision pending. Product/procurement call, not an engineering one.
-**Still accurate as of 2026-09-24** — nothing here has been built. FR-6's map review screen is
+**Updated 2026-09-24**: decision 1 answered (Path A ships in GEO-008); integration prep in **§12**. Nothing in this doc has been built yet. FR-6's map review screen is
 GEO-008, which is still Draft, so neither Path A nor its §7 seam exists yet. One premise has
 weakened, though: see the **⚠️ note in §6**.
 **Parent**: [offline-polygon-validation-requirements.md](./offline-polygon-validation-requirements.md) — resolves its open question **Q1**.
@@ -249,10 +249,10 @@ Phase 3's shape is chosen by Phase 2's answer, not by engineering preference.
 
 | # | Question | Owner | Blocks |
 |---|---|---|---|
-| 1 | Is a polygons-only offline map acceptable for MVP? | Product | Phase 1 scope |
+| 1 | ~~Is a polygons-only offline map acceptable for MVP?~~ **Yes, 2026-09-24** (GEO-008 D-3), with integration prep now (§12) | Product | Phase 1 scope |
 | 2 | Is there budget and appetite for a commercial imagery licence permitting offline packs? | Product / procurement | Phase 3 existence |
 | 3 | If yes — does the provider allow offline tiles **without** mandating their SDK? | Engineering, once the provider is known | **Path B vs B′** |
-| 4 | Which administration level is the download unit? (region / district / custom bbox) | Product + Engineering | FR-B1, storage math |
+| 4 | Which administration level is the download unit? (region / district / custom bbox) — size arithmetic in §12.4 | Product + Engineering | FR-B1, storage math |
 | 5 | What is the per-device storage cap, and what is the eviction policy at the cap? | Product | FR-B4 |
 
 Decision 3 is the pivotal one: it alone determines whether D4 survives.
@@ -274,3 +274,121 @@ Not yet established — do not treat any of these as known:
   conversation, not a substitute for it.
 - **Whether enumerators actually need imagery**, from Path A field use. This is the cheapest
   evidence available and it arrives free with Phase 1.
+
+---
+
+## 12. Integration Prep — Done Now, While Path A Ships (added 2026-09-24)
+
+Decision 1 is answered: Path A ships in GEO-008. Offline imagery is still wanted, so the aim here
+is to make Phase 3 **short** once Phase 2 returns an answer. That means retiring the unknowns
+now, not building the download subsystem early.
+
+### 12.1 Does Path B need a development build? — answer it with a spike, not a guess
+
+| Path | Native code beyond Expo Go? | Dev build? |
+|---|---|---|
+| A — polygons only | No | **No** |
+| B — `file://` tiles into the existing Leaflet WebView | No. `expo-file-system` and `react-native-webview` both ship in Expo Go, and `allowFileAccess` / `baseUrl` are JS props | **No, if the spike passes** |
+| B′ — native map SDK (Mapbox / MapLibre) | Yes, a config plugin | **Yes** |
+| *(GEO-004 D8 background recording, if it ever ships)* | Yes | Yes |
+
+The one thing that could push Path B into a dev build is Android WebView refusing `file://` tiles
+from a page loaded as an HTML string. Today both map screens load with
+`originWhitelist={['about:blank']}` and `source={{ html }}`, with no `baseUrl` and no file access.
+If that access is refused, the fallback is a local HTTP server, which *is* native.
+
+**Spike (~2h, alongside GEO-008):** copy a handful of `{z}/{x}/{y}` tiles into
+`FileSystem.documentDirectory + 'tiles/spike/'`. Point the resolver's local branch at them. Set
+`baseUrl` and `allowFileAccess` on the WebView. Check that the tiles render in **Expo Go and in an
+EAS release APK**, since the two can differ on file access. Use `documentDirectory`, not
+`cacheDirectory`: the OS may purge the cache, which would break FR-B7.
+
+- **Pass** → Path B stays in Expo Go, and the dev-build question only comes back if B′ is chosen.
+- **Fail** → make the dev-build switch (§12.2) *before* Phase 3, on evidence.
+
+**Recommendation: do not switch to a dev build now.** Nothing on the table needs one, and the
+switch changes every developer's daily loop for a benefit that may never come.
+
+### 12.2 What switching to a dev build would cost the Docker setup
+
+Written down so the switch is a known task, not a surprise. The **release pipeline does not
+change**: `apk-release.yml` already builds a native APK through EAS. Only local development
+moves off Expo Go.
+
+1. Add `expo-dev-client`, and set `"developmentClient": true` on the `development` profile in
+   `app/eas.json`.
+2. **Build the dev client on EAS, not in the container.** `mobileapp` runs
+   `akvo-node-20-alpine`, which has no JDK or Android SDK, so `expo run:android` inside Docker
+   would need a new multi-GB image. `EXPO_TOKEN` already passes through
+   `docker-compose-mobile.yml`. Rebuild only when a native dependency or `app.json` plugin
+   changes; JS changes still hot-reload from Metro.
+3. **`start.sh` rewrites `app.json` on every container start** (slug and Android package, from
+   `APK_SHORT_NAME`). A dev client is compiled with a fixed package and URL scheme, so Metro must
+   run with the **same `APK_SHORT_NAME` the client was built with**, or the QR / deep link will
+   not open it. This is the one real footgun in the switch.
+4. Metro stays in the container on the same ports (8081 / 19000) with
+   `REACT_NATIVE_PACKAGER_HOSTNAME`. `expo start` targets the dev client automatically once
+   `expo-dev-client` is installed. **Verify** that `EXPO_OFFLINE=1` still serves a manifest the
+   dev client accepts while `updates.url` is configured. It should, but it is untested here.
+5. README: "install Expo Go" becomes "install the dev-client APK".
+
+Worth checking whether the team already sideloads an SDK-53-matching Expo Go rather than using the
+Play Store build. If so, "install one APK by hand" is already the norm, and the dev client costs
+less than it looks.
+
+### 12.3 Start the vendor conversation now — one request, three answers
+
+The online basemap is **not** satellite today: `map-draw.html` draws OpenStreetMap street tiles.
+GEO-008's "satellite basemap when online" needs a provider anyway, so ask that provider in the
+same request:
+
+1. Online satellite tiles for a mobile app: plan and price.
+2. May tiles be **bulk-downloaded and stored on device**, and on which plan?
+3. May stored tiles be rendered by **our own client (Leaflet in a WebView)**, or only through
+   their SDK?
+
+Answer 3 is §10 decision 3. It alone decides Path B versus Path B′, and therefore whether a dev
+build is ever needed.
+
+### 12.4 The download unit: the administration bounding box — exists, but not usable yet
+
+SEED-003 already gives each administration a `Bounding Box` attribute
+(`minLng,minLat,maxLng,maxLat`), written by the CSV generator notebook (step 4), validated by
+`administration_csv_seeder`, parsed by `v1_profile/bbox.py`. That is the right *source* for FR-B1.
+Three gaps stand between it and a tile download:
+
+1. **It never reaches the device.** The mobile administration SQLite is built from
+   `Administration` model fields plus `full_path_name`. Attributes are not included. Phase 3 has
+   to ship the box, as a column in that SQLite or on the endpoint that lists downloadable areas.
+2. **It is the largest ring only.** For seeding pins that is correct; the notebook explains why
+   (antimeridian, archipelagos). For imagery it is not: every smaller island is left out, and the
+   map shows blank tiles inside an area the user believes is downloaded. That violates FR-B8.
+   Tile download needs **all rings' boxes, kept as a list**. A single union would re-open the
+   antimeridian problem the notebook solved.
+3. **A box over-downloads.** The notebook's own step 8 measures roughly half of a box falling
+   inside its unit, so expect about 2× the tiles the unit strictly needs. This is acceptable, but
+   it feeds the storage arithmetic below.
+
+**Size arithmetic** (equator, z15–18, ~25 KB per satellite JPEG, box area × ~1.33 for the lower
+zooms):
+
+| Box | Tiles | Size |
+|---|---|---|
+| 7 km × 7 km | ~2.8k | ~70 MB |
+| 10 km × 10 km | ~5.7k | ~140 MB |
+| 30 km × 30 km (a typical district) | ~51k | **~1.3 GB** |
+
+The inherited 50–100 MB-per-area figure therefore implies a unit about **7 km across**, which is
+village or ward scale, not district. Either the download unit is the **lowest administration
+level**, or z18 is dropped for larger units (each zoom level less is about 4× fewer tiles), or the
+unit is a bbox around the enumerator's **assigned plots** rather than an administration. That is
+decision 4, and the figures above are estimates until §11's measurement is done.
+
+No code for 12.4 now. Items 1 and 2 are Phase 3 work, and building them before the licensing
+answer is scaffolding for a path that may be B′, where the SDK brings its own region model.
+
+### 12.5 What is deliberately *not* prepared
+
+The download manager, settings screen, progress / resume, and eviction (FR-B1–B4, B8). Each one
+depends on the provider's terms and on decision 4. The resolver seam (§7, built in GEO-008) and the
+spike (§12.1) are all the code Phase 3 needs in place beforehand.

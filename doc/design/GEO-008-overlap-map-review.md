@@ -5,7 +5,7 @@
 **Task ID**: GEO-008 (breakdown ref: T5)
 **Author**: Iwan Firmawan
 **Date**: 2026-09-09
-**Status**: Draft — **note added 2026-09-18 (GEO-014)**
+**Status**: Draft — **note added 2026-09-18 (GEO-014)**; §10 questions answered 2026-09-24 (D-3, D-4)
 **Phase**: 3 — Overlap detection
 **Estimate**: 4.5h ≈ 0.5 day (Mobile)
 **Depends on**: GEO-001, GEO-007
@@ -53,10 +53,22 @@ the farmer name for each and how it differs from the farmer I am working on."*
       "imagery unavailable offline" notice
 - [ ] A disclaimer that satellite imagery may be outdated
 - [ ] Read-only — edits happen back in the form field
+- [ ] **Poor-accuracy vertices carry the red dot the capture screen already uses** (`.vertex-poor`
+      in `map-draw.html`), on the current polygon **and** every conflicting one, against the
+      question's own accuracy threshold (D-4)
+- [ ] A vertex with no accuracy (tapped, or entered on the webform) is never marked
+- [ ] The legend reads as GPS quality, never as verification — e.g. *"GPS accuracy worse than
+      Xm"* — per GEO-014 §8
 
 ### Technical Acceptance Criteria
 - [ ] Reuses GEO-001's WebView map host and bridge — none of it re-paid
 - [ ] The tile source comes from **one resolver function** (see D-1)
+- [ ] The resolver's template is **injected into `map-draw.html`** like the other `{{…}}` values;
+      the hardcoded `tile.openstreetmap.org` line goes. The capture screen and the detail preview
+      use the same page, so they get the resolver too — there is one tile source in the app
+- [ ] Each entry in `runOverlapCheck`'s `conflicts` carries that candidate's **coordinates, arity
+      preserved** (`[lat, lng]` or `[lat, lng, acc]`). They are already in memory when the conflict
+      is built; the screen must not re-read the datapoints. Additive change to GEO-007's contract
 
 ---
 
@@ -93,6 +105,26 @@ packs exist — the device can be offline *and* have imagery. Drive the notice f
 
 **Rationale**: Two editing surfaces for one value is a synchronisation problem with no
 compensating benefit. The enumerator reviews here and corrects in the field.
+
+### D-3: Polygons-only offline is accepted for this release (2026-09-24)
+
+**Decision**: Ship Path A of `doc/claude/offline-satellite-imagery-plan.md`. Offline imagery is
+still wanted, so the integration prep in that plan's §12 runs **now**, alongside this build.
+
+**Impact**: No dev build for this screen. Path A and Path B both run in Expo Go. Only Path B′
+(a native map SDK) would need one, and B′ is gated on licensing (plan §12.2).
+
+### D-4: Accuracy is shown as the capture screen's red vertex dot (2026-09-24)
+
+**Decision**: Reuse the capture screen's vertex rendering unchanged, with the real threshold
+passed in (the detail preview passes `0`, which turns marking off). No new visual.
+
+**Rationale**: The enumerator already reads a red dot as "this corner was measured loosely". The
+review screen keeps that meaning, and a conflict next to red dots reads as *maybe GPS noise*
+rather than *definitely a real intersection*.
+
+**Impact**: Needs the conflict's coordinates (Technical AC above). See §10 for the colour clash
+with red conflicting polygons.
 
 ---
 
@@ -139,24 +171,30 @@ compensating benefit. The enumerator reviews here and corrects in the field.
 | Tap a polygon → show datapoint name | 0.5 |
 | Tile-source resolver seam + offline notice | 1 |
 | Navigation from the error, scale bar, disclaimer | 0.5 |
+| Red accuracy dots on all polygons + conflict coordinates (D-4) | 0.5 |
 | **Device pass** | 1.5 |
-| **Total** | **4.5** |
+| **Total** | **5** |
+
+The `file://` tile spike (imagery plan §12.1, 2h) is scoped separately. It prepares Path B and
+does not ship in this screen.
 
 ---
 
 ## 10. Open Questions
 
-- [ ] Offline, is a polygons-only view acceptable? Without imagery the enumerator sees *that*
-      A intersects B but not the river or treeline that would settle the dispute — see
-      `doc/claude/offline-satellite-imagery-plan.md`
-- [ ] Should this screen **show the accuracy** behind each polygon? Since GEO-014 every vertex
-      may carry one, and the adaptive threshold (GEO-007 D-3) already uses it — so the screen can
-      now distinguish *"these two really intersect"* from *"these two were measured loosely"*
-      without any new data. Worth deciding before build: adding it later is a second pass over
-      the same rendering code.
-      **Caveat if it is added**: accuracy raises the cost of fabricating a boundary; it does not
-      prove attendance, and must not be labelled as proof (GEO-014 §8). A polygon entered through
-      the webform carries none at all and is never overlap-checked in the first place.
+- [x] ~~Offline, is a polygons-only view acceptable?~~ **Yes, for now** → D-3. Offline imagery
+      prep continues in parallel: `doc/claude/offline-satellite-imagery-plan.md` §12
+- [x] ~~Should this screen show the accuracy behind each polygon?~~ **Yes, with the existing red
+      dot** → D-4
+- [ ] **Red now means two things.** §6 draws conflicting polygons red, and D-4 draws poor
+      vertices red. A red dot on a red outline is still visible, since the dot is filled and has a
+      dark border, but the colour no longer means one thing. Recommendation: draw conflicting
+      polygons in **amber** and keep red for "re-walk this corner". The alternative is to keep
+      both red and accept the overlap in meaning.
+- [ ] **Which online satellite provider?** Today's map draws OpenStreetMap *street* tiles, not
+      satellite imagery, so the "satellite basemap when online" AC cannot be met yet. Pick the
+      provider in the same vendor conversation as the offline terms (imagery plan §12.3), since
+      it is the same contract
 
 ---
 
