@@ -6,12 +6,30 @@ import React, {
   useState,
 } from "react";
 import PropTypes from "prop-types";
-import { Drawer, Input, Button, Spin, Alert, Empty, Tag } from "antd";
+import {
+  Drawer,
+  Input,
+  Button,
+  Alert,
+  Empty,
+  Tag,
+  Skeleton,
+  message,
+} from "antd";
 import {
   ThunderboltFilled,
   ReloadOutlined,
   PlusOutlined,
   BulbOutlined,
+  CheckOutlined,
+  BarChartOutlined,
+  PieChartOutlined,
+  LineChartOutlined,
+  TableOutlined,
+  GlobalOutlined,
+  DashboardOutlined,
+  ClearOutlined,
+  AppstoreAddOutlined,
 } from "@ant-design/icons";
 import dashboardAi from "../../util/dashboardAi";
 import { WIDGET_TYPES } from "./builderConstants";
@@ -27,6 +45,22 @@ const typeIconMap = {
   section_title: "Title",
 };
 
+const typeIconComponent = {
+  kpi: <DashboardOutlined />,
+  bar: <BarChartOutlined />,
+  line: <LineChartOutlined />,
+  pie: <PieChartOutlined />,
+  table: <TableOutlined />,
+  map: <GlobalOutlined />,
+};
+
+const PROMPT_CHIPS = [
+  "Status & Functionality",
+  "Monthly Trends",
+  "Geographic Coverage",
+  "Key KPIs",
+];
+
 const AISuggestionDrawer = ({
   visible,
   onClose,
@@ -37,6 +71,7 @@ const AISuggestionDrawer = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
+  const [addedIndices, setAddedIndices] = useState(new Set());
   const [error, setError] = useState(null);
   const [promptHint, setPromptHint] = useState("");
 
@@ -85,6 +120,7 @@ const AISuggestionDrawer = ({
 
       setLoading(true);
       setError(null);
+      setAddedIndices(new Set());
 
       const existingTypes = (existingWidgetsRef.current || [])
         .map((w) => w.type)
@@ -169,10 +205,51 @@ const AISuggestionDrawer = ({
     [fetchSuggestions]
   );
 
+  const handleReset = useCallback(() => {
+    setPromptHint("");
+    fetchSuggestions("");
+  }, [fetchSuggestions]);
+
+  const handleAddWidget = useCallback(
+    (sug, idx) => {
+      onAddWidget(sug);
+      setAddedIndices((prev) => {
+        const next = new Set(prev);
+        next.add(idx);
+        return next;
+      });
+      message.success(`Added "${sug.title || "Widget"}" to dashboard`);
+    },
+    [onAddWidget]
+  );
+
+  const handleAddAll = useCallback(() => {
+    let count = 0;
+    const nextAdded = new Set(addedIndices);
+    suggestions.forEach((sug, idx) => {
+      if (!nextAdded.has(idx)) {
+        onAddWidget(sug);
+        nextAdded.add(idx);
+        count += 1;
+      }
+    });
+    setAddedIndices(nextAdded);
+    if (count > 0) {
+      message.success(
+        `Added ${count} widget${count > 1 ? "s" : ""} to dashboard`
+      );
+    }
+  }, [addedIndices, onAddWidget, suggestions]);
+
   const getTypeMeta = useCallback((type) => {
     const meta = WIDGET_TYPES.find((wt) => wt.type === type);
     return meta || { label: type, iconBg: "#f0f1f4" };
   }, []);
+
+  const hasCustomHint = Boolean(
+    (promptHint && promptHint.trim()) ||
+      (cachedRef.current?.promptHint && cachedRef.current.promptHint.trim())
+  );
 
   return (
     <Drawer
@@ -205,10 +282,40 @@ const AISuggestionDrawer = ({
             allowClear
             enterButton="Suggest"
             value={promptHint}
-            onChange={(e) => setPromptHint(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setPromptHint(val);
+              if (!val && cachedRef.current.promptHint) {
+                handleReset();
+              }
+            }}
             onSearch={handleSearch}
             loading={loading}
           />
+          <div className="ai-suggestion-chips">
+            <span className="ai-suggestion-chips-label">Try:</span>
+            {PROMPT_CHIPS.map((chip) => (
+              <Tag
+                key={chip}
+                className="ai-suggestion-chip"
+                onClick={() => handleSearch(chip)}
+              >
+                {chip}
+              </Tag>
+            ))}
+          </div>
+          {hasCustomHint && (
+            <div className="ai-suggestion-reset-link">
+              <Button
+                type="link"
+                size="small"
+                icon={<ClearOutlined />}
+                onClick={handleReset}
+              >
+                Reset to default recommendations
+              </Button>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -223,8 +330,19 @@ const AISuggestionDrawer = ({
         )}
 
         {loading ? (
-          <div className="ai-suggestion-loading">
-            <Spin tip="Generating intelligent recommendations..." />
+          <div className="ai-suggestion-skeleton-list">
+            {[1, 2, 3].map((key) => (
+              <div
+                key={key}
+                className="ai-suggestion-card ai-suggestion-skeleton-card"
+              >
+                <Skeleton
+                  active
+                  title={{ width: "60%" }}
+                  paragraph={{ rows: 2, width: ["90%", "40%"] }}
+                />
+              </div>
+            ))}
           </div>
         ) : suggestions.length === 0 ? (
           <Empty
@@ -233,9 +351,28 @@ const AISuggestionDrawer = ({
           />
         ) : (
           <div className="ai-suggestion-list">
+            {suggestions.length > 1 && (
+              <div className="ai-suggestion-list-header">
+                <span className="ai-suggestion-count">
+                  {suggestions.length} Suggested Widgets
+                </span>
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<AppstoreAddOutlined />}
+                  onClick={handleAddAll}
+                  disabled={addedIndices.size === suggestions.length}
+                >
+                  {addedIndices.size === suggestions.length
+                    ? "All Added"
+                    : `Add All (${suggestions.length - addedIndices.size})`}
+                </Button>
+              </div>
+            )}
             {suggestions.map((sug, idx) => {
               const meta = getTypeMeta(sug.type);
               const qMeta = questionMap[`${sug.form}_${sug.question}`];
+              const isAdded = addedIndices.has(idx);
 
               return (
                 <div
@@ -247,7 +384,8 @@ const AISuggestionDrawer = ({
                       className="ai-suggestion-type-badge"
                       style={{ background: meta.iconBg }}
                     >
-                      {typeIconMap[sug.type] || sug.type}
+                      {typeIconComponent[sug.type] || null}
+                      <span>{typeIconMap[sug.type] || sug.type}</span>
                     </span>
                     <span className="ai-suggestion-title">
                       {sug.title || meta.label}
@@ -278,12 +416,18 @@ const AISuggestionDrawer = ({
 
                   <div className="ai-suggestion-card-footer">
                     <Button
-                      type="primary"
+                      type={isAdded ? "default" : "primary"}
                       size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => onAddWidget(sug)}
+                      icon={
+                        isAdded ? (
+                          <CheckOutlined style={{ color: "#52c41a" }} />
+                        ) : (
+                          <PlusOutlined />
+                        )
+                      }
+                      onClick={() => handleAddWidget(sug, idx)}
                     >
-                      Add to Dashboard
+                      {isAdded ? "Added" : "Add to Dashboard"}
                     </Button>
                   </div>
                 </div>

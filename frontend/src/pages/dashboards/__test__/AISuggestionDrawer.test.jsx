@@ -311,4 +311,129 @@ describe("AISuggestionDrawer", () => {
       screen.getByText("Handles unmapped question IDs safely.")
     ).toBeInTheDocument();
   });
+
+  it("updates button state to 'Added' after clicking Add to Dashboard", async () => {
+    const onAddWidget = jest.fn();
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
+    const addButtons = await screen.findAllByRole("button", {
+      name: /add to dashboard/i,
+    });
+    fireEvent.click(addButtons[0]);
+
+    expect(onAddWidget).toHaveBeenCalledWith(mockSuggestions[0]);
+    expect(
+      await screen.findByRole("button", { name: /added/i })
+    ).toBeInTheDocument();
+  });
+
+  it("resets prompt hint and reloads default recommendations on Reset click", async () => {
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    await screen.findByText("Functionality Breakdown");
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+
+    const searchInput = screen.getByPlaceholderText(
+      /Ask AI for specific widgets/i
+    );
+    await userEvent.type(searchInput, "Custom filter");
+    await userEvent.click(screen.getByRole("button", { name: /^suggest$/i }));
+
+    await waitFor(() => {
+      expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(2);
+    });
+
+    const resetBtn = await screen.findByRole("button", {
+      name: /reset to default recommendations/i,
+    });
+    await userEvent.click(resetBtn);
+
+    await waitFor(() => {
+      expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(3);
+      expect(dashboardAi.suggestWidgets).toHaveBeenLastCalledWith(
+        1,
+        { existing_widget_types: [] },
+        expect.anything()
+      );
+      expect(searchInput).toHaveValue("");
+    });
+  });
+
+  it("loads suggestions when clicking a prompt chip", async () => {
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    await screen.findByText("Functionality Breakdown");
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+
+    const chip = screen.getByText("Monthly Trends");
+    fireEvent.click(chip);
+
+    await waitFor(() => {
+      expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(2);
+      expect(dashboardAi.suggestWidgets).toHaveBeenLastCalledWith(
+        1,
+        {
+          existing_widget_types: [],
+          prompt_hint: "Monthly Trends",
+        },
+        expect.anything()
+      );
+    });
+  });
+
+  it("adds all widgets to dashboard when clicking Add All button", async () => {
+    const onAddWidget = jest.fn();
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={onAddWidget}
+      />
+    );
+
+    await screen.findByText("Functionality Breakdown");
+
+    const addAllBtn = await screen.findByRole("button", {
+      name: /add all \(2\)/i,
+    });
+    fireEvent.click(addAllBtn);
+
+    expect(onAddWidget).toHaveBeenCalledTimes(2);
+    expect(onAddWidget).toHaveBeenNthCalledWith(1, mockSuggestions[0]);
+    expect(onAddWidget).toHaveBeenNthCalledWith(2, mockSuggestions[1]);
+
+    expect(
+      await screen.findByRole("button", { name: /all added/i })
+    ).toBeDisabled();
+  });
 });
