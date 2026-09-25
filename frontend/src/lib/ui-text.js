@@ -1301,6 +1301,8 @@ const uiText = {
     deleteDraftContent: "Are you sure you want to delete {{draftName}}?",
     deleteDraftSuccess: "Draft deleted successfully",
     deleteDraftError: "Unable to delete draft",
+    draftCreatedByCol: "Created by",
+    draftUpdatedByPrefix: "by",
     editAndPublishDraft: "Edit and Publish Draft",
     editDraft: "Edit Draft",
     createDraftMonitoring: "Create Draft Monitoring Data",

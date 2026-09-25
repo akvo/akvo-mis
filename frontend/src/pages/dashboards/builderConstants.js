@@ -867,6 +867,65 @@ export const tableColumnOptions = (forms = [], widgetFormId = null) => {
 };
 
 /**
+ * Generate standard default columns for a table widget.
+ */
+export const getDefaultTableColumns = (forms = [], widgetFormId = null) => {
+  const root = (forms || []).find((f) => f.type === "registration");
+  const monitoring = (forms || []).find((f) => f.id === widgetFormId);
+  const cols = [
+    {
+      key: "parent_name",
+      source: "parent_name",
+      label: "Datapoint name",
+    },
+    {
+      key: "administration",
+      source: "administration",
+      label: "Administration",
+    },
+  ];
+
+  const dateQ = (monitoring?.questions || []).find((q) => q.type === "date");
+  if (dateQ) {
+    cols.push({
+      key: "latest_date",
+      source: "latest_date",
+      label: "Last submission",
+      question: dateQ.id,
+    });
+  }
+
+  const indicatorTypes = ["option", "multiple_option", "number", "autofield"];
+  const mIndicators = (monitoring?.questions || []).filter(
+    (q) => indicatorTypes.includes(q.type) && q.id !== dateQ?.id
+  );
+  mIndicators.slice(0, 3).forEach((q) => {
+    cols.push({
+      key: `answer_${q.id}`,
+      source: "answer",
+      label: q.label || q.name,
+      question: q.id,
+    });
+  });
+
+  if (mIndicators.length < 2 && root) {
+    const rIndicators = (root.questions || []).filter((q) =>
+      indicatorTypes.includes(q.type)
+    );
+    rIndicators.slice(0, 2).forEach((q) => {
+      cols.push({
+        key: `parent_answer_${q.id}`,
+        source: "parent_answer",
+        label: q.label || q.name,
+        question: q.id,
+      });
+    });
+  }
+
+  return cols;
+};
+
+/**
  * Drop config entries bound to questions the new form does not have.
  *
  * Changing a widget's form already clears `widget.question`, but a table's

@@ -891,6 +891,13 @@ class PendingFormDataView(APIView):
         )
 
 
+def _can_manage_draft(user, draft) -> bool:
+    # Super admins sit at the top of the hierarchy and may manage any draft
+    # in their tenant; everyone else only their own. Tenant scoping is done
+    # by the caller's FormData.objects.for_user lookup.
+    return user.is_superuser or draft.created_by_id == user.id
+
+
 class DraftFormDataListView(APIView):
     permission_classes = [IsAuthenticated, IsSubmitter]
 
@@ -948,10 +955,12 @@ class DraftFormDataListView(APIView):
             )
         page = serializer.validated_data.get("page", 1)
 
-        # Filter draft data for this form and user
+        # Filter draft data for this form; super admins see every user's
+        queryset = FormData.objects_draft.filter(form=form)
+        if not request.user.is_superuser:
+            queryset = queryset.filter(created_by=request.user)
         queryset = (
-            FormData.objects_draft.filter(form=form, created_by=request.user)
-            .annotate(
+            queryset.annotate(
                 total_children=Count(
                     "children",
                     filter=Q(
@@ -1036,7 +1045,7 @@ class DraftFormDataDetailView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {"message": "You are not allowed to perform this action"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1060,7 +1069,7 @@ class DraftFormDataDetailView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {"message": "You are not allowed to perform this action"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1099,7 +1108,7 @@ class DraftFormDataDetailView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {
                     "detail": "You do not have permission to perform this action."  # noqa: E501
@@ -1127,7 +1136,7 @@ class PublishDraftFormDataView(APIView):
             pk=data_id,
             is_draft=True,
         )
-        if draft_data.created_by_id != request.user.id:
+        if not _can_manage_draft(request.user, draft_data):
             return Response(
                 {
                     "detail": "You do not have permission to perform this action."  # noqa: E501

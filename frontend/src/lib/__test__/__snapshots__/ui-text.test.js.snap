@@ -317,6 +317,7 @@ Object {
     "downloadReportSuccess": "Report downloaded successfully",
     "downloadTitle": "Downloads",
     "draft": "Draft",
+    "draftCreatedByCol": "Created by",
     "draftFormDescription": <p>
       Please fill up the webform below with relevant responses. You can save your responses and continue later or if you have completed the form then you can submit it.
     </p>,
@@ -326,6 +327,7 @@ Object {
     "draftFormPublishSuccess": "Draft published successfully",
     "draftFormSaveError": "Unable to save draft",
     "draftFormSaveSuccess": "Draft saved successfully",
+    "draftUpdatedByPrefix": "by",
     "dropFile": "Drop your file here",
     "editAdmDesc": <React.Fragment>
       This page allows you to edit administration to the 
