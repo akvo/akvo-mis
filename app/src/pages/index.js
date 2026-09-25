@@ -8,6 +8,7 @@ export { default as FormPage } from './FormPage';
 export { default as AddUserPage } from './AddUser';
 export { default as MapViewPage } from './MapView';
 export { default as MapDrawViewPage } from './MapDrawView';
+export { default as OverlapMapViewPage } from './OverlapMapView';
 export { default as UsersPage } from './Users';
 export { default as FormDataDetailsPage } from './FormData/FormDataDetails';
 export { default as AddNewForm } from './Settings/AddNewForm';

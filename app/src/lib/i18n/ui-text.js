@@ -180,6 +180,21 @@ const uiText = {
     polygonValidationPassed: 'All checks passed',
     confirmClearPolygonTitle: 'Clear shape',
     confirmClearPolygon: 'This removes all captured points. Are you sure?',
+    buttonViewOverlaps: 'See overlaps on map',
+    overlapReviewTitle: 'Overlapping plots',
+    overlapCurrentPlot: 'The plot you are working on',
+    overlapConflictPercent: 'Overlaps your plot by {percent}%',
+    overlapNoName: 'No name recorded for this plot',
+    /**
+     * GEO-014 §8: this legend describes the GPS fix, not anyone's claim. Wording it as
+     * "unverified" would send the enumerator to re-walk a corner because a neighbour overlaps
+     * it, which is a different problem with a different fix.
+     */
+    overlapLegendAccuracy: 'GPS accuracy worse than {threshold} m',
+    overlapLegendCurrent: 'Your plot',
+    overlapLegendConflict: 'Overlapping plot',
+    overlapImageryOffline: 'No map imagery offline - shapes and distances are still correct.',
+    overlapImageryDisclaimer: 'Map imagery may be out of date.',
     loadingText: 'Loading...',
     loadingPrefilledAnswer: 'Loading prefilled answer...',
     buttonSelectedLoc: 'Use selected location',
@@ -417,6 +432,17 @@ const uiText = {
     polygonValidationPassed: 'Toutes les vérifications ont réussi',
     confirmClearPolygonTitle: 'Effacer la forme',
     confirmClearPolygon: 'Cela supprime tous les points enregistres. Etes-vous sur ?',
+    buttonViewOverlaps: 'Voir les chevauchements sur la carte',
+    overlapReviewTitle: 'Parcelles chevauchantes',
+    overlapCurrentPlot: 'La parcelle sur laquelle vous travaillez',
+    overlapConflictPercent: 'Chevauche votre parcelle de {percent}%',
+    overlapNoName: 'Aucun nom enregistre pour cette parcelle',
+    overlapLegendAccuracy: 'GPS moins précis que {threshold} m',
+    overlapLegendCurrent: 'Votre parcelle',
+    overlapLegendConflict: 'Parcelle chevauchante',
+    overlapImageryOffline:
+      "Pas d'imagerie cartographique hors ligne - les formes et les distances restent correctes.",
+    overlapImageryDisclaimer: "L'imagerie cartographique peut être obsolète.",
     buttonRefreshCurrLocation: 'Refresh location',
     loadingText: 'Chargement...',
     loadingPrefilledAnswer: 'Chargement de la réponse préremplie...',
