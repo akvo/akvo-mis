@@ -315,6 +315,7 @@ const AISuggestionDrawer = ({
             icon={<ReloadOutlined />}
             onClick={() => fetchSuggestions(promptHint)}
             loading={loading}
+            disabled={!aiAvailable || loading}
           >
             Refresh
           </Button>
@@ -328,194 +329,232 @@ const AISuggestionDrawer = ({
       className="ai-suggestion-drawer"
     >
       <div className="ai-suggestion-drawer-body">
-        <div className="ai-suggestion-search-box">
-          <Input.Search
-            placeholder={
-              aiAvailable
-                ? "Ask AI for specific widgets (max 250 chars)..."
-                : "AI suggestions unavailable (AI service not configured)"
-            }
-            allowClear
-            enterButton="Suggest"
-            maxLength={250}
-            disabled={!aiAvailable || loading}
-            value={promptHint}
-            onChange={(e) => {
-              const val = e.target.value;
-              setPromptHint(val);
-              if (!val && cachedRef.current.promptHint) {
-                handleReset();
-              }
+        {!aiAvailable ? (
+          <div
+            className="ai-suggestion-unavailable"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: "60px 24px",
             }}
-            onSearch={handleSearch}
-            loading={loading}
-          />
-          {promptHint && (
-            <div className="ai-suggestion-char-count">
-              {promptHint.length} / 250
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                backgroundColor: "#f0f5ff",
+                border: "1px solid #d6e4ff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 20,
+                color: "#2563eb",
+                fontSize: 28,
+              }}
+            >
+              <ThunderboltFilled />
             </div>
-          )}
-          <div className="ai-suggestion-chips">
-            <span className="ai-suggestion-chips-label">Try:</span>
-            {PROMPT_CHIPS.map((chip) => (
-              <Tag
-                key={chip}
-                className="ai-suggestion-chip"
-                onClick={() => aiAvailable && handleSearch(chip)}
-                style={{
-                  opacity: aiAvailable ? 1 : 0.5,
-                  cursor: aiAvailable ? "pointer" : "not-allowed",
-                }}
-              >
-                {chip}
-              </Tag>
-            ))}
-          </div>
-          {hasCustomHint && (
-            <div className="ai-suggestion-reset-link">
-              <Button
-                type="link"
-                size="small"
-                icon={<ClearOutlined />}
-                onClick={handleReset}
-              >
-                Reset to default recommendations
-              </Button>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 600,
+                color: "#1e293b",
+                marginBottom: 8,
+              }}
+            >
+              AI Suggestions Unavailable
             </div>
-          )}
-        </div>
-
-        {error && (
-          <Alert
-            type="warning"
-            showIcon
-            message={error}
-            style={{ marginBottom: 16 }}
-            closable
-            onClose={() => setError(null)}
-          />
-        )}
-
-        {loading ? (
-          <div className="ai-suggestion-skeleton-list">
-            {[1, 2, 3].map((key) => (
-              <div
-                key={key}
-                className="ai-suggestion-card ai-suggestion-skeleton-card"
-              >
-                <Skeleton
-                  active
-                  title={{ width: "60%" }}
-                  paragraph={{ rows: 2, width: ["90%", "40%"] }}
-                />
-              </div>
-            ))}
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: "1.5",
+                color: "#64748b",
+                maxWidth: 320,
+              }}
+            >
+              AI widget suggestions require an AI service to be configured.
+              Please check your system configuration to enable dynamic widget
+              recommendations.
+            </div>
           </div>
-        ) : !aiAvailable ? (
-          <div className="ai-suggestion-unavailable" style={{ marginTop: 16 }}>
-            <Alert
-              type="info"
-              showIcon
-              message="AI Suggestions Unavailable"
-              description="AI widget suggestions require an AI service to be configured. Please check your system configuration to enable dynamic widget recommendations."
-              style={{ marginBottom: 16 }}
-            />
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="No AI suggestions available."
-            />
-          </div>
-        ) : suggestions.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No recommendations available. Try clicking Refresh or entering a custom prompt above."
-          />
         ) : (
-          <div className="ai-suggestion-list">
-            {suggestions.length > 1 && (
-              <div className="ai-suggestion-list-header">
-                <span className="ai-suggestion-count">
-                  {suggestions.length} Suggested Widgets
-                </span>
-                <Button
-                  size="small"
-                  type="link"
-                  icon={<AppstoreAddOutlined />}
-                  onClick={handleAddAll}
-                  disabled={addedIndices.size === suggestions.length}
-                >
-                  {addedIndices.size === suggestions.length
-                    ? "All Added"
-                    : `Add All (${suggestions.length - addedIndices.size})`}
-                </Button>
+          <>
+            <div className="ai-suggestion-search-box">
+              <Input.Search
+                placeholder="Ask AI for specific widgets (max 250 chars)..."
+                allowClear
+                enterButton="Suggest"
+                maxLength={250}
+                disabled={loading}
+                value={promptHint}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPromptHint(val);
+                  if (!val && cachedRef.current.promptHint) {
+                    handleReset();
+                  }
+                }}
+                onSearch={handleSearch}
+                loading={loading}
+              />
+              {promptHint && (
+                <div className="ai-suggestion-char-count">
+                  {promptHint.length} / 250
+                </div>
+              )}
+              <div className="ai-suggestion-chips">
+                <span className="ai-suggestion-chips-label">Try:</span>
+                {PROMPT_CHIPS.map((chip) => (
+                  <Tag
+                    key={chip}
+                    className="ai-suggestion-chip"
+                    onClick={() => handleSearch(chip)}
+                  >
+                    {chip}
+                  </Tag>
+                ))}
               </div>
+              {hasCustomHint && (
+                <div className="ai-suggestion-reset-link">
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<ClearOutlined />}
+                    onClick={handleReset}
+                  >
+                    Reset to default recommendations
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <Alert
+                type="warning"
+                showIcon
+                message={error}
+                style={{ marginBottom: 16 }}
+                closable
+                onClose={() => setError(null)}
+              />
             )}
-            {suggestions.map((sug, idx) => {
-              const meta = getTypeMeta(sug.type);
-              const qMeta = questionMap[`${sug.form}_${sug.question}`];
-              const isAdded = addedIndices.has(idx);
 
-              return (
-                <div
-                  key={`${sug.type}_${sug.question || idx}_${idx}`}
-                  className="ai-suggestion-card"
-                >
-                  <div className="ai-suggestion-card-header">
-                    <span
-                      className="ai-suggestion-type-badge"
-                      style={{ background: meta.iconBg }}
-                    >
-                      {typeIconComponent[sug.type] || null}
-                      <span>{typeIconMap[sug.type] || sug.type}</span>
-                    </span>
-                    <span className="ai-suggestion-title">
-                      {sug.title || meta.label}
-                    </span>
-                    <Tag className="ai-suggestion-col-tag">
-                      {sug.col_span ? `${sug.col_span}/24 col` : "Auto width"}
-                    </Tag>
+            {loading ? (
+              <div className="ai-suggestion-skeleton-list">
+                {[1, 2, 3].map((key) => (
+                  <div
+                    key={key}
+                    className="ai-suggestion-card ai-suggestion-skeleton-card"
+                  >
+                    <Skeleton
+                      active
+                      title={{ width: "60%" }}
+                      paragraph={{ rows: 2, width: ["90%", "40%"] }}
+                    />
                   </div>
-
-                  {qMeta && (
-                    <div className="ai-suggestion-source">
-                      <span className="ai-suggestion-source-form">
-                        {qMeta.formName}
-                      </span>
-                      <span className="ai-suggestion-source-separator">•</span>
-                      <span className="ai-suggestion-source-question">
-                        {qMeta.questionLabel}
-                      </span>
-                    </div>
-                  )}
-
-                  {sug.rationale && (
-                    <div className="ai-suggestion-rationale">
-                      <BulbOutlined className="ai-suggestion-rationale-icon" />
-                      <span>{sug.rationale}</span>
-                    </div>
-                  )}
-
-                  <div className="ai-suggestion-card-footer">
+                ))}
+              </div>
+            ) : suggestions.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="No recommendations available. Try clicking Refresh or entering a custom prompt above."
+              />
+            ) : (
+              <div className="ai-suggestion-list">
+                {suggestions.length > 1 && (
+                  <div className="ai-suggestion-list-header">
+                    <span className="ai-suggestion-count">
+                      {suggestions.length} Suggested Widgets
+                    </span>
                     <Button
-                      type={isAdded ? "default" : "primary"}
                       size="small"
-                      disabled={isAdded}
-                      icon={
-                        isAdded ? (
-                          <CheckOutlined style={{ color: "#52c41a" }} />
-                        ) : (
-                          <PlusOutlined />
-                        )
-                      }
-                      onClick={() => handleAddWidget(sug)}
+                      type="link"
+                      icon={<AppstoreAddOutlined />}
+                      onClick={handleAddAll}
+                      disabled={addedIndices.size === suggestions.length}
                     >
-                      {isAdded ? "Added" : "Add to Dashboard"}
+                      {addedIndices.size === suggestions.length
+                        ? "All Added"
+                        : `Add All (${suggestions.length - addedIndices.size})`}
                     </Button>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                )}
+                {suggestions.map((sug, idx) => {
+                  const meta = getTypeMeta(sug.type);
+                  const qMeta = questionMap[`${sug.form}_${sug.question}`];
+                  const isAdded = addedIndices.has(idx);
+
+                  return (
+                    <div
+                      key={`${sug.type}_${sug.question || idx}_${idx}`}
+                      className="ai-suggestion-card"
+                    >
+                      <div className="ai-suggestion-card-header">
+                        <span
+                          className="ai-suggestion-type-badge"
+                          style={{ background: meta.iconBg }}
+                        >
+                          {typeIconComponent[sug.type] || null}
+                          <span>{typeIconMap[sug.type] || sug.type}</span>
+                        </span>
+                        <span className="ai-suggestion-title">
+                          {sug.title || meta.label}
+                        </span>
+                        <Tag className="ai-suggestion-col-tag">
+                          {sug.col_span
+                            ? `${sug.col_span}/24 col`
+                            : "Auto width"}
+                        </Tag>
+                      </div>
+
+                      {qMeta && (
+                        <div className="ai-suggestion-source">
+                          <span className="ai-suggestion-source-form">
+                            {qMeta.formName}
+                          </span>
+                          <span className="ai-suggestion-source-separator">
+                            •
+                          </span>
+                          <span className="ai-suggestion-source-question">
+                            {qMeta.questionLabel}
+                          </span>
+                        </div>
+                      )}
+
+                      {sug.rationale && (
+                        <div className="ai-suggestion-rationale">
+                          <BulbOutlined className="ai-suggestion-rationale-icon" />
+                          <span>{sug.rationale}</span>
+                        </div>
+                      )}
+
+                      <div className="ai-suggestion-card-footer">
+                        <Button
+                          type={isAdded ? "default" : "primary"}
+                          size="small"
+                          disabled={isAdded}
+                          icon={
+                            isAdded ? (
+                              <CheckOutlined style={{ color: "#52c41a" }} />
+                            ) : (
+                              <PlusOutlined />
+                            )
+                          }
+                          onClick={() => handleAddWidget(sug)}
+                        >
+                          {isAdded ? "Added" : "Add to Dashboard"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </Drawer>

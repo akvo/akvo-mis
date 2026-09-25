@@ -72,8 +72,9 @@ describe("AISuggestionDrawer", () => {
       screen.getByText(/AI widget suggestions require an AI service/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText(/AI suggestions unavailable/i)
-    ).toBeDisabled();
+      screen.queryByPlaceholderText(/Ask AI for specific widgets/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeDisabled();
     expect(
       screen.queryByText("Functionality Breakdown")
     ).not.toBeInTheDocument();
