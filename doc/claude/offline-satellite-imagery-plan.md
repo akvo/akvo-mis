@@ -1,9 +1,22 @@
 # Offline Satellite Imagery — Path Plan (Q1)
 
-**Status**: Decision pending. Product/procurement call, not an engineering one.
-**Updated 2026-09-24**: decision 1 answered (Path A ships in GEO-008); integration prep in **§12**. Nothing in this doc has been built yet. FR-6's map review screen is
-GEO-008, which is still Draft, so neither Path A nor its §7 seam exists yet. One premise has
-weakened, though: see the **⚠️ note in §6**.
+**Status**: Phase 1 **built**; offline imagery still a pending product/procurement decision.
+**Updated 2026-09-25.** Decision 1 was answered on 2026-09-24: Path A ships. GEO-008 is **Built**.
+Its map review screen and the §7 resolver seam exist. Only the offline tile subsystem itself is
+unbuilt:
+
+| Piece | State | Where |
+|---|---|---|
+| Map review screen (FR-6), Path A offline behaviour | ✅ Built — GEO-008 | `app/src/pages/OverlapMapView.js` |
+| §7 resolver seam: one tile source for all three map screens | ✅ Built — GEO-008 | `app/src/lib/map-tiles.js` → `{{tileUrl}}` in `app/assets/map-draw.html` |
+| Offline notice driven by the resolver, not connectivity | ✅ Built — GEO-008 | `hasTiles` from `currentTileSource` |
+| Satellite basemap **online** | ❌ Not built — OSM street tiles until a provider is chosen | `NETWORK_TILE_TEMPLATE` in `map-tiles.js` (§12.3) |
+| `file://` tile spike | ❌ Not run | §12.1 |
+| Offline tile subsystem: local-pack lookup, download, storage (FR-B1–B8) | ❌ Not built — gated on licensing | §7 integration point, §12.4–12.5 |
+
+**Anyone starting Phase 3 should begin at the §7 integration point**, not build a second tile
+path. One premise has also weakened: see the **⚠️ note in §6**.
+
 **Parent**: [offline-polygon-validation-requirements.md](./offline-polygon-validation-requirements.md) — resolves its open question **Q1**.
 **Scope**: What sits *beneath* the polygons on the FR-6 map review screen. Nothing else.
 
@@ -53,9 +66,11 @@ substance of the decision.
 
 ## 3. Path A — Polygons-Only Offline
 
-**Current parent-spec position (D1 + D4).** The WebView Leaflet map fetches a satellite
-basemap when online. Offline, tiles fail and polygons render on a plain background with a
-scale bar, north arrow, and an explicit "satellite imagery unavailable offline" notice.
+**Current parent-spec position (D1 + D4) — built in GEO-008.** The WebView Leaflet map fetches a
+basemap when online. That is OpenStreetMap street tiles until a satellite provider is chosen
+(§12.3). Offline, the resolver returns no tiles, so no tile layer is built at all, and polygons
+render on a plain background with a scale bar and an explicit "imagery unavailable offline"
+notice. No north arrow was built: a Leaflet map never rotates, so it is always north-up.
 
 **Scope**: FR-6 exactly as already written, including FR-6.6. No additional requirements.
 
@@ -195,6 +210,32 @@ What must be true for this seam to hold:
 
 If those three hold, the Path A → Path B upgrade touches one module.
 
+### Built in GEO-008: the integration point for Phase 3
+
+All three conditions hold. `app/src/lib/map-tiles.js` is the only place a tile URL is decided:
+
+- `resolveTileSource({ bounds, online, findLocalPack })` returns `{ kind, template, hasTiles }` and
+  tries local → network → none, in that order.
+- `findLocalPack` defaults to `noLocalPack`, a stub that always misses. That stub **is** Path A.
+- `currentTileSource({ bounds })` is what the screens call. It supplies `online` from `UIState`.
+- Three callers pass their viewport as `bounds`: `MapDrawView` (capture), `GeometryView` (detail
+  preview) and `OverlapMapView` (review). Each bakes the template into `map-draw.html` as
+  `{{tileUrl}}`. A `null` template builds no tile layer at all.
+- The offline notice on the review screen reads `hasTiles`, never connectivity.
+
+**What Phase 3 changes here, and nothing else in this file:**
+
+1. Replace the `noLocalPack` default with a real lookup that returns `{ template }` for a pack
+   covering `bounds`, or `null`.
+2. **Make that lookup awaited.** `resolveTileSource` currently calls `findLocalPack(bounds)`
+   synchronously. A real lookup reads a pack manifest from disk, so it becomes
+   `await findLocalPack(bounds)`. `currentTileSource` is already async, and so are its three
+   callers, precisely so that this change touches no screen.
+3. Give the WebViews file access (§12.1) so that a `file://` template loads.
+
+The download and storage subsystem (FR-B1–B4, B6–B8) is entirely new code beside this module, and
+none of it exists yet.
+
 ---
 
 ## 8. Decision Matrix
@@ -237,7 +278,7 @@ Reasoning:
 
 | Phase | Content | Gated on |
 |---|---|---|
-| **1** | Path A + §7 resolver seam | Nothing — proceed now |
+| **1** | Path A + §7 resolver seam | ✅ **Done** — built in GEO-008 (2026-09-24) |
 | **2** *(parallel, non-blocking)* | Confirm provider, plan, and offline terms in writing | Product / procurement |
 | **3** | Path B (local-pack branch + FR-B1–B8) **or** Path B′ (native SDK) | Phase 2 outcome |
 
@@ -277,11 +318,13 @@ Not yet established — do not treat any of these as known:
 
 ---
 
-## 12. Integration Prep — Done Now, While Path A Ships (added 2026-09-24)
+## 12. Integration Prep for Phase 3 (added 2026-09-24, updated 2026-09-25)
 
-Decision 1 is answered: Path A ships in GEO-008. Offline imagery is still wanted, so the aim here
-is to make Phase 3 **short** once Phase 2 returns an answer. That means retiring the unknowns
-now, not building the download subsystem early.
+Decision 1 is answered, and Path A has shipped in GEO-008 together with the §7 seam. Offline
+imagery is still wanted, so the aim here is to make Phase 3 **short** once Phase 2 returns an
+answer. That means retiring the unknowns now, not building the download subsystem early. Of the
+items below, only the seam is built. The spike (§12.1) and the vendor conversation (§12.3) are
+still to do.
 
 ### 12.1 Does Path B need a development build? — answer it with a spike, not a guess
 
@@ -293,12 +336,14 @@ now, not building the download subsystem early.
 | *(GEO-004 D8 background recording, if it ever ships)* | Yes | Yes |
 
 The one thing that could push Path B into a dev build is Android WebView refusing `file://` tiles
-from a page loaded as an HTML string. Today both map screens load with
-`originWhitelist={['about:blank']}` and `source={{ html }}`, with no `baseUrl` and no file access.
+from a page loaded as an HTML string. All three map screens (capture, detail preview, review)
+still load with `originWhitelist={['about:blank']}` and `source={{ html }}`, with no `baseUrl` and
+no file access.
 If that access is refused, the fallback is a local HTTP server, which *is* native.
 
-**Spike (~2h, alongside GEO-008):** copy a handful of `{z}/{x}/{y}` tiles into
-`FileSystem.documentDirectory + 'tiles/spike/'`. Point the resolver's local branch at them. Set
+**Spike (~2h, not run yet):** copy a handful of `{z}/{x}/{y}` tiles into
+`FileSystem.documentDirectory + 'tiles/spike/'`. Pass a `findLocalPack` that returns their
+template (see the §7 integration point). Set
 `baseUrl` and `allowFileAccess` on the WebView. Check that the tiles render in **Expo Go and in an
 EAS release APK**, since the two can differ on file access. Use `documentDirectory`, not
 `cacheDirectory`: the OS may purge the cache, which would break FR-B7.
@@ -338,9 +383,10 @@ less than it looks.
 
 ### 12.3 Start the vendor conversation now — one request, three answers
 
-The online basemap is **not** satellite today: `map-draw.html` draws OpenStreetMap street tiles.
-GEO-008's "satellite basemap when online" needs a provider anyway, so ask that provider in the
-same request:
+The online basemap is **not** satellite today: `NETWORK_TILE_TEMPLATE` in `map-tiles.js` points at
+OpenStreetMap street tiles, and it is the one line that changes when a provider is chosen.
+GEO-008's "satellite basemap when online" is the only acceptance criterion of GEO-008 left
+unmet, and it needs a provider anyway, so ask that provider in the same request:
 
 1. Online satellite tiles for a mobile app: plan and price.
 2. May tiles be **bulk-downloaded and stored on device**, and on which plan?
@@ -390,5 +436,6 @@ answer is scaffolding for a path that may be B′, where the SDK brings its own 
 ### 12.5 What is deliberately *not* prepared
 
 The download manager, settings screen, progress / resume, and eviction (FR-B1–B4, B8). Each one
-depends on the provider's terms and on decision 4. The resolver seam (§7, built in GEO-008) and the
-spike (§12.1) are all the code Phase 3 needs in place beforehand.
+depends on the provider's terms and on decision 4. The resolver seam (§7) is already built in
+GEO-008. With the spike (§12.1), which has not been run, it is all Phase 3 needs in place
+beforehand.
