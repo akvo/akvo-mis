@@ -46,8 +46,37 @@ describe("AISuggestionDrawer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     dashboardAi.suggestWidgets.mockResolvedValue({
-      data: { suggestions: mockSuggestions },
+      data: { ai_available: true, suggestions: mockSuggestions },
     });
+  });
+
+  it("renders unavailable alert and empty state when ai_available is false", async () => {
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: { ai_available: false, provider: "none", suggestions: [] },
+    });
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByText("AI Suggestions Unavailable")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/AI widget suggestions require an AI service/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/AI suggestions unavailable/i)
+    ).toBeDisabled();
+    expect(
+      screen.queryByText("Functionality Breakdown")
+    ).not.toBeInTheDocument();
   });
 
   it("automatically loads default suggestions on open", async () => {

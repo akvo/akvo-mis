@@ -73,11 +73,13 @@ const AISuggestionDrawer = ({
   const [suggestions, setSuggestions] = useState([]);
   const [error, setError] = useState(null);
   const [promptHint, setPromptHint] = useState("");
+  const [aiAvailable, setAiAvailable] = useState(true);
 
   const cachedRef = useRef({
     dashboardId: null,
     data: null,
     promptHint: "",
+    aiAvailable: true,
   });
 
   const abortControllerRef = useRef(null);
@@ -186,6 +188,11 @@ const AISuggestionDrawer = ({
       dashboardAi
         .suggestWidgets(dashboardId, payload, controller.signal)
         .then((res) => {
+          const isAiAvail =
+            typeof res?.data?.ai_available === "boolean"
+              ? res.data.ai_available
+              : true;
+          setAiAvailable(isAiAvail);
           const list = Array.isArray(res?.data?.suggestions)
             ? res.data.suggestions
             : [];
@@ -194,6 +201,7 @@ const AISuggestionDrawer = ({
             dashboardId,
             data: list,
             promptHint: hintToUse || "",
+            aiAvailable: isAiAvail,
           };
         })
         .catch((err) => {
@@ -220,14 +228,19 @@ const AISuggestionDrawer = ({
           dashboardId,
           data: null,
           promptHint: "",
+          aiAvailable: true,
         };
         setPromptHint("");
         setSuggestions([]);
+        setAiAvailable(true);
         fetchSuggestions("");
         return;
       }
 
       if (cachedRef.current.data !== null) {
+        if (typeof cachedRef.current.aiAvailable === "boolean") {
+          setAiAvailable(cachedRef.current.aiAvailable);
+        }
         if (suggestions.length === 0) {
           setSuggestions(cachedRef.current.data);
           setPromptHint(cachedRef.current.promptHint || "");
@@ -317,10 +330,15 @@ const AISuggestionDrawer = ({
       <div className="ai-suggestion-drawer-body">
         <div className="ai-suggestion-search-box">
           <Input.Search
-            placeholder="Ask AI for specific widgets (max 250 chars)..."
+            placeholder={
+              aiAvailable
+                ? "Ask AI for specific widgets (max 250 chars)..."
+                : "AI suggestions unavailable (AI service not configured)"
+            }
             allowClear
             enterButton="Suggest"
             maxLength={250}
+            disabled={!aiAvailable || loading}
             value={promptHint}
             onChange={(e) => {
               const val = e.target.value;
@@ -343,7 +361,11 @@ const AISuggestionDrawer = ({
               <Tag
                 key={chip}
                 className="ai-suggestion-chip"
-                onClick={() => handleSearch(chip)}
+                onClick={() => aiAvailable && handleSearch(chip)}
+                style={{
+                  opacity: aiAvailable ? 1 : 0.5,
+                  cursor: aiAvailable ? "pointer" : "not-allowed",
+                }}
               >
                 {chip}
               </Tag>
@@ -388,6 +410,20 @@ const AISuggestionDrawer = ({
                 />
               </div>
             ))}
+          </div>
+        ) : !aiAvailable ? (
+          <div className="ai-suggestion-unavailable" style={{ marginTop: 16 }}>
+            <Alert
+              type="info"
+              showIcon
+              message="AI Suggestions Unavailable"
+              description="AI widget suggestions require an AI service to be configured. Please check your system configuration to enable dynamic widget recommendations."
+              style={{ marginBottom: 16 }}
+            />
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="No AI suggestions available."
+            />
           </div>
         ) : suggestions.length === 0 ? (
           <Empty
