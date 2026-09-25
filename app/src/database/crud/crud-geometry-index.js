@@ -13,11 +13,16 @@ const geometryIndexQuery = () => ({
    * Drop every index row for a datapoint, then insert the supplied ones.
    * Empty `rows` clears the index for that datapoint (e.g. all polygons removed).
    */
-  replaceForDatapoint: async (db, { uuid, formId, rows }) => {
+  replaceForDatapoint: async (db, { uuid, formId, rows, datapointId = null }) => {
+    /**
+     * `datapointId`, when given, also sweeps that datapoint's rows filed under any other uuid —
+     * the orphans a reopened draft left behind while FormPage minted a random uuid per session.
+     * `datapointId = NULL` never matches, so callers without one delete by uuid exactly as before.
+     */
     await sql.safeExecuteQuery(
       db,
-      `DELETE FROM ${tableName} WHERE uuid = ? AND formId = ?`,
-      [uuid, formId],
+      `DELETE FROM ${tableName} WHERE formId = ? AND (uuid = ? OR datapointId = ?)`,
+      [formId, uuid, datapointId],
       'geometryIndex.replaceForDatapoint.delete',
     );
     if (!rows?.length) {
@@ -93,8 +98,15 @@ const geometryIndexQuery = () => ({
     const params = [formId, questionId, maxLat, minLat, maxLon, minLon];
     let exclude = '';
     if (excludeUuid) {
-      exclude = ' AND uuid != ?';
-      params.push(excludeUuid);
+      /**
+       * By the row's uuid AND by the datapoint it points at. Before FormPage adopted a saved
+       * datapoint's uuid, each save of a reopened draft wrote index rows under a random uuid; those
+       * rows still name the draft's `datapointId`, so matching on uuid alone lets a plot overlap
+       * itself through them.
+       */
+      exclude =
+        ' AND uuid != ? AND (datapointId IS NULL OR datapointId NOT IN (SELECT id FROM datapoints WHERE uuid = ?))';
+      params.push(excludeUuid, excludeUuid);
     }
     return sql.safeExecuteQuery(
       db,

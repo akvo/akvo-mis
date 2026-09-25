@@ -240,6 +240,53 @@ describe('TypeGeoDrawing validation report (GEO-007)', () => {
     expect(queryByTestId('text-polygon-report-overlap')).toBeNull();
   });
 
+  it('refreshes the gate message when the points are retaken and validated again', async () => {
+    runOverlapCheck.mockResolvedValue({
+      status: OVERLAP_STATUS.failed,
+      conflicts: [
+        { uuid: 'a', name: 'Plot A', percent: 100, threshold: 20 },
+        { uuid: 'b', name: 'Plot B', percent: 20.7, threshold: 20 },
+      ],
+    });
+    const field = (value) => (
+      <TypeGeoDrawing
+        keyform={0}
+        id={42}
+        label="Plot boundary"
+        value={value}
+        required
+        extra={OVERLAP_EXTRA}
+      />
+    );
+    const { getByTestId, rerender } = render(field(triangle));
+    await act(async () => {
+      fireEvent.press(getByTestId('button-validate-polygon'));
+    });
+    await act(async () => {
+      FormState.update((s) => {
+        s.feedback = { 42: 'Plot boundary: Overlaps 2 plots: #1 (100.0%), #2 (20.7%).' };
+      });
+    });
+
+    // MapDrawView's Save writes the new points straight into the store, bypassing onChange.
+    const retaken = [...triangle, [9.035, 38.745]];
+    await act(async () => {
+      rerender(field(retaken));
+    });
+    expect(FormState.getRawState().feedback[42]).not.toContain('#2');
+
+    runOverlapCheck.mockResolvedValue({
+      status: OVERLAP_STATUS.failed,
+      conflicts: [{ uuid: 'a', name: 'Plot A', percent: 38.7, threshold: 20 }],
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId('button-validate-polygon'));
+    });
+    const message = FormState.getRawState().feedback[42];
+    expect(message).toContain('38.7');
+    expect(message).not.toContain('100.0');
+  });
+
   it('offers Retry when sync can close the gap, and kicks a sync', async () => {
     runOverlapCheck.mockResolvedValue({
       status: OVERLAP_STATUS.unavailable,

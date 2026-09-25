@@ -10,13 +10,13 @@ export const writeIndexFromListGeometry = async (
   { uuid, formId, datapointId, name, geometry, isComplete },
 ) => {
   if (!Array.isArray(geometry) || !geometry.length) {
-    await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows: [] });
+    await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows: [], datapointId });
     return;
   }
   const rows = geometry
     .map((entry) => rowFromListGeometry(entry, { datapointId, name, isComplete }))
     .filter((row) => row.questionId != null && Number.isFinite(row.minLat));
-  await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows });
+  await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows, datapointId });
 };
 
 /**
@@ -51,7 +51,7 @@ export const writeIndexFromAnswers = async (
       (g.question || []).some((q) => q?.extra?.geoConfig?.detectOverlaps === true),
     );
     if (couldIndex) {
-      await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows: [] });
+      await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows: [], datapointId });
     }
     return;
   }
@@ -66,7 +66,7 @@ export const writeIndexFromAnswers = async (
       }),
     )
     .filter(Boolean);
-  await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows });
+  await crudGeometryIndex.replaceForDatapoint(db, { uuid, formId, rows, datapointId });
 };
 
 /**

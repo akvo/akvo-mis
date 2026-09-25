@@ -119,7 +119,7 @@ describe('geometry-index-writer', () => {
 
       expect(crudGeometryIndex.replaceForDatapoint).toHaveBeenCalledWith(
         {},
-        { uuid: 'u-3', formId: 10, rows: [] },
+        { uuid: 'u-3', formId: 10, rows: [], datapointId: 44 },
       );
     });
   });
