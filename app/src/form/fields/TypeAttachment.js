@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
-import { Button, Text, Image } from '@rneui/themed';
+import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
+import { Image } from '@rneui/themed';
 import * as DocumentPicker from 'expo-document-picker';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as Linking from 'expo-linking';
@@ -81,50 +81,58 @@ const TypeAttachment = ({
       />
       {value && helpers.isImageFile(fileType) && (
         <View style={{ marginBottom: 10 }}>
-          <Image source={{ uri: value }} style={styles.image} />
-          <Button
-            icon={<Icon name="trash" size={20} color={theme.buttonPrimary.text} style={styles.Icon} />}
-            title={trans.buttonRemove}
+          <Image source={{ uri: value }} style={[styles.image, { borderRadius: 12 }]} />
+          <TouchableOpacity
+            style={[styles.pillButton, { backgroundColor: theme.status.error, marginTop: 10 }]}
             onPress={onRemovePress}
             testID="remove-file-button"
             accessibilityLabel="remove-file-button"
-            buttonStyle={{ backgroundColor: theme.status.error, marginTop: 10 }}
-          />
+          >
+            <Icon name="trash" size={18} color="#FFFFFF" />
+            <Text style={styles.pillButtonText}>{trans.buttonRemove}</Text>
+          </TouchableOpacity>
         </View>
       )}
       {selectedFile?.name && !helpers.isImageFile(fileType) && (
         <View style={{ marginBottom: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Icon name="document-text" size={20} color={theme.icon.primary} style={styles.Icon} />
+          <View style={[styles.fileRow, { backgroundColor: theme.bg.surfaceTertiary }]}>
+            <Icon name="document-text" size={20} color={theme.icon.primary} />
             <Text style={[styles.fileName, { color: theme.text.primary }]}>{fileName}</Text>
           </View>
-          <Button
-            icon={<Icon name="eye" size={20} color={theme.buttonPrimary.text} style={styles.Icon} />}
-            title={trans.openFileButton}
+          <TouchableOpacity
+            style={[styles.pillButton, { backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }]}
             onPress={() => onOpenPress(selectedFile?.uri)}
             testID="open-file-button"
             accessibilityLabel="open-file-button"
-            buttonStyle={{ backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }}
-          />
-          <Button
-            icon={<Icon name="trash" size={20} color={theme.buttonPrimary.text} style={styles.Icon} />}
-            title={trans.buttonRemove}
+          >
+            <Icon name="eye" size={18} color={theme.buttonPrimary.text} />
+            <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>
+              {trans.openFileButton}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.pillButton, { backgroundColor: theme.status.error, marginTop: 10 }]}
             onPress={onRemovePress}
             testID="remove-file-button"
             accessibilityLabel="remove-file-button"
-            buttonStyle={{ backgroundColor: theme.status.error, marginTop: 10 }}
-          />
+          >
+            <Icon name="trash" size={18} color="#FFFFFF" />
+            <Text style={styles.pillButtonText}>{trans.buttonRemove}</Text>
+          </TouchableOpacity>
         </View>
       )}
       {!value && (
-        <Button
-          icon={<Icon name="attach" size={20} color={theme.buttonPrimary.text} style={styles.Icon} />}
-          title={trans.attachButton}
+        <TouchableOpacity
+          style={[styles.pillButton, { backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }]}
           onPress={onPickerPress}
           testID="attach-file-button"
           accessibilityLabel="attach-file-button"
-          buttonStyle={{ backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }}
-        />
+        >
+          <Icon name="attach" size={18} color={theme.buttonPrimary.text} />
+          <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>
+            {trans.attachButton}
+          </Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -138,14 +146,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   fileName: {
-    marginBottom: 10,
+    flex: 1,
   },
-  Icon: {
-    marginRight: 10,
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
   },
   image: {
     width: '100%',
     height: 200,
     aspectRatio: 1,
+  },
+  pillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginHorizontal: 10,
+    gap: 8,
+  },
+  pillButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
