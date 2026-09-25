@@ -42,6 +42,16 @@ urlpatterns = [
         r"^(?P<version>(v1))/visualization/escalation/(?P<form_id>[0-9]+)",
         visualization_escalation,
     ),
+    # Dashboard builder AI suggestions (VIZ-AI-002)
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/ai/suggest-dashboard$",
+        DashboardBuilderViewSet.as_view({"post": "suggest_dashboard"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/dashboards/"
+        r"(?P<pk>[0-9]+)/ai/suggest-widgets$",
+        DashboardBuilderViewSet.as_view({"post": "suggest_widgets"}),
+    ),
     # Dashboard builder CRUD (sub-resource routes before generic)
     re_path(
         r"^(?P<version>(v1))/manage/dashboards/(?P<pk>[0-9]+)/sources$",
