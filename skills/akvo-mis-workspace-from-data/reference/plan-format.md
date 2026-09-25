@@ -12,6 +12,7 @@ user; `mis.py` executes it. Paths in `file` are relative to plan.json.
                                           // mis.py refuses any other domain
     "scheme": "https",                    // required; http only for the local
                                           // stack via --connect http://localhost:8000
+                                          // (--connect accepts nothing else)
     "email": "person@org.org",            // becomes the workspace super admin
     "first_name": "Ana", "last_name": "Silva"
   },
@@ -95,6 +96,13 @@ user; `mis.py` executes it. Paths in `file` are relative to plan.json.
   the same goes for group labels within a form.
 - CSV files: the delimiter is detected; set `"sep": ";"` in the data spec
   to force one.
+- A row whose **required** answer is blank or does not fit the question is
+  skipped, not loaded without it. A bad **optional** answer is dropped with
+  a warning and the rest of the row loads. Both are listed in
+  `load-report.csv`.
+- Once a form exists, `seed-forms` only reuses it if its groups, questions,
+  labels, options, required flags and dependencies match the plan.
+  Otherwise it stops, so a corrected plan never loads into an older form.
 - Any column you leave out of `columns` is not loaded. List it in
   `unmapped_columns` so the user sees what is dropped.
 - Cells are read as text exactly as written. `None`, `NA` and `-` are **not**

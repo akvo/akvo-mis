@@ -77,12 +77,23 @@ def infer(col, s):
     return "input"
 
 
-def numeric_id(col, s):
-    """Whole numbers in a column named like an id: 1001, not a quantity."""
+def id_like(col, kind, s):
+    """A column that identifies records, whatever type infer() gave it.
+
+    Free text is a candidate as is. A column named like an id also counts
+    when few distinct values made it look like an option list (10 sites
+    over 100 visits), or when its values are whole numbers (1001).
+    """
+    if kind == "input":
+        return True
     if not IDENT.search(col) or DERIVED.search(col) or DATE.search(col):
         return False
-    num = pd.to_numeric(s, errors="coerce")
-    return num.notna().all() and (num % 1 == 0).all()
+    if kind == "option":
+        return True
+    if kind == "number":
+        num = pd.to_numeric(s, errors="coerce")
+        return bool(num.notna().all() and (num % 1 == 0).all())
+    return False
 
 
 def registration_keys(df, types):
@@ -90,8 +101,7 @@ def registration_keys(df, types):
     out = []
     for c in df.columns:
         s = df[c][~blank(df[c])].astype(str).str.strip()
-        if types[c] != "input" and not (types[c] == "number"
-                                        and numeric_id(c, s)):
+        if not id_like(c, types[c], s):
             continue
         if len(s) < len(df) * .95:
             continue
@@ -197,7 +207,8 @@ def profile(path, sheet, df):
     res["geo"] = geo_pairs(df, types)
     uniq_cols = [c for c in df.columns
                  if df[c].notna().all() and df[c].astype(str).nunique()
-                 == len(df) and types[c] == "input"
+                 == len(df) and id_like(c, types[c],
+                                        df[c].astype(str).str.strip())
                  and not PII.search(c) and not DERIVED.search(c)]
     res["unique_columns"] = uniq_cols
     return res

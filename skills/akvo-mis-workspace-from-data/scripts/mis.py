@@ -52,11 +52,15 @@ def target_problem(ws, connect=None):
     """
     if connect:
         u = urllib.parse.urlsplit(connect)
-        if u.scheme == "https" or (u.scheme == "http"
-                                   and u.hostname in LOOPBACK):
+        host = (u.hostname or "").lower()
+        if u.scheme in ("http", "https") and host in LOOPBACK:
             return None
-        return (f"--connect {connect}: use https, or http only to "
-                f"{'/'.join(LOOPBACK)}")
+        if u.scheme == "https" and any(host == b or host.endswith("." + b)
+                                       for b in KNOWN_BASES):
+            return None
+        return (f"--connect {connect}: only a local stack "
+                f"({'/'.join(LOOPBACK)}) or https to "
+                f"{', '.join(KNOWN_BASES)}")
     if ws.get("base_domain") not in KNOWN_BASES:
         return (f"base_domain '{ws.get('base_domain')}' is not one of "
                 f"{', '.join(KNOWN_BASES)} (for a local docker stack, pass "
@@ -576,17 +580,53 @@ def existing_form(ctx, key, form):
     return ctx.ok("GET", f"manage/forms/{found['id']}") if found else None
 
 
+def form_shape(groups, deps):
+    """What must match between plan and server: groups, then questions.
+
+    `groups` is the editor's question_group list; `deps` maps a question
+    name to its dependency (question name, option values) or None.
+    """
+    out = []
+    for g in groups:
+        out.append(("group", norm(g["label"])))
+        for q in g["question"]:
+            out.append((q["name"], q["type"], norm(q["label"]),
+                        bool(q.get("required")), bool(q.get("meta")),
+                        tuple((o["value"], norm(o["label"]))
+                              for o in q.get("option") or []),
+                        deps.get(q["name"])))
+    return out
+
+
 def form_mismatch(form, detail, parent_id):
-    """Why the server's form is not the one the plan describes, or None."""
+    """Why the server's form is not the one the plan describes, or None.
+
+    A draft may still lack its dependencies (the run stopped before the
+    PUT that adds them), so those are compared on published forms only.
+    """
     if form["type"] == "monitoring" and detail.get("parent") != parent_id:
         return (f"its parent is form {detail.get('parent')}, the plan "
                 f"expects {parent_id}")
-    have = {q["name"] for g in detail["question_group"]
-            for q in g["question"]}
-    want = {q["name"] for q in plan_questions(form)}
-    if have != want:
-        return (f"questions differ (missing {sorted(want - have)}, "
-                f"extra {sorted(have - want)})")
+    published = detail.get("status") == "published"
+    names = {q["id"]: q["name"] for g in detail["question_group"]
+             for q in g["question"]}
+    have = form_shape(detail["question_group"], {
+        q["name"]: (names.get(q["dependency"][0]["id"]),
+                    tuple(sorted(q["dependency"][0]["options"])))
+        for g in detail["question_group"] for q in g["question"]
+        if published and q.get("dependency")})
+    want = form_shape(form_payload(form)["question_group"], {
+        q["name"]: (q["depends_on"]["question"],
+                    tuple(sorted(option_value(v)
+                                 for v in q["depends_on"]["values"])))
+        for q in plan_questions(form)
+        if published and q.get("depends_on")})
+    for h, w in zip(have, want):
+        if h != w:
+            return f"server has {h}, the plan has {w}"
+    if len(have) != len(want):
+        return (f"server has {len(have)} groups+questions, the plan "
+                f"has {len(want)}")
     return None
 
 
@@ -663,7 +703,10 @@ def to_number(v):
         return v
     s = str(v).strip().replace(",", "")
     s = re.sub(r"^[^\d\-.]+|[^\d.]+$", "", s)
-    f = float(s)
+    try:
+        f = float(s)
+    except ValueError:
+        raise ValueError(f"'{v}' is not a number") from None
     return int(f) if f.is_integer() else f
 
 
@@ -792,7 +835,7 @@ class Loader:
         return " - ".join(parts) or k
 
     def build(self, form, spec, row, qids):
-        answers, errors = [], []
+        answers, errors, missing = [], [], []
         is_mon = form["type"] == "monitoring"
         geo = None
         if is_mon:
@@ -831,16 +874,21 @@ class Loader:
                 raw = row.get(col)
             if blank(raw) or mapped_blank(spec, q["name"], raw):
                 if q.get("required"):
-                    errors.append(f"{q['name']}: required but blank")
+                    missing.append(f"{q['name']}: required but blank")
                 continue
             try:
                 v = convert(q, raw, spec)
             except (ValueError, TypeError, OverflowError) as e:
-                errors.append(f"{q['name']}: {e}")
+                # a bad optional answer is dropped with a warning; a bad
+                # required one would leave the record incomplete
+                (missing if q.get("required") else errors).append(
+                    f"{q['name']}: {e}")
                 continue
             if q["type"] == "geo":
                 geo = v
             answers.append({"question": qid, "value": v})
+        if missing:
+            raise ValueError("; ".join(missing))
         if geo and not is_mon:
             data["geo"] = geo
         data["submission_key"] = hashlib.sha256(

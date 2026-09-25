@@ -16,9 +16,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mis import (LOCAL_BASE, blank, form_problems,  # noqa: E402
-                 mapped_blank, match_option, norm, plan_questions,
-                 read_table, row_key, target_problem, to_date, to_geo,
-                 to_number)
+                 mapped_blank, match_option, norm, option_value,
+                 plan_questions, read_table, row_key, target_problem,
+                 to_date, to_geo, to_number)
 
 TYPE_WORDS = {
     "input": "short text", "text": "long text", "number": "number",
@@ -61,7 +61,7 @@ def check(ctx):
                                                    for q in qs):
             problems.append(f"form {f['key']}: mark the naming question(s) "
                             f"meta: true so datapoints get readable names")
-        local = set()
+        local, earlier = set(), {}
         for q in qs:
             if q["name"] in local:
                 problems.append(f"form {f['key']}: duplicate question "
@@ -71,10 +71,25 @@ def check(ctx):
                     not q.get("options"):
                 problems.append(f"{f['key']}.{q['name']}: no options")
             dep = q.get("depends_on")
-            if dep and dep["question"] not in local:
+            target = earlier.get(dep["question"]) if dep else None
+            if dep and target is None:
                 problems.append(f"{f['key']}.{q['name']}: depends on "
                                 f"'{dep['question']}' which must come "
                                 f"earlier in the form")
+            elif dep and target["type"] not in ("option",
+                                                "multiple_option"):
+                problems.append(f"{f['key']}.{q['name']}: depends on "
+                                f"'{dep['question']}', which is not an "
+                                f"option question")
+            elif dep:
+                unknown = [v for v in dep.get("values") or []
+                           if option_value(v) not in
+                           {option_value(o) for o in target["options"]}]
+                if unknown or not dep.get("values"):
+                    problems.append(f"{f['key']}.{q['name']}: depends on "
+                                    f"values {unknown or '[]'} that are "
+                                    f"not options of '{dep['question']}'")
+            earlier[q["name"]] = q
         if f["name"].casefold() in names:
             problems.append(f"two forms named '{f['name']}'")
         names.add(f["name"].casefold())
@@ -115,8 +130,9 @@ def check(ctx):
             continue
         qs = {q["name"]: q for q in plan_questions(f)}
         bad, blanks, keys, orphans = {}, 0, set(), 0
-        dup = nokey = 0
+        dup = nokey = req = 0
         for _, row in df.iterrows():
+            req_bad = False
             for qn, col in spec.get("columns", {}).items():
                 q = qs.get(qn)
                 if q is None:
@@ -125,6 +141,7 @@ def check(ctx):
                     continue
                 v = row[col]
                 if blank(v) or mapped_blank(spec, qn, v):
+                    req_bad = req_bad or bool(q.get("required"))
                     continue
                 try:
                     vm = spec.get("value_maps", {}).get(qn, {})
@@ -147,6 +164,8 @@ def check(ctx):
                     if "date_format" in str(e):
                         msg = f"{msg} (ambiguous: set date_format)"
                     bad.setdefault(qn, set()).add(msg)
+                    req_bad = req_bad or bool(q.get("required"))
+            req += req_bad
             if spec.get("administration_columns") and any(
                     blank(row[c]) for c in spec["administration_columns"]):
                 blanks += 1
@@ -173,6 +192,9 @@ def check(ctx):
             problems.append(f"{spec['form']}: {dup} rows repeat a key "
                             f"{spec.get('key_columns')} — only the first "
                             f"is loaded")
+        if req:
+            problems.append(f"{spec['form']}: {req} rows have a blank or "
+                            f"invalid required answer and will be skipped")
         if nokey:
             problems.append(f"{spec['form']}: {nokey} rows have a blank "
                             f"{spec['key_columns']} and will be skipped")
