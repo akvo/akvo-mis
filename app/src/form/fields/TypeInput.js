@@ -80,14 +80,16 @@ const TypeInput = ({
   addonBefore = null,
   tooltip = null,
   onFocus = null,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
   const requiredValue = required ? requiredSign : null;
-  const inputContainerStyle =
-    metaUUID || disabled
-      ? { ...styles.inputFieldContainer, ...styles.inputFieldDisabled }
-      : styles.inputFieldContainer;
+  const inputContainerStyle = {
+    ...styles.inputFieldContainer,
+    ...(metaUUID || disabled ? styles.inputFieldDisabled : {}),
+    ...(hasError ? styles.inputFieldError : {}),
+  };
 
   const handleFocus = () => {
     if (onFocus) {
@@ -99,9 +101,9 @@ const TypeInput = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-        inputContainerStyle={inputContainerStyle}
+                inputContainerStyle={inputContainerStyle}
         inputStyle={{ color: theme.input.textInput }}
-        errorStyle={{ height: 0, margin: 0 }}
+        renderErrorMessage={false}
         onChangeText={(val) => {
           if (onChange) {
             onChange(id, val);

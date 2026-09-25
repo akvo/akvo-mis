@@ -83,6 +83,11 @@ const getStyles = (theme) =>
       backgroundColor: theme.bg.surfaceTertiary,
       opacity: 0.5,
     },
+    inputFieldError: {
+      borderColor: theme.status.error,
+      borderWidth: 1.5,
+      borderBottomWidth: 1.5,
+    },
     textAreaContainer: {
       paddingHorizontal: 16,
       borderColor: 'transparent',
@@ -113,7 +118,7 @@ const getStyles = (theme) =>
       fontWeight: 'normal',
     },
     optionContainer: {
-      marginBottom: 14,
+      marginBottom: 4,
     },
     optionSelectedList: {
       backgroundColor: theme.bg.surfaceChip,
@@ -124,7 +129,7 @@ const getStyles = (theme) =>
       borderWidth: 0,
     },
     multipleOptionContainer: {
-      marginBottom: 14,
+      marginBottom: 4,
     },
     dropdownField: {
       marginHorizontal: 10,
@@ -250,7 +255,7 @@ const getStyles = (theme) =>
       display: 'flex',
       flexDirection: 'column',
       gap: 10,
-      marginBottom: 14,
+      marginBottom: 4,
     },
     cascadeValues: {
       opacity: 0,

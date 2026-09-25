@@ -23,6 +23,7 @@ const TypeNumber = ({
   questions = [],
   fn = null,
   onFocus = null,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -56,9 +57,10 @@ const TypeNumber = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-        inputContainerStyle={{
+                inputContainerStyle={{
           ...styles.inputFieldContainer,
           backgroundColor: fieldColor || styles.inputFieldContainer.backgroundColor,
+          ...(hasError ? styles.inputFieldError : {}),
         }}
         style={{
           color: fieldColor ? '#ffffff' : theme.input.textInput,
@@ -77,7 +79,7 @@ const TypeNumber = ({
         {...addPreffix(addonBefore, theme)}
         {...addSuffix(addonAfter, theme)}
         disabled={disabled}
-        errorStyle={{ height: 0, margin: 0 }}
+        renderErrorMessage={false}
       />
     </View>
   );

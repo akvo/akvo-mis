@@ -18,6 +18,7 @@ const TypeDate = ({
   disabled = false,
   tooltip = null,
   onFocus = null,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -40,7 +41,10 @@ const TypeDate = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-        inputContainerStyle={styles.inputFieldContainer}
+                inputContainerStyle={{
+          ...styles.inputFieldContainer,
+          ...(hasError ? styles.inputFieldError : {}),
+        }}
         inputStyle={{ color: theme.input.textInput }}
         onPressIn={() => setShowDatePicker(true)}
         onFocus={handleFocus}
@@ -49,7 +53,7 @@ const TypeDate = ({
         value={dateValue}
         placeholderTextColor={theme.input.text}
         disabled={disabled}
-        errorStyle={{ height: 0, margin: 0 }}
+        renderErrorMessage={false}
       />
       {showDatepicker && (
         <DateTimePicker

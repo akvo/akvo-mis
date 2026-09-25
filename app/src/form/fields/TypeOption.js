@@ -18,6 +18,7 @@ const TypeOption = ({
   tooltip = null,
   requiredSign = '*',
   disabled = false,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -47,9 +48,11 @@ const TypeOption = ({
       backgroundColor,
     };
   }, [value, color, option]);
-  const style = disabled
-    ? { ...styles.dropdownField, ...styles.dropdownFieldDisabled }
-    : styles.dropdownField;
+  const style = {
+    ...styles.dropdownField,
+    ...(disabled ? styles.dropdownFieldDisabled : {}),
+    ...(hasError ? styles.inputFieldError : {}),
+  };
 
   return (
     <View style={styles.optionContainer}>

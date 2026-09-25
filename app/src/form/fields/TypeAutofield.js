@@ -73,7 +73,7 @@ const TypeAutofield = ({
     <View testID="type-autofield-wrapper">
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} />
       <Input
-        inputContainerStyle={{
+                inputContainerStyle={{
           ...styles.autoFieldContainer,
           backgroundColor: fieldColor || styles.autoFieldContainer.backgroundColor,
         }}
@@ -82,7 +82,7 @@ const TypeAutofield = ({
         multiline
         numberOfLines={2}
         disabled
-        errorStyle={{ height: 0, margin: 0 }}
+        renderErrorMessage={false}
         style={{
           fontWeight: 'bold',
           opacity: 1,

@@ -19,6 +19,7 @@ const TypeMultipleOption = ({
   disabled = false,
   option = [],
   tooltip = null,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -26,9 +27,11 @@ const TypeMultipleOption = ({
   const activeLang = FormState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
   const requiredValue = required ? requiredSign : null;
-  const style = disabled
-    ? { ...styles.dropdownField, ...styles.dropdownFieldDisabled }
-    : styles.dropdownField;
+  const style = {
+    ...styles.dropdownField,
+    ...(disabled ? styles.dropdownFieldDisabled : {}),
+    ...(hasError ? styles.inputFieldError : {}),
+  };
 
   return (
     <View style={styles.multipleOptionContainer}>

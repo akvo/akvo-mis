@@ -20,6 +20,7 @@ const TypeCascade = ({
   requiredSign = '*',
   disabled = false,
   tooltip = null,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -274,9 +275,11 @@ const TypeCascade = ({
       <View style={styles.cascadeContainer}>
         {dropdownItems.map((item, index) => {
           const hasSearch = item?.options.length > 3;
-          const style = disabled
-            ? { ...styles.dropdownField, ...styles.dropdownFieldDisabled }
-            : styles.dropdownField;
+          const style = {
+            ...styles.dropdownField,
+            ...(disabled ? styles.dropdownFieldDisabled : {}),
+            ...(hasError ? styles.inputFieldError : {}),
+          };
           return (
             <Dropdown
               // eslint-disable-next-line react/no-array-index-key

@@ -17,14 +17,16 @@ const TypeText = ({
   meta_uuid: metaUUID,
   disabled,
   onFocus = null,
+  hasError = false,
 }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
   const requiredValue = required ? requiredSign : null;
-  const inputContainerStyle =
-    metaUUID || disabled
-      ? { ...styles.textAreaContainer, ...styles.inputFieldDisabled }
-      : styles.textAreaContainer;
+  const inputContainerStyle = {
+    ...styles.textAreaContainer,
+    ...(metaUUID || disabled ? styles.inputFieldDisabled : {}),
+    ...(hasError ? styles.inputFieldError : {}),
+  };
 
   const handleFocus = () => {
     if (onFocus) {
@@ -36,7 +38,7 @@ const TypeText = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-        inputContainerStyle={inputContainerStyle}
+                inputContainerStyle={inputContainerStyle}
         inputStyle={{ color: theme.input.textInput }}
         multiline
         numberOfLines={4}
@@ -51,7 +53,7 @@ const TypeText = ({
         testID="type-text"
         placeholderTextColor={theme.input.text}
         disabled={metaUUID || disabled}
-        errorStyle={{ height: 0, margin: 0 }}
+        renderErrorMessage={false}
       />
     </View>
   );
