@@ -54,6 +54,12 @@ describe("CreateDashboardModal AI Starter Generation", () => {
     expect(
       await screen.findByText(/AI service is currently not configured/i)
     ).toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText(/Overview of borehole functionality/i)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("+ Executive KPI Overview")
+    ).not.toBeInTheDocument();
   });
 
   it("reveals user intent input when AI auto-generate switch is toggled", async () => {
