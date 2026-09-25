@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Modal,
   Form,
@@ -8,6 +14,7 @@ import {
   Switch,
   Tag,
   Spin,
+  Alert,
   message,
 } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
@@ -62,6 +69,29 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
         f.content?.parent === watchedRootForm && f.content?.published !== false
     );
   }, [allForms, watchedRootForm]);
+
+  const [aiAvailable, setAiAvailable] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    if (visible) {
+      dashboardAi
+        .getStatus()
+        .then((res) => {
+          if (active && res?.data) {
+            setAiAvailable(Boolean(res.data.ai_available));
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setAiAvailable(false);
+          }
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [visible]);
 
   const isCancelledRef = useRef(false);
 
@@ -346,6 +376,18 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
             </div>
             {watchedAutoAi && (
               <>
+                {!aiAvailable && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message={text.dashboardAiNoticeTitle || "AI Notice"}
+                    description={
+                      text.dashboardAiUnavailableNotice ||
+                      "AI service is currently not configured. Starter dashboards will be generated using the built-in system template engine."
+                    }
+                    style={{ marginBottom: 16 }}
+                  />
+                )}
                 <div className="dashboards-modal-intent-chips">
                   <span className="dashboards-modal-chips-label">
                     {text.dashboardAiPresetsLabel || "Quick presets:"}

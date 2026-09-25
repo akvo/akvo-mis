@@ -26,6 +26,9 @@ const renderModal = (onCreate = jest.fn()) => render(modal(true, onCreate));
 describe("CreateDashboardModal AI Starter Generation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: true, provider: "openai" },
+    });
     store.update((s) => {
       s.allForms = [
         { id: 6001, name: "Water Points", content: { published: true } },
@@ -38,6 +41,18 @@ describe("CreateDashboardModal AI Starter Generation", () => {
     renderModal();
     expect(
       screen.getByText("Auto-generate starter dashboard with AI")
+    ).toBeInTheDocument();
+  });
+
+  it("renders AI unavailable notice when switch is toggled and ai_available is false", async () => {
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: false, provider: "none" },
+    });
+    renderModal();
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+    expect(
+      await screen.findByText(/AI service is currently not configured/i)
     ).toBeInTheDocument();
   });
 
