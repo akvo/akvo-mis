@@ -166,7 +166,7 @@ Provides deterministic recommendations when OpenAI is unavailable, respecting al
 - **Visual Diversity Rule**: Assembles a balanced multi-tier palette:
   1. Top Tier (Headline): 2 KPIs (`col_span: 6` or `12`).
   2. Middle Tier (Distributions): 1-2 Pie/Bar charts (`col_span: 8` or `12`).
-  3. Bottom Tier (Overview / Geospatial / Trends): 1 Line trend chart or Map (`col_span: 12` or `24`), or Table (`col_span: 24` if monitoring form exists).
+  3. Bottom Tier (Overview / Geospatial / Trends): 1 Line trend chart (`col_span: 12` or `24`), or Map (`col_span: 24`), or Table (`col_span: 24` if monitoring form exists). Table and Map widgets are always enforced to full-width (`col_span: 24`).
 
 ### 5.4. Referential Integrity & 24-Column Grid Normalizer (`ai_service.py`)
 Ensures model hallucinations are strictly caught and grid layouts are balanced before returning:

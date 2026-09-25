@@ -1,5 +1,6 @@
-import re
 import html
+import json
+import re
 
 # =========================================================
 # AI Prompts & JSON Schema Definitions (VIZ-AI-002)
@@ -14,9 +15,10 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "cohesive, insightful starter dashboard layout.\n\n"
     "CRITICAL ARCHITECTURAL & DESIGN RULES:\n"
     "1. STRICT REFERENTIAL INTEGRITY:\n"
-    "   - Every widget MUST reference a valid `form` ID from the schema.\n"
+    "   - Every widget MUST reference a valid `form` ID (integer) from "
+    "the schema.\n"
     "   - Every widget with a `question` MUST reference a valid `question` "
-    "ID belonging to that specified `form`.\n"
+    "ID (integer) belonging to that specified `form`.\n"
     "   - Never invent or hallucinate form or question IDs.\n\n"
     "2. MULTI-LINGUAL LANGUAGE PARITY:\n"
     "   - You MUST analyze the natural language of the question labels in "
@@ -46,37 +48,81 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "\"categorical\"}`.\n"
     "   - Geographic Maps:\n"
     "     - If form has geolocation coordinates and categorical status "
-    "questions: Use `type: \"map\"` (col_span: 12 or 24), `config: "
+    "questions: Use `type: \"map\"` (col_span: 24), `config: "
     "{\"map_mode\": \"category\", \"color_scheme\": \"categorical\"}`.\n"
     "   - Escalation / Monitoring Tables:\n"
     "     - Use `type: \"table\"` (col_span: 24), `question: null`, ONLY on "
-    "child monitoring forms (`config: {\"columns\": [...], "
-    "\"criteria\": []}`).\n\n"
+    "child monitoring forms.\n"
+    "     - `config.columns` MUST be pre-populated with standard columns:\n"
+    "       - parent_name: `{\"key\": \"parent_name\", \"source\": "
+    "\"parent_name\", \"label\": \"Datapoint name\"}`\n"
+    "       - administration: `{\"key\": \"administration\", \"source\": "
+    "\"administration\", \"label\": \"Administration\"}`\n"
+    "       - date (if any): `{\"key\": \"q_<id>\", \"source\": "
+    "\"latest_date\", \"question\": <id>, \"label\": \"Last submission\"}`\n"
+    "       - indicators: `{\"key\": \"q_<id>\", \"source\": \"answer\", "
+    "\"question\": <id>, \"label\": \"<label>\"}`\n"
+    "     - `config.criteria: []`.\n\n"
     "4. VISUAL DIVERSITY & PALETTE BALANCE:\n"
     "   - A starter dashboard must contain 4 to 6 complementary widgets.\n"
     "   - Do NOT generate more than 2 widgets of the same chart type.\n"
     "   - Provide a diverse multi-tier composition (e.g. 2 KPIs at the top, "
     "2 distribution charts in the middle, 1 trend/map/table at bottom).\n\n"
-    "5. REGISTRATION-ONLY FORMS:\n"
-    "   - If the form has NO child monitoring forms "
-    "(`has_monitoring: false`), NEVER generate `table` widgets and NEVER "
-    "set `measure: \"current_state\"`. Set `measure: null`.\n\n"
+    "5. FORM SCOPE & MEASURE RULES:\n"
+    "   - For child monitoring forms (`form != root_form_id`), "
+    "ALWAYS set `config.measure: \"all_submissions\"` for line charts or "
+    "`config.measure: \"current_state\"` for bar/pie/kpi charts.\n"
+    "   - For the root registration form (`form == root_form_id`), "
+    "NEVER set `measure` (omit or set to null).\n"
+    "   - If `has_monitoring: false`, NEVER generate `table` widgets.\n\n"
     "6. OUTPUT FORMAT:\n"
-    "   - Respond ONLY with valid JSON conforming to the requested schema. "
-    "Do not include markdown ticks, preamble, or commentary."
+    "   - Respond ONLY with a valid JSON object matching this schema:\n"
+    "     {\n"
+    "       \"suggested_name\": \"string\",\n"
+    "       \"description\": \"string\",\n"
+    "       \"widgets\": [\n"
+    "         {\n"
+    "           \"type\": \"kpi\" | \"pie\" | \"bar\" |\n"
+    "                   \"line\" | \"table\" | \"map\",\n"
+    "           \"title\": \"string\",\n"
+    "           \"col_span\": 6 | 8 | 12 | 24,\n"
+    "           \"form\": integer,\n"
+    "           \"question\": integer | null,\n"
+    "           \"config\": { ... },\n"
+    "           \"rationale\": \"string\"\n"
+    "         }\n"
+    "       ]\n"
+    "     }"
 )
 
 WIDGET_SUGGESTION_SYSTEM_PROMPT = (
     "You are an expert Data Visualization Architect for Akvo MIS.\n"
-    "Your task is to analyze an existing dashboard canvas along with the form "
-    "family schema and recommend 3 to 5 next complementary widgets.\n\n"
+    "Your task is to analyze an existing dashboard canvas along with the "
+    "form family schema and recommend 3 to 5 complementary widgets based on "
+    "user intent.\n\n"
     "RULES:\n"
-    "1. Prioritize unvisualized or underrepresented questions from the form "
-    "family.\n"
-    "2. Avoid duplicating existing chart types and question bindings.\n"
-    "3. Match the natural language of the form schema for all titles and "
+    "1. Prioritize questions related to the user's intent or "
+    "unvisualized/underrepresented questions.\n"
+    "2. Every widget must specify `form` (integer) and `question` (integer).\n"
+    "3. Use standard chart types: \"kpi\", \"pie\", \"bar\", \"line\", "
+    "\"table\", \"map\".\n"
+    "4. Match the natural language of the form schema for all titles and "
     "rationales.\n"
-    "4. Output strict JSON conforming to the requested schema."
+    "5. Respond ONLY with a valid JSON object matching this schema:\n"
+    "   {\n"
+    "     \"suggestions\": [\n"
+    "       {\n"
+    "         \"type\": \"kpi\" | \"pie\" | \"bar\" |\n"
+    "                 \"line\" | \"table\" | \"map\",\n"
+    "         \"title\": \"string\",\n"
+    "         \"col_span\": 6 | 8 | 12 | 24,\n"
+    "         \"form\": integer,\n"
+    "         \"question\": integer | null,\n"
+    "         \"config\": { ... },\n"
+    "         \"rationale\": \"string\"\n"
+    "       }\n"
+    "     ]\n"
+    "   }"
 )
 
 
@@ -97,10 +143,11 @@ def build_starter_dashboard_prompt(
 ) -> list:
     """Construct structured messages array for starter dashboard."""
     sanitized_intent = sanitize_user_input(user_intent)
+    formatted_schema = json.dumps(family_metadata, indent=2)
 
     user_content_parts = [
         "FORM FAMILY SCHEMA METADATA (JSON):",
-        f"```json\n{family_metadata}\n```"
+        f"```json\n{formatted_schema}\n```"
     ]
 
     if sanitized_intent:
@@ -128,11 +175,12 @@ def build_widget_suggestion_prompt(
 ) -> list:
     """Construct structured messages for in-canvas widget suggestions."""
     sanitized_hint = sanitize_user_input(prompt_hint)
+    formatted_schema = json.dumps(family_metadata, indent=2)
 
     types_str = str(existing_widget_types or [])
     user_content_parts = [
         "FORM FAMILY SCHEMA METADATA (JSON):",
-        f"```json\n{family_metadata}\n```",
+        f"```json\n{formatted_schema}\n```",
         f"\nCURRENTLY EXISTING WIDGET TYPES ON CANVAS:\n{types_str}"
     ]
 

@@ -19,11 +19,16 @@ import dashboardApi from "../../util/dashboardApi";
 import BuilderPalette from "./BuilderPalette";
 import BuilderCanvas from "./BuilderCanvas";
 import BuilderInspector from "./BuilderInspector";
+import AISuggestionDrawer from "./AISuggestionDrawer";
 import EmbedEditor from "./EmbedEditor";
 import EmbedFrame from "../../components/dashboard/EmbedFrame";
 import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
-import { WIDGET_DEFAULTS, defaultMeasure } from "./builderConstants";
+import {
+  WIDGET_DEFAULTS,
+  defaultMeasure,
+  getDefaultTableColumns,
+} from "./builderConstants";
 import "./builder.scss";
 import "./viewer.scss";
 
@@ -52,6 +57,7 @@ const DashboardBuilder = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [widgetError, setWidgetError] = useState(null);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   // Preview is a mode of this screen, not a different screen. See below.
   const [previewing, setPreviewing] = useState(false);
   const [previewFilters, setPreviewFilters] = useState(EMPTY_FILTERS);
@@ -118,17 +124,24 @@ const DashboardBuilder = () => {
         type === "table"
           ? sources?.forms?.find((f) => f.type === "monitoring")
           : sources?.forms?.[0];
+      const isFullWidthType = type === "table" || type === "map";
       const newWidget = {
         id: nextTempId,
         order: widgets.length + 1,
         type,
-        col_span: defaults.col_span || 24,
+        col_span: isFullWidthType ? 24 : defaults.col_span || 24,
         title: "",
         color: defaults.color || null,
         form: type !== "section_title" && firstForm ? firstForm.id : null,
         question: null,
         config: { ...(defaults.config || {}) },
       };
+      if (type === "table" && firstForm) {
+        newWidget.config.columns = getDefaultTableColumns(
+          sources?.forms,
+          firstForm.id
+        );
+      }
       // Only for a monitoring form. `/sources` leads with the root
       // registration form, so this is usually null — and seeding
       // current_state anyway is what made every new chart widget fail its
@@ -142,6 +155,33 @@ const DashboardBuilder = () => {
       setDirty(true);
     },
     [widgets.length, sources]
+  );
+
+  // Add suggested widget from AI drawer
+  const handleInsertSuggestedWidget = useCallback(
+    (suggestion) => {
+      nextTempId -= 1;
+      const defaults = WIDGET_DEFAULTS[suggestion.type] || {};
+      const isFullWidthType =
+        suggestion.type === "table" || suggestion.type === "map";
+      const newWidget = {
+        id: nextTempId,
+        order: widgets.length + 1,
+        type: suggestion.type,
+        col_span: isFullWidthType
+          ? 24
+          : suggestion.col_span || defaults.col_span || 24,
+        title: suggestion.title || "",
+        color: suggestion.color || defaults.color || null,
+        form: suggestion.form || null,
+        question: suggestion.question || null,
+        config: { ...(defaults.config || {}), ...(suggestion.config || {}) },
+      };
+      setWidgets((prev) => [...prev, newWidget]);
+      setSelectedId(newWidget.id);
+      setDirty(true);
+    },
+    [widgets.length]
   );
 
   // Select widget
@@ -594,7 +634,10 @@ const DashboardBuilder = () => {
             />
           ) : (
             <>
-              <BuilderPalette onAdd={handleAdd} />
+              <BuilderPalette
+                onAdd={handleAdd}
+                onOpenAiSuggestions={() => setAiDrawerOpen(true)}
+              />
               <BuilderCanvas
                 widgets={widgets}
                 selectedId={selectedId}
@@ -626,6 +669,14 @@ const DashboardBuilder = () => {
                 onDashboardChange={handleDashboardChange}
                 onVisibilityChange={handleVisibility}
                 errorMessage={widgetError}
+              />
+              <AISuggestionDrawer
+                visible={aiDrawerOpen}
+                onClose={() => setAiDrawerOpen(false)}
+                dashboardId={dashboard?.id}
+                existingWidgets={widgets}
+                sources={sources}
+                onAddWidget={handleInsertSuggestedWidget}
               />
             </>
           )}
