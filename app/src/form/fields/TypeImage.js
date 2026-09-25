@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, PermissionsAndroid, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { View, PermissionsAndroid, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
@@ -119,89 +119,152 @@ const TypeImage = ({
     onChange(id, null);
   };
 
-  const themedStyles = getThemedStyles(theme);
+  const s = getThemedStyles(theme);
 
   return (
-    <View style={{ marginBottom: 20 }}>
+    <View style={{ marginBottom: 14 }}>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
-      <View style={themedStyles.fieldImageContainer}>
-        <Button
-          type="outline"
-          onPress={handleCamera}
-          testID="btn-use-camera"
-          disabled={isCompressing}
-        >
-          <Icon name="camera" size={18} color={theme.icon.accent} />
-          {` ${trans.buttonUseCamera}`}
-        </Button>
-        {useGallery && (
-          <Button
-            type="outline"
-            onPress={selectFile}
-            testID="btn-from-gallery"
-            disabled={isCompressing}
-          >
-            <Icon name="image" size={18} color={theme.icon.accent} />
-            {` ${trans.buttonFromGallery}`}
-          </Button>
-        )}
-        {isCompressing && (
-          <View style={themedStyles.compressingContainer}>
-            <ActivityIndicator size="small" color={theme.icon.accent} />
-            <Text style={[themedStyles.compressingText, { color: theme.icon.accent }]}>
-              {trans.compressingImage || 'Compressing...'}
-            </Text>
-          </View>
-        )}
-        {value && typeof value === 'string' && !isCompressing && (
+      <View style={s.card}>
+        {/* Image preview or placeholder */}
+        {value && typeof value === 'string' && !isCompressing ? (
           <View>
             {failedUri === value ? (
-              <Text style={[themedStyles.missingText, { color: theme.status.error }]} testID="image-missing">
+              <Text style={s.missingText} testID="image-missing">
                 {trans.photoMissingText}
               </Text>
             ) : (
               <Image
                 source={{ uri: value }}
-                style={themedStyles.imagePreview}
+                style={s.imagePreview}
                 PlaceholderContent={<ActivityIndicator />}
                 testID="image-preview"
                 onError={() => setFailedUri(value)}
               />
             )}
             {fileSize !== null && (
-              <Text style={[themedStyles.fileSizeText, { color: theme.text.tertiary }]}>
+              <Text style={[s.fileSizeText, { color: theme.text.tertiary }]}>
                 {formatFileSize(fileSize)}
               </Text>
             )}
-            <Button
-              containerStyle={themedStyles.buttonRemoveFile}
-              title={trans.buttonRemove}
-              color="secondary"
-              onPress={handleRemove}
-              disabled={!value}
-              testID="btn-remove"
-            />
+          </View>
+        ) : (
+          <View style={s.placeholder}>
+            <Icon name="camera" size={32} color={theme.text.tertiary} />
           </View>
         )}
+
+        {isCompressing && (
+          <View style={s.compressingContainer}>
+            <ActivityIndicator size="small" color={theme.buttonPrimary.bg} />
+            <Text style={[s.compressingText, { color: theme.text.secondary }]}>
+              {trans.compressingImage || 'Compressing...'}
+            </Text>
+          </View>
+        )}
+
+        {/* Action buttons */}
+        {!value && !isCompressing && (
+          <View style={s.buttonRow}>
+            <Button
+              onPress={handleCamera}
+              testID="btn-use-camera"
+              disabled={isCompressing}
+              buttonStyle={s.cameraButton}
+              titleStyle={s.cameraButtonText}
+              icon={<Icon name="camera" size={18} color="#fff" style={{ marginRight: 6 }} />}
+              title={trans.buttonUseCamera}
+            />
+            {useGallery && (
+              <TouchableOpacity
+                onPress={selectFile}
+                testID="btn-from-gallery"
+                disabled={isCompressing}
+                style={s.galleryButton}
+              >
+                <Icon name="folder" size={18} color={theme.text.primary} style={{ marginRight: 6 }} />
+                <Text style={[s.galleryButtonText, { color: theme.text.primary }]}>
+                  {trans.buttonFromGallery}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Remove button when image exists */}
+        {value && !isCompressing && (
+          <TouchableOpacity
+            onPress={handleRemove}
+            testID="btn-remove"
+            style={s.removeButton}
+          >
+            <Icon name="trash-outline" size={16} color={theme.status.error} style={{ marginRight: 6 }} />
+            <Text style={{ color: theme.status.error, fontSize: 14, fontWeight: '600' }}>
+              {trans.buttonRemove}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* Info message */}
+      {!value && (
+        <View style={[s.infoContainer, { backgroundColor: theme.bg.surfaceElevated1 }]}>
+          <Icon name="information-circle" size={22} color={theme.buttonPrimary.bg} style={{ marginRight: 8, marginTop: 2 }} />
+          <Text style={[s.infoText, { color: theme.text.secondary }]}>
+            {trans.photoSyncInfo || 'The photo stays on the phone until you sync. Once it reaches the server the local copy is deleted to free up storage.'}
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
 
 export default TypeImage;
 
-const getThemedStyles = () =>
+const getThemedStyles = (theme) =>
   StyleSheet.create({
-    fieldImageContainer: {
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      gap: 8,
-      paddingHorizontal: 16,
+    card: {
+      backgroundColor: theme.bg.surfaceElevated1,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border.listDivider,
+      marginHorizontal: 10,
+      padding: 16,
     },
-    imagePreview: { width: '100%', height: 200, resizeMode: 'contain' },
-    buttonRemoveFile: {
-      paddingVertical: 8,
+    placeholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+    },
+    imagePreview: {
+      width: '100%',
+      height: 200,
+      resizeMode: 'contain',
+      borderRadius: 8,
+    },
+    buttonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    cameraButton: {
+      backgroundColor: theme.buttonPrimary.bg,
+      borderRadius: 24,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+    },
+    cameraButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    galleryButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+    },
+    galleryButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
     },
     compressingContainer: {
       flexDirection: 'row',
@@ -218,8 +281,28 @@ const getThemedStyles = () =>
       fontSize: 12,
       marginTop: 4,
     },
+    removeButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 12,
+      paddingVertical: 10,
+    },
     missingText: {
       textAlign: 'center',
       paddingVertical: 12,
+      color: theme.status.error,
+    },
+    infoContainer: {
+      flexDirection: 'row',
+      marginHorizontal: 10,
+      marginTop: 10,
+      padding: 14,
+      borderRadius: 12,
+    },
+    infoText: {
+      fontSize: 14,
+      lineHeight: 20,
+      flex: 1,
     },
   });
