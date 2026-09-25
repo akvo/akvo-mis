@@ -3,12 +3,12 @@ import {
   View,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   TouchableOpacity,
   BackHandler,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { Button, Text, Icon, Dialog } from '@rneui/themed';
+import { Button, Text, Icon } from '@rneui/themed';
+import { ConfirmDialog } from '../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FormState, UserState } from '../store';
 import i18n from '../lib/i18n';
@@ -65,6 +65,7 @@ const MapDrawView = ({ navigation, route }) => {
   const [points, setPoints] = useState(initialValue || []);
   const [showInputMethod, setShowInputMethod] = useState(false);
   const [showWarnings, setShowWarnings] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [inputMethod, setInputMethod] = useState(() =>
     tappingAllowed(route.params?.extra) ? 'tapping' : 'automatic',
   );
@@ -297,10 +298,7 @@ const MapDrawView = ({ navigation, route }) => {
 
   const handleClear = () => {
     if (points.length > CLEAR_CONFIRM_THRESHOLD) {
-      Alert.alert(trans.confirmClearPolygonTitle, trans.confirmClearPolygon, [
-        { text: trans.buttonCancel, style: 'cancel' },
-        { text: trans.buttonOk, onPress: () => command('setPoints', { points: [] }) },
-      ]);
+      setShowClearConfirm(true);
       return;
     }
     command('setPoints', { points: [] });
@@ -465,30 +463,64 @@ const MapDrawView = ({ navigation, route }) => {
         )}
       </View>
 
-      <Dialog
-        isVisible={showWarnings}
-        onBackdropPress={() => setShowWarnings(false)}
+      <ConfirmDialog
+        visible={showClearConfirm}
+        danger
+        title={trans.confirmClearPolygonTitle}
+        message={trans.confirmClearPolygon}
+        onClose={() => setShowClearConfirm(false)}
+        actions={[
+          {
+            label: trans.buttonCancel,
+            type: 'secondary',
+            onPress: () => setShowClearConfirm(false),
+          },
+          {
+            label: trans.buttonOk,
+            type: 'danger',
+            onPress: () => {
+              setShowClearConfirm(false);
+              command('setPoints', { points: [] });
+            },
+          },
+        ]}
+      />
+
+      <ConfirmDialog
+        visible={showWarnings}
+        title={trans.polygonInvalidTitle}
         testID="dialog-polygon-warnings"
+        onClose={() => setShowWarnings(false)}
+        actions={[
+          {
+            label: trans.buttonOk,
+            type: 'primary',
+            onPress: () => setShowWarnings(false),
+            testID: 'button-close-polygon-warnings',
+          },
+        ]}
       >
-        <Dialog.Title title={trans.polygonInvalidTitle} />
         {failures.map((failure) => (
           <Text
             key={failure.key}
             style={styles.warningRow}
             testID={`text-polygon-warning-${failure.key}`}
           >
-            {`⚠ ${formatRuleFailure(failure, trans)}`}
+            {`\u26A0 ${formatRuleFailure(failure, trans)}`}
           </Text>
         ))}
-        <Dialog.Actions>
-          <Button onPress={() => setShowWarnings(false)} testID="button-close-polygon-warnings">
-            {trans.buttonOk}
-          </Button>
-        </Dialog.Actions>
-      </Dialog>
+      </ConfirmDialog>
 
-      <Dialog isVisible={showInputMethod} testID="dialog-input-method">
-        <Dialog.Title title={trans.inputMethodTitle} />
+      <ConfirmDialog
+        visible={showInputMethod}
+        title={trans.inputMethodTitle}
+        testID="dialog-input-method"
+        onClose={() => {
+          setShowInputMethod(false);
+          setOpenPicker(null);
+        }}
+        actions={[]}
+      >
         {INPUT_METHODS.map(({ key, labelKey }) => {
           const disabled = key === 'tapping' && !canTap;
           return (
@@ -568,11 +600,12 @@ const MapDrawView = ({ navigation, route }) => {
             </Text>
           </View>
         )}
-        <Dialog.Actions>
+        <View style={styles.inputMethodActions}>
           <Button
             onPress={handleStartInputMethod}
             disabled={RECORDING_METHODS.includes(inputMethod) && !locked}
             testID="button-start-input-method"
+            buttonStyle={styles.inputMethodStartButton}
           >
             {trans.buttonStart}
           </Button>
@@ -586,8 +619,8 @@ const MapDrawView = ({ navigation, route }) => {
           >
             {trans.buttonCancel}
           </Button>
-        </Dialog.Actions>
-      </Dialog>
+        </View>
+      </ConfirmDialog>
     </View>
   );
 };
@@ -674,6 +707,15 @@ const styles = StyleSheet.create({
   warningRow: {
     fontSize: 15,
     paddingVertical: 8,
+  },
+  inputMethodActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  inputMethodStartButton: {
+    borderRadius: 24,
+    paddingHorizontal: 24,
   },
   methodRow: {
     flexDirection: 'row',
