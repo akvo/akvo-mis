@@ -10,14 +10,14 @@ import {
   ToastAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { CheckBox, Dialog, ListItem } from '@rneui/themed';
+import { CheckBox, ListItem } from '@rneui/themed';
 import * as FileSystem from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import moment from 'moment';
 import { FormState, UIState, UserState } from '../store';
 import { api, i18n } from '../lib';
-import { BaseLayout, FAButton } from '../components';
+import { BaseLayout, FAButton, ConfirmDialog } from '../components';
 import { getCurrentTimestamp } from '../form/lib';
 import { crudDataPoints, crudForms } from '../database/crud';
 import { refreshStorageWarning } from '../lib/submission-fallback';
@@ -641,26 +641,33 @@ const Submission = ({ navigation, route }) => {
         testID="new-submission-button"
         icon={{ name: 'add-circle', size: 20, color: 'white' }}
       />
-      <Dialog isVisible={!!confirmAction} onBackdropPress={() => setConfirmAction(null)}>
-        <Dialog.Title
-          title={confirmAction?.type === 'delete' ? trans.deleteDraftTitle : trans.sendToWebTitle}
-        />
-        <Text>
-          {confirmAction?.type === 'delete'
+      <ConfirmDialog
+        visible={!!confirmAction}
+        danger={confirmAction?.type === 'delete'}
+        title={confirmAction?.type === 'delete' ? trans.deleteDraftTitle : trans.sendToWebTitle}
+        message={
+          confirmAction?.type === 'delete'
             ? `${trans.deleteDraftMessage}${
                 confirmAction?.item?.draftId ? ` ${trans.deleteDraftWebToo}` : ''
               }`
-            : trans.sendToWebMessage}
-        </Text>
-        <Dialog.Actions>
-          <Dialog.Button testID="confirm-action-button" onPress={handleConfirmAction}>
-            {trans.buttonYes}
-          </Dialog.Button>
-          <Dialog.Button testID="cancel-action-button" onPress={() => setConfirmAction(null)}>
-            {trans.buttonCancel}
-          </Dialog.Button>
-        </Dialog.Actions>
-      </Dialog>
+            : trans.sendToWebMessage
+        }
+        onClose={() => setConfirmAction(null)}
+        actions={[
+          {
+            label: trans.buttonCancel,
+            type: 'secondary',
+            onPress: () => setConfirmAction(null),
+            testID: 'cancel-action-button',
+          },
+          {
+            label: trans.buttonYes,
+            type: confirmAction?.type === 'delete' ? 'danger' : 'primary',
+            onPress: handleConfirmAction,
+            testID: 'confirm-action-button',
+          },
+        ]}
+      />
     </BaseLayout>
   );
 };

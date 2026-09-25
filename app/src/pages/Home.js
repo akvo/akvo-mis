@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { BackHandler, Platform, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
-import { Dialog } from '@rneui/themed';
+import { ConfirmDialog } from '../components';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import * as Network from 'expo-network';
@@ -396,18 +396,26 @@ const Home = ({ navigation, route }) => {
       }
     >
       <BaseLayout.Content data={filteredData} action={goToSubmission} columns={1} />
-      <Dialog isVisible={updateDialogVisible} onBackdropPress={() => {}}>
-        <Dialog.Title title={trans.updateRequiredTitle} />
-        <Text>{updateInfo.text}</Text>
-        <Dialog.Actions>
-          <Dialog.Button testID="update-confirm-button" onPress={handleUpdate}>
-            {trans.buttonUpdate}
-          </Dialog.Button>
-          <Dialog.Button testID="update-skip-button" onPress={handleSkip}>
-            {trans.buttonLater}
-          </Dialog.Button>
-        </Dialog.Actions>
-      </Dialog>
+      <ConfirmDialog
+        visible={updateDialogVisible}
+        title={trans.updateRequiredTitle}
+        message={updateInfo.text}
+        onClose={() => {}}
+        actions={[
+          {
+            label: trans.buttonLater,
+            type: 'secondary',
+            onPress: handleSkip,
+            testID: 'update-skip-button',
+          },
+          {
+            label: trans.buttonUpdate,
+            type: 'primary',
+            onPress: handleUpdate,
+            testID: 'update-confirm-button',
+          },
+        ]}
+      />
     </BaseLayout>
   );
 };

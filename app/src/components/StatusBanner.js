@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { UIState, DatapointSyncState, AuthState } from '../store';
@@ -9,7 +9,7 @@ import useTheme from '../lib/theme';
 import { SYNC_STATUS } from '../lib/constants';
 
 const TIMEOUT_DISMISS = 3000; // 3second
-const TAB_BAR_HEIGHT = 80;
+const TAB_BAR_BASE = 70;
 
 const StatusBanner = () => {
   const insets = useSafeAreaInsets();
@@ -22,8 +22,6 @@ const StatusBanner = () => {
   const syncInProgress = DatapointSyncState.useState((s) => s.inProgress);
   const theme = useTheme();
   const trans = i18n.text(activeLang);
-  const statusBg = isOnline ? statusBar?.bgColor || theme.status.error : theme.status.error;
-  const statusIc = isOnline ? statusBar?.icon || 'cloud-offline' : 'cloud-offline';
 
   const getSyncPhaseLabel = () => {
     const { syncPhase } = statusBar || {};
@@ -81,20 +79,43 @@ const StatusBanner = () => {
     syncType,
   );
 
+  const getBannerColor = () => {
+    if (syncType === SYNC_STATUS.success) {
+      return '#5BFF53';
+    }
+    if (syncType === SYNC_STATUS.on_progress || syncType === SYNC_STATUS.re_sync) {
+      return '#83DCFF';
+    }
+    return theme.status.error;
+  };
+
+  const DARK_TEXT = '#000000';
+  const LIGHT_TEXT = '#FFFFFF';
+
   let banner = null;
   if (isSyncEvent) {
-    banner = { bg: statusBg, icon: statusIc, text: statusText?.[syncType] || trans.offlineText };
+    const bg = getBannerColor();
+    const useDark = syncType === SYNC_STATUS.success || syncType === SYNC_STATUS.on_progress || syncType === SYNC_STATUS.re_sync;
+    banner = {
+      bg,
+      color: useDark ? DARK_TEXT : LIGHT_TEXT,
+      text: statusText?.[syncType] || trans.offlineText,
+    };
   } else if (lowStorage) {
     banner = {
       bg: theme.status.warning,
-      icon: 'warning',
+      color: DARK_TEXT,
       text: trans.lowStorageText,
       isLowStorage: true,
     };
   } else if (syncType === SYNC_STATUS.failed || syncType === SYNC_STATUS.rejected) {
-    banner = { bg: statusBg, icon: statusIc, text: statusText?.[syncType] };
+    banner = {
+      bg: theme.status.error,
+      color: LIGHT_TEXT,
+      text: statusText?.[syncType],
+    };
   } else if (!isOnline) {
-    banner = { bg: theme.status.error, icon: 'cloud-offline', text: trans.offlineText };
+    banner = { bg: theme.text.tertiary, color: LIGHT_TEXT, text: trans.offlineText };
   }
 
   if (!banner) {
@@ -104,18 +125,20 @@ const StatusBanner = () => {
   return (
     <View
       testID={banner.isLowStorage ? 'status-bar-low-storage' : 'status-bar'}
-      style={{
-        ...styles.container,
-        backgroundColor: banner.bg,
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: token ? TAB_BAR_HEIGHT + Math.max(insets.bottom, 10) : insets.bottom,
-        zIndex: 10,
-      }}
+      style={[
+        styles.container,
+        {
+          backgroundColor: banner.bg,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: token ? TAB_BAR_BASE + Math.max(insets.bottom, 10) : insets.bottom,
+          zIndex: 10,
+        },
+      ]}
     >
-      <Icon name={banner.icon} testID="offline-icon" style={styles.icon} />
-      <Text style={styles.text} testID="offline-text">
+      <View testID="offline-icon" style={[styles.dot, { backgroundColor: banner.color }]} />
+      <Text style={[styles.text, { color: banner.color }]} testID="offline-text">
         {banner.text}
       </Text>
     </View>
@@ -124,18 +147,20 @@ const StatusBanner = () => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 4,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     display: 'flex',
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 0,
   },
-  text: { fontSize: 14, color: '#FFFFFF' },
-  icon: {
-    fontSize: 14,
-    color: '#FFFFFF',
+  text: { fontSize: 14, fontWeight: '500' },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 });
 

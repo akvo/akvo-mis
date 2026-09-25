@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Dialog, Text, Icon } from '@rneui/themed';
+import { View, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text, Icon } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 import { AuthState, UserState, FormState, UIState, DatapointSyncState } from '../store';
 import { api, cascades, i18n } from '../lib';
 import { openDatabase } from '../database';
 import sql from '../database/sql';
 import useTheme from '../lib/theme';
+import ConfirmDialog from './ConfirmDialog';
 
 const LogoutButton = () => {
   const theme = useTheme();
@@ -21,6 +22,7 @@ const LogoutButton = () => {
   };
 
   const handleYesPress = async () => {
+    setLoading(true);
     const db = await openDatabase();
     const tables = [
       'sessions',
@@ -87,25 +89,34 @@ const LogoutButton = () => {
         </View>
         <Icon name="refresh" type="ionicon" color={theme.icon.secondary} size={24} />
       </TouchableOpacity>
-      <Dialog
+      <ConfirmDialog
+        visible={visible}
+        title={trans.confirmResetTitle || 'Reset application?'}
+        message={trans.confirmReset}
         testID="dialog-confirm-logout"
-        isVisible={visible}
-        overlayStyle={{ backgroundColor: theme.bg.surfaceElevated1 }}
+        danger
+        onClose={handleNoPress}
+        actions={
+          loading
+            ? []
+            : [
+                {
+                  label: trans.buttonCancel,
+                  type: 'secondary',
+                  onPress: handleNoPress,
+                  testID: 'dialog-button-no',
+                },
+                {
+                  label: `${trans.buttonYes}, reset`,
+                  type: 'primary',
+                  onPress: handleYesPress,
+                  testID: 'dialog-button-yes',
+                },
+              ]
+        }
       >
-        {loading ? (
-          <Dialog.Loading />
-        ) : (
-          <Text style={{ color: theme.text.primary }}>{trans.confirmReset}</Text>
-        )}
-        <Dialog.Actions>
-          <Dialog.Button onPress={handleYesPress} testID="dialog-button-yes">
-            {trans.buttonYes}
-          </Dialog.Button>
-          <Dialog.Button onPress={handleNoPress} testID="dialog-button-no">
-            {trans.buttonNo}
-          </Dialog.Button>
-        </Dialog.Actions>
-      </Dialog>
+        {loading && <ActivityIndicator style={{ marginVertical: 16 }} />}
+      </ConfirmDialog>
     </View>
   );
 };
