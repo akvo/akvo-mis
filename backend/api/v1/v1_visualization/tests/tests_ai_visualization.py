@@ -1091,7 +1091,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.assertIsNotNone(w_res)
             self.assertIn("suggestions", w_res)
             self.assertEqual(len(w_res["suggestions"]), 0)
-            self.assertFalse(w_res["ai_available"])
+            self.assertTrue(w_res["ai_available"])
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_openai_cross_form_question_mismatch_pruned(self):

@@ -658,7 +658,7 @@ class AISuggestionService:
                 }
 
         return {
-            "ai_available": False,
-            "provider": "none",
+            "ai_available": bool(api_key),
+            "provider": "openai" if bool(api_key) else "none",
             "suggestions": [],
         }

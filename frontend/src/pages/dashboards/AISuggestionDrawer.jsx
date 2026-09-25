@@ -315,7 +315,7 @@ const AISuggestionDrawer = ({
             icon={<ReloadOutlined />}
             onClick={() => fetchSuggestions(promptHint)}
             loading={loading}
-            disabled={!aiAvailable || loading}
+            disabled={loading}
           >
             Refresh
           </Button>
