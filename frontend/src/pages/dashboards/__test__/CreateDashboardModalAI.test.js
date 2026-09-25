@@ -325,4 +325,47 @@ describe("CreateDashboardModal AI Starter Generation", () => {
       );
     });
   });
+
+  it("displays template generating status and button label without mentioning AI when ai_available is false", async () => {
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: false, provider: "none" },
+    });
+    let resolveAi;
+    const aiPromise = new Promise((resolve) => {
+      resolveAi = resolve;
+    });
+    dashboardAi.suggestDashboard.mockReturnValue(aiPromise);
+    dashboardApi.create.mockResolvedValue({
+      data: { id: 30, slug: "template-test" },
+    });
+
+    renderModal();
+
+    await userEvent.type(
+      screen.getByLabelText("Dashboard name"),
+      "Template Test"
+    );
+
+    const select = screen.getByRole("combobox");
+    fireEvent.mouseDown(select);
+    const option = await screen.findByText("Water Points");
+    fireEvent.click(option);
+
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    await userEvent.click(screen.getByText("Create dashboard"));
+
+    expect(
+      await screen.findByText(
+        "Analyzing form questions and generating starter dashboard..."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Generating with AI...")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/crafting AI starter layout/i)
+    ).not.toBeInTheDocument();
+
+    resolveAi({ data: { widgets: [] } });
+  });
 });

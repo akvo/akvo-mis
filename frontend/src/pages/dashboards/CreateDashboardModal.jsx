@@ -218,11 +218,19 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   }, [form, onCancel]);
 
   const modalOkText = useMemo(() => {
-    if (submitting && watchedAutoAi) {
-      return text.dashboardGeneratingAi || "Generating with AI...";
+    if (submitting) {
+      if (watchedAutoAi) {
+        if (!aiAvailable) {
+          return (
+            text.dashboardGeneratingStarter || "Generating starter dashboard..."
+          );
+        }
+        return text.dashboardGeneratingAi || "Generating with AI...";
+      }
+      return text.dashboardCreateBtn || "Create dashboard";
     }
     return text.dashboardCreateBtn || "Create dashboard";
-  }, [submitting, watchedAutoAi, text]);
+  }, [submitting, watchedAutoAi, aiAvailable, text]);
 
   return (
     <Modal
@@ -496,8 +504,11 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
                   <div className="dashboards-ai-generating-status">
                     <Spin size="small" />
                     <span>
-                      {text.dashboardAiGeneratingStatus ||
-                        "Analyzing form questions and crafting AI starter layout..."}
+                      {!aiAvailable
+                        ? text.dashboardTemplateGeneratingStatus ||
+                          "Analyzing form questions and generating starter dashboard..."
+                        : text.dashboardAiGeneratingStatus ||
+                          "Analyzing form questions and crafting AI starter layout..."}
                     </span>
                   </div>
                 )}
