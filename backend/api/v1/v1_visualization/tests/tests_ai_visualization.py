@@ -64,6 +64,9 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.suggest_dashboard_url = (
             "/api/v1/manage/dashboards/ai/suggest-dashboard"
         )
+        self.ai_status_url = (
+            "/api/v1/manage/dashboards/ai/status"
+        )
         self.suggest_widgets_url = (
             f"/api/v1/manage/dashboards/{self.dashboard.id}/ai/suggest-widgets"
         )
@@ -533,11 +536,19 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertFalse(cb.is_open)
 
     # =========================================================
-    # 6. Endpoints Integration Tests (HTTP POST)
+    # 6. Endpoints Integration Tests (HTTP POST & GET)
     # =========================================================
 
+    def test_ai_status_endpoint_without_key(self):
+        """GET /manage/dashboards/ai/status returns ai_available=False."""
+        response = self.client.get(self.ai_status_url, **self.header)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertFalse(data["ai_available"])
+        self.assertEqual(data["provider"], "none")
+
     def test_suggest_dashboard_endpoint_success(self):
-        """POST /manage/dashboards/ai/suggest-dashboard returns 200 OK."""
+        """POST /ai/suggest-dashboard returns 200 OK with heuristics."""
         payload = {
             "root_form": self.root.id,
             "user_intent": "Monitor water point functionality",
@@ -553,6 +564,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("suggested_name", data)
         self.assertIn("description", data)
         self.assertIn("widgets", data)
+        self.assertFalse(data["ai_available"])
+        self.assertEqual(data["provider"], "heuristics")
         self.assertTrue(len(data["widgets"]) >= 3)
 
     def test_suggest_dashboard_with_monitoring_forms_filter(self):
@@ -594,8 +607,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_suggest_widgets_endpoint_success(self):
-        """POST /manage/dashboards/<pk>/ai/suggest-widgets returns 200 OK."""
+    def test_suggest_widgets_endpoint_without_key_returns_empty(self):
+        """POST /ai/suggest-widgets without key returns empty list."""
         payload = {
             "existing_widget_types": ["kpi"],
             "prompt_hint": "Suggest bar charts",
@@ -608,8 +621,9 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertIn("suggestions", data)
-        self.assertTrue(len(data["suggestions"]) >= 1)
+        self.assertFalse(data["ai_available"])
+        self.assertEqual(data["provider"], "none")
+        self.assertEqual(data["suggestions"], [])
 
     def test_suggest_widgets_invalid_payload(self):
         """POST /manage/dashboards/<pk>/ai/suggest-widgets with bad payload."""
@@ -652,6 +666,15 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
     # =========================================================
     # 7. OpenAI Mock Structured Output & Resilience Tests
     # =========================================================
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_ai_status_endpoint_with_key(self):
+        """GET /manage/dashboards/ai/status returns ai_available=True."""
+        response = self.client.get(self.ai_status_url, **self.header)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertTrue(data["ai_available"])
+        self.assertEqual(data["provider"], "openai")
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_openai_structured_output_success(self):
@@ -728,6 +751,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             )
             self.assertIsNotNone(res)
             self.assertEqual(res["suggested_name"], "AI AI AI Water Overview")
+            self.assertTrue(res["ai_available"])
+            self.assertEqual(res["provider"], "openai")
             self.assertEqual(len(res["widgets"]), 3)
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
@@ -760,6 +785,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 self.dashboard.id, self.user, ["kpi"], "bar focus"
             )
             self.assertIsNotNone(res)
+            self.assertTrue(res["ai_available"])
+            self.assertEqual(res["provider"], "openai")
             self.assertIn("suggestions", res)
             self.assertEqual(len(res["suggestions"]), 1)
 
@@ -1055,7 +1082,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 self.assertNotEqual(w["form"], 9999999)
                 self.assertNotEqual(w.get("question"), 8888888)
 
-            # Test widget suggestion fallback
+            # Test widget suggestion returns empty when hallucinated
             w_res = AISuggestionService.suggest_widgets(
                 self.dashboard.id,
                 self.user,
@@ -1063,9 +1090,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             )
             self.assertIsNotNone(w_res)
             self.assertIn("suggestions", w_res)
-            self.assertGreaterEqual(len(w_res["suggestions"]), 1)
-            for s in w_res["suggestions"]:
-                self.assertNotEqual(s["form"], 9999999)
+            self.assertEqual(len(w_res["suggestions"]), 0)
+            self.assertFalse(w_res["ai_available"])
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_openai_cross_form_question_mismatch_pruned(self):
@@ -1163,4 +1189,5 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             data = response.json()
             self.assertIn("suggestions", data)
-            self.assertGreaterEqual(len(data["suggestions"]), 1)
+            self.assertEqual(len(data["suggestions"]), 0)
+            self.assertFalse(data["ai_available"])

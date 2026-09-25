@@ -15,7 +15,6 @@ from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_visualization.ai.ai_heuristics import (
     generate_starter_heuristics,
-    generate_widget_heuristics,
 )
 from api.v1.v1_visualization.ai.ai_prompts import (
     STARTER_DASHBOARD_JSON_SCHEMA,
@@ -584,6 +583,8 @@ class AISuggestionService:
                     "suggested_name": s_name,
                     "description": desc,
                     "widgets": valid_widgets,
+                    "ai_available": True,
+                    "provider": "openai",
                 }
 
         # Fallback to deterministic heuristics
@@ -592,6 +593,8 @@ class AISuggestionService:
             heuristic_res["widgets"], sources_map, has_monitoring, root_form_id
         )
         heuristic_res["widgets"] = valid_widgets
+        heuristic_res["ai_available"] = False
+        heuristic_res["provider"] = "heuristics"
         return heuristic_res
 
     @classmethod
@@ -620,6 +623,15 @@ class AISuggestionService:
         has_monitoring = metadata.get("has_monitoring", False)
         root_form_id = dashboard.root_form_id
 
+        # Check if OpenAI API key is configured
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        if not api_key:
+            return {
+                "ai_available": False,
+                "provider": "none",
+                "suggestions": [],
+            }
+
         # Attempt OpenAI generation
         messages = build_widget_suggestion_prompt(
             metadata, existing_widget_types, prompt_hint
@@ -640,19 +652,13 @@ class AISuggestionService:
             )
             if valid_suggestions:
                 return {
-                    "suggestions": valid_suggestions
+                    "ai_available": True,
+                    "provider": "openai",
+                    "suggestions": valid_suggestions,
                 }
 
-        # Fallback to deterministic heuristics
-        heuristic_res = generate_widget_heuristics(
-            metadata, existing_widget_types, prompt_hint
-        )
-        valid_suggestions = validate_and_sanitize_widgets(
-            heuristic_res["suggestions"],
-            sources_map,
-            has_monitoring,
-            root_form_id,
-        )
         return {
-            "suggestions": valid_suggestions
+            "ai_available": False,
+            "provider": "none",
+            "suggestions": [],
         }
