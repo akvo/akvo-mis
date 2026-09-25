@@ -7,8 +7,9 @@ import {
   generateDataPointName,
   generateValidationSchemaFieldLevel,
 } from '../lib';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
+import useTheme from '../../lib/theme';
 
 export const checkCompleteQuestionGroup = (form, values) => {
   // Extract all questions for recursive dependency checking
@@ -106,6 +107,8 @@ const QuestionGroupList = ({
   setActiveQuestionGroup,
   setShowQuestionGroupList,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const selectedForm = FormState.useState((s) => s.form);
   const currentValues = FormState.useState((s) => s.currentValues);
   const visitedQuestionGroup = FormState.useState((s) => s.visitedQuestionGroup);

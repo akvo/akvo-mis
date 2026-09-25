@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { View } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FieldLabel, OptionItem } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const TypeOption = ({
   onChange,
@@ -19,7 +19,8 @@ const TypeOption = ({
   requiredSign = '*',
   disabled = false,
 }) => {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const showSearch = useMemo(() => option.length > 3, [option]);
   const activeLang = FormState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
@@ -55,11 +56,14 @@ const TypeOption = ({
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Dropdown
         style={style}
-        selectedTextStyle={selectedStyle}
-        containerStyle={{ marginBottom: insets.bottom }}
+        selectedTextStyle={[selectedStyle, !color && { color: theme.input.textInput }]}
+        containerStyle={{
+          backgroundColor: theme.bg.surfaceElevated1,
+          borderRadius: 12,
+        }}
         data={option}
         search={showSearch}
-        maxHeight={300}
+        maxHeight={500}
         labelField="label"
         valueField="value"
         searchPlaceholder={trans.searchPlaceholder}
@@ -69,9 +73,17 @@ const TypeOption = ({
             onChange(id, [optValue]);
           }
         }}
-        renderItem={OptionItem}
+        renderItem={(item, selected) => <OptionItem {...item} selected={selected} />}
         testID="type-option-dropdown"
         placeholder={trans.selectItem}
+        placeholderStyle={{ color: theme.input.text }}
+        inputSearchStyle={{
+          borderRadius: 12,
+          backgroundColor: theme.bg.surfaceTertiary,
+          borderColor: 'transparent',
+          color: theme.text.primary,
+          paddingHorizontal: 12,
+        }}
         disable={disabled}
       />
     </View>

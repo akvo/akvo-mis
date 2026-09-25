@@ -5,6 +5,7 @@ import { Button, Icon } from '@rneui/themed';
 import { FieldLabel } from '../support';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const TypeSignature = ({
   onChange,
@@ -16,6 +17,7 @@ const TypeSignature = ({
   requiredSign = '*',
   tooltip = null,
 }) => {
+  const theme = useTheme();
   const [show, setShow] = useState(false);
   const [signature, setSignature] = useState(value);
   const activeLang = FormState.useState((s) => s.lang);
@@ -43,7 +45,7 @@ const TypeSignature = ({
         tooltip={tooltip}
       />
       {signature && (
-        <View style={styles.preview}>
+        <View style={[styles.preview, { backgroundColor: theme.bg.surfaceTertiary }]}>
           <Image
             resizeMode="contain"
             style={{ width: '100%', height: 164 }}
@@ -54,7 +56,7 @@ const TypeSignature = ({
       <Button
         title={signature ? trans.changeSignatureButton : trans.openSignatureButton}
         onPress={() => setShow(true)}
-        icon={<Icon name="create" size={20} color="#fff" type="ionicon" />}
+        icon={<Icon name="create" size={20} color={theme.buttonPrimary.text} type="ionicon" />}
         style={{ width: '100%' }}
         containerStyle={{ marginTop: 10 }}
         testID="open-signature-button"
@@ -89,7 +91,6 @@ const styles = StyleSheet.create({
   preview: {
     width: '100%',
     height: 164,
-    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,

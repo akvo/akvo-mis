@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { MultiSelect } from 'react-native-element-dropdown';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { FieldLabel, OptionItem } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const TypeMultipleOption = ({
   onChange,
@@ -19,7 +20,8 @@ const TypeMultipleOption = ({
   option = [],
   tooltip = null,
 }) => {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const showSearch = React.useMemo(() => option.length > 3, [option]);
   const activeLang = FormState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
@@ -34,27 +36,53 @@ const TypeMultipleOption = ({
       <MultiSelect
         style={style}
         selectedStyle={styles.dropdownSelectedList}
-        containerStyle={{ marginBottom: insets.bottom }}
-        activeColor="#ddd"
+        containerStyle={{
+          backgroundColor: theme.bg.surfaceElevated1,
+          borderRadius: 12,
+        }}
+        activeColor={theme.bg.surfaceTranslucent}
         data={option}
         search={showSearch}
-        maxHeight={300}
+        maxHeight={500}
         labelField="label"
         valueField="value"
         searchPlaceholder={trans.searchPlaceholder}
         placeholder={trans.selectMultiItem}
+        placeholderStyle={{ color: theme.input.text }}
+        inputSearchStyle={{
+          borderRadius: 12,
+          backgroundColor: theme.bg.surfaceTertiary,
+          borderColor: 'transparent',
+          color: theme.text.primary,
+          paddingHorizontal: 12,
+        }}
         value={value || []}
         onChange={(v) => {
           if (onChange) {
             onChange(id, v);
           }
         }}
-        renderItem={OptionItem}
+        renderItem={(item, selected) => <OptionItem {...item} selected={selected} isMulti />}
         renderSelectedItem={({ color, label: labelText, name }) => {
-          const renderStyle = color ? { backgroundColor: color, fontWeight: 'bold' } : {};
+          const bgColor = color || theme.bg.surfaceChip;
+          const textColor = color ? '#fff' : theme.text.primary;
           return (
-            <View style={{ ...styles.optionSelectedList, ...renderStyle }}>
-              <Text style={{ color: color ? '#fff' : '#000' }}>{labelText || name}</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: bgColor,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                marginLeft: 10,
+                marginTop: 5,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ color: textColor, fontWeight: color ? 'bold' : 'normal' }}>
+                {labelText || name}
+              </Text>
+              <Icon name="close-circle" size={14} color={textColor} style={{ marginLeft: 6 }} />
             </View>
           );
         }}

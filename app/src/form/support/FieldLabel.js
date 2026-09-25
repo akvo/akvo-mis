@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { Text, Icon } from '@rneui/themed';
-import styles from '../styles';
+import getStyles from '../styles';
 import AnimatedTooltip from '../../components/AnimatedTooltip';
+import useTheme from '../../lib/theme';
 
 const FieldLabel = ({ keyform, name, tooltip, requiredSign = null }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [open, setOpen] = useState(false);
   const labelText = `${keyform}. ${name}`;
   const tooltipText = tooltip?.text;
@@ -17,7 +20,7 @@ const FieldLabel = ({ keyform, name, tooltip, requiredSign = null }) => {
       )}
       <View style={styles.fieldLabel}>
         <View style={{ flexDirection: 'row' }}>
-          <Text testID="field-label">
+          <Text testID="field-label" style={{ color: theme.text.primary }}>
             {labelText}
             {tooltipText && (
               <Text>
@@ -26,6 +29,7 @@ const FieldLabel = ({ keyform, name, tooltip, requiredSign = null }) => {
                   name="information-circle"
                   type="ionicon"
                   size={18}
+                  color={theme.icon.secondary}
                   testID="field-tooltip-icon"
                   onPress={() => setOpen(!open)}
                 />

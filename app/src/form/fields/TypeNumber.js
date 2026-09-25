@@ -3,9 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Input } from '@rneui/themed';
 import { FieldLabel } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { addPreffix, addSuffix } from './TypeInput';
 import { strToFunction } from '../lib';
+import useTheme from '../../lib/theme';
 
 const TypeNumber = ({
   onChange,
@@ -23,6 +24,8 @@ const TypeNumber = ({
   fn = null,
   onFocus = null,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [fieldColor, setFieldColor] = useState(null);
   const requiredValue = required ? requiredSign : null;
   const { fnColor } = fn || {};
@@ -55,10 +58,10 @@ const TypeNumber = ({
       <Input
         inputContainerStyle={{
           ...styles.inputFieldContainer,
-          backgroundColor: fieldColor || 'white',
+          backgroundColor: fieldColor || styles.inputFieldContainer.backgroundColor,
         }}
         style={{
-          color: fieldColor ? 'white' : 'black',
+          color: fieldColor ? '#ffffff' : theme.input.textInput,
         }}
         keyboardType="numeric"
         onChangeText={(val) => {
@@ -70,9 +73,11 @@ const TypeNumber = ({
         defaultValue={value === null || typeof value === 'undefined' ? '' : String(value)}
         value={value}
         testID="type-number"
-        {...addPreffix(addonBefore)}
-        {...addSuffix(addonAfter)}
+        placeholderTextColor={theme.input.text}
+        {...addPreffix(addonBefore, theme)}
+        {...addSuffix(addonAfter, theme)}
         disabled={disabled}
+        errorStyle={{ height: 0, margin: 0 }}
       />
     </View>
   );

@@ -4,7 +4,8 @@ import moment from 'moment';
 import { Input } from '@rneui/themed';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FieldLabel } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
+import useTheme from '../../lib/theme';
 
 const TypeDate = ({
   onChange,
@@ -18,6 +19,8 @@ const TypeDate = ({
   tooltip = null,
   onFocus = null,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [showDatepicker, setShowDatePicker] = useState(false);
 
   const getDate = (v) =>
@@ -38,12 +41,15 @@ const TypeDate = ({
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
         inputContainerStyle={styles.inputFieldContainer}
+        inputStyle={{ color: theme.input.textInput }}
         onPressIn={() => setShowDatePicker(true)}
         onFocus={handleFocus}
         showSoftInputOnFocus={false}
         testID="type-date"
         value={dateValue}
+        placeholderTextColor={theme.input.text}
         disabled={disabled}
+        errorStyle={{ height: 0, margin: 0 }}
       />
       {showDatepicker && (
         <DateTimePicker

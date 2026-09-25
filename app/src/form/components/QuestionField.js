@@ -17,9 +17,10 @@ import {
   TypeSignature,
   TypeGeoDrawing,
 } from '../fields';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { QUESTION_TYPES } from '../../lib/constants';
+import useTheme from '../../lib/theme';
 
 const QuestionField = ({
   keyform,
@@ -29,6 +30,8 @@ const QuestionField = ({
   questions = [],
   onFieldFocus,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const questionType = questionField?.type;
   const defaultValQuestion = questionField?.default_value || {};
   const displayValue =
