@@ -128,6 +128,7 @@ def _create_map_widget(
     title: str,
     rationale: str,
     col_span: int = 24,
+    question_id: Optional[int] = None,
 ) -> Dict:
     return {
         "type": "map",
@@ -135,9 +136,32 @@ def _create_map_widget(
         "col_span": col_span,
         "color": None,
         "form": form_id,
-        "question": None,
+        "question": question_id,
         "config": {
-            "map_mode": "point",
+            "map_mode": "category" if question_id else "point",
+            "color_scheme": "categorical",
+        },
+        "rationale": rationale,
+    }
+
+
+def _create_scatter_widget(
+    form_id: int,
+    x_question_id: int,
+    y_question_id: Optional[int],
+    title: str,
+    rationale: str,
+    col_span: int = 12,
+) -> Dict:
+    return {
+        "type": "scatter",
+        "title": title,
+        "col_span": col_span,
+        "color": None,
+        "form": form_id,
+        "question": x_question_id,
+        "config": {
+            "question_y": y_question_id,
             "color_scheme": "categorical",
         },
         "rationale": rationale,
@@ -314,7 +338,36 @@ def generate_starter_heuristics(
             )
         )
 
-    # 4. Monitoring Form Trends / Tables (if monitoring exists)
+    # 4. Geographic Map if coordinates exist
+    geo_qs = _find_questions_by_type(root_questions, [QuestionTypes.geo])
+    if geo_qs:
+        widgets.append(
+            _create_map_widget(
+                form_id=root_id,
+                title=f"{root_name} Geographic Distribution",
+                rationale=f"Spatial map locating {root_name} sites.",
+                col_span=24,
+                question_id=geo_qs[0]["id"],
+            )
+        )
+
+    # 5. Scatter Plot if 2+ numeric questions exist
+    if len(numeric_qs) >= 2 and len(widgets) < 5:
+        widgets.append(
+            _create_scatter_widget(
+                form_id=root_id,
+                x_question_id=numeric_qs[0]["id"],
+                y_question_id=numeric_qs[1]["id"],
+                title=f"{numeric_qs[0]['label']} vs {numeric_qs[1]['label']}",
+                rationale=(
+                    f"Correlation between {numeric_qs[0]['label']} and "
+                    f"{numeric_qs[1]['label']}."
+                ),
+                col_span=12,
+            )
+        )
+
+    # 6. Monitoring Form Trends / Tables (if monitoring exists)
     if has_monitoring and monitoring_forms:
         m_form = monitoring_forms[0]
         m_id = m_form.get("id")
@@ -348,16 +401,6 @@ def generate_starter_heuristics(
                 root_questions=root_questions,
             )
         )
-    elif _find_questions_by_type(root_questions, [QuestionTypes.geo]):
-        # Geographic map for registration forms with coordinates
-        widgets.append(
-            _create_map_widget(
-                form_id=root_id,
-                title=f"{root_name} Geographic Distribution",
-                rationale=f"Spatial map locating {root_name} sites.",
-                col_span=24,
-            )
-        )
 
     suggested_name = f"{root_name} Overview Dashboard"
     if user_intent:
@@ -384,6 +427,7 @@ def generate_widget_heuristics(
     existing_types = set(existing_widget_types or [])
     root_form = metadata.get("root_form", {})
     root_id = root_form.get("id")
+    root_name = root_form.get("name", "Registration")
     root_questions = root_form.get("questions", [])
 
     monitoring_forms = metadata.get("monitoring_forms", [])
@@ -391,7 +435,48 @@ def generate_widget_heuristics(
 
     suggestions: List[Dict] = []
 
-    # 1. Check if Bar / Pie is missing
+    # 1. Check if Map is missing and Geo question exists
+    geo_qs = _find_questions_by_type(root_questions, [QuestionTypes.geo])
+    if (
+        geo_qs
+        and "map" not in existing_types
+        and WidgetTypes.map not in existing_types
+    ):
+        suggestions.append(
+            _create_map_widget(
+                form_id=root_id,
+                title=f"{root_name} Geographic Map",
+                rationale="Spatial map visualizing geographic distribution.",
+                col_span=24,
+                question_id=geo_qs[0]["id"],
+            )
+        )
+
+    # 2. Check if Scatter is missing and 2+ numeric questions exist
+    numeric_qs = _find_questions_by_type(
+        root_questions, [QuestionTypes.number, QuestionTypes.autofield]
+    )
+    if (
+        len(numeric_qs) >= 2
+        and "scatter" not in existing_types
+        and WidgetTypes.scatter not in existing_types
+    ):
+        label_x = numeric_qs[0]["label"]
+        label_y = numeric_qs[1]["label"]
+        suggestions.append(
+            _create_scatter_widget(
+                form_id=root_id,
+                x_question_id=numeric_qs[0]["id"],
+                y_question_id=numeric_qs[1]["id"],
+                title=f"{label_x} vs {label_y} Correlation",
+                rationale=(
+                    f"Scatter plot comparing {label_x} against {label_y}."
+                ),
+                col_span=12,
+            )
+        )
+
+    # 3. Check if Bar / Pie is missing
     option_qs = _find_questions_by_type(
         root_questions,
         [
@@ -412,7 +497,7 @@ def generate_widget_heuristics(
                 )
             )
 
-    # 2. Check if Line chart is available
+    # 4. Check if Line chart is available
     if has_monitoring and monitoring_forms:
         m_form = monitoring_forms[0]
         m_id = m_form.get("id")
@@ -445,10 +530,7 @@ def generate_widget_heuristics(
                 )
             )
 
-    # 3. Numeric KPI if unrepresented
-    numeric_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.number]
-    )
+    # 5. Numeric KPI if unrepresented
     if numeric_qs and WidgetTypes.kpi not in existing_types:
         num_q = numeric_qs[0]
         suggestions.append(
