@@ -2,6 +2,7 @@ import { Store } from 'pullstate';
 
 const UIState = new Store({
   isDarkMode: false, // if isDarkMode = false then Theme= light
+  darkModePreference: 'auto', // 'auto' | 'light' | 'dark'
   lang: 'en',
   fontSize: 16,
   currentPage: 'GetStarted',
@@ -11,6 +12,7 @@ const UIState = new Store({
   statusBar: null,
   refreshPage: false,
   lowStorage: false,
+  triggerSync: false,
 });
 
 export default UIState;

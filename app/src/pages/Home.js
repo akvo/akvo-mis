@@ -1,14 +1,14 @@
 /* eslint-disable no-console */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { BackHandler, Platform, Text, ToastAndroid, TouchableOpacity } from 'react-native';
+import { BackHandler, Platform, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
 import { Dialog } from '@rneui/themed';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout, FAButton } from '../components';
+import { BaseLayout } from '../components';
 import {
   FormState,
   UserState,
@@ -17,12 +17,12 @@ import {
   DatapointSyncState,
   AuthState,
 } from '../store';
+import useTheme from '../lib/theme';
 import { crudForms, crudUsers } from '../database/crud';
 import { api, cascades, i18n } from '../lib';
 import useVersionCheck from '../hooks/use-version-check';
 import crudJobs from '../database/crud/crud-jobs';
 import {
-  SYNC_STATUS,
   SYNC_DATAPOINT_JOB_NAME,
   SYNC_FORM_SUBMISSION_TASK_NAME,
   jobStatus,
@@ -44,14 +44,13 @@ const Home = ({ navigation, route }) => {
   const passcode = AuthState.useState((s) => s.authenticationCode);
   const isOnline = UIState.useState((s) => s.online);
   const syncWifiOnly = UserState.useState((s) => s.syncWifiOnly);
-  const statusBar = UIState.useState((s) => s.statusBar);
   const refreshPage = UIState.useState((s) => s.refreshPage);
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
   const db = useSQLiteContext();
 
   const { id: currentUserId, name: currentUserName } = UserState.useState((s) => s);
-  const subTitleText = currentUserName ? `${trans.userLabel} ${currentUserName}` : null;
 
   const {
     visible: updateDialogVisible,
@@ -347,34 +346,56 @@ const Home = ({ navigation, route }) => {
     };
   }, [syncWifiOnly]);
 
+  useEffect(() => {
+    const unsub = UIState.subscribe(
+      (s) => s.triggerSync,
+      (triggered) => {
+        if (!triggered) {
+          return;
+        }
+        UIState.update((s) => {
+          s.triggerSync = false;
+        });
+        if (!syncLoading && !syncDisabled && isOnline) {
+          handleOnSync();
+        }
+      },
+    );
+    return () => {
+      unsub();
+    };
+  });
+
   return (
     <BaseLayout
       title={trans.homePageTitle}
-      subTitle={subTitleText}
       search={{
         show: true,
         placeholder: trans.homeSearch,
         value: search,
         action: setSearch,
       }}
-      leftComponent={
-        <TouchableOpacity style={{ paddingTop: 8, paddingLeft: 8 }} onPress={goToUsers}>
-          <Icon name="person" size={18} />
+      rightComponent={
+        <TouchableOpacity
+          style={[homeStyles.headerButton, { backgroundColor: theme.bg.surfaceTranslucent }]}
+          onPress={goToUsers}
+        >
+          <Icon name="people-outline" size={18} color={theme.topNav.icon} />
         </TouchableOpacity>
+      }
+      leftComponent={
+        <View style={homeStyles.userInfo}>
+          <Icon name="person-circle-outline" size={22} color={theme.topNav.icon} />
+          <Text
+            style={[homeStyles.userName, { color: theme.topNav.text }]}
+            numberOfLines={1}
+          >
+            {currentUserName || ''}
+          </Text>
+        </View>
       }
     >
       <BaseLayout.Content data={filteredData} action={goToSubmission} columns={1} />
-      <FAButton
-        label={syncLoading ? trans.syncingText : trans.syncDataPointBtn}
-        onPress={handleOnSync}
-        testID="sync-datapoint-button"
-        icon={{ name: 'sync', color: 'white' }}
-        customStyle={{ marginBottom: 16 }}
-        backgroundColor="#1651b6"
-        disabled={
-          !isOnline || syncLoading || syncDisabled || statusBar?.type === SYNC_STATUS.on_progress
-        }
-      />
       <Dialog isVisible={updateDialogVisible} onBackdropPress={() => {}}>
         <Dialog.Title title={trans.updateRequiredTitle} />
         <Text>{updateInfo.text}</Text>
@@ -390,5 +411,26 @@ const Home = ({ navigation, route }) => {
     </BaseLayout>
   );
 };
+
+const homeStyles = StyleSheet.create({
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 4,
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
 
 export default Home;

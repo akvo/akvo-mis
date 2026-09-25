@@ -3,28 +3,36 @@ import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { UIState, DatapointSyncState } from '../store';
+import { UIState, DatapointSyncState, AuthState } from '../store';
 import { i18n } from '../lib';
+import useTheme from '../lib/theme';
 import { SYNC_STATUS } from '../lib/constants';
 
 const TIMEOUT_DISMISS = 3000; // 3second
+const TAB_BAR_HEIGHT = 80;
 
 const StatusBanner = () => {
   const insets = useSafeAreaInsets();
+  const token = AuthState.useState((s) => s.token);
   const isOnline = UIState.useState((s) => s.online);
   const activeLang = UIState.useState((s) => s.lang);
   const statusBar = UIState.useState((s) => s.statusBar);
   const lowStorage = UIState.useState((s) => s.lowStorage);
   const syncProgress = DatapointSyncState.useState((s) => s.progress);
   const syncInProgress = DatapointSyncState.useState((s) => s.inProgress);
+  const theme = useTheme();
   const trans = i18n.text(activeLang);
-  const statusBg = isOnline ? statusBar?.bgColor || '#ef4444' : '#ef4444';
+  const statusBg = isOnline ? statusBar?.bgColor || theme.status.error : theme.status.error;
   const statusIc = isOnline ? statusBar?.icon || 'cloud-offline' : 'cloud-offline';
 
   const getSyncPhaseLabel = () => {
     const { syncPhase } = statusBar || {};
-    if (syncPhase === 'uploading') return trans.uploadingSubmissionsText;
-    if (syncPhase === 'syncing_drafts') return trans.syncingDraftsText;
+    if (syncPhase === 'uploading') {
+      return trans.uploadingSubmissionsText;
+    }
+    if (syncPhase === 'syncing_drafts') {
+      return trans.syncingDraftsText;
+    }
     if (syncPhase === 'downloading') {
       return syncInProgress && syncProgress > 0
         ? `${trans.downloadingDatapointsText} ${Math.round(syncProgress)}%`
@@ -77,17 +85,16 @@ const StatusBanner = () => {
   if (isSyncEvent) {
     banner = { bg: statusBg, icon: statusIc, text: statusText?.[syncType] || trans.offlineText };
   } else if (lowStorage) {
-    // Amber, not the red used for offline and errors: a warning to act on, not a
-    // failure that already happened.
-    // One message for every context. "Sync now" only reclaims space by deleting
-    // photos already uploaded, so it is impossible advice on a signed-out device and
-    // useless to a signed-in one with nothing pending. Freeing device storage always
-    // works.
-    banner = { bg: '#f59e0b', icon: 'warning', text: trans.lowStorageText, isLowStorage: true };
+    banner = {
+      bg: theme.status.warning,
+      icon: 'warning',
+      text: trans.lowStorageText,
+      isLowStorage: true,
+    };
   } else if (syncType === SYNC_STATUS.failed || syncType === SYNC_STATUS.rejected) {
     banner = { bg: statusBg, icon: statusIc, text: statusText?.[syncType] };
   } else if (!isOnline) {
-    banner = { bg: '#ef4444', icon: 'cloud-offline', text: trans.offlineText };
+    banner = { bg: theme.status.error, icon: 'cloud-offline', text: trans.offlineText };
   }
 
   if (!banner) {
@@ -100,7 +107,11 @@ const StatusBanner = () => {
       style={{
         ...styles.container,
         backgroundColor: banner.bg,
-        marginBottom: insets.bottom,
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: token ? TAB_BAR_HEIGHT + Math.max(insets.bottom, 10) : insets.bottom,
+        zIndex: 10,
       }}
     >
       <Icon name={banner.icon} testID="offline-icon" style={styles.icon} />
@@ -121,10 +132,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: { fontSize: 14, color: '#f5f5f5' },
+  text: { fontSize: 14, color: '#FFFFFF' },
   icon: {
     fontSize: 14,
-    color: '#f5f5f5',
+    color: '#FFFFFF',
   },
 });
 
