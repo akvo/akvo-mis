@@ -1,16 +1,48 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sentry from '@sentry/react-native';
 import { openDatabase } from '../database';
-import { crudDataPoints } from '../database/crud';
+import { crudDataPoints, crudForms } from '../database/crud';
+import sql from '../database/sql';
+import { writeIndexFromAnswers } from './geometry-index-writer';
 import { UIState } from '../store';
 import { LOW_STORAGE_THRESHOLD, LOW_STORAGE_CLEAR_THRESHOLD } from './constants';
 
 const FALLBACK_DIR = `${FileSystem.documentDirectory}pending-submissions`;
 
-const writeRow = async (db, payload, isNewSubmission) =>
-  isNewSubmission
-    ? crudDataPoints.saveDataPoint(db, payload)
-    : crudDataPoints.updateDataPoint(db, payload);
+/**
+ * Write the datapoint and its geometry index rows together, or not at all.
+ *
+ * GEO-006 D-6 makes `geometry_index` a subset of `datapoints` by construction, and GEO-007
+ * relies on that: a candidate with no answers is read as drift and refuses validation. The
+ * local save used to write the index *after* this returned, swallowing failures — so a crash,
+ * or simply an index error, left a polygon in `datapoints` with nothing in the index. Overlap
+ * checks then measured against a set quietly missing a plot.
+ *
+ * `geometry` is optional: a form with no overlap-enabled geoshape passes nothing and takes the
+ * plain single-statement path.
+ */
+const writeRow = async (db, payload, isNewSubmission, geometry = null) => {
+  if (!geometry?.formId || !geometry?.formJson) {
+    return isNewSubmission
+      ? crudDataPoints.saveDataPoint(db, payload)
+      : crudDataPoints.updateDataPoint(db, payload);
+  }
+  return sql.withTransaction(db, async (txDb) => {
+    const datapointId = isNewSubmission
+      ? await crudDataPoints.saveDataPoint(txDb, payload)
+      : await crudDataPoints.updateDataPoint(txDb, payload).then(() => payload.id);
+    await writeIndexFromAnswers(txDb, {
+      uuid: payload.uuid,
+      formId: geometry.formId,
+      datapointId,
+      name: payload.name,
+      answers: payload.json,
+      formJson: geometry.formJson,
+      isComplete: true,
+    });
+    return datapointId;
+  });
+};
 
 /**
  * Layer 1: the shared connection. Layer 2: a fresh one — this is what survives a
@@ -28,9 +60,9 @@ const writeRow = async (db, payload, isNewSubmission) =>
  * @param {boolean} isNewSubmission - Insert when true, update when false.
  * @returns {Promise<'saved'|'fallback'|'failed'>}
  */
-export const persistSubmission = async (db, payload, isNewSubmission) => {
+export const persistSubmission = async (db, payload, isNewSubmission, geometry = null) => {
   try {
-    await writeRow(db, payload, isNewSubmission);
+    await writeRow(db, payload, isNewSubmission, geometry);
     return 'saved';
   } catch (error) {
     Sentry.captureMessage('[persistSubmission] primary connection failed, retrying fresh');
@@ -38,7 +70,7 @@ export const persistSubmission = async (db, payload, isNewSubmission) => {
   }
   try {
     const freshDb = await openDatabase();
-    await writeRow(freshDb, payload, isNewSubmission);
+    await writeRow(freshDb, payload, isNewSubmission, geometry);
     return 'saved';
   } catch (error) {
     Sentry.captureMessage('[persistSubmission] fresh connection failed, writing fallback file');
@@ -53,7 +85,12 @@ export const persistSubmission = async (db, payload, isNewSubmission) => {
     // queueing a second copy of the same submission.
     await FileSystem.writeAsStringAsync(
       `${FALLBACK_DIR}/${payload.uuid}.json`,
-      JSON.stringify({ payload, isNewSubmission }),
+      /**
+       * Only the form id, never the form definition: it is large, and recovery can look it up.
+       * Without it the replay would restore the datapoint and leave the index short — the same
+       * gap this function was changed to close.
+       */
+      JSON.stringify({ payload, isNewSubmission, formId: geometry?.formId || null }),
     );
     return 'fallback';
   } catch (error) {
@@ -76,8 +113,17 @@ const restoreAll = async (db) => {
     files.map(async (name) => {
       try {
         const raw = await FileSystem.readAsStringAsync(`${FALLBACK_DIR}/${name}`);
-        const { payload, isNewSubmission } = JSON.parse(raw);
-        await writeRow(db, payload, isNewSubmission);
+        const { payload, isNewSubmission, formId } = JSON.parse(raw);
+        // Rebuild the index alongside the datapoint; the form definition comes from the
+        // forms table rather than the fallback file, which keeps the file small.
+        let geometry = null;
+        if (formId) {
+          const form = await crudForms.getByFormId(db, { formId });
+          if (form?.json) {
+            geometry = { formId, formJson: JSON.parse(form.json) };
+          }
+        }
+        await writeRow(db, payload, isNewSubmission, geometry);
         await FileSystem.deleteAsync(`${FALLBACK_DIR}/${name}`, { idempotent: true });
         return 1;
       } catch (error) {

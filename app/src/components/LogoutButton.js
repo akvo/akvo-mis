@@ -28,6 +28,7 @@ const LogoutButton = () => {
       'datapoints',
       'jobs',
       'datapoint_sync_queue',
+      'geometry_index',
     ];
     await Promise.all(
       tables.map(async (table) => {

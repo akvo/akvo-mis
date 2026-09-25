@@ -284,6 +284,31 @@ const dataPointsQuery = () => ({
     );
     return res;
   },
+  /**
+   * Answers for a handful of datapoints, by local row id.
+   *
+   * GEO-006 D-5 keeps coordinates out of `geometry_index`, so GEO-007 reads them back from here
+   * for the 5-50 candidates that survive the bbox filter.
+   *
+   * **By id, not uuid.** A uuid identifies a plot, not a row: monitoring datapoints inherit
+   * their registration's uuid and differ only by `form`, which is what `getMonitoringStats`
+   * groups on. Selecting by uuid therefore returned the whole family, and a caller keying the
+   * result by uuid kept whichever row came last. A monitoring submission does not prefill the
+   * polygon, so the candidate's coordinates went missing and the overlap was never reported —
+   * a false pass, in a check that exists to prevent exactly that.
+   */
+  selectJsonByIds: async (db, ids = []) => {
+    if (!ids?.length) {
+      return [];
+    }
+    const placeholders = ids.map(() => '?').join(', ');
+    return sql.safeExecuteQuery(
+      db,
+      `SELECT id, uuid, json FROM datapoints WHERE id IN (${placeholders})`,
+      ids,
+      'datapoints.selectJsonByIds',
+    );
+  },
   getByUUID: async (db, { uuid, form }) => {
     const formVal = form ? { form } : {};
     const res = await sql.getFirstRow(db, 'datapoints', { uuid, ...formVal });
@@ -332,9 +357,23 @@ const dataPointsQuery = () => ({
   /**
    * Local-only delete. The server copy, if any, is untouched — a draft with a
    * draftId re-downloads on the next sync, which the confirmation dialog warns about.
+   *
+   * The datapoint's geometry index rows go with it, in the same transaction.
+   * GEO-006 D-6 makes `geometry_index` a subset of `datapoints`, and GEO-007 reads a
+   * candidate with no answers as drift and refuses to validate at all — so an orphaned
+   * index row does not merely linger, it disables overlap checking for that form until
+   * the next resync. FR-7.2 has always required this; nothing implemented it.
    */
   deleteDataPoint: async (db, id) => {
-    await sql.deleteRow(db, 'datapoints', id);
+    await sql.withTransaction(db, async (txDb) => {
+      await sql.safeExecuteQuery(
+        txDb,
+        'DELETE FROM geometry_index WHERE datapointId = ?',
+        [id],
+        'datapoints.deleteDataPoint.geometryIndex',
+      );
+      await sql.deleteRow(txDb, 'datapoints', id);
+    });
     return true;
   },
   /**

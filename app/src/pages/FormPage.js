@@ -16,13 +16,24 @@ import * as Crypto from 'expo-crypto';
 import FormContainer from '../form/FormContainer';
 import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
 import { BaseLayout } from '../components';
-import { crudDataPoints } from '../database/crud';
+import { crudDataPoints, crudForms } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
+
 import { UserState, UIState, FormState } from '../store';
 import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
 import { i18n } from '../lib';
 import crudJobs from '../database/crud/crud-jobs';
 import { SYNC_FORM_SUBMISSION_TASK_NAME, QUESTION_TYPES, jobStatus } from '../lib/constants';
+
+/**
+ * Geoshape question ids by name. A monitoring form and its registration parent share question
+ * names, not ids, so this is how a monitoring geoshape finds the parent's question in the index.
+ */
+const geoshapeIdsByName = (json) =>
+  (json?.question_group || [])
+    .flatMap((group) => group?.question || [])
+    .filter((q) => q?.type === QUESTION_TYPES.geoshape && q?.name)
+    .reduce((acc, q) => ({ ...acc, [q.name]: q.id }), {});
 
 const FormPage = ({ navigation, route }) => {
   const selectedForm = FormState.useState((s) => s.form);
@@ -101,11 +112,66 @@ const FormPage = ({ navigation, route }) => {
     });
   }, [formJSON]);
 
+  /**
+   * Publish what the geoshape field needs for overlap detection, and drop the previous form's
+   * verdicts.
+   *
+   * `polygonValidation` is cleared rather than left: FormState outlives this screen, and a
+   * stored pass keyed on a question id from the last form would be read by this one's submit
+   * gate. The signature check would catch it, but a verdict belonging to another submission
+   * should not be in reach at all.
+   *
+   * GEO-007 D-6 scopes candidates to REGISTRATION plots, so a monitoring form checks against its
+   * parent. `forms.parentId` is the parent's backend form id — Home stores the API's `parent`
+   * there, and FormOptions / `selectLatestFormVersion` match it against `formId`. Scoping to the
+   * monitoring form itself queried an index with no rows and returned a confident pass.
+   *
+   * The question has to move too: index rows carry the parent's question ids, and the two forms
+   * share question NAMES, not ids — the same mapping monitoring prefill uses (FormContainer).
+   * `overlapQuestionIds` maps this form's geoshape ids to the parent's; it is `null` for a
+   * registration form (ids are used as they are) and `{}` until the parent resolves, so a
+   * Validate pressed in between refuses rather than passes.
+   */
+  useEffect(() => {
+    const parentId = selectedForm?.parentId || null;
+    FormState.update((s) => {
+      s.submissionUuid = submissionUuidRef.current;
+      s.overlapFormId = parentId || selectedForm?.formId || null;
+      s.overlapQuestionIds = parentId ? {} : null;
+      s.polygonValidation = {};
+    });
+    if (!parentId) {
+      return () => {};
+    }
+    let active = true;
+    crudForms
+      .getByFormId(db, { formId: parentId })
+      .then((parent) => {
+        if (!active || !parent?.json) {
+          return;
+        }
+        const parentIds = geoshapeIdsByName(JSON.parse(parent.json));
+        const ownIds = geoshapeIdsByName(formJSON);
+        const mapped = Object.entries(ownIds)
+          .filter(([name]) => parentIds[name] != null)
+          .reduce((acc, [name, id]) => ({ ...acc, [id]: parentIds[name] }), {});
+        FormState.update((s) => {
+          s.overlapQuestionIds = mapped;
+        });
+      })
+      .catch((error) => Sentry.captureException(error));
+    return () => {
+      active = false;
+    };
+  }, [selectedForm, db, formJSON]);
+
   useEffect(() => {
     // FormState is global and outlives this screen, so a flag left raised by the last
-    // form would make the very first back press prompt. Reset on mount.
+    // form would make the very first back press prompt, and the last form's validation
+    // messages would greet a blank new submission. Reset on mount.
     FormState.update((s) => {
       s.hasUnsavedChanges = false;
+      s.feedback = {};
     });
 
     // Subscribing catches every writer — fields, prefill, geo, autofield, map — and
@@ -223,7 +289,15 @@ const FormPage = ({ navigation, route }) => {
         ...(isNewSubmission ? { locallyCreated: 1 } : {}),
         ...(sendToWeb ? { sendToWeb: 1 } : {}),
       };
-      const result = await persistSubmission(db, payload, isNewSubmission);
+      /**
+       * GEO-006 D-6: the index rows land inside the same transaction as the datapoint, so a
+       * polygon can never exist in `datapoints` without its index row. Null for a form with no
+       * overlap-enabled geoshape, which then takes the plain single-statement path.
+       */
+      const geometryContext = selectedForm?.formId
+        ? { formId: selectedForm.formId, formJson: formJSON }
+        : null;
+      const result = await persistSubmission(db, payload, isNewSubmission, geometryContext);
       await finishSave(result, trans.successSaveDatapoint);
     } catch (error) {
       Sentry.captureMessage('[FormPage] Cannot save draft submissions');
@@ -272,7 +346,15 @@ const FormPage = ({ navigation, route }) => {
         duration: duration === 0 ? 1 : duration,
         syncedAt: null,
       };
-      const result = await persistSubmission(db, payload, isNewSubmission);
+      /**
+       * GEO-006 D-6: the index rows land inside the same transaction as the datapoint, so a
+       * polygon can never exist in `datapoints` without its index row. Null for a form with no
+       * overlap-enabled geoshape, which then takes the plain single-statement path.
+       */
+      const geometryContext = selectedForm?.formId
+        ? { formId: selectedForm.formId, formJson: formJSON }
+        : null;
+      const result = await persistSubmission(db, payload, isNewSubmission, geometryContext);
       if (result !== 'failed') {
         /**
          * Create a new job for syncing form submissions.
@@ -309,6 +391,19 @@ const FormPage = ({ navigation, route }) => {
     try {
       const dpValue = await crudDataPoints.selectDataPointById(db, { id: savedDataPointId });
       setCurrentDataPoint(dpValue);
+      /**
+       * A saved datapoint already has an identity, and this session must use it. Not every caller
+       * passes `uuid` in the route (reopening a draft from the list does not), and the random one
+       * minted above then (a) failed to exclude the plot from its own overlap check, so a reopened
+       * draft overlapped itself at 100%, and (b) keyed the geometry index rows written on save to
+       * a uuid no datapoint has.
+       */
+      if (dpValue?.uuid) {
+        submissionUuidRef.current = dpValue.uuid;
+        FormState.update((s) => {
+          s.submissionUuid = dpValue.uuid;
+        });
+      }
       const jsonData = dpValue?.json;
       // No stored answers (the datapoint synced without its JSON file, or the
       // column is corrupt): open the form empty rather than prefilled.

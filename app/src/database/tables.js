@@ -28,6 +28,7 @@ const tables = [
       saveToGallery: 'TINYINT DEFAULT 0',
       validatePolygonShape: 'TINYINT DEFAULT 1',
       validatePolygonArea: 'TINYINT DEFAULT 1',
+      geometryIndexReady: 'TINYINT DEFAULT 0',
     },
   },
   {
@@ -95,6 +96,28 @@ const tables = [
       lastPage: 'INTEGER DEFAULT 0',
       totalPage: 'INTEGER DEFAULT 0',
       totalData: 'INTEGER DEFAULT 0',
+    },
+  },
+  {
+    // One row per geoshape answer. Bbox + accuracy summary only — coordinates stay
+    // in datapoints.json and are read for the 5–50 bbox survivors (GEO-006 D-5).
+    name: 'geometry_index',
+    fields: {
+      id: 'INTEGER PRIMARY KEY AUTOINCREMENT',
+      uuid: 'VARCHAR(191)',
+      datapointId: 'INTEGER',
+      formId: 'INTEGER NOT NULL',
+      questionId: 'INTEGER NOT NULL',
+      repeatIndex: 'INTEGER DEFAULT 0',
+      name: 'VARCHAR(255)',
+      minLat: 'REAL',
+      maxLat: 'REAL',
+      minLon: 'REAL',
+      maxLon: 'REAL',
+      accuracyMax: 'REAL NULL',
+      accuracyMeasured: 'TINYINT DEFAULT 0',
+      isComplete: 'TINYINT DEFAULT 0',
+      createdAt: 'DATETIME',
     },
   },
 ];

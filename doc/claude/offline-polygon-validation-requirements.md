@@ -1,7 +1,11 @@
 # Offline Polygon Validation (Mobile) — Requirements
 
-**Status**: Requirements only. No architecture, no schema design, no code.
-**Next**: `/sc:design` for architecture, then `/sc:workflow` for implementation planning.
+**Status**: Requirements — **largely delivered**. Phases 1–3 are implemented; the designs that
+answer these requirements are `doc/design/GEO-001` … `GEO-014`, and they are authoritative where
+the two disagree. This document is kept as the record of what was *asked for*, with the places
+where delivery diverged marked inline rather than rewritten away.
+**Still outstanding**: FR-6 (map review — GEO-008), FR-8 (background auto-record — conditional,
+see §3.2), and Q1 (offline imagery).
 **Sources**:
 - Validation rules — `akvo/african-bamboo-odk-external-validations` → `docs/{polygon-validation, plot-overlap-detection, basic-polygon-overlap-validation, polygon-validation-implementation-plan}.md`
 - Capture UX, value format, config contract — `akvo/akvo-react-form` **#192** (`TypeGeoDrawing`), commit `e7d786d`
@@ -37,10 +41,10 @@ Established by inspection, not assumption:
 |---|---|
 | Backend already defines `geoshape`=14, `geotrace`=15 with a `center` field | [constants.py:14](../../backend/api/v1/v1_forms/constants.py#L14), [serializers.py:149](../../backend/api/v1/v1_forms/serializers.py#L149) |
 | Mobile form endpoint uses the **same** `WebFormDetailSerializer` as web | [v1_mobile/views.py:146](../../backend/api/v1/v1_mobile/views.py#L146) |
-| ⚠️ A `geoshape` question therefore **already reaches the app** and renders as a **plain text input** via the `default:` branch | [QuestionField.js:157](../../app/src/form/components/QuestionField.js#L157) |
-| App has no polygon field — only single-point `geo` | [TypeGeo.js](../../app/src/form/fields/TypeGeo.js), [fields/index.js](../../app/src/form/fields/index.js) |
-| `QUESTION_TYPES` has no `geoshape`/`geotrace` | [constants.js:26](../../app/src/lib/constants.js#L26) |
-| No map library, no geometry library in dependencies | [package.json](../../app/package.json) |
+| ⚠️ ~~A `geoshape` question renders as a **plain text input** via the `default:` branch~~ — **fixed**; `QuestionField` now renders `TypeGeoDrawing` | [QuestionField.js](../../app/src/form/components/QuestionField.js) |
+| ~~App has no polygon field — only single-point `geo`~~ — **built** as `TypeGeoDrawing` (GEO-001) | [TypeGeoDrawing.js](../../app/src/form/fields/TypeGeoDrawing.js) |
+| ~~`QUESTION_TYPES` has no `geoshape`/`geotrace`~~ — **both added** | [constants.js:49-50](../../app/src/lib/constants.js#L49) |
+| ~~No map library, no geometry library in dependencies~~ — Leaflet runs in the WebView; `@turf/kinks` and `@turf/intersect` **^7.4.0** are installed, as DEP-2 advised (scoped submodules, not the bundle) | [package.json:28-29](../../app/package.json#L28) |
 | `react-native-webview` **is** already a dependency (13.13.5) | [package.json:64](../../app/package.json#L64) |
 | Field validation is already `async` and awaited — a DB-backed check can slot in | [FormNavigation.js:112](../../app/src/form/support/FormNavigation.js#L112) |
 | Navigation between groups is deliberately **not** blocked; **submit** is blocked by `validateAllGroups()` | [FormNavigation.js:135](../../app/src/form/support/FormNavigation.js#L135), [:164](../../app/src/form/support/FormNavigation.js#L164) |
@@ -48,7 +52,7 @@ Established by inspection, not assumption:
 | `datapoints.geo` is `VARCHAR(255)` — a point, not a polygon | [tables.js:53](../../app/src/database/tables.js#L53) |
 | GPS tuning knobs already live in `config` and sync from backend | [tables.js:23-25](../../app/src/database/tables.js#L23) |
 | `Questions.extra` is a free-form `JSONField` already serialized to mobile — **no model change needed for per-question geo config** | [models.py:148](../../backend/api/v1/v1_forms/models.py#L148), [serializers.py](../../backend/api/v1/v1_forms/serializers.py) `get_extra` |
-| **Web already collects polygons end to end, once authoring is unblocked.** `akvo-react-form-editor@2.0.4` offers `geotrace`/`geoshape` as authorable types with a `SettingGeo` panel, but this host clamped both types out of the form builder via `QUESTION_TYPES`; the epic added `geoshape` to that list (#383), leaving `geotrace` unauthorable; [Forms.jsx:532](../../frontend/src/pages/forms/Forms.jsx#L532) passes form JSON straight to ARF `<Webform>`, and ARF **2.7.9** switches on the type internally | [frontend/package.json:11-12](../../frontend/package.json#L11), `node_modules/akvo-react-form-editor/dist` |
+| **Web already collects polygons end to end, once authoring is unblocked.** `akvo-react-form-editor` (2.0.4 then; **2.0.6** today) offers `geotrace`/`geoshape` as authorable types with a `SettingGeo` panel, but this host clamped both types out of the form builder via `QUESTION_TYPES`; the epic added `geoshape` to that list (#383), leaving `geotrace` unauthorable; [Forms.jsx:532](../../frontend/src/pages/forms/Forms.jsx#L532) passes form JSON straight to ARF `<Webform>`, and ARF **2.7.9** switches on the type internally | [frontend/package.json:11-12](../../frontend/package.json#L11), `node_modules/akvo-react-form-editor/dist` |
 | Frontend `QUESTION_TYPES` drives **both** display **and** authoring. Both form-builder pages pass it to the editor as `limitQuestionType` ([FormBuilderCreate.jsx:110](../../frontend/src/pages/form-builder/FormBuilderCreate.jsx#L110), [FormBuilderEdit.jsx:434](../../frontend/src/pages/form-builder/FormBuilderEdit.jsx#L434)), so a type absent from it cannot be authored at all | [frontend/src/lib/constants.js:14](../../frontend/src/lib/constants.js#L14) |
 | `@turf/turf ^6.5.0` is already a declared frontend dependency — pure JS, so it runs in React Native too | [frontend/package.json:9](../../frontend/package.json#L9) |
 | No `Forms` field gates web vs mobile; client targeting is by `MobileAssignment` and by which questions a form author adds | [v1_forms/models.py:18](../../backend/api/v1/v1_forms/models.py#L18) |
@@ -309,12 +313,25 @@ Runs before any overlap check. Ported directly from `polygon-validation.md`.
 
 ### FR-4 — Error reporting and blocking
 
-- **FR-4.1** Overlap failure message follows the source format, using the datapoint name that
-  `generateDataPointName` already produces from `meta: true` questions:
+- **FR-4.1** ~~Overlap failure message follows the source format, using the datapoint name that
+  `generateDataPointName` already produces from `meta: true` questions:~~
   ```
   New plot for <current datapoint name> overlaps with plot for <existing datapoint name>
   ```
-- **FR-4.2** With multiple overlaps, every conflicting datapoint name is listed.
+
+  > **Superseded 2026-09-23 — GEO-007 D-11, after the first device test.** The message carries a
+  > **count and numbered percentages**, and no names:
+  > `Overlaps 3 plots: #1 (34.0%), #2 (28.3%), #3 (22.5%) (limit 20.0%).`
+  >
+  > The requirement assumed `generateDataPointName` produces something a human can identify a
+  > plot by. On any form with an administration cascade it produces every `meta` answer joined
+  > with `" - "` — one overlap filled six lines of a phone screen and named nothing useful.
+  > Identity moved to the map review (FR-6), which is where it can actually be acted on; the
+  > numbers are positions in the same worst-first order that screen must label from.
+
+- **FR-4.2** ~~With multiple overlaps, every conflicting datapoint name is listed.~~
+  **Superseded by D-11**: every overlap is still reported, as one numbered line rather than one
+  line each.
 - **FR-4.3** A failing polygon surfaces through the existing `FormState.feedback` channel and
   renders in the existing `err-validation-text` slot ([QuestionField.js:182](../../app/src/form/components/QuestionField.js#L182)).
 - **FR-4.4** Consistent with current app behaviour, a failure does **not** block moving between
@@ -440,7 +457,7 @@ keys: an enable-checkbox for "should this be a valid polygon?" has no meaningful
 
 #### FR-5.7.1 — Where the UI lives: two options
 
-The form builder is `akvo-react-form-editor@2.0.4`, imported wholesale by
+The form builder is `akvo-react-form-editor` (2.0.4 then; **2.0.6** today), imported wholesale by
 [FormBuilderCreate.jsx:3](../../frontend/src/pages/form-builder/FormBuilderCreate.jsx#L3).
 So this is **upstream work in the `akvo/akvo-react-form-editor` repo**, not akvo-mis frontend work.
 
@@ -499,7 +516,20 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
   form without parsing every `datapoints.json` blob at validation time.
 - **FR-7.2** The index stays correct when a datapoint is created locally, edited locally,
   deleted, or arrives through datapoint sync.
-- **FR-7.3** Existing installs with datapoints already on device are backfilled on migration.
+
+  > **The delete path was the one that was never built** — found 2026-09-24 while auditing this
+  > document, and fixed the same day. `deleteDataPoint` removed the row and left its
+  > `geometry_index` rows behind. Since GEO-007 reads a candidate whose answers are missing as
+  > drift, an orphaned row did not merely linger: it **refused overlap validation for that form**
+  > until the next resync. Both deletes now run in one transaction.
+
+- **FR-7.3** ~~Existing installs with datapoints already on device are backfilled on migration.~~
+
+  > **Reversed 2026-09-23 — GEO-006 D-4.** There is **no backfill**. Parsing every stored
+  > datapoint on app start is a blocking migration of unbounded duration on the one launch a user
+  > is least tolerant of. Existing installs upgrade by syncing, then resetting. What replaces the
+  > backfill is a gate: `config.geometryIndexReady` stays `0` until a **full** geometry pull has
+  > landed, and validation refuses rather than reporting "no overlap" over an empty index.
 - **FR-7.4** Forms with no `geoshape`/`geotrace` question incur no indexing work.
 
 ---
@@ -529,7 +559,8 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 ## 5. Non-Functional Requirements
 
 - **NFR-1 Performance** — Overlap check completes in <500 ms against 10,000 stored plots
-  (source doc target). It runs on the JS thread inside form validation; it must not visibly
+  (source doc target; the busiest deployment observed holds **1,000–5,000 per form**, so 10,000
+  is headroom rather than the case that must pass). **Not yet measured** — GEO-007 §10. It runs on the JS thread inside form validation; it must not visibly
   stall navigation or submit.
 - **NFR-2 Repeated validation** — `validateAllGroups()` re-validates every question of every
   group on submit. Overlap checks must not re-query the database once per group per submit.
@@ -558,7 +589,9 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 
 - **AC-1.1** Given the form's datapoints were synced to the device before signal was lost,
   when I capture a polygon overlapping one of them by ≥ threshold, then validation fails.
-- **AC-1.2** The error names both my datapoint and the conflicting one, per FR-4.1.
+- **AC-1.2** ~~The error names both my datapoint and the conflicting one, per FR-4.1.~~
+  **Superseded by D-11**: the error counts and numbers the overlaps; names live on the map
+  review screen (AC-1.4).
 - **AC-1.3** I can open the map review screen and see both polygons and their overlap.
 - **AC-1.4** Tapping either polygon shows whose record it is.
 - **AC-1.5** I cannot submit until it is resolved.
@@ -593,10 +626,13 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
   or by starting auto-record and walking the boundary.
 - **AC-5.2** In auto-record I see the point count grow on the interval, and a live GPS marker
   distinct from the recorded points.
-- **AC-5.3** In auto-record, fixes worse than the accuracy threshold are silently skipped and
-  the count does not advance — I can see the current accuracy and understand why.
-- **AC-5.4** When the form sets `extra.geoConfig.accuracyThreshold`, I see it as a read-only
-  value and cannot change it.
+- **AC-5.3** ~~In auto-record, fixes worse than the accuracy threshold are silently skipped and
+  the count does not advance~~ — **superseded by FR-1.4 (GEO-014 D-3/D-6)**: a poor fix is
+  **recorded and drawn in red**, the count keeps advancing, and from phase 3 an unresolved red
+  vertex blocks submission. I can see the current accuracy and which points are flagged.
+- **AC-5.4** ~~When the form sets `extra.geoConfig.accuracyThreshold`, I see it as a read-only
+  value and cannot change it.~~ — **superseded by FR-1.5 (GEO-004 D-7)**: the form's value is a
+  **ceiling**. I may tighten it, never loosen it.
 - **AC-5.5** I can undo the last point, remove any single point, or clear everything —
   clearing more than 3 points asks me to confirm.
 - **AC-5.6** I see the enclosed area once ≥3 points exist on a `geoshape`.
@@ -604,7 +640,7 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 - **AC-5.8** I never manually re-capture the first point to close the ring.
 - **AC-5.9** Stopping auto-record, leaving the group, or backgrounding the app stops the GPS
   watch — my battery is not drained by a forgotten subscription. *(Backgrounding behaviour
-  pending Q3b.)*
+  answered by D8; see §3.2 — still unbuilt and now conditional, GEO-014 D-4.)*
 
 ### US-6 — Existing forms keep working
 - **AC-6.1** A form with no polygon question behaves identically to today.
@@ -624,7 +660,7 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 | Server-side overlap validation on submit | Offline-first; the device is authoritative at collection time |
 | `plots` table with `isDraft` / `instanceName` matching | Section 1 — solves a problem Akvo MIS does not have |
 | Intent contract, XLSForm appearance changes | Section 1 — no external app involved |
-| Web frontend polygon capture | Rendering already works via ARF 2.7.9 + editor 2.0.4; the epic added `geoshape` to `QUESTION_TYPES` (#383) so it can be authored — nothing left to build (§2, Q9) |
+| Web frontend polygon capture | Rendering already works via ARF 2.7.9 + editor 2.0.6; the epic added `geoshape` to `QUESTION_TYPES` (#383) so it can be authored — nothing left to build (§2, Q9) |
 | Web frontend polygon *validation* (area, self-intersection, overlap) | Mobile-only request. Web has capture but no validation; parity is a later decision |
 | Web manage-data display of polygon answers | FR-1.17 — optional, independent |
 | Overlap detection between two polygons *within a single submission* | Not in source AC; confirm if repeatable groups can hold polygons |
@@ -636,8 +672,8 @@ are blocked, and would force FR-5 to adopt flat, array-wrapped, string-typed key
 | # | Item | Impact |
 |---|---|---|
 | DEP-1 | ~~Backend config payload change~~ — **dissolved** by the `extra.geoConfig` finding. Remaining: **an upstream PR to `akvo-react-form-editor`** for the `geoConfig` UI (D13, FR-5.7.1) | Reduced from a schema change to an authoring-surface change — but now in a **separate repo** with its own release cycle. Backend round-trip already works: `FormDetailQuestionSerializer` includes `extra` |
-| DEP-2 | A geometry library must be chosen (area, self-intersection, polygon intersection on a spheroid) | **Strong candidate already in the repo**: `@turf/turf ^6.5.0` is a declared frontend dependency and is pure JS, so it runs in React Native. Covers all four needs — `area` (geodesic, satisfies NFR-7), `kinks` (self-intersection), `intersect` (+`area` for the ratio), `bbox` (FR-7). Import the scoped submodules (`@turf/area` etc.), **not** the full `@turf/turf` bundle — mobile bundle size (NFR-4). ARF supplies no geometry maths, so this is the one genuinely new dependency |
-| DEP-3 | Local SQLite schema migration for the geometry index (FR-7) | Migration path for existing installs, see FR-7.3 |
+| DEP-2 | A geometry library must be chosen (area, self-intersection, polygon intersection on a spheroid) | **Resolved as advised.** `@turf/kinks` and `@turf/intersect` **^7.4.0** are installed in `app/` as scoped submodules, not the `@turf/turf` bundle (NFR-4). Area is **not** from turf: `polygonArea` in `app/src/form/lib/geometry.js` projects equirectangularly around the polygon's mean latitude before the shoelace sum, which keeps one area definition shared between the display, the minimum-area rule and the overlap ratio. `bbox` is computed server-side by GEO-005 and by `boundingBox` locally |
+| DEP-3 | Local SQLite schema migration for the geometry index (FR-7) | **Delivered** as migration 12 (`geometry_index` + 4 bbox indexes + `config.geometryIndexReady` + `config.geometryTotals`). Existing installs are **not** backfilled — FR-7.3 above explains what replaced it |
 | DEP-4 | ARF `TypeGeoDrawing` is the upstream of the ported capture code | Divergence risk: fixes landing in ARF will not flow to `app/` automatically. Value format is the contract that must not drift |
 | RISK-1 | ~~JS-thread geometry maths inside form validation~~ — **largely retired by D7**: the work is user-initiated, one polygon at a time, with a progress indicator | Residual: a single check over 10,000 plots must still meet NFR-1 |
 | RISK-2 | ~~`validateAllGroups()` fan-out~~ — **retired by D7/FR-4.7.7**: submit reads the stored result instead of re-running geometry | — |
@@ -659,7 +695,10 @@ recommendation and named decision owners, in
 but it blocks nothing else in this spec: the current text (D1, D4, FR-6.6) already describes
 the recommended Path A.
 
-**Q2 — Does overlap validation apply to `geotrace`?** *(narrowed by ARF)* ARF settles the
+**Q2 — ~~Does overlap validation apply to `geotrace`?~~ — ANSWERED by D6: `geoshape` only.**
+A geotrace is an open line; it encloses nothing, so neither area nor self-intersection nor
+overlap means anything for it. The original framing is kept below for the reasoning.
+*(narrowed by ARF)* ARF settles the
 value format: both types are the same `[[lat,lng],…]` array, differing only in rendering and
 min-point count. So the remaining question is policy, not format — should a `geotrace` be
 treated as an implicitly closed ring for overlap purposes, or is overlap detection
@@ -668,12 +707,16 @@ treated as an implicitly closed ring for overlap purposes, or is overlap detecti
 **Q3 — ~~Capture method~~ — ANSWERED by ARF #192.** All three modes ship: tap, manual marker,
 and auto-record (FR-1.3). No decision needed.
 
-**Q3b — Does auto-record survive backgrounding?** ARF runs in a browser tab where this is
-moot. On Android, an enumerator walking a boundary will lock the screen or switch apps.
+**Q3b — ~~Does auto-record survive backgrounding?~~ — ANSWERED by D8: yes, via a foreground
+service.** Unbuilt, and since GEO-014 D-4 put tapping on its own `allowTapping` key it is
+**conditional** on a programme setting that key to `false` rather than on overlap detection
+being on. ARF runs in a browser tab where this is moot. On Android, an enumerator walking a boundary will lock the screen or switch apps.
 Should auto-record continue in the background — which means a foreground service and a
 notification — or pause and resume?
 
-**Q4 — When does validation fire?** On leaving the question, on pressing Next, only on final
+**Q4 — ~~When does validation fire?~~ — ANSWERED by D7: an explicit Validate button**, with
+FR-4.7.5/4.7.6 closing the "never validated" state it creates. Shipped in GEO-007.
+Original framing: on leaving the question, on pressing Next, only on final
 submit, or on an explicit "Check for overlaps" button? This drives RISK-1/RISK-2 directly.
 A button is cheapest and most predictable; automatic is smoother but runs the query far more often.
 
@@ -695,15 +738,21 @@ web display parity is FR-1.17.
 accept drift, or track ARF releases and re-port. The value format is the contract that must
 not diverge either way.
 
-**Q6 — Polygons in repeatable groups.** Can a repeatable question group contain a polygon
+**Q6 — ~~Polygons in repeatable groups~~ — ANSWERED by D9**: supported; never checked against
+each other within one datapoint. Can a repeatable question group contain a polygon
 question? If so, two polygons in one submission may overlap each other — not covered by any
 source AC (Section 7).
 
-**Q7 — Monitoring forms.** Akvo MIS monitoring forms pre-fill from a parent submission. If a
+**Q7 — ~~Monitoring forms~~ — ANSWERED by D10**: no polygon prefill, so the parent-overlap
+problem does not arise. **One piece is still open in delivery**: GEO-007 D-6 wants candidates
+scoped to the *registration* form, and the shipped code scopes them to the form being filled —
+see GEO-007 §10. Akvo MIS monitoring forms pre-fill from a parent submission. If a
 monitoring form re-captures the plot boundary, should it be checked against its own parent
 datapoint — which will overlap almost completely by design?
 
-**Q8 — Deleted and rejected datapoints.** Should a datapoint that was rejected in approval, or
+**Q8 — ~~Deleted and rejected datapoints~~ — ANSWERED by D11**: no exclusion logic. Note that a
+*locally* deleted datapoint is now removed from the geometry index too (FR-7.2), which is a
+different thing from excluding it by status. Should a datapoint that was rejected in approval, or
 soft-deleted, still block a new plot?
 
 ---
@@ -738,7 +787,7 @@ soft-deleted, still block a new plot?
 | Vertex/area/self-intersection checks | Ported — FR-2 |
 | Bounding-box pre-filter then precise geometry | Ported — FR-3.4 |
 | Region as metadata only, never a filter | Ported — FR-3.3 |
-| `New plot for X overlaps with plot for Y` | Ported — FR-4.1 |
+| `New plot for X overlaps with plot for Y` | Ported, then **superseded 2026-09-23** — GEO-007 D-11 replaced the names with a count and numbered percentages after device testing; see FR-4.1 |
 | Fully offline, no sync between plots | Ported — FR-3.7 |
 | Map with current/overlap polygons, tap for name | Ported — FR-6 |
 | Imagery disclaimer banner | Ported — FR-6.7 |
@@ -772,7 +821,10 @@ Summary of that plan:
 Imagery is a comprehension aid, not a correctness input — FR-2, FR-3 and FR-4 are identical
 across all three paths. The current spec (D1, D4, FR-6.6) already describes Path A.
 
-**One cross-reference worth carrying back here**: D8 forces a development build (§3.2), so the
-"we'd need a dev client" objection to a native map SDK is **already spent**. If Q1 is ever
-reopened, B′ must be re-argued on licence cost and rewrite scope alone — not on D4's original
-build-tooling reasoning.
+**One cross-reference worth carrying back here**: D8 would force a development build (§3.2), so
+the "we'd need a dev client" objection to a native map SDK is spent **once D8 ships**. It has
+not: `expo-dev-client` is still absent and the `development` EAS profile still builds a plain
+APK, and GEO-014 D-4 made background recording conditional on `allowTapping: false` rather than
+part of the phase-3 baseline. If Q1 is ever reopened, check whether D8 has landed before
+inheriting that argument — B′ must otherwise still carry the dev-client cost as well as licence
+cost and rewrite scope.
