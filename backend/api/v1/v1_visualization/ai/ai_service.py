@@ -145,10 +145,12 @@ def extract_family_metadata(
             else:
                 opt_count = 0
 
+            type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
                 "type": q.type,
+                "type_name": type_name,
                 "option_count": opt_count,
             }
             if opts:
@@ -348,6 +350,9 @@ def validate_and_sanitize_widgets(
         "map": "map",
         "map_view": "map",
         "geo_map": "map",
+        WidgetTypes.scatter: "scatter",
+        "scatter": "scatter",
+        "scatter_plot": "scatter",
     }
 
     for item in raw_widgets:
@@ -385,6 +390,9 @@ def validate_and_sanitize_widgets(
             q_info = sources_map[form_id][q_id]
             q_type = q_info.get("type")
             valid_types = SUPPORTED_QUESTION_TYPES | {
+                QuestionTypes.geo,
+                "geo",
+                "geolocation",
                 "number",
                 "option",
                 "multiple_option",
@@ -402,6 +410,24 @@ def validate_and_sanitize_widgets(
         repeat_agg = config.get("repeat_agg")
         if repeat_agg and repeat_agg not in VALID_REPEAT_AGG:
             config["repeat_agg"] = "sum"
+
+        # Scatter widget question_y sanitization
+        if w_type == "scatter":
+            qy = config.get("question_y")
+            if qy:
+                # Validate question_y against sources_map
+                target_form_qs = sources_map.get(form_id or 0, {})
+                if qy not in target_form_qs:
+                    config["question_y"] = None
+                else:
+                    qy_type = target_form_qs[qy].get("type")
+                    if qy_type not in (
+                        QuestionTypes.number,
+                        QuestionTypes.autofield,
+                        "number",
+                        "autofield",
+                    ):
+                        config["question_y"] = None
 
         # Table widget columns sanitization & auto-generation
         if w_type == "table":
