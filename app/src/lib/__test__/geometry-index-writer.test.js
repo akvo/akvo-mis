@@ -1,7 +1,9 @@
 import {
   finishDatapointSync,
+  formsOwingFullPull,
   geometryIndexNeedsFullPull,
   markFormGeometryComplete,
+  markFormGeometryReady,
   readGeometryTotals,
   recordGeometryTotal,
   writeIndexFromAnswers,
@@ -16,6 +18,7 @@ jest.mock('../../database/crud', () => ({
   crudGeometryIndex: {
     replaceForDatapoint: jest.fn(() => Promise.resolve()),
     markFormComplete: jest.fn(() => Promise.resolve()),
+    countByForm: jest.fn(() => Promise.resolve(0)),
   },
 }));
 
@@ -234,6 +237,65 @@ describe('geometry-index-writer', () => {
       expect(markSyncComplete).toHaveBeenCalled();
       expect(clearQueue).toHaveBeenCalledWith({});
       expect(order).toEqual(['mark', 'clear', 'ready']);
+    });
+  });
+
+  describe('formsOwingFullPull', () => {
+    const config = (overrides) =>
+      crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 1, ...overrides });
+
+    beforeEach(() => {
+      crudConfig.updateConfig.mockReset();
+      crudGeometryIndex.countByForm.mockReset();
+    });
+
+    /**
+     * The reported bug: the device flag was already 1 from another form, so a newly assigned form
+     * was listed through the cursor and its index could never be built.
+     */
+    it('owes a full pull for a form assigned after the device became ready', async () => {
+      config({ geometryReadyForms: '["1"]', geometryTotals: '{"1":3,"2":40}' });
+      crudGeometryIndex.countByForm.mockResolvedValue(3);
+      const owing = await formsOwingFullPull({}, [1, 2]);
+      expect([...owing]).toEqual([2]);
+    });
+
+    it('owes every form while the device itself is not ready', async () => {
+      config({ geometryIndexReady: 0, geometryReadyForms: '["1","2"]' });
+      expect([...(await formsOwingFullPull({}, [1, 2]))]).toEqual([1, 2]);
+    });
+
+    it('revokes readiness for a ready form whose index is gapped', async () => {
+      config({ geometryReadyForms: '["1","2"]', geometryTotals: '{"1":10}' });
+      crudGeometryIndex.countByForm.mockResolvedValue(7);
+      expect([...(await formsOwingFullPull({}, [1, 2]))]).toEqual([1]);
+      expect(crudConfig.updateConfig).toHaveBeenCalledWith({}, { geometryReadyForms: '["2"]' });
+    });
+
+    /**
+     * Switching a resumed pull from the full listing to the cursor one lands on a different page N
+     * and skips recent changes, so a form mid-pull keeps its mode and is not gap-tested.
+     */
+    it('does not gap-test a form that is resuming', async () => {
+      config({ geometryReadyForms: '["1"]', geometryTotals: '{"1":10}' });
+      crudGeometryIndex.countByForm.mockResolvedValue(7);
+      expect((await formsOwingFullPull({}, [1], new Set([1]))).size).toBe(0);
+      expect(crudGeometryIndex.countByForm).not.toHaveBeenCalled();
+      expect(crudConfig.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('treats an unreadable ready list as nothing ready', async () => {
+      config({ geometryReadyForms: 'not json' });
+      expect([...(await formsOwingFullPull({}, [5]))]).toEqual([5]);
+    });
+
+    it('records a form as ready once, as a string id', async () => {
+      config({ geometryReadyForms: '["1"]' });
+      await markFormGeometryReady({}, 2);
+      expect(crudConfig.updateConfig).toHaveBeenCalledWith({}, { geometryReadyForms: '["1","2"]' });
+      crudConfig.updateConfig.mockClear();
+      await markFormGeometryReady({}, 1);
+      expect(crudConfig.updateConfig).not.toHaveBeenCalled();
     });
   });
 });

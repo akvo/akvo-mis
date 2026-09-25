@@ -19,6 +19,12 @@ const table = tables.find((t) => t.name === 'geometry_index');
  * is cleared the moment a sync finishes — which is exactly when validation needs it (D-9).
  * ponytail: a map in a TEXT column, not a table. It holds one small integer per assigned
  * form; give it a table if that ever stops being a handful.
+ *
+ * `geometryReadyForms` is a JSON array of backend form ids whose index a full, error-free
+ * geometry pull has populated. `geometryIndexReady` is one flag for the device, but the index is
+ * filled form by form: a registration form assigned after that flag flipped was pulled through
+ * the cursor-filtered listing, got none of its older datapoints, and its index could never be
+ * built. See `formsOwingFullPull`. Same ponytail as `geometryTotals`: one id per assigned form.
  */
 const up = async (db) => {
   await sql.createTable(db, table.name, table.fields);
@@ -32,6 +38,7 @@ const up = async (db) => {
   `);
   await sql.addNewColumn(db, 'config', 'geometryIndexReady', 'TINYINT DEFAULT 0');
   await sql.addNewColumn(db, 'config', 'geometryTotals', 'TEXT');
+  await sql.addNewColumn(db, 'config', 'geometryReadyForms', 'TEXT');
 };
 
 const down = (db) => sql.dropTable(db, table.name);

@@ -205,6 +205,27 @@ GEO-005's `complete: false`. Reset clears it back to `0` along with the rest of 
    but the confirmation dialog does not enforce it. This needs a release-note line at minimum;
    warning when unsynced work exists would be better, and is out of scope here.
 
+**Amended 2026-09-25 — which forms get a full pull is decided per form.** `geometryIndexReady`
+stays the device-level gate GEO-007 reads, and still flips only when a run that owed a full pull
+completes. But the index is built form by form, and a registration form assigned *after* the flag
+flipped was listed through the cursor: none of its older datapoints came back, its
+`geometry_total` stayed above its indexed count, Retry repeated the same cursor-filtered listing,
+and validation reported "incomplete" for good.
+
+So migration 12 also adds `config.geometryReadyForms` (folded in before release; the epic had not shipped), a JSON array of backend form ids. A form is
+listed with `geometry_full=true` while the device flag is `0` **or** the form is not in that
+array (`formsOwingFullPull`). It joins the array only when a full pull of it has reached the last
+page with every item stored. A gapped index (`countByForm < geometry_total`, as in D-9) removes it
+again, but that test runs only for forms **starting** a pull. A resumed pull keeps the mode it
+started in: the full and cursor-filtered listings number their pages differently, so a pull that
+switched modes on resume would start at a page N that skips recent changes, and the cursor would
+then advance past them.
+
+The quick-check in `SyncService` and the background task's "queue complete" branch both refuse to
+retire the job while any assigned form owes a full pull. The background task still cannot *start*
+one, so it leaves the job to the foreground. The array is empty on upgrade, so every form owes one
+full pull. Reset truncates `config` and clears it with everything else.
+
 ### D-9: Completeness is measured against `geometry_total`, not datapoint counts *(2026-09-23)*
 
 **Decision**: `config.geometryTotals` holds the server's `geometry_total` per

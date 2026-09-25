@@ -134,3 +134,76 @@ export const readGeometryTotals = async (db) => {
     return {};
   }
 };
+
+/** Backend form ids, as strings, whose index a full error-free pull has populated. */
+const readReadyForms = async (db) => {
+  const config = await crudConfig.getConfig(db);
+  try {
+    const ids = JSON.parse(config?.geometryReadyForms || '[]');
+    return Array.isArray(ids) ? ids.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeReadyForms = (db, ids) =>
+  crudConfig.updateConfig(db, { geometryReadyForms: JSON.stringify(ids) });
+
+/**
+ * Which of these forms must be listed with `geometry_full=true` this run?
+ *
+ * `geometryIndexReady` answers for the device, but the index is built per form. A registration
+ * form assigned after that flag flipped was pulled through the cursor-filtered listing, which
+ * returns none of its older datapoints, so its `geometry_total` stayed above its indexed count
+ * forever: validation said "incomplete", Retry ran the same cursor-filtered sync, nothing healed.
+ *
+ * A form owes a full pull until one has finished for it (`markFormGeometryReady`). The mode must
+ * not change partway through a pull: resuming a full listing through the cursor-filtered one
+ * lands on a different page N and skips the recent changes that page numbering hid. So the gap
+ * test — the only thing that can revoke readiness — runs only for forms starting fresh, never for
+ * ones in `resumingIds`, and revoking it keeps every later resume of that pull full as well.
+ *
+ * @param {Array<number|string>} formIds - backend ids of the registration forms being synced
+ * @param {Set} resumingIds - forms with an incomplete queue row
+ * @returns {Promise<Set>} the subset of `formIds` that owes a full pull
+ */
+export const formsOwingFullPull = async (db, formIds = [], resumingIds = new Set()) => {
+  const everyForm = await geometryIndexNeedsFullPull(db);
+  const ready = await readReadyForms(db);
+  const totals = await readGeometryTotals(db);
+  const owing = new Set();
+  const gapped = [];
+  await formIds.reduce(async (prev, formId) => {
+    await prev;
+    const key = `${formId}`;
+    if (everyForm || !ready.includes(key)) {
+      owing.add(formId);
+      return;
+    }
+    const expected = totals[key];
+    if (resumingIds.has(formId) || !Number.isFinite(expected) || expected <= 0) {
+      return;
+    }
+    // ponytail: a server polygon the device can never index keeps this form full-pulling on
+    // every sync; the preflight reports the same gap, so it is visible rather than silent.
+    if ((await crudGeometryIndex.countByForm(db, formId)) < expected) {
+      owing.add(formId);
+      gapped.push(key);
+    }
+  }, Promise.resolve());
+  if (gapped.length) {
+    await writeReadyForms(
+      db,
+      ready.filter((id) => !gapped.includes(id)),
+    );
+  }
+  return owing;
+};
+
+/** Record that a full pull of this form finished every page without an error. */
+export const markFormGeometryReady = async (db, formId) => {
+  const ready = await readReadyForms(db);
+  if (!ready.includes(`${formId}`)) {
+    await writeReadyForms(db, [...ready, `${formId}`]);
+  }
+};

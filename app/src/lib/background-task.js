@@ -13,7 +13,11 @@ import {
   geometryIndexNeedsFullPull,
   recordGeometryTotal,
 } from './sync-datapoints';
-import { markFormGeometryComplete } from './geometry-index-writer';
+import {
+  formsOwingFullPull,
+  markFormGeometryComplete,
+  markFormGeometryReady,
+} from './geometry-index-writer';
 import notification from './notification';
 import cascades from './cascades';
 import crudJobs from '../database/crud/crud-jobs';
@@ -555,6 +559,30 @@ const syncDatapointsBackground = async () => {
     }
     if (!incompleteForms.length) {
       /**
+       * A complete queue proves a full pull only if the queue was filled BY one, and it cannot
+       * say whether it was. A migrated device keeps the completed rows of an earlier, cursor-
+       * based sync while `geometryIndexReady` is still 0; finishing here marked that empty or
+       * stale index ready without downloading a single form.
+       *
+       * Reprocessing from here is not an option either: after resetting the queue and pulling
+       * everything, the next run sees this exact state again — complete queue, readiness 0 — and
+       * has no record that it already did the work, so it would reset forever. The foreground
+       * sync resolves this by reprocessing every assigned form in one run (SyncService's
+       * quick-check falls through when a full pull is owed), so the job is left to it, as with
+       * an empty queue above.
+       *
+       * The same holds per form: a registration form assigned after readiness flipped owes a full
+       * pull this task has no path to start, and completing here would retire the job over it.
+       */
+      const assignedForms = await crudForms.selectLatestFormVersion(db, { user: activeJob.user });
+      const owing = await formsOwingFullPull(
+        db,
+        (assignedForms || []).map((form) => form.formId),
+      );
+      if (needsFullGeometry || owing.size) {
+        return;
+      }
+      /**
        * The job used to be deleted before the finish step ran, so a failed backend post left
        * `geometryIndexReady` at 0 with the job already gone and no run that would try again —
        * overlap validation stayed unavailable until a Reset. Retire the job only once the
@@ -579,6 +607,9 @@ const syncDatapointsBackground = async () => {
     const startPage = queueRow.lastPage + 1;
     const formCache = new Map();
     let formComplete = false;
+    let formHasErrors = false;
+    // Resuming, so the form keeps the mode its pull started in (see `formsOwingFullPull`).
+    const formFull = (await formsOwingFullPull(db, [formId], new Set([formId]))).has(formId);
 
     await fetchFormDatapointsPageByPage(
       formId,
@@ -614,6 +645,7 @@ const syncDatapointsBackground = async () => {
             );
           } catch (err) {
             pageHasErrors = true;
+            formHasErrors = true;
             Sentry.captureException(err);
           }
         }, Promise.resolve());
@@ -624,7 +656,7 @@ const syncDatapointsBackground = async () => {
       },
       startPage,
       100,
-      needsFullGeometry,
+      formFull,
     );
 
     /**
@@ -635,6 +667,9 @@ const syncDatapointsBackground = async () => {
      */
     if (formComplete) {
       await markFormGeometryComplete(db, formId);
+    }
+    if (formFull && formComplete && !formHasErrors) {
+      await markFormGeometryReady(db, formId);
     }
 
     formCache.clear();

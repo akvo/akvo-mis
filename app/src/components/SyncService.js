@@ -5,7 +5,11 @@ import * as Sentry from '@sentry/react-native';
 import { BuildParamsState, DatapointSyncState, UIState, UserState } from '../store';
 import { backgroundTask } from '../lib';
 import { refreshStorageWarning } from '../lib/submission-fallback';
-import { markFormGeometryComplete } from '../lib/geometry-index-writer';
+import {
+  formsOwingFullPull,
+  markFormGeometryComplete,
+  markFormGeometryReady,
+} from '../lib/geometry-index-writer';
 import crudJobs from '../database/crud/crud-jobs';
 import { crudConfig, crudDataPoints, crudForms, crudSyncQueue } from '../database/crud';
 import {
@@ -238,6 +242,20 @@ const SyncService = () => {
         return;
       }
 
+      /**
+       * Decided per form, before the quick-check: a form assigned after readiness flipped owes a
+       * full pull even when every other form is current, and the quick-check must not retire the
+       * job over it. Forms mid-pull keep the mode they started in (see `formsOwingFullPull`).
+       */
+      const resumingIds = new Set(
+        (await crudSyncQueue.getIncompleteForms(db)).map((row) => row.formId),
+      );
+      const fullForms = await formsOwingFullPull(
+        db,
+        registrationForms.map((form) => form.formId),
+        resumingIds,
+      );
+
       // Quick check: if queue has completed entries and all local counts match, skip
       const hasEntries = await crudSyncQueue.hasEntries(db);
       const hasIncomplete = hasEntries ? await crudSyncQueue.hasIncomplete(db) : false;
@@ -261,7 +279,7 @@ const SyncService = () => {
          * full pull, and taking the shortcut there retired the job and left readiness at 0
          * forever. When a full pull is owed, fall through and do the sync.
          */
-        if (!hasNewData && !needsFullGeometry) {
+        if (!hasNewData && !fullForms.size) {
           await crudJobs.deleteJob(db, activeJob.id);
           DatapointSyncState.update((s) => {
             s.inProgress = false;
@@ -310,6 +328,8 @@ const SyncService = () => {
         const formCache = new Map();
         let formItemsProcessed = queueRow ? allProgress[formId]?.processed || 0 : 0;
         let formComplete = false;
+        let formHasErrors = false;
+        const formFull = fullForms.has(formId);
 
         await fetchFormDatapointsPageByPage(
           formId,
@@ -363,6 +383,7 @@ const SyncService = () => {
               } catch (error) {
                 pageHasErrors = true;
                 hasErrors = true;
+                formHasErrors = true;
                 Sentry.captureMessage(`Error downloading datapoint JSON for URL ${item.url}`);
                 Sentry.captureException(error);
               }
@@ -388,7 +409,7 @@ const SyncService = () => {
           },
           startPage,
           SYNC_PAGE_SIZE,
-          needsFullGeometry,
+          formFull,
         );
 
         /**
@@ -399,6 +420,10 @@ const SyncService = () => {
          */
         if (formComplete) {
           await markFormGeometryComplete(db, formId);
+        }
+        // Only a full pull that reached the last page with every item stored proves the form.
+        if (formFull && formComplete && !formHasErrors) {
+          await markFormGeometryReady(db, formId);
         }
 
         // Clear cache for this form to free memory
