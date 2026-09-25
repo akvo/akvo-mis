@@ -1,10 +1,11 @@
 import React from 'react';
 import { ToastAndroid } from 'react-native';
 import { Tab } from '@rneui/themed';
-import styles from '../styles';
+import getStyles from '../styles';
 import { UIState, FormState } from '../../store';
 import i18n from '../../lib/i18n';
 import { generateValidationSchemaFieldLevel, onFilterDependency } from '../lib';
+import useTheme from '../../lib/theme';
 
 const FormNavigation = ({
   currentGroup,
@@ -17,6 +18,8 @@ const FormNavigation = ({
   setShowQuestionGroupList,
   setShowDialogMenu,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const visitedQuestionGroup = FormState.useState((s) => s.visitedQuestionGroup);
   const currentValues = FormState.useState((s) => s.currentValues);
   const activeLang = UIState.useState((s) => s.lang);
@@ -41,17 +44,11 @@ const FormNavigation = ({
     }
 
     const allGroups = formDefinition.question_group;
-    // Extract all questions for recursive dependency checking
     const allQuestions = allGroups.flatMap((qg) => qg.question).filter((q) => q);
 
     const validationPromises = allGroups.map(async (group) => {
       const validateSync = group.question
         ?.filter((q) => onFilterDependency(group, currentValues, q, 0, allQuestions))
-        /**
-         * Only ENTITY cascades are gated here. `extra.type` is a cascade sub-type, so
-         * the old `|| !q?.extra?.type` clause also excluded administration cascades —
-         * a required one was never validated, and the form submitted without it.
-         */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
           const defaultVal = [
@@ -88,22 +85,12 @@ const FormNavigation = ({
   };
 
   const handleFormNavigation = async (index) => {
-    // index 0 = prev group
-    // index 1 = show question group list
-    // index 2 = next group
-    // Extract all questions for recursive dependency checking
     const allQuestions =
       formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [];
 
     const validateSync =
       currentGroup?.question
         ?.filter((q) => onFilterDependency(currentGroup, currentValues, q, 0, allQuestions))
-        /**
-         * Only ENTITY cascades are gated, because they depend on options and
-         * prevAdmAnswer. `extra.type` is a cascade sub-type, so the old
-         * `|| !q?.extra?.type` clause also excluded administration cascades — a required
-         * one was never validated here, and the group passed without it.
-         */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
           const defaultVal = [
@@ -116,9 +103,6 @@ const FormNavigation = ({
           ].includes(q?.type)
             ? null
             : '';
-          /**
-           * Set default value when the answer is undefined
-           */
           const fieldValue =
             currentValues?.[q?.id] === undefined ? defaultVal : currentValues[q.id];
           return generateValidationSchemaFieldLevel(fieldValue, q);
@@ -134,7 +118,6 @@ const FormNavigation = ({
       return acc;
     }, {});
     const errors = Object.values(feedbackValues).filter((val) => val !== true);
-    // Show warning but allow navigation to next group
     if (errors.length > 0 && index === 2 && activeGroup < totalGroup - 1) {
       const isRequired = errors.find((e) => e.includes('required'));
       const errorMessage = isRequired
@@ -146,7 +129,6 @@ const FormNavigation = ({
       s.feedback = feedbackValues;
     });
 
-    // No longer block navigation - allow moving to next group even with errors
     if (currentGroup?.id && !visitedQuestionGroup.includes(currentGroup.id)) {
       FormState.update((s) => {
         s.visitedQuestionGroup = [...visitedQuestionGroup, currentGroup.id];
@@ -174,7 +156,6 @@ const FormNavigation = ({
       setActiveGroup(activeGroup + 1);
     }
     if (index === 2 && activeGroup === totalGroup - 1) {
-      // Validate all groups before submitting
       const allGroupsValid = await validateAllGroups();
       if (allGroupsValid) {
         onSubmit();
@@ -197,7 +178,7 @@ const FormNavigation = ({
     >
       <Tab.Item
         title={trans.buttonBack}
-        icon={{ name: 'chevron-back-outline', type: 'ionicon', color: 'grey', size: 20 }}
+        icon={{ name: 'chevron-back-outline', type: 'ionicon', color: theme.text.secondary, size: 20 }}
         iconPosition="left"
         iconContainerStyle={styles.formNavigationIcon}
         titleStyle={styles.formNavigationTitle}
@@ -215,7 +196,7 @@ const FormNavigation = ({
       {activeGroup < totalGroup - 1 ? (
         <Tab.Item
           title={trans.buttonNext}
-          icon={{ name: 'chevron-forward-outline', type: 'ionicon', color: 'grey', size: 20 }}
+          icon={{ name: 'chevron-forward-outline', type: 'ionicon', color: theme.text.secondary, size: 20 }}
           iconPosition="right"
           iconContainerStyle={styles.formNavigationIcon}
           titleStyle={styles.formNavigationTitle}
@@ -227,7 +208,7 @@ const FormNavigation = ({
       ) : (
         <Tab.Item
           title={trans.buttonSubmit}
-          icon={{ name: 'paper-plane-outline', type: 'ionicon', color: 'white', size: 20 }}
+          icon={{ name: 'paper-plane-outline', type: 'ionicon', color: theme.buttonPrimary.text, size: 20 }}
           iconPosition="right"
           iconContainerStyle={styles.formNavigationIconSubmit}
           titleStyle={styles.formNavigationSubmit}

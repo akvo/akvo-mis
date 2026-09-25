@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { View, StyleSheet, Image, Modal } from 'react-native';
+import { View, StyleSheet, Image, Modal, TouchableOpacity, Text } from 'react-native';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { Button, Icon } from '@rneui/themed';
+import { Icon } from '@rneui/themed';
 import { FieldLabel } from '../support';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const TypeSignature = ({
   onChange,
@@ -16,6 +17,7 @@ const TypeSignature = ({
   requiredSign = '*',
   tooltip = null,
 }) => {
+  const theme = useTheme();
   const [show, setShow] = useState(false);
   const [signature, setSignature] = useState(value);
   const activeLang = FormState.useState((s) => s.lang);
@@ -33,6 +35,9 @@ const TypeSignature = ({
     setSignature(null);
   };
 
+  const penColor = theme.isDark ? '#FFFFFF' : '#000000';
+  const canvasBg = theme.isDark ? theme.bg.surfaceTertiary : '#FFFFFF';
+
   return (
     <View style={styles.container}>
       <FieldLabel
@@ -43,7 +48,7 @@ const TypeSignature = ({
         tooltip={tooltip}
       />
       {signature && (
-        <View style={styles.preview}>
+        <View style={[styles.preview, { backgroundColor: theme.bg.surfaceTertiary, borderRadius: 12 }]}>
           <Image
             resizeMode="contain"
             style={{ width: '100%', height: 164 }}
@@ -51,15 +56,17 @@ const TypeSignature = ({
           />
         </View>
       )}
-      <Button
-        title={signature ? trans.changeSignatureButton : trans.openSignatureButton}
+      <TouchableOpacity
+        style={[styles.signButton, { backgroundColor: theme.buttonPrimary.bg }]}
         onPress={() => setShow(true)}
-        icon={<Icon name="create" size={20} color="#fff" type="ionicon" />}
-        style={{ width: '100%' }}
-        containerStyle={{ marginTop: 10 }}
         testID="open-signature-button"
         accessibilityLabel="open-signature-button"
-      />
+      >
+        <Icon name="create" size={18} color={theme.buttonPrimary.text} type="ionicon" />
+        <Text style={[styles.signButtonText, { color: theme.buttonPrimary.text }]}>
+          {signature ? trans.changeSignatureButton : trans.openSignatureButton}
+        </Text>
+      </TouchableOpacity>
       {show && (
         <Modal>
           <SignatureCanvas
@@ -72,6 +79,8 @@ const TypeSignature = ({
             autoClear={false}
             dataURL={signature}
             imageType="image/png"
+            backgroundColor={canvasBg}
+            penColor={penColor}
           />
         </Modal>
       )}
@@ -89,9 +98,22 @@ const styles = StyleSheet.create({
   preview: {
     width: '100%',
     height: 164,
-    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,
+  },
+  signButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginTop: 10,
+    marginHorizontal: 10,
+    gap: 8,
+  },
+  signButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

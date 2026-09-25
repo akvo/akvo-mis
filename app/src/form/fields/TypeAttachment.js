@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
-import { Button, Text, Image } from '@rneui/themed';
+import { View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
+import { Image } from '@rneui/themed';
 import * as DocumentPicker from 'expo-document-picker';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as Linking from 'expo-linking';
@@ -9,6 +9,7 @@ import { FormState } from '../../store';
 import { helpers, i18n } from '../../lib';
 import { persistImage } from '../../lib/image-compressor';
 import MIME_TYPES from '../../lib/mime_types';
+import useTheme from '../../lib/theme';
 
 const TypeAttachment = ({
   onChange,
@@ -21,6 +22,7 @@ const TypeAttachment = ({
   tooltip = null,
   rule = null,
 }) => {
+  const theme = useTheme();
   const [selectedFile, setSelectedFile] = useState({ name: value });
   const activeLang = FormState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
@@ -46,13 +48,10 @@ const TypeAttachment = ({
       });
       if (!canceled && assets && assets.length > 0) {
         const result = assets[0];
-        // Move out of the purgeable cache dir so the file survives until synced
         onChange(id, await persistImage(result?.uri, 'attachments'));
         setSelectedFile(result);
       }
     } catch (error) {
-      // Handle any errors that occur during document picking
-      // by showing an alert instead of console.log
       Alert.alert('Error', 'An error occurred while picking the document. Please try again.');
     }
   };
@@ -82,50 +81,58 @@ const TypeAttachment = ({
       />
       {value && helpers.isImageFile(fileType) && (
         <View style={{ marginBottom: 10 }}>
-          <Image source={{ uri: value }} style={styles.image} />
-          <Button
-            icon={<Icon name="trash" size={20} color="white" style={styles.Icon} />}
-            title={trans.buttonRemove}
+          <Image source={{ uri: value }} style={[styles.image, { borderRadius: 12 }]} />
+          <TouchableOpacity
+            style={[styles.pillButton, { backgroundColor: theme.status.error, marginTop: 10 }]}
             onPress={onRemovePress}
             testID="remove-file-button"
             accessibilityLabel="remove-file-button"
-            buttonStyle={styles.removeButton}
-          />
+          >
+            <Icon name="trash" size={18} color="#FFFFFF" />
+            <Text style={styles.pillButtonText}>{trans.buttonRemove}</Text>
+          </TouchableOpacity>
         </View>
       )}
       {selectedFile?.name && !helpers.isImageFile(fileType) && (
         <View style={{ marginBottom: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Icon name="document-text" size={20} color="black" style={styles.Icon} />
-            <Text style={styles.fileName}>{fileName}</Text>
+          <View style={[styles.fileRow, { backgroundColor: theme.bg.surfaceTertiary }]}>
+            <Icon name="document-text" size={20} color={theme.icon.primary} />
+            <Text style={[styles.fileName, { color: theme.text.primary }]}>{fileName}</Text>
           </View>
-          <Button
-            icon={<Icon name="eye" size={20} color="white" style={styles.Icon} />}
-            title={trans.openFileButton}
+          <TouchableOpacity
+            style={[styles.pillButton, { backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }]}
             onPress={() => onOpenPress(selectedFile?.uri)}
             testID="open-file-button"
             accessibilityLabel="open-file-button"
-            buttonStyle={styles.attachButton}
-          />
-          <Button
-            icon={<Icon name="trash" size={20} color="white" style={styles.Icon} />}
-            title={trans.buttonRemove}
+          >
+            <Icon name="eye" size={18} color={theme.buttonPrimary.text} />
+            <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>
+              {trans.openFileButton}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.pillButton, { backgroundColor: theme.status.error, marginTop: 10 }]}
             onPress={onRemovePress}
             testID="remove-file-button"
             accessibilityLabel="remove-file-button"
-            buttonStyle={styles.removeButton}
-          />
+          >
+            <Icon name="trash" size={18} color="#FFFFFF" />
+            <Text style={styles.pillButtonText}>{trans.buttonRemove}</Text>
+          </TouchableOpacity>
         </View>
       )}
       {!value && (
-        <Button
-          icon={<Icon name="attach" size={20} color="white" style={styles.Icon} />}
-          title={trans.attachButton}
+        <TouchableOpacity
+          style={[styles.pillButton, { backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }]}
           onPress={onPickerPress}
           testID="attach-file-button"
           accessibilityLabel="attach-file-button"
-          buttonStyle={styles.attachButton}
-        />
+        >
+          <Icon name="attach" size={18} color={theme.buttonPrimary.text} />
+          <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>
+            {trans.attachButton}
+          </Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -138,23 +145,33 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     marginBottom: 10,
   },
-  removeButton: {
-    backgroundColor: '#ec003f',
-    marginTop: 10,
-  },
-  attachButton: {
-    backgroundColor: '#1E90FF',
-    marginTop: 10,
-  },
   fileName: {
-    marginBottom: 10,
+    flex: 1,
   },
-  Icon: {
-    marginRight: 10,
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
   },
   image: {
     width: '100%',
     height: 200,
     aspectRatio: 1,
+  },
+  pillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginHorizontal: 10,
+    gap: 8,
+  },
+  pillButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

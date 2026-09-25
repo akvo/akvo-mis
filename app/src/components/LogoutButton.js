@@ -6,8 +6,10 @@ import { AuthState, UserState, FormState, UIState, DatapointSyncState } from '..
 import { api, cascades, i18n } from '../lib';
 import { openDatabase } from '../database';
 import sql from '../database/sql';
+import useTheme from '../lib/theme';
 
 const LogoutButton = () => {
+  const theme = useTheme();
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
@@ -46,7 +48,7 @@ const LogoutButton = () => {
 
     FormState.update((s) => {
       s.form = {};
-      s.currentValues = {}; // answers
+      s.currentValues = {};
       s.visitedQuestionGroup = [];
       s.cascades = {};
       s.surveyDuration = 0;
@@ -66,14 +68,8 @@ const LogoutButton = () => {
       s.statusBar = null;
     });
 
-    /**
-     * Remove sqlite files
-     */
     await cascades.dropFiles();
     await db.closeAsync();
-    /**
-     * Reset axios token
-     */
     api.setToken(null);
 
     navigation.navigate('GetStarted');
@@ -84,15 +80,23 @@ const LogoutButton = () => {
       <TouchableOpacity
         onPress={() => setVisible(true)}
         testID="list-item-logout"
-        style={styles.listItem}
+        style={[styles.listItem, { backgroundColor: theme.bg.surfaceSecondary, borderBottomColor: theme.border.listDivider }]}
       >
         <View style={styles.contentContainer}>
-          <Text style={styles.buttonText}>{trans.buttonReset}</Text>
+          <Text style={[styles.buttonText, { color: theme.text.primary }]}>{trans.buttonReset}</Text>
         </View>
-        <Icon name="refresh" type="ionicon" color="grey" size={24} />
+        <Icon name="refresh" type="ionicon" color={theme.icon.secondary} size={24} />
       </TouchableOpacity>
-      <Dialog testID="dialog-confirm-logout" isVisible={visible}>
-        {loading ? <Dialog.Loading /> : <Text>{trans.confirmReset}</Text>}
+      <Dialog
+        testID="dialog-confirm-logout"
+        isVisible={visible}
+        overlayStyle={{ backgroundColor: theme.bg.surfaceElevated1 }}
+      >
+        {loading ? (
+          <Dialog.Loading />
+        ) : (
+          <Text style={{ color: theme.text.primary }}>{trans.confirmReset}</Text>
+        )}
         <Dialog.Actions>
           <Dialog.Button onPress={handleYesPress} testID="dialog-button-yes">
             {trans.buttonYes}
@@ -115,9 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   contentContainer: {
     flex: 1,
@@ -125,6 +127,5 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#212121',
   },
 });

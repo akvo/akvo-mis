@@ -7,9 +7,12 @@ import QuestionField from './QuestionField';
 import { FieldGroupHeader, RepeatSection } from '../support';
 import { generateValidationSchemaFieldLevel } from '../lib';
 import { FormState } from '../../store';
-import styles from '../styles';
+import getStyles from '../styles';
+import useTheme from '../../lib/theme';
 
 const QuestionGroup = ({ index, group, activeQuestions, dependantQuestions = [] }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const values = FormState.useState((s) => s.currentValues);
   const listRef = useRef(null);
   const [contentHeight, setContentHeight] = useState(0);

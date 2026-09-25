@@ -1,20 +1,20 @@
 import React from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Text, Icon } from '@rneui/themed';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
+import useTheme from '../../lib/theme';
 
 const FieldGroupHeader = ({ description, index, label, repeatable, id }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
   const handleDuplicateGroup = () => {
     if (repeatable) {
       FormState.update((s) => {
-        // If there's already a repeats array for this group, add to it
         const currentRepeats = s.repeats || {};
         const groupRepeats = currentRepeats[id] || [0];
-
-        // Add next repeat index (which is the current max + 1)
         const nextRepeatIndex = Math.max(...groupRepeats) + 1;
-        // Update the state with the new repeat
         s.repeats = {
           ...s.repeats,
           [id]: [...groupRepeats, nextRepeatIndex],
@@ -35,7 +35,7 @@ const FieldGroupHeader = ({ description, index, label, repeatable, id }) => {
             testID="copy-button"
             onPress={handleDuplicateGroup}
           >
-            <Icon type="ionicon" name="add-circle-outline" size={20} color="#000" testID="copy" />
+            <Icon type="ionicon" name="add-circle-outline" size={20} color={theme.icon.primary} testID="copy" />
           </TouchableOpacity>
         )}
       </View>

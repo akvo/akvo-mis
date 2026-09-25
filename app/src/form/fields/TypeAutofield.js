@@ -3,9 +3,10 @@ import { View } from 'react-native';
 import { Input } from '@rneui/themed';
 
 import { FieldLabel } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { strToFunction } from '../lib';
+import useTheme from '../../lib/theme';
 
 const TypeAutofield = ({
   keyform,
@@ -17,6 +18,8 @@ const TypeAutofield = ({
   questions = [],
   value: autofieldValue = null,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [value, setValue] = useState(null);
   const [fieldColor, setFieldColor] = useState(null);
   const { fnString: nameFnString, fnColor } = fn;
@@ -24,22 +27,16 @@ const TypeAutofield = ({
   useEffect(() => {
     const unsubsValues = FormState.subscribe(({ currentValues, surveyStart }) => {
       if (!surveyStart) {
-        /**
-         * When the survey session ends, `fnString` will not be re-executed.
-         * */
         return;
       }
       try {
-        // Pass the original fnString and allQuestions to strToFunction
         const automateValue = strToFunction(nameFnString, currentValues, questions);
         if (typeof automateValue === 'function') {
           const answer = automateValue();
           if (answer !== value && (answer || answer === 0)) {
             setValue(answer);
 
-            // Handle fnColor - supports both string-based function and object lookup
             if (typeof fnColor === 'string') {
-              // Use the original fnColor string with allQuestions
               const fnColorFunction = strToFunction(fnColor, currentValues, questions);
               if (typeof fnColorFunction === 'function') {
                 const fnColorValue = fnColorFunction();
@@ -76,7 +73,7 @@ const TypeAutofield = ({
     <View testID="type-autofield-wrapper">
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} />
       <Input
-        inputContainerStyle={{
+                inputContainerStyle={{
           ...styles.autoFieldContainer,
           backgroundColor: fieldColor || styles.autoFieldContainer.backgroundColor,
         }}
@@ -85,10 +82,11 @@ const TypeAutofield = ({
         multiline
         numberOfLines={2}
         disabled
+        renderErrorMessage={false}
         style={{
           fontWeight: 'bold',
           opacity: 1,
-          color: fieldColor ? 'white' : 'black',
+          color: fieldColor ? '#ffffff' : theme.text.primary,
         }}
       />
     </View>

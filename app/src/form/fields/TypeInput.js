@@ -3,9 +3,10 @@ import React, { isValidElement } from 'react';
 import { View } from 'react-native';
 import { Input, Text } from '@rneui/themed';
 import { FieldLabel } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
+import useTheme from '../../lib/theme';
 
-export const addPreffix = (addonBefore) => {
+export const addPreffix = (addonBefore, theme) => {
   if (!addonBefore) {
     return {};
   }
@@ -20,24 +21,22 @@ export const addPreffix = (addonBefore) => {
   return {
     leftIcon: element,
     leftIconContainerStyle: {
-      backgroundColor: '#F5F5F5',
-      marginLeft: -10,
-      marginRight: 8,
+      backgroundColor: theme.bg.surfaceTertiary,
+      marginLeft: -16,
+      marginRight: 10,
       marginVertical: 0,
-      paddingLeft: 8,
-      paddingRight: 8,
+      paddingLeft: 12,
+      paddingRight: 12,
       borderWidth: 0,
-      borderRightWidth: 0.5,
-      borderColor: 'grey',
-      borderTopLeftRadius: 5,
-      borderBottomLeftRadius: 5,
+      borderTopLeftRadius: 12,
+      borderBottomLeftRadius: 12,
       borderTopRightRadius: 0,
       borderBottomRightRadius: 0,
     },
   };
 };
 
-export const addSuffix = (addonAfter) => {
+export const addSuffix = (addonAfter, theme) => {
   if (!addonAfter) {
     return {};
   }
@@ -52,17 +51,15 @@ export const addSuffix = (addonAfter) => {
   return {
     rightIcon: element,
     rightIconContainerStyle: {
-      backgroundColor: '#F5F5F5',
-      marginRight: -10,
-      marginLeft: 8,
+      backgroundColor: theme.bg.surfaceTertiary,
+      marginRight: -16,
+      marginLeft: 10,
       marginVertical: 0,
-      paddingLeft: 8,
-      paddingRight: 8,
+      paddingLeft: 12,
+      paddingRight: 12,
       borderWidth: 0,
-      borderLeftWidth: 0.5,
-      borderLeftColor: 'grey',
-      borderTopRightRadius: 5,
-      borderBottomRightRadius: 5,
+      borderTopRightRadius: 12,
+      borderBottomRightRadius: 12,
       borderTopLeftRadius: 0,
       borderBottomLeftRadius: 0,
     },
@@ -83,12 +80,16 @@ const TypeInput = ({
   addonBefore = null,
   tooltip = null,
   onFocus = null,
+  hasError = false,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const requiredValue = required ? requiredSign : null;
-  const inputContainerStyle =
-    metaUUID || disabled
-      ? { ...styles.inputFieldContainer, ...styles.inputFieldDisabled }
-      : styles.inputFieldContainer;
+  const inputContainerStyle = {
+    ...styles.inputFieldContainer,
+    ...(metaUUID || disabled ? styles.inputFieldDisabled : {}),
+    ...(hasError ? styles.inputFieldError : {}),
+  };
 
   const handleFocus = () => {
     if (onFocus) {
@@ -100,7 +101,9 @@ const TypeInput = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-        inputContainerStyle={inputContainerStyle}
+                inputContainerStyle={inputContainerStyle}
+        inputStyle={{ color: theme.input.textInput }}
+        renderErrorMessage={false}
         onChangeText={(val) => {
           if (onChange) {
             onChange(id, val);
@@ -109,8 +112,9 @@ const TypeInput = ({
         value={value}
         testID="type-input"
         onFocus={handleFocus}
-        {...addPreffix(addonBefore)}
-        {...addSuffix(addonAfter)}
+        placeholderTextColor={theme.input.text}
+        {...addPreffix(addonBefore, theme)}
+        {...addSuffix(addonAfter, theme)}
         disabled={metaUUID || disabled}
       />
     </View>

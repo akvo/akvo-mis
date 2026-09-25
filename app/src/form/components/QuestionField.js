@@ -1,5 +1,5 @@
 /* eslint-disable react/jsx-props-no-spreading */
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 
 import { View, Text } from 'react-native';
 import {
@@ -17,9 +17,10 @@ import {
   TypeSignature,
   TypeGeoDrawing,
 } from '../fields';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { QUESTION_TYPES } from '../../lib/constants';
+import useTheme from '../../lib/theme';
 
 const QuestionField = ({
   keyform,
@@ -29,12 +30,18 @@ const QuestionField = ({
   questions = [],
   onFieldFocus,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const questionType = questionField?.type;
   const defaultValQuestion = questionField?.default_value || {};
   const displayValue =
     questionField?.hidden || Object.keys(defaultValQuestion).length ? 'none' : 'flex';
   const formFeedback = FormState.useState((s) => s.feedback);
   const viewRef = useRef(null);
+  const hasError = useMemo(
+    () => formFeedback?.[questionField?.id] && formFeedback?.[questionField?.id] !== true,
+    [formFeedback, questionField?.id],
+  );
 
   const handleOnChangeField = useCallback(
     (id, val) => {
@@ -64,6 +71,7 @@ const QuestionField = ({
             onChange={handleOnChangeField}
             value={value}
             onFocus={handleInputFocus}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -83,6 +91,7 @@ const QuestionField = ({
             keyform={keyform}
             onChange={handleOnChangeField}
             value={value}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -92,6 +101,7 @@ const QuestionField = ({
             keyform={keyform}
             onChange={handleOnChangeField}
             value={value}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -102,6 +112,7 @@ const QuestionField = ({
             onChange={handleOnChangeField}
             value={value}
             onFocus={handleInputFocus}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -113,6 +124,7 @@ const QuestionField = ({
             value={value}
             questions={questions}
             onFocus={handleInputFocus}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -124,6 +136,7 @@ const QuestionField = ({
             keyform={keyform}
             onChange={handleOnChangeField}
             value={value}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -172,6 +185,7 @@ const QuestionField = ({
             onChange={handleOnChangeField}
             value={value}
             onFocus={handleInputFocus}
+            hasError={hasError}
             {...questionField}
           />
         );
@@ -184,12 +198,13 @@ const QuestionField = ({
     value,
     questionField,
     questions,
+    hasError,
   ]);
 
   return (
     <View ref={viewRef} testID="question-view" style={{ display: displayValue }}>
       {renderField()}
-      {formFeedback?.[questionField?.id] && formFeedback?.[questionField?.id] !== true && (
+      {hasError && (
         <Text style={styles.validationErrorText} testID="err-validation-text">
           {formFeedback[questionField.id]}
         </Text>

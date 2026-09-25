@@ -16,8 +16,9 @@ import {
   runPolygonRules,
 } from '../lib/polygon-rules';
 import { QUESTION_TYPES } from '../../lib/constants';
-import styles from '../styles';
+import getStyles from '../styles';
 import i18n from '../../lib/i18n';
+import useTheme from '../../lib/theme';
 
 const MIN_POINTS_FOR_AREA = 3;
 
@@ -37,6 +38,8 @@ const TypeGeoDrawing = ({
   disabled = false,
   extra = null,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const navigation = useNavigation();
   const activeLang = FormState.useState((s) => s.lang);
   const feedback = FormState.useState((s) => s.feedback?.[id]);
@@ -68,12 +71,6 @@ const TypeGeoDrawing = ({
   const areaUnreliable = areaIsAmbiguous(failures);
 
   const handleDraw = () => {
-    /**
-     * `extra` travels with the route because MapDrawView runs the same rules as this field, and
-     * one of them - the `maxAreaHa` ceiling - reads its threshold from the question rather than
-     * from a constant (GEO-003 D-5). Without it the map silently evaluated every polygon as if
-     * no ceiling were configured, which looks identical to "no ceiling set".
-     */
     navigation.navigate('MapDrawView', { id, value: points, name: label, type, extra });
   };
 
@@ -84,18 +81,20 @@ const TypeGeoDrawing = ({
         <View>
           {points.length ? (
             <>
-              <Text testID="text-point-count">
+              <Text testID="text-point-count" style={{ color: theme.text.primary }}>
                 {trans.polygonPoints}: {points.length}
               </Text>
               {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
-                <Text testID="text-area" style={areaUnreliable ? styles.polygonWarningText : null}>
+                <Text testID="text-area" style={areaUnreliable ? styles.polygonWarningText : { color: theme.text.primary }}>
                   {trans.polygonArea}: {areaUnreliable ? '~' : ''}
                   {polygonAreaHectares(points).toFixed(2)} ha
                 </Text>
               )}
             </>
           ) : (
-            <Text testID="text-no-points">{trans.polygonNoPoints}</Text>
+            <Text testID="text-no-points" style={{ color: theme.text.secondary }}>
+              {trans.polygonNoPoints}
+            </Text>
           )}
           {showHint &&
             failures.map((failure) => (
