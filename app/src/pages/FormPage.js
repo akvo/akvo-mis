@@ -351,6 +351,19 @@ const FormPage = ({ navigation, route }) => {
     try {
       const dpValue = await crudDataPoints.selectDataPointById(db, { id: savedDataPointId });
       setCurrentDataPoint(dpValue);
+      /**
+       * A saved datapoint already has an identity, and this session must use it. Not every caller
+       * passes `uuid` in the route (reopening a draft from the list does not), and the random one
+       * minted above then (a) failed to exclude the plot from its own overlap check, so a reopened
+       * draft overlapped itself at 100%, and (b) keyed the geometry index rows written on save to
+       * a uuid no datapoint has.
+       */
+      if (dpValue?.uuid) {
+        submissionUuidRef.current = dpValue.uuid;
+        FormState.update((s) => {
+          s.submissionUuid = dpValue.uuid;
+        });
+      }
       const jsonData = dpValue?.json;
       // No stored answers (the datapoint synced without its JSON file, or the
       // column is corrupt): open the form empty rather than prefilled.
