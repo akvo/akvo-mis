@@ -8,13 +8,25 @@ import DialogForm from './Settings/DialogForm';
 import { config, langConfig } from './Settings/config';
 import { UIState, FormState, BuildParamsState } from '../store';
 import { i18n } from '../lib';
+import useTheme from '../lib/theme';
 
 const Settings = ({ navigation }) => {
   const [showLang, setShowLang] = useState(false);
   const activeLang = UIState.useState((s) => s.lang);
+  const darkModePreference = UIState.useState((s) => s.darkModePreference);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
   const nonEnglish = activeLang !== 'en';
   const authenticationType = BuildParamsState.useState((s) => s.authenticationType);
+
+  const darkModeOptions = ['auto', 'light', 'dark'];
+  const handleCycleDarkMode = () => {
+    const currentIndex = darkModeOptions.indexOf(darkModePreference || 'auto');
+    const nextIndex = (currentIndex + 1) % darkModeOptions.length;
+    UIState.update((s) => {
+      s.darkModePreference = darkModeOptions[nextIndex];
+    });
+  };
 
   const handleSaveLang = (value) => {
     UIState.update((s) => {
@@ -77,11 +89,26 @@ const Settings = ({ navigation }) => {
               </TouchableOpacity>
             </>
           )}
+          <Divider width={8} color={theme.bg.surfacePrimary} />
+          <TouchableOpacity
+            style={styles.listItem}
+            onPress={handleCycleDarkMode}
+            testID="dark-mode-toggle"
+          >
+            <View style={styles.listItemContent}>
+              <Text style={[styles.listItemTitle, { color: theme.text.primary }]}>Appearance</Text>
+              <Text style={[styles.listItemSubtitle, { color: theme.text.secondary }]}>
+                {(darkModePreference || 'auto').charAt(0).toUpperCase() +
+                  (darkModePreference || 'auto').slice(1)}
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={24} color={theme.icon?.primary || theme.text.primary} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('About')} style={styles.listItem}>
             <View style={styles.listItemContent}>
-              <Text style={styles.listItemTitle}>{trans.about}</Text>
+              <Text style={[styles.listItemTitle, { color: theme.text.primary }]}>{trans.about}</Text>
             </View>
-            <Icon name="chevron-right" size={24} color="#000" />
+            <Icon name="chevron-right" size={24} color={theme.icon.primary} />
           </TouchableOpacity>
           <Divider width={8} color="#f9fafb" />
           <LogoutButton />

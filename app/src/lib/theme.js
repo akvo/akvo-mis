@@ -7,6 +7,7 @@
  * the `useTheme` hook.
  */
 
+import { Appearance, useColorScheme } from 'react-native';
 import { UIState } from '../store';
 
 // ---------------------------------------------------------------------------
@@ -106,8 +107,8 @@ const dark = {
 
   // ---- bottom navigation ----
   bottomNav: {
-    bg: '#1E293B',
-    border: '#475569',
+    bg: '#000000',
+    border: '#1E293B',
     selected: '#FFFFFF',
     deselected: '#475569',
     indicator: '#FFFFFF',
@@ -244,7 +245,7 @@ const light = {
 
   // ---- bottom navigation ----
   bottomNav: {
-    bg: '#FFFFFF',
+    bg: '#EAEAEA',
     border: '#94A3B8',
     selected: '#020617',
     deselected: '#475569',
@@ -253,7 +254,7 @@ const light = {
 
   // ---- top navigation ----
   topNav: {
-    bg: '#FFFFFF',
+    bg: '#EAEAEA',
     text: '#020617',
     icon: '#020617',
     modal: '#000000',
@@ -376,7 +377,16 @@ const getTheme = (isDark = false) => {
  * Components that call this hook will re-render when isDarkMode changes.
  */
 const useTheme = () => {
-  const isDark = UIState.useState((s) => s.isDarkMode);
+  const preference = UIState.useState((s) => s.darkModePreference) || 'auto';
+  const hookScheme = useColorScheme();
+  // Fallback to Appearance API if hook returns null (Genymotion/emulator issue)
+  const systemScheme = hookScheme || Appearance.getColorScheme();
+  let isDark;
+  if (preference === 'auto') {
+    isDark = systemScheme === 'dark';
+  } else {
+    isDark = preference === 'dark';
+  }
   return getTheme(isDark);
 };
 
