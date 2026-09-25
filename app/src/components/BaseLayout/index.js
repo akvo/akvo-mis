@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import PageTitle from './PageTitle';
 import Content from './Content';
 import { UIState } from '../../store';
+import useTheme from '../../lib/theme';
 
 const BaseLayout = ({
   children,
@@ -17,6 +18,7 @@ const BaseLayout = ({
 }) => {
   const isOnline = UIState.useState((s) => s.online);
   const statusBar = UIState.useState((s) => s.statusBar);
+  const theme = useTheme();
   const networkBarVisible = !isOnline || statusBar !== null;
   const edges = networkBarVisible ? ['left', 'right'] : ['left', 'right', 'bottom'];
 
@@ -24,7 +26,7 @@ const BaseLayout = ({
     <SafeAreaView
       style={{
         flex: 1,
-        backgroundColor: '#f9fafb',
+        backgroundColor: theme.bg.surfacePrimary,
       }}
       edges={edges}
     >
@@ -41,7 +43,20 @@ const BaseLayout = ({
           value={search.value}
           onChangeText={search.action}
           testID="search-bar"
-          containerStyle={{ width: '100%' }}
+          containerStyle={{
+            width: '100%',
+            backgroundColor: theme.topNav.bg,
+            borderTopWidth: 0,
+            borderBottomWidth: 0,
+          }}
+          inputContainerStyle={{
+            backgroundColor: theme.input.bg,
+            borderRadius: 12,
+          }}
+          inputStyle={{
+            color: theme.input.textInput,
+          }}
+          placeholderTextColor={theme.input.text}
         />
       )}
       {children}
