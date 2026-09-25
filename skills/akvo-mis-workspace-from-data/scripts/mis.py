@@ -34,10 +34,36 @@ import string
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid as uuidlib
 
 UUID_NS = uuidlib.UUID("6f1c2b1e-2d4b-4a7e-9d0c-6d1a4b1f0a11")
+KNOWN_BASES = ("mis.akvotest.org", "mis.akvo.org")
+LOOPBACK = ("localhost", "127.0.0.1", "::1")
+LOCAL_BASE = "app.local"  # the docker stack's BASE_DOMAIN; needs --connect
+
+
+def target_problem(ws, connect=None):
+    """Why the plan must not send credentials where it points, or None.
+
+    Only the known MIS domains over HTTPS, unless --connect sends the
+    requests to a local docker stack (the documented testing path).
+    """
+    if connect:
+        u = urllib.parse.urlsplit(connect)
+        if u.scheme == "https" or (u.scheme == "http"
+                                   and u.hostname in LOOPBACK):
+            return None
+        return (f"--connect {connect}: use https, or http only to "
+                f"{'/'.join(LOOPBACK)}")
+    if ws.get("base_domain") not in KNOWN_BASES:
+        return (f"base_domain '{ws.get('base_domain')}' is not one of "
+                f"{', '.join(KNOWN_BASES)} (for a local docker stack, pass "
+                f"--connect http://localhost:8000)")
+    if ws.get("scheme", "https") != "https":
+        return f"scheme must be https for {ws['base_domain']}"
+    return None
 
 
 # --------------------------------------------------------------------- state
@@ -75,6 +101,9 @@ class Ctx:
         self.connect = args.connect or self.state.get("connect")
         if args.connect:
             self.state["connect"] = args.connect
+        bad = target_problem(ws, self.connect)
+        if bad:
+            sys.exit(f"refusing to connect: {bad}")
         self.state.setdefault("subdomain", self.sub)
         if self.state["subdomain"] != self.sub:
             sys.exit(f"state file belongs to workspace "
@@ -316,8 +345,9 @@ def read_table(ctx, spec):
                            header=spec.get("header_row", 0),
                            keep_default_na=False, na_values=[""])
     else:
-        df = pd.read_csv(f, dtype=object, sep=spec.get("sep", ","),
-                         header=spec.get("header_row", 0),
+        # no "sep" in the spec: sniff it, as profile_data.py does
+        df = pd.read_csv(f, dtype=object, sep=spec.get("sep"),
+                         engine="python", header=spec.get("header_row", 0),
                          encoding=spec.get("encoding", "utf-8-sig"),
                          keep_default_na=False, na_values=[""])
     df.columns = [norm(c) for c in df.columns]
@@ -438,6 +468,29 @@ def option_value(label):
     return v or "option"
 
 
+def value_collisions(labels):
+    """Labels that turn into the same stored value, e.g. 'A/B' and 'A B'."""
+    by_value = {}
+    for o in labels:
+        by_value.setdefault(option_value(o), []).append(o)
+    return [v for v in by_value.values() if len(v) > 1]
+
+
+def form_problems(form):
+    """Plan errors the server would reject with an integrity error."""
+    out = []
+    clash = value_collisions(g["label"] for g in form["groups"])
+    if clash:
+        out.append(f"form {form['key']}: group labels {clash} are the same "
+                   f"once simplified; rename them")
+    for q in plan_questions(form):
+        clash = value_collisions(q.get("options") or [])
+        if clash:
+            out.append(f"{form['key']}.{q['name']}: options {clash} are the "
+                       f"same once simplified; merge or rename them")
+    return out
+
+
 def question_payload(q, order):
     t = q["type"]
     if t not in QTYPE:
@@ -510,8 +563,38 @@ def find_form(ctx, name, ftype):
     return None
 
 
+def existing_form(ctx, key, form):
+    """Server copy of the plan's form, by the id in state or by name."""
+    known = ctx.state.get("forms", {}).get(key, {}).get("id")
+    if known:
+        s, detail = ctx.request("GET", f"manage/forms/{known}")
+        if s == 200:
+            return detail
+        if s != 404:
+            raise ApiError("GET", f"manage/forms/{known}", s, detail)
+    found = find_form(ctx, form["name"], form["type"])
+    return ctx.ok("GET", f"manage/forms/{found['id']}") if found else None
+
+
+def form_mismatch(form, detail, parent_id):
+    """Why the server's form is not the one the plan describes, or None."""
+    if form["type"] == "monitoring" and detail.get("parent") != parent_id:
+        return (f"its parent is form {detail.get('parent')}, the plan "
+                f"expects {parent_id}")
+    have = {q["name"] for g in detail["question_group"]
+            for q in g["question"]}
+    want = {q["name"] for q in plan_questions(form)}
+    if have != want:
+        return (f"questions differ (missing {sorted(want - have)}, "
+                f"extra {sorted(have - want)})")
+    return None
+
+
 def cmd_seed_forms(ctx):
     ensure_login(ctx)
+    problems = [p for f in ctx.plan["forms"] for p in form_problems(f)]
+    if problems:
+        sys.exit("fix the plan first:\n  " + "\n  ".join(problems))
     forms = ctx.state.setdefault("forms", {})
     ordered = sorted(ctx.plan["forms"],
                      key=lambda f: f["type"] == "monitoring")
@@ -523,12 +606,27 @@ def cmd_seed_forms(ctx):
             if not parent_id and not ctx.args.dry_run:
                 sys.exit(f"{key}: parent '{form['parent']}' not seeded")
         body = form_payload(form, parent_id)
-        existing = forms.get(key) or find_form(ctx, form["name"], form["type"])
-        if existing and existing.get("id"):
-            print(f"= {key}: exists as form {existing['id']}, skipped "
-                  f"(delete it in the UI to rebuild)")
-            forms[key] = {"id": existing["id"]}
+        existing = existing_form(ctx, key, form)
+        if existing:
+            fid = existing["id"]
+            why = form_mismatch(form, existing, parent_id)
+            if why:
+                sys.exit(f"{key}: form {fid} '{existing['name']}' already "
+                         f"exists but does not match the plan: {why}. "
+                         f"Rename the form in the plan, or delete it in the "
+                         f"UI to rebuild.")
+            forms[key] = {"id": fid}
             ctx.save()
+            if existing.get("status") == "published":
+                print(f"= {key}: exists as published form {fid}, skipped")
+                continue
+            # a draft left by a run that stopped before publishing
+            print(f"~ {key}: form {fid} is a draft, publishing")
+            if ctx.args.dry_run:
+                continue
+            if apply_dependencies(form, existing):
+                ctx.ok("PUT", f"manage/forms/{fid}", existing)
+            ctx.ok("POST", f"manage/forms/{fid}/publish")
             continue
         nq = len(plan_questions(form))
         if ctx.args.dry_run:
@@ -555,8 +653,9 @@ def question_index(ctx, form_key):
 # ---------------------------------------------------------------- load data
 
 def row_key(row, cols):
-    parts = [norm(row[c]) for c in cols]
-    return None if any(p == "" for p in parts) else "|".join(parts)
+    if not cols or any(blank(row[c]) for c in cols):
+        return None  # a missing key cannot tell this row apart
+    return "|".join(norm(row[c]) for c in cols)
 
 
 def to_number(v):
@@ -669,8 +768,8 @@ class Loader:
         out = {}
         for _, row in read_table(self.ctx, spec).iterrows():
             k = row_key(row, spec["key_columns"])
-            if k is None:
-                continue
+            if k is None or k in out:
+                continue  # the first row per key is the one loaded
             try:
                 aid = self.admin_id(row, spec)
             except ValueError:
@@ -702,8 +801,9 @@ class Loader:
             if pk not in parents:
                 raise ValueError(f"no registration with key '{pk}'")
             puuid, aid, pname = parents[pk]
-            k = row_key(row, spec.get("key_columns") or []) \
-                if spec.get("key_columns") else None
+            k = row_key(row, spec["key_columns"])
+            if k is None:
+                raise ValueError(f"key columns {spec['key_columns']} blank")
             data = {"uuid": puuid, "administration": aid, "name": pname}
         else:
             k = row_key(row, spec["key_columns"])
@@ -765,9 +865,10 @@ def cmd_load_data(ctx):
         fid, qids = (None, None)
         if not ctx.args.dry_run:
             fid, qids = question_index(ctx, fk)
-        if form["type"] == "monitoring" and not spec.get("key_columns"):
-            sys.exit(f"{fk}: monitoring data needs key_columns (e.g. parent "
-                     f"key + date) so re-runs do not duplicate rows")
+        if not spec.get("key_columns"):
+            sys.exit(f"{fk}: data needs key_columns (a stable id per record; "
+                     f"for monitoring e.g. parent key + date) so every row "
+                     f"gets its own record and re-runs do not duplicate rows")
         df = read_table(ctx, spec)
         sent = skipped = failed = 0
         samples = []

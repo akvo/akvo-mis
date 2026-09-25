@@ -34,6 +34,9 @@ PII = re.compile(r"phone|mobile|tel\b|e-?mail|national.?id|\bnin\b|passport|"
 DERIVED = re.compile(r"%|percent|pct|ratio|rate\b|total|sum\b|average|"
                      r"\bavg\b|mean\b|calculated|formula", re.I)
 DATE = re.compile(r"date|time|day|month|year|when|visit|period", re.I)
+# "Site ID", "hh_no", "id_site", "WPID": an identifier, not a quantity
+IDENT = re.compile(r"(^|[\s_.#-])(id|code|no|nr|ref|key)\.?$|"
+                   r"^(id|code)([\s_.#-]|$)|(?-i:[A-Za-z]ID$)", re.I)
 
 
 def blank(s):
@@ -74,13 +77,22 @@ def infer(col, s):
     return "input"
 
 
+def numeric_id(col, s):
+    """Whole numbers in a column named like an id: 1001, not a quantity."""
+    if not IDENT.search(col) or DERIVED.search(col) or DATE.search(col):
+        return False
+    num = pd.to_numeric(s, errors="coerce")
+    return num.notna().all() and (num % 1 == 0).all()
+
+
 def registration_keys(df, types):
     """ID columns whose rows are repeated observations of one datapoint."""
     out = []
     for c in df.columns:
-        if types[c] != "input":
-            continue
         s = df[c][~blank(df[c])].astype(str).str.strip()
+        if types[c] != "input" and not (types[c] == "number"
+                                        and numeric_id(c, s)):
+            continue
         if len(s) < len(df) * .95:
             continue
         u = s.nunique()

@@ -8,8 +8,10 @@ user; `mis.py` executes it. Paths in `file` are relative to plan.json.
 {
   "workspace": {
     "subdomain": "kenyawater",            // lowercase a-z 0-9 -, max 63
-    "base_domain": "mis.akvotest.org",    // or mis.akvo.org (production)
-    "scheme": "https",
+    "base_domain": "mis.akvotest.org",    // or mis.akvo.org (production);
+                                          // mis.py refuses any other domain
+    "scheme": "https",                    // required; http only for the local
+                                          // stack via --connect http://localhost:8000
     "email": "person@org.org",            // becomes the workspace super admin
     "first_name": "Ana", "last_name": "Silva"
   },
@@ -82,11 +84,17 @@ user; `mis.py` executes it. Paths in `file` are relative to plan.json.
   administration, geo and name.
 - `name` is a machine name: lowercase, unique in the form, never renamed after
   loading. `depends_on` may only point at an **earlier** `option` question.
-- `key_columns` must identify a row. On registration data it becomes the
-  record's uuid, and monitoring rows find their parent through it. On
-  monitoring data it makes reruns safe, so include the date column.
+- `key_columns` is required and must identify a row. On registration data it
+  becomes the record's uuid, and monitoring rows find their parent through
+  it. On monitoring data it makes reruns safe, so include the date column.
+  Rows with a blank key are skipped; of rows sharing a key, only the first
+  is loaded.
 - Option labels are what enumerators see. Stored values are derived from the
   labels (`Piped tap` → `piped_tap`), so don't rename options after loading.
+  Two labels that simplify to the same value (`A/B` and `A B`) are rejected;
+  the same goes for group labels within a form.
+- CSV files: the delimiter is detected; set `"sep": ";"` in the data spec
+  to force one.
 - Any column you leave out of `columns` is not loaded. List it in
   `unmapped_columns` so the user sees what is dropped.
 - Cells are read as text exactly as written. `None`, `NA` and `-` are **not**

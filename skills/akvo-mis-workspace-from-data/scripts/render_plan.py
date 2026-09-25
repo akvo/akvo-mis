@@ -15,8 +15,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mis import (blank, mapped_blank, match_option, norm, plan_questions,  # noqa: E402
-                 read_table, row_key, to_date, to_geo, to_number)
+from mis import (LOCAL_BASE, blank, form_problems,  # noqa: E402
+                 mapped_blank, match_option, norm, plan_questions,
+                 read_table, row_key, target_problem, to_date, to_geo,
+                 to_number)
 
 TYPE_WORDS = {
     "input": "short text", "text": "long text", "number": "number",
@@ -41,8 +43,12 @@ class P:
 def check(ctx):
     plan, problems, stats = ctx.plan, [], {}
     forms = {f["key"]: f for f in plan["forms"]}
+    bad_target = target_problem(plan["workspace"])
+    if bad_target and plan["workspace"].get("base_domain") != LOCAL_BASE:
+        problems.append(f"workspace: {bad_target}")
     names = set()
     for f in plan["forms"]:
+        problems += form_problems(f)
         if f["type"] == "monitoring" and f.get("parent") not in forms:
             problems.append(f"form {f['key']}: parent '{f.get('parent')}' "
                             f"is not a form in the plan")
@@ -74,7 +80,8 @@ def check(ctx):
         names.add(f["name"].casefold())
     reg_keys = {}
     ordered = sorted(plan.get("data", []),
-                     key=lambda d: forms[d["form"]]["type"] == "monitoring")
+                     key=lambda d: forms.get(d["form"], {}).get("type")
+                     == "monitoring")
     aliases = plan["administration"].get("aliases", {})
     for spec in ordered:
         f = forms.get(spec["form"])
@@ -86,6 +93,11 @@ def check(ctx):
         except Exception as e:  # noqa: BLE001 - report any read failure
             problems.append(f"{spec['form']}: cannot read {spec['file']}: "
                             f"{e}")
+            continue
+        if not spec.get("key_columns"):
+            problems.append(f"{spec['form']}: key_columns is empty; every "
+                            f"row needs a stable id (monitoring: parent key "
+                            f"+ date)")
             continue
         cols = set(df.columns)
         want = list(spec.get("columns", {}).values())
@@ -103,7 +115,7 @@ def check(ctx):
             continue
         qs = {q["name"]: q for q in plan_questions(f)}
         bad, blanks, keys, orphans = {}, 0, set(), 0
-        dup = 0
+        dup = nokey = 0
         for _, row in df.iterrows():
             for qn, col in spec.get("columns", {}).items():
                 q = qs.get(qn)
@@ -138,10 +150,12 @@ def check(ctx):
             if spec.get("administration_columns") and any(
                     blank(row[c]) for c in spec["administration_columns"]):
                 blanks += 1
-            k = row_key(row, spec.get("key_columns") or [])
-            if spec.get("key_columns"):
-                if k in keys:
-                    dup += 1
+            k = row_key(row, spec["key_columns"])
+            if k is None:
+                nokey += 1
+            elif k in keys:
+                dup += 1
+            else:
                 keys.add(k)
             if spec.get("parent"):
                 pk = row_key(row, spec["parent"]["key_columns"])
@@ -159,6 +173,9 @@ def check(ctx):
             problems.append(f"{spec['form']}: {dup} rows repeat a key "
                             f"{spec.get('key_columns')} — only the first "
                             f"is loaded")
+        if nokey:
+            problems.append(f"{spec['form']}: {nokey} rows have a blank "
+                            f"{spec['key_columns']} and will be skipped")
         if orphans:
             problems.append(f"{spec['form']}: {orphans} rows point at no "
                             f"registration row and will be skipped")

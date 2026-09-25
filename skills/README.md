@@ -56,7 +56,8 @@ setting must be on.
 The Claude.ai sandbox may block outbound network traffic. When it does, the skill
 still analyses the data and writes the plan, but it then hands over the
 folder with the commands (`python mis.py --plan plan.json register`, then
-`apply`) for the user to run on their own machine. To let Claude run the
+`python mis.py --plan plan.json apply`) for the user to run on their own
+machine. To let Claude run the
 setup itself, allow `*.mis.akvotest.org` / `*.mis.akvo.org` in the
 organisation's network egress settings.
 
@@ -65,4 +66,5 @@ organisation's network egress settings.
 Point the plan at the docker stack (`"base_domain": "app.local",
 "scheme": "http"`) and pass `--connect http://localhost:8000` to `mis.py`.
 The activation email appears in Mailpit at http://localhost:8025. Instead of
-clicking its link, run `mis.py activate <link-or-token>`.
+clicking its link, run
+`python mis.py --plan plan.json --connect http://localhost:8000 activate <link-or-token>`.
