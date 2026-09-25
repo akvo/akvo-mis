@@ -170,39 +170,55 @@ const AISuggestionDrawer = ({
       setLoading(true);
       setError(null);
 
-      const existingTypes = (existingWidgetsRef.current || [])
-        .map((w) => w.type)
-        .filter(Boolean);
-
-      const payload = {
-        existing_widget_types: existingTypes,
-      };
-
-      const hintToUse =
-        customHint !== null ? customHint : promptHintRef.current;
-      const trimmedHint = (hintToUse || "").trim();
-      if (trimmedHint) {
-        payload.prompt_hint = trimmedHint;
-      }
-
       dashboardAi
-        .suggestWidgets(dashboardId, payload, controller.signal)
-        .then((res) => {
+        .getStatus()
+        .then((statusRes) => {
           const isAiAvail =
-            typeof res?.data?.ai_available === "boolean"
-              ? res.data.ai_available
+            typeof statusRes?.data?.ai_available === "boolean"
+              ? statusRes.data.ai_available
               : true;
           setAiAvailable(isAiAvail);
-          const list = Array.isArray(res?.data?.suggestions)
-            ? res.data.suggestions
-            : [];
-          setSuggestions(list);
-          cachedRef.current = {
-            dashboardId,
-            data: list,
-            promptHint: hintToUse || "",
-            aiAvailable: isAiAvail,
+          if (!isAiAvail) {
+            setSuggestions([]);
+            cachedRef.current = {
+              dashboardId,
+              data: [],
+              promptHint: "",
+              aiAvailable: false,
+            };
+            setLoading(false);
+            return;
+          }
+
+          const existingTypes = (existingWidgetsRef.current || [])
+            .map((w) => w.type)
+            .filter(Boolean);
+
+          const payload = {
+            existing_widget_types: existingTypes,
           };
+
+          const hintToUse =
+            customHint !== null ? customHint : promptHintRef.current;
+          const trimmedHint = (hintToUse || "").trim();
+          if (trimmedHint) {
+            payload.prompt_hint = trimmedHint;
+          }
+
+          return dashboardAi
+            .suggestWidgets(dashboardId, payload, controller.signal)
+            .then((res) => {
+              const list = Array.isArray(res?.data?.suggestions)
+                ? res.data.suggestions
+                : [];
+              setSuggestions(list);
+              cachedRef.current = {
+                dashboardId,
+                data: list,
+                promptHint: hintToUse || "",
+                aiAvailable: true,
+              };
+            });
         })
         .catch((err) => {
           if (err?.name === "CanceledError" || err?.name === "AbortError") {

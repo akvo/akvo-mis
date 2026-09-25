@@ -45,14 +45,17 @@ const mockSuggestions = [
 describe("AISuggestionDrawer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: true, provider: "openai" },
+    });
     dashboardAi.suggestWidgets.mockResolvedValue({
       data: { ai_available: true, suggestions: mockSuggestions },
     });
   });
 
   it("renders unavailable alert and empty state when ai_available is false", async () => {
-    dashboardAi.suggestWidgets.mockResolvedValue({
-      data: { ai_available: false, provider: "none", suggestions: [] },
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: false, provider: "none" },
     });
     render(
       <AISuggestionDrawer
@@ -78,6 +81,7 @@ describe("AISuggestionDrawer", () => {
     expect(
       screen.queryByText("Functionality Breakdown")
     ).not.toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).not.toHaveBeenCalled();
   });
 
   it("automatically loads default suggestions on open", async () => {
