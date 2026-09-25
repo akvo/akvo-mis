@@ -216,6 +216,37 @@ describe('runOverlapCheck', () => {
     expect(result.status).toBe(OVERLAP_STATUS.failed);
   });
 
+  /**
+   * A monitoring form checks against its parent's registration plots, which are indexed under the
+   * parent's question id. Querying its own question id matched nothing and passed.
+   */
+  it("queries the parent's question for a monitoring form", async () => {
+    crudGeometryIndex.findOverlapCandidates.mockResolvedValue([]);
+    await runOverlapCheck(
+      {},
+      { points: PLOT, question: QUESTION, formId: FORM_ID, candidateQuestionId: 555 },
+    );
+    expect(crudGeometryIndex.findOverlapCandidates).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ formId: FORM_ID, questionId: 555 }),
+    );
+  });
+
+  it('refuses, without Retry, when the parent question cannot be mapped', async () => {
+    const result = await runOverlapCheck(
+      {},
+      { points: PLOT, question: QUESTION, formId: FORM_ID, candidateQuestionId: null },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: OVERLAP_STATUS.unavailable,
+        cause: UNAVAILABLE_CAUSE.parentUnmapped,
+        retryable: false,
+      }),
+    );
+    expect(crudGeometryIndex.findOverlapCandidates).not.toHaveBeenCalled();
+  });
+
   it('excludes the datapoint being edited from its own check', async () => {
     crudGeometryIndex.findOverlapCandidates.mockResolvedValue([]);
     await runOverlapCheck(

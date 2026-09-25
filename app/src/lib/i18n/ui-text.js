@@ -174,6 +174,8 @@ const uiText = {
     geoRuleOverlapGapped: 'Some nearby plots are missing - retry sync before validating.',
     geoRuleOverlapDrifted: 'Plot records are out of step - sync again before validating.',
     geoRuleOverlapDamaged: 'The plot index is damaged - reset the app and sync again.',
+    geoRuleOverlapNoParent:
+      'The registration plots for this form are not on this device - update your forms, or ask your administrator.',
     buttonValidatePolygon: 'Validate',
     buttonRetrySync: 'Retry sync',
     polygonValidating: 'Checking nearby plots...',
@@ -426,6 +428,8 @@ const uiText = {
     geoRuleOverlapDrifted:
       'Les enregistrements de parcelles sont désynchronisés - synchronisez à nouveau.',
     geoRuleOverlapDamaged: "L'index des parcelles est endommagé - réinitialisez l'application.",
+    geoRuleOverlapNoParent:
+      "Les parcelles d'enregistrement de ce formulaire ne sont pas sur cet appareil - mettez à jour vos formulaires ou contactez votre administrateur.",
     buttonValidatePolygon: 'Valider',
     buttonRetrySync: 'Réessayer la synchronisation',
     polygonValidating: 'Vérification des parcelles voisines...',

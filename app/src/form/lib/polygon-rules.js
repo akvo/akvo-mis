@@ -248,6 +248,7 @@ const I18N_KEYS = {
   overlapUnavailable_indexGapped: 'geoRuleOverlapGapped',
   overlapUnavailable_indexDrifted: 'geoRuleOverlapDrifted',
   overlapUnavailable_localFailure: 'geoRuleOverlapDamaged',
+  overlapUnavailable_parentUnmapped: 'geoRuleOverlapNoParent',
 };
 
 /**

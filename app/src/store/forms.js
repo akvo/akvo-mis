@@ -26,6 +26,7 @@ const FormState = new Store({
    */
   submissionUuid: null,
   overlapFormId: null,
+  overlapQuestionIds: null,
   loading: false,
   prevAdmAnswer: null,
   entityOptions: {},

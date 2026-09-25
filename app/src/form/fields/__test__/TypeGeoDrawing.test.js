@@ -314,6 +314,64 @@ describe('TypeGeoDrawing validation report (GEO-007)', () => {
     expect(requestDatapointSync).toHaveBeenCalled();
   });
 
+  describe('on a monitoring form', () => {
+    afterEach(() => {
+      act(() => {
+        FormState.update((s) => {
+          s.overlapQuestionIds = null;
+        });
+      });
+    });
+
+    const pressValidate = async (questionIds) => {
+      act(() => {
+        FormState.update((s) => {
+          s.overlapQuestionIds = questionIds;
+        });
+      });
+      const { getByTestId } = render(
+        <TypeGeoDrawing
+          keyform={0}
+          id={42}
+          label="Plot boundary"
+          value={triangle}
+          required
+          extra={OVERLAP_EXTRA}
+        />,
+      );
+      await act(async () => {
+        fireEvent.press(getByTestId('button-validate-polygon'));
+      });
+      return getByTestId;
+    };
+
+    it("checks against the parent's question, matched by name upstream", async () => {
+      runOverlapCheck.mockResolvedValue({ status: OVERLAP_STATUS.passed, conflicts: [] });
+      await pressValidate({ 42: 555 });
+      expect(runOverlapCheck).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ candidateQuestionId: 555 }),
+      );
+    });
+
+    it('asks for a refusal when the parent question is not mapped', async () => {
+      runOverlapCheck.mockResolvedValue({
+        status: OVERLAP_STATUS.unavailable,
+        cause: 'parentUnmapped',
+        retryable: false,
+        conflicts: [],
+      });
+      const getByTestId = await pressValidate({});
+      expect(runOverlapCheck).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ candidateQuestionId: null }),
+      );
+      expect(
+        getByTestId('text-polygon-report-overlapUnavailable_parentUnmapped').props.children,
+      ).toContain('registration plots for this form are not on this device');
+    });
+  });
+
   it('offers no Retry when the local database is the problem', async () => {
     runOverlapCheck.mockResolvedValue({
       status: OVERLAP_STATUS.unavailable,

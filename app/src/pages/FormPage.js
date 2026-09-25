@@ -16,7 +16,7 @@ import * as Crypto from 'expo-crypto';
 import FormContainer from '../form/FormContainer';
 import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
 import { BaseLayout } from '../components';
-import { crudDataPoints } from '../database/crud';
+import { crudDataPoints, crudForms } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
 
 import { UserState, UIState, FormState } from '../store';
@@ -24,6 +24,16 @@ import { generateDataPointName, getDurationInMinutes, transformAnswers } from '.
 import { i18n } from '../lib';
 import crudJobs from '../database/crud/crud-jobs';
 import { SYNC_FORM_SUBMISSION_TASK_NAME, QUESTION_TYPES, jobStatus } from '../lib/constants';
+
+/**
+ * Geoshape question ids by name. A monitoring form and its registration parent share question
+ * names, not ids, so this is how a monitoring geoshape finds the parent's question in the index.
+ */
+const geoshapeIdsByName = (json) =>
+  (json?.question_group || [])
+    .flatMap((group) => group?.question || [])
+    .filter((q) => q?.type === QUESTION_TYPES.geoshape && q?.name)
+    .reduce((acc, q) => ({ ...acc, [q.name]: q.id }), {});
 
 const FormPage = ({ navigation, route }) => {
   const selectedForm = FormState.useState((s) => s.form);
@@ -111,19 +121,49 @@ const FormPage = ({ navigation, route }) => {
    * gate. The signature check would catch it, but a verdict belonging to another submission
    * should not be in reach at all.
    *
-   * `overlapFormId` is the form being filled. GEO-007 D-6 wants candidates scoped to
-   * REGISTRATION plots, which for a monitoring form means its parent — but whether
-   * `forms.parentId` holds a backend form id or a local one is not settled here, and guessing
-   * wrong scopes the query to a form with no rows, which reports "no overlap" for every plot.
-   * Same-form scoping is the conservative, well-defined behaviour until that is confirmed.
+   * GEO-007 D-6 scopes candidates to REGISTRATION plots, so a monitoring form checks against its
+   * parent. `forms.parentId` is the parent's backend form id — Home stores the API's `parent`
+   * there, and FormOptions / `selectLatestFormVersion` match it against `formId`. Scoping to the
+   * monitoring form itself queried an index with no rows and returned a confident pass.
+   *
+   * The question has to move too: index rows carry the parent's question ids, and the two forms
+   * share question NAMES, not ids — the same mapping monitoring prefill uses (FormContainer).
+   * `overlapQuestionIds` maps this form's geoshape ids to the parent's; it is `null` for a
+   * registration form (ids are used as they are) and `{}` until the parent resolves, so a
+   * Validate pressed in between refuses rather than passes.
    */
   useEffect(() => {
+    const parentId = selectedForm?.parentId || null;
     FormState.update((s) => {
       s.submissionUuid = submissionUuidRef.current;
-      s.overlapFormId = selectedForm?.formId || null;
+      s.overlapFormId = parentId || selectedForm?.formId || null;
+      s.overlapQuestionIds = parentId ? {} : null;
       s.polygonValidation = {};
     });
-  }, [selectedForm]);
+    if (!parentId) {
+      return () => {};
+    }
+    let active = true;
+    crudForms
+      .getByFormId(db, { formId: parentId })
+      .then((parent) => {
+        if (!active || !parent?.json) {
+          return;
+        }
+        const parentIds = geoshapeIdsByName(JSON.parse(parent.json));
+        const ownIds = geoshapeIdsByName(formJSON);
+        const mapped = Object.entries(ownIds)
+          .filter(([name]) => parentIds[name] != null)
+          .reduce((acc, [name, id]) => ({ ...acc, [id]: parentIds[name] }), {});
+        FormState.update((s) => {
+          s.overlapQuestionIds = mapped;
+        });
+      })
+      .catch((error) => Sentry.captureException(error));
+    return () => {
+      active = false;
+    };
+  }, [selectedForm, db, formJSON]);
 
   useEffect(() => {
     // FormState is global and outlives this screen, so a flag left raised by the last

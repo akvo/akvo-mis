@@ -55,6 +55,13 @@ export const UNAVAILABLE_CAUSE = {
   indexDrifted: 'indexDrifted',
   /** SQLite itself refused — a missing table, a dead handle. Syncing cannot mend that. */
   localFailure: 'localFailure',
+  /**
+   * A monitoring form checks against its parent's REGISTRATION plots (GEO-007 D-6), matched by
+   * question name, and that match is not available: the parent form is not on this device, or it
+   * has no geoshape of the same name. Querying the monitoring form's own index instead finds no
+   * candidates and reports a confident pass. A datapoint sync cannot supply a form, so no Retry.
+   */
+  parentUnmapped: 'parentUnmapped',
 };
 
 /** Retry only helps where sync can close the gap. A corrupt database cannot be tapped better. */
@@ -213,10 +220,19 @@ const conflictFrom = (row, candidatePoints, points, geoConfig) => {
  */
 export const runOverlapCheck = async (
   db,
-  { points, question, formId, excludeUuid = null } = {},
+  {
+    points,
+    question,
+    formId,
+    excludeUuid = null,
+    candidateQuestionId = baseQuestionId(question?.id),
+  } = {},
 ) => {
   if (!Array.isArray(points) || points.length < 3) {
     return { status: OVERLAP_STATUS.passed, conflicts: [] };
+  }
+  if (candidateQuestionId == null) {
+    return unavailable(UNAVAILABLE_CAUSE.parentUnmapped);
   }
   const preflight = await overlapPreflight(db, { formId });
   if (preflight.status === OVERLAP_STATUS.unavailable) {
@@ -231,7 +247,8 @@ export const runOverlapCheck = async (
       formId,
       // Repeat instances arrive as "987-1"; the index stores 987 + repeatIndex (see
       // `baseQuestionId`). `row.questionId` below needs no stripping — it comes FROM the index.
-      questionId: baseQuestionId(question?.id),
+      // For a monitoring form this is the PARENT's question, which the caller resolved by name.
+      questionId: candidateQuestionId,
       ...bbox,
       excludeUuid,
     });

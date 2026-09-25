@@ -215,6 +215,20 @@ claiming new ground.
 **Impact**: Narrows the candidate set and is consistent with monitoring forms not prefilling a
 polygon. Needs confirming against how the first real programme structures its forms.
 
+**Implemented 2026-09-25.** Until then a monitoring form was checked against *its own* form id,
+which has no indexed plots, so every check passed with confidence. Now:
+
+- **Form**: `FormPage` scopes candidates to `forms.parentId`, which holds the parent's backend form
+  id (the same kind of id as `forms.formId`).
+- **Question**: index rows carry the parent's question ids, and the two forms share question
+  *names*, not ids. So the monitoring geoshape is matched to the parent geoshape of the same
+  `name`. This is the same name-based mapping monitoring prefill uses in `FormContainer`.
+- **No match → refuse**: if the parent form is not on the device, or has no geoshape of that
+  name, the check refuses with `parentUnmapped` and offers no Retry, because a datapoint sync
+  cannot fix either. A Validate pressed before the parent lookup resolves also refuses.
+- **The plot itself is excluded**: `excludeUuid` is the registration uuid a monitoring
+  submission inherits, so a plot never conflicts with its own registration.
+
 ### D-7: Warn vs block is driven by the question's `required` flag
 
 **Options Considered**:

@@ -16,7 +16,7 @@ import {
   hasConfiguredRules,
   runPolygonRules,
 } from '../lib/polygon-rules';
-import { detectOverlapsEnabled, signatureOf } from '../lib/overlap';
+import { baseQuestionId, detectOverlapsEnabled, signatureOf } from '../lib/overlap';
 import { accuracyThreshold as resolveAccuracyThreshold } from '../lib/gps-vertex';
 import {
   OVERLAP_STATUS,
@@ -56,6 +56,7 @@ const TypeGeoDrawing = ({
   const stored = FormState.useState((s) => s.polygonValidation?.[id]);
   const submissionUuid = FormState.useState((s) => s.submissionUuid);
   const overlapFormId = FormState.useState((s) => s.overlapFormId);
+  const overlapQuestionIds = FormState.useState((s) => s.overlapQuestionIds);
   const userId = UserState.useState((s) => s.id);
   const [checking, setChecking] = useState(false);
   const trans = i18n.text(activeLang);
@@ -173,6 +174,13 @@ const TypeGeoDrawing = ({
             question,
             formId: overlapFormId,
             excludeUuid: submissionUuid,
+            /**
+             * A monitoring form checks its parent's registration plots, filed under the parent's
+             * question id. An unmapped question passes `null`, which refuses (parentUnmapped).
+             */
+            ...(overlapQuestionIds
+              ? { candidateQuestionId: overlapQuestionIds[baseQuestionId(id)] ?? null }
+              : {}),
           })
         : { status: OVERLAP_STATUS.passed, conflicts: [] };
       const results = overlapResults(result, question);
@@ -231,7 +239,17 @@ const TypeGeoDrawing = ({
     } finally {
       setChecking(false);
     }
-  }, [db, points, question, extra, overlapFormId, submissionUuid, failures, id]);
+  }, [
+    db,
+    points,
+    question,
+    extra,
+    overlapFormId,
+    overlapQuestionIds,
+    submissionUuid,
+    failures,
+    id,
+  ]);
 
   const handleRetrySync = useCallback(async () => {
     try {
