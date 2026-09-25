@@ -15,7 +15,6 @@ from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_visualization.ai.ai_heuristics import (
     generate_starter_heuristics,
-    generate_widget_heuristics,
 )
 from api.v1.v1_visualization.ai.ai_prompts import (
     STARTER_DASHBOARD_JSON_SCHEMA,
@@ -146,10 +145,12 @@ def extract_family_metadata(
             else:
                 opt_count = 0
 
+            type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
                 "type": q.type,
+                "type_name": type_name,
                 "option_count": opt_count,
             }
             if opts:
@@ -349,6 +350,9 @@ def validate_and_sanitize_widgets(
         "map": "map",
         "map_view": "map",
         "geo_map": "map",
+        WidgetTypes.scatter: "scatter",
+        "scatter": "scatter",
+        "scatter_plot": "scatter",
     }
 
     for item in raw_widgets:
@@ -386,6 +390,9 @@ def validate_and_sanitize_widgets(
             q_info = sources_map[form_id][q_id]
             q_type = q_info.get("type")
             valid_types = SUPPORTED_QUESTION_TYPES | {
+                QuestionTypes.geo,
+                "geo",
+                "geolocation",
                 "number",
                 "option",
                 "multiple_option",
@@ -403,6 +410,24 @@ def validate_and_sanitize_widgets(
         repeat_agg = config.get("repeat_agg")
         if repeat_agg and repeat_agg not in VALID_REPEAT_AGG:
             config["repeat_agg"] = "sum"
+
+        # Scatter widget question_y sanitization
+        if w_type == "scatter":
+            qy = config.get("question_y")
+            if qy:
+                # Validate question_y against sources_map
+                target_form_qs = sources_map.get(form_id or 0, {})
+                if qy not in target_form_qs:
+                    config["question_y"] = None
+                else:
+                    qy_type = target_form_qs[qy].get("type")
+                    if qy_type not in (
+                        QuestionTypes.number,
+                        QuestionTypes.autofield,
+                        "number",
+                        "autofield",
+                    ):
+                        config["question_y"] = None
 
         # Table widget columns sanitization & auto-generation
         if w_type == "table":
@@ -584,6 +609,8 @@ class AISuggestionService:
                     "suggested_name": s_name,
                     "description": desc,
                     "widgets": valid_widgets,
+                    "ai_available": True,
+                    "provider": "openai",
                 }
 
         # Fallback to deterministic heuristics
@@ -592,6 +619,8 @@ class AISuggestionService:
             heuristic_res["widgets"], sources_map, has_monitoring, root_form_id
         )
         heuristic_res["widgets"] = valid_widgets
+        heuristic_res["ai_available"] = False
+        heuristic_res["provider"] = "heuristics"
         return heuristic_res
 
     @classmethod
@@ -620,6 +649,15 @@ class AISuggestionService:
         has_monitoring = metadata.get("has_monitoring", False)
         root_form_id = dashboard.root_form_id
 
+        # Check if OpenAI API key is configured
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        if not api_key:
+            return {
+                "ai_available": False,
+                "provider": "none",
+                "suggestions": [],
+            }
+
         # Attempt OpenAI generation
         messages = build_widget_suggestion_prompt(
             metadata, existing_widget_types, prompt_hint
@@ -640,19 +678,13 @@ class AISuggestionService:
             )
             if valid_suggestions:
                 return {
-                    "suggestions": valid_suggestions
+                    "ai_available": True,
+                    "provider": "openai",
+                    "suggestions": valid_suggestions,
                 }
 
-        # Fallback to deterministic heuristics
-        heuristic_res = generate_widget_heuristics(
-            metadata, existing_widget_types, prompt_hint
-        )
-        valid_suggestions = validate_and_sanitize_widgets(
-            heuristic_res["suggestions"],
-            sources_map,
-            has_monitoring,
-            root_form_id,
-        )
         return {
-            "suggestions": valid_suggestions
+            "ai_available": bool(api_key),
+            "provider": "openai" if bool(api_key) else "none",
+            "suggestions": [],
         }
