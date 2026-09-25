@@ -177,9 +177,9 @@ describe("AISuggestionDrawer", () => {
     ).toBeInTheDocument();
   });
 
-  it("displays empty state when no suggestions are returned", async () => {
+  it("displays empty recommendation state with search bar active when ai_available is true but suggestions array is empty", async () => {
     dashboardAi.suggestWidgets.mockResolvedValue({
-      data: { suggestions: [] },
+      data: { ai_available: true, provider: "openai", suggestions: [] },
     });
 
     render(
@@ -196,6 +196,12 @@ describe("AISuggestionDrawer", () => {
     expect(
       await screen.findByText(/No recommendations available/i)
     ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/Ask AI for specific widgets/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("AI Suggestions Unavailable")
+    ).not.toBeInTheDocument();
   });
 
   it("does not reload suggestions when drawer is closed and reopened with existing content", async () => {

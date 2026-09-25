@@ -669,12 +669,32 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_ai_status_endpoint_with_key(self):
-        """GET /manage/dashboards/ai/status returns ai_available=True."""
+        """GET /manage/dashboards/ai/status returns True when configured."""
         response = self.client.get(self.ai_status_url, **self.header)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertTrue(data["ai_available"])
         self.assertEqual(data["provider"], "openai")
+
+    @override_settings(OPENAI_API_KEY=None)
+    def test_suggest_widgets_without_key_returns_ai_available_false(self):
+        """suggest_widgets returns False and empty list without key."""
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id, self.user
+        )
+        self.assertIsNotNone(res)
+        self.assertFalse(res["ai_available"])
+        self.assertEqual(res["provider"], "none")
+        self.assertEqual(res["suggestions"], [])
+
+    @override_settings(OPENAI_API_KEY=None)
+    def test_suggest_dashboard_without_key_returns_ai_available_false(self):
+        """suggest_dashboard returns False with heuristics without key."""
+        res = AISuggestionService.suggest_dashboard(self.root.id, self.user)
+        self.assertIsNotNone(res)
+        self.assertFalse(res["ai_available"])
+        self.assertEqual(res["provider"], "heuristics")
+        self.assertGreaterEqual(len(res["widgets"]), 3)
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_openai_structured_output_success(self):
