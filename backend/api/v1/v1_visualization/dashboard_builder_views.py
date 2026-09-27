@@ -11,6 +11,7 @@
 # DashboardBuilder resolves slug -> id by scanning the whole list, so
 # an envelope would break the builder silently. See the spec, D-1.
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -195,6 +196,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "visibility": FeatureAccessTypes.dashboard_publish,
         "duplicate": FeatureAccessTypes.dashboard_create,
         "embed_preview": FeatureAccessTypes.dashboard_edit,
+        "ai_status": BUILDER_ACCESS,
         "suggest_dashboard": FeatureAccessTypes.dashboard_create,
         "suggest_widgets": BUILDER_ACCESS,
     }
@@ -577,6 +579,21 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # form is not here the builder cannot offer it, and if it
         # somehow does, validate_dashboard_payload rejects it on save.
         return Response(serialize_sources(dashboard, request.user))
+
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Get AI suggestion service status",
+        description="Returns whether OpenAI API is configured and available.",
+    )
+    def ai_status(self, request, *args, **kwargs):
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        return Response(
+            {
+                "ai_available": bool(api_key),
+                "provider": "openai" if bool(api_key) else "none",
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=[MANAGE],

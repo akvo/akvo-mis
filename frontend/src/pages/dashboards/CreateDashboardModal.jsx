@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Modal,
   Form,
@@ -10,7 +16,7 @@ import {
   Spin,
   message,
 } from "antd";
-import { ThunderboltOutlined } from "@ant-design/icons";
+import { ThunderboltOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { store, uiText } from "../../lib";
 import dashboardApi from "../../util/dashboardApi";
@@ -62,6 +68,29 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
         f.content?.parent === watchedRootForm && f.content?.published !== false
     );
   }, [allForms, watchedRootForm]);
+
+  const [aiAvailable, setAiAvailable] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    if (visible) {
+      dashboardAi
+        .getStatus()
+        .then((res) => {
+          if (active && res?.data) {
+            setAiAvailable(Boolean(res.data.ai_available));
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setAiAvailable(false);
+          }
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [visible]);
 
   const isCancelledRef = useRef(false);
 
@@ -189,11 +218,19 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   }, [form, onCancel]);
 
   const modalOkText = useMemo(() => {
-    if (submitting && watchedAutoAi) {
-      return text.dashboardGeneratingAi || "Generating with AI...";
+    if (submitting) {
+      if (watchedAutoAi) {
+        if (!aiAvailable) {
+          return (
+            text.dashboardGeneratingStarter || "Generating starter dashboard..."
+          );
+        }
+        return text.dashboardGeneratingAi || "Generating with AI...";
+      }
+      return text.dashboardCreateBtn || "Create dashboard";
     }
     return text.dashboardCreateBtn || "Create dashboard";
-  }, [submitting, watchedAutoAi, text]);
+  }, [submitting, watchedAutoAi, aiAvailable, text]);
 
   return (
     <Modal
@@ -346,20 +383,94 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
             </div>
             {watchedAutoAi && (
               <>
-                <div className="dashboards-modal-intent-chips">
-                  <span className="dashboards-modal-chips-label">
-                    {text.dashboardAiPresetsLabel || "Quick presets:"}
-                  </span>
-                  {INTENT_PRESETS.map((preset) => (
-                    <Tag
-                      key={preset}
-                      className="dashboards-modal-intent-chip"
-                      onClick={() => handleChipClick(preset)}
+                {!aiAvailable ? (
+                  <div
+                    style={{
+                      backgroundColor: "#f8fafd",
+                      border: "1px solid #dbeafe",
+                      borderRadius: 6,
+                      padding: "12px 14px",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <InfoCircleOutlined
+                      style={{
+                        color: "#2563eb",
+                        fontSize: 16,
+                        marginTop: 2,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div
+                      style={{
+                        fontSize: 13,
+                        lineHeight: "1.45",
+                        color: "#475569",
+                      }}
                     >
-                      + {preset}
-                    </Tag>
-                  ))}
-                </div>
+                      <strong
+                        style={{
+                          color: "#1e293b",
+                          display: "block",
+                          marginBottom: 2,
+                        }}
+                      >
+                        {text.dashboardAiNoticeTitle ||
+                          "Built-in System Template Engine"}
+                      </strong>
+                      {text.dashboardAiUnavailableNotice ||
+                        "AI service is currently not configured. Starter dashboards will be generated using the built-in system template engine based on your form questions."}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="dashboards-modal-intent-chips">
+                      <span className="dashboards-modal-chips-label">
+                        {text.dashboardAiPresetsLabel || "Quick presets:"}
+                      </span>
+                      {INTENT_PRESETS.map((preset) => (
+                        <Tag
+                          key={preset}
+                          className="dashboards-modal-intent-chip"
+                          onClick={() => handleChipClick(preset)}
+                        >
+                          + {preset}
+                        </Tag>
+                      ))}
+                    </div>
+                    <Form.Item
+                      name="user_intent"
+                      label={
+                        text.dashboardAiIntentLabel ||
+                        "Dashboard Goal & Questions (Optional)"
+                      }
+                      extra={
+                        <span className="dashboards-modal-subhint">
+                          {text.dashboardAiIntentHint ||
+                            "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown', max 250 chars)"}
+                        </span>
+                      }
+                      rules={[
+                        {
+                          max: 250,
+                          message:
+                            text.dashboardAiIntentMax ||
+                            "Dashboard goal cannot exceed 250 characters",
+                        },
+                      ]}
+                    >
+                      <Input.TextArea
+                        rows={2}
+                        maxLength={250}
+                        showCount
+                        placeholder="e.g. Overview of borehole functionality and regional water access"
+                      />
+                    </Form.Item>
+                  </>
+                )}
                 {availableMonitoringForms.length > 0 && (
                   <Form.Item
                     name="monitoring_forms"
@@ -370,7 +481,7 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
                     extra={
                       <span className="dashboards-modal-subhint">
                         {text.dashboardAiMonitoringFormsHint ||
-                          "Optionally choose specific monitoring forms for the AI starter dashboard (defaults to all)"}
+                          "Optionally choose specific monitoring forms for the starter dashboard (defaults to all)"}
                       </span>
                     }
                   >
@@ -389,40 +500,15 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
                     </Select>
                   </Form.Item>
                 )}
-                <Form.Item
-                  name="user_intent"
-                  label={
-                    text.dashboardAiIntentLabel ||
-                    "Dashboard Goal & Questions (Optional)"
-                  }
-                  extra={
-                    <span className="dashboards-modal-subhint">
-                      {text.dashboardAiIntentHint ||
-                        "Tell the AI what insights you are looking for (e.g. 'Overview of borehole status and functional breakdown', max 250 chars)"}
-                    </span>
-                  }
-                  rules={[
-                    {
-                      max: 250,
-                      message:
-                        text.dashboardAiIntentMax ||
-                        "Dashboard goal cannot exceed 250 characters",
-                    },
-                  ]}
-                >
-                  <Input.TextArea
-                    rows={2}
-                    maxLength={250}
-                    showCount
-                    placeholder="e.g. Overview of borehole functionality and regional water access"
-                  />
-                </Form.Item>
                 {submitting && (
                   <div className="dashboards-ai-generating-status">
                     <Spin size="small" />
                     <span>
-                      {text.dashboardAiGeneratingStatus ||
-                        "Analyzing form questions and crafting AI starter layout..."}
+                      {!aiAvailable
+                        ? text.dashboardTemplateGeneratingStatus ||
+                          "Analyzing form questions and generating starter dashboard..."
+                        : text.dashboardAiGeneratingStatus ||
+                          "Analyzing form questions and crafting AI starter layout..."}
                     </span>
                   </div>
                 )}

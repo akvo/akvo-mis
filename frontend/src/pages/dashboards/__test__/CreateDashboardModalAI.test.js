@@ -26,6 +26,9 @@ const renderModal = (onCreate = jest.fn()) => render(modal(true, onCreate));
 describe("CreateDashboardModal AI Starter Generation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: true, provider: "openai" },
+    });
     store.update((s) => {
       s.allForms = [
         { id: 6001, name: "Water Points", content: { published: true } },
@@ -39,6 +42,24 @@ describe("CreateDashboardModal AI Starter Generation", () => {
     expect(
       screen.getByText("Auto-generate starter dashboard with AI")
     ).toBeInTheDocument();
+  });
+
+  it("renders AI unavailable notice when switch is toggled and ai_available is false", async () => {
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: false, provider: "none" },
+    });
+    renderModal();
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+    expect(
+      await screen.findByText(/AI service is currently not configured/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText(/Overview of borehole functionality/i)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("+ Executive KPI Overview")
+    ).not.toBeInTheDocument();
   });
 
   it("reveals user intent input when AI auto-generate switch is toggled", async () => {
@@ -303,5 +324,48 @@ describe("CreateDashboardModal AI Starter Generation", () => {
         })
       );
     });
+  });
+
+  it("displays template generating status and button label without mentioning AI when ai_available is false", async () => {
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: false, provider: "none" },
+    });
+    let resolveAi;
+    const aiPromise = new Promise((resolve) => {
+      resolveAi = resolve;
+    });
+    dashboardAi.suggestDashboard.mockReturnValue(aiPromise);
+    dashboardApi.create.mockResolvedValue({
+      data: { id: 30, slug: "template-test" },
+    });
+
+    renderModal();
+
+    await userEvent.type(
+      screen.getByLabelText("Dashboard name"),
+      "Template Test"
+    );
+
+    const select = screen.getByRole("combobox");
+    fireEvent.mouseDown(select);
+    const option = await screen.findByText("Water Points");
+    fireEvent.click(option);
+
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    await userEvent.click(screen.getByText("Create dashboard"));
+
+    expect(
+      await screen.findByText(
+        "Analyzing form questions and generating starter dashboard..."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Generating with AI...")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/crafting AI starter layout/i)
+    ).not.toBeInTheDocument();
+
+    resolveAi({ data: { widgets: [] } });
   });
 });

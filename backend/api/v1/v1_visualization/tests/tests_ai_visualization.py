@@ -64,6 +64,9 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.suggest_dashboard_url = (
             "/api/v1/manage/dashboards/ai/suggest-dashboard"
         )
+        self.ai_status_url = (
+            "/api/v1/manage/dashboards/ai/status"
+        )
         self.suggest_widgets_url = (
             f"/api/v1/manage/dashboards/{self.dashboard.id}/ai/suggest-widgets"
         )
@@ -533,11 +536,19 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertFalse(cb.is_open)
 
     # =========================================================
-    # 6. Endpoints Integration Tests (HTTP POST)
+    # 6. Endpoints Integration Tests (HTTP POST & GET)
     # =========================================================
 
+    def test_ai_status_endpoint_without_key(self):
+        """GET /manage/dashboards/ai/status returns ai_available=False."""
+        response = self.client.get(self.ai_status_url, **self.header)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertFalse(data["ai_available"])
+        self.assertEqual(data["provider"], "none")
+
     def test_suggest_dashboard_endpoint_success(self):
-        """POST /manage/dashboards/ai/suggest-dashboard returns 200 OK."""
+        """POST /ai/suggest-dashboard returns 200 OK with heuristics."""
         payload = {
             "root_form": self.root.id,
             "user_intent": "Monitor water point functionality",
@@ -553,6 +564,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("suggested_name", data)
         self.assertIn("description", data)
         self.assertIn("widgets", data)
+        self.assertFalse(data["ai_available"])
+        self.assertEqual(data["provider"], "heuristics")
         self.assertTrue(len(data["widgets"]) >= 3)
 
     def test_suggest_dashboard_with_monitoring_forms_filter(self):
@@ -594,8 +607,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_suggest_widgets_endpoint_success(self):
-        """POST /manage/dashboards/<pk>/ai/suggest-widgets returns 200 OK."""
+    def test_suggest_widgets_endpoint_without_key_returns_empty(self):
+        """POST /ai/suggest-widgets without key returns empty list."""
         payload = {
             "existing_widget_types": ["kpi"],
             "prompt_hint": "Suggest bar charts",
@@ -608,8 +621,9 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertIn("suggestions", data)
-        self.assertTrue(len(data["suggestions"]) >= 1)
+        self.assertFalse(data["ai_available"])
+        self.assertEqual(data["provider"], "none")
+        self.assertEqual(data["suggestions"], [])
 
     def test_suggest_widgets_invalid_payload(self):
         """POST /manage/dashboards/<pk>/ai/suggest-widgets with bad payload."""
@@ -652,6 +666,35 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
     # =========================================================
     # 7. OpenAI Mock Structured Output & Resilience Tests
     # =========================================================
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_ai_status_endpoint_with_key(self):
+        """GET /manage/dashboards/ai/status returns True when configured."""
+        response = self.client.get(self.ai_status_url, **self.header)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertTrue(data["ai_available"])
+        self.assertEqual(data["provider"], "openai")
+
+    @override_settings(OPENAI_API_KEY=None)
+    def test_suggest_widgets_without_key_returns_ai_available_false(self):
+        """suggest_widgets returns False and empty list without key."""
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id, self.user
+        )
+        self.assertIsNotNone(res)
+        self.assertFalse(res["ai_available"])
+        self.assertEqual(res["provider"], "none")
+        self.assertEqual(res["suggestions"], [])
+
+    @override_settings(OPENAI_API_KEY=None)
+    def test_suggest_dashboard_without_key_returns_ai_available_false(self):
+        """suggest_dashboard returns False with heuristics without key."""
+        res = AISuggestionService.suggest_dashboard(self.root.id, self.user)
+        self.assertIsNotNone(res)
+        self.assertFalse(res["ai_available"])
+        self.assertEqual(res["provider"], "heuristics")
+        self.assertGreaterEqual(len(res["widgets"]), 3)
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_openai_structured_output_success(self):
@@ -728,6 +771,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             )
             self.assertIsNotNone(res)
             self.assertEqual(res["suggested_name"], "AI AI AI Water Overview")
+            self.assertTrue(res["ai_available"])
+            self.assertEqual(res["provider"], "openai")
             self.assertEqual(len(res["widgets"]), 3)
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
@@ -760,6 +805,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 self.dashboard.id, self.user, ["kpi"], "bar focus"
             )
             self.assertIsNotNone(res)
+            self.assertTrue(res["ai_available"])
+            self.assertEqual(res["provider"], "openai")
             self.assertIn("suggestions", res)
             self.assertEqual(len(res["suggestions"]), 1)
 
@@ -1055,7 +1102,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 self.assertNotEqual(w["form"], 9999999)
                 self.assertNotEqual(w.get("question"), 8888888)
 
-            # Test widget suggestion fallback
+            # Test widget suggestion returns empty when hallucinated
             w_res = AISuggestionService.suggest_widgets(
                 self.dashboard.id,
                 self.user,
@@ -1063,9 +1110,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             )
             self.assertIsNotNone(w_res)
             self.assertIn("suggestions", w_res)
-            self.assertGreaterEqual(len(w_res["suggestions"]), 1)
-            for s in w_res["suggestions"]:
-                self.assertNotEqual(s["form"], 9999999)
+            self.assertEqual(len(w_res["suggestions"]), 0)
+            self.assertTrue(w_res["ai_available"])
 
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_openai_cross_form_question_mismatch_pruned(self):
@@ -1163,4 +1209,348 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             data = response.json()
             self.assertIn("suggestions", data)
-            self.assertGreaterEqual(len(data["suggestions"]), 1)
+            self.assertEqual(len(data["suggestions"]), 0)
+            self.assertFalse(data["ai_available"])
+
+    # =========================================================
+    # Map & Scatter Widget Generation and Validation Tests
+    # =========================================================
+
+    def test_map_widget_sanitization_with_geo_question(self):
+        """Map widgets with QuestionTypes.geo are preserved and valid."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        geo_q = Questions.objects.create(
+            name="Facility GPS Coordinates",
+            label="Facility GPS Coordinates",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.geo,
+            order=99,
+        )
+
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        raw_widgets = [
+            {
+                "type": "map",
+                "title": "Facility Coordinates Map",
+                "form": self.root.id,
+                "question": geo_q.id,
+                "col_span": 24,
+                "config": {"map_mode": "point"},
+                "rationale": "Displays GPS locations",
+            }
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets, sources_map, has_monitoring=True
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["type"], "map")
+        self.assertEqual(sanitized[0]["question"], geo_q.id)
+        self.assertEqual(sanitized[0]["col_span"], 24)
+
+    def test_scatter_widget_sanitization_with_dual_numeric_questions(self):
+        """Scatter widgets with valid X and Y questions are preserved."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        num_x = Questions.objects.create(
+            name="Daily Volume",
+            label="Daily Volume",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=100,
+        )
+        num_y = Questions.objects.create(
+            name="Pressure Reading",
+            label="Pressure Reading",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=101,
+        )
+
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        raw_widgets = [
+            {
+                "type": "scatter",
+                "title": "Volume vs Pressure",
+                "form": self.root.id,
+                "question": num_x.id,
+                "col_span": 12,
+                "config": {
+                    "question_y": num_y.id,
+                    "color_scheme": "categorical",
+                },
+                "rationale": "Correlation between volume and pressure",
+            }
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets, sources_map, has_monitoring=True
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["type"], "scatter")
+        self.assertEqual(sanitized[0]["question"], num_x.id)
+        self.assertEqual(sanitized[0]["config"]["question_y"], num_y.id)
+
+    def test_scatter_widget_invalid_question_y_cleaned(self):
+        """Scatter widgets with invalid question_y have it reset to None."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        num_x = Questions.objects.create(
+            name="Daily Volume 2",
+            label="Daily Volume 2",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=102,
+        )
+
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        raw_widgets = [
+            {
+                "type": "scatter",
+                "title": "Volume vs Unknown",
+                "form": self.root.id,
+                "question": num_x.id,
+                "col_span": 12,
+                "config": {
+                    "question_y": 99999999,  # Non-existent question ID
+                },
+                "rationale": "Scatter with bad Y axis",
+            }
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets, sources_map, has_monitoring=True
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["type"], "scatter")
+        self.assertIsNone(sanitized[0]["config"]["question_y"])
+
+    def test_heuristics_generate_map_and_scatter_widgets(self):
+        """Heuristics engine generates map and scatter when questions exist."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        Questions.objects.create(
+            name="GPS Coordinates",
+            label="GPS Coordinates",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.geo,
+            order=103,
+        )
+        Questions.objects.create(
+            name="Numeric Measure A",
+            label="Numeric Measure A",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=104,
+        )
+        Questions.objects.create(
+            name="Numeric Measure B",
+            label="Numeric Measure B",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=105,
+        )
+
+        metadata, _ = extract_family_metadata(self.root.id, self.user)
+        starter = generate_starter_heuristics(metadata)
+        types_in_starter = [w["type"] for w in starter["widgets"]]
+        self.assertIn("map", types_in_starter)
+        self.assertIn("scatter", types_in_starter)
+
+        # Also test complementary suggestions
+        suggestions_result = generate_widget_heuristics(
+            metadata, existing_widget_types=["kpi", "bar"]
+        )
+        suggested_types = [
+            s["type"] for s in suggestions_result["suggestions"]
+        ]
+        self.assertIn("map", suggested_types)
+        self.assertIn("scatter", suggested_types)
+
+    def test_metadata_extraction_includes_type_names(self):
+        """Metadata extraction includes type_name for LLM readability."""
+        metadata, _ = extract_family_metadata(self.root.id, self.user)
+        root_qs = metadata["root_form"]["questions"]
+        self.assertTrue(len(root_qs) > 0)
+        for q in root_qs:
+            self.assertIn("type_name", q)
+            self.assertIsInstance(q["type_name"], str)
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    @patch.object(AISuggestionService, "_call_openai")
+    def test_widget_suggestion_query_intent_for_each_chart_type(
+        self, mock_openai
+    ):
+        """AI suggestions honor query intents for all chart types."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        geo_q = Questions.objects.create(
+            name="School Location",
+            label="School Location",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.geo,
+            order=200,
+        )
+        num_x = Questions.objects.create(
+            name="Water Flow",
+            label="Water Flow",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=201,
+        )
+        num_y = Questions.objects.create(
+            name="Pressure Reading",
+            label="Pressure Reading",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.number,
+            order=202,
+        )
+        opt_q = Questions.objects.create(
+            name="School Type",
+            label="School Type",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.option,
+            order=203,
+        )
+        QuestionOptions.objects.create(
+            question=opt_q, label="Primary", value="primary", order=1
+        )
+        date_q = Questions.objects.filter(
+            form=self.monitoring, type=QuestionTypes.date
+        ).first()
+
+        chart_test_matrix = [
+            (
+                "I want a map of school location",
+                {
+                    "type": "map",
+                    "title": "School Location Map",
+                    "form": self.root.id,
+                    "question": geo_q.id,
+                    "col_span": 24,
+                    "config": {"map_mode": "point"},
+                    "rationale": "Geographic map of school locations",
+                },
+                "map",
+            ),
+            (
+                "Show correlation between water flow and pressure",
+                {
+                    "type": "scatter",
+                    "title": "Water Flow vs Pressure",
+                    "form": self.root.id,
+                    "question": num_x.id,
+                    "col_span": 12,
+                    "config": {
+                        "question_y": num_y.id,
+                        "color_scheme": "categorical",
+                    },
+                    "rationale": "Scatter correlation",
+                },
+                "scatter",
+            ),
+            (
+                "Distribution of school types",
+                {
+                    "type": "bar",
+                    "title": "School Type Distribution",
+                    "form": self.root.id,
+                    "question": opt_q.id,
+                    "col_span": 12,
+                    "config": {"group_by": "option"},
+                    "rationale": "Bar breakdown",
+                },
+                "bar",
+            ),
+            (
+                "Breakdown of school types",
+                {
+                    "type": "pie",
+                    "title": "School Type Breakdown",
+                    "form": self.root.id,
+                    "question": opt_q.id,
+                    "col_span": 8,
+                    "config": {"group_by": "option"},
+                    "rationale": "Pie breakdown",
+                },
+                "pie",
+            ),
+            (
+                "Submission activity trend over time",
+                {
+                    "type": "line",
+                    "title": "Activity Trend",
+                    "form": self.monitoring.id,
+                    "question": date_q.id if date_q else None,
+                    "col_span": 12,
+                    "config": {
+                        "group_by": "month",
+                        "date_question_id": date_q.id if date_q else None,
+                    },
+                    "rationale": "Temporal trend line",
+                },
+                "line",
+            ),
+            (
+                "Summary table of monitoring records",
+                {
+                    "type": "table",
+                    "title": "Monitoring Submissions Table",
+                    "form": self.monitoring.id,
+                    "question": None,
+                    "col_span": 24,
+                    "config": {
+                        "columns": [
+                            {"key": "parent_name", "source": "parent_name"}
+                        ]
+                    },
+                    "rationale": "Tabular monitoring log",
+                },
+                "table",
+            ),
+            (
+                "Total headline count of installations",
+                {
+                    "type": "kpi",
+                    "title": "Total Installations",
+                    "form": self.root.id,
+                    "question": None,
+                    "col_span": 6,
+                    "config": {"value_type": "number"},
+                    "rationale": "Headline KPI total",
+                },
+                "kpi",
+            ),
+        ]
+
+        for query_hint, mock_widget, expected_type in chart_test_matrix:
+            mock_openai.return_value = {"suggestions": [mock_widget]}
+            payload = {
+                "existing_widget_types": [],
+                "prompt_hint": query_hint,
+            }
+            response = self.client.post(
+                self.suggest_widgets_url,
+                data=json.dumps(payload),
+                content_type="application/json",
+                **self.header,
+            )
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_200_OK,
+                f"Failed for query: {query_hint}",
+            )
+            data = response.json()
+            self.assertIn("suggestions", data)
+            self.assertGreaterEqual(
+                len(data["suggestions"]), 1, f"No suggestions for {query_hint}"
+            )
+            self.assertEqual(
+                data["suggestions"][0]["type"],
+                expected_type,
+                f"Query '{query_hint}' did not yield '{expected_type}'",
+            )

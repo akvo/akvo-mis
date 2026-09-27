@@ -45,9 +45,43 @@ const mockSuggestions = [
 describe("AISuggestionDrawer", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    dashboardAi.suggestWidgets.mockResolvedValue({
-      data: { suggestions: mockSuggestions },
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: true, provider: "openai" },
     });
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: { ai_available: true, suggestions: mockSuggestions },
+    });
+  });
+
+  it("renders unavailable alert and empty state when ai_available is false", async () => {
+    dashboardAi.getStatus.mockResolvedValue({
+      data: { ai_available: false, provider: "none" },
+    });
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(
+      await screen.findByText("AI Suggestions Unavailable")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/AI widget suggestions require an AI service/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText(/Ask AI for specific widgets/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeEnabled();
+    expect(
+      screen.queryByText("Functionality Breakdown")
+    ).not.toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).not.toHaveBeenCalled();
   });
 
   it("automatically loads default suggestions on open", async () => {
@@ -147,9 +181,9 @@ describe("AISuggestionDrawer", () => {
     ).toBeInTheDocument();
   });
 
-  it("displays empty state when no suggestions are returned", async () => {
+  it("displays empty recommendation state with search bar active when ai_available is true but suggestions array is empty", async () => {
     dashboardAi.suggestWidgets.mockResolvedValue({
-      data: { suggestions: [] },
+      data: { ai_available: true, provider: "openai", suggestions: [] },
     });
 
     render(
@@ -166,6 +200,12 @@ describe("AISuggestionDrawer", () => {
     expect(
       await screen.findByText(/No recommendations available/i)
     ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/Ask AI for specific widgets/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("AI Suggestions Unavailable")
+    ).not.toBeInTheDocument();
   });
 
   it("does not reload suggestions when drawer is closed and reopened with existing content", async () => {
