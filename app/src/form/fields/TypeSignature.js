@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { View, StyleSheet, Image, Modal } from 'react-native';
+import { View, StyleSheet, Image, Modal, TouchableOpacity, Text } from 'react-native';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { Button, Icon } from '@rneui/themed';
+import { Icon } from '@rneui/themed';
 import { FieldLabel } from '../support';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const TypeSignature = ({
   onChange,
@@ -16,6 +17,7 @@ const TypeSignature = ({
   requiredSign = '*',
   tooltip = null,
 }) => {
+  const theme = useTheme();
   const [show, setShow] = useState(false);
   const [signature, setSignature] = useState(value);
   const activeLang = FormState.useState((s) => s.lang);
@@ -33,6 +35,21 @@ const TypeSignature = ({
     setSignature(null);
   };
 
+  // The canvas is a text-field-like surface; its bg is baked into the saved PNG.
+  const penColor = theme.input.textInput;
+  const canvasBg = theme.input.bg;
+  // Injected after the library's default CSS (react-native-signature-canvas h5/html.js).
+  const webStyle = `
+    body, html { height: 100%; background-color: ${theme.bg.surfacePrimary}; font-family: Inter, sans-serif; }
+    .m-signature-pad { display: flex; flex-direction: column; border: none; box-shadow: none; background-color: transparent; }
+    .m-signature-pad--body { flex: none; height: 50vh; overflow: hidden; border: 1px solid ${theme.input.border}; border-radius: ${theme.radius.md}px; background-color: ${canvasBg}; }
+    .m-signature-pad--footer { flex: none; height: 48px; margin-top: ${theme.spacing.lg}px; padding: 0; }
+    .m-signature-pad--footer .description { color: ${theme.text.tertiary}; font-size: ${theme.typography.size.sm}px; }
+    .m-signature-pad--footer .button { height: 44px; line-height: 42px; padding: 0 ${theme.spacing.xl}px; border-radius: ${theme.radius.xl}px; font-size: ${theme.typography.size.md}px; font-weight: 600; }
+    .m-signature-pad--footer .button.clear { background-color: transparent; color: ${theme.buttonTertiary.text}; border: 1px solid ${theme.buttonTertiary.border}; }
+    .m-signature-pad--footer .button.save { background-color: ${theme.buttonPrimary.bg}; color: ${theme.buttonPrimary.text}; }
+  `;
+
   return (
     <View style={styles.container}>
       <FieldLabel
@@ -43,7 +60,9 @@ const TypeSignature = ({
         tooltip={tooltip}
       />
       {signature && (
-        <View style={styles.preview}>
+        <View
+          style={[styles.preview, { backgroundColor: canvasBg, borderRadius: theme.radius.md }]}
+        >
           <Image
             resizeMode="contain"
             style={{ width: '100%', height: 164 }}
@@ -51,28 +70,41 @@ const TypeSignature = ({
           />
         </View>
       )}
-      <Button
-        title={signature ? trans.changeSignatureButton : trans.openSignatureButton}
+      <TouchableOpacity
+        style={[styles.signButton, { backgroundColor: theme.buttonPrimary.bg }]}
         onPress={() => setShow(true)}
-        icon={<Icon name="create" size={20} color="#fff" type="ionicon" />}
-        style={{ width: '100%' }}
-        containerStyle={{ marginTop: 10 }}
         testID="open-signature-button"
         accessibilityLabel="open-signature-button"
-      />
+      >
+        <Icon name="create" size={18} color={theme.buttonPrimary.text} type="ionicon" />
+        <Text style={[styles.signButtonText, { color: theme.buttonPrimary.text }]}>
+          {signature ? trans.changeSignatureButton : trans.openSignatureButton}
+        </Text>
+      </TouchableOpacity>
       {show && (
-        <Modal>
-          <SignatureCanvas
-            ref={ref}
-            onOK={handleSignature}
-            onClear={handleClear}
-            descriptionText={trans.signHereText}
-            clearText={trans.clearText}
-            confirmText={trans.confirmText}
-            autoClear={false}
-            dataURL={signature}
-            imageType="image/png"
-          />
+        <Modal onRequestClose={() => setShow(false)}>
+          <View
+            style={[
+              styles.modalBody,
+              { backgroundColor: theme.bg.surfacePrimary, padding: theme.spacing.lg },
+            ]}
+          >
+            <SignatureCanvas
+              ref={ref}
+              onOK={handleSignature}
+              onClear={handleClear}
+              descriptionText={trans.signHereText}
+              clearText={trans.clearText}
+              confirmText={trans.confirmText}
+              autoClear={false}
+              dataURL={signature}
+              imageType="image/png"
+              backgroundColor={canvasBg}
+              penColor={penColor}
+              webStyle={webStyle}
+              webviewContainerStyle={{ backgroundColor: theme.bg.surfacePrimary }}
+            />
+          </View>
         </Modal>
       )}
     </View>
@@ -86,12 +118,28 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     flexDirection: 'column',
   },
+  modalBody: {
+    flex: 1,
+  },
   preview: {
     width: '100%',
     height: 164,
-    backgroundColor: '#F8F8F8',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,
+  },
+  signButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginTop: 10,
+    marginHorizontal: 10,
+    gap: 8,
+  },
+  signButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

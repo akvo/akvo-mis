@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FieldLabel } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { i18n, cascades } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const TypeCascade = ({
   onChange,
@@ -20,8 +20,10 @@ const TypeCascade = ({
   requiredSign = '*',
   disabled = false,
   tooltip = null,
+  hasError = false,
 }) => {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [dataSource, setDataSource] = useState([]);
   const [dropdownItems, setDropdownItems] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -273,9 +275,11 @@ const TypeCascade = ({
       <View style={styles.cascadeContainer}>
         {dropdownItems.map((item, index) => {
           const hasSearch = item?.options.length > 3;
-          const style = disabled
-            ? { ...styles.dropdownField, ...styles.dropdownFieldDisabled }
-            : styles.dropdownField;
+          const style = {
+            ...styles.dropdownField,
+            ...(disabled ? styles.dropdownFieldDisabled : {}),
+            ...(hasError ? styles.inputFieldError : {}),
+          };
           return (
             <Dropdown
               // eslint-disable-next-line react/no-array-index-key
@@ -283,7 +287,10 @@ const TypeCascade = ({
               labelField="name"
               valueField="id"
               testID={`dropdown-cascade-${index}`}
-              containerStyle={{ marginBottom: insets.bottom }}
+              containerStyle={{
+                backgroundColor: theme.bg.surfaceElevated1,
+                borderRadius: 12,
+              }}
               data={item?.options}
               search={hasSearch}
               searchPlaceholder={trans.searchPlaceholder}
@@ -291,6 +298,16 @@ const TypeCascade = ({
               value={item.value}
               style={style}
               placeholder={trans.selectItem}
+              placeholderStyle={{ color: theme.input.text }}
+              selectedTextStyle={{ color: theme.input.textInput }}
+              inputSearchStyle={{
+                borderRadius: 12,
+                backgroundColor: theme.bg.surfaceTertiary,
+                borderColor: 'transparent',
+                color: theme.text.primary,
+                paddingHorizontal: 12,
+              }}
+              maxHeight={500}
               disable={disabled}
             />
           );

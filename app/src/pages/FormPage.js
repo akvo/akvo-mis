@@ -97,6 +97,7 @@ const FormPage = ({ navigation, route }) => {
         s.surveyDuration = 0;
         s.repeats = {};
         s.hasUnsavedChanges = false;
+        s.feedback = {};
       });
     });
   }, [formJSON]);
@@ -106,6 +107,7 @@ const FormPage = ({ navigation, route }) => {
     // form would make the very first back press prompt. Reset on mount.
     FormState.update((s) => {
       s.hasUnsavedChanges = false;
+      s.feedback = {};
     });
 
     // Subscribing catches every writer — fields, prefill, geo, autofield, map — and

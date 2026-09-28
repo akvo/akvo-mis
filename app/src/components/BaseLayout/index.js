@@ -55,7 +55,10 @@ const BaseLayout = ({
           }}
           inputStyle={{
             color: theme.input.textInput,
+            fontSize: 16,
           }}
+          searchIcon={{ size: 20, color: theme.icon.secondary }}
+          clearIcon={{ size: 20, color: theme.icon.secondary }}
           placeholderTextColor={theme.input.text}
         />
       )}

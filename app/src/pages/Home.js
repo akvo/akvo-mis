@@ -1,7 +1,15 @@
 /* eslint-disable no-console */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { BackHandler, Platform, StyleSheet, Text, ToastAndroid, TouchableOpacity, View } from 'react-native';
+import {
+  BackHandler,
+  Platform,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Dialog } from '@rneui/themed';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
@@ -386,10 +394,7 @@ const Home = ({ navigation, route }) => {
       leftComponent={
         <View style={homeStyles.userInfo}>
           <Icon name="person-circle-outline" size={22} color={theme.topNav.icon} />
-          <Text
-            style={[homeStyles.userName, { color: theme.topNav.text }]}
-            numberOfLines={1}
-          >
+          <Text style={[homeStyles.userName, { color: theme.topNav.text }]} numberOfLines={1}>
             {currentUserName || ''}
           </Text>
         </View>
