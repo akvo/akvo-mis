@@ -57,7 +57,7 @@ const TypeNumber = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-                inputContainerStyle={{
+        inputContainerStyle={{
           ...styles.inputFieldContainer,
           backgroundColor: fieldColor || styles.inputFieldContainer.backgroundColor,
           ...(hasError ? styles.inputFieldError : {}),

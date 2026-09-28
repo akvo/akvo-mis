@@ -102,11 +102,17 @@ const Settings = ({ navigation }) => {
                   (darkModePreference || 'auto').slice(1)}
               </Text>
             </View>
-            <Icon name="chevron-right" size={24} color={theme.icon?.primary || theme.text.primary} />
+            <Icon
+              name="chevron-right"
+              size={24}
+              color={theme.icon?.primary || theme.text.primary}
+            />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('About')} style={styles.listItem}>
             <View style={styles.listItemContent}>
-              <Text style={[styles.listItemTitle, { color: theme.text.primary }]}>{trans.about}</Text>
+              <Text style={[styles.listItemTitle, { color: theme.text.primary }]}>
+                {trans.about}
+              </Text>
             </View>
             <Icon name="chevron-right" size={24} color={theme.icon.primary} />
           </TouchableOpacity>

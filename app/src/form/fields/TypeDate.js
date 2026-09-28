@@ -41,7 +41,7 @@ const TypeDate = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-                inputContainerStyle={{
+        inputContainerStyle={{
           ...styles.inputFieldContainer,
           ...(hasError ? styles.inputFieldError : {}),
         }}

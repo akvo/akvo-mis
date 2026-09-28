@@ -85,7 +85,10 @@ const TypeGeoDrawing = ({
                 {trans.polygonPoints}: {points.length}
               </Text>
               {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
-                <Text testID="text-area" style={areaUnreliable ? styles.polygonWarningText : { color: theme.text.primary }}>
+                <Text
+                  testID="text-area"
+                  style={areaUnreliable ? styles.polygonWarningText : { color: theme.text.primary }}
+                >
                   {trans.polygonArea}: {areaUnreliable ? '~' : ''}
                   {polygonAreaHectares(points).toFixed(2)} ha
                 </Text>
@@ -108,7 +111,30 @@ const TypeGeoDrawing = ({
             ))}
         </View>
         <View style={styles.geoButtonGroup}>
-          <Button onPress={handleDraw} testID="button-draw-on-map" disabled={disabled}>
+          <Button
+            onPress={handleDraw}
+            testID="button-draw-on-map"
+            disabled={disabled}
+            buttonStyle={{
+              backgroundColor: theme.buttonPrimary.bg,
+              borderRadius: theme.radius.xl,
+              paddingVertical: theme.spacing.md,
+            }}
+            titleStyle={{
+              color: theme.buttonPrimary.text,
+              fontSize: theme.typography.size.md,
+              fontWeight: '600',
+            }}
+            disabledStyle={{ backgroundColor: theme.buttonPrimary.bgDisabled }}
+            disabledTitleStyle={{ color: theme.buttonPrimary.textDisabled }}
+            icon={{
+              name: 'map-outline',
+              type: 'ionicon',
+              size: 18,
+              color: disabled ? theme.buttonPrimary.textDisabled : theme.buttonPrimary.text,
+            }}
+            iconContainerStyle={{ marginRight: theme.spacing.sm }}
+          >
             {trans.buttonDrawOnMap}
           </Button>
         </View>

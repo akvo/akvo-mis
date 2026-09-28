@@ -14,13 +14,18 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
     <Dialog
       visible={visible}
       testID="save-dialog-menu"
-      overlayStyle={[styles.dialogMenuContainer, { backgroundColor: theme.bg.surfaceElevated1 }]}
+      overlayStyle={[
+        styles.dialogMenuContainer,
+        { backgroundColor: theme.bg.surfaceElevated1, borderRadius: theme.radius.lg },
+      ]}
     >
       <Dialog.Title title={trans.unsavedChangesTitle} titleStyle={{ color: theme.text.primary }} />
       <Dialog.Button
         type="solid"
         title={trans.buttonSaveNExit}
         testID="save-and-exit-button"
+        buttonStyle={[styles.button, { backgroundColor: theme.buttonPrimary.bg }]}
+        titleStyle={[styles.buttonTitle, { color: theme.buttonPrimary.text }]}
         onPress={() => {
           if (handleOnSaveAndExit) {
             handleOnSaveAndExit();
@@ -31,6 +36,8 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
         type="outline"
         title={trans.buttonSaveNSendToWeb}
         testID="save-and-send-to-web-button"
+        buttonStyle={[styles.button, { borderColor: theme.buttonTertiary.border }]}
+        titleStyle={[styles.buttonTitle, { color: theme.buttonTertiary.text }]}
         onPress={() => {
           if (handleOnSaveAndExit) {
             handleOnSaveAndExit({ sendToWeb: true });
@@ -41,8 +48,8 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
         type="outline"
         title={trans.buttonExitWoSaving}
         testID="exit-without-saving-button"
-        buttonStyle={{ borderColor: theme.status.error }}
-        titleStyle={{ color: theme.status.error }}
+        buttonStyle={[styles.button, { borderColor: theme.status.error }]}
+        titleStyle={[styles.buttonTitle, { color: theme.status.error }]}
         onPress={() => {
           if (handleOnExit) {
             handleOnExit();
@@ -53,6 +60,8 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
         type="clear"
         title={trans.buttonCancel}
         testID="cancel-button"
+        buttonStyle={styles.button}
+        titleStyle={[styles.buttonTitle, { color: theme.buttonGhost.color }]}
         onPress={() => {
           setVisible(false);
         }}
@@ -67,7 +76,14 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 20,
     paddingHorizontal: 16,
-    borderRadius: 0,
+  },
+  button: {
+    borderRadius: 24,
+    paddingVertical: 12,
+  },
+  buttonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -38,7 +38,7 @@ const TypeText = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-                inputContainerStyle={inputContainerStyle}
+        inputContainerStyle={inputContainerStyle}
         inputStyle={{ color: theme.input.textInput }}
         multiline
         numberOfLines={4}

@@ -65,7 +65,15 @@ const TypeMultipleOption = ({
             onChange(id, v);
           }
         }}
-        renderItem={(item, selected) => <OptionItem {...item} selected={selected} isMulti />}
+        renderItem={(item, selected) => (
+          <OptionItem
+            label={item.label}
+            name={item.name}
+            color={item.color}
+            selected={selected}
+            isMulti
+          />
+        )}
         renderSelectedItem={({ color, label: labelText, name }) => {
           const bgColor = color || theme.bg.surfaceChip;
           const textColor = color ? '#fff' : theme.text.primary;

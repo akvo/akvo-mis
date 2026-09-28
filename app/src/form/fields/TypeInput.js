@@ -101,7 +101,7 @@ const TypeInput = ({
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
       <Input
-                inputContainerStyle={inputContainerStyle}
+        inputContainerStyle={inputContainerStyle}
         inputStyle={{ color: theme.input.textInput }}
         renderErrorMessage={false}
         onChangeText={(val) => {
