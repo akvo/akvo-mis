@@ -95,8 +95,9 @@ const FormContainer = ({
 
   const formDefinition = transformForm(forms, currentValues, activeLang, repeats, prevAdmAnswer);
   const questionGroupCount = formDefinition?.question_group?.length || 0;
-  const totalGroup = questionGroupCount + 1; // +1 for overview step
-  const isOverviewStep = activeGroup === questionGroupCount;
+  const hasOverview = questionGroupCount > 1;
+  const totalGroup = hasOverview ? questionGroupCount + 1 : questionGroupCount;
+  const isOverviewStep = hasOverview && activeGroup === questionGroupCount;
 
   const activeGroupLabel = isOverviewStep
     ? trans.overviewLabel || 'Overview'

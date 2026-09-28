@@ -64,21 +64,25 @@ const FormNavigation = ({
         });
 
       if (!validateSync || validateSync.length === 0) {
-        return true;
+        return { valid: true, feedback: {} };
       }
 
       const validations = await Promise.allSettled(validateSync);
-      const errors = validations
+      const feedbackValues = validations
         ?.filter(({ status }) => status === 'fulfilled')
-        .map(({ value }) => Object.values(value))
-        .flat()
-        .filter((val) => val !== true);
+        .map(({ value }) => value)
+        .reduce((acc, obj) => ({ ...acc, ...obj }), {});
+      const errors = Object.values(feedbackValues).filter((val) => val !== true);
 
-      return errors.length === 0;
+      return { valid: errors.length === 0, feedback: feedbackValues };
     });
 
     const results = await Promise.all(validationPromises);
-    return results.every((valid) => valid);
+    const allFeedback = results.reduce((acc, r) => ({ ...acc, ...r.feedback }), {});
+    FormState.update((s) => {
+      s.feedback = { ...s.feedback, ...allFeedback };
+    });
+    return results.every((r) => r.valid);
   };
 
   const handleBack = async () => {
