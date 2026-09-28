@@ -302,6 +302,12 @@ const TypeGeoDrawing = ({
     });
   };
 
+  const pillStyle = { borderRadius: theme.radius.xl, paddingVertical: theme.spacing.md };
+  const pillTitleStyle = { fontSize: theme.typography.size.md, fontWeight: '600' };
+  const outlineStyle = [pillStyle, { borderColor: theme.buttonTertiary.border }];
+  const outlineTitleStyle = [pillTitleStyle, { color: theme.buttonTertiary.text }];
+  const outlineDisabledStyle = { borderColor: theme.buttonTertiary.borderDisabled };
+
   return (
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
@@ -371,16 +377,8 @@ const TypeGeoDrawing = ({
             onPress={handleDraw}
             testID="button-draw-on-map"
             disabled={disabled}
-            buttonStyle={{
-              backgroundColor: theme.buttonPrimary.bg,
-              borderRadius: theme.radius.xl,
-              paddingVertical: theme.spacing.md,
-            }}
-            titleStyle={{
-              color: theme.buttonPrimary.text,
-              fontSize: theme.typography.size.md,
-              fontWeight: '600',
-            }}
+            buttonStyle={[pillStyle, { backgroundColor: theme.buttonPrimary.bg }]}
+            titleStyle={[pillTitleStyle, { color: theme.buttonPrimary.text }]}
             disabledStyle={{ backgroundColor: theme.buttonPrimary.bgDisabled }}
             disabledTitleStyle={{ color: theme.buttonPrimary.textDisabled }}
             icon={{
@@ -398,7 +396,10 @@ const TypeGeoDrawing = ({
               onPress={handleValidate}
               testID="button-validate-polygon"
               disabled={disabled || checking}
-              color="secondary"
+              buttonStyle={[pillStyle, { backgroundColor: theme.buttonSecondary.bg }]}
+              titleStyle={[pillTitleStyle, { color: theme.buttonSecondary.text }]}
+              disabledStyle={{ backgroundColor: theme.buttonSecondary.bgDisabled }}
+              disabledTitleStyle={{ color: theme.buttonSecondary.textDisabled }}
             >
               {trans.buttonValidatePolygon}
             </Button>
@@ -409,6 +410,10 @@ const TypeGeoDrawing = ({
               testID="button-retry-sync"
               disabled={disabled}
               type="outline"
+              buttonStyle={outlineStyle}
+              titleStyle={outlineTitleStyle}
+              disabledStyle={outlineDisabledStyle}
+              disabledTitleStyle={{ color: theme.buttonTertiary.textDisabled }}
             >
               {trans.buttonRetrySync}
             </Button>
@@ -419,6 +424,10 @@ const TypeGeoDrawing = ({
               testID="button-review-overlaps"
               disabled={disabled}
               type="outline"
+              buttonStyle={outlineStyle}
+              titleStyle={outlineTitleStyle}
+              disabledStyle={outlineDisabledStyle}
+              disabledTitleStyle={{ color: theme.buttonTertiary.textDisabled }}
             >
               {trans.buttonViewOverlaps}
             </Button>
