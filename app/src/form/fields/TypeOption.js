@@ -83,7 +83,7 @@ const TypeOption = ({
                   style={[
                     pillStyles.pillText,
                     {
-                      color: isSelected ? theme.buttonPrimary.text : theme.buttonPrimary.bg,
+                      color: isSelected ? theme.buttonPrimary.text : theme.text.primary,
                       fontWeight: isSelected ? '600' : '500',
                     },
                   ]}
@@ -144,6 +144,7 @@ const pillStyles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 28,
     padding: 4,
+    marginHorizontal: 10,
   },
   pill: {
     flex: 1,

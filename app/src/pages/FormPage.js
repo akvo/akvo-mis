@@ -455,7 +455,7 @@ const FormPage = ({ navigation, route }) => {
       headerBg={theme.bg.surfaceElevated3}
       leftComponent={
         <Button type="clear" onPress={handleOnPressArrowBackButton} testID="arrow-back-button">
-          <Icon name="arrow-back" size={18} />
+          <Icon name="arrow-back" size={18} color={theme.topNav.icon} />
         </Button>
       }
       rightComponent={
@@ -468,7 +468,7 @@ const FormPage = ({ navigation, route }) => {
               testID="form-page-kebab-menu"
               onPress={() => setShowDropdownMenu(true)}
             >
-              <Icon name="ellipsis-vertical" size={18} />
+              <Icon name="ellipsis-vertical" size={18} color={theme.topNav.icon} />
             </Button>
           }
           handleOnExit={handleShowExitConfirmationDialog}
