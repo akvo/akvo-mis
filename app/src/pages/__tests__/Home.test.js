@@ -1,9 +1,9 @@
 import React from 'react';
-import { render, waitFor, fireEvent, act } from '@testing-library/react-native';
+import { render, waitFor, fireEvent, act, within } from '@testing-library/react-native';
 import HomePage from '../Home';
 import crudForms from '../../database/crud/crud-forms';
 import FormState from '../../store/forms';
-import { UserState, UIState } from '../../store';
+import { UserState, UIState, BuildParamsState } from '../../store';
 
 const mockDateNow = new Date().toISOString();
 const mockForms = [
@@ -48,6 +48,8 @@ const mockForms = [
   },
 ];
 
+// background-task imports expo-task-manager, whose native module jest-expo can't load.
+jest.mock('../../lib/background-task', () => ({}));
 jest.mock('../../database/crud/crud-forms');
 jest.mock('../../store/forms');
 const mockNavigation = {
@@ -97,25 +99,19 @@ describe('Homepage', () => {
       expect(crudForms.selectLatestFormVersion).toHaveBeenCalledTimes(1);
     });
 
-    const listForm1 = wrapper.queryByTestId('card-touchable-1');
-    expect(listForm1).toBeTruthy();
-    expect(listForm1.props.children[0].props.title).toEqual('Form 1');
-    expect(listForm1.props.children[0].props.subTitles).toEqual([
-      'Version: 1.0.0',
-      'Submitted: 2',
-      'Saved: 0',
-      'Synced: 2',
-    ]);
+    const listForm1 = within(await wrapper.findByTestId('card-touchable-1'));
+    expect(listForm1.getByText('Form 1')).toBeTruthy();
+    expect(listForm1.getByText('Version: 1.0.0')).toBeTruthy();
+    expect(within(listForm1.getByTestId('stat-submitted')).getByText('2')).toBeTruthy();
+    expect(within(listForm1.getByTestId('stat-draft')).getByText('0')).toBeTruthy();
+    expect(within(listForm1.getByTestId('stat-synced')).getByText('2')).toBeTruthy();
 
-    const listForm2 = wrapper.queryByTestId('card-touchable-2');
-    expect(listForm2).toBeTruthy();
-    expect(listForm2.props.children[0].props.title).toEqual('Form 2');
-    expect(listForm2.props.children[0].props.subTitles).toEqual([
-      'Version: 1.0.1',
-      'Submitted: 1',
-      'Saved: 3',
-      'Synced: 0',
-    ]);
+    const listForm2 = within(wrapper.getByTestId('card-touchable-2'));
+    expect(listForm2.getByText('Form 2')).toBeTruthy();
+    expect(listForm2.getByText('Version: 1.0.1')).toBeTruthy();
+    expect(within(listForm2.getByTestId('stat-submitted')).getByText('1')).toBeTruthy();
+    expect(within(listForm2.getByTestId('stat-draft')).getByText('3')).toBeTruthy();
+    expect(within(listForm2.getByTestId('stat-synced')).getByText('0')).toBeTruthy();
 
     const listForm3 = wrapper.queryByTestId('card-touchable-3');
     expect(listForm3).toBeFalsy();
@@ -173,14 +169,116 @@ describe('Homepage', () => {
     await waitFor(() => {
       const listForm1 = queryByTestId('card-touchable-1');
       expect(listForm1).toBeTruthy();
-
-      expect(listForm1.props.children[0].props.subTitles).toEqual([
-        'Version: 1.0.0',
-        'Soumis: 2',
-        'Brouillon: 0',
-        'Synchronisé: 2',
-      ]);
+      const card = within(listForm1);
+      expect(card.getByText('Soumis')).toBeTruthy();
+      expect(card.getByText('Brouillon')).toBeTruthy();
+      expect(card.getByText('Synchronisés')).toBeTruthy();
     });
+    act(() => {
+      UIState.update((s) => {
+        s.lang = 'en';
+      });
+    });
+  });
+
+  describe('with no forms', () => {
+    beforeEach(() => {
+      crudForms.selectLatestFormVersion.mockImplementation(() => Promise.resolve([]));
+    });
+
+    afterEach(() => {
+      crudForms.selectLatestFormVersion.mockImplementation(() =>
+        Promise.resolve(mockForms.filter((form) => form.latest)),
+      );
+    });
+
+    it('shows the empty state with an arrow to Settings', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.authenticationType = ['username', 'password'];
+        });
+      });
+      const { findByTestId, getByText, getByTestId } = render(
+        <HomePage navigation={mockNavigation} />,
+      );
+      expect(await findByTestId('home-empty-state')).toBeTruthy();
+      expect(getByText('No forms yet')).toBeTruthy();
+      expect(getByText('Add a form from Settings to start collecting data.')).toBeTruthy();
+      expect(getByTestId('home-empty-state-arrow')).toBeTruthy();
+    });
+
+    it('shows the assigned-forms body and no arrow for code_assignment logins', async () => {
+      act(() => {
+        BuildParamsState.update((s) => {
+          s.authenticationType = ['code_assignment'];
+        });
+      });
+      const { findByTestId, getByText, queryByTestId } = render(
+        <HomePage navigation={mockNavigation} />,
+      );
+      expect(await findByTestId('home-empty-state')).toBeTruthy();
+      expect(getByText('Forms assigned to you will appear here.')).toBeTruthy();
+      expect(queryByTestId('home-empty-state-arrow')).toBeNull();
+    });
+  });
+
+  it('splits forms: app-created data under Latest, newest first; the rest under Earlier', async () => {
+    const [form1, form2] = mockForms;
+    crudForms.selectLatestFormVersion.mockImplementation(() =>
+      Promise.resolve([
+        { ...form1, lastActivityAt: '2026-09-01T08:00:00.000Z' },
+        { ...form2, lastActivityAt: '2026-09-20T08:00:00.000Z' },
+        { ...form2, id: 4, name: 'Form 4', lastActivityAt: null },
+      ]),
+    );
+    const { findByTestId, getByTestId } = render(<HomePage navigation={mockNavigation} />);
+    const latest = within(await findByTestId('form-group-latest'));
+    expect(latest.getAllByTestId(/^card-touchable-/).map((el) => el.props.testID)).toEqual([
+      'card-touchable-2',
+      'card-touchable-1',
+    ]);
+    const earlier = within(getByTestId('form-group-earlier'));
+    expect(earlier.getAllByTestId(/^card-touchable-/).map((el) => el.props.testID)).toEqual([
+      'card-touchable-4',
+    ]);
+    expect(within(getByTestId('section-header-latest')).getByText('2')).toBeTruthy();
+    expect(within(getByTestId('section-header-earlier')).getByText('1')).toBeTruthy();
+    crudForms.selectLatestFormVersion.mockImplementation(() =>
+      Promise.resolve(mockForms.filter((form) => form.latest)),
+    );
+  });
+
+  it('shows Latest alone when every form has app-created data', async () => {
+    crudForms.selectLatestFormVersion.mockImplementation(() =>
+      Promise.resolve(
+        mockForms
+          .filter((form) => form.latest)
+          .map((form) => ({ ...form, lastActivityAt: '2026-09-20T08:00:00.000Z' })),
+      ),
+    );
+    const { findByText, queryByText } = render(<HomePage navigation={mockNavigation} />);
+    expect(await findByText('Latest submissions')).toBeTruthy();
+    expect(queryByText('Earlier submissions')).toBeNull();
+    crudForms.selectLatestFormVersion.mockImplementation(() =>
+      Promise.resolve(mockForms.filter((form) => form.latest)),
+    );
+  });
+
+  it('shows Earlier alone when no form has app-created data', async () => {
+    const { findByText, queryByText } = render(<HomePage navigation={mockNavigation} />);
+    expect(await findByText('Earlier submissions')).toBeTruthy();
+    expect(queryByText('Latest submissions')).toBeNull();
+  });
+
+  it('shows the Add form row only when the login can add forms', async () => {
+    act(() => {
+      BuildParamsState.update((s) => {
+        s.authenticationType = ['username', 'password'];
+      });
+    });
+    const { findByTestId } = render(<HomePage navigation={mockNavigation} />);
+    fireEvent.press(await findByTestId('home-add-form'));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('AddNewForm', {});
   });
 
   it('should disable sync datapoint button when syncWifiOnly is true & network type cellular', async () => {

@@ -17,7 +17,16 @@ import * as Sentry from '@sentry/react-native';
 import moment from 'moment';
 import { FormState, UIState, UserState } from '../store';
 import { api, i18n } from '../lib';
-import { BaseLayout, FAButton, ConfirmDialog } from '../components';
+import {
+  ActionBar,
+  BaseLayout,
+  ConfirmDialog,
+  DatapointCard,
+  DatapointLegend,
+  EmptyState,
+  SectionHeader,
+} from '../components';
+import useTheme from '../lib/theme';
 import { getCurrentTimestamp } from '../form/lib';
 import { crudDataPoints, crudForms } from '../database/crud';
 import { refreshStorageWarning } from '../lib/submission-fallback';
@@ -27,7 +36,8 @@ const Submission = ({ navigation, route }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [draftsOnly, setDraftsOnly] = useState(false);
-  const [sortByLastSubmission, setSortByLastSubmission] = useState(false);
+  // Per-section collapse, held for the screen's lifetime only (A14).
+  const [collapsed, setCollapsed] = useState({});
   const [confirmAction, setConfirmAction] = useState(null);
   // Armed only by openFamilyDraft, which is the one place that swaps the active form.
   // A bare 'focus' listener would also fire on this screen's FIRST focus — and
@@ -40,6 +50,8 @@ const Submission = ({ navigation, route }) => {
   const activeLang = UIState.useState((s) => s.lang);
   const { id: activeUserId } = UserState.useState((s) => s);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const db = SQLite.useSQLiteContext();
   const refreshPage = UIState.useState((s) => s.refreshPage);
   const isOnline = UIState.useState((s) => s.online);
@@ -56,41 +68,66 @@ const Submission = ({ navigation, route }) => {
   // deriving it would undercount by every monitoring draft and then jump on check.
   const [draftCount, setDraftCount] = useState(0);
 
-  const datapoints = useMemo(() => {
-    const filtered = data.filter((d) => {
-      const matchSearch = !search || d?.name?.toLowerCase().includes(search.toLowerCase());
-      // Checked shows drafts ALONE — the same view the removed header icon gave, and
-      // the only way to find a handful of unfinished drafts among hundreds of rows.
-      const matchDraft = draftsOnly ? d.submitted === 0 : d.submitted === 1;
-      return matchSearch && matchDraft;
-    });
-    if (!sortByLastSubmission) {
-      return filtered;
-    }
-    // sortAt is the newest of this row's submission, its creation and its latest
-    // monitoring submission, so "last submission" means the datapoint's last
-    // activity rather than only the registration's. Sort a copy: data is state.
-    return [...filtered].sort((a, b) => b.sortAt - a.sortAt);
-  }, [data, search, draftsOnly, sortByLastSubmission]);
+  const datapoints = useMemo(
+    () =>
+      data.filter((d) => {
+        const matchSearch = !search || d?.name?.toLowerCase().includes(search.toLowerCase());
+        // Checked shows drafts ALONE — the same view the removed header icon gave, and
+        // the only way to find a handful of unfinished drafts among hundreds of rows.
+        const matchDraft = draftsOnly ? d.submitted === 0 : d.submitted === 1;
+        return matchSearch && matchDraft;
+      }),
+    [data, search, draftsOnly],
+  );
 
   const sections = useMemo(() => {
-    if (!isFamilyDraftView) {
-      // One untitled section: the ordinary list, unchanged.
-      return datapoints.length ? [{ title: null, data: datapoints }] : [];
+    let groups;
+    if (isFamilyDraftView) {
+      // Grouped by BACKEND formId so multiple versions of one form collapse into a
+      // single section instead of repeating the name. The SQL already orders
+      // registration first then monitoring forms, and Map preserves insertion order.
+      const byForm = datapoints.reduce((acc, d) => {
+        const key = `${d.groupFormId}`;
+        if (!acc.has(key)) {
+          acc.set(key, { key, title: d.groupName, testID: `section-${d.groupName}`, rows: [] });
+        }
+        acc.get(key).rows.push(d);
+        return acc;
+      }, new Map());
+      groups = [...byForm.values()];
+    } else {
+      // Split as on Home, each row once (A19, A20). sortAt is the newest activity
+      // created in this app — the row itself or its monitoring data (A18); 0 is none.
+      groups = [
+        {
+          key: 'latest',
+          title: trans.latestSubmissionsTitle,
+          rows: datapoints.filter((d) => d.sortAt > 0).sort((a, b) => b.sortAt - a.sortAt),
+        },
+        {
+          key: 'earlier',
+          title: trans.earlierSubmissionsTitle,
+          rows: datapoints.filter((d) => !(d.sortAt > 0)),
+        },
+      ];
     }
-    // Grouped by BACKEND formId so multiple versions of one form collapse into a
-    // single section instead of repeating the name. The SQL already orders
-    // registration first then monitoring forms, and Map preserves insertion order.
-    const byForm = datapoints.reduce((acc, d) => {
-      const key = d.groupFormId;
-      if (!acc.has(key)) {
-        acc.set(key, { title: d.groupName, data: [] });
-      }
-      acc.get(key).data.push(d);
-      return acc;
-    }, new Map());
-    return [...byForm.values()];
-  }, [datapoints, isFamilyDraftView]);
+    // Empty sections are hidden. A collapsed one keeps its header and count (A21) but
+    // drops its rows, so a long list stays virtualized.
+    return groups
+      .filter((g) => g.rows.length)
+      .map((g, gx) => ({
+        ...g,
+        testID: g.testID || `section-header-${g.key}`,
+        spaced: gx > 0,
+        data: collapsed[g.key] ? [] : g.rows,
+      }));
+  }, [
+    datapoints,
+    isFamilyDraftView,
+    collapsed,
+    trans.earlierSubmissionsTitle,
+    trans.latestSubmissionsTitle,
+  ]);
 
   const goToNewForm = () => {
     FormState.update((s) => {
@@ -257,7 +294,10 @@ const Submission = ({ navigation, route }) => {
 
           const monitoring = statsByUuid.get(res.uuid);
           // Computed from the RAW columns: createdAt above is already a display string.
-          const timestamps = [res.submittedAt, res.createdAt, monitoring?.lastSubmissionAt]
+          // A downloaded row's own dates are the download time, so only its monitoring
+          // activity counts (APP-481 A18).
+          const ownTimes = res.locallyCreated ? [res.submittedAt, res.createdAt] : [];
+          const timestamps = [...ownTimes, monitoring?.lastSubmissionAt]
             .filter(Boolean)
             .map((d) => moment(d).valueOf())
             .filter((ms) => !Number.isNaN(ms));
@@ -433,51 +473,20 @@ const Submission = ({ navigation, route }) => {
     setConfirmAction({ type: 'delete', item });
   };
 
-  const renderRowBody = (item) => (
-    <View style={styles.itemContent}>
-      <Text style={styles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
-        {item.name}
-      </Text>
-      <View style={styles.badgeRow}>
-        {item.submitted === 0 && (
-          <View style={styles.draftBadge}>
-            <Text style={styles.draftText}>{trans.draftText}</Text>
-          </View>
-        )}
-        {item.needsRetake && (
-          <View style={styles.retakeBadge} testID={`retake-badge-${item.id}`}>
-            <Text style={styles.retakeText}>{trans.photoMissingText}</Text>
-          </View>
-        )}
-        {item.submitted === 0 &&
-          (!!item.draftId || !!item.sendToWeb) &&
-          // syncedAt is the only honest signal here. Bound for the web is not the
-          // same as on the web: a freshly opted-in draft has not left the device
-          // yet, and an edited one leaves a stale copy up there until it re-uploads.
-          (item.isSynced ? (
-            <Text style={styles.onWebLabel} testID={`on-web-${item.id}`}>
-              {trans.onWebLabel}
-            </Text>
-          ) : (
-            <Text style={styles.pendingWebLabel} testID={`pending-web-${item.id}`}>
-              {trans.pendingWebLabel}
-            </Text>
-          ))}
-        <Text style={styles.itemDate}>
-          {trans.createdLabel} {item.createdAt}
-        </Text>
-      </View>
-      {item.submitted === 1 && !activeForm?.parentId && (
-        <Text style={styles.itemMeta} testID={`monitoring-meta-${item.id}`}>
-          {`${trans.monitoringLabel}${item.monitoringSubmissions}`}
-          {item.monitoringDrafts > 0 ? ` · ${trans.draftLabel}${item.monitoringDrafts}` : ''}
-          {item.lastMonitoringAt
-            ? ` · ${trans.lastMonitoringLabel}${moment(item.lastMonitoringAt).format('DD/MM/YYYY')}`
-            : ''}
-        </Text>
-      )}
-    </View>
-  );
+  // One line under the name (Figma): the date, plus the monitoring count on the
+  // registration list. The card truncates it rather than wrapping.
+  const getMeta = (item) => {
+    // Downloaded rows: syncedAt is the server's last_updated; createdAt is the download time.
+    const date = (item.locallyCreated ? item.createdAt : item.syncedAt).split(' ')[0];
+    const created = (item.submitted === 0 ? trans.createdOn : trans.registeredOn).replace(
+      '{date}',
+      date,
+    );
+    if (item.submitted !== 1 || activeForm?.parentId) {
+      return created;
+    }
+    return `${created} · ${trans.monitoringCount.replace('{count}', item.monitoringSubmissions)}`;
+  };
 
   const renderItem = ({ item }) => {
     // Submitted rows have nothing to swipe to — keep them plain so the gesture only
@@ -485,28 +494,19 @@ const Submission = ({ navigation, route }) => {
     if (item.submitted !== 0) {
       return (
         <TouchableOpacity
-          key={item.id}
           onPress={() => onClickItem(item)}
           testID={`submission-item-${item.id}`}
-          style={styles.itemContainer}
+          style={styles.item}
           activeOpacity={0.6}
         >
-          <View style={styles.iconContainer}>
-            <Icon
-              name={item.isSynced ? 'checkmark' : 'time'}
-              size={24}
-              color={item.isSynced ? '#4CAF50' : '#FFA000'}
-            />
-          </View>
-          {renderRowBody(item)}
+          <DatapointCard item={item} meta={getMeta(item)} trans={trans} />
         </TouchableOpacity>
       );
     }
     return (
       <ListItem.Swipeable
-        key={item.id}
         onPress={() => openFamilyDraft(item)}
-        containerStyle={[styles.itemContainer, styles.itemDraftBorder]}
+        containerStyle={styles.swipeItem}
         testID={`submission-item-${item.id}`}
         leftWidth={112}
         minSlideWidth={40}
@@ -517,7 +517,7 @@ const Submission = ({ navigation, route }) => {
               testID={`delete-draft-${item.id}`}
               style={styles.swipeAction}
             >
-              <Icon name="trash-outline" size={22} color="#B91C1C" />
+              <Icon name="trash-outline" size={22} color={theme.status.error} />
             </TouchableOpacity>
             {!item.draftId && !item.sendToWeb && (
               <TouchableOpacity
@@ -525,55 +525,51 @@ const Submission = ({ navigation, route }) => {
                 testID={`send-to-web-${item.id}`}
                 style={styles.swipeAction}
               >
-                <Icon name="cloud-upload-outline" size={22} color="#1651b6" />
+                <Icon name="cloud-upload-outline" size={22} color={theme.icon.accent} />
               </TouchableOpacity>
             )}
           </View>
         }
       >
         {/*
-          One child only. RNEUI's PadView inserts an unkeyed spacer View between
-          siblings, so passing Content and Chevron separately triggers a "unique key"
-          warning from inside the library. Wrapping them keeps the same layout.
+          One child only: RNEUI's PadView inserts an unkeyed spacer View between
+          siblings, which triggers a "unique key" warning from inside the library.
         */}
-        <View style={styles.swipeRowInner}>
-          {renderRowBody(item)}
-          <Icon name="chevron-forward" size={18} color="#cccccc" />
-        </View>
+        <DatapointCard item={item} meta={getMeta(item)} trans={trans} />
       </ListItem.Swipeable>
     );
   };
 
-  const renderSectionHeader = ({ section }) =>
-    section.title ? (
-      <View style={styles.sectionHeader} testID={`section-${section.title}`}>
-        <Text style={styles.sectionHeaderText} numberOfLines={1}>
-          {section.title}
-        </Text>
-        <Text style={styles.sectionHeaderCount}>{section.data.length}</Text>
-      </View>
-    ) : null;
+  const toggleSection = (key) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const renderSectionHeader = ({ section }) => (
+    <SectionHeader
+      title={section.title}
+      count={section.rows.length}
+      collapsed={!!collapsed[section.key]}
+      onToggle={() => toggleSection(section.key)}
+      testID={section.testID}
+      style={section.spaced ? styles.spacedHeader : null}
+    />
+  );
 
   const renderEmptyState = () =>
     loading ? (
       <View style={styles.emptyStateContainer}>
         <View style={styles.emptyIconContainer}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color={theme.text.highlight} />
         </View>
         <View style={styles.emptyStateTextContainer}>
           <Text style={styles.emptyStateTitle}>{trans.fetchingData}</Text>
         </View>
       </View>
     ) : (
-      <View style={styles.emptyStateContainer}>
-        <View style={styles.emptyIconContainer}>
-          <Icon name="document-outline" size={64} color="#C5CAE9" />
-        </View>
-        <View style={styles.emptyStateTextContainer}>
-          <Text style={styles.emptyStateTitle}>{trans.emptySubmissionMessageInfo}</Text>
-          <Text style={styles.emptyStateDescription}>{trans.emptySubmissionMessageAction}</Text>
-        </View>
-      </View>
+      // Figma's arrow position: its tip lands on the full-width action bar (A25).
+      <EmptyState
+        title={trans.emptySubmissionMessageInfo}
+        body={trans.emptySubmissionMessageAction}
+        testID="submission-empty-state"
+      />
     );
 
   return (
@@ -597,49 +593,36 @@ const Submission = ({ navigation, route }) => {
               containerStyle={styles.filterCheckbox}
               textStyle={styles.filterCheckboxText}
             />
-            <TouchableOpacity
-              onPress={() => setSortByLastSubmission((prev) => !prev)}
-              testID="sort-last-submission-button"
-              style={[styles.sortChip, sortByLastSubmission && styles.sortChipActive]}
-              activeOpacity={0.6}
-            >
-              <Icon
-                name="swap-vertical"
-                size={14}
-                color={sortByLastSubmission ? '#ffffff' : '#424242'}
-              />
-              <Text
-                style={[styles.sortChipText, sortByLastSubmission && styles.sortChipTextActive]}
-              >
-                {trans.sortLastSubmissionLabel}
-              </Text>
-            </TouchableOpacity>
           </View>
           {draftsOnly && datapoints.length > 0 && (
             <Text style={styles.swipeHint} testID="swipe-hint">
               {trans.swipeHintText}
             </Text>
           )}
-          <SectionList
-            sections={sections}
-            renderItem={renderItem}
-            renderSectionHeader={renderSectionHeader}
-            keyExtractor={(item) => `${item.id}`}
-            testID="submission-list"
-            stickySectionHeadersEnabled={false}
-            contentContainerStyle={[
-              styles.flatListContent,
-              datapoints.length === 0 && styles.emptyListContent,
-            ]}
-            ListEmptyComponent={renderEmptyState}
-          />
+          <View style={styles.listSection}>
+            <SectionList
+              sections={sections}
+              renderItem={renderItem}
+              renderSectionHeader={renderSectionHeader}
+              keyExtractor={(item) => `${item.id}`}
+              testID="submission-list"
+              stickySectionHeadersEnabled={false}
+              contentContainerStyle={[
+                styles.flatListContent,
+                datapoints.length === 0 && styles.emptyListContent,
+              ]}
+              ListEmptyComponent={renderEmptyState}
+              ListFooterComponent={
+                datapoints.length > 0 ? <DatapointLegend trans={trans} items={datapoints} /> : null
+              }
+            />
+          </View>
         </View>
       </BaseLayout.Content>
-      <FAButton
+      <ActionBar
         label={trans.newSubmissionText}
         onPress={goToNewForm}
         testID="new-submission-button"
-        icon={{ name: 'add-circle', size: 20, color: 'white' }}
       />
       <ConfirmDialog
         visible={!!confirmAction}
@@ -672,214 +655,96 @@ const Submission = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: '100%',
-  },
-  flatListContent: {
-    padding: 8,
-    // Clears the floating action button, which overlays the list rather than
-    // sitting below it.
-    paddingBottom: 88,
-  },
-  emptyListContent: {
-    flexGrow: 1,
-  },
-  filterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  filterCheckbox: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0,
-    margin: 0,
-  },
-  filterCheckboxText: {
-    fontSize: 14,
-    fontWeight: 'normal',
-    color: '#424242',
-  },
-  sortChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderColor: '#cfd8dc',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
-  },
-  sortChipActive: {
-    backgroundColor: '#1651b6',
-    borderColor: '#1651b6',
-  },
-  sortChipText: {
-    fontSize: 14,
-    color: '#424242',
-  },
-  sortChipTextActive: {
-    color: '#ffffff',
-  },
-  swipeHint: {
-    fontSize: 14,
-    color: '#78909c',
-    fontStyle: 'italic',
-    paddingHorizontal: 12,
-    paddingTop: 4,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    gap: 8,
-  },
-  sectionHeaderText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#37474f',
-  },
-  sectionHeaderCount: {
-    fontSize: 14,
-    color: '#607d8b',
-  },
-  itemContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'white',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-    borderLeftWidth: 4,
-    borderLeftColor: 'transparent',
-  },
-  itemDraftBorder: {
-    borderLeftColor: '#FFEB3B',
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    marginRight: 12,
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#212121',
-    marginBottom: 4,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  itemDate: {
-    fontSize: 12,
-    color: '#9e9e9e',
-  },
-  itemMeta: {
-    fontSize: 12,
-    color: '#546e7a',
-    marginTop: 2,
-  },
-  swipeRowInner: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  swipeActions: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    backgroundColor: '#f1f5f9',
-  },
-  swipeAction: {
-    width: 56,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  onWebLabel: {
-    fontSize: 11,
-    color: '#1651b6',
-    fontWeight: 'bold',
-  },
-  // Amber, matching the low-storage bar: bound for the web, not there yet.
-  pendingWebLabel: {
-    fontSize: 11,
-    color: '#b45309',
-    fontWeight: 'bold',
-  },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
-  },
-  emptyIconContainer: {
-    marginBottom: 20,
-  },
-  emptyStateTextContainer: {
-    alignItems: 'center',
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#424242',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptyStateDescription: {
-    fontSize: 14,
-    color: '#757575',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  draftBadge: {
-    backgroundColor: '#FFEB3B',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-  },
-  draftText: {
-    fontSize: 12,
-    color: '#212121',
-    fontWeight: 'bold',
-  },
-  retakeBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  retakeText: {
-    fontSize: 12,
-    color: '#B91C1C',
-    fontWeight: 'bold',
-  },
-});
+const getStyles = (theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      width: '100%',
+    },
+    listSection: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+    },
+    flatListContent: {
+      // Clears the action bar (16 + 56 + 24), which overlays the list rather than
+      // sitting below it.
+      paddingBottom: 104,
+    },
+    emptyListContent: {
+      flexGrow: 1,
+    },
+    filterBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    filterCheckbox: {
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      padding: 0,
+      margin: 0,
+    },
+    filterCheckboxText: {
+      fontSize: 14,
+      fontWeight: 'normal',
+      color: theme.text.secondary,
+    },
+    spacedHeader: {
+      marginTop: 16,
+    },
+    swipeHint: {
+      fontSize: 14,
+      color: theme.text.tertiary,
+      fontStyle: 'italic',
+      paddingHorizontal: 16,
+      paddingTop: 4,
+    },
+    item: {
+      marginBottom: 8,
+    },
+    // The card draws itself; the swipe container only has to get out of its way.
+    swipeItem: {
+      padding: 0,
+      marginBottom: 8,
+      backgroundColor: 'transparent',
+    },
+    swipeActions: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      marginBottom: 8,
+      borderRadius: 12,
+      backgroundColor: theme.bg.surfaceChip,
+    },
+    swipeAction: {
+      width: 56,
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyStateContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 40,
+      paddingVertical: 60,
+    },
+    emptyIconContainer: {
+      marginBottom: 20,
+    },
+    emptyStateTextContainer: {
+      alignItems: 'center',
+    },
+    emptyStateTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme.text.primary,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+  });
 
 export default Submission;
