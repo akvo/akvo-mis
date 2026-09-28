@@ -20,6 +20,7 @@ import {
   ImageView,
   AttachmentView,
   SubtitleContent,
+  SectionLabel,
   formDataDetailsStyles as sharedStyles,
 } from '../../components';
 import FormDataNavigation from './FormDataNavigation';
@@ -265,7 +266,7 @@ const FormDataDetails = ({ navigation, route }) => {
   };
 
   const renderSectionHeader = ({ section }) => (
-    <Text style={styles.sectionTitle}>{section.title}</Text>
+    <SectionLabel style={styles.sectionTitle}>{section.title}</SectionLabel>
   );
 
   useEffect(
@@ -306,11 +307,9 @@ const FormDataDetails = ({ navigation, route }) => {
 
 const styles = StyleSheet.create({
   sectionTitle: {
-    fontWeight: '700',
-    fontSize: 14,
-    paddingVertical: 12,
+    paddingTop: 16,
+    paddingBottom: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#f2f2f2',
   },
   listContainer: {
     width: '100%',

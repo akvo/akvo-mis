@@ -426,7 +426,9 @@ const dataPointsQuery = () => ({
       `SELECT dp.uuid,
           SUM(CASE WHEN dp.submitted = 0 THEN 1 ELSE 0 END) AS draftCount,
           SUM(CASE WHEN dp.submitted = 1 THEN 1 ELSE 0 END) AS submissionCount,
-          MAX(CASE WHEN dp.submitted = 1 THEN dp.submittedAt END) AS lastSubmissionAt
+          -- Created in this app only: a downloaded row's submittedAt is the download time.
+          MAX(CASE WHEN dp.submitted = 1 AND dp.locallyCreated = 1 THEN dp.submittedAt END)
+            AS lastSubmissionAt
         FROM datapoints dp
         JOIN forms f ON dp.form = f.id
         WHERE f.parentId = ? AND dp.user = ? AND dp.uuid IS NOT NULL

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import Titles from './Titles';
 import useTheme from '../../lib/theme';
 
-const CenterLayout = ({ children }) => {
+const CenterLayout = ({ children, backgroundColor = null }) => {
   const theme = useTheme();
 
   return (
@@ -16,7 +16,7 @@ const CenterLayout = ({ children }) => {
         justifyContent: 'center',
         paddingHorizontal: 16,
         gap: 36,
-        backgroundColor: theme.bg.surfacePrimary,
+        backgroundColor: backgroundColor || theme.bg.surfacePrimary,
       }}
       testID="center-layout"
     >

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { SearchBar } from '@rneui/themed';
+import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PageTitle from './PageTitle';
 import Content from './Content';
@@ -20,7 +21,10 @@ const BaseLayout = ({
   const statusBar = UIState.useState((s) => s.statusBar);
   const theme = useTheme();
   const networkBarVisible = !isOnline || statusBar !== null;
-  const edges = networkBarVisible ? ['left', 'right'] : ['left', 'right', 'bottom'];
+  // A tab screen sits above the tab bar, which already pads for the Android nav bar;
+  // taking the bottom edge here too left a dead strip that clipped the list above it.
+  const inTabs = useContext(BottomTabBarHeightContext) !== undefined;
+  const edges = networkBarVisible || inTabs ? ['left', 'right'] : ['left', 'right', 'bottom'];
 
   return (
     <SafeAreaView
