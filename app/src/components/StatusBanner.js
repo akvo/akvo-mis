@@ -1,19 +1,14 @@
 import React, { useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { UIState, DatapointSyncState, AuthState } from '../store';
+import { UIState, DatapointSyncState } from '../store';
 import { i18n } from '../lib';
 import useTheme from '../lib/theme';
 import { SYNC_STATUS } from '../lib/constants';
 
 const TIMEOUT_DISMISS = 3000; // 3second
-const TAB_BAR_BASE = 70;
 
 const StatusBanner = () => {
-  const insets = useSafeAreaInsets();
-  const token = AuthState.useState((s) => s.token);
   const isOnline = UIState.useState((s) => s.online);
   const activeLang = UIState.useState((s) => s.lang);
   const statusBar = UIState.useState((s) => s.statusBar);
@@ -118,6 +113,12 @@ const StatusBanner = () => {
     banner = { bg: theme.text.tertiary, color: LIGHT_TEXT, text: trans.offlineText };
   }
 
+  useEffect(() => {
+    UIState.update((s) => {
+      s.bannerVisible = !!banner;
+    });
+  }, [!!banner]);
+
   if (!banner) {
     return null;
   }
@@ -129,11 +130,6 @@ const StatusBanner = () => {
         styles.container,
         {
           backgroundColor: banner.bg,
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: token ? TAB_BAR_BASE + Math.max(insets.bottom, 10) : insets.bottom,
-          zIndex: 10,
         },
       ]}
     >

@@ -13,6 +13,7 @@ const UIState = new Store({
   refreshPage: false,
   lowStorage: false,
   triggerSync: false,
+  bannerVisible: false,
 });
 
 export default UIState;
