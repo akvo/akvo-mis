@@ -77,13 +77,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '400',
-    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 10,
   },
   message: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     marginBottom: 20,
   },
   buttonRow: {
@@ -98,8 +98,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

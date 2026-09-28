@@ -1,7 +1,5 @@
 import React from 'react';
-import { ToastAndroid } from 'react-native';
-import { Tab } from '@rneui/themed';
-import getStyles from '../styles';
+import { View, Text, TouchableOpacity, StyleSheet, ToastAndroid } from 'react-native';
 import { UIState, FormState } from '../../store';
 import i18n from '../../lib/i18n';
 import { generateValidationSchemaFieldLevel, onFilterDependency } from '../lib';
@@ -19,7 +17,6 @@ const FormNavigation = ({
   setShowDialogMenu,
 }) => {
   const theme = useTheme();
-  const styles = getStyles(theme);
   const visitedQuestionGroup = FormState.useState((s) => s.visitedQuestionGroup);
   const currentValues = FormState.useState((s) => s.currentValues);
   const activeLang = UIState.useState((s) => s.lang);
@@ -84,7 +81,24 @@ const FormNavigation = ({
     return results.every((valid) => valid);
   };
 
-  const handleFormNavigation = async (index) => {
+  const handleBack = async () => {
+    if (showQuestionGroupList) {
+      return;
+    }
+    if (!activeGroup) {
+      setShowDialogMenu(true);
+      return;
+    }
+    const activeValue = activeGroup - 1;
+    setActiveGroup(activeValue);
+    handleOnUpdateState(activeValue);
+  };
+
+  const handleNext = async () => {
+    if (showQuestionGroupList) {
+      return;
+    }
+
     const allQuestions =
       formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [];
 
@@ -118,7 +132,8 @@ const FormNavigation = ({
       return acc;
     }, {});
     const errors = Object.values(feedbackValues).filter((val) => val !== true);
-    if (errors.length > 0 && index === 2 && activeGroup < totalGroup - 1) {
+
+    if (errors.length > 0 && activeGroup < totalGroup - 1) {
       const isRequired = errors.find((e) => e.includes('required'));
       const errorMessage = isRequired
         ? trans.mandatoryQuestionsWarning || trans.mandatoryQuestions
@@ -135,104 +150,97 @@ const FormNavigation = ({
       });
     }
 
-    if (index === 0) {
-      if (activeGroup > 0) {
-        setActiveGroup(activeGroup - 1);
-      }
-      if (!activeGroup) {
-        setShowDialogMenu(true);
-      } else {
-        const activeValue = activeGroup - 1;
-        setActiveGroup(activeValue);
-        handleOnUpdateState(activeValue);
-      }
-      return;
-    }
-    if (index === 1) {
-      setShowQuestionGroupList(!showQuestionGroupList);
-      return;
-    }
-    if (index === 2 && activeGroup < totalGroup - 1) {
+    if (activeGroup < totalGroup - 1) {
       setActiveGroup(activeGroup + 1);
-    }
-    if (index === 2 && activeGroup === totalGroup - 1) {
-      const allGroupsValid = await validateAllGroups();
-      if (allGroupsValid) {
-        onSubmit();
-      } else {
-        ToastAndroid.show(
-          trans.completeAllRequiredFields ||
-            'Please complete all required fields in all sections before submitting',
-          ToastAndroid.LONG,
-        );
-      }
     }
   };
 
+  const handleSubmit = async () => {
+    const allGroupsValid = await validateAllGroups();
+    if (allGroupsValid) {
+      onSubmit();
+    } else {
+      ToastAndroid.show(
+        trans.completeAllRequiredFields ||
+          'Please complete all required fields in all sections before submitting',
+        ToastAndroid.LONG,
+      );
+    }
+  };
+
+  const isOverviewStep = activeGroup === totalGroup - 1;
+
   return (
-    <Tab
-      buttonStyle={styles.formNavigationButton}
-      onChange={handleFormNavigation}
-      disableIndicator
-      value={activeGroup}
-    >
-      <Tab.Item
-        title={trans.buttonBack}
-        icon={{
-          name: 'chevron-back-outline',
-          type: 'ionicon',
-          color: theme.text.secondary,
-          size: 20,
-        }}
-        iconPosition="left"
-        iconContainerStyle={styles.formNavigationIcon}
-        titleStyle={styles.formNavigationTitle}
-        testID="form-nav-btn-back"
+    <View style={[styles.container, { backgroundColor: theme.bg.surfaceElevated3, borderTopColor: theme.border.listDivider }]}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={handleBack}
         disabled={showQuestionGroupList}
-        disabledStyle={{ backgroundColor: 'transparent' }}
-        containerStyle={styles.formNavigationBgLight}
-      />
-      <Tab.Item
-        title={`${activeGroup + 1}/${totalGroup}`}
-        titleStyle={styles.formNavigationGroupCount}
-        testID="form-nav-group-count"
-        containerStyle={styles.formNavigationBgLight}
-      />
-      {activeGroup < totalGroup - 1 ? (
-        <Tab.Item
-          title={trans.buttonNext}
-          icon={{
-            name: 'chevron-forward-outline',
-            type: 'ionicon',
-            color: theme.text.secondary,
-            size: 20,
-          }}
-          iconPosition="right"
-          iconContainerStyle={styles.formNavigationIcon}
-          titleStyle={styles.formNavigationTitle}
-          testID="form-nav-btn-next"
-          disabled={showQuestionGroupList}
-          disabledStyle={{ backgroundColor: 'transparent' }}
-          containerStyle={styles.formNavigationBgLight}
-        />
-      ) : (
-        <Tab.Item
-          title={trans.buttonSubmit}
-          icon={{
-            name: 'paper-plane-outline',
-            type: 'ionicon',
-            color: theme.buttonPrimary.text,
-            size: 20,
-          }}
-          iconPosition="right"
-          iconContainerStyle={styles.formNavigationIconSubmit}
-          titleStyle={styles.formNavigationSubmit}
-          containerStyle={styles.formNavigationBgPrimary}
+        testID="form-nav-btn-back"
+      >
+        <Text style={[styles.backText, { color: theme.buttonPrimary.bg }]}>
+          {trans.buttonBack}
+        </Text>
+      </TouchableOpacity>
+
+      {isOverviewStep ? (
+        <TouchableOpacity
+          style={[styles.nextButton, { backgroundColor: theme.buttonPrimary.bg }]}
+          onPress={handleSubmit}
           testID="form-btn-submit"
-        />
+        >
+          <Text style={[styles.nextText, { color: theme.buttonPrimary.text }]}>
+            {trans.buttonSubmit}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.nextButton, { backgroundColor: theme.buttonPrimary.bg }]}
+          onPress={handleNext}
+          disabled={showQuestionGroupList}
+          testID="form-nav-btn-next"
+        >
+          <Text style={[styles.nextText, { color: theme.buttonPrimary.text }]}>
+            {trans.buttonNext}
+          </Text>
+        </TouchableOpacity>
       )}
-    </Tab>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  backText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  nextButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  nextText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});
 
 export default FormNavigation;

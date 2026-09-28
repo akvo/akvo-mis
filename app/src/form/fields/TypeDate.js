@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import moment from 'moment';
 import { Input } from '@rneui/themed';
+import Icon from 'react-native-vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FieldLabel } from '../support';
 import getStyles from '../styles';
@@ -54,6 +55,7 @@ const TypeDate = ({
         placeholderTextColor={theme.input.text}
         disabled={disabled}
         renderErrorMessage={false}
+        rightIcon={<Icon name="calendar-outline" size={20} color={theme.icon.secondary} />}
       />
       {showDatepicker && (
         <DateTimePicker

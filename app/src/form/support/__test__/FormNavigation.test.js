@@ -115,10 +115,6 @@ describe('FormNavigation component', () => {
     const btnBack = getByTestId('form-nav-btn-back');
     expect(btnBack).toBeDefined();
 
-    const groupCounter = getByTestId('form-nav-group-count');
-    expect(groupCounter).toBeDefined();
-    expect(getByText('1/2')).toBeDefined();
-
     const btnNext = getByTestId('form-nav-btn-next');
     expect(btnNext).toBeDefined();
 

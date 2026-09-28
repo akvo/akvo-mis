@@ -99,26 +99,28 @@ const TypeAttachment = ({
             <Icon name="document-text" size={20} color={theme.icon.primary} />
             <Text style={[styles.fileName, { color: theme.text.primary }]}>{fileName}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.pillButton, { backgroundColor: theme.buttonPrimary.bg, marginTop: 10 }]}
-            onPress={() => onOpenPress(selectedFile?.uri)}
-            testID="open-file-button"
-            accessibilityLabel="open-file-button"
-          >
-            <Icon name="eye" size={18} color={theme.buttonPrimary.text} />
-            <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>
-              {trans.openFileButton}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.pillButton, { backgroundColor: theme.status.error, marginTop: 10 }]}
-            onPress={onRemovePress}
-            testID="remove-file-button"
-            accessibilityLabel="remove-file-button"
-          >
-            <Icon name="trash" size={18} color="#FFFFFF" />
-            <Text style={styles.pillButtonText}>{trans.buttonRemove}</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.smallPillButton, { backgroundColor: theme.buttonPrimary.bg }]}
+              onPress={() => onOpenPress(selectedFile?.uri)}
+              testID="open-file-button"
+              accessibilityLabel="open-file-button"
+            >
+              <Icon name="eye" size={16} color={theme.buttonPrimary.text} />
+              <Text style={[styles.smallPillButtonText, { color: theme.buttonPrimary.text }]}>
+                {trans.openFileButton}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.smallPillButton, { backgroundColor: theme.status.error }]}
+              onPress={onRemovePress}
+              testID="remove-file-button"
+              accessibilityLabel="remove-file-button"
+            >
+              <Icon name="trash" size={16} color="#FFFFFF" />
+              <Text style={styles.smallPillButtonText}>{trans.buttonRemove}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
       {!value && (
@@ -171,6 +173,25 @@ const styles = StyleSheet.create({
   },
   pillButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  smallPillButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 6,
+  },
+  smallPillButtonText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
   },

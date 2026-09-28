@@ -250,6 +250,9 @@ const uiText = {
     emptyDraftMessageAction: 'Saved forms will appear here',
     draftText: 'Draft',
     compressingImage: 'Compressing...',
+    stepLabel: 'Step',
+    ofLabel: 'of',
+    overviewLabel: 'Overview',
   },
   fr: {
     showDraftsOnlyLabel: 'Brouillons uniquement',
@@ -497,6 +500,9 @@ const uiText = {
     emptyDraftMessageAction: 'Les formulaires enregistrés apparaîtront ici',
     draftText: 'Brouillon',
     compressingImage: 'Compression...',
+    stepLabel: 'Étape',
+    ofLabel: 'de',
+    overviewLabel: 'Aperçu',
   },
 };
 

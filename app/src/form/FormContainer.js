@@ -2,10 +2,11 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { BaseLayout } from '../components';
-import { FormNavigation, QuestionGroupList } from './support';
+import { FormNavigation, QuestionGroupList, FormOverview } from './support';
 import QuestionGroup from './components/QuestionGroup';
-import { transformForm, generateDataPointName } from './lib';
-import { FormState } from '../store';
+import { transformForm, generateDataPointName, generateValidationSchemaFieldLevel, onFilterDependency } from './lib';
+import { FormState, UIState } from '../store';
+import { i18n } from '../lib';
 import { crudDataPoints, crudForms } from '../database/crud';
 
 // TODO:: Allow other not supported yet
@@ -57,6 +58,8 @@ const FormContainer = ({
   const activeLang = FormState.useState((s) => s.lang);
   const repeats = FormState.useState((s) => s.repeats);
   const prevAdmAnswer = FormState.useState((s) => s.prevAdmAnswer);
+  const uiLang = UIState.useState((s) => s.lang);
+  const trans = i18n.text(uiLang);
   const route = useRoute();
 
   const dependantQuestions =
@@ -65,7 +68,47 @@ const FormContainer = ({
       .filter((q) => q?.dependency && q?.dependency?.length)
       ?.map((q) => ({ id: q.id, dependency: q.dependency })) || [];
 
+  const validateGroupAndSetFeedback = useCallback(async (group, allQuestions) => {
+    if (!group?.question) {
+      return;
+    }
+    const vals = FormState.getRawState().currentValues;
+    const validateSync = group.question
+      ?.filter((q) => onFilterDependency(group, vals, q, 0, allQuestions))
+      ?.filter((q) => q?.extra?.type !== 'entity' || vals?.[q?.id] !== undefined)
+      ?.map((q) => {
+        const defaultVal = [
+          'cascade', 'multiple_option', 'option', 'geo', 'geoshape', 'geotrace',
+        ].includes(q?.type) ? null : '';
+        const fieldValue = vals?.[q?.id] === undefined ? defaultVal : vals[q.id];
+        return generateValidationSchemaFieldLevel(fieldValue, q);
+      }) || [];
+    const validations = await Promise.allSettled(validateSync);
+    const feedbackValues = validations
+      ?.filter(({ status }) => status === 'fulfilled')
+      .map(({ value }) => value)
+      .reduce((acc, obj) => ({ ...acc, ...obj }), {});
+    FormState.update((s) => {
+      s.feedback = { ...s.feedback, ...feedbackValues };
+    });
+  }, []);
+
   const formDefinition = transformForm(forms, currentValues, activeLang, repeats, prevAdmAnswer);
+  const questionGroupCount = formDefinition?.question_group?.length || 0;
+  const totalGroup = questionGroupCount + 1; // +1 for overview step
+  const isOverviewStep = activeGroup === questionGroupCount;
+
+  const activeGroupLabel = isOverviewStep
+    ? trans.overviewLabel || 'Overview'
+    : formDefinition?.question_group?.[activeGroup]?.label || '';
+
+  useEffect(() => {
+    FormState.update((s) => {
+      s.activeGroup = activeGroup;
+      s.totalGroup = totalGroup;
+      s.activeGroupLabel = activeGroupLabel;
+    });
+  }, [activeGroup, totalGroup, activeGroupLabel]);
   const activeQuestions = formDefinition?.question_group
     ?.flatMap((qg) => qg?.question)
     .filter((q) => q); // Filter out null/undefined values
@@ -152,6 +195,10 @@ const FormContainer = ({
 
   const handleOnActiveGroup = (page) => {
     const group = formDefinition?.question_group?.[page];
+    if (!group) {
+      setActiveGroup(page);
+      return;
+    }
     const currentPrefilled = group.question
       ?.filter((q) => q?.pre && q?.id)
       ?.filter(
@@ -281,7 +328,26 @@ const FormContainer = ({
     <>
       <BaseLayout.Content>
         <View style={style}>
-          {!showQuestionGroupList ? (
+          {isOverviewStep ? (
+            <FormOverview
+              formDefinition={formDefinition}
+              onEditGroup={(groupIndex) => {
+                const targetGroup = formDefinition?.question_group?.[groupIndex];
+                validateGroupAndSetFeedback(targetGroup, activeQuestions);
+                setActiveGroup(groupIndex);
+                setShowQuestionGroupList(false);
+              }}
+              onEditQuestion={(groupIndex, questionId) => {
+                const targetGroup = formDefinition?.question_group?.[groupIndex];
+                validateGroupAndSetFeedback(targetGroup, activeQuestions);
+                FormState.update((s) => {
+                  s.scrollToQuestionId = questionId;
+                });
+                setActiveGroup(groupIndex);
+                setShowQuestionGroupList(false);
+              }}
+            />
+          ) : !showQuestionGroupList ? (
             <QuestionGroup
               index={activeGroup}
               group={currentGroup}
@@ -304,7 +370,7 @@ const FormContainer = ({
         onSubmit={handleOnSubmitForm}
         activeGroup={activeGroup}
         setActiveGroup={handleOnActiveGroup}
-        totalGroup={formDefinition?.question_group?.length || 0}
+        totalGroup={totalGroup}
         showQuestionGroupList={showQuestionGroupList}
         setShowQuestionGroupList={setShowQuestionGroupList}
         setShowDialogMenu={setShowDialogMenu}

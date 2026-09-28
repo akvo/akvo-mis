@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   View,
+  Text,
 } from 'react-native';
 import { Button } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -18,6 +19,7 @@ import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
 import { BaseLayout, ConfirmDialog } from '../components';
 import { crudDataPoints, crudForms } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
+import useTheme from '../lib/theme';
 
 import { UserState, UIState, FormState } from '../store';
 import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
@@ -47,8 +49,12 @@ const FormPage = ({ navigation, route }) => {
   const [showDialogMenu, setShowDialogMenu] = useState(false);
   const [showDropdownMenu, setShowDropdownMenu] = useState(false);
   const [showExitConfirmationDialog, setShowExitConfirmationDialog] = useState(false);
+  const activeGroupIndex = FormState.useState((s) => s.activeGroup);
+  const totalGroupCount = FormState.useState((s) => s.totalGroup);
+  const activeGroupLabel = FormState.useState((s) => s.activeGroupLabel);
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
 
   const currentFormId = route?.params?.id;
   // continue saved submission
@@ -445,8 +451,8 @@ const FormPage = ({ navigation, route }) => {
 
   return (
     <BaseLayout
-      title={route?.params?.name}
-      subTitle="formPage"
+      title={trans.newSubmissionText}
+      headerBg={theme.bg.surfaceElevated3}
       leftComponent={
         <Button type="clear" onPress={handleOnPressArrowBackButton} testID="arrow-back-button">
           <Icon name="arrow-back" size={18} />
@@ -470,6 +476,26 @@ const FormPage = ({ navigation, route }) => {
         />
       }
     >
+      <View
+        style={[
+          styles.formHeader,
+          {
+            backgroundColor: theme.bg.surfaceElevated3,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme.border.listDivider,
+          },
+        ]}
+      >
+        <Text style={[styles.formName, { color: theme.topNav.text }]}>
+          {route?.params?.name}
+        </Text>
+        {totalGroupCount > 0 && (
+          <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
+            {`${trans.stepLabel || 'Step'} ${activeGroupIndex + 1} ${trans.ofLabel || 'of'} ${totalGroupCount}`}
+            {activeGroupLabel ? ` — ${activeGroupLabel}` : ''}
+          </Text>
+        )}
+      </View>
       {!loading ? (
         <FormContainer
           forms={formJSON}
@@ -516,6 +542,22 @@ const FormPage = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
+  formHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  formName: {
+    fontSize: 24,
+    fontWeight: '400',
+  },
+  stepIndicator: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginTop: 4,
+  },
   loadingContainer: {
     flex: 1,
     flexDirection: 'column',

@@ -15,6 +15,7 @@ const BaseLayout = ({
   leftContainerStyle = {},
   rightComponent = null,
   rightContainerStyle = {},
+  headerBg = null,
 }) => {
   const isOnline = UIState.useState((s) => s.online);
   const statusBar = UIState.useState((s) => s.statusBar);
@@ -34,6 +35,7 @@ const BaseLayout = ({
         <PageTitle
           text={title}
           subTitle={subTitle}
+          headerBg={headerBg}
           {...{ leftComponent, leftContainerStyle, rightComponent, rightContainerStyle }}
         />
       )}
