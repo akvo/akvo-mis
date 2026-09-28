@@ -9,6 +9,24 @@ const FormState = new Store({
   cascades: {},
   lang: 'en',
   feedback: {},
+  /**
+   * Stored polygon validation, keyed by question id: `{ status, results, retryable, at }`.
+   *
+   * Overlap detection is user-initiated and expensive, so the submit gate reads what the
+   * Validate button last produced instead of re-running the geometry (GEO-007 D-1). Editing the
+   * polygon clears its entry, which is what returns the field to "not validated".
+   */
+  polygonValidation: {},
+  /**
+   * The submission being filled, and the form whose datapoints are overlap candidates.
+   *
+   * Published by FormPage because the geoshape field needs both and sits several levels below
+   * it: the uuid excludes the datapoint from its own overlap check (without it every edit
+   * overlaps itself by 100 %), and the form id scopes the candidate query.
+   */
+  submissionUuid: null,
+  overlapFormId: null,
+  overlapQuestionIds: null,
   loading: false,
   prevAdmAnswer: null,
   entityOptions: {},

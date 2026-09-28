@@ -3,7 +3,7 @@
 
 ./wait-for-it.sh -h "${DB_HOST}" -p 5432 -- echo "Database is up and running"
 
-rm /var/tmp/cache/*.djcache
+rm -f /var/tmp/cache/*.djcache 2>/dev/null || true
 
 set -eu
 pip -q install --upgrade pip

@@ -31,7 +31,7 @@ import {
 import { tables, openDatabase } from './src/database';
 import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09, m10, m11 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10, m11, m12 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -310,6 +310,13 @@ const migrateDbIfNeeded = async (db) => {
       await txDb.execAsync('PRAGMA user_version = 11');
     });
     currentDbVersion = 11;
+  }
+  if (currentDbVersion === 11) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m12.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 12');
+    });
+    currentDbVersion = 12;
   }
 
   // Every DATABASE_VERSION bump sends exactly one launch down this path. Without

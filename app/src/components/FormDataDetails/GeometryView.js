@@ -4,8 +4,9 @@ import { WebView } from 'react-native-webview';
 import { UIState } from '../../store';
 import i18n from '../../lib/i18n';
 import loadMapDrawHtml from '../../lib/map-draw-html';
+import { currentTileSource } from '../../lib/map-tiles';
 import { QUESTION_TYPES } from '../../lib/constants';
-import { polygonAreaHectares } from '../../form/lib/geometry';
+import { fitBoundsFor, polygonAreaHectares } from '../../form/lib/geometry';
 
 const MIN_POINTS_FOR_AREA = 3;
 const PREVIEW_HEIGHT = 200;
@@ -46,11 +47,13 @@ const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
     if (!pointCount) {
       return;
     }
+    const tiles = await currentTileSource({ bounds: fitBoundsFor([points]) });
     const html = await loadMapDrawHtml({
       points,
       center: points[0],
       readonly: true,
       closed: isClosed,
+      tileUrl: tiles.template,
     });
     setHtmlContent(html);
     // `points` is derived from `answer` on every render; keying the effect to the answer keeps
