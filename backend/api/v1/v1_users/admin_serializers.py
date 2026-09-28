@@ -13,6 +13,21 @@ from api.v1.v1_users.models import SystemUser, Tenant
 from utils.tenant_host import ADMIN_SUBDOMAIN, embed_hostname
 
 
+# The three states a workspace can be in, and the rows each one selects.
+# `TenantListSerializer.get_state` maps a row to one of these names and
+# `list_tenants` maps a name back to a queryset -- the two are inverses
+# of each other, so `tests_admin_tenants` asserts the round trip rather
+# than trusting them to stay in step.
+#
+# `deleted` ignores `is_active` deliberately: deletion is an ending, and
+# a deleted workspace is deleted whether or not it was suspended first.
+TENANT_STATES = {
+    "active": {"is_active": True, "deleted_at": None},
+    "suspended": {"is_active": False, "deleted_at": None},
+    "deleted": {"deleted_at__isnull": False},
+}
+
+
 class TenantListSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     state = serializers.SerializerMethodField()
@@ -44,6 +59,7 @@ class TenantListSerializer(serializers.ModelSerializer):
         return roots[0].name if roots else ""
 
     def get_state(self, instance):
+        # The inverse of TENANT_STATES; keep the two in step.
         if instance.deleted_at:
             return "deleted"
         return "active" if instance.is_active else "suspended"

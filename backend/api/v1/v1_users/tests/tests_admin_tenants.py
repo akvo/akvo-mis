@@ -88,6 +88,65 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(rows["acme"]["state"], "active")
         self.assertEqual(rows["beta"]["state"], "suspended")
 
+    def test_search_narrows_by_subdomain(self):
+        rows = self.get(f"{TENANTS}?search=acm").json()
+        subdomains = [row["subdomain"] for row in rows]
+        self.assertEqual(subdomains, ["acme"])
+
+    def test_every_state_round_trips_through_the_filter(self):
+        """Filtering by a state returns exactly the rows reporting it.
+
+        `get_state` maps a row to a name and the view maps a name back
+        to a queryset. They are inverses written in two places, so this
+        asserts they agree rather than trusting them to. A mapping that
+        drifts shows up here as a row whose `state` is not the one
+        asked for.
+        """
+        self.post(f"{TENANTS}/{self.beta.tenant.pk}/deactivate")
+        self.client.delete(
+            f"{TENANTS}/{self.acme.tenant.pk}", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        expected = {
+            "active": None,
+            "suspended": "beta",
+            "deleted": "acme",
+        }
+        for state, present in expected.items():
+            with self.subTest(state=state):
+                rows = self.get(f"{TENANTS}?state={state}").json()
+                self.assertTrue(rows, f"no workspace reported {state}")
+                for row in rows:
+                    self.assertEqual(row["state"], state)
+                if present:
+                    self.assertIn(
+                        present, [row["subdomain"] for row in rows]
+                    )
+
+    def test_a_deleted_workspace_is_deleted_however_it_got_there(self):
+        # Deletion is an ending: suspending first must not move a
+        # workspace out of `deleted` into `suspended`.
+        pk = self.acme.tenant.pk
+        self.post(f"{TENANTS}/{pk}/deactivate")
+        self.client.delete(
+            f"{TENANTS}/{pk}", HTTP_HOST=ADMIN_HOST, **self.auth
+        )
+        suspended = [
+            row["subdomain"]
+            for row in self.get(f"{TENANTS}?state=suspended").json()
+        ]
+        deleted = [
+            row["subdomain"]
+            for row in self.get(f"{TENANTS}?state=deleted").json()
+        ]
+        self.assertNotIn("acme", suspended)
+        self.assertIn("acme", deleted)
+
+    def test_an_unknown_state_is_refused(self):
+        # Ignoring it would read as "this deployment has none of those".
+        response = self.get(f"{TENANTS}?state=archived")
+        self.assertEqual(response.status_code, 400)
+
     def test_toggles_a_feature(self):
         pk = self.acme.tenant.pk
         response = self.client.put(

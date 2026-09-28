@@ -381,6 +381,7 @@ raise.
 | Live JWT for a workspace suspended mid-session | 404 on the next request |
 | Rename to a taken or reserved subdomain | 400 naming the field |
 | Unknown key in a features payload | 400 listing the accepted keys |
+| Unknown `state` in a tenant-list query | 400 listing the accepted states |
 | Master-data directory rename fails | Logged; rename still succeeds, files regenerate lazily |
 
 ## Testing
