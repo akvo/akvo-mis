@@ -7,6 +7,64 @@ import useTheme from '../lib/theme';
 import { SYNC_STATUS } from '../lib/constants';
 
 const TIMEOUT_DISMISS = 3000; // 3second
+// Transient sync events and the theme.banner token that fills each.
+const SYNC_EVENT_BG_KEY = {
+  [SYNC_STATUS.on_progress]: 'syncBg',
+  [SYNC_STATUS.re_sync]: 'syncBg',
+  [SYNC_STATUS.success]: 'successBg',
+};
+// Plain per-status text, used when the caller's statusText is missing or has no entry.
+const SYNC_FALLBACK_TEXT_KEY = {
+  [SYNC_STATUS.on_progress]: 'syncingText',
+  [SYNC_STATUS.re_sync]: 'reSyncingText',
+  [SYNC_STATUS.success]: 'doneText',
+  [SYNC_STATUS.failed]: 'syncErrorText',
+  [SYNC_STATUS.rejected]: 'syncRejectedText',
+};
+
+/**
+ * Pick the one banner to show, or null. Pure, so the precedence is testable on its own.
+ *
+ * Precedence: events interrupt, conditions resume.
+ * 1. sync activity — transient, and it shows progress the user asked for
+ * 2. low storage — a condition, and the only message here that predicts data loss
+ * 3. sync failed / refused — sticky, so neither must mask (2). Low storage still
+ *    outranks a refusal: the refused answers are safe as a draft, storage loss is not.
+ * 4. offline — normal in the field, so it sits below (2) as well
+ */
+export const resolveBanner = ({
+  syncType: rawSyncType,
+  isOnline,
+  lowStorage,
+  statusText,
+  theme,
+  trans,
+}) => {
+  // A sync status left over from before the connection dropped is stale: offline must not be
+  // masked by it. Nulled here, not in the caller, so every caller gets it. Not an early
+  // `!isOnline` return, because low storage still outranks offline.
+  const syncType = isOnline ? rawSyncType : null;
+  const syncText = statusText?.[syncType] || trans[SYNC_FALLBACK_TEXT_KEY[syncType]];
+  const eventBgKey = SYNC_EVENT_BG_KEY[syncType];
+  if (eventBgKey) {
+    return { bg: theme.banner[eventBgKey], color: theme.banner.onSync, text: syncText };
+  }
+  if (lowStorage) {
+    return {
+      bg: theme.status.warning,
+      color: theme.banner.onWarning,
+      text: trans.lowStorageText,
+      isLowStorage: true,
+    };
+  }
+  if (syncType === SYNC_STATUS.failed || syncType === SYNC_STATUS.rejected) {
+    return { bg: theme.status.error, color: theme.banner.onError, text: syncText };
+  }
+  if (!isOnline) {
+    return { bg: theme.text.tertiary, color: theme.banner.onMuted, text: trans.offlineText };
+  }
+  return null;
+};
 
 const StatusBanner = () => {
   const isOnline = UIState.useState((s) => s.online);
@@ -61,63 +119,21 @@ const StatusBanner = () => {
     handleOnResetStatusBar();
   }, [handleOnResetStatusBar]);
 
-  /**
-   * Precedence: events interrupt, conditions resume.
-   * 1. sync activity — transient, and it shows progress the user asked for
-   * 2. low storage — a condition, and the only message here that predicts data loss
-   * 3. sync failed / refused — sticky, so neither must mask (2). Low storage still
-   *    outranks a refusal: the refused answers are safe as a draft, storage loss is not.
-   * 4. offline — normal in the field, so it sits below (2) as well
-   */
-  const syncType = isOnline ? statusBar?.type : null;
-  const isSyncEvent = [SYNC_STATUS.on_progress, SYNC_STATUS.re_sync, SYNC_STATUS.success].includes(
-    syncType,
-  );
+  const banner = resolveBanner({
+    syncType: statusBar?.type,
+    isOnline,
+    lowStorage,
+    statusText,
+    theme,
+    trans,
+  });
 
-  const getBannerColor = () => {
-    if (syncType === SYNC_STATUS.success) {
-      return '#5BFF53';
-    }
-    if (syncType === SYNC_STATUS.on_progress || syncType === SYNC_STATUS.re_sync) {
-      return '#83DCFF';
-    }
-    return theme.status.error;
-  };
-
-  const DARK_TEXT = '#000000';
-  const LIGHT_TEXT = '#FFFFFF';
-
-  let banner = null;
-  if (isSyncEvent) {
-    const bg = getBannerColor();
-    const useDark = syncType === SYNC_STATUS.success || syncType === SYNC_STATUS.on_progress || syncType === SYNC_STATUS.re_sync;
-    banner = {
-      bg,
-      color: useDark ? DARK_TEXT : LIGHT_TEXT,
-      text: statusText?.[syncType] || trans.offlineText,
-    };
-  } else if (lowStorage) {
-    banner = {
-      bg: theme.status.warning,
-      color: DARK_TEXT,
-      text: trans.lowStorageText,
-      isLowStorage: true,
-    };
-  } else if (syncType === SYNC_STATUS.failed || syncType === SYNC_STATUS.rejected) {
-    banner = {
-      bg: theme.status.error,
-      color: LIGHT_TEXT,
-      text: statusText?.[syncType],
-    };
-  } else if (!isOnline) {
-    banner = { bg: theme.text.tertiary, color: LIGHT_TEXT, text: trans.offlineText };
-  }
-
+  const bannerVisible = !!banner;
   useEffect(() => {
     UIState.update((s) => {
-      s.bannerVisible = !!banner;
+      s.bannerVisible = bannerVisible;
     });
-  }, [!!banner]);
+  }, [bannerVisible]);
 
   if (!banner) {
     return null;
