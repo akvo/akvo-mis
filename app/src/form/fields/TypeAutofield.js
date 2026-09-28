@@ -73,7 +73,7 @@ const TypeAutofield = ({
     <View testID="type-autofield-wrapper">
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} />
       <Input
-                inputContainerStyle={{
+        inputContainerStyle={{
           ...styles.autoFieldContainer,
           backgroundColor: fieldColor || styles.autoFieldContainer.backgroundColor,
         }}
