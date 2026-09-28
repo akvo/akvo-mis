@@ -204,7 +204,7 @@ describe('Homepage', () => {
       expect(await findByTestId('home-empty-state')).toBeTruthy();
       expect(getByText('No forms yet')).toBeTruthy();
       expect(getByText('Add a form from Settings to start collecting data.')).toBeTruthy();
-      expect(getByTestId('home-empty-arrow')).toBeTruthy();
+      expect(getByTestId('home-empty-state-arrow')).toBeTruthy();
     });
 
     it('shows the assigned-forms body and no arrow for code_assignment logins', async () => {
@@ -218,7 +218,7 @@ describe('Homepage', () => {
       );
       expect(await findByTestId('home-empty-state')).toBeTruthy();
       expect(getByText('Forms assigned to you will appear here.')).toBeTruthy();
-      expect(queryByTestId('home-empty-arrow')).toBeNull();
+      expect(queryByTestId('home-empty-state-arrow')).toBeNull();
     });
   });
 

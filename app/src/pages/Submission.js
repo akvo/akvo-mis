@@ -18,11 +18,12 @@ import moment from 'moment';
 import { FormState, UIState, UserState } from '../store';
 import { api, i18n } from '../lib';
 import {
+  ActionBar,
   BaseLayout,
-  FAButton,
   ConfirmDialog,
   DatapointCard,
   DatapointLegend,
+  EmptyState,
   SectionHeader,
 } from '../components';
 import useTheme from '../lib/theme';
@@ -563,15 +564,12 @@ const Submission = ({ navigation, route }) => {
         </View>
       </View>
     ) : (
-      <View style={styles.emptyStateContainer}>
-        <View style={styles.emptyIconContainer}>
-          <Icon name="document-outline" size={64} color={theme.icon.secondary} />
-        </View>
-        <View style={styles.emptyStateTextContainer}>
-          <Text style={styles.emptyStateTitle}>{trans.emptySubmissionMessageInfo}</Text>
-          <Text style={styles.emptyStateDescription}>{trans.emptySubmissionMessageAction}</Text>
-        </View>
-      </View>
+      // Figma's arrow position: its tip lands on the full-width action bar (A25).
+      <EmptyState
+        title={trans.emptySubmissionMessageInfo}
+        body={trans.emptySubmissionMessageAction}
+        testID="submission-empty-state"
+      />
     );
 
   return (
@@ -614,16 +612,17 @@ const Submission = ({ navigation, route }) => {
                 datapoints.length === 0 && styles.emptyListContent,
               ]}
               ListEmptyComponent={renderEmptyState}
-              ListFooterComponent={datapoints.length > 0 ? <DatapointLegend trans={trans} /> : null}
+              ListFooterComponent={
+                datapoints.length > 0 ? <DatapointLegend trans={trans} items={datapoints} /> : null
+              }
             />
           </View>
         </View>
       </BaseLayout.Content>
-      <FAButton
+      <ActionBar
         label={trans.newSubmissionText}
         onPress={goToNewForm}
         testID="new-submission-button"
-        icon={{ name: 'add-circle', size: 20, color: 'white' }}
       />
       <ConfirmDialog
         visible={!!confirmAction}
@@ -668,9 +667,9 @@ const getStyles = (theme) =>
       paddingTop: 12,
     },
     flatListContent: {
-      // Clears the floating action button, which overlays the list rather than
+      // Clears the action bar (16 + 56 + 24), which overlays the list rather than
       // sitting below it.
-      paddingBottom: 88,
+      paddingBottom: 104,
     },
     emptyListContent: {
       flexGrow: 1,
@@ -745,12 +744,6 @@ const getStyles = (theme) =>
       color: theme.text.primary,
       textAlign: 'center',
       marginBottom: 8,
-    },
-    emptyStateDescription: {
-      fontSize: 14,
-      color: theme.text.tertiary,
-      textAlign: 'center',
-      lineHeight: 20,
     },
   });
 

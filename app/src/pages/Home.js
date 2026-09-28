@@ -15,7 +15,7 @@ import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout, CenterLayout, ConfirmDialog } from '../components';
+import { BaseLayout, ConfirmDialog, EmptyState } from '../components';
 import {
   FormState,
   UserState,
@@ -422,26 +422,16 @@ const Home = ({ navigation, route }) => {
       >
         {/* Only a truly empty list: a search with no match must not claim there are no forms */}
         {!loading && !data.length && (
-          <CenterLayout backgroundColor={theme.bg.surfaceTertiary}>
-            <View style={homeStyles.emptyText} testID="home-empty-state">
-              <Text style={[homeStyles.emptyTitle, { color: theme.text.primary }]}>
-                {trans.emptyFormsTitle}
-              </Text>
-              <Text style={[homeStyles.emptyBody, { color: theme.text.secondary }]}>
-                {canAddForms ? trans.emptyFormsBody : trans.emptyFormsAssignedBody}
-              </Text>
-            </View>
-            {/* Settings is the middle tab, straight below the centred arrow */}
-            {canAddForms && (
-              <Icon
-                name="arrow-down-outline"
-                size={32}
-                color={theme.text.tertiary}
-                style={homeStyles.emptyArrow}
-                testID="home-empty-arrow"
-              />
-            )}
-          </CenterLayout>
+          // The arrow ends on the centre line, over the Settings tab (A23); assigned
+          // logins can't add forms, so they get no arrow (A8).
+          <EmptyState
+            arrowTip="centre"
+            title={trans.emptyFormsTitle}
+            body={canAddForms ? trans.emptyFormsBody : trans.emptyFormsAssignedBody}
+            showArrow={canAddForms}
+            style={{ backgroundColor: theme.bg.surfaceTertiary }}
+            testID="home-empty-state"
+          />
         )}
       </BaseLayout.Content>
       <ConfirmDialog
@@ -496,24 +486,6 @@ const homeStyles = StyleSheet.create({
   addFormText: {
     fontSize: 16,
     fontWeight: '500',
-  },
-  emptyText: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  emptyArrow: {
-    position: 'absolute',
-    bottom: 16,
   },
 });
 

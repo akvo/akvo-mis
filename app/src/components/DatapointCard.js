@@ -60,23 +60,26 @@ const DatapointCard = ({ item, meta, trans }) => {
   );
 };
 
-/** Explains the two icons a submitted row can carry; drafts explain themselves. */
-const DatapointLegend = ({ trans }) => {
+/** Explains every status icon `items` shows, in STATUS_ICONS order (A24). */
+const DatapointLegend = ({ trans, items = [] }) => {
   const theme = useTheme();
+  const shown = new Set(items.map(getStatus));
   return (
     <View style={styles.legend} testID="status-legend">
-      {['pending', 'synced'].map((status) => (
-        <View key={status} style={styles.legendRow}>
-          <Icon
-            name={STATUS_ICONS[status].name}
-            size={16}
-            color={STATUS_ICONS[status].color(theme)}
-          />
-          <Text style={[styles.legendText, { color: theme.text.tertiary }]}>
-            {trans[STATUS_ICONS[status].label]}
-          </Text>
-        </View>
-      ))}
+      {Object.keys(STATUS_ICONS)
+        .filter((status) => shown.has(status))
+        .map((status) => (
+          <View key={status} style={styles.legendRow}>
+            <Icon
+              name={STATUS_ICONS[status].name}
+              size={16}
+              color={STATUS_ICONS[status].color(theme)}
+            />
+            <Text style={[styles.legendText, { color: theme.text.tertiary }]}>
+              {trans[STATUS_ICONS[status].label]}
+            </Text>
+          </View>
+        ))}
     </View>
   );
 };

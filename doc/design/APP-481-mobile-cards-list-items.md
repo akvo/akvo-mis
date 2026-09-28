@@ -5,7 +5,7 @@
 **Task ID**: APP-481
 **Author**: Mobile developer
 **Date**: 2026-09-28
-**Status**: Implemented on `feature/481-mobile-redesign-cards-list-items` (device-checked 2026-09-28). This document describes what was built; A14 and A17–A22 record where it departs from the original story and from Figma.
+**Status**: Implemented on `feature/481-mobile-redesign-cards-list-items` (device-checked 2026-09-28). This document describes what was built; A14 and A17–A25 record where it departs from the original story and from Figma.
 
 ---
 
@@ -43,7 +43,8 @@ Goal:
 | Section labels "DATAPOINT" / "MONITORING FORMS" | `pages/FormOptions.js` section headers | Hardcoded, not uppercase |
 | Setting row "View details" | `pages/FormOptions.js` (same `renderItem`) | Hardcoded, label + chevron only |
 | Datapoint card | `pages/Submission.js` | Hardcoded, no `useTheme` |
-| Empty state (no forms) | none | — |
+| Empty state (no forms / no datapoints) | none on Home; icon + text on Submission | Hardcoded on Submission |
+| "New Submission" button | `pages/Submission.js` → `components/FAButton.js` (floating pill) | Hardcoded |
 | Answer-list section header | `pages/FormData/FormDataDetails.js` | Hardcoded `#f2f2f2` |
 
 ---
@@ -80,17 +81,24 @@ All colors are tokens from `app/src/lib/theme.js`, read through `useTheme()`. Th
 - [ ] Name 16 / **w500** / line height 24 / `text.primary` (the story says w700)
 - [ ] One meta line under the name (2px gap): `Registered {date}` (drafts: `Created {date}`): `createdAt` for rows created in the app, `syncedAt` (the server's `last_updated`) for downloaded rows, whose `createdAt` is the download time (A18); 12 / w400 / line height 16 / `text.tertiary`. This **replaces** the story's key/value rows. The Figma `{administration} ·` prefix is deferred (A17).
 - [ ] Status icon, 20px Ionicons, on the right (12px from the text, 16px from the edge): draft = `pencil` in `status.draft`; waiting to sync = `time` in `status.warning`; delivered to the server = `checkmark-circle` in `status.success`. Each icon carries an `accessibilityLabel` and the testID `status-${status}-${id}`. This replaces today's yellow left accent and the Draft badge.
-- [ ] A legend under the list explaining the clock and the tick (12 / w300 / line height 16, `text.tertiary`), with new EN/FR i18n text ("Waiting to sync" / "Delivered to the server"); `DatapointLegend`, testID `status-legend`, shown whenever the list has rows
+- [ ] A legend under the list (12 / w300 / line height 16, `text.tertiary`) explaining **every status icon the list currently shows**, in icon-priority order: File missing, Pending upload, On web, Draft, Waiting to sync, Delivered to the server (A24). New EN/FR text only for the last two ("Waiting to sync" / "Delivered to the server"); the others reuse `photoMissingText`, `draftText`, `pendingWebLabel`, `onWebLabel`. `DatapointLegend`, testID `status-legend`, shown whenever the list has rows
 - [ ] States the design doesn't draw (A7). The icon priority is **file missing > draft > waiting to sync > synced**:
   - File missing: `alert-circle` in `status.error` replaces the status icon, and the row still opens the retake flow
   - Draft bound for the web (`sendToWeb` or `draftId`): `cloud-upload` in `status.draft` replaces the pencil while it is pending, and `cloud-done` once it is synced, so today's "Pending upload" and "On web" labels stay distinguishable
   - Monitoring info: on the registration list, submitted rows append `· {n} monitoring` to the meta line, one line, truncated. It is part of the meta string, so the old `monitoring-meta-${id}` testID and its drafts / last-monitoring details are gone
   - Draft swipe actions (`ListItem.Swipeable`) are unchanged
 
-**Empty state — no forms**
-- [ ] Screen `bg.surfaceTertiary` (`#1B1B1B` / `#EAEAEA`), built on `CenterLayout` with a new optional `backgroundColor` prop that defaults to `bg.surfacePrimary`, so GetStarted and the login screens are unchanged (A8)
-- [ ] Title 24 / w500 / `text.primary`; body 16 / w500 / `text.secondary`. *Default* copy (EN): "No forms yet" / "Add a form from Settings to start collecting data." With a code-assignment login, the body instead reads "Forms assigned to you will appear here.", and there is no arrow
-- [ ] Arrow: Ionicons `arrow-down-outline` in `text.tertiary`, pointing at the Settings tab in the bottom navigation. No new dependency (A8)
+**Empty state — Home (no forms) and Submission (no datapoints)**, per Figma nodes `6499:17376` (light) and `6218:1095` (dark) (A23)
+- [ ] One shared `EmptyState` component: the stacked-paper illustration (146×181), then 27px, then a 290-wide centred text block (title 24 / w500 / line height 30 / letter-spacing −0.1 / `text.primary`; 8px; body 16 / w500 / line height 24 / `text.secondary`), then the hand-drawn arrow (142×160 box, image rotated −7.91°, overlapping the text by 7.5px). Top-aligned, 24px from the top of its area
+- [ ] Illustration and arrow are the Figma SVGs rasterised to PNG at 1×/2×/3×, one file per theme (`app/assets/empty-state/`), since the app has no SVG renderer and adds no dependency
+- [ ] Arrow position: on Submission, exactly as Figma (tip right of centre, over the full-width New submission button, A25); on Home, the tip is moved to the centre line, over the Settings tab (A23)
+- [ ] Home: `bg.surfaceTertiary` (`#1B1B1B` / `#EAEAEA`) behind the empty state. Copy (EN): "No forms yet" / "Add a form from Settings to start collecting data." With a code-assignment login, the body instead reads "Forms assigned to you will appear here.", and there is no arrow (A8)
+- [ ] Submission: shown once loading finishes with no rows; keeps the existing copy ("No data collected yet" / "Click New Submission to begin"). While loading, the spinner and "Fetching data" stay
+
+**Action bar — Submission "New submission"**, per Figma node `6499:17412` (A25)
+- [ ] `ActionBar` replaces `FAButton`: container `bg.surfaceElevated3` (`#242424` / `#FFFFFF`), top corners radius 24, padding 16 top / 24 bottom / 16 horizontal, pinned to the screen bottom and extended by the bottom safe-area inset
+- [ ] Full-width button `buttonPrimary.bg`, radius 16, padding 16 vertical / 24 horizontal; label 16 / w700 / line height 24 / `buttonPrimary.text`, 8px gap, then a 24px Ionicons `add` in `buttonPrimary.text`
+- [ ] The list's bottom padding clears the bar (104); `new-submission-button` testID kept
 
 **Section labels**
 - [ ] "DATAPOINT", "MONITORING FORMS", and the question-group headers on FormDataDetails (A9): 11 / w700 / `text.tertiary`, uppercase
@@ -113,7 +121,7 @@ All colors are tokens from `app/src/lib/theme.js`, read through `useTheme()`. Th
 - [ ] Uppercase section labels use `textTransform: 'uppercase'`; the EN/FR i18n strings are unchanged
 - [ ] New visible text gets EN and FR keys in `lib/i18n/ui-text.js`: label-only stat labels (Draft reuses the existing `draftText`), the Home "Add form" row, the View details description, the empty-state title and both bodies, the datapoint legend, and the monitoring meta suffix
 - [ ] Passes the app's Airbnb ESLint config (no prop spreading, no nested ternaries, no `for…of`)
-- [ ] Existing testIDs are kept: `card-touchable-${id}`, `form-item-${id}`, `form-list`, `submission-item-${id}`, `delete-draft-${id}`, `send-to-web-${id}`, `section-${title}` (drafts-only form groups). Removed with their elements: `sort-last-submission-button` (A19), `retake-badge-${id}`, `on-web-${id}`, `pending-web-${id}`, `monitoring-meta-${id}` (A7). New: `section-header-latest` / `section-header-earlier`, `form-group-latest` / `form-group-earlier`, `stat-submitted` / `stat-draft` / `stat-synced`, `home-add-form`, `home-empty-state`, `home-empty-arrow`, `status-${status}-${id}`, `status-legend`, and `button-users` on Home's Users button
+- [ ] Existing testIDs are kept: `card-touchable-${id}`, `form-item-${id}`, `form-list`, `submission-item-${id}`, `delete-draft-${id}`, `send-to-web-${id}`, `section-${title}` (drafts-only form groups). Removed with their elements: `sort-last-submission-button` (A19), `retake-badge-${id}`, `on-web-${id}`, `pending-web-${id}`, `monitoring-meta-${id}` (A7). New: `section-header-latest` / `section-header-earlier`, `form-group-latest` / `form-group-earlier`, `stat-submitted` / `stat-draft` / `stat-synced`, `home-add-form`, `home-empty-state` / `home-empty-state-arrow`, `submission-empty-state` / `submission-empty-state-arrow`, `new-submission-button-bar` (the button keeps `new-submission-button`), `status-${status}-${id}`, `status-legend`, and `button-users` on Home's Users button
 
 ---
 
@@ -209,7 +217,9 @@ No backend or API changes. This is a mobile change only.
 | `FormCard` | Home (inside the grouped container), FormOptions | title, version, stats; `variant` = `home` or `monitoring` sets sizes and head-row icons |
 | `DatapointCard` | Submission | name, one meta line, status icon (per Figma, A7) |
 | `SectionLabel` | FormOptions, FormDataDetails (A9) | uppercase 11 / w700 label |
-| `DatapointLegend` (exported from `DatapointCard.js`) | Submission | the clock / tick legend under the list |
+| `DatapointLegend` (exported from `DatapointCard.js`) | Submission | one line per status icon the list shows (A24) |
+| `EmptyState` | Home, Submission (A23) | Figma illustration, title, body and optional arrow (`arrowTip` `right` / `centre`) |
+| `ActionBar` | Submission (A25) | full-width primary button on a bottom sheet surface; replaces `FAButton` |
 | `SectionHeader` | Home, Submission (A14, A19, A21) | section title, row count and collapse caret; own state, or controlled (`collapsed` + `onToggle`) as a `SectionList` header |
 | `SettingRow` | FormOptions "View details" | icon box, label, description, chevron |
 
@@ -259,13 +269,15 @@ The old labels (`submittedLabel`, `draftLabel`, `syncLabel`) are colon-suffixed 
 | Test Type | Coverage (as built) |
 |---|---|
 | Unit | `components/__tests__/FormCard.test.js`: both variants, Submitted / Draft / Synced labels, D-2 count colors under `darkModePreference` `dark` and `light`, sync progress bar |
-| Unit | `components/__tests__/DatapointCard.test.js`: `getStatus` priority table (A7), meta text color, status icon label and color in both modes, legend |
+| Unit | `components/__tests__/DatapointCard.test.js`: `getStatus` priority table (A7), meta text color, status icon label and color in both modes, legend lists only the icons present (cloud states included, A24) |
+| Unit | `components/__tests__/EmptyState.test.js`: per-theme illustration and arrow, arrow left out on request (A23) |
+| Unit | `components/__tests__/ActionBar.test.js`: bar and button token colors in both modes, press (A25) |
 | Unit | `components/BaseLayout/__tests__/Content.test.js`: counted sections, footer closes the last visible section, empty section hidden, collapse keeps the count, children when empty, press action |
 | Integration | `pages/__tests__/FormOptions.test.js`: `getFormOptions` counts reach the monitoring card; View details row and description |
 | Integration | `pages/__tests__/Home.test.js`: per-card stats (`stat-*`), French labels, Latest / Earlier split and order, each section alone, empty state with and without `code_assignment`, Add form row |
 | Integration | `pages/__tests__/Submission.test.js` (new): Latest / Earlier split and order, counts, collapse, each section alone, drafts-only form groups with counts |
-| Removed | `components/__tests__/Card.test.js` (with `Card.js`, D-4) |
-| Manual (device) | Home, FormOptions, Submission (including drafts-only) and the empty state; scrolling to the tab bar (A22) |
+| Removed | `components/__tests__/Card.test.js` (with `Card.js`, D-4); `FAButton.js` had no test |
+| Manual (device) | Home, FormOptions, Submission (including drafts-only) and scrolling to the tab bar (A22). The Figma empty state, the action bar and the per-icon legend (A23–A25) were checked against an HTML mock of the same layout in both themes, not yet on a device |
 
 Notes:
 - The jest suite doesn't run on the host; run it in the mobile container. Page tests stub `lib/background-task` (its `expo-task-manager` import has no native mock), and `__mocks__/@react-navigation/bottom-tabs.js` provides `BottomTabBarHeightContext` for `BaseLayout`.
@@ -283,7 +295,7 @@ All questions are answered. **Basis** says where each answer comes from: *Figma*
 | A5 | When does Home's "Add form" row show, and where does it go? | Hidden when `authenticationType` includes `code_assignment`, otherwise shown; opens `AddNewForm`. This mirrors Settings' `add-more-forms` and explains the slot hidden in Figma. | Code (`Settings.js`) + Figma |
 | A6 | What does the sync-in-progress state look like in the grouped container? | The per-card border highlight is dropped; the existing 4px progress bar sits under that form's stats row (`text.highlight` fill, `border.listDivider` track). | Code (`Card.js` today); default placement |
 | A7 | Where do the states the datapoint design leaves out go? | Priority file missing > draft > waiting > synced. File missing = `alert-circle` `status.error`; send-to-web draft = `cloud-upload` `status.draft`; monitoring info appended to the meta line; swipe actions unchanged. | Figma (icon slot, colors); default (extra icons) |
-| A8 | Empty state: arrow, asset, background? | Ionicons `arrow-down-outline` pointing at the Settings tab (no `react-native-svg`); a `CenterLayout` `backgroundColor` prop, so the auth screens are unchanged; no arrow for code-assignment logins. | Code (dependencies, nav tabs, A5 gate); default (copy) |
+| A8 | Empty state: arrow, asset, background? | Superseded by A23 for the artwork: Figma's illustration and arrow, rasterised (no `react-native-svg`). Still: `bg.surfaceTertiary` on Home; no arrow for code-assignment logins. | Code (dependencies, nav tabs, A5 gate); default (copy) |
 | A9 | Is FormDataDetails in scope? | **Yes.** Its `#f2f2f2` question-group header becomes `SectionLabel`. It's in the story's file set and the change is small. | Story file set |
 | A10 | "View details" icon and text? | Ionicons `document-text-outline`; EN "See every answer in this datapoint", FR "Voir toutes les réponses de ce point de données". | Default |
 | A11 | Where is the Figma `Card` tile (`6202:2546`) used? | **(a) Reference only; not part of APP-481.** No APP-481 surface uses it: Home's Submission Card and the Datapoint Item are separate components. Suggested follow-up ticket: the `MapDrawView` input-method picker (default / active / disabled). | Figma |
@@ -298,6 +310,9 @@ All questions are answered. **Basis** says where each answer comes from: *Figma*
 | A20 | Latest and All repeated the same rows (one datapoint; a monitoring list where every entry was made in the app). | **Split instead of overlap, on Home and Submission.** A row goes in Latest or in the second section, never both, and the second section is renamed "Earlier submissions" (FR "Soumissions précédentes"), since "All" would no longer be true. One recent row shows Latest alone; nothing recent shows Earlier alone. Row testIDs stay `submission-item-${id}` / `card-touchable-${id}`. Departs from the Figma label "All submissions". | Device check + product decision (2026-09-28) |
 | A21 | Section counts? | **Every section header shows its row count**, on Home, the datapoint list and its drafts-only per-form groups alike (the drafts-only view already showed one). The count is the section's full size, so it stays visible while the section is collapsed. | Product decision (2026-09-28) |
 | A22 | Home's last card was cropped above the tab bar. | **`BaseLayout` skips the bottom safe-area edge inside the tab navigator** (it reads `BottomTabBarHeightContext`). The tab bar already pads for the Android navigation bar, so the second inset left a dead strip on every tab screen (Home, Settings, Sync). Stack screens such as Submission keep the edge. Home's list padding also drops from 88 to 16: it cleared a floating button Home does not have. | Device check (2026-09-28) |
+| A23 | Empty-state design (Figma `6499:17376` / `6218:1095`)? | **One `EmptyState` component on Home and Submission** with Figma's illustration and arrow. Two deviations: (1) on Home the arrow's tip is moved to the screen's centre line, over the Settings tab, since Home has no bottom button (Submission keeps Figma's position now that it has the full-width bar, A25). (2) The copy stays the app's localized strings, not Figma's "Get started with MIS app / Add data forms and more with the action bar": the app is white-labelled (the About text names the tenant's product), and the Home copy must point at Settings. `CenterLayout`'s `backgroundColor` prop, added only for the old Home empty state, is removed. | Figma + device layout (2026-09-28) |
+| A24 | The legend explained only the clock and the tick, but drafts show a pencil, cloud-upload or cloud-done, and any row can show the red alert. | **The legend lists the icons present in the current list**, one line each, same icon and color as the card, in A7 priority order. A submitted-only list still shows just the clock and the tick; the drafts-only view explains its pencil and clouds. Labels reuse the badge strings those icons replaced, so no new i18n keys. | Device check (2026-09-28) |
+| A25 | Submission's New submission button (Figma `6499:17412`)? | **A full-width bottom action bar (`ActionBar`) replaces the floating pill (`FAButton`, deleted: Submission was its only caller).** It keeps `FAButton`'s placement rule, absolutely positioned at the screen bottom and padded by the safe-area inset, so the bar's surface continues under the Android navigation bar. The plus is Ionicons `add` (the app's icon set) rather than Figma's `Iconset/add` SVG; both are a 24px plus. | Figma (2026-09-28) |
 
 ---
 
@@ -329,7 +344,7 @@ All questions are answered. **Basis** says where each answer comes from: *Figma*
 
 ## 12. Implementation Plan
 
-> **Status: all phases implemented.** The plan below is kept as built; §10 A14 and A17–A22 record the changes made during implementation and device checks.
+> **Status: all phases implemented.** The plan below is kept as built; §10 A14 and A17–A25 record the changes made during implementation and device checks.
 
 ```mermaid
 flowchart LR
@@ -337,7 +352,7 @@ flowchart LR
   P1 --> P2[Phase 2<br/>Home FormCard]
   P1 --> P3[Phase 3<br/>FormOptions]
   P1 --> P4[Phase 4<br/>DatapointCard]
-  P2 --> P5[Phase 5<br/>Empty state]
+  P2 --> P5[Phase 5<br/>Empty state +<br/>action bar]
   P1 --> P6[Phase 6<br/>FormDataDetails]
   P2 & P3 & P4 & P5 & P6 --> P7[Phase 7<br/>Verification]
 ```
@@ -383,14 +398,15 @@ Tests: new `FormOptions` test that mocks `crudForms.getFormOptions` and asserts 
 
 Tests: `DatapointCard` unit tests: the meta line, each status icon, the A7 priority (file missing beats draft), dark and light.
 
-### Phase 5 — Empty state (no forms)
+### Phase 5 — Empty state and action bar
 | File | Change |
 |---|---|
-| `app/src/pages/Home.js` | Render the empty state as `Content`'s children when the user has no forms at all (not when a search matches nothing), instead of an empty `View` |
-| `app/src/components/CenterLayout/index.js` | Optional `backgroundColor` prop, defaulting to `bg.surfacePrimary`; the empty state passes `bg.surfaceTertiary` (A8) |
-| Arrow | Ionicons `arrow-down-outline` in `text.tertiary`, aimed at the Settings tab; left out for `code_assignment` logins (A8). No new dependency. |
+| `app/src/components/EmptyState.js` (new) + `app/assets/empty-state/` | Figma illustration and arrow per theme, title, body, optional arrow (A23) |
+| `app/src/pages/Home.js` | Render `EmptyState` as `Content`'s children when the user has no forms at all (not when a search matches nothing), on `bg.surfaceTertiary`; no arrow for `code_assignment` logins (A8) |
+| `app/src/pages/Submission.js` | `EmptyState` replaces the old icon + text once loading finishes (A23) |
+| `app/src/components/ActionBar.js` (new), `FAButton.js` (deleted) | Figma bottom action bar for New submission (A25) |
 
-Tests: Home with zero forms renders the empty-state title; a `code_assignment` login gets the alternate body and no arrow.
+Tests: Home with zero forms renders the empty-state title; a `code_assignment` login gets the alternate body and no arrow; `EmptyState` picks the per-theme artwork; `ActionBar` colors in both themes.
 
 ### Phase 6 — FormDataDetails (A9)
 | File | Change |
@@ -407,7 +423,7 @@ Tests: Home with zero forms renders the empty-state title; a `code_assignment` l
    - Draft swipe actions, sync progress while a form syncs, every badge
 5. Commit only after the device check is approved; do not push without explicit confirmation.
 
-Done: lint 0 errors (6 `no-console` warnings in untouched files), prettier clean, no hex literals in the touched files, jest as in §9, device check on Home, FormOptions and Submission (2026-09-28).
+Done: lint 0 errors (6 `no-console` warnings in untouched files), prettier clean, no hex literals in the touched files, jest as in §9, device check on Home, FormOptions and Submission (2026-09-28). Still to check on a device: the empty state, the action bar and the per-icon legend (A23–A25).
 
 ---
 
