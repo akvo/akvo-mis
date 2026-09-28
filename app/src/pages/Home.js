@@ -15,7 +15,7 @@ import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout, ConfirmDialog } from '../components';
+import { BaseLayout, ConfirmDialog, EmptyState } from '../components';
 import {
   FormState,
   UserState,
@@ -47,6 +47,9 @@ const Home = ({ navigation, route }) => {
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
   const gpsAccuracyLevel = BuildParamsState.useState((s) => s.gpsAccuracyLevel);
   const gpsInterval = BuildParamsState.useState((s) => s.gpsInterval);
+  const authenticationType = BuildParamsState.useState((s) => s.authenticationType);
+  // Same rule as Settings' add-more-forms: assigned logins can't add forms themselves.
+  const canAddForms = !authenticationType?.includes('code_assignment');
   const userId = UserState.useState((s) => s.id);
   const passcode = AuthState.useState((s) => s.authenticationCode);
   const isOnline = UIState.useState((s) => s.online);
@@ -77,6 +80,10 @@ const Home = ({ navigation, route }) => {
       formId: findForm.formId,
       draft: findForm?.draft,
     });
+  };
+
+  const goToAddForm = () => {
+    navigation.navigate('AddNewForm', {});
   };
 
   const goToUsers = () => {
@@ -201,17 +208,7 @@ const Home = ({ navigation, route }) => {
 
       try {
         const results = await crudForms.selectLatestFormVersion(db, { user: currentUserId });
-        const forms = results
-          .map((r) => ({
-            ...r,
-            subtitles: [
-              `${trans.versionLabel}${r.version}`,
-              `${trans.submittedLabel}${r.submitted}`,
-              `${trans.draftLabel}${r.draft}`,
-              `${trans.syncLabel}${r.synced}`,
-            ],
-          }))
-          .filter((r) => r?.userId === currentUserId);
+        const forms = results.filter((r) => r?.userId === currentUserId);
         setData(forms);
         setloading(false);
       } catch (error) {
@@ -223,18 +220,7 @@ const Home = ({ navigation, route }) => {
         }
       }
     }
-  }, [
-    db,
-    params,
-    currentUserId,
-    activeLang,
-    appLang,
-    trans.versionLabel,
-    trans.submittedLabel,
-    trans.draftLabel,
-    trans.syncLabel,
-    refreshPage,
-  ]);
+  }, [db, params, currentUserId, activeLang, appLang, refreshPage]);
 
   useEffect(() => {
     getUserForms();
@@ -264,6 +250,19 @@ const Home = ({ navigation, route }) => {
         (d) => (search && d?.name?.toLowerCase().includes(search.toLowerCase())) || !search,
       ),
     [data, search],
+  );
+
+  // Split, each form once (A20): Latest = forms with data created in this app, newest
+  // first (A18); Earlier = the rest, in query order. ISO strings from toISOString, so
+  // string order is time order.
+  const [latestData, earlierData] = useMemo(
+    () => [
+      filteredData
+        .filter((d) => d?.lastActivityAt)
+        .sort((a, b) => (a.lastActivityAt < b.lastActivityAt ? 1 : -1)),
+      filteredData.filter((d) => !d?.lastActivityAt),
+    ],
+    [filteredData],
   );
 
   useEffect(() => {
@@ -386,6 +385,7 @@ const Home = ({ navigation, route }) => {
         <TouchableOpacity
           style={[homeStyles.headerButton, { backgroundColor: theme.bg.surfaceTranslucent }]}
           onPress={goToUsers}
+          testID="button-users"
         >
           <Icon name="people-outline" size={18} color={theme.topNav.icon} />
         </TouchableOpacity>
@@ -399,7 +399,41 @@ const Home = ({ navigation, route }) => {
         </View>
       }
     >
-      <BaseLayout.Content data={filteredData} action={goToSubmission} columns={1} />
+      <BaseLayout.Content
+        action={goToSubmission}
+        sections={[
+          { key: 'latest', title: trans.latestSubmissionsTitle, data: latestData },
+          { key: 'earlier', title: trans.earlierSubmissionsTitle, data: earlierData },
+        ]}
+        footer={
+          canAddForms && (
+            <TouchableOpacity
+              style={homeStyles.addFormRow}
+              onPress={goToAddForm}
+              testID="home-add-form"
+            >
+              <Icon name="add-circle-outline" size={20} color={theme.text.tertiary} />
+              <Text style={[homeStyles.addFormText, { color: theme.text.tertiary }]}>
+                {trans.settingAddFormTitle}
+              </Text>
+            </TouchableOpacity>
+          )
+        }
+      >
+        {/* Only a truly empty list: a search with no match must not claim there are no forms */}
+        {!loading && !data.length && (
+          // The arrow ends on the centre line, over the Settings tab (A23); assigned
+          // logins can't add forms, so they get no arrow (A8).
+          <EmptyState
+            arrowTip="centre"
+            title={trans.emptyFormsTitle}
+            body={canAddForms ? trans.emptyFormsBody : trans.emptyFormsAssignedBody}
+            showArrow={canAddForms}
+            style={{ backgroundColor: theme.bg.surfaceTertiary }}
+            testID="home-empty-state"
+          />
+        )}
+      </BaseLayout.Content>
       <ConfirmDialog
         visible={updateDialogVisible}
         title={trans.updateRequiredTitle}
@@ -442,6 +476,16 @@ const homeStyles = StyleSheet.create({
   userName: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  addFormRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 24,
+  },
+  addFormText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 
