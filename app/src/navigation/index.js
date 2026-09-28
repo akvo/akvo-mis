@@ -68,8 +68,11 @@ const HomeTabs = () => {
   const insets = useSafeAreaInsets();
   const activeLang = UIState.useState((s) => s.lang);
   const isOnline = UIState.useState((s) => s.online);
+  const bannerVisible = UIState.useState((s) => s.bannerVisible);
   const syncInProgress = DatapointSyncState.useState((s) => s.inProgress);
   const trans = i18n.text(activeLang);
+
+  const bottomPad = bannerVisible ? 10 : Math.max(insets.bottom, 10);
 
   return (
     <Tab.Navigator
@@ -80,8 +83,8 @@ const HomeTabs = () => {
           borderTopColor: theme.bottomNav.border,
           borderTopWidth: 1,
           paddingTop: 10,
-          paddingBottom: Math.max(insets.bottom, 10),
-          height: 70 + Math.max(insets.bottom, 10),
+          paddingBottom: bottomPad,
+          height: 70 + bottomPad,
         },
         tabBarActiveTintColor: theme.bottomNav.selected,
         tabBarInactiveTintColor: theme.bottomNav.deselected,

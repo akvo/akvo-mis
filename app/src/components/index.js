@@ -7,6 +7,7 @@ export { default as LogoutButton } from './LogoutButton';
 export { default as StatusBanner } from './StatusBanner';
 export { default as SyncService } from './SyncService';
 export { default as FAButton } from './FAButton';
+export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as LogoImage } from './LogoImage';
 export {
   ImageView,

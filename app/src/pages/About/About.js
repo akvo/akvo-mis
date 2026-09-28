@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
-import { Icon, Dialog, Button } from '@rneui/themed';
-import { BaseLayout } from '../../components';
+import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
+import { Icon, Button } from '@rneui/themed';
+import { BaseLayout, ConfirmDialog } from '../../components';
 import { BuildParamsState, UIState } from '../../store';
 import { i18n } from '../../lib';
 import useVersionCheck from '../../hooks/use-version-check';
@@ -44,30 +44,35 @@ const AboutHome = () => {
             testID="update-button"
             disabled={!isOnline}
           />
-          {/* EOL Update button */}
 
-          <Dialog isVisible={visible}>
-            {checking ? (
-              <View>
-                <Dialog.Loading />
-                <Text style={{ textAlign: 'center' }}>{trans.checkingVersion}</Text>
-              </View>
-            ) : (
-              <View>
-                <Text>{updateInfo.text}</Text>
-                <Dialog.Actions>
-                  {updateInfo.status === 200 ? (
-                    <Dialog.Button onPress={handleUpdate}>{trans.buttonUpdate}</Dialog.Button>
-                  ) : (
-                    ''
-                  )}
-                  <Dialog.Button onPress={() => setVisible(false)}>
-                    {trans.buttonCancel}
-                  </Dialog.Button>
-                </Dialog.Actions>
-              </View>
-            )}
-          </Dialog>
+          <ConfirmDialog
+            visible={visible}
+            title={checking ? trans.checkingVersion : null}
+            message={checking ? null : updateInfo.text}
+            onClose={() => setVisible(false)}
+            actions={
+              checking
+                ? []
+                : [
+                    ...(updateInfo.status === 200
+                      ? [
+                          {
+                            label: trans.buttonUpdate,
+                            type: 'primary',
+                            onPress: handleUpdate,
+                          },
+                        ]
+                      : []),
+                    {
+                      label: trans.buttonCancel,
+                      type: 'secondary',
+                      onPress: () => setVisible(false),
+                    },
+                  ]
+            }
+          >
+            {checking && <ActivityIndicator style={{ marginVertical: 16 }} />}
+          </ConfirmDialog>
         </View>
       </BaseLayout.Content>
     </BaseLayout>
@@ -94,10 +99,11 @@ const styles = StyleSheet.create({
   updateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007bff',
-    borderRadius: 5,
+    backgroundColor: '#0434FF',
+    borderRadius: 24,
     marginVertical: 16,
-    marginHorizontal: 10,
+    marginHorizontal: 40,
+    paddingVertical: 12,
   },
   updateButtonText: {
     color: '#fff',

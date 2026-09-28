@@ -8,14 +8,14 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Button, Dialog, Text } from '@rneui/themed';
+import { Button } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import * as Crypto from 'expo-crypto';
 import FormContainer from '../form/FormContainer';
 import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
-import { BaseLayout } from '../components';
+import { BaseLayout, ConfirmDialog } from '../components';
 import { crudDataPoints, crudForms } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
 
@@ -489,21 +489,28 @@ const FormPage = ({ navigation, route }) => {
         handleOnExit={handleShowExitConfirmationDialog}
         handleOnSaveAndExit={handleOnSaveAndExit}
       />
-      <Dialog visible={showExitConfirmationDialog} testID="exit-confirmation-dialog">
-        <Text testID="exit-confirmation-text">{trans.confirmExit}</Text>
-        <Dialog.Actions>
-          <Dialog.Button
-            title={trans.buttonExit}
-            onPress={handleOnExit}
-            testID="exit-confirmation-ok"
-          />
-          <Dialog.Button
-            title={trans.buttonCancel}
-            onPress={() => setShowExitConfirmationDialog(false)}
-            testID="exit-confirmation-cancel"
-          />
-        </Dialog.Actions>
-      </Dialog>
+      <ConfirmDialog
+        visible={showExitConfirmationDialog}
+        danger
+        title={trans.confirmExitTitle || 'Exit without saving?'}
+        message={trans.confirmExit}
+        testID="exit-confirmation-dialog"
+        onClose={() => setShowExitConfirmationDialog(false)}
+        actions={[
+          {
+            label: trans.buttonCancel,
+            type: 'secondary',
+            onPress: () => setShowExitConfirmationDialog(false),
+            testID: 'exit-confirmation-cancel',
+          },
+          {
+            label: trans.buttonExit,
+            type: 'danger',
+            onPress: handleOnExit,
+            testID: 'exit-confirmation-ok',
+          },
+        ]}
+      />
     </BaseLayout>
   );
 };

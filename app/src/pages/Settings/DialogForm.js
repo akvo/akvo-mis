@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Dialog, Input, Slider, Text } from '@rneui/themed';
+import { Input, Slider, Text } from '@rneui/themed';
 import { Dropdown } from 'react-native-element-dropdown';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { UIState } from '../../store';
 import { i18n } from '../../lib';
+import { ConfirmDialog } from '../../components';
 
 const DialogForm = ({ onOk, onCancel, showDialog, edit, initValue = 0 }) => {
   const [value, setValue] = useState(initValue);
@@ -14,7 +15,25 @@ const DialogForm = ({ onOk, onCancel, showDialog, edit, initValue = 0 }) => {
   const isPassword = type === 'password' || false;
 
   return (
-    <Dialog isVisible={showDialog} testID="settings-form-dialog">
+    <ConfirmDialog
+      visible={showDialog}
+      testID="settings-form-dialog"
+      onClose={onCancel}
+      actions={[
+        {
+          label: trans.buttonCancel,
+          type: 'secondary',
+          onPress: onCancel,
+          testID: 'settings-form-dialog-cancel',
+        },
+        {
+          label: trans.buttonOk,
+          type: 'primary',
+          onPress: () => onOk(value),
+          testID: 'settings-form-dialog-ok',
+        },
+      ]}
+    >
       {type === 'slider' && (
         <Slider
           // eslint-disable-next-line react/jsx-props-no-spreading
@@ -54,15 +73,7 @@ const DialogForm = ({ onOk, onCancel, showDialog, edit, initValue = 0 }) => {
         />
       )}
       {description?.name && <Text>{i18n.transform(activeLang, description)?.name}</Text>}
-      <Dialog.Actions>
-        <Dialog.Button onPress={() => onOk(value)} testID="settings-form-dialog-ok">
-          {trans.buttonOk}
-        </Dialog.Button>
-        <Dialog.Button onPress={onCancel} testID="settings-form-dialog-cancel">
-          {trans.buttonCancel}
-        </Dialog.Button>
-      </Dialog.Actions>
-    </Dialog>
+    </ConfirmDialog>
   );
 };
 

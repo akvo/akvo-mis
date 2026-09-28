@@ -91,6 +91,17 @@ const dark = {
     error: '#FF2C20',
   },
 
+  // ---- status banner (app-defined, not in the Figma export) ----
+  // Text colors are per mode so every pair clears WCAG AA (4.5:1) for 14px text.
+  banner: {
+    syncBg: '#83DCFF',
+    successBg: '#5BFF53',
+    onSync: '#000000', // 13.7:1 on syncBg, 15.9:1 on successBg
+    onWarning: '#000000', // 9.4:1 on status.warning
+    onError: '#000000', // 5.6:1 on status.error
+    onMuted: '#FFFFFF', // 4.6:1 on text.tertiary
+  },
+
   // ---- borders ----
   border: {
     divider: '#333333',
@@ -227,6 +238,17 @@ const light = {
     warning: '#A1440B',
     draft: '#89570A',
     error: '#C8170D',
+  },
+
+  // ---- status banner (app-defined, not in the Figma export) ----
+  // Text colors are per mode so every pair clears WCAG AA (4.5:1) for 14px text.
+  banner: {
+    syncBg: '#83DCFF',
+    successBg: '#5BFF53',
+    onSync: '#000000', // 13.7:1 on syncBg, 15.9:1 on successBg
+    onWarning: '#FFFFFF', // 6.3:1 on status.warning
+    onError: '#FFFFFF', // 5.9:1 on status.error
+    onMuted: '#FFFFFF', // 7.6:1 on text.tertiary
   },
 
   // ---- borders ----
