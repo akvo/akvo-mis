@@ -270,6 +270,24 @@ const getStyles = (theme) =>
       flexDirection: 'column',
       gap: 8,
     },
+    /** GEO-007 validation report: a pass says one line, a failure says every line. */
+    polygonReport: {
+      marginTop: 8,
+      gap: 4,
+    },
+    polygonReportPass: {
+      color: theme.status.success,
+      fontSize: 13,
+    },
+    polygonReportFail: {
+      color: theme.status.error,
+      fontSize: 13,
+    },
+    polygonReportChecking: {
+      color: theme.text.secondary,
+      fontSize: 13,
+      fontStyle: 'italic',
+    },
     errorText: {
       color: theme.status.error,
       fontStyle: 'italic',

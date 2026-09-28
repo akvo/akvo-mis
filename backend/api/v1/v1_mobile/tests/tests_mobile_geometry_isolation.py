@@ -119,17 +119,17 @@ class GeometryTenantIsolationTestCase(TenantIsolationTestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "acme-plot")
         self.assertEqual(len(rows[0]["geometry"]), 1)
-        self.assertEqual(rows[0]["geometry"][0]["coordinates"], ADDIS_PLOT)
-        # Both tenants reuse ADDIS_PLOT-shaped data in other tests, so
-        # a coordinate leak would be textually invisible unless the two
-        # tenants' polygons actually differ -- which is why TOKYO_PLOT
-        # exists. A cross-tenant coordinate leak would surface here.
-        acme_coordinates = [
-            entry["coordinates"]
-            for row in rows
-            for entry in row["geometry"]
-        ]
-        self.assertNotIn(TOKYO_PLOT, acme_coordinates)
+        # GEO-006 dropped coordinates; bbox is the tenant-specific fingerprint.
+        acme_bbox = rows[0]["geometry"][0]["bbox"]
+        self.assertEqual(acme_bbox, {
+            "min_lat": 9.03, "max_lat": 9.04,
+            "min_lon": 38.74, "max_lon": 38.75,
+        })
+        tokyo_bbox = {
+            "min_lat": 35.65, "max_lat": 35.66,
+            "min_lon": 139.83, "max_lon": 139.84,
+        }
+        self.assertNotEqual(acme_bbox, tokyo_bbox)
         self.assertNotIn(b"beta", response.content)
 
         response_b = self.device_list(
@@ -137,13 +137,11 @@ class GeometryTenantIsolationTestCase(TenantIsolationTestCase):
         )
         rows_b = response_b.json()["data"]
         self.assertEqual(len(rows_b), 2)
-        beta_coordinates = [
-            entry["coordinates"]
-            for row in rows_b
-            for entry in row["geometry"]
+        beta_bboxes = [
+            entry["bbox"] for row in rows_b for entry in row["geometry"]
         ]
-        self.assertEqual(beta_coordinates, [TOKYO_PLOT, TOKYO_PLOT])
-        self.assertNotIn(ADDIS_PLOT, beta_coordinates)
+        self.assertEqual(beta_bboxes, [tokyo_bbox, tokyo_bbox])
+        self.assertNotIn(acme_bbox, beta_bboxes)
         self.assertNotIn(b"acme", response_b.content)
 
 

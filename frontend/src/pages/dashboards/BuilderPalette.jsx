@@ -1,5 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
+import { ThunderboltFilled } from "@ant-design/icons";
 import { WIDGET_TYPES } from "./builderConstants";
 
 const typeIcons = {
@@ -101,9 +102,26 @@ const typeIcons = {
   ),
 };
 
-const BuilderPalette = ({ onAdd }) => (
+const BuilderPalette = ({ onAdd, onOpenAiSuggestions }) => (
   <div className="builder-palette">
     <div className="builder-palette-heading">Add widget</div>
+    {onOpenAiSuggestions && (
+      <button
+        type="button"
+        className="builder-palette-ai-btn"
+        onClick={onOpenAiSuggestions}
+      >
+        <span className="builder-palette-ai-icon">
+          <ThunderboltFilled />
+        </span>
+        <span className="builder-palette-ai-text">
+          <span className="builder-palette-ai-label">AI Suggestions</span>
+          <span className="builder-palette-ai-desc">
+            Get smart recommendations
+          </span>
+        </span>
+      </button>
+    )}
     <div className="builder-palette-list">
       {WIDGET_TYPES.map((wt) => (
         <button
@@ -133,6 +151,7 @@ const BuilderPalette = ({ onAdd }) => (
 
 BuilderPalette.propTypes = {
   onAdd: PropTypes.func.isRequired,
+  onOpenAiSuggestions: PropTypes.func,
 };
 
 export default BuilderPalette;

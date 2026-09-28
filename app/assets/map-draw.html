@@ -694,6 +694,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
         border-color: #7a0020;
         border-width: 4px;
       }
+      /* The `#n` that ties a polygon here to the same `#n` in the error sentence the enumerator
+         just read (GEO-007 D-11). Outlined text rather than a Leaflet tooltip box: it has to stay
+         legible over an amber fill, over cyan next door, and over whatever imagery is under
+         both. Declared after leaflet.css at equal specificity, so these win. */
+      .conflict-label {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 700;
+        text-shadow:
+          0 0 3px #000,
+          0 0 3px #000,
+          0 0 6px #000;
+      }
     </style>
     <script>
 /* leaflet:js:start */
@@ -715,6 +732,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
       data-mylocation="{{myLocation}}"
       data-closed="{{closed}}"
       data-accuracy-threshold="{{accuracyThreshold}}"
+      data-tile-url="{{tileUrl}}"
+      data-review="{{review}}"
+      data-conflicts="{{conflicts}}"
+      data-fit-bounds="{{fitBounds}}"
     ></div>
     <script>
       (function () {
@@ -730,39 +751,85 @@ svg.leaflet-image-layer.leaflet-interactive path {
         var tapping = false;
         // Metres. 0 disables red marking entirely, which is what the read-only preview wants.
         var accuracyThreshold = Number(root.getAttribute('data-accuracy-threshold')) || 0;
+        // The overlap review screen (GEO-008): the current polygon against the ones it conflicts
+        // with, labelled and tappable, and nothing editable.
+        var review = root.getAttribute('data-review') === 'true';
+        var conflicts = JSON.parse(root.getAttribute('data-conflicts') || '[]');
+        var fitTo = JSON.parse(root.getAttribute('data-fit-bounds') || 'null');
+        /**
+         * `readonly` means "the polygon cannot be changed", which is true of both the detail
+         * preview and the review screen. Only the preview is also frozen: it is a picture
+         * embedded in a scrolling list and must not steal the drag gesture (GEO-001 D-5). The
+         * review screen is full-screen, and inspecting an overlap means panning and zooming.
+         */
+        var staticMap = readonly && !review;
 
         var map = L.map('map', {
           zoomControl: false,
           attributionControl: false,
-          dragging: !readonly,
-          touchZoom: !readonly,
-          doubleClickZoom: !readonly,
-          scrollWheelZoom: !readonly,
-          boxZoom: !readonly,
-          keyboard: !readonly,
-          tap: !readonly,
+          dragging: !staticMap,
+          touchZoom: !staticMap,
+          doubleClickZoom: !staticMap,
+          scrollWheelZoom: !staticMap,
+          boxZoom: !staticMap,
+          keyboard: !staticMap,
+          tap: !staticMap,
         });
-        if (!readonly) {
+        if (!staticMap) {
           L.control.zoom({ position: 'bottomleft' }).addTo(map);
         }
+        // Offline there is no imagery to judge distance against, so the polygons float on a
+        // blank canvas with nothing to scale them by. The bar is that reference (FR-6.6), and it
+        // is worth having online too - it is the only thing here that says "metres".
+        if (review) {
+          L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
+        }
 
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          // A transparent 1x1: offline, tiles fail silently and the canvas stays drawable
-          // instead of filling with broken-image icons. See GEO-001 D-3.
-          errorTileUrl:
-            'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-        }).addTo(map);
+        // The template arrives from the resolver in src/lib/map-tiles.js, baked in like every
+        // other value - this page names no provider of its own (GEO-008 D-1). `null` is the
+        // resolver's "nothing to draw" verdict: offline with no pack stored. The canvas then
+        // stays blank under the polygons, which is exactly what the review screen's offline
+        // notice describes, so no connectivity check is involved anywhere.
+        var tileUrl = JSON.parse(root.getAttribute('data-tile-url') || 'null');
+        if (tileUrl) {
+          L.tileLayer(tileUrl, {
+            maxZoom: 19,
+            // A transparent 1x1: offline, tiles fail silently and the canvas stays drawable
+            // instead of filling with broken-image icons. See GEO-001 D-3.
+            errorTileUrl:
+              'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+          }).addTo(map);
+        }
 
         // geoshape is a closed ring with a fill; geotrace is an open line with neither.
         // Everything else about capture - tapping, dragging, undo - is identical.
         var closed = root.getAttribute('data-closed') !== 'false';
+        /**
+         * Cyan for the plot being worked on, amber for the ones it overlaps (GEO-008 §6, with
+         * §10's recommendation taken). Red is deliberately NOT used for a conflict: `.vertex-poor`
+         * below already means "this corner was measured loosely, walk it again", and one colour
+         * carrying two verdicts on one screen is how a GPS artefact gets read as a boundary
+         * dispute. Amber against cyan also survives the common case of the two polygons
+         * occupying the same pixels.
+         */
+        var CURRENT_COLOR = review ? '#00bcd4' : '#1651b6';
+        var CONFLICT_COLOR = '#ffb300';
         var polygon = closed
-          ? L.polygon([], { color: '#1651b6', weight: 3, fillOpacity: 0.2 }).addTo(map)
-          : L.polyline([], { color: '#1651b6', weight: 3 }).addTo(map);
+          ? L.polygon([], { color: CURRENT_COLOR, weight: 3, fillOpacity: 0.2 }).addTo(map)
+          : L.polyline([], { color: CURRENT_COLOR, weight: 3 }).addTo(map);
         var markers = [];
+        var conflictLayers = [];
         var myDot = null;
         var myCircle = null;
+
+        // Tapping a polygon is how its farmer's name is reached - the error sentence carries
+        // positions, not names, so this screen is the only place the name appears. `index: null`
+        // is the plot being worked on; a number is that conflict.
+        if (review) {
+          polygon.on('click', function () {
+            send('polygonTapped', { index: null });
+          });
+        }
 
         // Blue dot plus an accuracy circle, as in ODK. Both are interactive:false so they
         // never swallow a map tap meant to place a vertex.
@@ -818,9 +885,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
           return isFinite(metres) && metres > 0 && metres > accuracyThreshold;
         }
 
-        function vertexIcon(index, point) {
+        function vertexIcon(point, first) {
           var classes = 'vertex';
-          if (index === 0) {
+          if (first) {
             classes += ' vertex-first';
           }
           if (isPoor(point)) {
@@ -833,6 +900,59 @@ svg.leaflet-image-layer.leaflet-interactive path {
           });
         }
 
+        /**
+         * The conflicting polygons, drawn from the coordinates `runOverlapCheck` already carried
+         * - this screen never re-reads the datapoints (GEO-008 Technical AC).
+         *
+         * Redrawn alongside the current polygon rather than once at load, so a threshold change
+         * recolours a neighbour's corners too and the two can never disagree about what "poor"
+         * means.
+         */
+        function drawConflicts() {
+          conflictLayers.forEach(function (layer) {
+            map.removeLayer(layer);
+          });
+          conflictLayers = [];
+          if (!review) {
+            return;
+          }
+          conflicts.forEach(function (conflict, index) {
+            var ring = conflict.coordinates;
+            if (!Array.isArray(ring) || ring.length < 3) {
+              return;
+            }
+            var shape = L.polygon(ring, {
+              color: CONFLICT_COLOR,
+              weight: 3,
+              fillOpacity: 0.25,
+            }).addTo(map);
+            // Permanent, not on hover: the whole point is that `#2` here and `#2` in the
+            // sentence just read are the same plot, and a label you have to hunt for cannot
+            // carry that.
+            shape.bindTooltip(conflict.label, {
+              permanent: true,
+              direction: 'center',
+              className: 'conflict-label',
+            });
+            shape.on('click', function () {
+              send('polygonTapped', { index: index });
+            });
+            conflictLayers.push(shape);
+            // The capture screen's own red dot, against the question's own threshold, on the
+            // neighbour's corners as well as ours (D-4). An overlap ringed by red dots reads as
+            // "maybe GPS noise"; one ringed by clean corners reads as a real intersection.
+            // No `vertex-first` emphasis: a ring that cannot be edited has no start to find.
+            ring.forEach(function (point) {
+              conflictLayers.push(
+                L.marker(point, {
+                  icon: vertexIcon(point, false),
+                  interactive: false,
+                }).addTo(map),
+              );
+            });
+          });
+        }
+
         function draw() {
           markers.forEach(function (m) {
             map.removeLayer(m);
@@ -842,7 +962,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
             // measured vertex needs no special handling to draw in the right place.
             var marker = L.marker(p, {
               draggable: !readonly,
-              icon: vertexIcon(index, p),
+              // Read-only, a vertex has nothing to be tapped for - and on the review screen it
+              // would otherwise sit on top of the polygon and swallow the tap that names it.
+              interactive: !readonly,
+              icon: vertexIcon(p, index === 0),
             }).addTo(map);
             if (readonly) {
               return marker;
@@ -875,9 +998,17 @@ svg.leaflet-image-layer.leaflet-interactive path {
             return marker;
           });
           polygon.setLatLngs(points);
+          drawConflicts();
         }
 
         function fit() {
+          // Baked in, and it covers the current polygon AND every conflict: zooming to the
+          // current polygon alone would leave the neighbour it overlaps off the edge, and that
+          // neighbour is the subject of the screen.
+          if (fitTo) {
+            map.fitBounds(fitTo, { padding: [32, 32], maxZoom: 19 });
+            return;
+          }
           if (points.length) {
             map.fitBounds(polygon.getBounds(), { padding: [32, 32], maxZoom: 19 });
             return;

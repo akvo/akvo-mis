@@ -8,6 +8,7 @@ jest.mock("../../../lib/api");
 import {
   pruneConfigForForm,
   tableColumnOptions,
+  getDefaultTableColumns,
   monitoringForms,
   stackByOptions,
   withValidStack,
@@ -724,6 +725,53 @@ describe("tableColumnOptions", () => {
   test("no monitoring form selected offers the registration side only", () => {
     const opts = tableColumnOptions(FORMS, null);
     expect(opts.map((o) => o.question)).toEqual([102, 106]);
+  });
+});
+
+describe("getDefaultTableColumns", () => {
+  test("generates standard default columns with parent_name, administration, latest_date, and indicators", () => {
+    const testForms = [
+      {
+        id: 6001,
+        type: "registration",
+        questions: [{ id: 102, label: "Name", type: "text" }],
+      },
+      {
+        id: 6002,
+        type: "monitoring",
+        questions: [
+          { id: 10101, label: "Date of Inspection", type: "date" },
+          { id: 10106, label: "Status", type: "option" },
+        ],
+      },
+    ];
+    const cols = getDefaultTableColumns(testForms, 6002);
+    expect(cols.map((c) => c.key)).toEqual([
+      "parent_name",
+      "administration",
+      "latest_date",
+      "answer_10106",
+    ]);
+  });
+});
+
+describe("populate default columns button", () => {
+  test("clicking Populate default columns updates widget columns with defaults", () => {
+    const onWidgetChange = draw({
+      type: "table",
+      form: 6002,
+      config: { columns: [] },
+    });
+
+    const btn = screen.getByRole("button", {
+      name: /populate default columns/i,
+    });
+    fireEvent.click(btn);
+
+    expect(onWidgetChange).toHaveBeenCalled();
+    const updated = onWidgetChange.mock.calls[0][0];
+    expect(updated.config.columns.length).toBeGreaterThan(0);
+    expect(updated.config.columns[0].key).toBe("parent_name");
   });
 });
 
