@@ -76,7 +76,9 @@ const TypeOption = ({
             onChange(id, [optValue]);
           }
         }}
-        renderItem={(item, selected) => <OptionItem {...item} selected={selected} />}
+        renderItem={(item, selected) => (
+          <OptionItem label={item.label} name={item.name} color={item.color} selected={selected} />
+        )}
         testID="type-option-dropdown"
         placeholder={trans.selectItem}
         placeholderStyle={{ color: theme.input.text }}

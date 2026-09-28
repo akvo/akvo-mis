@@ -6,7 +6,8 @@ import useTheme from '../../lib/theme';
 const OptionItem = ({ label, name, color, selected, isMulti }) => {
   const theme = useTheme();
   const textColor = color ? '#ffffff' : theme.text.primary;
-  const iconColor = color ? '#ffffff' : selected ? theme.icon.primary : theme.text.tertiary;
+  const plainIconColor = selected ? theme.icon.primary : theme.text.tertiary;
+  const iconColor = color ? '#ffffff' : plainIconColor;
   return (
     <View style={{ padding: 3 }}>
       <View
@@ -14,7 +15,8 @@ const OptionItem = ({ label, name, color, selected, isMulti }) => {
           flexDirection: 'row',
           alignItems: 'center',
           padding: 10,
-          backgroundColor: color || (selected ? theme.bg.surfaceTranslucent : theme.bg.surfaceSecondary),
+          backgroundColor:
+            color || (selected ? theme.bg.surfaceTranslucent : theme.bg.surfaceSecondary),
           borderRadius: color ? 8 : 0,
         }}
       >

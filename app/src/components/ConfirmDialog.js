@@ -29,9 +29,7 @@ const ConfirmDialog = ({
           style={[styles.card, { backgroundColor: theme.bg.surfaceElevated1 }]}
           onPress={() => {}}
         >
-          {title && (
-            <Text style={[styles.title, { color: titleColor }]}>{title}</Text>
-          )}
+          {title && <Text style={[styles.title, { color: titleColor }]}>{title}</Text>}
           {message && (
             <Text style={[styles.message, { color: theme.text.primary }]}>{message}</Text>
           )}
@@ -41,14 +39,10 @@ const ConfirmDialog = ({
               {actions.map((action) => {
                 const isPrimary = action.type === 'primary';
                 const isDanger = action.type === 'danger';
-                const buttonBg = isPrimary
-                  ? theme.buttonPrimary.bg
-                  : isDanger
-                    ? theme.status.error
-                    : theme.buttonSecondary.bg;
-                const buttonText = isPrimary || isDanger
-                  ? theme.buttonPrimary.text
-                  : theme.buttonSecondary.text;
+                const solidBg = isDanger ? theme.status.error : theme.buttonPrimary.bg;
+                const buttonBg = isPrimary || isDanger ? solidBg : theme.buttonSecondary.bg;
+                const buttonText =
+                  isPrimary || isDanger ? theme.buttonPrimary.text : theme.buttonSecondary.text;
                 return (
                   <TouchableOpacity
                     key={action.label}
@@ -56,9 +50,7 @@ const ConfirmDialog = ({
                     onPress={action.onPress}
                     testID={action.testID}
                   >
-                    <Text style={[styles.buttonText, { color: buttonText }]}>
-                      {action.label}
-                    </Text>
+                    <Text style={[styles.buttonText, { color: buttonText }]}>{action.label}</Text>
                   </TouchableOpacity>
                 );
               })}

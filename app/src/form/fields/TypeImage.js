@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, PermissionsAndroid, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import {
+  View,
+  PermissionsAndroid,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
@@ -181,7 +188,12 @@ const TypeImage = ({
                 disabled={isCompressing}
                 style={s.galleryButton}
               >
-                <Icon name="folder" size={18} color={theme.text.primary} style={{ marginRight: 6 }} />
+                <Icon
+                  name="folder"
+                  size={18}
+                  color={theme.text.primary}
+                  style={{ marginRight: 6 }}
+                />
                 <Text style={[s.galleryButtonText, { color: theme.text.primary }]}>
                   {trans.buttonFromGallery}
                 </Text>
@@ -192,12 +204,13 @@ const TypeImage = ({
 
         {/* Remove button when image exists */}
         {value && !isCompressing && (
-          <TouchableOpacity
-            onPress={handleRemove}
-            testID="btn-remove"
-            style={s.removeButton}
-          >
-            <Icon name="trash-outline" size={16} color={theme.status.error} style={{ marginRight: 6 }} />
+          <TouchableOpacity onPress={handleRemove} testID="btn-remove" style={s.removeButton}>
+            <Icon
+              name="trash-outline"
+              size={16}
+              color={theme.status.error}
+              style={{ marginRight: 6 }}
+            />
             <Text style={{ color: theme.status.error, fontSize: 14, fontWeight: '600' }}>
               {trans.buttonRemove}
             </Text>
@@ -208,9 +221,15 @@ const TypeImage = ({
       {/* Info message */}
       {!value && (
         <View style={[s.infoContainer, { backgroundColor: theme.bg.surfaceElevated1 }]}>
-          <Icon name="information-circle" size={22} color={theme.buttonPrimary.bg} style={{ marginRight: 8, marginTop: 2 }} />
+          <Icon
+            name="information-circle"
+            size={22}
+            color={theme.buttonPrimary.bg}
+            style={{ marginRight: 8, marginTop: 2 }}
+          />
           <Text style={[s.infoText, { color: theme.text.secondary }]}>
-            {trans.photoSyncInfo || 'The photo stays on the phone until you sync. Once it reaches the server the local copy is deleted to free up storage.'}
+            {trans.photoSyncInfo ||
+              'The photo stays on the phone until you sync. Once it reaches the server the local copy is deleted to free up storage.'}
           </Text>
         </View>
       )}

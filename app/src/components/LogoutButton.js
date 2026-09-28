@@ -82,10 +82,18 @@ const LogoutButton = () => {
       <TouchableOpacity
         onPress={() => setVisible(true)}
         testID="list-item-logout"
-        style={[styles.listItem, { backgroundColor: theme.bg.surfaceSecondary, borderBottomColor: theme.border.listDivider }]}
+        style={[
+          styles.listItem,
+          {
+            backgroundColor: theme.bg.surfaceSecondary,
+            borderBottomColor: theme.border.listDivider,
+          },
+        ]}
       >
         <View style={styles.contentContainer}>
-          <Text style={[styles.buttonText, { color: theme.text.primary }]}>{trans.buttonReset}</Text>
+          <Text style={[styles.buttonText, { color: theme.text.primary }]}>
+            {trans.buttonReset}
+          </Text>
         </View>
         <Icon name="refresh" type="ionicon" color={theme.icon.secondary} size={24} />
       </TouchableOpacity>

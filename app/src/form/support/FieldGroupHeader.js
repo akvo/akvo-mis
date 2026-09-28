@@ -35,7 +35,13 @@ const FieldGroupHeader = ({ description, index, label, repeatable, id }) => {
             testID="copy-button"
             onPress={handleDuplicateGroup}
           >
-            <Icon type="ionicon" name="add-circle-outline" size={20} color={theme.icon.primary} testID="copy" />
+            <Icon
+              type="ionicon"
+              name="add-circle-outline"
+              size={20}
+              color={theme.icon.primary}
+              testID="copy"
+            />
           </TouchableOpacity>
         )}
       </View>

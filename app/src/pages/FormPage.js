@@ -8,15 +8,14 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Button, Text } from '@rneui/themed';
-import { ConfirmDialog } from '../components';
+import { Button } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import * as Crypto from 'expo-crypto';
 import FormContainer from '../form/FormContainer';
 import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
-import { BaseLayout } from '../components';
+import { BaseLayout, ConfirmDialog } from '../components';
 import { crudDataPoints } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
 import { UserState, UIState, FormState } from '../store';

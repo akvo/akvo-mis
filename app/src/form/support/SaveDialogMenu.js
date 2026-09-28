@@ -19,7 +19,10 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
       testID="save-dialog-menu"
     >
       <Pressable style={styles.overlay} onPress={() => setVisible(false)}>
-        <Pressable style={[styles.sheet, { backgroundColor: theme.bg.surfaceElevated1 }]} onPress={() => {}}>
+        <Pressable
+          style={[styles.sheet, { backgroundColor: theme.bg.surfaceElevated1 }]}
+          onPress={() => {}}
+        >
           <View style={styles.handle} />
           <Text style={[styles.title, { color: theme.text.primary }]}>
             {trans.leaveSubmissionTitle || 'Leave this submission?'}
@@ -34,13 +37,43 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
               }
             }}
           >
-            <Icon name="time-outline" size={24} color={theme.text.primary} style={styles.optionIcon} />
+            <Icon
+              name="time-outline"
+              size={24}
+              color={theme.text.primary}
+              style={styles.optionIcon}
+            />
             <View style={styles.optionContent}>
               <Text style={[styles.optionTitle, { color: theme.text.primary }]}>
                 {trans.buttonSaveNExit}
               </Text>
               <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
                 {trans.saveDraftDesc || 'Keeps your progress. Reopen it from the drafts list.'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.optionRow}
+            testID="save-and-send-to-web-button"
+            onPress={() => {
+              if (handleOnSaveAndExit) {
+                handleOnSaveAndExit({ sendToWeb: true });
+              }
+            }}
+          >
+            <Icon
+              name="cloud-upload-outline"
+              size={24}
+              color={theme.text.primary}
+              style={styles.optionIcon}
+            />
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionTitle, { color: theme.text.primary }]}>
+                {trans.buttonSaveNSendToWeb}
+              </Text>
+              <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
+                {trans.sendToWebMessage}
               </Text>
             </View>
           </TouchableOpacity>
@@ -60,7 +93,8 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
                 {trans.buttonExitWoSaving}
               </Text>
               <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
-                {trans.exitWithoutSavingDesc || 'Discards everything you have typed in this submission.'}
+                {trans.exitWithoutSavingDesc ||
+                  'Discards everything you have typed in this submission.'}
               </Text>
             </View>
           </TouchableOpacity>

@@ -1,15 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import {
-  View,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  BackHandler,
-} from 'react-native';
+import { View, StyleSheet, ActivityIndicator, TouchableOpacity, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Button, Text, Icon } from '@rneui/themed';
-import { ConfirmDialog } from '../components';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ConfirmDialog } from '../components';
 import { FormState, UserState } from '../store';
 import i18n from '../lib/i18n';
 import loadMapDrawHtml from '../lib/map-draw-html';
@@ -33,6 +27,7 @@ import {
 } from '../form/lib/polygon-rules';
 import useBoundaryRecorder from '../hooks/use-boundary-recorder';
 import { QUESTION_TYPES } from '../lib/constants';
+import useTheme from '../lib/theme';
 
 const CLEAR_CONFIRM_THRESHOLD = 3;
 const MIN_POINTS_FOR_AREA = 3;
@@ -61,6 +56,7 @@ const MapDrawView = ({ navigation, route }) => {
   // geoshape is a closed ring with an enclosed area; geotrace is an open line with
   // neither. Capture - tap, drag, undo, clear - is identical for both.
   const isClosed = type !== QUESTION_TYPES.geotrace;
+  const theme = useTheme();
   const [htmlContent, setHtmlContent] = useState(null);
   const [points, setPoints] = useState(initialValue || []);
   const [showInputMethod, setShowInputMethod] = useState(false);
@@ -331,8 +327,11 @@ const MapDrawView = ({ navigation, route }) => {
         onPress={() => setOpenPicker(openPicker === key ? null : key)}
         testID={`picker-${key}`}
       >
-        <Text style={styles.pickerLabel}>{label}</Text>
-        <Text style={styles.pickerValue} testID={`picker-${key}-value`}>
+        <Text style={[styles.pickerLabel, { color: theme.text.primary }]}>{label}</Text>
+        <Text
+          style={[styles.pickerValue, { color: theme.text.highlight }]}
+          testID={`picker-${key}-value`}
+        >
           {`${format(selected)} \u25BE`}
         </Text>
       </TouchableOpacity>
@@ -347,7 +346,13 @@ const MapDrawView = ({ navigation, route }) => {
             }}
             testID={`picker-${key}-option-${option}`}
           >
-            <Text style={[styles.methodLabel, option === selected && styles.pickerSelected]}>
+            <Text
+              style={[
+                styles.methodLabel,
+                { color: theme.text.primary },
+                option === selected && [styles.pickerSelected, { color: theme.text.highlight }],
+              ]}
+            >
               {format(option)}
             </Text>
           </TouchableOpacity>
@@ -535,9 +540,14 @@ const MapDrawView = ({ navigation, route }) => {
                 type="material"
                 name={inputMethod === key ? 'radio-button-checked' : 'radio-button-unchecked'}
                 size={22}
-                color={disabled ? '#9e9e9e' : '#1651b6'}
+                color={disabled ? theme.text.tertiary : theme.icon.accent}
               />
-              <Text style={[styles.methodLabel, disabled && styles.methodLabelDisabled]}>
+              <Text
+                style={[
+                  styles.methodLabel,
+                  { color: disabled ? theme.text.tertiary : theme.text.primary },
+                ]}
+              >
                 {trans[labelKey]}
               </Text>
             </TouchableOpacity>
@@ -548,7 +558,10 @@ const MapDrawView = ({ navigation, route }) => {
           and this one is a deliberate instruction from the form author.
         */}
         {!canTap && (
-          <Text style={styles.methodHint} testID="text-tapping-disabled">
+          <Text
+            style={[styles.methodHint, { color: theme.status.warning }]}
+            testID="text-tapping-disabled"
+          >
             {trans.gpsTappingDisabled}
           </Text>
         )}
@@ -580,7 +593,10 @@ const MapDrawView = ({ navigation, route }) => {
           instead of leaving the missing options to be noticed - or not.
         */}
         {RECORDING_METHODS.includes(inputMethod) && accuracyCap !== null && (
-          <Text style={styles.methodHint} testID="text-accuracy-capped">
+          <Text
+            style={[styles.methodHint, { color: theme.status.warning }]}
+            testID="text-accuracy-capped"
+          >
             {trans.gpsAccuracyCapped.replace('{threshold}', accuracyCap)}
           </Text>
         )}
@@ -592,8 +608,8 @@ const MapDrawView = ({ navigation, route }) => {
         */}
         {RECORDING_METHODS.includes(inputMethod) && !locked && (
           <View style={styles.waitingRow} testID="text-waiting-for-fix">
-            <ActivityIndicator size="small" color="#8a6d3b" />
-            <Text style={styles.methodHint}>
+            <ActivityIndicator size="small" color={theme.status.warning} />
+            <Text style={[styles.methodHint, { color: theme.status.warning }]}>
               {accuracy
                 ? trans.gpsImprovingFix.replace('{accuracy}', Math.round(accuracy))
                 : trans.gpsWaitingForFix}
@@ -605,7 +621,10 @@ const MapDrawView = ({ navigation, route }) => {
             onPress={handleStartInputMethod}
             disabled={RECORDING_METHODS.includes(inputMethod) && !locked}
             testID="button-start-input-method"
-            buttonStyle={styles.inputMethodStartButton}
+            buttonStyle={[styles.dialogButton, { backgroundColor: theme.buttonPrimary.bg }]}
+            titleStyle={[styles.dialogButtonTitle, { color: theme.buttonPrimary.text }]}
+            disabledStyle={{ backgroundColor: theme.buttonPrimary.bgDisabled }}
+            disabledTitleStyle={{ color: theme.buttonPrimary.textDisabled }}
           >
             {trans.buttonStart}
           </Button>
@@ -616,6 +635,8 @@ const MapDrawView = ({ navigation, route }) => {
               setOpenPicker(null);
             }}
             testID="button-cancel-input-method"
+            buttonStyle={styles.dialogButton}
+            titleStyle={[styles.dialogButtonTitle, { color: theme.buttonGhost.color }]}
           >
             {trans.buttonCancel}
           </Button>
@@ -713,10 +734,6 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 16,
   },
-  inputMethodStartButton: {
-    borderRadius: 24,
-    paddingHorizontal: 24,
-  },
   methodRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -727,11 +744,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     flexShrink: 1,
   },
-  methodLabelDisabled: {
-    color: '#9e9e9e',
-  },
   methodHint: {
-    color: '#8a6d3b',
     fontSize: 13,
     flexShrink: 1,
   },
@@ -755,14 +768,20 @@ const styles = StyleSheet.create({
   },
   pickerValue: {
     fontSize: 15,
-    color: '#1651b6',
   },
   pickerOption: {
     paddingVertical: 8,
     paddingLeft: 34,
   },
   pickerSelected: {
-    color: '#1651b6',
+    fontWeight: '600',
+  },
+  dialogButton: {
+    borderRadius: 24,
+    paddingHorizontal: 20,
+  },
+  dialogButtonTitle: {
+    fontSize: 16,
     fontWeight: '600',
   },
 });

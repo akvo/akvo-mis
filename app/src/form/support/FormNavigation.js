@@ -178,7 +178,12 @@ const FormNavigation = ({
     >
       <Tab.Item
         title={trans.buttonBack}
-        icon={{ name: 'chevron-back-outline', type: 'ionicon', color: theme.text.secondary, size: 20 }}
+        icon={{
+          name: 'chevron-back-outline',
+          type: 'ionicon',
+          color: theme.text.secondary,
+          size: 20,
+        }}
         iconPosition="left"
         iconContainerStyle={styles.formNavigationIcon}
         titleStyle={styles.formNavigationTitle}
@@ -196,7 +201,12 @@ const FormNavigation = ({
       {activeGroup < totalGroup - 1 ? (
         <Tab.Item
           title={trans.buttonNext}
-          icon={{ name: 'chevron-forward-outline', type: 'ionicon', color: theme.text.secondary, size: 20 }}
+          icon={{
+            name: 'chevron-forward-outline',
+            type: 'ionicon',
+            color: theme.text.secondary,
+            size: 20,
+          }}
           iconPosition="right"
           iconContainerStyle={styles.formNavigationIcon}
           titleStyle={styles.formNavigationTitle}
@@ -208,7 +218,12 @@ const FormNavigation = ({
       ) : (
         <Tab.Item
           title={trans.buttonSubmit}
-          icon={{ name: 'paper-plane-outline', type: 'ionicon', color: theme.buttonPrimary.text, size: 20 }}
+          icon={{
+            name: 'paper-plane-outline',
+            type: 'ionicon',
+            color: theme.buttonPrimary.text,
+            size: 20,
+          }}
           iconPosition="right"
           iconContainerStyle={styles.formNavigationIconSubmit}
           titleStyle={styles.formNavigationSubmit}
