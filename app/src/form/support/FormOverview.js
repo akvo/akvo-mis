@@ -11,9 +11,7 @@ const formatValue = (value, question) => {
   }
   if (Array.isArray(value)) {
     if (question?.option) {
-      return value
-        .map((v) => question.option.find((o) => o.value === v)?.label || v)
-        .join(', ');
+      return value.map((v) => question.option.find((o) => o.value === v)?.label || v).join(', ');
     }
     return value.filter((v) => v !== null && v !== undefined).join(', ');
   }
@@ -31,8 +29,7 @@ const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
   const currentValues = FormState.useState((s) => s.currentValues);
 
   const allQuestions = useMemo(
-    () =>
-      formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [],
+    () => formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [],
     [formDefinition],
   );
 
@@ -74,9 +71,7 @@ const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
       {groupSummaries.map((group) => (
         <View key={group.groupIndex} style={styles.groupSection}>
           <View style={styles.groupHeaderRow}>
-            <Text style={[styles.groupLabel, { color: theme.text.primary }]}>
-              {group.label}
-            </Text>
+            <Text style={[styles.groupLabel, { color: theme.text.primary }]}>{group.label}</Text>
             {group.hasMissing && (
               <TouchableOpacity
                 style={[styles.editButton, { backgroundColor: theme.status.error }]}

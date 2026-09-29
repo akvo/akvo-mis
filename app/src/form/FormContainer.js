@@ -4,7 +4,12 @@ import { useRoute } from '@react-navigation/native';
 import { BaseLayout } from '../components';
 import { FormNavigation, QuestionGroupList, FormOverview } from './support';
 import QuestionGroup from './components/QuestionGroup';
-import { transformForm, generateDataPointName, generateValidationSchemaFieldLevel, onFilterDependency } from './lib';
+import {
+  transformForm,
+  generateDataPointName,
+  generateValidationSchemaFieldLevel,
+  onFilterDependency,
+} from './lib';
 import { FormState, UIState } from '../store';
 import { i18n } from '../lib';
 import { crudDataPoints, crudForms } from '../database/crud';
@@ -62,27 +67,29 @@ const FormContainer = ({
   const trans = i18n.text(uiLang);
   const route = useRoute();
 
-  const dependantQuestions =
-    forms?.question_group
-      ?.flatMap((qg) => qg.question)
-      .filter((q) => q?.dependency && q?.dependency?.length)
-      ?.map((q) => ({ id: q.id, dependency: q.dependency })) || [];
-
   const validateGroupAndSetFeedback = useCallback(async (group, allQuestions) => {
     if (!group?.question) {
       return;
     }
     const vals = FormState.getRawState().currentValues;
-    const validateSync = group.question
-      ?.filter((q) => onFilterDependency(group, vals, q, 0, allQuestions))
-      ?.filter((q) => q?.extra?.type !== 'entity' || vals?.[q?.id] !== undefined)
-      ?.map((q) => {
-        const defaultVal = [
-          'cascade', 'multiple_option', 'option', 'geo', 'geoshape', 'geotrace',
-        ].includes(q?.type) ? null : '';
-        const fieldValue = vals?.[q?.id] === undefined ? defaultVal : vals[q.id];
-        return generateValidationSchemaFieldLevel(fieldValue, q);
-      }) || [];
+    const validateSync =
+      group.question
+        ?.filter((q) => onFilterDependency(group, vals, q, 0, allQuestions))
+        ?.filter((q) => q?.extra?.type !== 'entity' || vals?.[q?.id] !== undefined)
+        ?.map((q) => {
+          const defaultVal = [
+            'cascade',
+            'multiple_option',
+            'option',
+            'geo',
+            'geoshape',
+            'geotrace',
+          ].includes(q?.type)
+            ? null
+            : '';
+          const fieldValue = vals?.[q?.id] === undefined ? defaultVal : vals[q.id];
+          return generateValidationSchemaFieldLevel(fieldValue, q);
+        }) || [];
     const validations = await Promise.allSettled(validateSync);
     const feedbackValues = validations
       ?.filter(({ status }) => status === 'fulfilled')
@@ -325,45 +332,46 @@ const FormContainer = ({
     );
   }
 
+  const renderGroupContent = () => {
+    if (isOverviewStep) {
+      return (
+        <FormOverview
+          formDefinition={formDefinition}
+          onEditGroup={(groupIndex) => {
+            const targetGroup = formDefinition?.question_group?.[groupIndex];
+            validateGroupAndSetFeedback(targetGroup, activeQuestions);
+            setActiveGroup(groupIndex);
+            setShowQuestionGroupList(false);
+          }}
+          onEditQuestion={(groupIndex, questionId) => {
+            const targetGroup = formDefinition?.question_group?.[groupIndex];
+            validateGroupAndSetFeedback(targetGroup, activeQuestions);
+            FormState.update((s) => {
+              s.scrollToQuestionId = questionId;
+            });
+            setActiveGroup(groupIndex);
+            setShowQuestionGroupList(false);
+          }}
+        />
+      );
+    }
+    if (showQuestionGroupList) {
+      return (
+        <QuestionGroupList
+          form={formDefinition}
+          activeQuestionGroup={activeGroup}
+          setActiveQuestionGroup={setActiveGroup}
+          setShowQuestionGroupList={setShowQuestionGroupList}
+        />
+      );
+    }
+    return <QuestionGroup group={currentGroup} activeQuestions={activeQuestions} />;
+  };
+
   return (
     <>
       <BaseLayout.Content>
-        <View style={style}>
-          {isOverviewStep ? (
-            <FormOverview
-              formDefinition={formDefinition}
-              onEditGroup={(groupIndex) => {
-                const targetGroup = formDefinition?.question_group?.[groupIndex];
-                validateGroupAndSetFeedback(targetGroup, activeQuestions);
-                setActiveGroup(groupIndex);
-                setShowQuestionGroupList(false);
-              }}
-              onEditQuestion={(groupIndex, questionId) => {
-                const targetGroup = formDefinition?.question_group?.[groupIndex];
-                validateGroupAndSetFeedback(targetGroup, activeQuestions);
-                FormState.update((s) => {
-                  s.scrollToQuestionId = questionId;
-                });
-                setActiveGroup(groupIndex);
-                setShowQuestionGroupList(false);
-              }}
-            />
-          ) : !showQuestionGroupList ? (
-            <QuestionGroup
-              index={activeGroup}
-              group={currentGroup}
-              activeQuestions={activeQuestions}
-              dependantQuestions={dependantQuestions}
-            />
-          ) : (
-            <QuestionGroupList
-              form={formDefinition}
-              activeQuestionGroup={activeGroup}
-              setActiveQuestionGroup={setActiveGroup}
-              setShowQuestionGroupList={setShowQuestionGroupList}
-            />
-          )}
-        </View>
+        <View style={style}>{renderGroupContent()}</View>
       </BaseLayout.Content>
       <FormNavigation
         currentGroup={currentGroup}
@@ -373,7 +381,6 @@ const FormContainer = ({
         setActiveGroup={handleOnActiveGroup}
         totalGroup={totalGroup}
         showQuestionGroupList={showQuestionGroupList}
-        setShowQuestionGroupList={setShowQuestionGroupList}
         setShowDialogMenu={setShowDialogMenu}
       />
     </>

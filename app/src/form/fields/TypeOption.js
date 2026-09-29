@@ -67,10 +67,7 @@ const TypeOption = ({
             return (
               <TouchableOpacity
                 key={opt.value}
-                style={[
-                  pillStyles.pill,
-                  isSelected && { backgroundColor: theme.buttonPrimary.bg },
-                ]}
+                style={[pillStyles.pill, isSelected && { backgroundColor: theme.buttonPrimary.bg }]}
                 onPress={() => {
                   if (onChange && !disabled) {
                     onChange(id, [opt.value]);

@@ -13,7 +13,6 @@ const FormNavigation = ({
   setActiveGroup,
   totalGroup,
   showQuestionGroupList,
-  setShowQuestionGroupList,
   setShowDialogMenu,
 }) => {
   const theme = useTheme();
@@ -175,16 +174,19 @@ const FormNavigation = ({
   const isOverviewStep = activeGroup === totalGroup - 1;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg.surfaceElevated3, borderTopColor: theme.border.listDivider }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: theme.bg.surfaceElevated3, borderTopColor: theme.border.listDivider },
+      ]}
+    >
       <TouchableOpacity
         style={styles.backButton}
         onPress={handleBack}
         disabled={showQuestionGroupList}
         testID="form-nav-btn-back"
       >
-        <Text style={[styles.backText, { color: theme.buttonPrimary.bg }]}>
-          {trans.buttonBack}
-        </Text>
+        <Text style={[styles.backText, { color: theme.buttonPrimary.bg }]}>{trans.buttonBack}</Text>
       </TouchableOpacity>
 
       {isOverviewStep ? (

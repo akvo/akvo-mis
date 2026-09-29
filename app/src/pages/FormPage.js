@@ -486,12 +486,12 @@ const FormPage = ({ navigation, route }) => {
           },
         ]}
       >
-        <Text style={[styles.formName, { color: theme.topNav.text }]}>
-          {route?.params?.name}
-        </Text>
+        <Text style={[styles.formName, { color: theme.topNav.text }]}>{route?.params?.name}</Text>
         {totalGroupCount > 0 && (
           <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
-            {`${trans.stepLabel || 'Step'} ${activeGroupIndex + 1} ${trans.ofLabel || 'of'} ${totalGroupCount}`}
+            {`${trans.stepLabel || 'Step'} ${activeGroupIndex + 1} ${
+              trans.ofLabel || 'of'
+            } ${totalGroupCount}`}
             {activeGroupLabel ? ` — ${activeGroupLabel}` : ''}
           </Text>
         )}
