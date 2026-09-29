@@ -196,6 +196,7 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": (
         "rest_framework_simplejwt.tokens.AccessToken",
         "api.v1.v1_mobile.authentication.MobileAssignmentToken",
+        "api.v1.v1_users.authentication.TenantInspectionToken",
     ),
 }
 # Database
