@@ -82,3 +82,57 @@ The exception is a deployment that deliberately pointed devices at a
 workspace's own address. Nothing in the app does this and the server cannot
 tell which devices were set up that way, so if that is how yours is
 configured, re-enrol those devices after a rename.
+
+## Inspecting a workspace
+
+**Inspect** on the workspaces list opens that workspace's own application,
+at its own address, in a read-only session. There is no separate viewer: what
+you see is the customer's app, with the customer's data, which is the point —
+a support case about a dashboard that will not load is answered by opening
+the dashboard that will not load.
+
+One click, no reason prompt. A typed justification on every support call
+would buy a free-text field nobody reads at the cost of friction on the most
+common action in the console.
+
+An orange bar across the top names the workspace, says **read only**, gives
+the time the session ends, and carries the two things you need from it: a
+workspace switcher and **Exit inspection**. Switching moves this tab straight
+to another workspace without going back to the console. Suspended and deleted
+workspaces are not offered and cannot be inspected — their addresses no longer
+resolve, so the link would lead nowhere.
+
+**Read only means the server refuses the write, not that the button is
+hidden.** Write controls are greyed out as a courtesy; the refusal happens
+server-side whether or not the browser tries. Two independent guards enforce
+it, so a page reached by an unusual route still cannot write.
+
+### What the session is, exactly
+
+While inspecting, you hold the authority of that workspace's owner, minus
+every write. That is more than any one of the customer's staff typically has,
+and it is not the same as *being* one of them: a bug that happens only to a
+particular user with a particular role may not reproduce for you. Seeing the
+app as a named user is a separate feature that does not exist yet.
+
+The session lasts twelve hours, but it does not depend on that. Every single
+request re-checks that you are still a platform admin, so **revoking an
+operator ends every inspection they have open, immediately** — including tabs
+left open on other machines. Suspending or deleting the workspace ends it too.
+
+Sessions are confined to one address each. The cookie the workspace sets is
+that workspace's alone and never reaches the console, so signing out of one
+does not sign you out of the other, and closing the tab does not end the
+console session.
+
+### The record it leaves
+
+Each inspection writes a row to `tenant_inspection` naming the operator, the
+workspace and the time. That table exists to carry the one-time hand-off
+code, not as an audit feature: no screen shows it, no endpoint reads it, and
+nothing in the console is built on it. The rows do stay, so "which of our
+staff opened this workspace" is answerable with a query — but treat that as
+a byproduct rather than a control.
+
+Customers are not notified when their workspace is inspected. Whether they
+should be is a commercial decision, not a technical one.
