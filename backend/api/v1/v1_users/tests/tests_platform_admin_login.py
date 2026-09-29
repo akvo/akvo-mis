@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.test import TestCase, override_settings
 
 from api.v1.v1_profile.tests.mixins import (
@@ -63,3 +65,43 @@ class PlatformAdminLoginTestCase(TestCase, TenantTestHelperMixin):
             LOGIN, self.operator_credentials(), HTTP_HOST="app.com"
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_the_session_says_the_signed_in_account_is_an_operator(self):
+        # The console's route guard is the only thing standing between a
+        # workspace account and the /admin tree, and it has nothing else
+        # to read: `is_superuser` is a workspace role (D-1) and a
+        # tenant-less `subdomain` is "" for reasons unrelated to being
+        # an operator. Without this field on the wire the guard can
+        # never pass, and the console redirects its own operators to
+        # the login page they just came from.
+        response = self.client.post(
+            LOGIN, self.operator_credentials(), HTTP_HOST="admin.app.com"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_platform_admin"])
+
+    def test_a_workspace_account_is_not_an_operator(self):
+        response = self.client.post(
+            LOGIN, self.workspace_credentials(), HTTP_HOST="acme.app.com"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_platform_admin"])
+
+    def test_a_forgotten_password_is_reset_on_the_console(self):
+        # Same reasoning as the activation link: everything past this
+        # URL is bound to a host, and an operator's host is the console.
+        # Sending them to the base domain hands them a link to the one
+        # origin that refuses to sign them in -- /login there redirects
+        # to find-workspace, so the reset can never be completed.
+        with mock.patch(
+            "api.v1.v1_users.views.send_email"
+        ) as send_email:
+            response = self.client.post(
+                "/api/v1/user/forgot-password",
+                {"email": "ops@akvo.org"},
+                content_type="application/json",
+                HTTP_HOST="admin.app.com",
+            )
+        self.assertEqual(response.status_code, 200)
+        url = send_email.call_args.kwargs["context"]["button_url"]
+        self.assertIn("//admin.app.com/login/", url)

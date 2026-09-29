@@ -1,0 +1,58 @@
+@import "../../variables";
+
+#admin-console {
+  // The app's body reserves $header-height for a fixed header and
+  // insets its content by the layout padding. The console hides that
+  // header and lays out its own chrome, so both would be paid for
+  // twice — a dead band above the console header and a doubled gutter
+  // beside it. Cancelled the same way #login does it.
+  margin-top: -($header-height + $padding-default);
+  margin-bottom: -$padding-default;
+  margin-left: -$layout-padding-small-screen;
+  margin-right: -$layout-padding-small-screen;
+
+  @media screen and (min-width: $screen-regular) {
+    margin-left: -$layout-padding;
+    margin-right: -$layout-padding;
+  }
+
+  min-height: 100vh;
+  background: $bg-page;
+
+  .admin-header {
+    height: $header-height;
+    background: $bg-header-light;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 0 $layout-padding-small-screen;
+
+    @media screen and (min-width: $screen-regular) {
+      padding: 0 $layout-padding;
+    }
+  }
+
+  .admin-brand {
+    font-weight: $font-weight-semi-bold;
+    font-size: 16px;
+  }
+
+  .admin-nav a {
+    color: $color-default;
+
+    &.admin-nav-active {
+      color: $blue;
+      font-weight: $font-weight-semi-bold;
+    }
+  }
+
+  .admin-body {
+    padding: $padding-default $layout-padding-small-screen;
+
+    @media screen and (min-width: $screen-regular) {
+      padding: $padding-default $layout-padding;
+    }
+  }
+
+  .admin-account {
+    color: $color-default;
+  }
+}

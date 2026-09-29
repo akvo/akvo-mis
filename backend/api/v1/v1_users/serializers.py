@@ -966,6 +966,11 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "configured",
             "subdomain",
+            # The console's route guard reads this and has nothing else
+            # to read: `is_superuser` is a workspace role (D-1), and a
+            # tenant-less account's `subdomain` is "" for reasons that
+            # have nothing to do with being an operator.
+            "is_platform_admin",
         ]
 
 
