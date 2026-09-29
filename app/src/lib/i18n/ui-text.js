@@ -216,7 +216,6 @@ const uiText = {
     autoSyncInProgress: 'Auto sync is in progress',
     connectToInternet: 'Connect to the internet to sync',
     loadMore: 'Load more',
-    updateApp: 'Update application',
     updateRequiredTitle: 'Update Required',
     checkingVersion: 'Checking for update',
     buttonUpdate: 'Update',
@@ -235,7 +234,7 @@ const uiText = {
     viewDetails: 'View details',
     monitoringForms: 'Monitoring Forms',
     aboutAppDescription:
-      'The Fiji Department of Water & Sewerage (DWS) DataPro is a comprehensive platform designed to enhance the management of water and sewerage services in Fiji.',
+      'Akvo MIS helps teams collect, sync and monitor field data, online or offline.',
     appVersionLabel: 'App Version',
     emptySubmissionMessageInfo: 'No data collected yet',
     emptySubmissionMessageAction: 'Click New Submission to begin',
@@ -259,6 +258,23 @@ const uiText = {
     registeredOn: 'Registered {date}',
     createdOn: 'Created {date}',
     monitoringCount: '{count} monitoring',
+    settingsApplication: 'Application',
+    settingsDataReset: 'Data reset',
+    settingsResetTitle: 'Reset (clear all data)',
+    settingsResetDesc: 'Erases every local user, form and datapoint — including unsynced work',
+    settingsSectionServer: 'Server',
+    settingsSectionSync: 'Synchronization',
+    settingsSectionLocation: 'Location',
+    settingsSectionPhotos: 'Photos',
+    settingsSensitiveNote:
+      'Treat this screen as sensitive. Anyone with your passcode can submit data as you, from any device.',
+    appearance: 'Appearance',
+    appearanceAuto: 'Auto',
+    appearanceLight: 'Light',
+    appearanceDark: 'Dark',
+    languageNote:
+      'Switching the language also changes question text when the form has a translation. Forms without one stay in their original language.',
+    checkAppUpdate: 'Check app update',
   },
   fr: {
     showDraftsOnlyLabel: 'Brouillons uniquement',
@@ -471,7 +487,6 @@ const uiText = {
     downloadingDatapointsText: 'Téléchargement des données...',
     autoSyncInProgress: 'La synchronisation automatique est en cours',
     loadMore: 'Charger plus',
-    updateApp: "Met à jour l'application",
     updateRequiredTitle: 'Mise à jour requise',
     checkingVersion: 'Vérification des mises à jour',
     buttonUpdate: 'Mise à jour',
@@ -491,7 +506,7 @@ const uiText = {
     monitoringForms: 'Formulaires de surveillance',
     about: 'À propos',
     aboutAppDescription:
-      "La plateforme Fiji Department of Water & Sewerage (DWS) DataPro est conçue pour améliorer la gestion des services d'eau et d'assainissement aux Fidji.",
+      'Akvo MIS aide les équipes à collecter, synchroniser et suivre les données de terrain, en ligne ou hors ligne.',
     appVersionLabel: 'Version de l’application',
     emptySubmissionMessageInfo: 'Aucune donnée collectée pour le moment',
     emptySubmissionMessageAction: 'Cliquez sur Nouvelle soumission pour commencer',
@@ -515,6 +530,24 @@ const uiText = {
     registeredOn: 'Enregistré le {date}',
     createdOn: 'Créé le {date}',
     monitoringCount: '{count} suivi(s)',
+    settingsApplication: 'Application',
+    settingsDataReset: 'Réinitialisation des données',
+    settingsResetTitle: 'Réinitialiser (effacer toutes les données)',
+    settingsResetDesc:
+      'Efface tous les utilisateurs, formulaires et points de données locaux — y compris le travail non synchronisé',
+    settingsSectionServer: 'Serveur',
+    settingsSectionSync: 'Synchronisation',
+    settingsSectionLocation: 'Localisation',
+    settingsSectionPhotos: 'Photos',
+    settingsSensitiveNote:
+      "Considérez cet écran comme sensible. Toute personne disposant de votre code d'accès peut soumettre des données en votre nom, depuis n'importe quel appareil.",
+    appearance: 'Apparence',
+    appearanceAuto: 'Automatique',
+    appearanceLight: 'Clair',
+    appearanceDark: 'Sombre',
+    languageNote:
+      "Changer la langue modifie aussi le texte des questions lorsque le formulaire est traduit. Les formulaires sans traduction restent dans leur langue d'origine.",
+    checkAppUpdate: 'Vérifier les mises à jour',
   },
 };
 

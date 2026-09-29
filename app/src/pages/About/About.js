@@ -1,9 +1,17 @@
 import React from 'react';
-import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
-import { Icon, Button } from '@rneui/themed';
-import { BaseLayout, ConfirmDialog } from '../../components';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { BaseLayout, ConfirmDialog, SettingRow, SettingSection } from '../../components';
 import { BuildParamsState, UIState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 import useVersionCheck from '../../hooks/use-version-check';
 
 const AboutHome = () => {
@@ -11,104 +19,100 @@ const AboutHome = () => {
   const isOnline = UIState.useState((s) => s.online);
   const { lang } = UIState.useState((s) => s);
   const trans = i18n.text(lang);
+  const theme = useTheme();
   const { visible, setVisible, checking, updateInfo, checkVersion, handleUpdate } =
     useVersionCheck();
+  const updateColor = isOnline ? theme.buttonGhost.color : theme.buttonGhost.colorDisabled;
 
   return (
     <BaseLayout title={trans.about} rightComponent={false}>
       <BaseLayout.Content>
-        <View>
-          {/* About App Info */}
-          <View style={styles.listItem}>
-            <View style={styles.listItemContent}>
-              <Text style={styles.listItemTitle}>{`${trans.about} ${apkName}`}</Text>
-              <Text style={styles.listItemSubtitle}>{trans.aboutAppDescription}</Text>
-            </View>
-          </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          <SettingSection>
+            <SettingRow
+              label={`${trans.about} ${apkName}`}
+              description={trans.aboutAppDescription}
+              control="none"
+            />
+            <SettingRow label={trans.appVersionLabel} control="value" value={appVersion} />
+          </SettingSection>
+        </ScrollView>
 
-          {/* App Version */}
-          <View style={styles.listItem}>
-            <View style={styles.listItemContent}>
-              <Text style={styles.listItemTitle}>{trans.appVersionLabel}</Text>
-              <Text style={styles.listItemSubtitle}>{appVersion}</Text>
-            </View>
-          </View>
-
-          {/* Update button */}
-          <Button
-            title={trans.updateApp}
+        {/* Figma "Check app update" (6499:17856): ghost button pinned to the bottom */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.updateButton}
             onPress={() => checkVersion()}
-            icon={<Icon name="system-update" type="materialicon" color="#fff" />}
-            buttonStyle={styles.updateButton}
-            titleStyle={styles.updateButtonText}
-            testID="update-button"
             disabled={!isOnline}
-          />
-
-          <ConfirmDialog
-            visible={visible}
-            title={checking ? trans.checkingVersion : null}
-            message={checking ? null : updateInfo.text}
-            onClose={() => setVisible(false)}
-            actions={
-              checking
-                ? []
-                : [
-                    ...(updateInfo.status === 200
-                      ? [
-                          {
-                            label: trans.buttonUpdate,
-                            type: 'primary',
-                            onPress: handleUpdate,
-                          },
-                        ]
-                      : []),
-                    {
-                      label: trans.buttonCancel,
-                      type: 'secondary',
-                      onPress: () => setVisible(false),
-                    },
-                  ]
-            }
+            testID="update-button"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !isOnline }}
           >
-            {checking && <ActivityIndicator style={{ marginVertical: 16 }} />}
-          </ConfirmDialog>
+            <Icon name="refresh" size={24} color={updateColor} />
+            <Text style={[styles.updateButtonText, { color: updateColor }]}>
+              {trans.checkAppUpdate}
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        <ConfirmDialog
+          visible={visible}
+          title={checking ? trans.checkingVersion : null}
+          message={checking ? null : updateInfo.text}
+          onClose={() => setVisible(false)}
+          actions={
+            checking
+              ? []
+              : [
+                  ...(updateInfo.status === 200
+                    ? [
+                        {
+                          label: trans.buttonUpdate,
+                          type: 'primary',
+                          onPress: handleUpdate,
+                        },
+                      ]
+                    : []),
+                  {
+                    label: trans.buttonCancel,
+                    type: 'secondary',
+                    onPress: () => setVisible(false),
+                  },
+                ]
+          }
+        >
+          {checking && <ActivityIndicator style={styles.loading} color={theme.buttonPrimary.bg} />}
+        </ConfirmDialog>
       </BaseLayout.Content>
     </BaseLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  listItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    paddingVertical: 12,
+  content: {
+    paddingTop: 8,
+  },
+  bottomBar: {
+    paddingTop: 8,
+    paddingBottom: 16,
     paddingHorizontal: 16,
-  },
-  listItemContent: {
-    flexDirection: 'column',
-  },
-  listItemTitle: {
-    fontWeight: 'bold',
-  },
-  listItemSubtitle: {
-    color: '#666',
-    paddingTop: 14,
   },
   updateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0434FF',
-    borderRadius: 24,
-    marginVertical: 16,
-    marginHorizontal: 40,
-    paddingVertical: 12,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
   },
   updateButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginRight: 10,
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  loading: {
+    marginVertical: 16,
   },
 });
 
