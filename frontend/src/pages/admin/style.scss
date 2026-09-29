@@ -64,4 +64,9 @@
   .admin-disabled {
     color: $color-disabled;
   }
+
+  .admin-tile-value {
+    font-size: 26px;
+    font-weight: $font-weight-semi-bold;
+  }
 }

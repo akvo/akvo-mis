@@ -66,6 +66,47 @@ def console_tenants():
     )
 
 
+def with_counts(queryset):
+    """How much is in each workspace, annotated onto the rows.
+
+    Every console endpoint that hands back a workspace uses this, not
+    just the ones that list. The detail page assigns each response
+    straight over the workspace it is displaying, so a reply without the
+    counts does not merely omit them -- it blanks five stat tiles that
+    were on screen a moment ago, beside a Delete button. Suspending a
+    workspace and being told it holds no data is the opposite of what
+    this console is for.
+
+    Every Count carries distinct=True because the joins multiply:
+    counting forms and users in the same query without it returns
+    forms x users for both. The soft-delete filters are part of the
+    count rather than applied afterwards, so a deleted datapoint is
+    never counted and never has to be subtracted.
+
+    The `_count` suffixes are not cosmetic -- Django refuses an
+    annotation that shadows a field or reverse accessor, and three of
+    these five are reverse accessors on Tenant. The serializer sources
+    the plain wire names from these.
+    """
+    return queryset.annotate(
+        users_count=Count(
+            "users", distinct=True, filter=Q(users__deleted_at=None)
+        ),
+        forms_count=Count(
+            "forms", distinct=True, filter=Q(forms__deleted_at=None)
+        ),
+        dashboards_count=Count(
+            "dashboards", distinct=True,
+            filter=Q(dashboards__deleted_at=None),
+        ),
+        datapoints_count=Count(
+            "forms__form_form_data", distinct=True,
+            filter=Q(forms__form_form_data__deleted_at=None),
+        ),
+        devices_count=Count("users__mobile_assignments", distinct=True),
+    )
+
+
 @extend_schema(responses={200: TenantListSerializer(many=True)},
                tags=CONSOLE_TAG, summary="List every workspace")
 @api_view(["GET"])
@@ -103,12 +144,15 @@ def list_tenants(request, version):
     )
 
 
-@extend_schema(responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+@extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="One workspace, or soft-delete it")
 @api_view(["GET", "DELETE"])
 @permission_classes([IsPlatformAdmin])
 def tenant_detail(request, version, tenant_id):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    # Annotated, because the console's detail page is six stat tiles
+    # over this response. A DELETE answers with the same shape so the
+    # page can render what it just changed without a second request.
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     if request.method == "DELETE":
         # Soft only. Every tenant FK is PROTECT, so a hard delete would
         # raise -- and making it work means flipping those to CASCADE
@@ -117,11 +161,11 @@ def tenant_detail(request, version, tenant_id):
         tenant.deleted_at = timezone.now()
         tenant.save(update_fields=["deleted_at"])
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
-@extend_schema(responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+@extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Suspend a workspace")
 @api_view(["POST"])
 @permission_classes([IsPlatformAdmin])
@@ -129,7 +173,7 @@ def deactivate_tenant(request, version, tenant_id):
     return _set_active(tenant_id, False)
 
 
-@extend_schema(responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+@extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Restore a suspended workspace")
 @api_view(["POST"])
 @permission_classes([IsPlatformAdmin])
@@ -138,21 +182,21 @@ def activate_tenant(request, version, tenant_id):
 
 
 def _set_active(tenant_id, active):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     tenant.is_active = active
     tenant.save(update_fields=["is_active"])
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
 @extend_schema(request=TenantFeaturesSerializer,
-               responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+               responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Set a workspace's entitlements")
 @api_view(["PUT"])
 @permission_classes([IsPlatformAdmin])
 def set_tenant_features(request, version, tenant_id):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     serializer = TenantFeaturesSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -173,7 +217,7 @@ def set_tenant_features(request, version, tenant_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
@@ -190,27 +234,7 @@ def tenants_summary(request, version):
     count rather than applied afterwards, so a deleted datapoint is
     never counted and never has to be subtracted.
     """
-    queryset = console_tenants().annotate(
-        # `_count` suffixes because Django refuses an annotation that
-        # shadows a field or reverse accessor, and three of these five
-        # are reverse accessors on Tenant. The serializer sources the
-        # plain names from these.
-        users_count=Count(
-            "users", distinct=True, filter=Q(users__deleted_at=None)
-        ),
-        forms_count=Count(
-            "forms", distinct=True, filter=Q(forms__deleted_at=None)
-        ),
-        dashboards_count=Count(
-            "dashboards", distinct=True,
-            filter=Q(dashboards__deleted_at=None),
-        ),
-        datapoints_count=Count(
-            "forms__form_form_data", distinct=True,
-            filter=Q(forms__form_form_data__deleted_at=None),
-        ),
-        devices_count=Count("users__mobile_assignments", distinct=True),
-    )
+    queryset = with_counts(console_tenants())
     return Response(
         TenantSummarySerializer(queryset, many=True).data,
         status=status.HTTP_200_OK,
@@ -256,12 +280,12 @@ def tenant_rename_impact(request, version, tenant_id):
 
 
 @extend_schema(request=TenantRenameSerializer,
-               responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+               responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Change a workspace's address")
 @api_view(["POST"])
 @permission_classes([IsPlatformAdmin])
 def rename_tenant(request, version, tenant_id):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     serializer = TenantRenameSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -281,7 +305,7 @@ def rename_tenant(request, version, tenant_id):
         )
     _move_master_data(previous, tenant)
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
