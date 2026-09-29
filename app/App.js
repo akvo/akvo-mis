@@ -11,7 +11,7 @@ import { SENTRY_DSN, SENTRY_ENV } from '@env';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import Navigation, { reactNavigationIntegration } from './src/navigation';
-import { UIState, AuthState, UserState, BuildParamsState } from './src/store';
+import { UIState, AuthState, UserState, BuildParamsState, FormState } from './src/store';
 import { crudUsers, crudConfig, crudDataPoints } from './src/database/crud';
 import { api } from './src/lib';
 import { StatusBanner, SyncService } from './src/components';
@@ -179,6 +179,16 @@ const handleInitConfig = async (db) => {
     UserState.update((s) => {
       s.syncWifiOnly = configExist?.syncWifiOnly;
     });
+
+    // Saved by Settings > Language (APP-487); drives the interface and translated questions.
+    if (configExist.lang) {
+      UIState.update((s) => {
+        s.lang = configExist.lang;
+      });
+      FormState.update((s) => {
+        s.lang = configExist.lang;
+      });
+    }
   }
 };
 

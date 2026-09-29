@@ -24,6 +24,7 @@ import {
   UsersPage,
   FormDataDetailsPage,
   AddNewForm,
+  LanguagePage,
   AboutPage,
   SubmissionPage,
   FormOptionsPage,
@@ -217,6 +218,7 @@ const RootNavigator = () => {
           <Stack.Screen name="Users" component={UsersPage} />
           <Stack.Screen name="FormDataDetails" component={FormDataDetailsPage} />
           <Stack.Screen name="AddNewForm" component={AddNewForm} />
+          <Stack.Screen name="Language" component={LanguagePage} />
           <Stack.Screen name="Submission" component={SubmissionPage} />
           <Stack.Screen name="FormOptions" component={FormOptionsPage} />
         </>
