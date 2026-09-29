@@ -56,6 +56,17 @@ export const workspaceUrl = (subdomain) => {
   return `${window.location.protocol}//${subdomain}.${baseDomain()}${port}`;
 };
 
+// A page on the platform console. Built like workspaceUrl -- the port
+// comes from the address the browser is already on, so a local
+// development port survives the navigation -- but the console lives on
+// a fixed `admin.` host rather than a workspace's own. Not
+// baseDomainUrl: the main site is where people sign up, and it has no
+// console on it.
+export const adminUrl = (path = "") => {
+  const port = window.location.port ? `:${window.location.port}` : "";
+  return `${window.location.protocol}//admin.${baseDomain()}${port}${path}`;
+};
+
 // A page on the main site. Every way out of a workspace that does not
 // exist leads here, and it is a different origin, so these are real
 // navigations rather than router links.

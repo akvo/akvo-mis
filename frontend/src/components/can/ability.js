@@ -8,6 +8,17 @@ const defineAbilityFor = (user) => {
     cannot("manage", "all");
     return build();
   }
+  // A read-only cross-workspace session. Checked before is_superuser,
+  // which the backend sets on an inspecting operator so that the
+  // workspace's own pages render at all.
+  //
+  // Presentation only: the server refuses these writes whether or not
+  // the browser attempts them. What this buys is an operator who is not
+  // offered buttons that will 403.
+  if (user?.is_inspecting) {
+    can("read", "all");
+    return build();
+  }
   if (user?.is_superuser) {
     can("manage", "all");
   } else if (user) {

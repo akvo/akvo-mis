@@ -55,3 +55,4 @@ export { default as DashboardList } from "./dashboards/DashboardList";
 export { default as DashboardBuilder } from "./dashboards/DashboardBuilder";
 export { default as DashboardViewer } from "./dashboards/DashboardViewer";
 export { AdminLayout, Tenants, TenantDetail, Operators } from "./admin";
+export { Inspect } from "./inspect";
