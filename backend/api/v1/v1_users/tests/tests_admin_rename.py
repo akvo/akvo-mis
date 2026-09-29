@@ -7,7 +7,10 @@ from django.test import TestCase, override_settings
 
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
-from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
+from api.v1.v1_profile.tests.mixins import (
+    TenantTestHelperMixin,
+    set_embedding,
+)
 from api.v1.v1_users.models import SystemUser
 from utils.custom_generator import sqlite_path
 from utils.tenant_host import resolve_tenant_from_host
@@ -58,13 +61,18 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
             **self.auth,
         )
 
-    def test_impact_counts_this_workspace(self):
-        response = self.client.get(
-            f"{self.base()}/rename-impact", HTTP_HOST=ADMIN_HOST,
-            **self.auth,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["mobile_devices"], 1)
+    def test_no_mobile_device_warning(self):
+        """Devices are not counted, because a rename does not reach them.
+
+        The app is configured against the deployment's own address, not
+        a workspace's: `MobileFormSerializer.get_url` hands back
+        `/form/<id>` rather than an absolute host, nothing under
+        `v1_mobile` builds a tenant URL, and the shipped build params
+        document `serverURL` as `https://<your-domain>/api/v1/device`.
+        `test_a_device_on_the_base_domain_survives_a_rename` is the
+        proof; this only pins that no number is offered.
+        """
+        self.assertNotIn("mobile_devices", self.impact())
 
     def test_rename_moves_the_address(self):
         self.assertEqual(self.rename("moh-hss").status_code, 200)
@@ -109,3 +117,126 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
             self.assertEqual(self.rename("moh-hss").status_code, 200)
         self.acme.tenant.refresh_from_db()
         self.assertEqual(self.acme.tenant.subdomain, "moh-hss")
+
+    def dashboard(self, name, kind, public=False, snippet=None):
+        from api.v1.v1_forms.constants import FormStatus
+        from api.v1.v1_forms.models import Forms
+        from api.v1.v1_visualization.constants import (
+            DashboardKind, DashboardStatus,
+        )
+        from api.v1.v1_visualization.models import Dashboard
+        form = Forms.objects.create(
+            name=f"{name}-form", tenant=self.acme.tenant,
+            status=FormStatus.published,
+        )
+        return Dashboard.objects.create(
+            tenant=self.acme.tenant, name=name, slug=name, kind=kind,
+            root_form=form if kind == DashboardKind.widgets else None,
+            embed_snippet=snippet,
+            status=DashboardStatus.published, is_public=public,
+            published_config={"embed_snippet": snippet} if snippet else {},
+        )
+
+    def impact(self):
+        response = self.client.get(
+            f"{self.base()}/rename-impact", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_dashboard_counts_are_disjoint(self):
+        # Every published dashboard used to be counted once as a link
+        # and, if it carried a snippet, a second time as an embed -- so
+        # an operator reading the dialog was told more would break than
+        # exists. The two counts now partition the published set.
+        from api.v1.v1_visualization.constants import DashboardKind
+        set_embedding(self.acme.tenant)
+        self.dashboard("internal-a", DashboardKind.widgets)
+        self.dashboard("internal-b", DashboardKind.widgets)
+        self.dashboard("shared", DashboardKind.widgets, public=True)
+        self.dashboard(
+            "report", DashboardKind.embed, snippet="<iframe src='x'>"
+        )
+        impact = self.impact()
+        self.assertEqual(impact["published_dashboards"], 3)
+        self.assertEqual(impact["public_dashboards"], 1)
+
+    def test_embedded_dashboards_are_not_warned_about(self):
+        # The spec asked for this to be confirmed rather than assumed,
+        # and it survives: the embed document is served from EMBED_HOST
+        # under a signed token carrying a dashboard id, so nothing in
+        # its URL is the workspace's address. Warning about it told an
+        # operator that a rename breaks something a rename does not
+        # touch.
+        from api.v1.v1_visualization.constants import DashboardKind
+        from api.v1.v1_visualization.embed_views import embed_url_for
+        set_embedding(self.acme.tenant)
+        board = self.dashboard(
+            "report", DashboardKind.embed, snippet="<iframe src='x'>"
+        )
+        self.assertNotIn("embedded_dashboards", self.impact())
+        with override_settings(EMBED_HOST="https://embed.example.com"):
+            before = embed_url_for(board)
+            self.assertEqual(self.rename("moh-hss").status_code, 200)
+            board.refresh_from_db()
+            self.assertEqual(embed_url_for(board), before)
+
+    def test_a_device_on_the_base_domain_survives_a_rename(self):
+        """The reason there is no device warning, asserted end to end.
+
+        A device syncs against the base domain, where `request.tenant`
+        is None and the middleware's host check is skipped, so what
+        partitions the reply is the token's assignment -- and a rename
+        does not touch that. The dialog used to say every enrolled
+        device would stop syncing and need re-enrolling by hand, which
+        described field work that does not exist.
+        """
+        from api.v1.v1_mobile.authentication import MobileAssignmentToken
+        assignment = MobileAssignment.objects.filter(
+            user=self.acme.admin
+        ).first()
+        auth = {
+            "HTTP_AUTHORIZATION": "Bearer {0}".format(
+                MobileAssignmentToken.for_assignment(assignment)
+            )
+        }
+        url = "/api/v1/device/datapoint-list"
+        self.assertEqual(
+            self.client.get(url, HTTP_HOST="app.com", **auth).status_code,
+            200,
+        )
+        self.assertEqual(self.rename("moh-hss").status_code, 200)
+        self.assertEqual(
+            self.client.get(url, HTTP_HOST="app.com", **auth).status_code,
+            200,
+        )
+
+    def test_a_device_still_sees_only_its_own_workspace(self):
+        """Dropping the warning must not quietly drop the partition."""
+        from api.v1.v1_forms.constants import FormStatus
+        from api.v1.v1_forms.models import Forms
+        from api.v1.v1_mobile.authentication import MobileAssignmentToken
+        other = self.create_tenant("beta", ["Country"], "Uganda")
+        theirs = Forms.objects.create(
+            name="theirs", tenant=other.tenant, status=FormStatus.published
+        )
+        mine = Forms.objects.create(
+            name="mine", tenant=self.acme.tenant,
+            status=FormStatus.published,
+        )
+        assignment = MobileAssignment.objects.filter(
+            user=self.acme.admin
+        ).first()
+        assignment.forms.add(mine)
+        auth = {
+            "HTTP_AUTHORIZATION": "Bearer {0}".format(
+                MobileAssignmentToken.for_assignment(assignment)
+            )
+        }
+        for form, expected in ((mine, 200), (theirs, 404)):
+            response = self.client.get(
+                f"/api/v1/device/form/{form.id}",
+                HTTP_HOST="app.com", **auth,
+            )
+            self.assertEqual(response.status_code, expected)

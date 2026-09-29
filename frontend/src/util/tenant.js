@@ -26,6 +26,20 @@ export const onBaseDomainHost = () => {
   return host === base || host === `www.${base}`;
 };
 
+// Is the browser on the platform console?
+//
+// Note the default differs from onBaseDomainHost deliberately. With no
+// base domain that helper answers true, because a single-host install
+// *is* the base domain — but a single-host install is one workspace and
+// has no console, so this one answers false.
+export const onAdminHost = () => {
+  const base = baseDomain().toLowerCase();
+  if (!base) {
+    return false;
+  }
+  return window.location.hostname.toLowerCase() === `admin.${base}`;
+};
+
 // The main site's host. The port comes from the address the browser is
 // already on — local development runs on one and production does not —
 // while the domain comes from the configuration, because the host we are

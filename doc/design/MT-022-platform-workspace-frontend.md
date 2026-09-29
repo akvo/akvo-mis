@@ -118,12 +118,40 @@ Opens on `GET /admin/tenants/:id/rename-impact` and renders the counts as
 statements of fact:
 
 > **The old address stops working immediately**
-> - **23 enrolled mobile devices** will stop syncing and must each be
->   reconfigured by hand in Settings.
-> - **3 published dashboard links** will break, including any bookmarked or
->   printed.
-> - **1 embedded dashboard** will stop loading on the external sites hosting
->   it.
+> - **3 dashboard links** will break for anyone in the workspace who has one
+>   bookmarked.
+> - **2 publicly shared dashboards** will stop loading for readers outside
+>   the workspace, including any site that has framed one.
+
+**There is deliberately no mobile-device bullet either**, and dropping it
+mattered most: it was the dialog's loudest line and it described field work
+that does not exist. The app is configured against the deployment's own
+address, never a workspace's — `MobileFormSerializer.get_url` returns
+`/form/<id>` rather than an absolute host, nothing under `v1_mobile` builds a
+tenant URL, and the shipped build params document `serverURL` as
+`https://<your-domain>/api/v1/device`. A device syncing on the base domain
+reaches a request whose `tenant` is None, so the middleware's host check is
+skipped and the reply is partitioned by the token's assignment, which a rename
+does not touch. Confirmed end to end in `tests_admin_rename`, including that
+the device still cannot see another workspace's form.
+
+The one case this cannot see is a deployment that chose to point devices at a
+workspace's own address. Nothing in the app does, and the server cannot know
+which devices were configured that way, so it is a caveat in
+`doc/notes/platform-console.md` rather than a number nobody can compute.
+
+The two dashboard counts partition the published set rather than overlapping,
+and they are reported apart rather than summed because the audiences differ: a
+colleague can be told the new address, a reader of a public link cannot.
+
+**There is deliberately no embedded-dashboard bullet.** An earlier draft had
+one — "*1 embedded dashboard will stop loading on the external sites hosting
+it*" — and it was wrong in both directions. An embedded dashboard is one whose
+*content* comes from Power BI or Tableau; nothing external hosts it. And a
+rename does not break it: the embed document is served from `EMBED_HOST` under
+a signed token carrying a dashboard id, so its URL survives untouched. Naming
+a consequence that does not happen spends exactly the credibility the real
+counts exist to buy.
 
 The submit button stays disabled until the operator types the *current*
 subdomain. A warning that says "this may break things" gets clicked through;

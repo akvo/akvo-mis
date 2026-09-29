@@ -57,6 +57,10 @@ import {
   DashboardList,
   DashboardBuilder,
   DashboardViewer,
+  AdminLayout,
+  Tenants,
+  TenantDetail,
+  Operators,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -68,6 +72,7 @@ import { fetchLevels } from "./util/level";
 import {
   baseDomain,
   fetchTenant,
+  onAdminHost,
   onBaseDomainHost,
   workspaceUrl,
 } from "./util/tenant";
@@ -120,6 +125,40 @@ const RouteList = () => {
   // — so the sign-up form rendered there and offered to create
   // `<name>.sleman.app.com`.
   const onBaseDomain = Boolean(baseDomain()) && onBaseDomainHost();
+
+  // The console is a different product on a different host. Branching
+  // before tenantMissing matters: the console resolves to no tenant by
+  // construction, so the workspace-not-found page would claim it.
+  //
+  // Everything but /login sits under AdminLayout, which is where the
+  // operator check lives. The catch-all sends an unknown console path
+  // to the tenants list rather than to the workspace routes below,
+  // none of which can work without a tenant.
+  if (onAdminHost()) {
+    return (
+      <Routes>
+        {/* The pre-authentication surface, and all of it. An operator
+            reaches each of these holding no session: from an invitation
+            email, from a password-reset email, or by typing the
+            address. MT-021 mails both links at this host, so a tree
+            that served only /login and /admin would make the invite
+            button on the operators page a button that cannot work —
+            an invited account is inactive with an unusable password
+            until /activate runs. */}
+        <Route exact path="/login" element={<Login />} />
+        <Route exact path="/login/:invitationId" element={<Login />} />
+        <Route exact path="/forgot-password" element={<Login />} />
+        <Route exact path="/activate/:token" element={<Activate />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="tenants" replace />} />
+          <Route path="tenants" element={<Tenants />} />
+          <Route path="tenants/:id" element={<TenantDetail />} />
+          <Route path="operators" element={<Operators />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
+      </Routes>
+    );
+  }
 
   // Not a route: on a host the deployment does not serve, every call the
   // app would make is refused, so there is no page here to be on.
@@ -590,7 +629,11 @@ const App = () => {
   return (
     <AbilityContext.Provider value={ability(authUser)}>
       <Layout>
-        <Layout.Header />
+        {/* The app header belongs to a workspace: it fetches that
+            workspace's published dashboards and its account menu links
+            to /control-center. Neither exists on the console, which
+            brings its own header in AdminLayout. */}
+        {!onAdminHost() && <Layout.Header />}
         <Layout.Body>
           {(loading || formsLoading) && !isHome && !isPublic ? (
             <PageLoader message="Initializing. Please wait.." />
@@ -598,7 +641,11 @@ const App = () => {
             <RouteList />
           )}
         </Layout.Body>
-        <ChatbotWidget />
+        {/* A workspace feature: it posts to a tenant-scoped endpoint
+            and labels itself with the page it is on, so on the console
+            it offers an assistant that can only fail. Same reason the
+            header above is suppressed. */}
+        {!onAdminHost() && <ChatbotWidget />}
       </Layout>
     </AbilityContext.Provider>
   );

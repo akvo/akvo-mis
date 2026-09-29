@@ -4,6 +4,7 @@ import {
   baseDomainHost,
   baseDomainUrl,
   fetchTenant,
+  onAdminHost,
   onBaseDomainHost,
   workspaceUrl,
 } from "../tenant";
@@ -148,5 +149,31 @@ describe("tenant util", () => {
     axios.mockRejectedValue(new Error("network"));
     await fetchTenant();
     expect(store.getRawState().tenantMissing).toBe(false);
+  });
+
+  describe("onAdminHost", () => {
+    it("is true on the console host", () => {
+      withLocation({ hostname: "admin.app.com" }, () => {
+        expect(onAdminHost()).toBe(true);
+      });
+    });
+
+    it("is false on a workspace and on the base domain", () => {
+      withLocation({ hostname: "acme.app.com" }, () => {
+        expect(onAdminHost()).toBe(false);
+      });
+      withLocation({ hostname: "app.com" }, () => {
+        expect(onAdminHost()).toBe(false);
+      });
+    });
+
+    it("is false with no base domain", () => {
+      // Unlike onBaseDomainHost, which treats a single-host install as
+      // the base domain, a single-host install has no console at all.
+      window.appConfig = { ...window.appConfig, baseDomain: "" };
+      withLocation({ hostname: "admin.app.com" }, () => {
+        expect(onAdminHost()).toBe(false);
+      });
+    });
   });
 });

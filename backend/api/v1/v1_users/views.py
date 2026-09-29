@@ -1084,7 +1084,18 @@ def forgot_password(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     user: SystemUser = serializer.validated_data.get("email")
-    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
+    # Same host rule as send_activation_email, for the same reason: what
+    # waits at the end of this link is a session, and a session is only
+    # valid on the host that issued it. An operator has no workspace but
+    # does have a host, and the base domain refuses to sign anyone in --
+    # /login there redirects to find-workspace, so a reset sent to it
+    # can never be completed.
+    base = (
+        console_web_url()
+        if user.is_platform_admin and user.tenant_id is None
+        else tenant_web_url(user.tenant)
+    )
+    url = f"{base}/login/{signing.dumps(user.pk)}"
     data = {"button_url": url, "send_to": [user.email]}
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(

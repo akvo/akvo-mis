@@ -90,3 +90,51 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
         before = self.query_count()
         self.create_tenant("gamma", ["Country", "D"], "Tanzania")
         self.assertEqual(self.query_count(), before)
+
+    def counted(self, response):
+        """The five numbers the console's stat tiles are made of."""
+        body = response.json()
+        self.assertEqual(response.status_code, 200)
+        return {key: body.get(key) for key in (
+            "users", "forms", "dashboards", "datapoints", "devices",
+        )}
+
+    def test_every_mutation_answers_with_the_counts_intact(self):
+        # The console assigns each of these responses straight over the
+        # workspace it is displaying, so a body without the counts does
+        # not merely omit them -- it blanks five stat tiles that were on
+        # screen a moment ago, next to a Delete button. One endpoint
+        # carrying them is not enough; every path that returns a
+        # workspace has to.
+        tenant_id = self.acme.tenant.id
+        base = f"/api/v1/admin/tenants/{tenant_id}"
+        # The GET is the baseline and is itself the assertion that the
+        # detail endpoint carries the counts at all: served from the
+        # plain list serializer it renders every tile as zero, and no
+        # frontend test catches that, because the frontend mocks the
+        # shape it expects rather than the shape the endpoint sends.
+        expected = self.counted(
+            self.client.get(base, HTTP_HOST=ADMIN_HOST, **self.auth)
+        )
+        self.assertEqual(
+            expected,
+            {"users": 1, "forms": 2, "dashboards": 0,
+             "datapoints": 3, "devices": 1},
+        )
+
+        mutations = [
+            ("put", f"{base}/features", {"embedded_dashboard": True}),
+            ("post", f"{base}/deactivate", None),
+            ("post", f"{base}/activate", None),
+            ("post", f"{base}/rename", {"subdomain": "acme-renamed"}),
+        ]
+        for method, url, payload in mutations:
+            with self.subTest(url=url):
+                call = getattr(self.client, method)
+                response = (
+                    call(url, payload, content_type="application/json",
+                         HTTP_HOST=ADMIN_HOST, **self.auth)
+                    if payload is not None
+                    else call(url, HTTP_HOST=ADMIN_HOST, **self.auth)
+                )
+                self.assertEqual(self.counted(response), expected)

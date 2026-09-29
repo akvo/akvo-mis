@@ -22,7 +22,6 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.admin_serializers import (
     TENANT_STATES,
@@ -42,7 +41,6 @@ from api.v1.v1_users.views import send_activation_email
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_generator import sqlite_path
 from utils.custom_permissions import IsPlatformAdmin
-from utils.tenant_host import tenant_may_embed
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +61,47 @@ def console_tenants():
         Tenant.objects.all()
         .prefetch_related("administrations")
         .order_by("subdomain")
+    )
+
+
+def with_counts(queryset):
+    """How much is in each workspace, annotated onto the rows.
+
+    Every console endpoint that hands back a workspace uses this, not
+    just the ones that list. The detail page assigns each response
+    straight over the workspace it is displaying, so a reply without the
+    counts does not merely omit them -- it blanks five stat tiles that
+    were on screen a moment ago, beside a Delete button. Suspending a
+    workspace and being told it holds no data is the opposite of what
+    this console is for.
+
+    Every Count carries distinct=True because the joins multiply:
+    counting forms and users in the same query without it returns
+    forms x users for both. The soft-delete filters are part of the
+    count rather than applied afterwards, so a deleted datapoint is
+    never counted and never has to be subtracted.
+
+    The `_count` suffixes are not cosmetic -- Django refuses an
+    annotation that shadows a field or reverse accessor, and three of
+    these five are reverse accessors on Tenant. The serializer sources
+    the plain wire names from these.
+    """
+    return queryset.annotate(
+        users_count=Count(
+            "users", distinct=True, filter=Q(users__deleted_at=None)
+        ),
+        forms_count=Count(
+            "forms", distinct=True, filter=Q(forms__deleted_at=None)
+        ),
+        dashboards_count=Count(
+            "dashboards", distinct=True,
+            filter=Q(dashboards__deleted_at=None),
+        ),
+        datapoints_count=Count(
+            "forms__form_form_data", distinct=True,
+            filter=Q(forms__form_form_data__deleted_at=None),
+        ),
+        devices_count=Count("users__mobile_assignments", distinct=True),
     )
 
 
@@ -103,12 +142,15 @@ def list_tenants(request, version):
     )
 
 
-@extend_schema(responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+@extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="One workspace, or soft-delete it")
 @api_view(["GET", "DELETE"])
 @permission_classes([IsPlatformAdmin])
 def tenant_detail(request, version, tenant_id):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    # Annotated, because the console's detail page is six stat tiles
+    # over this response. A DELETE answers with the same shape so the
+    # page can render what it just changed without a second request.
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     if request.method == "DELETE":
         # Soft only. Every tenant FK is PROTECT, so a hard delete would
         # raise -- and making it work means flipping those to CASCADE
@@ -117,11 +159,11 @@ def tenant_detail(request, version, tenant_id):
         tenant.deleted_at = timezone.now()
         tenant.save(update_fields=["deleted_at"])
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
-@extend_schema(responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+@extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Suspend a workspace")
 @api_view(["POST"])
 @permission_classes([IsPlatformAdmin])
@@ -129,7 +171,7 @@ def deactivate_tenant(request, version, tenant_id):
     return _set_active(tenant_id, False)
 
 
-@extend_schema(responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+@extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Restore a suspended workspace")
 @api_view(["POST"])
 @permission_classes([IsPlatformAdmin])
@@ -138,21 +180,21 @@ def activate_tenant(request, version, tenant_id):
 
 
 def _set_active(tenant_id, active):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     tenant.is_active = active
     tenant.save(update_fields=["is_active"])
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
 @extend_schema(request=TenantFeaturesSerializer,
-               responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+               responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Set a workspace's entitlements")
 @api_view(["PUT"])
 @permission_classes([IsPlatformAdmin])
 def set_tenant_features(request, version, tenant_id):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     serializer = TenantFeaturesSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -173,7 +215,7 @@ def set_tenant_features(request, version, tenant_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 
@@ -190,27 +232,7 @@ def tenants_summary(request, version):
     count rather than applied afterwards, so a deleted datapoint is
     never counted and never has to be subtracted.
     """
-    queryset = console_tenants().annotate(
-        # `_count` suffixes because Django refuses an annotation that
-        # shadows a field or reverse accessor, and three of these five
-        # are reverse accessors on Tenant. The serializer sources the
-        # plain names from these.
-        users_count=Count(
-            "users", distinct=True, filter=Q(users__deleted_at=None)
-        ),
-        forms_count=Count(
-            "forms", distinct=True, filter=Q(forms__deleted_at=None)
-        ),
-        dashboards_count=Count(
-            "dashboards", distinct=True,
-            filter=Q(dashboards__deleted_at=None),
-        ),
-        datapoints_count=Count(
-            "forms__form_form_data", distinct=True,
-            filter=Q(forms__form_form_data__deleted_at=None),
-        ),
-        devices_count=Count("users__mobile_assignments", distinct=True),
-    )
+    queryset = with_counts(console_tenants())
     return Response(
         TenantSummarySerializer(queryset, many=True).data,
         status=status.HTTP_200_OK,
@@ -224,25 +246,46 @@ def rename_impact(tenant):
     dialog that names 23 devices is not clicked through the way a
     generic warning is.
     """
+    # No mobile-device count either, and for a sharper reason than the
+    # embeds below: the app is configured against the deployment's own
+    # address, not a workspace's. `MobileFormSerializer.get_url` hands
+    # devices `/form/<id>` rather than an absolute host, nothing under
+    # `v1_mobile` builds a tenant URL, and the shipped build params
+    # document `serverURL` as `https://<your-domain>/api/v1/device`. A
+    # device syncing against the base domain reaches a request whose
+    # `tenant` is None, so the middleware's host check is skipped and
+    # what partitions the reply is the token's assignment -- which a
+    # rename does not touch. The dialog used to say every enrolled
+    # device would stop syncing and need re-enrolling by hand, the
+    # most alarming line it had, describing field work that does not
+    # exist. See `test_a_device_on_the_base_domain_survives_a_rename`.
+    #
+    # No embedded-dashboard count, and that absence is a finding rather
+    # than an omission. The spec listed third-party `<iframe>`s as
+    # possible breakage but said the embed document "deliberately knows
+    # no subdomain, so this may survive; it must be confirmed during
+    # implementation rather than assumed." Confirmed: `embed_url_for`
+    # builds `EMBED_HOST/api/v1/embed/<token>`, and the token carries a
+    # dashboard id, never an address. A rename leaves it byte for byte
+    # the same, so warning about it told an operator that a rename
+    # breaks something it does not touch. See `tests_admin_rename`.
+    published = Dashboard.objects.filter(
+        tenant=tenant, deleted_at=None
+    ).exclude(published_config=None)
     return {
-        # Every enrolled device stores serverURL locally and never
-        # re-fetches it; MobileAssignmentToken lasts 99999 days, so
-        # they never re-authenticate either. Each one has to be
-        # reconfigured by hand.
-        "mobile_devices": MobileAssignment.objects.filter(
-            user__tenant=tenant
-        ).count(),
-        "published_dashboards": Dashboard.objects.filter(
-            tenant=tenant, deleted_at=None
-        ).exclude(published_config=None).count(),
-        "embedded_dashboards": (
-            Dashboard.objects.filter(tenant=tenant, deleted_at=None)
-            .exclude(embed_snippet=None)
-            .exclude(embed_snippet="")
-            .count()
-            if tenant_may_embed(tenant)
-            else 0
-        ),
+        # The two dashboard counts partition the published set, and
+        # that is deliberate. They used to overlap -- every published
+        # dashboard was counted as a link, and one carrying a snippet
+        # was counted again as an embed -- so the dialog claimed more
+        # would break than the workspace contains.
+        #
+        # They are reported apart rather than summed because the
+        # audiences differ. An internal link breaking inconveniences a
+        # colleague who can be told the new address; a public one
+        # breaks for readers nobody can reach, including any site that
+        # has framed it.
+        "published_dashboards": published.filter(is_public=False).count(),
+        "public_dashboards": published.filter(is_public=True).count(),
     }
 
 
@@ -256,12 +299,12 @@ def tenant_rename_impact(request, version, tenant_id):
 
 
 @extend_schema(request=TenantRenameSerializer,
-               responses={200: TenantListSerializer}, tags=CONSOLE_TAG,
+               responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
                summary="Change a workspace's address")
 @api_view(["POST"])
 @permission_classes([IsPlatformAdmin])
 def rename_tenant(request, version, tenant_id):
-    tenant = get_object_or_404(console_tenants(), pk=tenant_id)
+    tenant = get_object_or_404(with_counts(console_tenants()), pk=tenant_id)
     serializer = TenantRenameSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
@@ -281,7 +324,7 @@ def rename_tenant(request, version, tenant_id):
         )
     _move_master_data(previous, tenant)
     return Response(
-        TenantListSerializer(tenant).data, status=status.HTTP_200_OK
+        TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
 
 

@@ -215,8 +215,22 @@ renaming turns out to be common. Without it the mitigation is an honest,
 computed warning:
 
     GET /admin/tenants/<id>/rename-impact
-      → {"mobile_devices": 23, "published_dashboards": 3,
-         "embedded_dashboards": 1}
+      → {"published_dashboards": 3, "public_dashboards": 2}
+
+There is no `mobile_devices` count. The app syncs against the deployment's own
+address rather than a workspace's, and its replies are partitioned by the
+token's assignment rather than by the host, so a rename leaves every enrolled
+device working.
+
+**Corrected during MT-022.** This originally returned an
+`embedded_dashboards` count, which was wrong twice over. The spec asked for
+third-party `<iframe>` breakage to be *confirmed rather than assumed*, and
+confirming it showed embeds survive a rename: `embed_url_for` builds
+`EMBED_HOST/api/v1/embed/<token>` and the token carries a dashboard id, never
+an address. It also double-counted, because a published embed dashboard has a
+`published_config` and so was counted again as a link. The two dashboard
+counts now partition the published set — internal links, and the publicly
+shared ones whose readers cannot be told the new address.
 
 The dialog states those as facts about *this* workspace and requires the
 operator to type the current subdomain to confirm. A warning that says "this
