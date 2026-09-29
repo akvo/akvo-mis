@@ -8,13 +8,11 @@ React app work unchanged against someone else's workspace.
 """
 from django.conf import settings
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework_simplejwt.tokens import AccessToken
 
 from api.v1.v1_mobile.authentication import AssignmentAwareJWTAuthentication
 from api.v1.v1_users.models import SystemUser, Tenant
-
-# Methods an inspection session may use. Anything else is a write.
-SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 # The one write an inspection session may make: a fresh code row for the
 # workspace it is moving to. Named as a path rather than inferred from
@@ -64,12 +62,6 @@ class TenantInspectionToken(AccessToken):
         token["operator_id"] = inspection.operator_id
         token["tenant_id"] = inspection.tenant_id
         return token
-
-    @classmethod
-    def for_user(cls, _):
-        raise NotImplementedError(
-            ".for_user() is not used on this token type."
-        )
 
 
 class InspectionAwareJWTAuthentication(AssignmentAwareJWTAuthentication):

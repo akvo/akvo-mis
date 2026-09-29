@@ -10,10 +10,8 @@ Nothing here returns a workspace's data. There is no delete endpoint
 for datapoints or dashboards anywhere under /admin/ -- the absence is
 the enforcement, not a flag.
 """
-import hashlib
 import logging
 import os
-import secrets
 
 from django.db import IntegrityError
 from django.db.models import Count, Q
@@ -494,10 +492,5 @@ def inspect_tenant(request, version, tenant_id):
         console_tenants().filter(is_active=True, deleted_at=None),
         pk=tenant_id,
     )
-    code = secrets.token_urlsafe(32)
-    TenantInspection.objects.create(
-        operator=request.user,
-        tenant=tenant,
-        code_hash=hashlib.sha256(code.encode()).hexdigest(),
-    )
+    code = TenantInspection.mint(request.user, tenant)
     return Response({"code": code}, status=status.HTTP_200_OK)

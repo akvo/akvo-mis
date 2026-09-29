@@ -6,8 +6,6 @@ console session -- the console's cookie is host-only and never reaches
 this origin.
 """
 import datetime
-import hashlib
-import secrets
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -18,14 +16,14 @@ from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 
 from api.v1.v1_users.admin_serializers import TenantListSerializer
+from api.v1.v1_users.admin_views import CONSOLE_TAG
 from api.v1.v1_users.authentication import TenantInspectionToken
 from api.v1.v1_users.models import Tenant, TenantInspection
 
-INSPECT_TAG = ["Platform Console"]
 CODE_TTL_SECONDS = 60
 
 
-@extend_schema(tags=INSPECT_TAG,
+@extend_schema(tags=CONSOLE_TAG,
                summary="Exchange a one-time code for an inspection session")
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -40,10 +38,9 @@ def exchange_code(request, version):
         {"message": "Invalid or expired inspection link"},
         status=status.HTTP_400_BAD_REQUEST,
     )
-    code = request.data.get("code")
-    if not code:
-        return invalid
-    digest = hashlib.sha256(str(code).encode()).hexdigest()
+    # A missing code hashes to a digest no row carries, so the lookup
+    # below is the only check needed.
+    digest = TenantInspection.digest(request.data.get("code"))
     cutoff = timezone.now() - datetime.timedelta(seconds=CODE_TTL_SECONDS)
     inspection = TenantInspection.objects.filter(
         code_hash=digest, code_used_at=None, created_at__gte=cutoff
@@ -109,7 +106,7 @@ def switchable():
     )
 
 
-@extend_schema(tags=INSPECT_TAG,
+@extend_schema(tags=CONSOLE_TAG,
                summary="Workspaces this session may switch to")
 @api_view(["GET"])
 @permission_classes([IsInspecting])
@@ -120,7 +117,7 @@ def switchable_tenants(request, version):
     )
 
 
-@extend_schema(tags=INSPECT_TAG, summary="Inspect a different workspace")
+@extend_schema(tags=CONSOLE_TAG, summary="Inspect a different workspace")
 @api_view(["POST"])
 @permission_classes([IsInspecting])
 def switch_tenant(request, version):
@@ -133,14 +130,9 @@ def switch_tenant(request, version):
     operator is revoked.
     """
     tenant = get_object_or_404(switchable(), pk=request.data.get("tenant_id"))
-    code = secrets.token_urlsafe(32)
-    TenantInspection.objects.create(
-        # request.user is the operator, re-verified by get_user on this
-        # very request -- so the new row names who really switched.
-        operator=request.user,
-        tenant=tenant,
-        code_hash=hashlib.sha256(code.encode()).hexdigest(),
-    )
+    # request.user is the operator, re-verified by get_user on this very
+    # request -- so the new row names who really switched.
+    code = TenantInspection.mint(request.user, tenant)
     return Response(
         {"code": code, "subdomain": tenant.subdomain},
         status=status.HTTP_200_OK,

@@ -77,20 +77,19 @@ const InspectionBanner = () => {
 
   // A menu needs items even before the answer arrives, and "none" and
   // "not yet" say different things to someone who just clicked.
-  const items = options
-    ? options.map((row) => ({
-        key: String(row.id),
-        label: (
-          <span>
-            <strong>{row.subdomain}</strong>
-            {row.name ? ` \u00b7 ${row.name}` : ""}
-          </span>
-        ),
-      }))
-    : [{ key: "loading", label: "Loading...", disabled: true }];
-  const menu = items.length
+  const items = options?.map((row) => ({
+    key: String(row.id),
+    label: (
+      <span>
+        <strong>{row.subdomain}</strong>
+        {row.name ? ` \u00b7 ${row.name}` : ""}
+      </span>
+    ),
+  }));
+  const empty = items ? "No other workspaces" : "Loading...";
+  const menu = items?.length
     ? items
-    : [{ key: "none", label: "No other workspaces", disabled: true }];
+    : [{ key: "empty", label: empty, disabled: true }];
 
   // Erase, then leave. Staying put would re-render the workspace's own
   // pages with no session at all, which is a screen of failed requests
@@ -100,7 +99,7 @@ const InspectionBanner = () => {
     window.location.replace(adminUrl("/admin/tenants"));
   };
 
-  const ends = cookies.AUTH_TOKEN ? endsAt(cookies.AUTH_TOKEN) : null;
+  const ends = endsAt(cookies.AUTH_TOKEN);
 
   return (
     <div className="inspection-banner">

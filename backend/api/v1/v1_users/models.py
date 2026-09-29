@@ -1,3 +1,6 @@
+import hashlib
+import secrets
+
 from api.v1.v1_profile.constants import OrganisationTypes
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import PermissionsMixin
@@ -184,6 +187,22 @@ class TenantInspection(models.Model):
     code_hash = models.CharField(max_length=64, unique=True)
     code_used_at = models.DateTimeField(default=None, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def digest(code):
+        """How a code becomes the column. Both the mint and the
+        exchange go through here, so they cannot hash differently."""
+        return hashlib.sha256(str(code).encode()).hexdigest()
+
+    @classmethod
+    def mint(cls, operator, tenant):
+        """Record the visit and return the code, which is the only time
+        it exists in the clear."""
+        code = secrets.token_urlsafe(32)
+        cls.objects.create(
+            operator=operator, tenant=tenant, code_hash=cls.digest(code)
+        )
+        return code
 
     class Meta:
         db_table = "tenant_inspection"
