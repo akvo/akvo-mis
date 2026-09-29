@@ -16,6 +16,12 @@ from api.v1.v1_users.models import SystemUser, Tenant
 # Methods an inspection session may use. Anything else is a write.
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
+# The one write an inspection session may make: a fresh code row for the
+# workspace it is moving to. Named as a path rather than inferred from
+# anything, so allowing a second write means editing this line on
+# purpose. Both read-only guards consult it.
+INSPECTION_WRITE_PATHS = ("/api/v1/inspect/switch",)
+
 
 class TenantInspectionToken(AccessToken):
     token_type = "tenant_inspection"
@@ -51,7 +57,10 @@ class InspectionAwareJWTAuthentication(AssignmentAwareJWTAuthentication):
         # the view declares, and cannot be switched off by adding an
         # endpoint.
         if isinstance(token, TenantInspectionToken):
-            if request.method not in SAFE_METHODS:
+            if (
+                request.method not in SAFE_METHODS
+                and request.path not in INSPECTION_WRITE_PATHS
+            ):
                 raise PermissionDenied(
                     "This inspection session is read only"
                 )

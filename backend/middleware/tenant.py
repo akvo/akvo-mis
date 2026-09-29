@@ -20,6 +20,7 @@ test suite and any single-host deployment run.
 from django.http import JsonResponse
 
 from api.v1.v1_users.authentication import (
+    INSPECTION_WRITE_PATHS,
     SAFE_METHODS,
     InspectionAwareJWTAuthentication,
     TenantInspectionToken,
@@ -106,7 +107,10 @@ class TenantMiddleware:
         # acting user's tenant, so an unguarded write would stamp rows
         # into the *inspected* workspace. That path must be
         # unreachable, not merely unlikely.
-        if request.method not in SAFE_METHODS:
+        if (
+            request.method not in SAFE_METHODS
+            and request.path not in INSPECTION_WRITE_PATHS
+        ):
             if self._inspection_token(request) is not None:
                 return JsonResponse(
                     {"message": "This inspection session is read only"},
