@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Table, Input, Space, Tag, Radio } from "antd";
+import { Table, Input, Space, Tag, Radio, Button } from "antd";
 import { Link } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
@@ -15,6 +15,7 @@ const Tenants = () => {
   const [dataset, setDataset] = useState([]);
   const [search, setSearch] = useState("");
   const [state, setState] = useState("all");
+  const [inspecting, setInspecting] = useState(null);
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -33,6 +34,25 @@ const Tenants = () => {
       .catch(() => notify({ type: "error", message: text.consoleTenants }))
       .finally(() => setLoading(false));
   }, [notify, text]);
+
+  // The hand-off, and the reason Inspect is a control rather than a
+  // link: the workspace's own /inspect needs a one-time code, and only
+  // this host can mint one. A plain href would carry no credential and
+  // land the operator on the expired-link page.
+  const inspect = (row) => {
+    setInspecting(row.id);
+    api
+      .post(`admin/tenants/${row.id}/inspect`)
+      .then((res) => {
+        window.location.replace(
+          `${workspaceUrl(row.subdomain)}/inspect?code=${res.data.code}`
+        );
+      })
+      .catch(() => {
+        setInspecting(null);
+        notify({ type: "error", message: text.consoleInspectFailed });
+      });
+  };
 
   // Filtered here rather than at the endpoint: the summary is one
   // request for every workspace, so narrowing it is a client concern
@@ -89,9 +109,14 @@ const Tenants = () => {
         // deleted one would open a 404, so the label renders without a
         // link rather than offering a dead one.
         row.state === "active" ? (
-          <a href={`${workspaceUrl(row.subdomain)}/inspect`}>
+          <Button
+            type="link"
+            size="small"
+            loading={inspecting === row.id}
+            onClick={() => inspect(row)}
+          >
             {text.consoleInspect}
-          </a>
+          </Button>
         ) : (
           <span className="admin-disabled">{text.consoleInspect}</span>
         ),
