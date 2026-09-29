@@ -50,6 +50,16 @@ def exchange_code(request, version):
     ).first()
     if inspection is None:
         return invalid
+    # The code names a workspace and so does the host it arrived on;
+    # they have to be the same one. Without this, a code minted for acme
+    # is accepted on beta's origin, and the operator lands on a page
+    # whose banner says "Inspecting beta" while holding acme's
+    # authority -- every request then 403s at the host check, with
+    # nothing on screen to explain why. `request.tenant` is None on a
+    # single-host install, where there is no host to disagree with.
+    host_tenant = getattr(request, "tenant", None)
+    if host_tenant is not None and host_tenant.id != inspection.tenant_id:
+        return invalid
     # Burned before the token is minted. A second request racing this
     # one finds code_used_at set and gets the same refusal.
     inspection.code_used_at = timezone.now()

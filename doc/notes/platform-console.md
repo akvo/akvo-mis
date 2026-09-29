@@ -125,6 +125,12 @@ that workspace's alone and never reaches the console, so signing out of one
 does not sign you out of the other, and closing the tab does not end the
 console session.
 
+**Exit inspection clears the browser's copy of the session, not the session.**
+The token stays valid for its remaining time; what ends it everywhere, at
+once, is revoking the operator. That is the difference worth knowing on the
+day it matters: if you think a session may have been left somewhere it should
+not be, exiting the tab is not the answer — revoking the operator is.
+
 ### The record it leaves
 
 Each inspection writes a row to `tenant_inspection` naming the operator, the

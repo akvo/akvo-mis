@@ -37,7 +37,49 @@ describe("ability for an inspection session", () => {
     expect(can.can("upload", "data")).toBe(false);
     expect(can.can("delete", "data")).toBe(false);
     expect(can.can("create", "dashboard")).toBe(false);
-    expect(can.can("manage", "user")).toBe(false);
+    expect(can.can("publish", "form-builder")).toBe(false);
+    expect(can.can("create", "form-builder")).toBe(false);
+  });
+
+  // The checks the sidebar actually makes. Asserted as the sidebar
+  // spells them, not as "manage is granted": an inspecting operator who
+  // cannot reach Master Data cannot answer a support call about it, and
+  // nothing on screen would tell them the menu is short.
+  it("keeps every section the workspace's own sidebar offers", () => {
+    const can = ability(inspecting);
+    [
+      "user",
+      "roles",
+      "draft",
+      "submissions",
+      "approvals",
+      "master-data",
+      "mobile",
+      "control-center",
+    ].forEach((subject) => {
+      expect([subject, can.can("manage", subject)]).toEqual([subject, true]);
+    });
+    expect(can.can("read", "form-builder")).toBe(true);
+    expect(can.can("read", "downloads")).toBe(true);
+    expect(can.can("manage", "dashboard") || can.can("read", "dashboard")).toBe(
+      true
+    );
+  });
+
+  // The three gates DashboardList uses, spelled as it spells them. It
+  // reads `manage dashboard` as a write grant, which is why the branch
+  // subtracts that one on top of the verbs.
+  it("offers no dashboard write control", () => {
+    const can = ability(inspecting);
+    expect(
+      can.can("manage", "dashboard") || can.can("create", "dashboard")
+    ).toBe(false);
+    expect(can.can("manage", "dashboard") || can.can("edit", "dashboard")).toBe(
+      false
+    );
+    expect(
+      can.can("manage", "dashboard") || can.can("delete", "dashboard")
+    ).toBe(false);
   });
 
   it("leaves an ordinary superadmin alone", () => {

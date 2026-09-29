@@ -20,10 +20,9 @@ test suite and any single-host deployment run.
 from django.http import JsonResponse
 
 from api.v1.v1_users.authentication import (
-    INSPECTION_WRITE_PATHS,
-    SAFE_METHODS,
     InspectionAwareJWTAuthentication,
     TenantInspectionToken,
+    inspection_write_refused,
 )
 from utils.tenant_host import (
     is_admin_host,
@@ -84,6 +83,25 @@ class TenantMiddleware:
         host = request.get_host()
         request.tenant = resolve_tenant_from_host(host)
 
+        # Guard one of two, and the earlier one: refused before any
+        # view runs. TenantStampedSerializerMixin.create() reads the
+        # acting user's tenant, so an unguarded write would stamp rows
+        # into the *inspected* workspace. That path must be
+        # unreachable, not merely unlikely.
+        #
+        # Above the exemptions below, not after them. Those paths return
+        # early, and one of them -- the embed document -- is a plain
+        # Django view with no method restriction, so it is the single
+        # route where guard two does not apply either. Nothing there
+        # writes today; putting this first means nothing added there
+        # later escapes by inheriting the exemption.
+        if self._inspection_token(request) is not None:
+            if inspection_write_refused(request.method, request.path):
+                return JsonResponse(
+                    {"message": "This inspection session is read only"},
+                    status=403,
+                )
+
         # Resolved first, so a probe arriving on a real workspace host
         # still reports that tenant, then exempted from both the 404 and
         # enforcement below.
@@ -101,21 +119,6 @@ class TenantMiddleware:
             and not is_admin_host(host)
         ):
             return JsonResponse({"message": "Workspace not found"}, status=404)
-
-        # Guard one of two, and the earlier one: refused before any
-        # view runs. TenantStampedSerializerMixin.create() reads the
-        # acting user's tenant, so an unguarded write would stamp rows
-        # into the *inspected* workspace. That path must be
-        # unreachable, not merely unlikely.
-        if (
-            request.method not in SAFE_METHODS
-            and request.path not in INSPECTION_WRITE_PATHS
-        ):
-            if self._inspection_token(request) is not None:
-                return JsonResponse(
-                    {"message": "This inspection session is read only"},
-                    status=403,
-                )
 
         # Enforcement needs an account to compare, so it is skipped for
         # anonymous requests — which is every public endpoint, including

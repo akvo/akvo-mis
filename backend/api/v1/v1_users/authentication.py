@@ -22,6 +22,37 @@ SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 # purpose. Both read-only guards consult it.
 INSPECTION_WRITE_PATHS = ("/api/v1/inspect/switch",)
 
+# The other direction: paths refused whatever the method, because they
+# write on a GET. Both of these queue a Jobs row and a django_q task
+# from a plain GET, so a method test alone lets a "read-only" session
+# create rows and buy worker time indefinitely.
+#
+# The method is a sound proxy for "writes" everywhere else in this API
+# -- a sweep of every GET-only view found no other that touches a row --
+# but where it is not, the exception is named rather than inferred, the
+# same shape as the allowlist above. Whoever writes the next mutating
+# GET adds it here.
+INSPECTION_BLOCKED_PATHS = (
+    "/api/v1/download/generate",
+    "/api/v1/download/datapoint-report",
+)
+
+
+def inspection_write_refused(method, path):
+    """Would this request write, for an inspection session?
+
+    One definition, called by both guards. They detect the token
+    independently -- that is what makes two guards worth more than one
+    -- but they must not disagree about what counts as a write, because
+    then each would be enforcing a different rule and neither the whole
+    one.
+    """
+    if path.startswith(INSPECTION_BLOCKED_PATHS):
+        return True
+    if method in SAFE_METHODS:
+        return False
+    return path not in INSPECTION_WRITE_PATHS
+
 
 class TenantInspectionToken(AccessToken):
     token_type = "tenant_inspection"
@@ -57,10 +88,7 @@ class InspectionAwareJWTAuthentication(AssignmentAwareJWTAuthentication):
         # the view declares, and cannot be switched off by adding an
         # endpoint.
         if isinstance(token, TenantInspectionToken):
-            if (
-                request.method not in SAFE_METHODS
-                and request.path not in INSPECTION_WRITE_PATHS
-            ):
+            if inspection_write_refused(request.method, request.path):
                 raise PermissionDenied(
                     "This inspection session is read only"
                 )

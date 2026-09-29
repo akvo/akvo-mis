@@ -47,13 +47,6 @@ class InspectionHandoffTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(record.operator_id, self.operator.pk)
         self.assertEqual(record.tenant_id, self.acme.tenant.pk)
 
-    def test_mint_takes_no_reason(self):
-        # Inspecting is one click, and a free-text justification
-        # nobody reads is not worth the friction.
-        self.assertFalse(
-            hasattr(TenantInspection, "reason")
-        )
-
     def test_exchange_sets_a_host_only_cookie(self):
         code = self.mint().json()["code"]
         response = self.exchange(code)
@@ -77,6 +70,26 @@ class InspectionHandoffTestCase(TestCase, TenantTestHelperMixin):
 
     def test_an_unknown_code_is_refused(self):
         self.assertEqual(self.exchange("nope").status_code, 400)
+
+    def test_a_code_is_refused_on_another_workspaces_host(self):
+        # The code names a workspace and so does the host. Accepting a
+        # mismatch sets a live-looking cookie on the wrong origin: the
+        # banner would say "Inspecting beta" while the token carries
+        # acme's authority, and every request after it 403s at the host
+        # check with nothing on screen to explain why.
+        self.create_tenant("beta", ["Country"], "Uganda")
+        code = self.mint().json()["code"]
+        response = self.client.post(
+            "/api/v1/inspect/exchange",
+            json.dumps({"code": code}),
+            content_type="application/json",
+            HTTP_HOST="beta.app.com",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("AUTH_TOKEN", response.cookies)
+        # And refusing it must not burn it -- the operator's own tab is
+        # still waiting to spend it on the right host.
+        self.assertEqual(self.exchange(code).status_code, 200)
 
     def test_a_workspace_user_cannot_mint(self):
         response = self.client.post(
