@@ -3,8 +3,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { View, StyleSheet } from 'react-native';
 import { Header, Text, Button } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
-import { FormState } from '../../store';
-import { generateDataPointName } from '../../form/lib';
 import useTheme from '../../lib/theme';
 
 const BackButton = ({ navigation, theme }) => {
@@ -28,20 +26,15 @@ const PageTitle = ({
   leftContainerStyle = null,
   rightComponent = null,
   rightContainerStyle = null,
+  headerBg = null,
 }) => {
   const navigation = useNavigation();
   const theme = useTheme();
-  const selectedForm = FormState.useState((s) => s.form);
-  const currentValues = FormState.useState((s) => s.currentValues);
-  const cascades = FormState.useState((s) => s.cascades);
-  const forms = selectedForm?.json ? JSON.parse(selectedForm.json) : {};
-  const { dpName } = generateDataPointName(forms, currentValues, cascades);
 
   const handleSettingsPress = () => {
     navigation.navigate('Home', { screen: 'SettingsTab' });
   };
 
-  const subTitleText = subTitle === 'formPage' ? dpName : subTitle;
   const hasBackButton = !leftComponent && navigation.canGoBack();
 
   return (
@@ -51,7 +44,7 @@ const PageTitle = ({
       rightComponent={rightComponent}
       rightContainerStyle={[styles.sideContainer, styles.sideContainerRight, rightContainerStyle]}
       centerContainerStyle={styles.centerContainer}
-      backgroundColor={theme.topNav.bg}
+      backgroundColor={headerBg || theme.topNav.bg}
       statusBarProps={{
         backgroundColor: theme.statusBar.bg,
         barStyle: theme.statusBar.style === 'light' ? 'light-content' : 'dark-content',
@@ -60,7 +53,7 @@ const PageTitle = ({
       testID="base-layout-page-title"
     >
       {!leftComponent && <BackButton navigation={navigation} theme={theme} />}
-      {subTitleText ? (
+      {subTitle ? (
         <View>
           <Text
             h4Style={[
@@ -83,7 +76,7 @@ const PageTitle = ({
             ]}
             numberOfLines={1}
           >
-            {subTitleText}
+            {subTitle}
           </Text>
         </View>
       ) : (

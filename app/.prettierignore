@@ -1,3 +1,5 @@
 .expo
 coverage
 map-draw.html
+# Local tool output (Claude Code session logs), not app source
+.claude

@@ -71,7 +71,8 @@ const TypeImage = ({
         setFileSize(result.size);
         persisted = await persistImage(result.uri);
       } catch (error) {
-        console.error('[TypeImage] Compression error:', error);
+        Sentry.captureMessage(`[TypeImage] Compression failed for ${imageUri}`);
+        Sentry.captureException(error);
         setFileSize(null);
         persisted = await persistImage(imageUri);
       }

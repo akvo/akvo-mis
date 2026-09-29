@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { FieldLabel, OptionItem } from '../support';
 import getStyles from '../styles';
@@ -54,6 +54,47 @@ const TypeOption = ({
     ...(hasError ? styles.inputFieldError : {}),
   };
 
+  const isTwoOption = option.length === 2;
+
+  if (isTwoOption) {
+    const selectedValue = value?.[0] || '';
+    return (
+      <View style={styles.optionContainer}>
+        <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
+        <View style={[pillStyles.container, { backgroundColor: theme.input.bg }]}>
+          {option.map((opt) => {
+            const isSelected = opt.value === selectedValue;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[pillStyles.pill, isSelected && { backgroundColor: theme.buttonPrimary.bg }]}
+                onPress={() => {
+                  if (onChange && !disabled) {
+                    onChange(id, [opt.value]);
+                  }
+                }}
+                disabled={disabled}
+                testID={`type-option-pill-${opt.value}`}
+              >
+                <Text
+                  style={[
+                    pillStyles.pillText,
+                    {
+                      color: isSelected ? theme.buttonPrimary.text : theme.text.primary,
+                      fontWeight: isSelected ? '600' : '500',
+                    },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.optionContainer}>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
@@ -94,5 +135,24 @@ const TypeOption = ({
     </View>
   );
 };
+
+const pillStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    borderRadius: 28,
+    padding: 4,
+    marginHorizontal: 10,
+  },
+  pill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  pillText: {
+    fontSize: 14,
+  },
+});
 
 export default TypeOption;
