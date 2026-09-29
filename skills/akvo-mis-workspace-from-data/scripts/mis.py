@@ -561,9 +561,10 @@ def find_form(ctx, name, ftype):
     for f in ctx.paged(f"manage/forms?type={ftype}"):
         if norm(f["name"]).casefold() == norm(name).casefold():
             return f
-        for c in f.get("children") or []:
-            if norm(c["name"]).casefold() == norm(name).casefold():
-                return c
+        if ftype == "monitoring":
+            for c in f.get("children") or []:
+                if norm(c["name"]).casefold() == norm(name).casefold():
+                    return c
     return None
 
 
@@ -604,6 +605,13 @@ def form_mismatch(form, detail, parent_id):
     A draft may still lack its dependencies (the run stopped before the
     PUT that adds them), so those are compared on published forms only.
     """
+    expected_type = 2 if form["type"] == "monitoring" else 1
+    if norm(detail.get("name")).casefold() != norm(form["name"]).casefold():
+        return (f"its name is '{detail.get('name')}', the plan expects "
+                f"'{form['name']}'")
+    if detail.get("type") != expected_type:
+        return (f"its type is {detail.get('type')}, the plan expects "
+                f"{expected_type}")
     if form["type"] == "monitoring" and detail.get("parent") != parent_id:
         return (f"its parent is form {detail.get('parent')}, the plan "
                 f"expects {parent_id}")
@@ -814,11 +822,12 @@ class Loader:
             if k is None or k in out:
                 continue  # the first row per key is the one loaded
             try:
-                aid = self.admin_id(row, spec)
+                payload, _ = self.build(self.forms[form_key], spec, row, None)
             except ValueError:
                 continue
-            out[k] = (self.uuid(form_key, k), aid,
-                      self.dp_name(self.forms[form_key], row, spec, k))
+            out[k] = (payload["data"]["uuid"],
+                      payload["data"]["administration"],
+                      payload["data"]["name"])
         self.parents[form_key] = out
         return out
 
@@ -870,6 +879,8 @@ class Loader:
             else:
                 col = spec["columns"].get(q["name"])
                 if not col:
+                    if q.get("required"):
+                        missing.append(f"{q['name']}: required but unmapped")
                     continue
                 raw = row.get(col)
             if blank(raw) or mapped_blank(spec, q["name"], raw):
