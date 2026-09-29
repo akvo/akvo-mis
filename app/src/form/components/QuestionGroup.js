@@ -1,7 +1,8 @@
 /* eslint-disable react/jsx-props-no-spreading */
 import React, { useRef, useMemo, useEffect, useCallback } from 'react';
-import { View } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import Icon from 'react-native-vector-icons/Ionicons';
 
 import QuestionField from './QuestionField';
 import { RepeatSection } from '../support';
@@ -73,6 +74,20 @@ const QuestionGroup = ({ group, activeQuestions }) => {
     setTimeout(() => tryScroll(0), 500);
   }, [scrollToQuestionId]);
 
+  const handleAddRepeat = useCallback(() => {
+    if (group?.repeatable && group?.id) {
+      FormState.update((s) => {
+        const currentRepeats = s.repeats || {};
+        const groupRepeats = currentRepeats[group.id] || [0];
+        const nextRepeatIndex = Math.max(...groupRepeats) + 1;
+        s.repeats = {
+          ...s.repeats,
+          [group.id]: [...groupRepeats, nextRepeatIndex],
+        };
+      });
+    }
+  }, [group]);
+
   // Handle onChange for all questions
   const handleOnChange = useCallback((id, value, question) => {
     FormState.update((s) => {
@@ -133,9 +148,38 @@ const QuestionGroup = ({ group, activeQuestions }) => {
             </View>
           );
         })}
+        {group?.repeatable && (
+          <TouchableOpacity
+            style={[repeatStyles.addButton, { backgroundColor: theme.buttonSecondary.bg }]}
+            onPress={handleAddRepeat}
+            testID={`add-repeat-${group.id}`}
+          >
+            <Icon name="add-circle-outline" size={20} color={theme.buttonSecondary.text} />
+            <Text style={[repeatStyles.addButtonText, { color: theme.buttonSecondary.text }]}>
+              {group.repeat_text || 'Add another'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </KeyboardAwareScrollView>
     </View>
   );
 };
+
+const repeatStyles = StyleSheet.create({
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 24,
+    marginHorizontal: 16,
+    marginTop: 16,
+    gap: 8,
+  },
+  addButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+});
 
 export default QuestionGroup;
