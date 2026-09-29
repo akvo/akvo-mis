@@ -18,8 +18,12 @@ test suite and any single-host deployment run.
 """
 
 from django.http import JsonResponse
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from api.v1.v1_users.authentication import (
+    SAFE_METHODS,
+    InspectionAwareJWTAuthentication,
+    TenantInspectionToken,
+)
 from utils.tenant_host import (
     is_admin_host,
     is_base_domain,
@@ -69,7 +73,11 @@ EXEMPT_PATHS = (
 class TenantMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
-        self.jwt_auth = JWTAuthentication()
+        # Not the base JWTAuthentication. That class resolves a user
+        # from a `user_id` claim; an inspection token carries none, so
+        # it would fail, return None, and skip host enforcement below
+        # for exactly the sessions that most need checking.
+        self.jwt_auth = InspectionAwareJWTAuthentication()
 
     def __call__(self, request):
         host = request.get_host()
@@ -92,6 +100,18 @@ class TenantMiddleware:
             and not is_admin_host(host)
         ):
             return JsonResponse({"message": "Workspace not found"}, status=404)
+
+        # Guard one of two, and the earlier one: refused before any
+        # view runs. TenantStampedSerializerMixin.create() reads the
+        # acting user's tenant, so an unguarded write would stamp rows
+        # into the *inspected* workspace. That path must be
+        # unreachable, not merely unlikely.
+        if request.method not in SAFE_METHODS:
+            if self._inspection_token(request) is not None:
+                return JsonResponse(
+                    {"message": "This inspection session is read only"},
+                    status=403,
+                )
 
         # Enforcement needs an account to compare, so it is skipped for
         # anonymous requests — which is every public endpoint, including
@@ -131,3 +151,27 @@ class TenantMiddleware:
             # wrong host, and only that deserves a 403.
             return None
         return result[0] if result else None
+
+    def _inspection_token(self, request):
+        """Is this request carrying an inspection token?
+
+        Validates the token itself rather than calling
+        `self.jwt_auth.authenticate()`, which carries the *second*
+        read-only guard and raises on an unsafe method. Catching that
+        raise here would make this guard fire only in the cases where
+        the other one already had -- two guards sharing one failure are
+        one guard, and the whole reason for two is that either may be
+        bypassed alone.
+        """
+        header = self.jwt_auth.get_header(request)
+        if header is None:
+            return None
+        raw_token = self.jwt_auth.get_raw_token(header)
+        if raw_token is None:
+            return None
+        try:
+            token = self.jwt_auth.get_validated_token(raw_token)
+        except Exception:
+            # A malformed or expired token is the view's 401 to give.
+            return None
+        return token if isinstance(token, TenantInspectionToken) else None

@@ -846,6 +846,7 @@ class UserSerializer(serializers.ModelSerializer):
     forms = serializers.SerializerMethodField()
     last_login = serializers.SerializerMethodField()
     passcode = serializers.SerializerMethodField()
+    is_inspecting = serializers.SerializerMethodField()
 
     @extend_schema_field(UserAdministrationSerializer)
     def get_administration(self, instance: SystemUser):
@@ -939,6 +940,18 @@ class UserSerializer(serializers.ModelSerializer):
     def get_configured(self, instance: SystemUser):
         return tenant_is_configured(instance.tenant)
 
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_inspecting(self, instance: SystemUser):
+        """Is this a read-only cross-workspace session?
+
+        The frontend uses it for the banner and to strip write
+        abilities. It is presentation only -- the server refuses the
+        writes whether or not the browser tries them. Read with getattr
+        because only the inspection authentication class sets it, in
+        memory, on the instance it hands back.
+        """
+        return bool(getattr(instance, "is_inspecting", False))
+
     @extend_schema_field(OpenApiTypes.STR)
     def get_subdomain(self, instance: SystemUser):
         # The address this session belongs to. The frontend compares it
@@ -971,6 +984,7 @@ class UserSerializer(serializers.ModelSerializer):
             # tenant-less account's `subdomain` is "" for reasons that
             # have nothing to do with being an operator.
             "is_platform_admin",
+            "is_inspecting",
         ]
 
 
