@@ -64,3 +64,21 @@ there could never be completed.
 Locally, check the mail in Mailpit at <http://localhost:8025>. The link
 is built from `WEBDOMAIN`, so that variable has to be the address the
 browser actually uses or the mailed link will point somewhere else.
+
+## Renaming a workspace
+
+The dialog names what breaks, counted from that workspace: dashboard links
+inside it, and the publicly shared ones whose readers cannot be told a new
+address. Both are real outages — there is no alias table, so the old address
+stops resolving at once.
+
+**Enrolled mobile devices are not affected**, which is worth knowing because
+it is the first thing people expect to break. The app is configured against
+this deployment's address, not a workspace's, and a device's replies are
+partitioned by the token it carries rather than by the host it calls — so a
+rename leaves it syncing, and still unable to see any other workspace.
+
+The exception is a deployment that deliberately pointed devices at a
+workspace's own address. Nothing in the app does this and the server cannot
+tell which devices were set up that way, so if that is how yours is
+configured, re-enrol those devices after a rename.

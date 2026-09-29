@@ -22,7 +22,6 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.admin_serializers import (
     TENANT_STATES,
@@ -42,7 +41,6 @@ from api.v1.v1_users.views import send_activation_email
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_generator import sqlite_path
 from utils.custom_permissions import IsPlatformAdmin
-from utils.tenant_host import tenant_may_embed
 
 logger = logging.getLogger(__name__)
 
@@ -248,25 +246,46 @@ def rename_impact(tenant):
     dialog that names 23 devices is not clicked through the way a
     generic warning is.
     """
+    # No mobile-device count either, and for a sharper reason than the
+    # embeds below: the app is configured against the deployment's own
+    # address, not a workspace's. `MobileFormSerializer.get_url` hands
+    # devices `/form/<id>` rather than an absolute host, nothing under
+    # `v1_mobile` builds a tenant URL, and the shipped build params
+    # document `serverURL` as `https://<your-domain>/api/v1/device`. A
+    # device syncing against the base domain reaches a request whose
+    # `tenant` is None, so the middleware's host check is skipped and
+    # what partitions the reply is the token's assignment -- which a
+    # rename does not touch. The dialog used to say every enrolled
+    # device would stop syncing and need re-enrolling by hand, the
+    # most alarming line it had, describing field work that does not
+    # exist. See `test_a_device_on_the_base_domain_survives_a_rename`.
+    #
+    # No embedded-dashboard count, and that absence is a finding rather
+    # than an omission. The spec listed third-party `<iframe>`s as
+    # possible breakage but said the embed document "deliberately knows
+    # no subdomain, so this may survive; it must be confirmed during
+    # implementation rather than assumed." Confirmed: `embed_url_for`
+    # builds `EMBED_HOST/api/v1/embed/<token>`, and the token carries a
+    # dashboard id, never an address. A rename leaves it byte for byte
+    # the same, so warning about it told an operator that a rename
+    # breaks something it does not touch. See `tests_admin_rename`.
+    published = Dashboard.objects.filter(
+        tenant=tenant, deleted_at=None
+    ).exclude(published_config=None)
     return {
-        # Every enrolled device stores serverURL locally and never
-        # re-fetches it; MobileAssignmentToken lasts 99999 days, so
-        # they never re-authenticate either. Each one has to be
-        # reconfigured by hand.
-        "mobile_devices": MobileAssignment.objects.filter(
-            user__tenant=tenant
-        ).count(),
-        "published_dashboards": Dashboard.objects.filter(
-            tenant=tenant, deleted_at=None
-        ).exclude(published_config=None).count(),
-        "embedded_dashboards": (
-            Dashboard.objects.filter(tenant=tenant, deleted_at=None)
-            .exclude(embed_snippet=None)
-            .exclude(embed_snippet="")
-            .count()
-            if tenant_may_embed(tenant)
-            else 0
-        ),
+        # The two dashboard counts partition the published set, and
+        # that is deliberate. They used to overlap -- every published
+        # dashboard was counted as a link, and one carrying a snippet
+        # was counted again as an embed -- so the dialog claimed more
+        # would break than the workspace contains.
+        #
+        # They are reported apart rather than summed because the
+        # audiences differ. An internal link breaking inconveniences a
+        # colleague who can be told the new address; a public one
+        # breaks for readers nobody can reach, including any site that
+        # has framed it.
+        "published_dashboards": published.filter(is_public=False).count(),
+        "public_dashboards": published.filter(is_public=True).count(),
     }
 
 

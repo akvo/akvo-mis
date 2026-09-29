@@ -100,22 +100,16 @@ const RenameModal = ({ tenant, open, onClose, onRenamed }) => {
             description={
               <ul>
                 <li>
-                  <strong>
-                    {impact.mobile_devices} enrolled mobile devices
-                  </strong>
-                  {" will stop syncing and must each be reconfigured by hand."}
+                  <strong>{impact.published_dashboards} dashboard links</strong>
+                  {" will break for anyone in the workspace who has one "}
+                  {"bookmarked."}
                 </li>
                 <li>
                   <strong>
-                    {impact.published_dashboards} published dashboard links
+                    {impact.public_dashboards} publicly shared dashboards
                   </strong>
-                  {" will break, including any bookmarked or printed."}
-                </li>
-                <li>
-                  <strong>
-                    {impact.embedded_dashboards} embedded dashboards
-                  </strong>
-                  {" will stop loading on the sites hosting them."}
+                  {" will stop loading for readers outside the workspace, "}
+                  {"including any site that has framed one."}
                 </li>
               </ul>
             }

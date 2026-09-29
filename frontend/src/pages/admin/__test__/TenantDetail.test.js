@@ -204,11 +204,7 @@ describe("Tenant detail", () => {
     axios.mockClear();
     axios.mockResolvedValue({
       status: 200,
-      data: {
-        mobile_devices: 23,
-        published_dashboards: 3,
-        embedded_dashboards: 1,
-      },
+      data: { published_dashboards: 3, public_dashboards: 1 },
     });
     await act(async () => {
       userEvent.click(screen.getByRole("button", { name: /^rename$/i }));
@@ -218,8 +214,6 @@ describe("Tenant detail", () => {
         conf.url.includes("admin/tenants/42/rename-impact")
       )
     ).toBe(true);
-    expect(
-      await screen.findByText(/23 enrolled mobile devices/)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/3 dashboard links/)).toBeInTheDocument();
   });
 });

@@ -9,9 +9,8 @@ jest.mock("axios");
 
 const tenant = { id: 42, subdomain: "mohhs" };
 const impact = {
-  mobile_devices: 23,
   published_dashboards: 3,
-  embedded_dashboards: 1,
+  public_dashboards: 2,
 };
 
 const dialog = (props = {}) => (
@@ -47,8 +46,30 @@ const confirmButton = () =>
 describe("Rename dialog", () => {
   it("states the impact as live counts", async () => {
     await open(resolveImpact);
-    expect(screen.getByText(/23 enrolled mobile devices/)).toBeInTheDocument();
-    expect(screen.getByText(/stop syncing/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 dashboard links/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 publicly shared dashboards/)
+    ).toBeInTheDocument();
+  });
+
+  it("does not claim mobile devices break", async () => {
+    // They do not. The app syncs against the deployment's own address,
+    // never a workspace's, and its data is partitioned by the token's
+    // assignment rather than by the host — so a rename leaves every
+    // enrolled device working. This was the dialog's most alarming
+    // line and it described field work that does not exist.
+    await open(resolveImpact);
+    expect(screen.queryByText(/device/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/syncing/i)).not.toBeInTheDocument();
+  });
+
+  it("does not claim embedded dashboards break", async () => {
+    // They do not. The embed document is served from EMBED_HOST under a
+    // signed token carrying a dashboard id, so a rename leaves its URL
+    // untouched — and a dialog that names a consequence which does not
+    // happen spends the credibility the real counts are for.
+    await open(resolveImpact);
+    expect(screen.queryByText(/embedded/i)).not.toBeInTheDocument();
   });
 
   it("keeps confirm disabled until the subdomain is typed", async () => {
