@@ -102,7 +102,8 @@ const FormContainer = ({
 
   const formDefinition = transformForm(forms, currentValues, activeLang, repeats, prevAdmAnswer);
   const questionGroupCount = formDefinition?.question_group?.length || 0;
-  const hasOverview = questionGroupCount > 1;
+  // A single-group form still gets a review step before submitting.
+  const hasOverview = questionGroupCount > 0;
   const totalGroup = hasOverview ? questionGroupCount + 1 : questionGroupCount;
   const isOverviewStep = hasOverview && activeGroup === questionGroupCount;
 
