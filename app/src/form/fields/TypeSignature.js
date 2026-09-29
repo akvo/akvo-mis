@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, StyleSheet, Image, Modal, TouchableOpacity, Text } from 'react-native';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { Icon } from '@rneui/themed';
+
 import { FieldLabel } from '../support';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
@@ -76,7 +76,6 @@ const TypeSignature = ({
         testID="open-signature-button"
         accessibilityLabel="open-signature-button"
       >
-        <Icon name="create" size={18} color={theme.buttonPrimary.text} type="ionicon" />
         <Text style={[styles.signButtonText, { color: theme.buttonPrimary.text }]}>
           {signature ? trans.changeSignatureButton : trans.openSignatureButton}
         </Text>

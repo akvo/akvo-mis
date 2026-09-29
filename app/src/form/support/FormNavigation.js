@@ -186,7 +186,7 @@ const FormNavigation = ({
         disabled={showQuestionGroupList}
         testID="form-nav-btn-back"
       >
-        <Text style={[styles.backText, { color: theme.buttonPrimary.bg }]}>{trans.buttonBack}</Text>
+        <Text style={[styles.backText, { color: theme.buttonGhost.color }]}>{trans.buttonBack}</Text>
       </TouchableOpacity>
 
       {isOverviewStep ? (

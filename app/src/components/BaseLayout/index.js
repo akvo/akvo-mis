@@ -54,6 +54,7 @@ const BaseLayout = ({
             backgroundColor: theme.topNav.bg,
             borderTopWidth: 0,
             borderBottomWidth: 0,
+            paddingHorizontal: 16,
           }}
           inputContainerStyle={{
             backgroundColor: theme.input.bg,

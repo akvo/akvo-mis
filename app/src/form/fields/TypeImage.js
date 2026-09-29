@@ -264,7 +264,8 @@ const getThemedStyles = (theme) =>
     buttonRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 16,
+      justifyContent: 'center',
+      gap: 12,
     },
     cameraButton: {
       backgroundColor: theme.buttonPrimary.bg,
@@ -279,8 +280,11 @@ const getThemedStyles = (theme) =>
     galleryButton: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       paddingVertical: 12,
-      paddingHorizontal: 8,
+      paddingHorizontal: 20,
+      borderRadius: 24,
+      backgroundColor: theme.bg.surfaceElevated2,
     },
     galleryButtonText: {
       fontSize: 15,
