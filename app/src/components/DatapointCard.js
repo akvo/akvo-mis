@@ -22,8 +22,9 @@ const getStatus = (item) => {
 
 const STATUS_ICONS = {
   missing: { name: 'alert-circle', color: (t) => t.status.error, label: 'photoMissingText' },
-  pendingWeb: { name: 'cloud-upload', color: (t) => t.status.draft, label: 'pendingWebLabel' },
-  onWeb: { name: 'cloud-done', color: (t) => t.status.draft, label: 'onWebLabel' },
+  // Same colours as pending/synced below: the glyphs alone are too alike at 20px.
+  pendingWeb: { name: 'cloud-upload', color: (t) => t.status.warning, label: 'pendingWebLabel' },
+  onWeb: { name: 'cloud-done', color: (t) => t.status.success, label: 'onWebLabel' },
   draft: { name: 'pencil', color: (t) => t.status.draft, label: 'draftText' },
   pending: { name: 'time', color: (t) => t.status.warning, label: 'legendPending' },
   synced: { name: 'checkmark-circle', color: (t) => t.status.success, label: 'legendSynced' },
