@@ -3,6 +3,7 @@ import { Row, Col, Card, Table, Switch, Button, Space, Tag, Modal } from "antd";
 import { Link, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
+import RenameModal from "./RenameModal";
 
 const TILES = [
   ["users", "Users"],
@@ -18,6 +19,7 @@ const TenantDetail = () => {
   const [tenant, setTenant] = useState(null);
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -160,11 +162,21 @@ const TenantDetail = () => {
               ? text.consoleSuspend
               : text.consoleRestore}
           </Button>
+          <Button onClick={() => setRenaming(true)}>
+            {text.consoleRename}
+          </Button>
           <Button danger onClick={confirmDelete}>
             {text.consoleDelete}
           </Button>
         </Space>
       )}
+
+      <RenameModal
+        tenant={tenant}
+        open={renaming}
+        onClose={() => setRenaming(false)}
+        onRenamed={setTenant}
+      />
 
       <Row gutter={14} style={{ marginTop: 16 }}>
         {TILES.map(([key, label]) => (

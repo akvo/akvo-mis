@@ -198,4 +198,28 @@ describe("Tenant detail", () => {
       screen.queryByRole("button", { name: /^delete$/i })
     ).not.toBeInTheDocument();
   });
+
+  it("opens the rename dialog on its impact preflight", async () => {
+    await renderDetail();
+    axios.mockClear();
+    axios.mockResolvedValue({
+      status: 200,
+      data: {
+        mobile_devices: 23,
+        published_dashboards: 3,
+        embedded_dashboards: 1,
+      },
+    });
+    await act(async () => {
+      userEvent.click(screen.getByRole("button", { name: /^rename$/i }));
+    });
+    expect(
+      axios.mock.calls.some(([conf]) =>
+        conf.url.includes("admin/tenants/42/rename-impact")
+      )
+    ).toBe(true);
+    expect(
+      await screen.findByText(/23 enrolled mobile devices/)
+    ).toBeInTheDocument();
+  });
 });
