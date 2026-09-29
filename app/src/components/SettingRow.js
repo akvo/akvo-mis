@@ -1,8 +1,31 @@
-import React from 'react';
-import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, Animated, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import useTheme from '../lib/theme';
 import LevelIcon from './LevelIcon';
+
+const TRACK_W = 48;
+const TRACK_H = 28;
+const THUMB = 22;
+
+const CustomToggle = ({ value: isOn, onValueChange, theme, testID }) => {
+  const pos = useRef(new Animated.Value(isOn ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(pos, { toValue: isOn ? 1 : 0, duration: 200, useNativeDriver: false }).start();
+  }, [isOn, pos]);
+  const tx = pos.interpolate({ inputRange: [0, 1], outputRange: [3, TRACK_W - THUMB - 3] });
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={() => onValueChange(!isOn)}
+      testID={testID}
+    >
+      <View style={[toggleStyles.track, { backgroundColor: isOn ? theme.buttonPrimary.bg : theme.border.divider }]}>
+        <Animated.View style={[toggleStyles.thumb, { transform: [{ translateX: tx }] }]} />
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 /**
  * Figma "Setting Row" (6226:1039). `control` picks the trailing element:
@@ -41,11 +64,10 @@ const SettingRow = ({
     }
     if (control === 'toggle') {
       return (
-        <Switch
+        <CustomToggle
           value={!!value}
           onValueChange={onValueChange}
-          trackColor={{ true: theme.buttonPrimary.bg, false: theme.border.divider }}
-          thumbColor={theme.buttonPrimary.text}
+          theme={theme}
           testID={switchTestID}
         />
       );
@@ -139,6 +161,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 16,
     letterSpacing: 0.04,
+  },
+});
+
+const toggleStyles = StyleSheet.create({
+  track: {
+    width: TRACK_W,
+    height: TRACK_H,
+    borderRadius: TRACK_H / 2,
+    justifyContent: 'center',
+  },
+  thumb: {
+    width: THUMB,
+    height: THUMB,
+    borderRadius: THUMB / 2,
+    backgroundColor: '#FFFFFF',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
 });
 
