@@ -102,7 +102,8 @@ const FormContainer = ({
 
   const formDefinition = transformForm(forms, currentValues, activeLang, repeats, prevAdmAnswer);
   const questionGroupCount = formDefinition?.question_group?.length || 0;
-  const hasOverview = questionGroupCount > 1;
+  // A single-group form still gets a review step before submitting.
+  const hasOverview = questionGroupCount > 0;
   const totalGroup = hasOverview ? questionGroupCount + 1 : questionGroupCount;
   const isOverviewStep = hasOverview && activeGroup === questionGroupCount;
 
@@ -195,10 +196,12 @@ const FormContainer = ({
       .reduce((prev, current) => ({ ...prev, [current]: reIndexedValues[current] }), {});
 
     const results = checkValuesBeforeCallback({ values: validValues });
-    if (onSubmit) {
-      const { dpName, dpGeo } = generateDataPointName(forms, validValues, cascades, datapoint);
-      onSubmit({ name: dpName, geo: dpGeo, answers: results });
+    if (!onSubmit) {
+      return null;
     }
+    const { dpName, dpGeo } = generateDataPointName(forms, validValues, cascades, datapoint);
+    // Returned so the submit button can show progress until the save settles.
+    return onSubmit({ name: dpName, geo: dpGeo, answers: results });
   };
 
   const handleOnActiveGroup = (page) => {

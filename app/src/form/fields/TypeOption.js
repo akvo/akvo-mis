@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { FieldLabel, OptionItem } from '../support';
@@ -6,6 +6,7 @@ import getStyles from '../styles';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
 import useTheme from '../../lib/theme';
+import useDropdownPlacement from '../lib/dropdown-placement';
 
 const TypeOption = ({
   onChange,
@@ -23,6 +24,8 @@ const TypeOption = ({
   const theme = useTheme();
   const styles = getStyles(theme);
   const showSearch = useMemo(() => option.length > 3, [option]);
+  const anchor = useRef(null);
+  const { placement, place } = useDropdownPlacement();
   const activeLang = FormState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
   const requiredValue = required ? requiredSign : null;
@@ -98,40 +101,49 @@ const TypeOption = ({
   return (
     <View style={styles.optionContainer}>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
-      <Dropdown
-        style={style}
-        selectedTextStyle={[selectedStyle, !color && { color: theme.input.textInput }]}
-        containerStyle={{
-          backgroundColor: theme.bg.surfaceElevated1,
-          borderRadius: 12,
-        }}
-        data={option}
-        search={showSearch}
-        maxHeight={500}
-        labelField="label"
-        valueField="value"
-        searchPlaceholder={trans.searchPlaceholder}
-        value={value?.[0] || ''}
-        onChange={({ value: optValue }) => {
-          if (onChange) {
-            onChange(id, [optValue]);
-          }
-        }}
-        renderItem={(item, selected) => (
-          <OptionItem label={item.label} name={item.name} color={item.color} selected={selected} />
-        )}
-        testID="type-option-dropdown"
-        placeholder={trans.selectItem}
-        placeholderStyle={{ color: theme.input.text }}
-        inputSearchStyle={{
-          borderRadius: 12,
-          backgroundColor: theme.bg.surfaceTertiary,
-          borderColor: 'transparent',
-          color: theme.text.primary,
-          paddingHorizontal: 12,
-        }}
-        disable={disabled}
-      />
+      <View ref={anchor} collapsable={false}>
+        <Dropdown
+          style={style}
+          dropdownPosition={placement.dropdownPosition}
+          onFocus={() => place(anchor)}
+          selectedTextStyle={[selectedStyle, !color && { color: theme.input.textInput }]}
+          containerStyle={{
+            backgroundColor: theme.bg.surfaceElevated1,
+            borderRadius: 12,
+          }}
+          data={option}
+          search={showSearch}
+          maxHeight={placement.maxHeight}
+          labelField="label"
+          valueField="value"
+          searchPlaceholder={trans.searchPlaceholder}
+          value={value?.[0] || ''}
+          onChange={({ value: optValue }) => {
+            if (onChange) {
+              onChange(id, [optValue]);
+            }
+          }}
+          renderItem={(item, selected) => (
+            <OptionItem
+              label={item.label}
+              name={item.name}
+              color={item.color}
+              selected={selected}
+            />
+          )}
+          testID="type-option-dropdown"
+          placeholder={trans.selectItem}
+          placeholderStyle={{ color: theme.input.text }}
+          inputSearchStyle={{
+            borderRadius: 12,
+            backgroundColor: theme.bg.surfaceTertiary,
+            borderColor: 'transparent',
+            color: theme.text.primary,
+            paddingHorizontal: 12,
+          }}
+          disable={disabled}
+        />
+      </View>
     </View>
   );
 };

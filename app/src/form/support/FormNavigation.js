@@ -1,5 +1,12 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ToastAndroid } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ToastAndroid,
+  ActivityIndicator,
+} from 'react-native';
 import { UIState, FormState } from '../../store';
 import i18n from '../../lib/i18n';
 import { generateValidationSchemaFieldLevel, onFilterDependency } from '../lib';
@@ -16,6 +23,7 @@ const FormNavigation = ({
   setShowDialogMenu,
 }) => {
   const theme = useTheme();
+  const [submitting, setSubmitting] = useState(false);
   const visitedQuestionGroup = FormState.useState((s) => s.visitedQuestionGroup);
   const currentValues = FormState.useState((s) => s.currentValues);
   const activeLang = UIState.useState((s) => s.lang);
@@ -159,15 +167,23 @@ const FormNavigation = ({
   };
 
   const handleSubmit = async () => {
-    const allGroupsValid = await validateAllGroups();
-    if (allGroupsValid) {
-      onSubmit();
-    } else {
-      ToastAndroid.show(
-        trans.completeAllRequiredFields ||
-          'Please complete all required fields in all sections before submitting',
-        ToastAndroid.LONG,
-      );
+    if (submitting) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const allGroupsValid = await validateAllGroups();
+      if (allGroupsValid) {
+        await onSubmit();
+      } else {
+        ToastAndroid.show(
+          trans.completeAllRequiredFields ||
+            'Please complete all required fields in all sections before submitting',
+          ToastAndroid.LONG,
+        );
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -183,21 +199,28 @@ const FormNavigation = ({
       <TouchableOpacity
         style={styles.backButton}
         onPress={handleBack}
-        disabled={showQuestionGroupList}
+        disabled={showQuestionGroupList || submitting}
         testID="form-nav-btn-back"
       >
-        <Text style={[styles.backText, { color: theme.buttonPrimary.bg }]}>{trans.buttonBack}</Text>
+        <Text style={[styles.backText, { color: theme.buttonGhost.color }]}>
+          {trans.buttonBack}
+        </Text>
       </TouchableOpacity>
 
       {isOverviewStep ? (
         <TouchableOpacity
           style={[styles.nextButton, { backgroundColor: theme.buttonPrimary.bg }]}
           onPress={handleSubmit}
+          disabled={submitting}
           testID="form-btn-submit"
         >
-          <Text style={[styles.nextText, { color: theme.buttonPrimary.text }]}>
-            {trans.buttonSubmit}
-          </Text>
+          {submitting ? (
+            <ActivityIndicator color={theme.buttonPrimary.text} testID="form-btn-submit-loading" />
+          ) : (
+            <Text style={[styles.nextText, { color: theme.buttonPrimary.text }]}>
+              {trans.buttonSubmit}
+            </Text>
+          )}
         </TouchableOpacity>
       ) : (
         <TouchableOpacity

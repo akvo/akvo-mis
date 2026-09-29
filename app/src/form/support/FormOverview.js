@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { FormState } from '../../store';
 import { onFilterDependency } from '../lib';
 import useTheme from '../../lib/theme';
+import helpers from '../../lib/helpers';
+import cascades from '../../lib/cascades';
+import { QUESTION_TYPES } from '../../lib/constants';
+import { GeometryView, toImageURL } from '../../components/FormDataDetails';
 
 const formatValue = (value, question) => {
   if (value === null || value === undefined || value === '') {
@@ -22,6 +26,103 @@ const formatValue = (value, question) => {
     return value.toLocaleDateString();
   }
   return String(value);
+};
+
+const isImageAnswer = (type, value) => {
+  if ([QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(type)) {
+    return true;
+  }
+  return type === QUESTION_TYPES.attachment && helpers.isImageFile(value.split('.').pop());
+};
+
+/**
+ * A cascade answer is a node id. TypeCascade records its name in FormState.cascades, but
+ * only once the field has rendered — a group not opened this session (a reopened draft)
+ * has none — so fall back to the source sqlite, as the datapoint detail screen does.
+ */
+const CascadeAnswer = ({ question, textStyle }) => {
+  const { id, raw, source, value } = question;
+  const storedName = FormState.useState((s) => s.cascades?.[id]);
+  const [loadedName, setLoadedName] = useState(null);
+  const nodeId = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+
+  useEffect(() => {
+    if (storedName || !source?.file || !nodeId) {
+      return () => {};
+    }
+    let active = true;
+    cascades
+      .loadDataSource(source, nodeId)
+      .then((row) => {
+        if (active) {
+          setLoadedName(row?.full_path_name || null);
+        }
+      })
+      // Already reported to Sentry by loadDataSource; the id stays as the fallback.
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [storedName, source, nodeId]);
+
+  return (
+    <Text style={textStyle} numberOfLines={2} testID={`overview-cascade-${id}`}>
+      {storedName || loadedName || value}
+    </Text>
+  );
+};
+
+/**
+ * Files and geometries are shown the way the datapoint detail screen shows them, not as
+ * the raw path or coordinate array. Only answered questions reach here.
+ */
+const OverviewAnswer = ({ question, theme }) => {
+  const { id, type, raw, value } = question;
+  if (typeof raw === 'string' && isImageAnswer(type, raw)) {
+    return (
+      <Image
+        source={{ uri: toImageURL(raw) }}
+        style={styles.thumbnail}
+        resizeMode="contain"
+        testID={`overview-image-${id}`}
+      />
+    );
+  }
+  if (type === QUESTION_TYPES.attachment && typeof raw === 'string') {
+    return (
+      <View style={styles.fileRow}>
+        <Icon name="document-attach-outline" size={16} color={theme.text.secondary} />
+        <Text
+          style={[styles.questionValue, styles.fileName, { color: theme.text.primary }]}
+          numberOfLines={1}
+          testID={`overview-file-${id}`}
+        >
+          {raw.split('/').pop()}
+        </Text>
+      </View>
+    );
+  }
+  if (type === QUESTION_TYPES.cascade) {
+    return (
+      <CascadeAnswer
+        question={question}
+        textStyle={[styles.questionValue, { color: theme.text.primary }]}
+      />
+    );
+  }
+  if ([QUESTION_TYPES.geoshape, QUESTION_TYPES.geotrace].includes(type)) {
+    // Not touchable, so a tap on the map still reaches the row and opens the question.
+    return (
+      <View pointerEvents="none" style={styles.geometry}>
+        <GeometryView index={id} answer={raw} type={type} />
+      </View>
+    );
+  }
+  return (
+    <Text style={[styles.questionValue, { color: theme.text.primary }]} numberOfLines={2}>
+      {value}
+    </Text>
+  );
 };
 
 const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
@@ -50,6 +151,9 @@ const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
         const isMissing = q.required && isEmpty;
         return {
           id: q.id,
+          type: q.type,
+          raw: value,
+          source: q.source,
           label: q.label || q.name,
           value: displayValue,
           required: q.required,
@@ -106,18 +210,18 @@ const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
                   {q.label}
                   {q.required && <Text style={{ color: theme.status.error }}> *</Text>}
                 </Text>
-                <Text
-                  style={[
-                    styles.questionValue,
-                    {
-                      color: q.value ? theme.text.primary : theme.text.tertiary,
-                      fontStyle: q.value ? 'normal' : 'italic',
-                    },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {q.value || (q.isMissing ? 'Required' : 'Not answered')}
-                </Text>
+                {q.value ? (
+                  <OverviewAnswer question={q} theme={theme} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.questionValue,
+                      { color: theme.text.tertiary, fontStyle: 'italic' },
+                    ]}
+                  >
+                    {q.isMissing ? 'Required' : 'Not answered'}
+                  </Text>
+                )}
               </View>
               <Icon
                 name="pencil"
@@ -191,6 +295,23 @@ const styles = StyleSheet.create({
   questionValue: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  thumbnail: {
+    width: '100%',
+    height: 120,
+    marginTop: 4,
+    borderRadius: 8,
+  },
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  fileName: {
+    flexShrink: 1,
+  },
+  geometry: {
+    marginTop: 4,
   },
 });
 
