@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Row, Col, Card, Table, Switch, Button, Space, Tag } from "antd";
+import { Row, Col, Card, Table, Switch, Button, Space, Tag, Modal } from "antd";
 import { Link, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
@@ -67,6 +67,39 @@ const TenantDetail = () => {
       );
   };
 
+  const setTenantActive = (active) => {
+    api
+      .post(`admin/tenants/${id}/${active ? "activate" : "deactivate"}`)
+      .then((res) => setTenant(res.data))
+      .catch(() =>
+        notify({ type: "error", message: "Could not update the workspace" })
+      );
+  };
+
+  const confirmDelete = () => {
+    Modal.confirm({
+      title: `Delete ${tenant.subdomain}?`,
+      // States the consequence rather than asking "are you sure". Soft
+      // delete is reversible only from a shell, so this dialog is the
+      // last point a mis-click can be caught.
+      content:
+        "The address stops resolving and every session ends. Data is " +
+        "retained, but restoring the workspace is a shell operation.",
+      okText: text.consoleDelete,
+      okButtonProps: { danger: true },
+      onOk: () =>
+        api
+          .delete(`admin/tenants/${id}`)
+          .then((res) => setTenant(res.data))
+          .catch(() =>
+            notify({
+              type: "error",
+              message: "Could not delete the workspace",
+            })
+          ),
+    });
+  };
+
   if (!tenant) {
     return null;
   }
@@ -112,6 +145,26 @@ const TenantDetail = () => {
         {tenant.subdomain} <Tag>{tenant.state}</Tag>
       </h1>
       <div className="admin-subtle">{tenant.name}</div>
+
+      {/* Nothing here applies to a deleted workspace. Restore only
+          flips is_active, which the deleted state ignores, so the
+          button would report success and change nothing visible; and
+          deleting again would only re-stamp deleted_at. Undoing a
+          delete is a shell operation, exactly as the delete dialog
+          says — offering a button that contradicts it is worse than
+          offering nothing. */}
+      {tenant.state !== "deleted" && (
+        <Space style={{ marginTop: 8 }}>
+          <Button onClick={() => setTenantActive(tenant.state !== "active")}>
+            {tenant.state === "active"
+              ? text.consoleSuspend
+              : text.consoleRestore}
+          </Button>
+          <Button danger onClick={confirmDelete}>
+            {text.consoleDelete}
+          </Button>
+        </Space>
+      )}
 
       <Row gutter={14} style={{ marginTop: 16 }}>
         {TILES.map(([key, label]) => (

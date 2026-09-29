@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { act } from "react-dom/test-utils";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Modal } from "antd";
 import axios from "axios";
 import TenantDetail from "../TenantDetail";
 import "@testing-library/jest-dom";
@@ -63,6 +64,11 @@ describe("Tenant detail", () => {
   // Testing Library unmounts, so a dialog opened by one test is still
   // on screen in the next one and every query for a button by name
   // matches twice.
+  afterEach(() => {
+    Modal.destroyAll();
+    document.body.innerHTML = "";
+  });
+
   it("renders the counts", async () => {
     await renderDetail();
     expect(screen.getByText("128,430")).toBeInTheDocument();
@@ -109,6 +115,45 @@ describe("Tenant detail", () => {
     expect(call[0].url).toBe("admin/users/7/deactivate");
   });
 
+  it("suspends a workspace", async () => {
+    await renderDetail();
+    axios.mockClear();
+    axios.mockResolvedValue({
+      status: 200,
+      data: { ...tenant, state: "suspended" },
+    });
+    await act(async () => {
+      userEvent.click(screen.getByRole("button", { name: /suspend/i }));
+    });
+    const call = axios.mock.calls.find(([conf]) => conf.method === "POST");
+    expect(call[0].url).toContain("admin/tenants/42/deactivate");
+  });
+
+  it("asks before deleting", async () => {
+    // Soft-delete is reversible only from a shell, so the confirmation
+    // is the last point a mis-click can be caught.
+    await renderDetail();
+    await act(async () => {
+      userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    });
+    expect(
+      await screen.findByText(/address stops resolving/i)
+    ).toBeInTheDocument();
+  });
+
+  it("does not delete until the confirmation is accepted", async () => {
+    // The dialog is the guard. Opening it must not be enough to issue
+    // the request, or the guard is decoration.
+    await renderDetail();
+    axios.mockClear();
+    await act(async () => {
+      userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    });
+    expect(
+      axios.mock.calls.find(([conf]) => conf.method === "DELETE")
+    ).toBeUndefined();
+  });
+
   it("keeps the counts on screen after a mutation", async () => {
     // The page assigns each mutation's response straight over the
     // workspace it is displaying, so a reply that omits the counts does
@@ -124,5 +169,33 @@ describe("Tenant detail", () => {
       userEvent.click(screen.getByRole("switch", { name: /embedded/i }));
     });
     expect(screen.getByText("128,430")).toBeInTheDocument();
+  });
+
+  it("offers neither restore nor delete once a workspace is deleted", async () => {
+    // Restore only flips is_active, which a deleted workspace ignores —
+    // the state stays "deleted", nothing visibly changes and no error
+    // is shown. The delete dialog's own copy says restoring is a shell
+    // operation, so a Restore button here contradicts it.
+    axios.mockImplementation(({ url }) =>
+      Promise.resolve({
+        status: 200,
+        data: url.includes("/users") ? users : { ...tenant, state: "deleted" },
+      })
+    );
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={["/admin/tenants/42"]}>
+          <Routes>
+            <Route path="/admin/tenants/:id" element={<TenantDetail />} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+    expect(
+      screen.queryByRole("button", { name: /restore/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^delete$/i })
+    ).not.toBeInTheDocument();
   });
 });
