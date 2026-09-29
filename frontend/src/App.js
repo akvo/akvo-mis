@@ -60,6 +60,7 @@ import {
   AdminLayout,
   Tenants,
   TenantDetail,
+  Operators,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -152,6 +153,7 @@ const RouteList = () => {
           <Route index element={<Navigate to="tenants" replace />} />
           <Route path="tenants" element={<Tenants />} />
           <Route path="tenants/:id" element={<TenantDetail />} />
+          <Route path="operators" element={<Operators />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>
