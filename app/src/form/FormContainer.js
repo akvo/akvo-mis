@@ -195,10 +195,12 @@ const FormContainer = ({
       .reduce((prev, current) => ({ ...prev, [current]: reIndexedValues[current] }), {});
 
     const results = checkValuesBeforeCallback({ values: validValues });
-    if (onSubmit) {
-      const { dpName, dpGeo } = generateDataPointName(forms, validValues, cascades, datapoint);
-      onSubmit({ name: dpName, geo: dpGeo, answers: results });
+    if (!onSubmit) {
+      return null;
     }
+    const { dpName, dpGeo } = generateDataPointName(forms, validValues, cascades, datapoint);
+    // Returned so the submit button can show progress until the save settles.
+    return onSubmit({ name: dpName, geo: dpGeo, answers: results });
   };
 
   const handleOnActiveGroup = (page) => {
