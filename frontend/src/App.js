@@ -58,6 +58,7 @@ import {
   DashboardBuilder,
   DashboardViewer,
   AdminLayout,
+  Tenants,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -148,6 +149,7 @@ const RouteList = () => {
         <Route exact path="/activate/:token" element={<Activate />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="tenants" replace />} />
+          <Route path="tenants" element={<Tenants />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>

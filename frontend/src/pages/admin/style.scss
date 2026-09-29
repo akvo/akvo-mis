@@ -55,4 +55,13 @@
   .admin-account {
     color: $color-default;
   }
+
+  .admin-subtle {
+    font-size: $font-size-small;
+    color: $color-default;
+  }
+
+  .admin-disabled {
+    color: $color-disabled;
+  }
 }
