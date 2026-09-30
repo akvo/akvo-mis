@@ -308,12 +308,13 @@ describe("CreateDashboardModal AI Starter Generation", () => {
     const option = await screen.findByText("Water Points");
     fireEvent.click(option);
 
-    const aiSwitch = screen.getByRole("switch");
-    await userEvent.click(aiSwitch);
-
+    // Monitoring forms selector appears immediately below the registration selection
     expect(
       await screen.findByText("Monitoring Forms to Include")
     ).toBeInTheDocument();
+
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
 
     await userEvent.click(screen.getByText("Create dashboard"));
 

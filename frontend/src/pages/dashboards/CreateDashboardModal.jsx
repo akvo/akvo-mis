@@ -349,6 +349,37 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
             )}
           </Form.Item>
         )}
+        {kind !== "embed" && availableMonitoringForms.length > 0 && (
+          <Form.Item
+            name="monitoring_forms"
+            label={
+              text.dashboardMonitoringFormsLabel ||
+              text.dashboardAiMonitoringFormsLabel ||
+              "Monitoring Forms to Include"
+            }
+            extra={
+              <span className="dashboards-modal-subhint">
+                {text.dashboardMonitoringFormsHint ||
+                  text.dashboardAiMonitoringFormsHint ||
+                  "Optionally choose specific monitoring forms for this dashboard (defaults to all)"}
+              </span>
+            }
+          >
+            <Select
+              mode="multiple"
+              placeholder="All monitoring forms"
+              allowClear
+              showSearch
+              optionFilterProp="children"
+            >
+              {availableMonitoringForms.map((mf) => (
+                <Select.Option key={mf.id} value={mf.id}>
+                  {mf.name}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        )}
         {kind !== "embed" && registrationForms.length > 0 && (
           <>
             <div
@@ -470,35 +501,6 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
                       />
                     </Form.Item>
                   </>
-                )}
-                {availableMonitoringForms.length > 0 && (
-                  <Form.Item
-                    name="monitoring_forms"
-                    label={
-                      text.dashboardAiMonitoringFormsLabel ||
-                      "Monitoring Forms to Include"
-                    }
-                    extra={
-                      <span className="dashboards-modal-subhint">
-                        {text.dashboardAiMonitoringFormsHint ||
-                          "Optionally choose specific monitoring forms for the starter dashboard (defaults to all)"}
-                      </span>
-                    }
-                  >
-                    <Select
-                      mode="multiple"
-                      placeholder="All monitoring forms"
-                      allowClear
-                      showSearch
-                      optionFilterProp="children"
-                    >
-                      {availableMonitoringForms.map((mf) => (
-                        <Select.Option key={mf.id} value={mf.id}>
-                          {mf.name}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
                 )}
                 {submitting && (
                   <div className="dashboards-ai-generating-status">
