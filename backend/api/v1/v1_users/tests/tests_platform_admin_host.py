@@ -29,6 +29,14 @@ class AdminHostTestCase(TestCase):
         self.assertFalse(is_admin_host("admin.evil.com"))
         self.assertFalse(is_admin_host("sub.admin.app.com"))
 
+    @override_settings(ADMIN_SUBDOMAIN="console")
+    def test_the_label_is_configurable(self):
+        # A deployment that already serves something at admin.<domain>,
+        # or that has a workspace called "admin" it cannot rename, moves
+        # the console rather than being stuck.
+        self.assertTrue(is_admin_host("console.app.com"))
+        self.assertFalse(is_admin_host("admin.app.com"))
+
     def test_the_admin_host_resolves_to_no_tenant(self):
         self.assertIsNone(resolve_tenant_from_host("admin.app.com"))
 
@@ -40,20 +48,32 @@ class AdminHostTestCase(TestCase):
         )
         self.assertNotEqual(response.status_code, 404)
 
-    def test_registration_refuses_the_reserved_subdomain(self):
-        response = self.client.post(
+    def register(self, subdomain):
+        return self.client.post(
             "/api/v1/register",
             {
                 "email": "founder@acme.org",
                 "password": "Secret#Pass123",
-                "subdomain": "admin",
+                "subdomain": subdomain,
             },
             content_type="application/json",
             # Registration is served on the base domain; without a host
             # the middleware 404s before the serializer is reached.
             HTTP_HOST="app.com",
         )
-        self.assertEqual(response.status_code, 400)
+
+    def test_registration_refuses_the_reserved_subdomain(self):
+        self.assertEqual(self.register("admin").status_code, 400)
+
+    @override_settings(ADMIN_SUBDOMAIN="console")
+    def test_the_reservation_moves_with_the_console(self):
+        # The label the console is actually on is the one that must be
+        # refused. Reserving "admin" on a deployment whose console lives
+        # at console.<domain> protects an address nothing serves and
+        # leaves the real one registrable -- a workspace that would
+        # shadow the only host this deployment can be administered from.
+        self.assertEqual(self.register("console").status_code, 400)
+        self.assertEqual(self.register("admin").status_code, 200)
 
 
 @override_settings(BASE_DOMAIN="app.com")

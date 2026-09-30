@@ -75,6 +75,12 @@ TESTING = sys.argv[1:2] == ["test"]
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
+# The label the platform console answers on, under BASE_DOMAIN -- see
+# env.example and doc/notes/platform-console.md. Normalised here and
+# nowhere else: "" would put the console at ".<BASE_DOMAIN>", which no
+# browser sends, so empty means the default rather than the apex.
+ADMIN_SUBDOMAIN = environ.get("ADMIN_SUBDOMAIN", "admin") or "admin"
+
 # Origin that serves embedded dashboards' author markup, e.g.
 # "https://embed.example.com". It MUST NOT be this application's origin:
 # the whole point is that a pasted snippet runs somewhere its scripts

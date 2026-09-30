@@ -19,6 +19,21 @@ workspace can take the address from under the console. With
 `BASE_DOMAIN` empty there is no console, because a single-host install
 is one workspace and has nothing to administer across.
 
+The label is `ADMIN_SUBDOMAIN`, and `admin` is only its default. Change
+it if that address is already taken — by another service on the same
+domain, or by a workspace registered before the name was reserved, since
+the reservation refuses new registrations but does not rename rows that
+predate it. The reservation follows the setting, so whatever the console
+is on is what registration refuses.
+
+Two things to know before changing it on a running deployment. The
+frontend cannot read a Django setting, so the label reaches it through
+`config.js` — **run `manage.py generate_config` after changing it**, or
+the browser keeps looking for the console at the old address while the
+server answers at the new one. And an operator invitation already in
+someone's inbox points at the old host; those links stop working, so
+re-invite anyone still pending.
+
 Locally that means one more `/etc/hosts` line beside the ones in
 [`subdomain-local-dev.md`](subdomain-local-dev.md):
 

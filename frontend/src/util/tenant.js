@@ -26,6 +26,16 @@ export const onBaseDomainHost = () => {
   return host === base || host === `www.${base}`;
 };
 
+// The label the platform console answers on, under the base domain.
+// Configured per deployment, so a site that already serves something at
+// admin.<domain> can move the console. The frontend cannot read the
+// Django setting, so it arrives through config.js -- and falls back to
+// "admin" when it does not, because regenerating config.js is a deploy
+// step that gets missed and a console that stops recognising its own
+// host is a blank page.
+export const adminSubdomain = () =>
+  (window?.appConfig?.adminSubdomain || "admin").toLowerCase();
+
 // Is the browser on the platform console?
 //
 // Note the default differs from onBaseDomainHost deliberately. With no
@@ -37,7 +47,9 @@ export const onAdminHost = () => {
   if (!base) {
     return false;
   }
-  return window.location.hostname.toLowerCase() === `admin.${base}`;
+  return (
+    window.location.hostname.toLowerCase() === `${adminSubdomain()}.${base}`
+  );
 };
 
 // The port comes from the address the browser is already on, so a local
@@ -54,11 +66,12 @@ export const baseDomainHost = () =>
 export const workspaceUrl = (subdomain) =>
   `${window.location.protocol}//${subdomain}.${baseDomain()}${port()}`;
 
-// A page on the platform console, which lives on a fixed `admin.` host
-// rather than a workspace's own. Not baseDomainUrl: the main site is
-// where people sign up, and it has no console on it.
+// A page on the platform console, which lives on its own host rather
+// than a workspace's. Not baseDomainUrl: the main site is where people
+// sign up, and it has no console on it.
 export const adminUrl = (path = "") =>
-  `${window.location.protocol}//admin.${baseDomain()}${port()}${path}`;
+  `${window.location.protocol}//${adminSubdomain()}.${baseDomain()}` +
+  `${port()}${path}`;
 
 // A page on the main site. Every way out of a workspace that does not
 // exist leads here, and it is a different origin, so these are real

@@ -10,7 +10,7 @@ from rest_framework import serializers
 
 from api.v1.v1_profile.constants import FeatureFlags
 from api.v1.v1_users.models import SystemUser, Tenant
-from utils.tenant_host import ADMIN_SUBDOMAIN, embed_hostname
+from utils.tenant_host import admin_subdomain, embed_hostname
 
 
 # The three states a workspace can be in, and the rows each one selects.
@@ -143,7 +143,7 @@ class TenantRenameSerializer(serializers.Serializer):
     )
 
     def validate_subdomain(self, value):
-        if value.lower() == ADMIN_SUBDOMAIN:
+        if value.lower() == admin_subdomain():
             raise serializers.ValidationError("This subdomain is reserved.")
         embed = embed_hostname()
         if embed and settings.BASE_DOMAIN:
