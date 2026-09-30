@@ -21,7 +21,7 @@ const CustomToggle = ({ value: isOn, onValueChange, theme, testID }) => {
       testID={testID}
     >
       <View style={[toggleStyles.track, { backgroundColor: isOn ? theme.buttonPrimary.bg : theme.border.divider }]}>
-        <Animated.View style={[toggleStyles.thumb, { transform: [{ translateX: tx }] }]} />
+        <Animated.View style={[toggleStyles.thumb, { backgroundColor: theme.bg.surfaceElevated3, shadowColor: theme.bg.surfacePrimary, transform: [{ translateX: tx }] }]} />
       </View>
     </TouchableOpacity>
   );
@@ -175,9 +175,7 @@ const toggleStyles = StyleSheet.create({
     width: THUMB,
     height: THUMB,
     borderRadius: THUMB / 2,
-    backgroundColor: '#FFFFFF',
     elevation: 3,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,

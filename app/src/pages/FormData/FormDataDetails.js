@@ -21,13 +21,16 @@ import {
   AttachmentView,
   SubtitleContent,
   SectionLabel,
-  formDataDetailsStyles as sharedStyles,
+  formDataDetailsStyles as getSharedStyles,
 } from '../../components';
 import FormDataNavigation from './FormDataNavigation';
 import { QUESTION_TYPES } from '../../lib/constants';
 import MIME_TYPES from '../../lib/mime_types';
+import useTheme from '../../lib/theme';
 
 const FormDataDetails = ({ navigation, route }) => {
+  const theme = useTheme();
+  const sharedStyles = getSharedStyles(theme);
   const selectedForm = FormState.useState((s) => s.form);
   const currentValues = FormState.useState((s) => s.currentValues);
   const [currentPage, setCurrentPage] = useState(0);

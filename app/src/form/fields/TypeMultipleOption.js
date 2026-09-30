@@ -82,7 +82,7 @@ const TypeMultipleOption = ({
           )}
           renderSelectedItem={({ color, label: labelText, name }) => {
             const bgColor = color || theme.bg.surfaceChip;
-            const textColor = color ? '#fff' : theme.text.primary;
+            const textColor = color ? theme.buttonPrimary.text : theme.text.primary;
             return (
               <View
                 style={{

@@ -58,7 +58,7 @@ const getStyles = (theme) =>
     },
     fieldRequiredIcon: {
       color: theme.status.error,
-      paddingLeft: 10,
+      paddingRight: 10,
     },
     fieldLabel: {
       display: 'flex',

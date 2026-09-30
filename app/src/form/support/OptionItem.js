@@ -5,9 +5,9 @@ import useTheme from '../../lib/theme';
 
 const OptionItem = ({ label, name, color, selected, isMulti }) => {
   const theme = useTheme();
-  const textColor = color ? '#ffffff' : theme.text.primary;
+  const textColor = color ? theme.buttonPrimary.text : theme.text.primary;
   const plainIconColor = selected ? theme.icon.primary : theme.text.tertiary;
-  const iconColor = color ? '#ffffff' : plainIconColor;
+  const iconColor = color ? theme.buttonPrimary.text : plainIconColor;
   return (
     <View style={{ padding: 3 }}>
       <View

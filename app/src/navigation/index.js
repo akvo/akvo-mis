@@ -81,8 +81,9 @@ const HomeTabs = () => {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: theme.bottomNav.bg,
-          borderTopColor: theme.bottomNav.border,
-          borderTopWidth: 1,
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
           paddingTop: 10,
           paddingBottom: bottomPad,
           height: 70 + bottomPad,
@@ -148,7 +149,7 @@ const HomeTabs = () => {
             UIState.update((s) => {
               s.statusBar = {
                 type: SYNC_STATUS.on_progress,
-                bgColor: '#1651b6',
+                bgColor: theme.banner.syncBg,
                 icon: 'sync',
               };
               s.triggerSync = true;

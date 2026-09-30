@@ -18,12 +18,12 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
       onRequestClose={() => setVisible(false)}
       testID="save-dialog-menu"
     >
-      <Pressable style={styles.overlay} onPress={() => setVisible(false)}>
+      <Pressable style={[styles.overlay, { backgroundColor: theme.bg.scrim }]} onPress={() => setVisible(false)}>
         <Pressable
           style={[styles.sheet, { backgroundColor: theme.bg.surfaceElevated1 }]}
           onPress={() => {}}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: theme.text.tertiary }]} />
           <Text style={[styles.title, { color: theme.text.primary }]}>
             {trans.leaveSubmissionTitle || 'Leave this submission?'}
           </Text>
@@ -117,7 +117,7 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: undefined,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#999',
+    backgroundColor: undefined,
     alignSelf: 'center',
     marginBottom: 16,
   },

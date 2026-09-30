@@ -86,7 +86,7 @@ const TypeAutofield = ({
         style={{
           fontWeight: 'bold',
           opacity: 1,
-          color: fieldColor ? '#ffffff' : theme.text.primary,
+          color: fieldColor ? theme.buttonPrimary.text : theme.text.primary,
         }}
       />
     </View>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { UIState } from '../../store';
 import i18n from '../../lib/i18n';
+import useTheme from '../../lib/theme';
 import loadMapDrawHtml from '../../lib/map-draw-html';
 import { currentTileSource } from '../../lib/map-tiles';
 import { QUESTION_TYPES } from '../../lib/constants';
@@ -35,6 +36,7 @@ const toPoints = (answer) => {
  * geoshape is a closed ring with an enclosed area; geotrace is an open line with neither.
  */
 const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
+  const theme = useTheme();
   const [htmlContent, setHtmlContent] = useState(null);
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
@@ -71,7 +73,7 @@ const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
 
   return (
     <View testID={`text-type-geometry-${index}`} style={styles.container}>
-      <View style={styles.mapWrapper}>
+      <View style={[styles.mapWrapper, { backgroundColor: theme.bg.surfaceTertiary }]}>
         {htmlContent ? (
           <WebView
             originWhitelist={['about:blank']}
@@ -107,7 +109,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 4,
     overflow: 'hidden',
-    backgroundColor: '#f2f2f2',
+    backgroundColor: undefined,
     justifyContent: 'center',
   },
   map: {

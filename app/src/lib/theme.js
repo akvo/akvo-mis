@@ -167,7 +167,7 @@ const dark = {
 const light = {
   // ---- backgrounds ----
   bg: {
-    surfacePrimary: '#EEEEEE',
+    surfacePrimary: '#EAEAEA',
     surfaceSecondary: '#FFFFFF',
     surfaceTertiary: '#EAEAEA',
     surfaceElevated1: '#FFFFFF',

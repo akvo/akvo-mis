@@ -63,7 +63,7 @@ const TypeNumber = ({
           ...(hasError ? styles.inputFieldError : {}),
         }}
         style={{
-          color: fieldColor ? '#ffffff' : theme.input.textInput,
+          color: fieldColor ? theme.buttonPrimary.text : theme.input.textInput,
         }}
         keyboardType="numeric"
         onChangeText={(val) => {

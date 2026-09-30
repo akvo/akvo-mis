@@ -6,9 +6,11 @@ import * as Linking from 'expo-linking';
 import { UIState } from '../../store';
 import { cascades, i18n } from '../../lib';
 import { QUESTION_TYPES } from '../../lib/constants';
+import useTheme from '../../lib/theme';
 import GeometryView from './GeometryView';
 
 const SubtitleContent = ({ index, answer, type, source = null, option = [] }) => {
+  const theme = useTheme();
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
   const [cascadeValue, setCascadeValue] = useState(null);
@@ -81,7 +83,7 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
         <View testID={`text-type-attachment-${index}`} style={{ width: '100%' }}>
           <Text
             testID={`text-answer-${index}`}
-            style={{ color: 'blue', textDecorationLine: 'underline' }}
+            style={{ color: theme.buttonGhost.color, textDecorationLine: 'underline' }}
           >
             {answer.split('/').pop()}
           </Text>
@@ -89,7 +91,7 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
             title={trans.openFileButton}
             onPress={() => openFileManager(answer)}
             testID={`open-file-button-${index}`}
-            buttonStyle={{ width: '100%', backgroundColor: '#1E90FF', marginTop: 8 }}
+            buttonStyle={{ width: '100%', backgroundColor: theme.buttonPrimary.bg, marginTop: 8 }}
           />
         </View>
       );

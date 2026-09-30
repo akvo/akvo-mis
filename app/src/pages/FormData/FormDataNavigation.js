@@ -4,10 +4,10 @@ import { Button } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { UIState } from '../../store';
 import { i18n } from '../../lib';
-
-const colorPrimary = '#1f2937';
+import useTheme from '../../lib/theme';
 
 const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
+  const theme = useTheme();
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
 
@@ -20,10 +20,10 @@ const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
 
   const disabledBack = currentPage === 0;
   const disabledNext = currentPage === totalPage - 1;
-  const colorIconBack = disabledBack ? '#9ca3af' : colorPrimary;
-  const colorIconNext = disabledNext ? '#9ca3af' : colorPrimary;
+  const colorIconBack = disabledBack ? theme.text.tertiary : theme.text.primary;
+  const colorIconNext = disabledNext ? theme.text.tertiary : theme.text.primary;
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { borderTopColor: theme.border.divider }]}>
       <Button
         type="clear"
         testID="button-back"
@@ -31,11 +31,11 @@ const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
         onPress={goBack}
         icon={<Icon name="chevron-back" style={{ ...styles.icon, color: colorIconBack }} />}
         buttonStyle={styles.button}
-        titleStyle={styles.buttonTitle}
+        titleStyle={{ color: theme.text.primary }}
       >
         {trans.buttonBack}
       </Button>
-      <Text testID="text-pagination" style={styles.paginationText}>
+      <Text testID="text-pagination" style={[styles.paginationText, { color: theme.text.primary }]}>
         {currentPage + 1}/{totalPage}
       </Text>
       <Button
@@ -45,7 +45,7 @@ const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
         onPress={goNext}
         icon={<Icon name="chevron-forward" style={{ ...styles.icon, color: colorIconNext }} />}
         buttonStyle={styles.button}
-        titleStyle={styles.buttonTitle}
+        titleStyle={{ color: theme.text.primary }}
         iconRight
       >
         {trans.buttonNext}
@@ -60,7 +60,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    borderTopColor: 'grey',
     borderTopWidth: 0.5,
     borderBottomWidth: 0,
     paddingVertical: 8,
@@ -73,14 +72,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingHorizontal: 8,
   },
-  buttonTitle: {
-    color: colorPrimary,
-  },
   paginationText: {
     width: '60%',
     textAlign: 'center',
     fontSize: 14,
-    color: colorPrimary,
   },
 });
 

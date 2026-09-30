@@ -179,7 +179,7 @@ const TypeImage = ({
               disabled={isCompressing}
               buttonStyle={s.cameraButton}
               titleStyle={s.cameraButtonText}
-              icon={<Icon name="camera" size={18} color="#fff" style={{ marginRight: 6 }} />}
+              icon={<Icon name="camera" size={18} color={theme.buttonPrimary.text} style={{ marginRight: 6 }} />}
               title={trans.buttonUseCamera}
             />
             {useGallery && (
