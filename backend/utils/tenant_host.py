@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 
+from api.v1.v1_profile.constants import FeatureFlags
 from api.v1.v1_users.models import Tenant
 
 
@@ -32,6 +33,28 @@ def is_base_domain(host):
         return True
     base = settings.BASE_DOMAIN.lower()
     return _normalize(host) in (base, f"www.{base}")
+
+
+# The label the platform console answers on. Registration and rename
+# both refuse it, so no workspace can take it from here on. A row that
+# predates the reservation is possible and is left to be renamed by
+# hand rather than blocked by a migration: which label the console uses
+# is a decision this deployment may revisit, and a migration that
+# hardcoded one would make revisiting it a schema problem.
+ADMIN_SUBDOMAIN = "admin"
+
+
+def is_admin_host(host):
+    """Does this host serve the platform console?
+
+    A third host class beside the base domain and a workspace. Like
+    `is_embed_host`, it is inert without BASE_DOMAIN -- a single-host
+    install is one workspace and has no console.
+    """
+    if not settings.BASE_DOMAIN:
+        return False
+    admin = f"{ADMIN_SUBDOMAIN}.{settings.BASE_DOMAIN}".lower()
+    return _normalize(host) == admin
 
 
 def embed_hostname():
@@ -63,21 +86,22 @@ def tenant_may_embed(tenant):
     its own there is nowhere safe to run a third-party snippet, so no
     workspace can embed however it was sold.
 
-    `EMBED_TENANTS` is the commercial entitlement. Membership is by
-    subdomain, which is the tenant identifier that survives being
-    written down in an environment variable -- a primary key would not
-    survive a restore into a fresh database.
+    `Tenant.features` holds the commercial entitlement, which an
+    operator toggles from the console. It used to be `EMBED_TENANTS`,
+    an environment variable keyed by subdomain, so selling the feature
+    meant a deploy -- and it was the last thing keyed by the subdomain
+    string, which is what a rename invalidates.
 
     A tenant of None is not entitled. That is the honest answer for the
-    base domain and for a deployment with no tenant rows, and it also
-    means a single-host install must name its workspace in
-    `EMBED_TENANTS` like any other. Defaulting the tenant-less case to
-    "allowed" would have made the base domain the one place the
-    entitlement did not apply.
+    base domain and for a deployment with no tenant rows. Defaulting
+    the tenant-less case to "allowed" would have made the base domain
+    the one place the entitlement did not apply.
     """
     if not settings.EMBED_HOST or tenant is None:
         return False
-    return (tenant.subdomain or "").lower() in settings.EMBED_TENANTS
+    return bool(
+        (tenant.features or {}).get(FeatureFlags.embedded_dashboard)
+    )
 
 
 def resolve_tenant_from_host(host):
@@ -93,7 +117,13 @@ def resolve_tenant_from_host(host):
     # resolve to nothing useful, or worse, to a tenant it is not.
     if not label or "." in label:
         return None
-    return Tenant.objects.filter(subdomain=label).first()
+    # Suspension and deletion are enforced here and nowhere else. A
+    # workspace that stops resolving 404s at the middleware, which also
+    # kills sessions already holding a valid 12-hour token -- filtering
+    # only at login would leave those running for the rest of the day.
+    return Tenant.objects.filter(
+        subdomain=label, is_active=True, deleted_at=None
+    ).first()
 
 
 def tenant_web_url(tenant):
@@ -104,18 +134,38 @@ def tenant_web_url(tenant):
     enforced to that host. Sending it to the base domain would strand
     the registrant one click from a login they cannot use.
 
-    `WEBDOMAIN` keeps supplying the scheme and port — which differ
-    between local development and production — while `BASE_DOMAIN`
-    supplies the host. With no base domain or no tenant there is only
-    one address, and it is `WEBDOMAIN` unchanged.
+    With no base domain or no tenant there is only one address, and it
+    is `WEBDOMAIN` unchanged. An operator is tenant-less but does have
+    an address of their own -- see `console_web_url`.
     """
     if not settings.BASE_DOMAIN or not tenant:
         return settings.WEBDOMAIN
+    return _web_url_for_label(tenant.subdomain)
+
+
+def _web_url_for_label(label):
+    """A sibling host of the base domain, as a full URL.
+
+    `WEBDOMAIN` keeps supplying the scheme and port -- which differ
+    between local development and production -- while `BASE_DOMAIN`
+    supplies the host.
+    """
     parsed = urlparse(settings.WEBDOMAIN)
     port = f":{parsed.port}" if parsed.port else ""
-    return (
-        f"{parsed.scheme}://{tenant.subdomain}.{settings.BASE_DOMAIN}{port}"
-    )
+    return f"{parsed.scheme}://{label}.{settings.BASE_DOMAIN}{port}"
+
+
+def console_web_url():
+    """Where the platform console lives -- for operator invitations.
+
+    An operator belongs to no workspace, so `tenant_web_url` would send
+    them to the base domain: the public signup page, and the one origin
+    where `login` refuses them. Their activation link has to land on the
+    console, which is also where the session it hands back is usable.
+    """
+    if not settings.BASE_DOMAIN:
+        return settings.WEBDOMAIN
+    return _web_url_for_label(ADMIN_SUBDOMAIN)
 
 
 def public_tenant(request):

@@ -23,9 +23,75 @@ from api.v1.v1_users.views import (
     configure_project,
     tenant_info,
 )
+from api.v1.v1_users.admin_views import (
+    activate_tenant,
+    activate_user,
+    deactivate_tenant,
+    deactivate_user,
+    operators,
+    revoke_operator,
+    list_tenants,
+    rename_tenant,
+    set_tenant_features,
+    tenant_detail,
+    tenant_rename_impact,
+    tenant_users,
+    tenants_summary,
+)
 from api.v1.v1_profile.views import list_entity_data
 
 urlpatterns = [
+    # Console routes first, and every one anchored. The existing
+    # patterns in this file are mostly unanchored prefixes -- `users`
+    # would otherwise swallow `admin/tenants/1/users`.
+    re_path(r"^(?P<version>(v1))/admin/tenants$", list_tenants),
+    re_path(r"^(?P<version>(v1))/admin/operators$", operators),
+    re_path(
+        r"^(?P<version>(v1))/admin/operators/(?P<operator_id>[0-9]+)$",
+        revoke_operator,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/"
+        r"deactivate$",
+        deactivate_tenant,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/activate$",
+        activate_tenant,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/features$",
+        set_tenant_features,
+    ),
+    # Before the numeric-id pattern. `summary` is not a number so it
+    # would not match today, but the ordering makes that a property of
+    # the list rather than of the regex.
+    re_path(r"^(?P<version>(v1))/admin/tenants/summary$", tenants_summary),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/"
+        r"rename-impact$",
+        tenant_rename_impact,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/rename$",
+        rename_tenant,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/users$",
+        tenant_users,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/users/(?P<user_id>[0-9]+)/deactivate$",
+        deactivate_user,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/users/(?P<user_id>[0-9]+)/activate$",
+        activate_user,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)$",
+        tenant_detail,
+    ),
     # Anchored: unanchored, this pattern also matches /levels-management
     # and — because v1_users is included before v1_profile — would answer
     # it with the read-only list.

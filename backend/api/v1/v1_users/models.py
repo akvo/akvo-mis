@@ -48,10 +48,21 @@ class OrganisationAttribute(models.Model):
 
 
 class Tenant(models.Model):
-    # Free-tier registration creates one Tenant per sign-up. Only the
-    # subdomain is stored for now; tenant scoping of data and subdomain
-    # routing are future work — this table is the anchor they hang off.
+    # Free-tier registration creates one Tenant per sign-up. The
+    # subdomain is also the workspace's name: there is deliberately no
+    # separate display field, which would be a synonym that drifts out
+    # of step with the address people actually type.
     subdomain = models.CharField(max_length=63, unique=True)
+    # Three states on two columns. Suspension is an operational lever
+    # an operator uses and undoes; deletion is an ending. They differ
+    # in reversibility and visibility, not in enforcement -- both stop
+    # the host resolving, at the one line in resolve_tenant_from_host.
+    is_active = models.BooleanField(default=True)
+    deleted_at = models.DateTimeField(default=None, null=True, blank=True)
+    # Per-workspace commercial entitlements, keyed by FeatureFlags.
+    # Unknown keys are rejected at the serializer rather than by the
+    # column, which is the trade a JSON field makes.
+    features = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -77,6 +88,13 @@ class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
     # and invited users active; only registrants start inactive, until they
     # follow the activation link.
     is_active = models.BooleanField(default=True)
+    # Platform operator, not workspace owner. Deliberately a second
+    # flag rather than a reuse of is_superuser, which every permission
+    # class in this codebase reads as "owns this workspace" -- an
+    # operator holding it would pass those checks the moment a tenant
+    # was in scope. An operator has tenant=None; the two flags are
+    # independent and no code path sets both.
+    is_platform_admin = models.BooleanField(default=False)
     updated = models.DateTimeField(default=None, null=True)
     organisation = models.ForeignKey(
         to=Organisation,

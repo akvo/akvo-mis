@@ -20,7 +20,11 @@ test suite and any single-host deployment run.
 from django.http import JsonResponse
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from utils.tenant_host import is_base_domain, resolve_tenant_from_host
+from utils.tenant_host import (
+    is_admin_host,
+    is_base_domain,
+    resolve_tenant_from_host,
+)
 
 # The two requests that must be answered on whatever host they arrive on.
 #
@@ -77,11 +81,16 @@ class TenantMiddleware:
         if request.path.startswith(EXEMPT_PATHS):
             return self.get_response(request)
 
-        # A host that is neither the signup domain nor a workspace names
-        # nothing this deployment serves. Answering 404 before the view
-        # runs also means a typo'd subdomain gets "no such workspace"
-        # rather than a login page it could never log in to.
-        if request.tenant is None and not is_base_domain(host):
+        # A host that is neither the signup domain, the console, nor a
+        # workspace names nothing this deployment serves. Answering 404
+        # before the view runs also means a typo'd subdomain gets "no
+        # such workspace" rather than a login page it could never log
+        # in to.
+        if (
+            request.tenant is None
+            and not is_base_domain(host)
+            and not is_admin_host(host)
+        ):
             return JsonResponse({"message": "Workspace not found"}, status=404)
 
         # Enforcement needs an account to compare, so it is skipped for

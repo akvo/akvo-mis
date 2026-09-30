@@ -4,6 +4,10 @@ export const SYNC_FORM_VERSION_TASK_NAME = 'sync-form-version';
 
 export const SYNC_FORM_SUBMISSION_TASK_NAME = 'sync-form-submission';
 
+// Not a task: the notification type shown when the server refuses this
+// device because the person behind it was deactivated or deleted.
+export const ACCOUNT_DEACTIVATED_NOTIFICATION = 'account-deactivated';
+
 export const SYNC_STATUS = {
   on_progress: 1,
   re_sync: 2,

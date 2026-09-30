@@ -2,7 +2,7 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Alert, Platform } from 'react-native';
-import { SYNC_FORM_SUBMISSION_TASK_NAME } from './constants';
+import { ACCOUNT_DEACTIVATED_NOTIFICATION, SYNC_FORM_SUBMISSION_TASK_NAME } from './constants';
 
 const registerForPushNotificationsAsync = async () => {
   if (Platform.OS === 'android') {
@@ -39,6 +39,16 @@ const sendPushNotification = async (type = 'sync-form-version') => {
   };
   let notificationBody = null;
   switch (type) {
+    case ACCOUNT_DEACTIVATED_NOTIFICATION:
+      notificationBody = {
+        content: {
+          title: 'Account deactivated',
+          body: 'Your account has been deactivated. Contact your administrator.',
+          data,
+        },
+        trigger: null,
+      };
+      break;
     case SYNC_FORM_SUBMISSION_TASK_NAME:
       notificationBody = {
         content: {

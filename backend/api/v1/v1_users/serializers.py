@@ -41,7 +41,7 @@ from api.v1.v1_profile.constants import FeatureAccessTypes
 from django.conf import settings
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
-from utils.tenant_host import embed_hostname
+from utils.tenant_host import ADMIN_SUBDOMAIN, embed_hostname
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
 
 
@@ -966,6 +966,11 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "configured",
             "subdomain",
+            # The console's route guard reads this and has nothing else
+            # to read: `is_superuser` is a workspace role (D-1), and a
+            # tenant-less account's `subdomain` is "" for reasons that
+            # have nothing to do with being an operator.
+            "is_platform_admin",
         ]
 
 
@@ -1152,6 +1157,11 @@ class RegisterSerializer(serializers.Serializer):
         correct whatever `EMBED_HOST` is set to, and inert when either
         setting is empty.
         """
+        # The console's own host. A workspace here would not merely
+        # collide -- it would shadow the only address from which this
+        # deployment can be administered.
+        if value.lower() == ADMIN_SUBDOMAIN:
+            raise serializers.ValidationError("This subdomain is reserved.")
         embed = embed_hostname()
         if embed and settings.BASE_DOMAIN:
             candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
