@@ -157,8 +157,8 @@ const AISuggestionDrawer = ({
 
   const fetchSuggestions = useCallback(
     (customHint = null) => {
-      if (!dashboardId || !visible) {
-        return;
+      if (!dashboardId) {
+        return Promise.resolve();
       }
 
       if (abortControllerRef.current) {
@@ -170,12 +170,27 @@ const AISuggestionDrawer = ({
       setLoading(true);
       setError(null);
 
-      dashboardAi
-        .getStatus()
-        .then((statusRes) => {
+      const existingTypes = (existingWidgetsRef.current || [])
+        .map((w) => w.type)
+        .filter(Boolean);
+
+      const payload = {
+        existing_widget_types: existingTypes,
+      };
+
+      const hintToUse =
+        customHint !== null ? customHint : promptHintRef.current;
+      const trimmedHint = (hintToUse || "").trim();
+      if (trimmedHint) {
+        payload.prompt_hint = trimmedHint;
+      }
+
+      return dashboardAi
+        .suggestWidgets(dashboardId, payload, controller.signal)
+        .then((res) => {
           const isAiAvail =
-            typeof statusRes?.data?.ai_available === "boolean"
-              ? statusRes.data.ai_available
+            typeof res?.data?.ai_available === "boolean"
+              ? res.data.ai_available
               : true;
           setAiAvailable(isAiAvail);
           if (!isAiAvail) {
@@ -186,39 +201,19 @@ const AISuggestionDrawer = ({
               promptHint: "",
               aiAvailable: false,
             };
-            setLoading(false);
             return;
           }
 
-          const existingTypes = (existingWidgetsRef.current || [])
-            .map((w) => w.type)
-            .filter(Boolean);
-
-          const payload = {
-            existing_widget_types: existingTypes,
+          const list = Array.isArray(res?.data?.suggestions)
+            ? res.data.suggestions
+            : [];
+          setSuggestions(list);
+          cachedRef.current = {
+            dashboardId,
+            data: list,
+            promptHint: hintToUse || "",
+            aiAvailable: true,
           };
-
-          const hintToUse =
-            customHint !== null ? customHint : promptHintRef.current;
-          const trimmedHint = (hintToUse || "").trim();
-          if (trimmedHint) {
-            payload.prompt_hint = trimmedHint;
-          }
-
-          return dashboardAi
-            .suggestWidgets(dashboardId, payload, controller.signal)
-            .then((res) => {
-              const list = Array.isArray(res?.data?.suggestions)
-                ? res.data.suggestions
-                : [];
-              setSuggestions(list);
-              cachedRef.current = {
-                dashboardId,
-                data: list,
-                promptHint: hintToUse || "",
-                aiAvailable: true,
-              };
-            });
         })
         .catch((err) => {
           if (err?.name === "CanceledError" || err?.name === "AbortError") {
@@ -233,44 +228,48 @@ const AISuggestionDrawer = ({
           setLoading(false);
         });
     },
-    [dashboardId, visible]
+    [dashboardId]
   );
 
-  // Auto-load default recommendations when drawer opens, and retain existing suggestions across open/close
+  // Background prefetch when dashboardId is available, and instant restore when drawer opens
   useEffect(() => {
-    if (visible && dashboardId) {
-      if (cachedRef.current.dashboardId !== dashboardId) {
-        cachedRef.current = {
-          dashboardId,
-          data: null,
-          promptHint: "",
-          aiAvailable: true,
-        };
-        setPromptHint("");
-        setSuggestions([]);
-        setAiAvailable(true);
-        fetchSuggestions("");
-        return;
-      }
-
-      if (cachedRef.current.data !== null) {
-        if (typeof cachedRef.current.aiAvailable === "boolean") {
-          setAiAvailable(cachedRef.current.aiAvailable);
-        }
-        if (suggestions.length === 0) {
-          setSuggestions(cachedRef.current.data);
-          setPromptHint(cachedRef.current.promptHint || "");
-        }
-        return;
-      }
-
-      if (suggestions.length === 0) {
-        fetchSuggestions("");
-      }
-    } else if (!visible && abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (!dashboardId) {
+      return;
     }
-  }, [visible, dashboardId, fetchSuggestions, suggestions.length]);
+
+    if (cachedRef.current.dashboardId !== dashboardId) {
+      cachedRef.current = {
+        dashboardId,
+        data: null,
+        promptHint: "",
+        aiAvailable: true,
+      };
+      setPromptHint("");
+      setSuggestions([]);
+      setAiAvailable(true);
+      fetchSuggestions("");
+      return;
+    }
+
+    if (visible && cachedRef.current.data !== null) {
+      if (typeof cachedRef.current.aiAvailable === "boolean") {
+        setAiAvailable(cachedRef.current.aiAvailable);
+      }
+      if (suggestions.length === 0) {
+        setSuggestions(cachedRef.current.data);
+        setPromptHint(cachedRef.current.promptHint || "");
+      }
+    }
+  }, [dashboardId, visible, fetchSuggestions, suggestions.length]);
+
+  // Clean up in-flight request on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const handleSearch = useCallback(
     (value) => {

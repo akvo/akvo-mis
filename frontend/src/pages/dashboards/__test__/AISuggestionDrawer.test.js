@@ -54,8 +54,8 @@ describe("AISuggestionDrawer", () => {
   });
 
   it("renders unavailable alert and empty state when ai_available is false", async () => {
-    dashboardAi.getStatus.mockResolvedValue({
-      data: { ai_available: false, provider: "none" },
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: { ai_available: false, provider: "none", suggestions: [] },
     });
     render(
       <AISuggestionDrawer
@@ -81,7 +81,40 @@ describe("AISuggestionDrawer", () => {
     expect(
       screen.queryByText("Functionality Breakdown")
     ).not.toBeInTheDocument();
-    expect(dashboardAi.suggestWidgets).not.toHaveBeenCalled();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalled();
+  });
+
+  it("prefetches suggestions in background on mount before drawer is opened", async () => {
+    const { rerender } = render(
+      <AISuggestionDrawer
+        visible={false}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    // Initial background prefetch is triggered immediately when dashboardId is provided
+    await waitFor(() => {
+      expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+    });
+
+    // Opening the drawer displays cached suggestions immediately without duplicate API calls
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Functionality Breakdown")).toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
   });
 
   it("automatically loads default suggestions on open", async () => {
