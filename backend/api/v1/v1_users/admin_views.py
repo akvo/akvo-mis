@@ -33,7 +33,11 @@ from api.v1.v1_users.admin_serializers import (
     TenantSummarySerializer,
     TenantUserSerializer,
 )
-from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_users.models import (
+    SystemUser,
+    Tenant,
+    TenantInspection,
+)
 # Imported by name rather than called through `views`, so that a test
 # patching `admin_views.send_activation_email` patches what this module
 # actually calls.
@@ -471,3 +475,22 @@ def revoke_operator(request, version, operator_id):
     return Response(
         OperatorSerializer(operator).data, status=status.HTTP_200_OK
     )
+
+
+@extend_schema(tags=CONSOLE_TAG,
+               summary="Begin a read-only inspection of a workspace")
+@api_view(["POST"])
+@permission_classes([IsPlatformAdmin])
+def inspect_tenant(request, version, tenant_id):
+    """Record the visit and hand back a one-time code.
+
+    Not the token itself: a JWT in the query string that follows would
+    land in nginx access logs, browser history and any Referer the page
+    emits, and stay valid there for its whole 12-hour life.
+    """
+    tenant = get_object_or_404(
+        console_tenants().filter(is_active=True, deleted_at=None),
+        pk=tenant_id,
+    )
+    code = TenantInspection.mint(request.user, tenant)
+    return Response({"code": code}, status=status.HTTP_200_OK)

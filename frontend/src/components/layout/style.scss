@@ -1,5 +1,16 @@
 @import "../../variables";
 
+// How far the top of the app has been pushed down by a banner above the
+// header. Zero normally; the inspection banner sets it below. Every rule
+// that pins something to the top of the viewport -- the header itself,
+// the control-center and downloads sidebars, the dashboard viewer's back
+// button, the builder -- adds it, so a banner moves them all at once
+// rather than needing an override apiece. A custom property rather than
+// a Sass variable because it has to change at runtime.
+:root {
+  --inspection-offset: 0px;
+}
+
 #root {
   .layout {
     min-width: 100vw;
@@ -21,7 +32,9 @@
     }
 
     .body {
-      padding-top: calc(#{$header-height} + #{$padding-default});
+      padding-top: calc(
+        #{$header-height} + #{$padding-default} + var(--inspection-offset)
+      );
       padding-bottom: $padding-default;
     }
 
@@ -120,7 +133,7 @@
       padding-bottom: $padding-header;
       border-bottom: 1px solid rgba(0, 0, 0, 0.06);
       position: fixed;
-      top: 0;
+      top: var(--inspection-offset);
       left: 0;
       right: 0;
       z-index: 999;
@@ -379,4 +392,39 @@
   &:hover {
     color: $color-dark;
   }
+}
+
+// The one element inspection adds to a workspace's app. Fixed above the
+// header rather than stacked before it: the header is itself fixed to
+// the top of the viewport, so a banner merely earlier in the DOM would
+// be covered by it.
+.inspection-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  height: $inspection-banner-height;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #874d00;
+  color: #fff7e6;
+  padding-left: $layout-padding-small-screen;
+  padding-right: $layout-padding-small-screen;
+
+  @media screen and (min-width: $screen-regular) {
+    padding-left: $layout-padding;
+    padding-right: $layout-padding;
+  }
+}
+
+// The one declaration that moves everything pinned to the top of the
+// viewport down by the banner's height. It is a class on the layout
+// rather than something the banner sets on itself, because a fixed
+// element cannot make room for itself -- and it inherits, so every page
+// inside the app reads it without knowing the banner exists.
+#root .layout.inspecting {
+  --inspection-offset: #{$inspection-banner-height};
 }

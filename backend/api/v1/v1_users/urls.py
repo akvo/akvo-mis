@@ -28,6 +28,7 @@ from api.v1.v1_users.admin_views import (
     activate_user,
     deactivate_tenant,
     deactivate_user,
+    inspect_tenant,
     operators,
     revoke_operator,
     list_tenants,
@@ -37,6 +38,11 @@ from api.v1.v1_users.admin_views import (
     tenant_rename_impact,
     tenant_users,
     tenants_summary,
+)
+from api.v1.v1_users.inspect_views import (
+    exchange_code,
+    switch_tenant,
+    switchable_tenants,
 )
 from api.v1.v1_profile.views import list_entity_data
 
@@ -80,6 +86,15 @@ urlpatterns = [
         r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/users$",
         tenant_users,
     ),
+    re_path(
+        r"^(?P<version>(v1))/admin/tenants/(?P<tenant_id>[0-9]+)/inspect$",
+        inspect_tenant,
+    ),
+    # Served on a workspace's host, not the console's, and authorised by
+    # the inspection token rather than by a console session.
+    re_path(r"^(?P<version>(v1))/inspect/exchange$", exchange_code),
+    re_path(r"^(?P<version>(v1))/inspect/tenants$", switchable_tenants),
+    re_path(r"^(?P<version>(v1))/inspect/switch$", switch_tenant),
     re_path(
         r"^(?P<version>(v1))/admin/users/(?P<user_id>[0-9]+)/deactivate$",
         deactivate_user,

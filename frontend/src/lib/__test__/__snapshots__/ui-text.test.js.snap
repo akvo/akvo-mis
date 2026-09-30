@@ -149,6 +149,7 @@ Object {
     "consoleDelete": "Delete",
     "consoleFeatures": "Features",
     "consoleInspect": "Inspect",
+    "consoleInspectFailed": "Could not open that workspace",
     "consoleInviteOperator": "Invite operator",
     "consoleOperators": "Operators",
     "consoleReactivate": "Reactivate",

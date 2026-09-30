@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Row, Col, Card, Table, Switch, Button, Space, Tag, Modal } from "antd";
+import { EyeOutlined } from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import RenameModal from "./RenameModal";
+import useInspect from "./useInspect";
 
 const TILES = [
   ["users", "Users"],
@@ -20,6 +22,7 @@ const TenantDetail = () => {
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const { inspect, inspecting } = useInspect();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -157,6 +160,21 @@ const TenantDetail = () => {
           offering nothing. */}
       {tenant.state !== "deleted" && (
         <Space style={{ marginTop: 8 }}>
+          {/* First and filled: opening the workspace is what an
+              operator came here to do, and the other three are things
+              they do to it. Only for an active workspace -- a suspended
+              one's host no longer resolves, so the button would open a
+              dead page. */}
+          {tenant.state === "active" && (
+            <Button
+              type="primary"
+              icon={<EyeOutlined />}
+              loading={inspecting === tenant.id}
+              onClick={() => inspect(tenant)}
+            >
+              {text.consoleInspect}
+            </Button>
+          )}
           <Button onClick={() => setTenantActive(tenant.state !== "active")}>
             {tenant.state === "active"
               ? text.consoleSuspend

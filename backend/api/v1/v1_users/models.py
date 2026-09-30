@@ -1,3 +1,6 @@
+import hashlib
+import secrets
+
 from api.v1.v1_profile.constants import OrganisationTypes
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import PermissionsMixin
@@ -148,3 +151,58 @@ class SystemUser(AbstractBaseUser, PermissionsMixin, SoftDeletes):
                 name="unique_email_per_tenant",
             )
         ]
+
+
+class TenantInspection(models.Model):
+    """Where a one-time hand-off code lives until it is exchanged.
+
+    Every column here is functional; this is not an audit feature.
+    Nothing reads these rows once the code is burned, and nothing in
+    the console displays them.
+
+    A table rather than a cache entry because CACHES is a FileBasedCache
+    under /var/tmp/cache, which is per-pod: the mint and the exchange
+    are different requests, and with more than one replica the second
+    would miss. `operator` and `tenant` are here because the exchange
+    receives nothing but a code and has to learn which token to build.
+
+    That the rows remain afterwards gives a forensic trail for free.
+    Free is the operative word -- it is a byproduct, not a control, and
+    no decision elsewhere in this feature rests on it.
+    """
+
+    operator = models.ForeignKey(
+        to=SystemUser,
+        # PROTECT so that revoking an operator can clear their flag and
+        # keep the account, rather than having to choose between losing
+        # the account and orphaning these rows.
+        on_delete=models.PROTECT,
+        related_name="inspections",
+    )
+    tenant = models.ForeignKey(
+        to=Tenant, on_delete=models.PROTECT, related_name="inspections"
+    )
+    # Hashed: it lives 60 seconds and is burned on first use, but in the
+    # clear it would be a live credential in any dump taken in between.
+    code_hash = models.CharField(max_length=64, unique=True)
+    code_used_at = models.DateTimeField(default=None, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def digest(code):
+        """How a code becomes the column. Both the mint and the
+        exchange go through here, so they cannot hash differently."""
+        return hashlib.sha256(str(code).encode()).hexdigest()
+
+    @classmethod
+    def mint(cls, operator, tenant):
+        """Record the visit and return the code, which is the only time
+        it exists in the clear."""
+        code = secrets.token_urlsafe(32)
+        cls.objects.create(
+            operator=operator, tenant=tenant, code_hash=cls.digest(code)
+        )
+        return code
+
+    class Meta:
+        db_table = "tenant_inspection"

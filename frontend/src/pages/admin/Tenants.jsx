@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Table, Input, Space, Tag, Radio } from "antd";
+import { Table, Input, Space, Tag, Radio, Button } from "antd";
 import { Link } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
-import { workspaceUrl } from "../../util/tenant";
+import useInspect from "./useInspect";
 
 const { Search } = Input;
 
@@ -15,6 +15,7 @@ const Tenants = () => {
   const [dataset, setDataset] = useState([]);
   const [search, setSearch] = useState("");
   const [state, setState] = useState("all");
+  const { inspect, inspecting } = useInspect();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
@@ -89,9 +90,14 @@ const Tenants = () => {
         // deleted one would open a 404, so the label renders without a
         // link rather than offering a dead one.
         row.state === "active" ? (
-          <a href={`${workspaceUrl(row.subdomain)}/inspect`}>
+          <Button
+            type="link"
+            size="small"
+            loading={inspecting === row.id}
+            onClick={() => inspect(row)}
+          >
             {text.consoleInspect}
-          </a>
+          </Button>
         ) : (
           <span className="admin-disabled">{text.consoleInspect}</span>
         ),

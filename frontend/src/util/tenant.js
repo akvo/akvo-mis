@@ -40,21 +40,25 @@ export const onAdminHost = () => {
   return window.location.hostname.toLowerCase() === `admin.${base}`;
 };
 
-// The main site's host. The port comes from the address the browser is
-// already on — local development runs on one and production does not —
-// while the domain comes from the configuration, because the host we are
-// on may be a workspace, or a workspace that does not exist.
-export const baseDomainHost = () => {
-  const port = window.location.port ? `:${window.location.port}` : "";
-  return baseDomain() ? `${baseDomain()}${port}` : window.location.host;
-};
-// Where a workspace's app lives. The port comes from the address the
-// browser is already on, so a local development port survives the
-// redirect and production — which has none — is unaffected.
-export const workspaceUrl = (subdomain) => {
-  const port = window.location.port ? `:${window.location.port}` : "";
-  return `${window.location.protocol}//${subdomain}.${baseDomain()}${port}`;
-};
+// The port comes from the address the browser is already on, so a local
+// development port survives every redirect below and production — which
+// has none — is unaffected. The domain never does: the host we are on
+// may be a workspace, or a workspace that does not exist.
+const port = () => (window.location.port ? `:${window.location.port}` : "");
+
+// The main site's host.
+export const baseDomainHost = () =>
+  baseDomain() ? `${baseDomain()}${port()}` : window.location.host;
+
+// Where a workspace's app lives.
+export const workspaceUrl = (subdomain) =>
+  `${window.location.protocol}//${subdomain}.${baseDomain()}${port()}`;
+
+// A page on the platform console, which lives on a fixed `admin.` host
+// rather than a workspace's own. Not baseDomainUrl: the main site is
+// where people sign up, and it has no console on it.
+export const adminUrl = (path = "") =>
+  `${window.location.protocol}//admin.${baseDomain()}${port()}${path}`;
 
 // A page on the main site. Every way out of a workspace that does not
 // exist leads here, and it is a different origin, so these are real

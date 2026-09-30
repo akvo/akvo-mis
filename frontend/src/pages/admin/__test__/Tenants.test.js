@@ -66,14 +66,64 @@ describe("Tenants list", () => {
   });
 
   it("does not offer Inspect for a workspace that cannot resolve", async () => {
-    // A suspended workspace's host 404s, so the link would be dead. The
-    // label still renders for that row — the column stays legible — but
-    // only the active row's copy is a link, which is the whole assertion.
+    // A suspended workspace's host 404s, so inspecting it would open a
+    // dead address. The label still renders for that row — the column
+    // stays legible — but only the active row's copy is a control,
+    // which is the whole assertion.
     await renderList();
     expect(screen.getAllByText("Inspect")).toHaveLength(2);
-    const links = screen.getAllByRole("link", { name: "Inspect" });
-    expect(links).toHaveLength(1);
-    expect(links[0].closest("tr")).toHaveTextContent("mohhs");
+    const actions = screen.getAllByRole("button", { name: "Inspect" });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].closest("tr")).toHaveTextContent("mohhs");
+  });
+
+  describe("the Inspect action", () => {
+    const appConfig = window.appConfig;
+    let originalLocation;
+
+    beforeEach(() => {
+      window.appConfig = { ...appConfig, baseDomain: "app.com" };
+      originalLocation = window.location;
+      delete window.location;
+      window.location = {
+        ...originalLocation,
+        protocol: "http:",
+        hostname: "admin.app.com",
+        host: "admin.app.com",
+        port: "",
+        replace: jest.fn(),
+      };
+    });
+
+    afterEach(() => {
+      window.location = originalLocation;
+      window.appConfig = appConfig;
+    });
+
+    it("mints a one-time code and opens the workspace with it", async () => {
+      await renderList();
+      // The console hands over a code, not a token, and the workspace's
+      // own /inspect spends it. A bare link to that address carries no
+      // credential and lands on the expired-link page.
+      axios.mockResolvedValue({ status: 200, data: { code: "xyz" } });
+      await act(async () => {
+        userEvent.click(screen.getByRole("button", { name: "Inspect" }));
+      });
+      const call = axios.mock.calls.find(([conf]) => conf.method === "POST");
+      expect(call[0].url).toContain("admin/tenants/1/inspect");
+      expect(window.location.replace).toHaveBeenCalledWith(
+        "http://mohhs.app.com/inspect?code=xyz"
+      );
+    });
+
+    it("says so when the code cannot be minted", async () => {
+      await renderList();
+      axios.mockRejectedValue({ response: { status: 404 } });
+      await act(async () => {
+        userEvent.click(screen.getByRole("button", { name: "Inspect" }));
+      });
+      expect(window.location.replace).not.toHaveBeenCalled();
+    });
   });
 
   it("narrows the table to one state", async () => {

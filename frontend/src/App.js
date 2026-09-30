@@ -57,6 +57,7 @@ import {
   DashboardList,
   DashboardBuilder,
   DashboardViewer,
+  Inspect,
   AdminLayout,
   Tenants,
   TenantDetail,
@@ -194,6 +195,11 @@ const RouteList = () => {
         element={onBaseDomainHost() ? <Register /> : <Navigate to="/" />}
       />
       <Route exact path="/activate/:token" element={<Activate />} />
+      {/* The console's one-time code becomes a session here. Reached
+          holding nothing for this origin -- the code is the credential
+          -- so it sits outside Private like the other hand-off routes
+          above it. */}
+      <Route exact path="/inspect" element={<Inspect />} />
       {/* Not wrapped in Private: Private sends every unconfigured user
           here, so guarding this route the same way would loop. Configure
           does its own redirects for the no-session and already-done
@@ -628,7 +634,14 @@ const App = () => {
 
   return (
     <AbilityContext.Provider value={ability(authUser)}>
-      <Layout>
+      {/* The class is what makes room: the banner is fixed, and a fixed
+          element cannot push the header and body down by itself. */}
+      <Layout className={authUser?.is_inspecting ? "inspecting" : ""}>
+        {/* The only thing inspection adds to a workspace's app.
+            Everything below it is the workspace's own layout and pages,
+            untouched -- which is the point of the whole approach. It
+            renders nothing for an ordinary session. */}
+        <Layout.InspectionBanner />
         {/* The app header belongs to a workspace: it fetches that
             workspace's published dashboards and its account menu links
             to /control-center. Neither exists on the console, which

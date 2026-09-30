@@ -72,6 +72,9 @@ class LoginUserTestCase(TestCase):
                 # Whether this session may enter the platform console.
                 # The console's route guard has nothing else to read.
                 "is_platform_admin",
+                # Always false here: only a session opened with an
+                # inspection token reports true.
+                "is_inspecting",
                 "token",
                 "invite",
                 "expiration_time",

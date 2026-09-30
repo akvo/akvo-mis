@@ -8,6 +8,37 @@ const defineAbilityFor = (user) => {
     cannot("manage", "all");
     return build();
   }
+  // A read-only cross-workspace session. Checked before is_superuser,
+  // which the backend sets on an inspecting operator so that the
+  // workspace's own pages render at all.
+  //
+  // The authority is kept and the write verbs are subtracted, rather
+  // than replaced with `can("read", "all")`. In this codebase `manage`
+  // is what the sidebar gates whole sections on -- users, roles,
+  // drafts, submissions, approvals, master data, the mobile app -- so
+  // granting only `read` takes away half the navigation, and an
+  // operator on a support call about master data would find no Master
+  // Data menu and no way to tell whether that is the inspection or the
+  // customer's configuration. A support view that looks right and
+  // behaves wrong is the failure this whole feature exists to avoid.
+  //
+  // Presentation only either way: the server refuses these writes
+  // whether or not the browser attempts them. What this buys is an
+  // operator who is not offered buttons that will 403.
+  if (user?.is_inspecting) {
+    can("manage", "all");
+    cannot(["create", "edit", "delete", "upload", "publish"], "all");
+    // `manage dashboard` is the one place `manage` gates a write rather
+    // than a section: DashboardList reads it as "may create/edit/delete"
+    // alongside the granular verbs, so leaving it granted would offer
+    // three buttons that 403. Withdrawing it takes every dashboard
+    // action with it -- `manage` in a rule is a wildcard, not an action
+    // -- so reading is granted back on the next line, which is what the
+    // sidebar's `manage || read` gate then finds.
+    cannot("manage", "dashboard");
+    can("read", "dashboard");
+    return build();
+  }
   if (user?.is_superuser) {
     can("manage", "all");
   } else if (user) {

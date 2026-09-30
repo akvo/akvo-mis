@@ -1353,6 +1353,7 @@ const uiText = {
     consoleStateSuspended: "Suspended",
     consoleStateDeleted: "Deleted",
     consoleInspect: "Inspect",
+    consoleInspectFailed: "Could not open that workspace",
     consoleSuspend: "Suspend",
     consoleRestore: "Restore",
     consoleRename: "Rename",

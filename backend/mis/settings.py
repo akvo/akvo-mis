@@ -171,7 +171,11 @@ WSGI_APPLICATION = "mis.wsgi.application"
 # Rest Settings
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "api.v1.v1_mobile.authentication.AssignmentAwareJWTAuthentication",
+        # Subclasses the mobile one, which it replaces rather than joins:
+        # inspection has to be recognised everywhere, and a second entry
+        # would only mean whichever ran first decided.
+        "api.v1.v1_users.authentication."
+        "InspectionAwareJWTAuthentication",
     ),
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
     "DATE_FORMAT": "%d-%m-%Y",
@@ -196,6 +200,7 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": (
         "rest_framework_simplejwt.tokens.AccessToken",
         "api.v1.v1_mobile.authentication.MobileAssignmentToken",
+        "api.v1.v1_users.authentication.TenantInspectionToken",
     ),
 }
 # Database

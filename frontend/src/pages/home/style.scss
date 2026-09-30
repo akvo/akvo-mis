@@ -65,7 +65,7 @@
       var(--bg-2) 100%
     );
     overflow: hidden;
-    padding-top: $header-height;
+    padding-top: calc(#{$header-height} + var(--inspection-offset));
   }
 
   .hero {
