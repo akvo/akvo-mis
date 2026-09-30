@@ -113,6 +113,7 @@ def extract_family_metadata(
         .filter(id=root_form_id, type=FormTypes.registration)
         .prefetch_related(
             "form_questions__options",
+            "form_questions__question_group",
         )
         .first()
     )
@@ -129,6 +130,7 @@ def extract_family_metadata(
     monitoring_forms = list(
         monitoring_qs.prefetch_related(
             "form_questions__options",
+            "form_questions__question_group",
         ).order_by("id")
     )
 
@@ -159,11 +161,15 @@ def extract_family_metadata(
                 opt_count = 0
 
             type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
+            group_name = (
+                q.question_group.name if q.question_group else None
+            )
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
                 "type": q.type,
                 "type_name": type_name,
+                "group_name": group_name,
                 "option_count": opt_count,
             }
             if opts:
@@ -177,6 +183,7 @@ def extract_family_metadata(
                 "type": q.type,
                 "label": q.label or q.name,
                 "group_id": q.question_group_id,
+                "group_name": group_name,
             }
 
         sources_map[form_obj.id] = q_map

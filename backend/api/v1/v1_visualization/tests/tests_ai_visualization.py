@@ -91,6 +91,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("id", q_item)
         self.assertIn("label", q_item)
         self.assertIn("type", q_item)
+        self.assertIn("group_name", q_item)
+        self.assertIn("option_count", q_item)
 
     def test_metadata_extraction_not_found(self):
         """Non-existent form returns None."""

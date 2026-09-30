@@ -27,20 +27,23 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "   - Generate all widget `title`, dashboard `suggested_name`, "
     "`description`, and `rationale` in the EXACT SAME LANGUAGE as the form "
     "labels.\n\n"
-    "3. APPROPRIATE VISUAL ENCODING:\n"
+    "3. APPROPRIATE VISUAL ENCODING & CARDINALITY RULES:\n"
     '   - Headline / Total Counts: Use `type: "kpi"` (col_span: 6 or 12).\n'
     "     - Site count / registration total: `question: null`, `config: "
     '{"value_type": "number"}`.\n'
     "     - Numeric metrics: `form: <form_id>`, `question: "
     '<question_id>`, `config: {"value_type": "number", '
     '"repeat_agg": "sum"|"average"}`.\n'
-    "   - Categorical Distributions:\n"
-    '     - 2 to 5 choices: Use `type: "pie"` (col_span: 8 or 12), `config: '
-    '{"group_by": "option", "variant": "doughnut", "color_scheme": '
-    '"categorical"}`.\n'
-    '     - 6+ choices: Use `type: "bar"` (col_span: 8 or 12), `config: '
-    '{"group_by": "option", "stack_by": null, "color_scheme": '
-    '"categorical"}`.\n'
+    "   - Categorical Distributions (Check `option_count` in schema):\n"
+    '     - 2 to 5 choices (`option_count <= 5`): Use `type: "pie"` '
+    '(col_span: 8 or 12), `config: {"group_by": "option", "variant": '
+    '"doughnut", "color_scheme": "categorical"}`.\n'
+    '     - 6+ choices (`option_count >= 6`): Use `type: "bar"` '
+    '(col_span: 8 or 12), `config: {"group_by": "option", "stack_by": '
+    'null, "color_scheme": "categorical"}`.\n'
+    "   - Question Groups & Semantic Domain Clustering:\n"
+    "     - Use `group_name` (e.g. Demographics, Inspection Findings) to "
+    "cluster related questions into harmonious layouts.\n"
     "   - Temporal Trends:\n"
     '     - Date questions on monitoring forms: Use `type: "line"` '
     '(col_span: 12 or 24), `config: {"group_by": "month", '
@@ -116,7 +119,7 @@ WIDGET_SUGGESTION_SYSTEM_PROMPT = (
     "(`suggestions[0]`).\n"
     "   - Secondary suggestions should complement the canvas with other "
     "unvisualized questions.\n\n"
-    "2. VISUAL ENCODING BY CHART TYPE:\n"
+    "2. VISUAL ENCODING BY CHART TYPE & CARDINALITY:\n"
     "   - `map`: Use when location/GPS is requested or for `type_name: "
     '"geo"` fields. `col_span: 24`, `question: null` (or an option/number '
     'question ID for thematic coloring), `config: {"map_mode": "point", '
@@ -125,19 +128,21 @@ WIDGET_SUGGESTION_SYSTEM_PROMPT = (
     "requested. `col_span: 12`, `question: <x_question_id>`, `config: "
     '{"question_y": <y_question_id>, "color_scheme": '
     '"categorical"}`.\n'
-    "   - `pie`: Use for categorical breakdowns (2-5 options). `col_span: 8` "
-    'or `12`, `config: {"group_by": "option", "variant": "doughnut", '
-    '"color_scheme": "categorical"}`.\n'
-    "   - `bar`: Use for categorical distributions (6+ options). `col_span: "
-    '8` or `12`, `config: {"group_by": "option", "stack_by": null, '
-    '"color_scheme": "categorical"}`.\n'
+    "   - `pie`: Use for categorical breakdowns with 2-5 options "
+    '(`option_count <= 5`). `col_span: 8` or `12`, `config: {"group_by": '
+    '"option", "variant": "doughnut", "color_scheme": "categorical"}`.\n'
+    "   - `bar`: Use for categorical distributions with 6+ options "
+    '(`option_count >= 6`). `col_span: 8` or `12`, `config: {"group_by": '
+    '"option", "stack_by": null, "color_scheme": "categorical"}`.\n'
     "   - `line`: Use for temporal activity over time. `col_span: 12` "
     'or `24`, `config: {"group_by": "month", "date_question_id": '
     '<date_id>, "color_scheme": "categorical"}`.\n'
     "   - `kpi`: Use for headline counts / numeric aggregates. `col_span: 6` "
     'or `12`, `config: {"value_type": "number"}`.\n'
     "   - `table`: Use for tabular monitoring logs (on child monitoring forms "
-    "only). `col_span: 24`, `question: null`.\n\n"
+    "only). `col_span: 24`, `question: null`.\n"
+    "   - Use `group_name` metadata to recommend cohesive widgets covering "
+    "distinct thematic areas.\n\n"
     "3. DUPLICATE PREVENTION (CRITICAL):\n"
     "   - Inspect the 'EXISTING WIDGETS' provided in the user context.\n"
     "   - Do NOT suggest duplicate widgets for questions that are already "
