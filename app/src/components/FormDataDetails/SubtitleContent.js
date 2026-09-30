@@ -43,10 +43,10 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
     case QUESTION_TYPES.geo:
       return (
         <View testID={`text-type-geo-${index}`}>
-          <Text>
+          <Text style={{ color: theme.text.secondary }}>
             {trans.latitude}: {answer?.[0]}
           </Text>
-          <Text>
+          <Text style={{ color: theme.text.secondary }}>
             {trans.longitude}: {answer?.[1]}
           </Text>
         </View>
@@ -56,17 +56,17 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
       // Without this the array of pairs falls to `default:` and renders as a run of digits.
       return <GeometryView index={index} answer={answer} type={type} />;
     case QUESTION_TYPES.cascade:
-      return <Text testID={`text-answer-${index}`}>{cascadeValue?.full_path_name || answer}</Text>;
+      return <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>{cascadeValue?.full_path_name || answer}</Text>;
     case QUESTION_TYPES.date:
       return (
-        <Text testID={`text-answer-${index}`}>
+        <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>
           {answer ? moment(answer).format('YYYY-MM-DD') : '-'}
         </Text>
       );
     case QUESTION_TYPES.option:
     case QUESTION_TYPES.multiple_option:
       return (
-        <Text testID={`text-answer-${index}`}>
+        <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>
           {answer
             ?.map((a) => {
               const findOption = option?.find((o) => o?.value === a);
@@ -77,7 +77,7 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
       );
     case QUESTION_TYPES.attachment:
       if (!answer) {
-        return <Text testID={`text-type-attachment-${index}`}>-</Text>;
+        return <Text style={{ color: theme.text.secondary }} testID={`text-type-attachment-${index}`}>-</Text>;
       }
       return (
         <View testID={`text-type-attachment-${index}`} style={{ width: '100%' }}>
@@ -96,7 +96,7 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
         </View>
       );
     default:
-      return <Text testID={`text-answer-${index}`}>{answer || answer === 0 ? answer : '-'}</Text>;
+      return <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>{answer || answer === 0 ? answer : '-'}</Text>;
   }
 };
 

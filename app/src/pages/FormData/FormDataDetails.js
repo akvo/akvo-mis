@@ -289,7 +289,29 @@ const FormDataDetails = ({ navigation, route }) => {
   );
 
   return (
-    <BaseLayout title={route?.params?.name} rightComponent={false}>
+    <BaseLayout
+      title={route?.params?.name}
+      rightComponent={false}
+      headerBg={theme.bg.surfaceElevated3}
+    >
+      {totalPage > 0 && (
+        <View
+          style={[
+            styles.stepHeader,
+            {
+              backgroundColor: theme.bg.surfaceElevated3,
+              borderBottomColor: theme.border.listDivider,
+            },
+          ]}
+        >
+          <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
+            {`${trans.stepLabel || 'Step'} ${currentPage + 1} ${trans.ofLabel || 'of'} ${totalPage}`}
+            {currentGroup?.label || currentGroup?.name
+              ? ` — ${currentGroup.label || currentGroup.name}`
+              : ''}
+          </Text>
+        </View>
+      )}
       <View style={styles.listContainer}>
         <SectionList
           sections={sections}
@@ -309,6 +331,17 @@ const FormDataDetails = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
+  stepHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  stepIndicator: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
   sectionTitle: {
     paddingTop: 16,
     paddingBottom: 8,

@@ -68,7 +68,7 @@ const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
   }, [loadHtml]);
 
   if (!pointCount) {
-    return <Text testID={`text-answer-${index}`}>-</Text>;
+    return <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>-</Text>;
   }
 
   return (
@@ -87,11 +87,11 @@ const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
         )}
       </View>
       <View style={styles.readout}>
-        <Text testID={`text-geometry-points-${index}`}>
+        <Text style={{ color: theme.text.secondary }} testID={`text-geometry-points-${index}`}>
           {trans.polygonPoints}: {pointCount}
         </Text>
         {isClosed && pointCount >= MIN_POINTS_FOR_AREA && (
-          <Text testID={`text-geometry-area-${index}`}>
+          <Text style={{ color: theme.text.secondary }} testID={`text-geometry-area-${index}`}>
             {trans.polygonArea}: {polygonAreaHectares(points).toFixed(2)} ha
           </Text>
         )}

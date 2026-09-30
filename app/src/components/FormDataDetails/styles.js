@@ -10,6 +10,7 @@ const getStyles = (theme) =>
       fontWeight: '700',
       fontSize: 14,
       marginBottom: 4,
+      color: theme ? theme.text.primary : '#000000',
     },
     containerImage: {
       display: 'flex',
@@ -64,6 +65,7 @@ const getStyles = (theme) =>
       fontSize: 16,
       fontWeight: 'bold',
       marginBottom: 4,
+      color: theme ? theme.text.primary : '#000000',
     },
   });
 
