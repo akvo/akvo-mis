@@ -155,6 +155,103 @@ const AISuggestionDrawer = ({
     return map;
   }, [sources]);
 
+  // Derive smart, schema-aware suggestion chips from available form family
+  const dynamicPromptChips = useMemo(() => {
+    if (
+      !sources?.forms ||
+      !Array.isArray(sources.forms) ||
+      sources.forms.length === 0
+    ) {
+      return PROMPT_CHIPS;
+    }
+
+    const chips = [];
+    const allQuestions = [];
+    let hasGeo = false;
+    let hasDate = false;
+    let numericCount = 0;
+    let hasMonitoring = false;
+
+    sources.forms.forEach((form, fIdx) => {
+      if (fIdx > 0 || form.type === "monitoring") {
+        hasMonitoring = true;
+      }
+      if (form.questions && Array.isArray(form.questions)) {
+        form.questions.forEach((q) => {
+          allQuestions.push(q);
+          const qType = String(q.type || "").toLowerCase();
+          const qTypeName = String(q.type_name || "").toLowerCase();
+          if (qType === "geo" || qType === "5" || qTypeName === "geo") {
+            hasGeo = true;
+          }
+          if (qType === "date" || qType === "9" || qTypeName === "date") {
+            hasDate = true;
+          }
+          if (
+            qType === "number" ||
+            qType === "autofield" ||
+            qType === "3" ||
+            qTypeName === "number" ||
+            qTypeName === "autofield"
+          ) {
+            numericCount += 1;
+          }
+        });
+      }
+    });
+
+    // 1. Option Question Breakdown
+    const optionQuestions = allQuestions.filter((q) => {
+      const qType = String(q.type || "").toLowerCase();
+      const qTypeName = String(q.type_name || "").toLowerCase();
+      return (
+        qType === "option" ||
+        qType === "single_select" ||
+        qType === "1" ||
+        qTypeName === "option" ||
+        qTypeName === "single_select"
+      );
+    });
+
+    if (optionQuestions.length > 0) {
+      const firstOpt = optionQuestions[0];
+      const optLabel = (firstOpt.label || firstOpt.name || "Status").trim();
+      const shortLabel =
+        optLabel.length > 20 ? `${optLabel.slice(0, 18)}...` : optLabel;
+      chips.push(`${shortLabel} Breakdown`);
+    }
+
+    // 2. Temporal Trends
+    if (hasDate || hasMonitoring) {
+      chips.push("Monthly Trends");
+    }
+
+    // 3. Geographic Map
+    if (hasGeo) {
+      chips.push("Geographic Coverage");
+    }
+
+    // 4. Metric Correlations
+    if (numericCount >= 2) {
+      chips.push("Metric Correlations");
+    }
+
+    // 5. Monitoring Log Table
+    if (hasMonitoring) {
+      chips.push("Monitoring Summary");
+    }
+
+    // 6. KPIs
+    chips.push("Key KPIs");
+
+    if (chips.length <= 1) {
+      chips.unshift("Status & Functionality");
+    }
+
+    const uniqueChips = Array.from(new Set(chips));
+    return uniqueChips.slice(0, 6);
+  }, [sources]);
+
   const fetchSuggestions = useCallback(
     (customHint = null) => {
       if (!dashboardId) {
@@ -441,7 +538,7 @@ const AISuggestionDrawer = ({
               )}
               <div className="ai-suggestion-chips">
                 <span className="ai-suggestion-chips-label">Try:</span>
-                {PROMPT_CHIPS.map((chip) => (
+                {dynamicPromptChips.map((chip) => (
                   <Tag
                     key={chip}
                     className="ai-suggestion-chip"
