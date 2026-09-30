@@ -41,6 +41,7 @@ IP_ADDRESS="http://<your_ip_address>:3000/api/v1/device"
 APK_UPLOAD_SECRET="123456789AU"
 STORAGE_PATH="./storage"
 BASE_DOMAIN=
+ADMIN_SUBDOMAIN=admin
 EMBED_HOST=
 SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
@@ -252,6 +253,64 @@ browser resolves the name. Tests need nothing at all — the Django test client
 takes the host as an argument, and `BASE_DOMAIN` is forced empty under
 `manage.py test`, so a test that wants host routing opts in with
 `override_settings`.
+
+#### Platform admin console locally
+
+The console is where a platform operator sees every workspace, suspends
+or renames one, invites other operators, and opens a customer's own
+application read-only to answer a support question. It is a third host
+class beside the main site and the workspaces, so it needs
+`BASE_DOMAIN` — with that empty there is no console at all, because a
+single-host install is one workspace and has nothing to administer
+across.
+
+**One-time setup**
+
+1. Do the [subdomain routing](#subdomain-routing-locally) setup above, if
+   you have not already.
+
+2. Add the console's host to `/etc/hosts`:
+
+   ```
+   127.0.0.1  admin.localapp.test
+   ```
+
+3. Create the first operator. Nobody can invite them: the invite button
+   lives inside the console, which has no one to sign in to it yet.
+
+   ```bash
+   ./dc.sh exec backend python manage.py createplatformadmin \
+       --email ops@akvo.org --password 'Console#Pass123' \
+       --first-name Ops --last-name Operator
+   ```
+
+4. Sign in at `http://admin.localapp.test:3000`. It is the app's own
+   login page on a different host; a workspace account typed into it is
+   refused, and an operator account is refused everywhere else.
+
+**Inspecting a workspace** opens that workspace's own app at its own
+address, so it needs that workspace's `/etc/hosts` line like any other —
+`Inspect` on a workspace with no entry fails at DNS, before anything
+this app controls. Suspended and deleted workspaces are not offered,
+because their hosts stop resolving.
+
+**Moving the console.** `ADMIN_SUBDOMAIN` sets the label, `admin` being
+only the default. Change it if that address is already taken — by
+another service, or by a workspace registered before the name was
+reserved. Registration and rename refuse whatever it is set to, so the
+address the console is on is always the one protected. The frontend
+cannot read a Django setting, so after changing it:
+
+```bash
+./dc.sh up -d --force-recreate backend worker
+./dc.sh exec backend python manage.py generate_config
+```
+
+Without the second command the browser keeps looking for the console at
+the old address while the server answers at the new one.
+
+More on operators, the pending state, password resets and what a rename
+breaks: [`doc/notes/platform-console.md`](doc/notes/platform-console.md).
 
 #### Start
 
