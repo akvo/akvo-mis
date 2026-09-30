@@ -35,13 +35,22 @@ def is_base_domain(host):
     return _normalize(host) in (base, f"www.{base}")
 
 
-# The label the platform console answers on. Registration and rename
-# both refuse it, so no workspace can take it from here on. A row that
-# predates the reservation is possible and is left to be renamed by
-# hand rather than blocked by a migration: which label the console uses
-# is a decision this deployment may revisit, and a migration that
-# hardcoded one would make revisiting it a schema problem.
-ADMIN_SUBDOMAIN = "admin"
+def admin_subdomain():
+    """The label the platform console answers on, from the setting.
+
+    Registration and rename both refuse it, so no workspace can take it
+    from here on. A row that predates the reservation is possible and is
+    left to be renamed by hand rather than blocked by a migration: which
+    label the console uses is a per-deployment decision, and a migration
+    that wrote one into the schema would make changing it a schema
+    problem.
+
+    Read here rather than imported as a constant so that a test or a
+    deployment changing the setting changes every consumer at once.
+    Empty falls back to the default, because "" would make the console
+    host ".<BASE_DOMAIN>" -- an address no browser sends.
+    """
+    return (settings.ADMIN_SUBDOMAIN or "admin").lower()
 
 
 def is_admin_host(host):
@@ -53,7 +62,7 @@ def is_admin_host(host):
     """
     if not settings.BASE_DOMAIN:
         return False
-    admin = f"{ADMIN_SUBDOMAIN}.{settings.BASE_DOMAIN}".lower()
+    admin = f"{admin_subdomain()}.{settings.BASE_DOMAIN}".lower()
     return _normalize(host) == admin
 
 
@@ -165,7 +174,7 @@ def console_web_url():
     """
     if not settings.BASE_DOMAIN:
         return settings.WEBDOMAIN
-    return _web_url_for_label(ADMIN_SUBDOMAIN)
+    return _web_url_for_label(admin_subdomain())
 
 
 def public_tenant(request):
