@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import { api } from '../../lib';
-import styles from './styles';
+import useTheme from '../../lib/theme';
+import getStyles from './styles';
 
 /** Local, data: and absolute uris load as they are; a server path gets the API host. */
 export const toImageURL = (uri) => {
@@ -36,6 +37,8 @@ const ImageView = ({
   // photo changes `uri`, so the comparison below goes false on its own — the
   // preview appears without this component having to be remounted and without
   // an effect to reset the flag.
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [failedUri, setFailedUri] = useState(null);
   // Bumping this remounts the Image, which is what makes "Try again" re-request it
   const [reloadKey, setReloadKey] = useState(0);

@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import useTheme from '../lib/theme';
 
 /**
@@ -10,14 +9,15 @@ import useTheme from '../lib/theme';
  */
 const ActionBar = ({ label, onPress, testID = 'action-bar-button' }) => {
   const theme = useTheme();
-  // Absolutely positioned elements anchor to the screen edge, below the Android
-  // navigation bar, so the inset is added here; the bar's surface runs under it.
-  const insets = useSafeAreaInsets();
   return (
     <View
       style={[
         styles.bar,
-        { backgroundColor: theme.bg.surfaceElevated3, paddingBottom: 24 + insets.bottom },
+        {
+          backgroundColor: theme.bg.surfaceElevated3,
+          borderTopColor: theme.border.listDivider,
+          paddingBottom: 20,
+        },
       ]}
       testID={`${testID}-bar`}
     >
@@ -39,12 +39,9 @@ const ActionBar = ({ label, onPress, testID = 'action-bar-button' }) => {
 
 const styles = StyleSheet.create({
   bar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingTop: 16,
-    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingHorizontal: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },

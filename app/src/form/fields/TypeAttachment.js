@@ -88,8 +88,8 @@ const TypeAttachment = ({
             testID="remove-file-button"
             accessibilityLabel="remove-file-button"
           >
-            <Icon name="trash" size={18} color="#FFFFFF" />
-            <Text style={styles.pillButtonText}>{trans.buttonRemove}</Text>
+            <Icon name="trash" size={18} color={theme.buttonPrimary.text} />
+            <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>{trans.buttonRemove}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -117,8 +117,8 @@ const TypeAttachment = ({
               testID="remove-file-button"
               accessibilityLabel="remove-file-button"
             >
-              <Icon name="trash" size={16} color="#FFFFFF" />
-              <Text style={styles.smallPillButtonText}>{trans.buttonRemove}</Text>
+              <Icon name="trash" size={16} color={theme.buttonPrimary.text} />
+              <Text style={[styles.smallPillButtonText, { color: theme.buttonPrimary.text }]}>{trans.buttonRemove}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   pillButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: undefined,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -193,6 +193,6 @@ const styles = StyleSheet.create({
   smallPillButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: undefined,
   },
 });

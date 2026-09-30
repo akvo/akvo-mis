@@ -24,7 +24,7 @@ const ConfirmDialog = ({
       onRequestClose={onClose}
       testID={testID}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={[styles.overlay, { backgroundColor: theme.bg.scrim }]} onPress={onClose}>
         <Pressable
           style={[styles.card, { backgroundColor: theme.bg.surfaceElevated1 }]}
           onPress={() => {}}
@@ -65,7 +65,6 @@ const ConfirmDialog = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,

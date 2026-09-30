@@ -578,6 +578,7 @@ const Submission = ({ navigation, route }) => {
       subTitle={route?.params?.subTitle}
       search={{
         show: true,
+        placeholder: trans.formDataSearch,
         value: search,
         action: setSearch,
       }}
@@ -667,9 +668,7 @@ const getStyles = (theme) =>
       paddingTop: 12,
     },
     flatListContent: {
-      // Clears the action bar (16 + 56 + 24), which overlays the list rather than
-      // sitting below it.
-      paddingBottom: 104,
+      paddingBottom: 16,
     },
     emptyListContent: {
       flexGrow: 1,

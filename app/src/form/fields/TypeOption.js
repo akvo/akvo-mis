@@ -47,7 +47,7 @@ const TypeOption = ({
       paddingTop: 8,
       paddingLeft: 8,
       paddingBottom: 8,
-      color: '#FFF',
+      color: theme.buttonPrimary.text,
       backgroundColor,
     };
   }, [value, color, option]);

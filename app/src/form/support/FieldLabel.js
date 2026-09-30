@@ -13,11 +13,6 @@ const FieldLabel = ({ keyform, name, tooltip, requiredSign = null }) => {
   const tooltipText = tooltip?.text;
   return (
     <View style={styles.fieldLabelContainer}>
-      {requiredSign && (
-        <Text style={styles.fieldRequiredIcon} testID="field-required-icon">
-          {requiredSign}
-        </Text>
-      )}
       <View style={styles.fieldLabel}>
         <View style={{ flexDirection: 'row' }}>
           <Text testID="field-label" style={{ color: theme.text.primary }}>
@@ -39,6 +34,11 @@ const FieldLabel = ({ keyform, name, tooltip, requiredSign = null }) => {
         </View>
         <AnimatedTooltip visible={open} content={tooltipText} style={{ width: '100%' }} />
       </View>
+      {requiredSign && (
+        <Text style={styles.fieldRequiredIcon} testID="field-required-icon">
+          {requiredSign}
+        </Text>
+      )}
     </View>
   );
 };
