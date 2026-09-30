@@ -174,8 +174,24 @@ const AISuggestionDrawer = ({
         .map((w) => w.type)
         .filter(Boolean);
 
+      const existingDescriptors = (existingWidgetsRef.current || [])
+        .map((w) => ({
+          type: w.type || null,
+          form:
+            typeof w.form !== "undefined" && w.form !== null
+              ? Number(w.form)
+              : null,
+          question:
+            typeof w.question !== "undefined" && w.question !== null
+              ? Number(w.question)
+              : null,
+          config: w.config || {},
+        }))
+        .filter((d) => Boolean(d.type));
+
       const payload = {
         existing_widget_types: existingTypes,
+        existing_widgets: existingDescriptors,
       };
 
       const hintToUse =
@@ -188,12 +204,16 @@ const AISuggestionDrawer = ({
       return dashboardAi
         .suggestWidgets(dashboardId, payload, controller.signal)
         .then((res) => {
+          const list = Array.isArray(res?.data?.suggestions)
+            ? res.data.suggestions
+            : [];
           const isAiAvail =
             typeof res?.data?.ai_available === "boolean"
               ? res.data.ai_available
-              : true;
-          setAiAvailable(isAiAvail);
-          if (!isAiAvail) {
+              : list.length > 0;
+
+          if (list.length === 0 && !isAiAvail) {
+            setAiAvailable(false);
             setSuggestions([]);
             cachedRef.current = {
               dashboardId,
@@ -204,9 +224,7 @@ const AISuggestionDrawer = ({
             return;
           }
 
-          const list = Array.isArray(res?.data?.suggestions)
-            ? res.data.suggestions
-            : [];
+          setAiAvailable(true);
           setSuggestions(list);
           cachedRef.current = {
             dashboardId,

@@ -142,7 +142,7 @@ describe("AISuggestionDrawer", () => {
 
     expect(dashboardAi.suggestWidgets).toHaveBeenCalledWith(
       1,
-      { existing_widget_types: [] },
+      { existing_widget_types: [], existing_widgets: [] },
       expect.anything()
     );
   });
@@ -203,6 +203,7 @@ describe("AISuggestionDrawer", () => {
         1,
         {
           existing_widget_types: [],
+          existing_widgets: [],
           prompt_hint: "Focus on population",
         },
         expect.anything()
@@ -479,7 +480,7 @@ describe("AISuggestionDrawer", () => {
       expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(3);
       expect(dashboardAi.suggestWidgets).toHaveBeenLastCalledWith(
         1,
-        { existing_widget_types: [] },
+        { existing_widget_types: [], existing_widgets: [] },
         expect.anything()
       );
       expect(searchInput).toHaveValue("");
@@ -510,6 +511,7 @@ describe("AISuggestionDrawer", () => {
         1,
         {
           existing_widget_types: [],
+          existing_widgets: [],
           prompt_hint: "Monthly Trends",
         },
         expect.anything()
