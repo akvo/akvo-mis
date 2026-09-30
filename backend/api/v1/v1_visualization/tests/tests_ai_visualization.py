@@ -38,7 +38,7 @@ from api.v1.v1_visualization.constants import DashboardKind, WidgetTypes
 from api.v1.v1_visualization.dashboard_functions import (
     validate_dashboard_payload,
 )
-from api.v1.v1_visualization.models import Dashboard
+from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 
 
 @override_settings(USE_TZ=False, OPENAI_API_KEY=None)
@@ -1614,4 +1614,82 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 data["suggestions"][0]["type"],
                 expected_type,
                 f"Query '{query_hint}' did not yield '{expected_type}'",
+            )
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_suggest_widgets_excludes_already_visualized_questions(self):
+        """Questions already visualized are excluded from suggestions."""
+        q_opt = self.root.form_questions.filter(
+            type=QuestionTypes.option
+        ).first()
+        self.assertIsNotNone(q_opt)
+        existing = [
+            {
+                "form": self.root.id,
+                "question": q_opt.id,
+                "type": "bar",
+            }
+        ]
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id,
+            self.user,
+            existing_widgets=existing,
+        )
+        self.assertIsNotNone(res)
+        self.assertIn("suggestions", res)
+        # Verify q_opt.id is not re-suggested as a bar/pie chart
+        for s in res["suggestions"]:
+            if s.get("type") in ("bar", "pie"):
+                self.assertNotEqual(
+                    s.get("question"),
+                    q_opt.id,
+                    "Visualized option question was re-suggested",
+                )
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_suggest_widgets_excludes_already_present_map(self):
+        """Map widget is not suggested if dashboard already has a map."""
+        existing = [
+            {
+                "form": self.root.id,
+                "question": None,
+                "type": "map",
+            }
+        ]
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id,
+            self.user,
+            existing_widgets=existing,
+        )
+        self.assertIsNotNone(res)
+        for s in res.get("suggestions", []):
+            self.assertNotEqual(
+                s.get("type"), "map", "Duplicate map was suggested"
+            )
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_suggest_widgets_persisted_db_widgets_are_excluded(self):
+        """DB saved widgets are excluded from suggestions."""
+        q_target = self.root.form_questions.first()
+        self.assertIsNotNone(q_target)
+        DashboardWidget.objects.create(
+            dashboard=self.dashboard,
+            form=self.root,
+            question=q_target,
+            type=WidgetTypes.kpi,
+            title="Existing KPI",
+            col_span=6,
+            order=1,
+            config={"value_type": "number", "repeat_agg": None},
+        )
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id,
+            self.user,
+        )
+        self.assertIsNotNone(res)
+        for s in res.get("suggestions", []):
+            self.assertNotEqual(
+                s.get("question"),
+                q_target.id,
+                "Persisted widget question was re-suggested",
             )

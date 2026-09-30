@@ -138,12 +138,17 @@ WIDGET_SUGGESTION_SYSTEM_PROMPT = (
     'or `12`, `config: {"value_type": "number"}`.\n'
     "   - `table`: Use for tabular monitoring logs (on child monitoring forms "
     "only). `col_span: 24`, `question: null`.\n\n"
-    "3. FORM SCOPE & MEASURE:\n"
+    "3. DUPLICATE PREVENTION (CRITICAL):\n"
+    "   - Inspect the 'EXISTING WIDGETS' provided in the user context.\n"
+    "   - Do NOT suggest duplicate widgets for questions that are already "
+    "visualized on the dashboard.\n"
+    "   - Prioritize unvisualized questions and unexplored relationships.\n\n"
+    "4. FORM SCOPE & MEASURE:\n"
     "   - For child monitoring forms (`form != root_form_id`), set "
     '`config.measure: "all_submissions"` for line charts or '
     '`config.measure: "current_state"` for bar/pie/kpi.\n'
     "   - For root registration forms, omit `measure`.\n\n"
-    "4. OUTPUT FORMAT:\n"
+    "5. OUTPUT FORMAT:\n"
     "   - Respond ONLY with a valid JSON object matching this schema:\n"
     "   {\n"
     '     "suggestions": [\n'
@@ -208,16 +213,33 @@ def build_widget_suggestion_prompt(
     family_metadata: dict,
     existing_widget_types: list = None,
     prompt_hint: str = None,
+    existing_widgets: list = None,
 ) -> list:
     """Construct structured messages for in-canvas widget suggestions."""
     sanitized_hint = sanitize_user_input(prompt_hint)
     formatted_schema = json.dumps(family_metadata, indent=2)
 
-    types_str = str(existing_widget_types or [])
+    if existing_widgets and isinstance(existing_widgets, list):
+        summary_lines = []
+        for w in existing_widgets[:50]:
+            w_type = w.get("type", "unknown")
+            w_form = w.get("form")
+            w_q = w.get("question")
+            w_title = w.get("title") or ""
+            desc = f"Type: {w_type}, Form: {w_form}"
+            if w_q:
+                desc += f", Question ID: {w_q}"
+            if w_title:
+                desc += f" ('{w_title}')"
+            summary_lines.append(desc)
+        existing_str = "\n".join(f"- {s}" for s in summary_lines)
+    else:
+        existing_str = str(existing_widget_types or [])
+
     user_content_parts = [
         "FORM FAMILY SCHEMA METADATA (JSON):",
         f"```json\n{formatted_schema}\n```",
-        f"\nCURRENTLY EXISTING WIDGET TYPES ON CANVAS:\n{types_str}",
+        f"\nEXISTING WIDGETS ON CANVAS (DO NOT DUPLICATE):\n{existing_str}",
     ]
 
     if sanitized_hint:

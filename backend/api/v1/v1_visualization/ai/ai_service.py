@@ -15,6 +15,7 @@ from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_visualization.ai.ai_heuristics import (
     generate_starter_heuristics,
+    generate_widget_heuristics,
 )
 from api.v1.v1_visualization.ai.ai_prompts import (
     STARTER_DASHBOARD_JSON_SCHEMA,
@@ -636,12 +637,61 @@ class AISuggestionService:
         return heuristic_res
 
     @classmethod
+    def _deduplicate_suggestions(
+        cls,
+        suggestions: List[Dict],
+        existing_widgets: List[Dict],
+    ) -> List[Dict]:
+        """Post-filter suggestions to ensure no duplicate questions or maps."""
+        seen_questions = set()
+        has_map = False
+
+        for w in existing_widgets:
+            w_type = w.get("type")
+            if w_type in ("map", WidgetTypes.map):
+                has_map = True
+            q = w.get("question")
+            if q:
+                seen_questions.add(q)
+            cfg = w.get("config")
+            if isinstance(cfg, dict):
+                if cfg.get("question_y"):
+                    seen_questions.add(cfg["question_y"])
+                if cfg.get("date_question_id"):
+                    seen_questions.add(cfg["date_question_id"])
+
+        deduped = []
+        for s in suggestions:
+            stype = s.get("type")
+            sq = s.get("question")
+            if stype in ("map", WidgetTypes.map):
+                if has_map:
+                    continue
+                has_map = True
+
+            if sq and sq in seen_questions:
+                continue
+
+            cfg = s.get("config")
+            if isinstance(cfg, dict):
+                qy = cfg.get("question_y")
+                if qy and qy in seen_questions:
+                    continue
+
+            deduped.append(s)
+            if sq:
+                seen_questions.add(sq)
+
+        return deduped
+
+    @classmethod
     def suggest_widgets(
         cls,
         dashboard_id: int,
         user,
         existing_widget_types: Optional[List[str]] = None,
         prompt_hint: Optional[str] = None,
+        existing_widgets: Optional[List[Dict]] = None,
     ) -> Optional[Dict]:
         """Generate contextual in-canvas widget suggestions."""
         dashboard = (
@@ -661,7 +711,35 @@ class AISuggestionService:
         has_monitoring = metadata.get("has_monitoring", False)
         root_form_id = dashboard.root_form_id
 
-        # Check if OpenAI API key is configured
+        # Combine database-persisted widgets with client-supplied widgets
+        persisted = list(
+            dashboard.widgets.values(
+                "id", "type", "form_id", "question_id", "config", "title"
+            )
+        )
+        all_existing: List[Dict] = []
+        for pw in persisted:
+            all_existing.append(
+                {
+                    "type": pw["type"],
+                    "form": pw["form_id"],
+                    "question": pw["question_id"],
+                    "config": pw["config"] or {},
+                    "title": pw.get("title") or "",
+                }
+            )
+        if existing_widgets and isinstance(existing_widgets, list):
+            for ew in existing_widgets:
+                if isinstance(ew, dict):
+                    all_existing.append(ew)
+
+        merged_types = list(
+            set(
+                (existing_widget_types or [])
+                + [w.get("type") for w in all_existing if w.get("type")]
+            )
+        )
+
         api_key = getattr(settings, "OPENAI_API_KEY", None)
         if not api_key:
             return {
@@ -670,33 +748,52 @@ class AISuggestionService:
                 "suggestions": [],
             }
 
-        # Attempt OpenAI generation
-        messages = build_widget_suggestion_prompt(
-            metadata, existing_widget_types, prompt_hint
-        )
-        openai_result = cls._call_openai(
-            messages, WIDGET_SUGGESTION_JSON_SCHEMA
-        )
+        if not ai_circuit_breaker.is_open:
+            messages = build_widget_suggestion_prompt(
+                metadata,
+                existing_widget_types=merged_types,
+                prompt_hint=prompt_hint,
+                existing_widgets=all_existing,
+            )
+            openai_result = cls._call_openai(
+                messages, WIDGET_SUGGESTION_JSON_SCHEMA
+            )
 
-        if openai_result and isinstance(openai_result, dict):
-            raw_suggestions = (
-                openai_result.get("suggestions")
-                or openai_result.get("widgets")
-                or openai_result.get("recommended_widgets")
-                or []
-            )
-            valid_suggestions = validate_and_sanitize_widgets(
-                raw_suggestions, sources_map, has_monitoring, root_form_id
-            )
-            if valid_suggestions:
+            if openai_result and isinstance(openai_result, dict):
+                raw_suggestions = (
+                    openai_result.get("suggestions")
+                    or openai_result.get("widgets")
+                    or openai_result.get("recommended_widgets")
+                    or []
+                )
+                valid_suggestions = validate_and_sanitize_widgets(
+                    raw_suggestions, sources_map, has_monitoring, root_form_id
+                )
+                deduped = cls._deduplicate_suggestions(
+                    valid_suggestions, all_existing
+                )
                 return {
                     "ai_available": True,
                     "provider": "openai",
-                    "suggestions": valid_suggestions,
+                    "suggestions": deduped,
                 }
 
+        # Fall back to deterministic heuristics
+        heuristic_res = generate_widget_heuristics(
+            metadata,
+            existing_widget_types=merged_types,
+            prompt_hint=prompt_hint,
+            existing_widgets=all_existing,
+        )
+        valid_suggestions = validate_and_sanitize_widgets(
+            heuristic_res.get("suggestions", []),
+            sources_map,
+            has_monitoring,
+            root_form_id,
+        )
+        deduped = cls._deduplicate_suggestions(valid_suggestions, all_existing)
         return {
-            "ai_available": bool(api_key),
-            "provider": "openai" if bool(api_key) else "none",
-            "suggestions": [],
+            "ai_available": True,
+            "provider": "heuristics",
+            "suggestions": deduped,
         }
