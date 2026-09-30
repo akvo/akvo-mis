@@ -41,11 +41,11 @@ const users = [
   },
 ];
 
-const renderDetail = async () => {
+const renderDetail = async (overrides = {}) => {
   axios.mockImplementation(({ url }) =>
     Promise.resolve({
       status: 200,
-      data: url.includes("/users") ? users : tenant,
+      data: url.includes("/users") ? users : { ...tenant, ...overrides },
     })
   );
   await act(async () => {
@@ -67,6 +67,55 @@ describe("Tenant detail", () => {
   afterEach(() => {
     Modal.destroyAll();
     document.body.innerHTML = "";
+  });
+
+  describe("the Inspect action", () => {
+    const appConfig = window.appConfig;
+    let originalLocation;
+
+    beforeEach(() => {
+      window.appConfig = { ...appConfig, baseDomain: "app.com" };
+      originalLocation = window.location;
+      delete window.location;
+      window.location = {
+        ...originalLocation,
+        protocol: "http:",
+        hostname: "admin.app.com",
+        host: "admin.app.com",
+        port: "",
+        replace: jest.fn(),
+      };
+    });
+
+    afterEach(() => {
+      window.location = originalLocation;
+      window.appConfig = appConfig;
+    });
+
+    it("mints a one-time code and opens the workspace with it", async () => {
+      await renderDetail();
+      // The same hand-off the list performs: only this host can mint a
+      // code, and the workspace's own /inspect spends it. A link would
+      // carry no credential.
+      axios.mockResolvedValue({ status: 200, data: { code: "xyz" } });
+      await act(async () => {
+        userEvent.click(screen.getByRole("button", { name: /inspect/i }));
+      });
+      const call = axios.mock.calls.find(([conf]) => conf.method === "POST");
+      expect(call[0].url).toContain("admin/tenants/42/inspect");
+      expect(window.location.replace).toHaveBeenCalledWith(
+        "http://mohhs.app.com/inspect?code=xyz"
+      );
+    });
+
+    it("is absent for a workspace whose host cannot resolve", async () => {
+      // Suspended and deleted workspaces 404 at their own address, so
+      // the button would open a dead page.
+      await renderDetail({ state: "suspended" });
+      expect(
+        screen.queryByRole("button", { name: /inspect/i })
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("renders the counts", async () => {
