@@ -519,17 +519,35 @@ is never blocked on accuracy.
 3. Capture a polygon that you **know** overlaps one of the not-yet-synced datapoints
 4. Press Validate
 
-**Expected**: the app either refuses to validate, or validates with a **clear warning** that its
-data is incomplete. **FAIL if** it reports a confident "no overlap" — that is a false pass, and
-it is worse than an error.
+**Expected**: the app **refuses to validate** and names the cause. **FAIL if** it reports a
+confident "no overlap" — that is a false pass, and it is worse than an error. **Also FAIL if**
+it passes with a caveat: GEO-007 D-10 rules that out, because a recorded "pass (incomplete)" is
+indistinguishable from a real pass once the submission leaves the device.
 
-### QA-606 — Overlap detected and named
+Retry is offered for the causes a sync can repair (index not ready, download incomplete, count
+mismatch, index drifted) and withheld for a damaged local database. A sync that is *running*
+says so and offers no Retry.
+
+### QA-606 — Overlap detected, counted and numbered
+
+> **Revised 2026-09-23 (GEO-007 D-11).** The message used to name the other datapoint. On a form
+> with an administration cascade that name is every meta answer joined with `" - "`, which filled
+> six lines on a phone and identified nothing. It now counts and numbers instead; identity moved
+> to the map review (GEO-008), which labels its polygons from the same worst-first order.
 
 1. Capture a polygon covering ~50 % of a known existing plot
 2. Press Validate
 
-**Expected**: fails, with a message naming **both** datapoints:
-`New plot for <yours> overlaps with plot for <theirs>`
+**Expected**: fails, with a message carrying the **count and the percentage**, no names:
+`Overlaps 1 plot by 50.2% (limit 20.0%).`
+
+3. Capture a polygon overlapping **two** existing plots by different amounts
+4. Press Validate
+
+**Expected**: one line, not two, numbered worst first:
+`Overlaps 2 plots: #1 (41.2%), #2 (22.5%) (limit 20.0%).`
+**FAIL if** a percentage prints without its decimal, or if the same failure also appears a second
+time below the buttons — the report and the submit gate must not both print it.
 
 ### QA-607 — Threshold boundary
 

@@ -13,7 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FormState, UserState } from '../store';
 import i18n from '../lib/i18n';
 import loadMapDrawHtml from '../lib/map-draw-html';
-import { polygonAreaHectares } from '../form/lib/geometry';
+import { currentTileSource } from '../lib/map-tiles';
+import { fitBoundsFor, polygonAreaHectares } from '../form/lib/geometry';
 import {
   DEFAULT_INTERVAL_SECONDS,
   INTERVAL_OPTIONS,
@@ -159,6 +160,7 @@ const MapDrawView = ({ navigation, route }) => {
      * discard the polygon - every few seconds. Live position goes over the bridge below.
      */
     const coords = UserState.getRawState()?.currentLocation?.coords;
+    const tiles = await currentTileSource({ bounds: fitBoundsFor([initialValue || []]) });
     const html = await loadMapDrawHtml({
       points: initialValue || [],
       center: coords ? [coords.latitude, coords.longitude] : [0, 0],
@@ -168,6 +170,7 @@ const MapDrawView = ({ navigation, route }) => {
       // mid-capture, and rebuilding the page to recolour vertices would discard the polygon
       // they are standing in the middle of; changes go over the bridge below instead.
       accuracyThreshold: resolveAccuracyThreshold(extra),
+      tileUrl: tiles.template,
     });
     setHtmlContent(html);
     // initialValue is the value captured when the screen was pushed; it is deliberately

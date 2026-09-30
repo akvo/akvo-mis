@@ -107,16 +107,19 @@ Most of this task is an upstream PR plus an npm release, not akvo-mis frontend w
 > carries the one control, and its rules are indented beneath it, so the blast radius of changing
 > it is visible rather than implied.
 >
-> **`validateOverlap` is new and has no reader yet.** See the note in §2.1.
+> **`validateOverlap` was authored here before the app read it.** The app caught up on
+> 2026-09-23 (GEO-007 D-9); §2.1 keeps the record of why the order was reversed.
 >
 > **What did not change**: the keys' names, types, ranges and defaults; the `geoshape`-only
 > scoping of D-3; and the rule that absent means "use the default". No published form changes
 > meaning.
 
-### 2.1 `validateOverlap` — authored in 2.0.6, read by nobody *(2026-09-21)*
+### 2.1 `validateOverlap` — authored in 2.0.6, read from 2026-09-23 *(2026-09-21)*
 
 Every other key in the panel was already read by the app before it became authorable. This one
-reverses that order, and the asymmetry is worth stating plainly rather than discovering later.
+reversed that order for two days, and the asymmetry is worth keeping on the record rather than
+quietly erasing now that it has closed: **the app began honouring it on 2026-09-23**, through
+the same `resolveSeverity` helper as every other rule (GEO-007 D-9).
 
 **Why it exists.** The panel labelled overlap's severity as fixed. That was wrong in both
 directions: FR-4.4 says an overlap failure *"does block submission via `validateAllGroups()`"*

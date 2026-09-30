@@ -1,4 +1,5 @@
 import { kinks } from '@turf/kinks';
+import { boundingBox } from '../../lib/geometry-index';
 
 const EARTH_RADIUS_M = 6378137;
 const SQM_PER_HECTARE = 10000;
@@ -72,4 +73,24 @@ export const selfIntersects = (points = []) => {
     geometry: { type: 'Polygon', coordinates: [toGeoJsonRing(points)] },
   };
   return kinks(feature).features.length > 0;
+};
+
+/**
+ * The viewport that shows every one of `polygons` at once, as a Leaflet `LatLngBounds` literal
+ * `[[south, west], [north, east]]`. `null` when there is nothing to fit.
+ *
+ * Lives here rather than on a screen because all three map surfaces need it - capture, the
+ * detail preview and overlap review - and because keeping it out of the Leaflet page is what
+ * makes "the map zooms out far enough" an ordinary assertion instead of a device test.
+ */
+export const fitBoundsFor = (polygons) => {
+  const vertices = (Array.isArray(polygons) ? polygons : []).flat();
+  const box = boundingBox(vertices);
+  if (!box) {
+    return null;
+  }
+  return [
+    [box.minLat, box.minLon],
+    [box.maxLat, box.maxLon],
+  ];
 };
