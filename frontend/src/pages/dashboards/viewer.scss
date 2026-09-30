@@ -24,7 +24,7 @@
   background: #f0f2f5;
   margin: (-$padding-default) (-$layout-padding-small-screen)
     (-$padding-default);
-  min-height: calc(100vh - #{$header-height});
+  min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
 
   @media screen and (min-width: $screen-regular) {
     margin-left: -$layout-padding;
@@ -36,7 +36,7 @@
    it exactly) and stays put while the dashboard scrolls. */
 .dashboard-view-back {
   position: fixed;
-  top: calc(#{$header-height} + 16px);
+  top: calc(#{$header-height} + 16px + var(--inspection-offset));
   left: 16px;
   z-index: 5;
   width: 34px;

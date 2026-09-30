@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Network from 'expo-network';
 import * as FileSystem from 'expo-file-system';
 import * as Sentry from '@sentry/react-native';
+import axios from 'axios';
 import api from './api';
 import { openDatabase } from '../database';
 import { crudForms, crudDataPoints, crudUsers, crudConfig, crudSyncQueue } from '../database/crud';
@@ -23,6 +24,7 @@ import cascades from './cascades';
 import crudJobs from '../database/crud/crud-jobs';
 import { UIState, DatapointSyncState } from '../store';
 import {
+  ACCOUNT_DEACTIVATED_NOTIFICATION,
   jobStatus,
   QUESTION_TYPES,
   SYNC_DATAPOINT_BACKGROUND_TASK_NAME,
@@ -35,6 +37,48 @@ import MIME_TYPES from './mime_types';
 
 const BATCH_SIZE = 20;
 const UPLOAD_CONCURRENCY = 3;
+
+// A 403 reaches this app from one place only: IsMobileAssignment,
+// which refuses every device call once the person behind the device is
+// deactivated or soft-deleted. Every sync path below used to catch
+// that, report it to Sentry and reschedule, so the device polled
+// indefinitely and the fieldworker was told nothing -- their app
+// simply stopped working, with no way to find out why.
+let accountDeactivated = false;
+
+export const handleAccountDeactivated = async () => {
+  if (accountDeactivated) {
+    return;
+  }
+  accountDeactivated = true;
+  await notification.sendPushNotification(ACCOUNT_DEACTIVATED_NOTIFICATION);
+  // Told once, then stop asking. Re-notifying on every background
+  // interval would nag about something only an administrator can undo,
+  // and polling an endpoint that will keep refusing costs the person
+  // battery and us load. App.js registers both tasks on launch, so
+  // reactivating the account and reopening the app resumes syncing.
+  await [SYNC_FORM_VERSION_TASK_NAME, SYNC_FORM_SUBMISSION_TASK_NAME].reduce(
+    async (prev, task) => {
+      await prev;
+      await BackgroundTask.unregisterTaskAsync(task).catch(() => null);
+    },
+    Promise.resolve(),
+  );
+};
+
+// Registered here rather than in each sync function: all three route
+// through the same axios client, and a guard per caller is a guard the
+// fourth caller forgets. This module is imported by App.js at startup,
+// so the interceptor is installed before any sync runs.
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 403) {
+      handleAccountDeactivated();
+    }
+    return Promise.reject(error);
+  },
+);
 
 const syncFormVersion = async (
   db,

@@ -4,6 +4,7 @@ from django.core.management import BaseCommand
 from jsmin import jsmin
 
 from mis.settings import (
+    ADMIN_SUBDOMAIN,
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
@@ -81,6 +82,12 @@ class Command(BaseCommand):
                         # tenant-info answers 204 in both cases, so the
                         # app cannot tell them apart without this.
                         "baseDomain": BASE_DOMAIN,
+                        # Which label the console answers on. The
+                        # frontend cannot read a Django setting, and it
+                        # has to know: every host-aware branch compares
+                        # against this. Stale config.js falls back to
+                        # "admin" on the frontend side.
+                        "adminSubdomain": ADMIN_SUBDOMAIN,
                     }),
                     ";",
                     "var roleFeatures=",

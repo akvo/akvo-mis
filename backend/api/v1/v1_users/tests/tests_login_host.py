@@ -3,6 +3,7 @@ from django.test import TestCase, override_settings
 from api.v1.v1_profile.tests.mixins import (
     TENANT_PASSWORD,
     TenantTestHelperMixin,
+    set_embedding,
 )
 from api.v1.v1_users.models import SystemUser, Tenant
 
@@ -175,10 +176,9 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
     #
     # This endpoint is the frontend's only source for it.
 
-    @override_settings(
-        EMBED_HOST="http://embed.app.com", EMBED_TENANTS={"acme"}
-    )
+    @override_settings(EMBED_HOST="http://embed.app.com")
     def test_a_signed_in_caller_is_told_the_workspace_may_embed(self):
+        set_embedding(self.acme.tenant)
         response = self.client.get(
             TENANT_INFO,
             HTTP_HOST="acme.app.com",
@@ -187,9 +187,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(response.status_code, 200)
         self.assertIs(response.json()["embed_enabled"], True)
 
-    @override_settings(
-        EMBED_HOST="http://embed.app.com", EMBED_TENANTS={"globex"}
-    )
+    @override_settings(EMBED_HOST="http://embed.app.com")
     def test_a_workspace_off_the_whitelist_is_told_it_may_not(self):
         response = self.client.get(
             TENANT_INFO,
@@ -198,10 +196,11 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         )
         self.assertIs(response.json()["embed_enabled"], False)
 
-    @override_settings(EMBED_HOST="", EMBED_TENANTS={"acme"})
-    def test_the_whitelist_alone_does_not_enable_embedding(self):
+    @override_settings(EMBED_HOST="")
+    def test_the_entitlement_alone_does_not_enable_embedding(self):
         # Being sold the feature is not the same as the deployment
         # having somewhere safe to render it. Both are required.
+        set_embedding(self.acme.tenant)
         response = self.client.get(
             TENANT_INFO,
             HTTP_HOST="acme.app.com",
@@ -209,13 +208,12 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         )
         self.assertIs(response.json()["embed_enabled"], False)
 
-    @override_settings(
-        EMBED_HOST="http://embed.app.com", EMBED_TENANTS={"acme"}
-    )
+    @override_settings(EMBED_HOST="http://embed.app.com")
     def test_an_anonymous_caller_is_not_told_which_tier_this_is(self):
         # The load-bearing half of putting the flag here. Which
         # commercial tier a customer is on is a fact about the customer,
         # and this endpoint answers a guessable host with no credentials
         # — so the field must be absent, not merely false.
+        set_embedding(self.acme.tenant)
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(set(response.json().keys()), {"subdomain"})

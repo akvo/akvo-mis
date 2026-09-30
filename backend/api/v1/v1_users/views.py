@@ -70,7 +70,12 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
-from utils.tenant_host import tenant_may_embed, tenant_web_url
+from utils.tenant_host import (
+    console_web_url,
+    is_admin_host,
+    tenant_may_embed,
+    tenant_web_url,
+)
 
 
 # A week is long enough to survive a weekend and a spam folder, short
@@ -84,15 +89,19 @@ def send_activation_email(user):
     #
     # The link points at the registrant's own workspace host, because
     # everything past it is bound to that host: activation hands back a
-    # session, and that session is only valid there.
+    # session, and that session is only valid there. An operator has no
+    # workspace but does have a host -- the console -- and sending them
+    # to the base domain instead would hand them a session on the one
+    # origin that refuses to sign them in.
+    if user.is_platform_admin and user.tenant_id is None:
+        base = console_web_url()
+    else:
+        base = tenant_web_url(user.tenant)
     send_email(
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
-            "button_url": (
-                f"{tenant_web_url(user.tenant)}"
-                f"/activate/{signing.dumps(user.pk)}"
-            ),
+            "button_url": f"{base}/activate/{signing.dumps(user.pk)}",
         },
     )
 
@@ -222,9 +231,16 @@ def signing_in_elsewhere(request, user):
 @api_view(["POST"])
 def login(request, version):
     # On a SaaS deployment the main site signs people up; signing in
-    # happens at the workspace's own address. Refusing here, before the
+    # happens at the workspace's own address. The console is the single
+    # exception, because its operators belong to no workspace and so
+    # have no workspace address to use. Refusing here, before the
     # serializer, means the credentials are never even evaluated.
-    if settings.BASE_DOMAIN and getattr(request, "tenant", None) is None:
+    on_admin_host = is_admin_host(request.get_host())
+    if (
+        settings.BASE_DOMAIN
+        and getattr(request, "tenant", None) is None
+        and not on_admin_host
+    ):
         return Response(
             {
                 "message": "Sign in at your workspace address, not the main "
@@ -255,6 +271,21 @@ def login(request, version):
         password=serializer.validated_data["password"],
         tenant=getattr(request, "tenant", None),
     )
+
+    # The console is for operators. A workspace account whose
+    # credentials happen to land here is refused before any session is
+    # minted, and told exactly what the base domain tells it -- so this
+    # host reveals nothing about which addresses exist where.
+    if user and on_admin_host and not (
+        user.is_platform_admin and user.tenant_id is None
+    ):
+        return Response(
+            {
+                "message": "Sign in at your workspace address, not the main "
+                "site"
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     if user:
         if user.deleted_at:
@@ -1053,7 +1084,18 @@ def forgot_password(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     user: SystemUser = serializer.validated_data.get("email")
-    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
+    # Same host rule as send_activation_email, for the same reason: what
+    # waits at the end of this link is a session, and a session is only
+    # valid on the host that issued it. An operator has no workspace but
+    # does have a host, and the base domain refuses to sign anyone in --
+    # /login there redirects to find-workspace, so a reset sent to it
+    # can never be completed.
+    base = (
+        console_web_url()
+        if user.is_platform_admin and user.tenant_id is None
+        else tenant_web_url(user.tenant)
+    )
+    url = f"{base}/login/{signing.dumps(user.pk)}"
     data = {"button_url": url, "send_to": [user.email]}
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(

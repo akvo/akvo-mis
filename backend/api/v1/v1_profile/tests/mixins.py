@@ -7,6 +7,7 @@ from django.db import connection
 from django.test.client import Client
 from faker import Faker
 from rest_framework_simplejwt.tokens import RefreshToken
+from api.v1.v1_profile.constants import FeatureFlags
 from api.v1.v1_profile.models import (
     Administration,
     Levels,
@@ -146,6 +147,21 @@ class TenantTestHelperMixin:
     def bearer(user: SystemUser) -> dict:
         token = RefreshToken.for_user(user).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+
+def set_embedding(tenant, enabled: bool = True) -> None:
+    """Turn the embedded-dashboard entitlement on or off for a tenant.
+
+    The entitlement used to be `EMBED_TENANTS`, so tests said what they
+    meant with `override_settings`. It is a column now, which means a
+    test that wants an entitled workspace has to write one — and a test
+    that leaves a stale setting override behind gets an unentitled
+    workspace without being told.
+    """
+    features = dict(tenant.features or {})
+    features[FeatureFlags.embedded_dashboard] = enabled
+    tenant.features = features
+    tenant.save(update_fields=["features"])
 
 
 def administration_columns(levels: typing.List[Levels]) -> typing.List[str]:

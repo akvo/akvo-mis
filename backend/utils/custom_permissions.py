@@ -121,3 +121,22 @@ class PublicGet(BasePermission):
             is_super_admin = IsSuperAdmin().has_permission(request, view)
             return is_editor or is_super_admin
         return False
+
+
+class IsPlatformAdmin(BasePermission):
+    """The console's only gate.
+
+    Both halves are required. `is_platform_admin` alone would admit an
+    account that also belongs to a workspace, which is a shape nothing
+    creates today but which a future bug or a hand-edited row could
+    produce -- and such an account would carry its tenant into every
+    unscoped console query.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user.is_authenticated
+            and user.is_platform_admin
+            and user.tenant_id is None
+        )

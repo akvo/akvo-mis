@@ -41,7 +41,7 @@ from api.v1.v1_profile.constants import FeatureAccessTypes
 from django.conf import settings
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
-from utils.tenant_host import embed_hostname
+from utils.tenant_host import admin_subdomain, embed_hostname
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
 
 
@@ -846,6 +846,7 @@ class UserSerializer(serializers.ModelSerializer):
     forms = serializers.SerializerMethodField()
     last_login = serializers.SerializerMethodField()
     passcode = serializers.SerializerMethodField()
+    is_inspecting = serializers.SerializerMethodField()
 
     @extend_schema_field(UserAdministrationSerializer)
     def get_administration(self, instance: SystemUser):
@@ -939,6 +940,18 @@ class UserSerializer(serializers.ModelSerializer):
     def get_configured(self, instance: SystemUser):
         return tenant_is_configured(instance.tenant)
 
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_inspecting(self, instance: SystemUser):
+        """Is this a read-only cross-workspace session?
+
+        The frontend uses it for the banner and to strip write
+        abilities. It is presentation only -- the server refuses the
+        writes whether or not the browser tries them. Read with getattr
+        because only the inspection authentication class sets it, in
+        memory, on the instance it hands back.
+        """
+        return bool(getattr(instance, "is_inspecting", False))
+
     @extend_schema_field(OpenApiTypes.STR)
     def get_subdomain(self, instance: SystemUser):
         # The address this session belongs to. The frontend compares it
@@ -966,6 +979,12 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "configured",
             "subdomain",
+            # The console's route guard reads this and has nothing else
+            # to read: `is_superuser` is a workspace role (D-1), and a
+            # tenant-less account's `subdomain` is "" for reasons that
+            # have nothing to do with being an operator.
+            "is_platform_admin",
+            "is_inspecting",
         ]
 
 
@@ -1152,6 +1171,11 @@ class RegisterSerializer(serializers.Serializer):
         correct whatever `EMBED_HOST` is set to, and inert when either
         setting is empty.
         """
+        # The console's own host. A workspace here would not merely
+        # collide -- it would shadow the only address from which this
+        # deployment can be administered.
+        if value.lower() == admin_subdomain():
+            raise serializers.ValidationError("This subdomain is reserved.")
         embed = embed_hostname()
         if embed and settings.BASE_DOMAIN:
             candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
