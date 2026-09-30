@@ -194,12 +194,14 @@ def _create_table_widget(
     if date_qs:
         date_q = date_qs[0]
         date_q_id = date_q["id"]
-        columns.append({
-            "key": f"q_{date_q_id}",
-            "source": "latest_date",
-            "question": date_q_id,
-            "label": "Last submission",
-        })
+        columns.append(
+            {
+                "key": f"q_{date_q_id}",
+                "source": "latest_date",
+                "question": date_q_id,
+                "label": "Last submission",
+            }
+        )
 
     indicator_types = [
         QuestionTypes.option,
@@ -208,28 +210,33 @@ def _create_table_widget(
         QuestionTypes.autofield,
     ]
     monitoring_indicators = [
-        q for q in _find_questions_by_type(qs, indicator_types)
+        q
+        for q in _find_questions_by_type(qs, indicator_types)
         if q.get("id") != date_q_id
     ]
     for q in monitoring_indicators[:3]:
-        columns.append({
-            "key": f"q_{q['id']}",
-            "source": "answer",
-            "question": q["id"],
-            "label": q.get("label") or f"Question {q['id']}",
-        })
+        columns.append(
+            {
+                "key": f"q_{q['id']}",
+                "source": "answer",
+                "question": q["id"],
+                "label": q.get("label") or f"Question {q['id']}",
+            }
+        )
 
     if len(monitoring_indicators) < 2 and root_questions:
         root_indicators = _find_questions_by_type(
             root_questions, indicator_types
         )
         for rq in root_indicators[:2]:
-            columns.append({
-                "key": f"q_{rq['id']}",
-                "source": "parent_answer",
-                "question": rq["id"],
-                "label": rq.get("label") or f"Question {rq['id']}",
-            })
+            columns.append(
+                {
+                    "key": f"q_{rq['id']}",
+                    "source": "parent_answer",
+                    "question": rq["id"],
+                    "label": rq.get("label") or f"Question {rq['id']}",
+                }
+            )
 
     return {
         "type": "table",
@@ -301,9 +308,7 @@ def generate_starter_heuristics(
 
     if all_cats:
         cat_q = all_cats[0]
-        opt_count = cat_q.get(
-            "option_count", len(cat_q.get("options", []))
-        )
+        opt_count = cat_q.get("option_count", len(cat_q.get("options", [])))
         if opt_count <= 5:
             widgets.append(
                 _create_pie_widget(
@@ -347,7 +352,7 @@ def generate_starter_heuristics(
                 title=f"{root_name} Geographic Distribution",
                 rationale=f"Spatial map locating {root_name} sites.",
                 col_span=24,
-                question_id=geo_qs[0]["id"],
+                question_id=None,
             )
         )
 
@@ -374,9 +379,7 @@ def generate_starter_heuristics(
         m_name = m_form.get("name", "Monitoring")
         m_questions = m_form.get("questions", [])
 
-        date_qs = _find_questions_by_type(
-            m_questions, [QuestionTypes.date]
-        )
+        date_qs = _find_questions_by_type(m_questions, [QuestionTypes.date])
         if date_qs:
             date_q = date_qs[0]
             widgets.append(
@@ -448,7 +451,7 @@ def generate_widget_heuristics(
                 title=f"{root_name} Geographic Map",
                 rationale="Spatial map visualizing geographic distribution.",
                 col_span=24,
-                question_id=geo_qs[0]["id"],
+                question_id=None,
             )
         )
 
@@ -502,9 +505,7 @@ def generate_widget_heuristics(
         m_form = monitoring_forms[0]
         m_id = m_form.get("id")
         m_questions = m_form.get("questions", [])
-        date_qs = _find_questions_by_type(
-            m_questions, [QuestionTypes.date]
-        )
+        date_qs = _find_questions_by_type(m_questions, [QuestionTypes.date])
         if date_qs and WidgetTypes.line not in existing_types:
             suggestions.append(
                 _create_line_widget(
@@ -555,6 +556,4 @@ def generate_widget_heuristics(
             )
         )
 
-    return {
-        "suggestions": suggestions[:5]
-    }
+    return {"suggestions": suggestions[:5]}

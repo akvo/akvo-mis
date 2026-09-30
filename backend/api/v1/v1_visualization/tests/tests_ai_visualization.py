@@ -35,6 +35,9 @@ from api.v1.v1_visualization.ai.ai_service import (
     validate_and_sanitize_widgets,
 )
 from api.v1.v1_visualization.constants import DashboardKind, WidgetTypes
+from api.v1.v1_visualization.dashboard_functions import (
+    validate_dashboard_payload,
+)
 from api.v1.v1_visualization.models import Dashboard
 
 
@@ -48,9 +51,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             email="ai_viz_author@akvo.org", role_level=self.IS_SUPER_ADMIN
         )
         token = RefreshToken.for_user(self.user).access_token
-        self.header = {
-            "HTTP_AUTHORIZATION": f"Bearer {token}"
-        }
+        self.header = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
         self.root = Forms.objects.get(pk=6001)
         self.monitoring = Forms.objects.get(pk=6002)
 
@@ -64,9 +65,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.suggest_dashboard_url = (
             "/api/v1/manage/dashboards/ai/suggest-dashboard"
         )
-        self.ai_status_url = (
-            "/api/v1/manage/dashboards/ai/status"
-        )
+        self.ai_status_url = "/api/v1/manage/dashboards/ai/status"
         self.suggest_widgets_url = (
             f"/api/v1/manage/dashboards/{self.dashboard.id}/ai/suggest-widgets"
         )
@@ -250,6 +249,65 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("map", types)
         map_widget = next(w for w in result["widgets"] if w["type"] == "map")
         self.assertEqual(map_widget["col_span"], 24)
+        self.assertIsNone(map_widget["question"])
+        error = validate_dashboard_payload(
+            {
+                "name": "Borehole Points Dashboard",
+                "root_form": geo_form.id,
+                "widgets": result["widgets"],
+            },
+            self.user,
+        )
+        self.assertIsNone(error)
+
+    def test_map_widget_geo_question_sanitized_to_none(self):
+        """Map widget referencing a geo question ID is sanitized to None."""
+        geo_form = Forms.objects.create(
+            name="Water Facilities Geo",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        group = QuestionGroup.objects.create(
+            form=geo_form, name="Location", order=1
+        )
+        geo_q = Questions.objects.create(
+            form=geo_form,
+            name="Facility GPS",
+            type=QuestionTypes.geo,
+            question_group=group,
+            order=1,
+        )
+        _, sources_map = extract_family_metadata(geo_form.id, self.user)
+        raw_widgets = [
+            {
+                "type": "map",
+                "title": "Facility Map",
+                "form": geo_form.id,
+                "question": geo_q.id,
+                "col_span": 24,
+                "config": {"map_mode": "category"},
+                "rationale": "Shows spatial distribution",
+            }
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=False,
+            root_form_id=geo_form.id,
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["type"], "map")
+        self.assertIsNone(sanitized[0]["question"])
+        self.assertEqual(sanitized[0]["config"]["map_mode"], "point")
+        error = validate_dashboard_payload(
+            {
+                "name": "Sanitized Map Dashboard",
+                "root_form": geo_form.id,
+                "widgets": sanitized,
+            },
+            self.user,
+        )
+        self.assertIsNone(error)
 
     def test_starter_heuristics_high_cardinality_bar(self):
         """Option question with >5 choices generates Bar chart over Pie."""
@@ -410,16 +468,20 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.root.id, self.user
         )
         m_q_id = next(
-            qid for qid, q in sources_map[self.monitoring.id].items()
-            if q["type"] in (
+            qid
+            for qid, q in sources_map[self.monitoring.id].items()
+            if q["type"]
+            in (
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
                 QuestionTypes.number,
             )
         )
         r_q_id = next(
-            qid for qid, q in sources_map[self.root.id].items()
-            if q["type"] in (
+            qid
+            for qid, q in sources_map[self.root.id].items()
+            if q["type"]
+            in (
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
                 QuestionTypes.number,
@@ -679,9 +741,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
     @override_settings(OPENAI_API_KEY=None)
     def test_suggest_widgets_without_key_returns_ai_available_false(self):
         """suggest_widgets returns False and empty list without key."""
-        res = AISuggestionService.suggest_widgets(
-            self.dashboard.id, self.user
-        )
+        res = AISuggestionService.suggest_widgets(self.dashboard.id, self.user)
         self.assertIsNotNone(res)
         self.assertFalse(res["ai_available"])
         self.assertEqual(res["provider"], "none")
@@ -894,7 +954,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         """Invalid structures, bad IDs, and bad spans are sanitized."""
         sources = {
             self.root.id: {
-                6001: {"type": "number"},
+                6001: {"type": QuestionTypes.number},
             }
         }
         raw_items = [
@@ -1217,7 +1277,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
     # =========================================================
 
     def test_map_widget_sanitization_with_geo_question(self):
-        """Map widgets with QuestionTypes.geo are preserved and valid."""
+        """Map widgets with geo questions are sanitized to question=None."""
         group = QuestionGroup.objects.filter(form=self.root).first()
         geo_q = Questions.objects.create(
             name="Facility GPS Coordinates",
@@ -1245,7 +1305,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(len(sanitized), 1)
         self.assertEqual(sanitized[0]["type"], "map")
-        self.assertEqual(sanitized[0]["question"], geo_q.id)
+        self.assertIsNone(sanitized[0]["question"])
+        self.assertEqual(sanitized[0]["config"]["map_mode"], "point")
         self.assertEqual(sanitized[0]["col_span"], 24)
 
     def test_scatter_widget_sanitization_with_dual_numeric_questions(self):

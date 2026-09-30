@@ -24,14 +24,12 @@ from api.v1.v1_visualization.ai.ai_prompts import (
 )
 from api.v1.v1_visualization.constants import (
     SUPPORTED_QUESTION_TYPES,
+    VALID_REPEAT_AGG,
     WidgetTypes,
 )
 from api.v1.v1_visualization.models import Dashboard
 
 logger = logging.getLogger(__name__)
-
-# Valid aggregation methods for repeated questions
-VALID_REPEAT_AGG = {"sum", "average", "count", "min", "max"}
 
 # Non-visualized binary / asset question types
 NON_VISUALIZED_TYPES = {
@@ -39,6 +37,20 @@ NON_VISUALIZED_TYPES = {
     QuestionTypes.attachment,
     QuestionTypes.signature,
     QuestionTypes.text,  # long free-text notes
+}
+
+# Thematic questions supported on Map widgets (coloring/sizing)
+MAP_THEMATIC_QUESTION_TYPES = {
+    QuestionTypes.option,
+    QuestionTypes.multiple_option,
+    QuestionTypes.number,
+    QuestionTypes.autofield,
+}
+
+# Numeric question types supported on Scatter question_y
+NUMERIC_QUESTION_TYPES = {
+    QuestionTypes.number,
+    QuestionTypes.autofield,
 }
 
 MAX_OPTIONS_IN_PROMPT = 15
@@ -260,55 +272,51 @@ def _build_default_table_columns(
     form_qs = sources_map.get(form_id or 0, {})
     # Check date question for latest_date
     date_qs = [
-        q for q in form_qs.values()
-        if q.get("type") in (QuestionTypes.date, "date")
+        q for q in form_qs.values() if q.get("type") == QuestionTypes.date
     ]
     date_q_id = None
     if date_qs:
         date_q = date_qs[0]
         date_q_id = date_q["id"]
-        columns.append({
-            "key": f"q_{date_q_id}",
-            "source": "latest_date",
-            "question": date_q_id,
-            "label": "Last submission",
-        })
+        columns.append(
+            {
+                "key": f"q_{date_q_id}",
+                "source": "latest_date",
+                "question": date_q_id,
+                "label": "Last submission",
+            }
+        )
 
-    indicator_types = {
-        QuestionTypes.option,
-        QuestionTypes.multiple_option,
-        QuestionTypes.number,
-        QuestionTypes.autofield,
-        "option",
-        "multiple_option",
-        "number",
-        "autofield",
-    }
+    indicator_types = MAP_THEMATIC_QUESTION_TYPES
     m_indicators = [
-        q for q in form_qs.values()
+        q
+        for q in form_qs.values()
         if q.get("type") in indicator_types and q.get("id") != date_q_id
     ]
     for q in m_indicators[:3]:
-        columns.append({
-            "key": f"q_{q['id']}",
-            "source": "answer",
-            "question": q["id"],
-            "label": q.get("label") or f"Question {q['id']}",
-        })
+        columns.append(
+            {
+                "key": f"q_{q['id']}",
+                "source": "answer",
+                "question": q["id"],
+                "label": q.get("label") or f"Question {q['id']}",
+            }
+        )
 
     if len(m_indicators) < 2 and root_form_id and root_form_id in sources_map:
         root_qs = sources_map.get(root_form_id, {})
         r_indicators = [
-            q for q in root_qs.values()
-            if q.get("type") in indicator_types
+            q for q in root_qs.values() if q.get("type") in indicator_types
         ]
         for rq in r_indicators[:2]:
-            columns.append({
-                "key": f"q_{rq['id']}",
-                "source": "parent_answer",
-                "question": rq["id"],
-                "label": rq.get("label") or f"Question {rq['id']}",
-            })
+            columns.append(
+                {
+                    "key": f"q_{rq['id']}",
+                    "source": "parent_answer",
+                    "question": rq["id"],
+                    "label": rq.get("label") or f"Question {rq['id']}",
+                }
+            )
 
     return columns
 
@@ -389,16 +397,7 @@ def validate_and_sanitize_widgets(
                 continue
             q_info = sources_map[form_id][q_id]
             q_type = q_info.get("type")
-            valid_types = SUPPORTED_QUESTION_TYPES | {
-                QuestionTypes.geo,
-                "geo",
-                "geolocation",
-                "number",
-                "option",
-                "multiple_option",
-                "date",
-                "autofield",
-            }
+            valid_types = SUPPORTED_QUESTION_TYPES | {QuestionTypes.geo}
             if q_type not in valid_types:
                 continue
 
@@ -421,13 +420,23 @@ def validate_and_sanitize_widgets(
                     config["question_y"] = None
                 else:
                     qy_type = target_form_qs[qy].get("type")
-                    if qy_type not in (
-                        QuestionTypes.number,
-                        QuestionTypes.autofield,
-                        "number",
-                        "autofield",
-                    ):
+                    if qy_type not in NUMERIC_QUESTION_TYPES:
                         config["question_y"] = None
+
+        # Map widget question sanitization:
+        # In Akvo MIS, registration forms provide coordinates automatically.
+        # A map widget's `question` field is ONLY for optional thematic
+        # coloring (option/number) or None (point mode). It must NEVER be a
+        # `geo` question ID.
+        if w_type == "map":
+            if q_id:
+                target_form_qs = sources_map.get(form_id or 0, {})
+                q_info = target_form_qs.get(q_id, {})
+                q_type = q_info.get("type")
+                if q_type not in MAP_THEMATIC_QUESTION_TYPES:
+                    q_id = None
+            if not q_id:
+                config["map_mode"] = "point"
 
         # Table widget columns sanitization & auto-generation
         if w_type == "table":
@@ -439,8 +448,11 @@ def validate_and_sanitize_widgets(
                         continue
                     src = col.get("source")
                     if src not in (
-                        "parent_name", "administration", "answer",
-                        "parent_answer", "latest_date",
+                        "parent_name",
+                        "administration",
+                        "answer",
+                        "parent_answer",
+                        "latest_date",
                     ):
                         continue
                     col_qid = col.get("question") or col.get("question_id")
@@ -460,14 +472,16 @@ def validate_and_sanitize_widgets(
                             if not found_fid:
                                 continue
                             col_qid = int(col_qid)
-                    valid_cols.append({
-                        "key": col.get("key") or f"col_{len(valid_cols)}",
-                        "source": src,
-                        "question": col_qid,
-                        "label": (
-                            col.get("label") or col.get("key") or "Column"
-                        ),
-                    })
+                    valid_cols.append(
+                        {
+                            "key": col.get("key") or f"col_{len(valid_cols)}",
+                            "source": src,
+                            "question": col_qid,
+                            "label": (
+                                col.get("label") or col.get("key") or "Column"
+                            ),
+                        }
+                    )
 
             if not valid_cols:
                 valid_cols = _build_default_table_columns(
@@ -496,9 +510,7 @@ def validate_and_sanitize_widgets(
 
         default_title = f"{w_type.capitalize()} Widget"
         title = str(item.get("title") or default_title).strip()[:255]
-        rationale = str(
-            item.get("rationale") or "Recommended metric."
-        ).strip()
+        rationale = str(item.get("rationale") or "Recommended metric.").strip()
 
         valid_widgets.append(
             {
