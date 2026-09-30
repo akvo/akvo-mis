@@ -165,8 +165,38 @@ const uiText = {
     geoRuleSelfIntersection: 'The boundary crosses itself.',
     geoRuleMinArea: 'Area is {actual} m2, below the {threshold} m2 minimum.',
     geoRuleMaxArea: 'Area is {actual} ha, above the {threshold} ha maximum.',
+    geoRuleOverlap: 'Overlaps 1 plot by {actual}% (limit {threshold}%).',
+    geoRuleOverlapMany: 'Overlaps {count} plots: {list} (limit {threshold}%).',
+    geoRuleOverlapNotValidated: 'Not checked for overlaps yet - press Validate before submitting.',
+    geoRuleOverlapNotReady: 'Nearby plots have not been downloaded yet - sync before validating.',
+    geoRuleOverlapSyncing: 'Nearby plots are still downloading - retry sync before validating.',
+    geoRuleOverlapSyncRunning: 'Sync is running - validate again once it finishes.',
+    geoRuleOverlapGapped: 'Some nearby plots are missing - retry sync before validating.',
+    geoRuleOverlapDrifted: 'Plot records are out of step - sync again before validating.',
+    geoRuleOverlapDamaged: 'The plot index is damaged - reset the app and sync again.',
+    geoRuleOverlapNoParent:
+      'The registration plots for this form are not on this device - update your forms, or ask your administrator.',
+    buttonValidatePolygon: 'Validate',
+    buttonRetrySync: 'Retry sync',
+    polygonValidating: 'Checking nearby plots...',
+    polygonValidationPassed: 'All checks passed',
     confirmClearPolygonTitle: 'Clear shape',
     confirmClearPolygon: 'This removes all captured points. Are you sure?',
+    buttonViewOverlaps: 'See overlaps on map',
+    overlapReviewTitle: 'Overlapping plots',
+    overlapCurrentPlot: 'The plot you are working on',
+    overlapConflictPercent: 'Overlaps your plot by {percent}%',
+    overlapNoName: 'No name recorded for this plot',
+    /**
+     * GEO-014 §8: this legend describes the GPS fix, not anyone's claim. Wording it as
+     * "unverified" would send the enumerator to re-walk a corner because a neighbour overlaps
+     * it, which is a different problem with a different fix.
+     */
+    overlapLegendAccuracy: 'GPS accuracy worse than {threshold} m',
+    overlapLegendCurrent: 'Your plot',
+    overlapLegendConflict: 'Overlapping plot',
+    overlapImageryOffline: 'No map imagery offline - shapes and distances are still correct.',
+    overlapImageryDisclaimer: 'Map imagery may be out of date.',
     loadingText: 'Loading...',
     loadingPrefilledAnswer: 'Loading prefilled answer...',
     buttonSelectedLoc: 'Use selected location',
@@ -384,8 +414,39 @@ const uiText = {
     geoRuleSelfIntersection: 'La limite se croise elle-même.',
     geoRuleMinArea: 'La superficie est de {actual} m2, en dessous du minimum de {threshold} m2.',
     geoRuleMaxArea: 'La superficie est de {actual} ha, au-dessus du maximum de {threshold} ha.',
+    geoRuleOverlap: 'Chevauche 1 parcelle de {actual}% (limite {threshold}%).',
+    geoRuleOverlapMany: 'Chevauche {count} parcelles : {list} (limite {threshold}%).',
+    geoRuleOverlapNotValidated:
+      "Chevauchements pas encore vérifiés - appuyez sur Valider avant d'envoyer.",
+    geoRuleOverlapNotReady:
+      'Les parcelles voisines ne sont pas encore téléchargées - synchronisez avant de valider.',
+    geoRuleOverlapSyncing:
+      'Les parcelles voisines sont en cours de téléchargement - réessayez la synchronisation.',
+    geoRuleOverlapSyncRunning: 'Synchronisation en cours - validez à nouveau une fois terminée.',
+    geoRuleOverlapGapped:
+      'Certaines parcelles voisines sont manquantes - réessayez la synchronisation.',
+    geoRuleOverlapDrifted:
+      'Les enregistrements de parcelles sont désynchronisés - synchronisez à nouveau.',
+    geoRuleOverlapDamaged: "L'index des parcelles est endommagé - réinitialisez l'application.",
+    geoRuleOverlapNoParent:
+      "Les parcelles d'enregistrement de ce formulaire ne sont pas sur cet appareil - mettez à jour vos formulaires ou contactez votre administrateur.",
+    buttonValidatePolygon: 'Valider',
+    buttonRetrySync: 'Réessayer la synchronisation',
+    polygonValidating: 'Vérification des parcelles voisines...',
+    polygonValidationPassed: 'Toutes les vérifications ont réussi',
     confirmClearPolygonTitle: 'Effacer la forme',
     confirmClearPolygon: 'Cela supprime tous les points enregistres. Etes-vous sur ?',
+    buttonViewOverlaps: 'Voir les chevauchements sur la carte',
+    overlapReviewTitle: 'Parcelles chevauchantes',
+    overlapCurrentPlot: 'La parcelle sur laquelle vous travaillez',
+    overlapConflictPercent: 'Chevauche votre parcelle de {percent}%',
+    overlapNoName: 'Aucun nom enregistre pour cette parcelle',
+    overlapLegendAccuracy: 'GPS moins précis que {threshold} m',
+    overlapLegendCurrent: 'Votre parcelle',
+    overlapLegendConflict: 'Parcelle chevauchante',
+    overlapImageryOffline:
+      "Pas d'imagerie cartographique hors ligne - les formes et les distances restent correctes.",
+    overlapImageryDisclaimer: "L'imagerie cartographique peut être obsolète.",
     buttonRefreshCurrLocation: 'Refresh location',
     loadingText: 'Chargement...',
     loadingPrefilledAnswer: 'Chargement de la réponse préremplie...',

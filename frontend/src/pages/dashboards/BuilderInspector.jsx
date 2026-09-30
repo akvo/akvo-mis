@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
-import { Input, InputNumber, Select, Switch, Checkbox, Tooltip } from "antd";
+import {
+  Input,
+  InputNumber,
+  Select,
+  Switch,
+  Checkbox,
+  Tooltip,
+  Button,
+} from "antd";
 import {
   DeleteOutlined,
   PlusOutlined,
@@ -48,6 +56,7 @@ import {
   valueQuestionOptions,
   repeatAggOptions,
   tableColumnOptions,
+  getDefaultTableColumns,
   monitoringForms,
   MAP_QUESTION_TYPES,
   NUMERIC_QUESTION_TYPES,
@@ -1775,7 +1784,34 @@ const BuilderInspector = ({
         {/* Table columns */}
         {wType === "table" && widget.form && (
           <div className="builder-inspector-field">
-            <label className="builder-inspector-label">Columns</label>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
+              <label
+                className="builder-inspector-label"
+                style={{ marginBottom: 0 }}
+              >
+                Columns
+              </label>
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, fontSize: 12 }}
+                onClick={() =>
+                  updateConfig(
+                    "columns",
+                    getDefaultTableColumns(forms, widget.form)
+                  )
+                }
+              >
+                Populate default columns
+              </Button>
+            </div>
             <div className="builder-inspector-columns">
               {/* Built-in columns */}
               {[

@@ -5,10 +5,14 @@ import i18n from '../../lib/i18n';
 import { QUESTION_TYPES } from '../../lib/constants';
 import FormState from '../../store/forms';
 import { blockingMessage, isNoAnswer, runPolygonRules } from './polygon-rules';
+import { detectOverlapsEnabled } from './overlap';
+import { storedOverlapFailures } from './overlap-check';
 
 export * from './geometry';
 export * from './gps-vertex';
 export * from './polygon-rules';
+export * from './overlap';
+export * from './overlap-check';
 
 /**
  * Polygon rules, layered on top of Yup rather than inside it.
@@ -31,9 +35,18 @@ const polygonFeedback = (currentValue, field) => {
   if (field?.type !== QUESTION_TYPES.geoshape || isNoAnswer(currentValue)) {
     return null;
   }
-  const { lang } = FormState.getRawState();
+  const { lang, polygonValidation } = FormState.getRawState();
   const results = runPolygonRules(currentValue, field);
-  return blockingMessage(results, i18n.text(lang), field?.label);
+  /**
+   * Overlap is the one rule the gate does not run: it needs the database and 5-50 JSON parses,
+   * so it is user-initiated and its verdict is read back from where Validate stored it
+   * (GEO-007 D-1). A question with `detectOverlaps` off contributes nothing here and behaves
+   * exactly as it did in phase 1.
+   */
+  const overlapFailures = detectOverlapsEnabled(field)
+    ? storedOverlapFailures(polygonValidation?.[field?.id], field, currentValue)
+    : [];
+  return blockingMessage([...results, ...overlapFailures], i18n.text(lang), field?.label);
 };
 
 export const intersection = (array1, array2) => {
