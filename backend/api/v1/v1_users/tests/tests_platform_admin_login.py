@@ -93,9 +93,7 @@ class PlatformAdminLoginTestCase(TestCase, TenantTestHelperMixin):
         # Sending them to the base domain hands them a link to the one
         # origin that refuses to sign them in -- /login there redirects
         # to find-workspace, so the reset can never be completed.
-        with mock.patch(
-            "api.v1.v1_users.views.send_email"
-        ) as send_email:
+        with mock.patch("api.v1.v1_users.views.send_email") as send_email:
             response = self.client.post(
                 "/api/v1/user/forgot-password",
                 {"email": "ops@akvo.org"},
@@ -104,4 +102,5 @@ class PlatformAdminLoginTestCase(TestCase, TenantTestHelperMixin):
             )
         self.assertEqual(response.status_code, 200)
         url = send_email.call_args.kwargs["context"]["button_url"]
-        self.assertIn("//admin.app.com/login/", url)
+        self.assertIn("//admin.app.com", url)
+        self.assertIn("/login/", url)

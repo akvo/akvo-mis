@@ -5,6 +5,7 @@ workspace, which nothing else in this app is allowed to do. Keeping
 them apart makes the unscoped surface one file a reviewer can hold in
 their head.
 """
+
 from django.conf import settings
 from rest_framework import serializers
 
@@ -34,8 +35,15 @@ class TenantListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tenant
-        fields = ["id", "subdomain", "name", "state", "features",
-                  "created_at"]
+        fields = [
+            "id",
+            "subdomain",
+            "name",
+            "language",
+            "state",
+            "features",
+            "created_at",
+        ]
 
     def get_name(self, instance):
         """The workspace's human label.
@@ -111,13 +119,15 @@ class TenantSummarySerializer(TenantListSerializer):
     datapoints = serializers.IntegerField(
         read_only=True, source="datapoints_count"
     )
-    devices = serializers.IntegerField(
-        read_only=True, source="devices_count"
-    )
+    devices = serializers.IntegerField(read_only=True, source="devices_count")
 
     class Meta(TenantListSerializer.Meta):
         fields = TenantListSerializer.Meta.fields + [
-            "users", "forms", "dashboards", "datapoints", "devices",
+            "users",
+            "forms",
+            "dashboards",
+            "datapoints",
+            "devices",
         ]
 
 
@@ -184,8 +194,7 @@ class OperatorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SystemUser
-        fields = ["id", "name", "email", "state", "date_joined",
-                  "last_login"]
+        fields = ["id", "name", "email", "state", "date_joined", "last_login"]
 
     def get_state(self, instance):
         # An invited operator is inactive until the activation link is

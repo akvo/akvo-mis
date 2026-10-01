@@ -1369,4 +1369,331 @@ const uiText = {
   de: {},
 };
 
+uiText.fr = {
+  ...uiText.en,
+
+  // Sidebar Menu Labels
+  menuUsers: "Utilisateurs",
+  menuControlCenter: "Centre de contrôle",
+  menuManagePlatformUsers: "Gérer les utilisateurs de la plateforme",
+  menuValidationTree: "Arbre de validation",
+  menuManageMobileUsers: "Gérer les utilisateurs mobiles",
+  menuManageRoles: "Gérer les rôles",
+  menuMasterData: "Données de référence",
+  menuAdministrativeList: "Liste administrative",
+  menuLevels: "Niveaux",
+  menuAttributes: "Attributs",
+  menuEntities: "Entités",
+  menuEntityTypes: "Types d'entités",
+  menuOrganisations: "Organisations",
+  menuData: "Données",
+  menuManageData: "Gérer les données",
+  menuPendingSubmissions: "Soumissions",
+  menuApprovals: "Approbations",
+  menuDownloads: "Téléchargements",
+  menuManageDraft: "Gérer les brouillons",
+  menuDownloadApps: "Télécharger l'application",
+  menuDocumentation: "Documentation",
+  menuFormBuilder: "Générateur de formulaires",
+  menuDashboards: "Tableaux de bord",
+
+  // Dashboards
+  dashboardListTitle: "Mes tableaux de bord",
+  dashboardListSubtitle:
+    "Créez et gérez vos tableaux de bord de données personnalisés.",
+  dashboardNew: "Nouveau tableau de bord",
+  dashboardEmptyTitle: "Aucun tableau de bord pour le moment",
+  dashboardEmptyDesc:
+    "Créez votre premier tableau de bord personnalisé pour visualiser les données de vos formulaires.",
+  dashboardCreateTitle: "Créer un tableau de bord",
+  dashboardCreateHint:
+    "Donnez-lui un nom, puis choisissez le formulaire d'enregistrement dont ce tableau de bord affichera les données.",
+  dashboardCreateBtn: "Créer le tableau de bord",
+  dashboardNameLabel: "Nom du tableau de bord",
+  dashboardNameRequired: "Veuillez saisir un nom de tableau de bord",
+  dashboardFormLabel: "Source de données",
+  dashboardFormExtra:
+    "Ce tableau de bord affichera les données de ce formulaire et de ses formulaires de suivi. Cela ne pourra pas être modifié ultérieurement.",
+  dashboardFormRequired: "Veuillez sélectionner un formulaire d'enregistrement",
+  dashboardFormPlaceholder: "Sélectionnez un formulaire d'enregistrement",
+  dashboardNoForms: "Aucun formulaire d'enregistrement publié disponible.",
+  dashboardGoFormBuilder:
+    "Accédez au Générateur de formulaires pour créer et publier un formulaire.",
+  dashboardForbidden:
+    "Vous n'avez plus l'autorisation d'effectuer cette action.",
+  dashboardCreated: "Tableau de bord créé",
+  dashboardDeleted: "Tableau de bord supprimé",
+  dashboardDuplicated: "Tableau de bord dupliqué",
+  dashboardDeleteConfirm: "Supprimer ce tableau de bord ?",
+  dashboardSlugConflict:
+    "Un tableau de bord avec un nom similaire existe déjà. Veuillez choisir un nom différent.",
+  dashboardSaved: "Tableau de bord enregistré",
+  dashboardPublished: "Tableau de bord publié",
+
+  // Viewer and preview
+  dashboardViewEmpty: "Ce tableau de bord n'a pas encore de widgets.",
+  dashboardNotFound: "Le tableau de bord est vide",
+  dashboardNotFoundHint:
+    "Ce tableau de bord n'a pas encore été publié ou a peut-être été supprimé.",
+  dashboardEdit: "Modifier le tableau de bord",
+  dashboardPreview: "Aperçu",
+  dashboardBackToEditing: "Retour à l'édition",
+  dashboardWidgetError: "Impossible de charger ce widget",
+  dashboardWidgetRetry: "Réessayer",
+  dashboardWidgetNoData: "Aucune donnée disponible",
+  dashboardWidgetNoDataFiltered:
+    "Aucune donnée trouvée pour les filtres actuels",
+  dashboardWidgetQuestionGone: "La question de ce widget n'existe plus.",
+  dashboardWidgetFormGone: "Le formulaire de ce widget n'existe plus.",
+
+  // Export
+  dashboardExport: "Exporter",
+  dashboardExportPng: "Image PNG",
+  dashboardExportPdf: "Document PDF",
+  dashboardExportFailed: "Impossible d'exporter ce tableau de bord",
+  dashboardFilterPeriod: "Date",
+  dashboardFilterAllLocations: "Tous les emplacements",
+
+  // Visibility
+  dashboardVisibilityTitle: "Tableau de bord public",
+  dashboardVisibilityHintOn:
+    "Tout le monde peut l'ouvrir sans se connecter, et il est listé dans le menu Tableau de bord pour chaque visiteur. Prend effet immédiatement — pas besoin d'enregistrer.",
+  dashboardVisibilityHintDraft:
+    "Publiez d'abord ce tableau de bord. Seul un tableau de bord publié peut être rendu public.",
+  dashboardMakePublicTitle: "Rendre ce tableau de bord public ?",
+  dashboardMakePublicBody:
+    "Toute personne disposant du lien pourra ouvrir ce tableau de bord sans se connecter, et il sera répertorié dans le menu Tableaux de bord pour chaque visiteur de cet espace.",
+  dashboardMakePublicRawData:
+    "Ce tableau de bord comprend un tableau et une carte. Les visiteurs publics verront les lignes de soumission individuelles et l'emplacement de chaque point enregistré, pas seulement les totaux.",
+  dashboardMakePublicOk: "Rendre public",
+  dashboardMadePublic: "Le tableau de bord est maintenant public",
+  dashboardMadePrivate: "Le tableau de bord est maintenant privé",
+  dashboardVisibilityPublic: "Public",
+  dashboardVisibilityPrivate: "Privé",
+
+  // Embedded dashboards
+  dashboardKindLabel: "Quel est ce tableau de bord ?",
+  dashboardKindWidgets: "Le construire ici",
+  dashboardKindWidgetsHint:
+    "Composez des graphiques et des tableaux à partir de vos propres données de formulaire.",
+  dashboardKindEmbed: "Intégrer un tableau de bord externe",
+  dashboardKindEmbedHint:
+    "Afficher un rapport publié par Power BI, Tableau, Looker Studio ou un autre outil.",
+  dashboardEmbedLabel: "Code d'intégration",
+  dashboardEmbedPlaceholder:
+    "Collez le code d'intégration depuis la boîte de dialogue Partager de votre outil de rapport",
+  dashboardEmbedRequired: "Veuillez coller le code d'intégration",
+  dashboardEmbedHint:
+    "Collé exactement comme indiqué, la taille provient du snippet : donnez-lui une largeur et une hauteur pour l'afficher à cette taille, centré.",
+  dashboardEmbedBadge: "Externe",
+  dashboardEmbedUnavailable:
+    "Le contenu externe de ce tableau de bord ne peut pas être affiché car les tableaux de bord intégrés ne sont pas disponibles ici.",
+  preview: "Aperçu",
+  publish: "Publier",
+  published: "Publié",
+  draft: "Brouillon",
+
+  // Error messages
+  error: "Erreur",
+  errorPageNA: "Oups, cette page n'est pas disponible",
+  errorAuth: "Vous n'êtes pas autorisé à accéder à cette page",
+  errorUnknown: "Une erreur inconnue s'est produite",
+  errorVerifyCreds:
+    "Veuillez vérifier vos identifiants pour la ressource demandée",
+  backHome: "Retour à la page d'accueil",
+  errorDataLoad: "Impossible de charger les données",
+  errorUserLoad: "Échec du chargement des données utilisateur",
+  errorFileList: "Impossible de récupérer la liste des fichiers",
+  errorSomething: "Une erreur s'est produite",
+  errorMandatoryFields: "Veuillez répondre à toutes les questions obligatoires",
+  errorFileUpload: "Impossible de téléverser le fichier",
+
+  // Header Links
+  controlCenter: "Centre de contrôle",
+  myProfile: "Mon profil",
+  settings: "Paramètres système",
+  signOut: "Se déconnecter",
+  dashboards: "Tableaux de bord",
+  reports: "Rapports",
+  newsEvents: "Actualités et événements",
+  login: "Connexion",
+
+  // Reports
+  noTemplate: "Aucun modèle trouvé",
+  chooseTemplate: "Choisir un modèle",
+  backBtn: "Retour",
+  printBtn: "Imprimer",
+
+  // Events
+  upcomingEventText: "Événements à venir",
+  eventTitle: "Actualités et événements",
+  latestUpdateText: "Dernières mises à jour",
+
+  // Charts
+  showEmpty: "Afficher les valeurs vides",
+  noInformationAvailable: "Aucune information disponible",
+
+  // User Management
+  manageDataValidationSetup: "Arbre de validation",
+  manageUsers: "Gérer les utilisateurs",
+  addUser: "Ajouter un utilisateur",
+  addNewUser: "Ajouter un nouvel utilisateur",
+  editUser: "Modifier l'utilisateur",
+  updateUser: "Mettre à jour l'utilisateur",
+
+  // Organisation Management
+  manageOrganisations: "Gérer les organisations",
+  addOrganisation: "Ajouter une organisation",
+  editOrganisation: "Modifier l'organisation",
+  updateOrganisation: "Mettre à jour l'organisation",
+
+  // Validations
+  valFirstName: "Le prénom est requis",
+  valLastName: "Le nom de famille est requis",
+  valEmail: "Veuillez entrer une adresse e-mail valide",
+  valPhone: "Le numéro de téléphone est requis",
+  valRole: "Veuillez sélectionner un rôle",
+  valOrganization: "Veuillez sélectionner une organisation",
+  valOrgName: "Le nom de l'organisation est requis",
+  valOrgAttributes: "Veuillez sélectionner des attributs",
+
+  // Control Center
+  manageDataTitle: "Gérer les données",
+  manageDataButton: "Gérer les données",
+  newSubmissionBtn: "Ajouter une nouvelle soumission",
+  finishSubmissionBtn: "Terminer et aller à Gérer les données",
+  finishSubmissionBatchBtn: "Terminer et aller au lot",
+  noFormText: "Aucune donnée",
+  noFormSelectedText: "Aucun formulaire sélectionné",
+
+  // Form Builder
+  formBuilderCreateTitle: "Créer un formulaire",
+  formBuilderEditTitle: "Modifier le formulaire",
+  formBuilderDraftRestored:
+    "Nous avons récupéré votre travail précédent — vérifiez-le avant d'enregistrer.",
+  formBuilderBackToSaved: "Retour à l'état enregistré",
+  formBuilderSaveSuccess: "Formulaire enregistré",
+  formBuilderSaveError: "Échec de l'enregistrement du formulaire",
+  formBuilderCreateSuccess: "Formulaire créé avec succès",
+  formBuilderCreateError: "Échec de la création du formulaire",
+  formBuilderPublishSuccess: "Formulaire publié",
+  formBuilderPublishError: "Échec de la publication du formulaire",
+  formBuilderUnpublishSuccess: "Formulaire dépublié",
+  formBuilderUnpublishError: "Échec de la dépublication du formulaire",
+  formBuilderActivateError: "Échec de l'activation de la version",
+  formBuilderPreviewError: "Échec du chargement de la version",
+  formBuilderVersionHistoryTitle: "Historique des versions",
+  formBuilderVersionsButton: "Versions",
+  formBuilderRefreshButton: "Actualiser",
+  formBuilderVersionHistoryEmpty: "Aucune version publiée pour le moment",
+  formBuilderNameCol: "Nom",
+  formBuilderTypeCol: "Type",
+  formBuilderStatusCol: "Statut",
+  formBuilderLastUpdatedCol: "Dernière mise à jour",
+  formBuilderVersionCol: "Version",
+  formBuilderPublishedAtCol: "Publié le",
+  formBuilderPublishedByCol: "Publié par",
+  formBuilderActionsCol: "Actions",
+  formBuilderActiveTag: "Actif",
+  formBuilderPreviewButton: "Aperçu",
+  formBuilderActivateButton: "Activer",
+  formBuilderSetActiveButton: "Définir comme actif",
+  formBuilderPublishButton: "Publier",
+  formBuilderUnpublishTitle: "Dépublier ce formulaire ?",
+  formBuilderUnpublishDesc:
+    "Le formulaire ne sera plus disponible pour la collecte de données.",
+  formBuilderUnpublishButton: "Dépublier",
+  formBuilderStatusPublished: "Publié",
+  formBuilderStatusDraft: "Brouillon",
+  formBuilderResetDraft: "Charger depuis le serveur",
+  formBuilderCreateMonitoringButton: "Créer un formulaire de suivi",
+  formBuilderCreateButton: "Créer un nouveau formulaire",
+  formBuilderRegistrationType: "Enregistrement",
+  formBuilderMonitoringType: "Suivi",
+  formBuilderTabActive: "Actif",
+  formBuilderTabArchived: "Archivé",
+  formBuilderSearchPlaceholder: "Rechercher par nom",
+  formBuilderFilterStatusAll: "Tous les statuts",
+  formBuilderFilterTypeAll: "Tous les types",
+  formBuilderArchivedAtCol: "Archivé",
+  formBuilderDuplicateButton: "Dupliquer",
+  formBuilderArchiveButton: "Archiver",
+  formBuilderRestoreButton: "Restaurer",
+  formBuilderDeleteButton: "Supprimer définitivement",
+  formBuilderPublishConfirmTitle: "Publier ce formulaire ?",
+  formBuilderPublishConfirmDesc:
+    "Il sera disponible pour la collecte de données.",
+  formBuilderArchiveConfirmTitle: "Archiver ce formulaire ?",
+  formBuilderRestoreConfirmTitle: "Restaurer ce formulaire ?",
+  formBuilderRestoreConfirmDesc:
+    "Il reviendra sous forme de brouillon ; republiez-le pour reprendre la collecte de données.",
+  formBuilderDeleteConfirmTitle: "Supprimer définitivement ce formulaire ?",
+  formBuilderDeleteConfirmDesc: "Cette action est irréversible.",
+  formBuilderArchiveSuccess: "Formulaire archivé",
+  formBuilderArchiveError: "Échec de l'archivage du formulaire",
+  formBuilderRestoreSuccess: "Formulaire restauré",
+  formBuilderRestoreError: "Échec de la restauration du formulaire",
+  formBuilderDuplicateSuccess: "Formulaire dupliqué",
+  formBuilderDuplicateError: "Échec de la duplication du formulaire",
+  formBuilderDeleteSuccess: "Formulaire définitivement supprimé",
+  formBuilderDeleteError: "Échec de la suppression du formulaire",
+  formBuilderStatusArchived: "Archivé",
+  formBuilderEmptyText: "Aucun formulaire trouvé",
+  formBuilderExportButton: "Exporter",
+  formBuilderExportError: "Échec de l'exportation du formulaire",
+  formBuilderExportXlsformButton: "Exporter XLSForm",
+  formBuilderExportXlsformError: "Échec de l'exportation XLSForm",
+  formBuilderExportXlsformWarningTitle: "Avertissements d'exportation XLSForm",
+  formBuilderExportCascadeCsvButton: "Exporter le CSV Cascade",
+  formBuilderExportCascadeCsvError: "Échec de l'exportation du CSV Cascade",
+  formBuilderImportButton: "Importer un formulaire",
+  formBuilderImportModalTitle: "Importer un formulaire",
+  formBuilderImportFormatLabel: "Format",
+  formBuilderImportFormatJson: "JSON (Natif)",
+  formBuilderImportFormatXlsform: "XLSForm (.xlsx)",
+  formBuilderImportDraggerText:
+    "Cliquez ou glissez un fichier de formulaire ici",
+  formBuilderImportInvalidFile: "Seuls les fichiers .json sont pris en charge",
+  formBuilderImportInvalidFileXlsform:
+    "Seuls les fichiers .xlsx ou .xls sont pris en charge",
+  formBuilderImportPreflightError: "Échec de la validation du fichier",
+  formBuilderImportErrorsTitle: "Erreurs de validation",
+  formBuilderImportWarningsTitle: "Avertissements",
+  formBuilderImportFormLabel: "Formulaire",
+  formBuilderImportQuestionsLabel: "Questions",
+  formBuilderImportGroupsLabel: "Groupes",
+  formBuilderImportFormTypeLabel: "Type de formulaire",
+  formBuilderImportFormTypeRegistration: "Enregistrement",
+  formBuilderImportFormTypeMonitoring: "Suivi",
+  formBuilderImportFormTypeRequired:
+    "Veuillez sélectionner un type de formulaire",
+
+  // Common UI words
+  dateFromPlaceholder: "De",
+  dateToPlaceholder: "À",
+  viewDetails: "Voir les détails",
+
+  // Platform console
+  platformConsole: "Console de plateforme",
+  consoleTenants: "Espaces",
+  consoleOperators: "Opérateurs",
+  consoleSearchTenants: "Rechercher un sous-domaine ou un nom",
+  consoleStateAll: "Tous",
+  consoleStateActive: "Actif",
+  consoleStateSuspended: "Suspendu",
+  consoleStateDeleted: "Supprimé",
+  consoleInspect: "Inspecter",
+  consoleInspectFailed: "Impossible d'ouvrir cet espace",
+  consoleSuspend: "Suspendre",
+  consoleRestore: "Restaurer",
+  consoleRename: "Renommer",
+  consoleDelete: "Supprimer",
+  consoleFeatures: "Fonctionnalités",
+  consoleUsers: "Utilisateurs",
+  consoleDeactivate: "Désactiver",
+  consoleReactivate: "Réactiver",
+  consoleInviteOperator: "Inviter un opérateur",
+  consoleRevoke: "Révoquer",
+};
+
 export default uiText;

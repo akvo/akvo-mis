@@ -26,3 +26,14 @@ class TenantModelTestCase(TestCase):
             last_name="Tenant",
         )
         self.assertIsNone(user.tenant)
+
+    def test_tenant_defaults_language_to_en(self):
+        tenant = Tenant.objects.create(subdomain="default-lang")
+        self.assertEqual(tenant.language, "en")
+
+    def test_tenant_persists_custom_language(self):
+        tenant = Tenant.objects.create(
+            subdomain="french-workspace", language="fr"
+        )
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.language, "fr")

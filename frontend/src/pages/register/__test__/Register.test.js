@@ -48,6 +48,7 @@ describe("Register", () => {
     render(<TestApp entryPoint={"/register"} />);
     expect(screen.getByText(/Create your workspace/i)).toBeInTheDocument();
     expect(screen.getByText(/Workspace address/i)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace language/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Create workspace/i })
     ).toBeInTheDocument();
@@ -55,6 +56,25 @@ describe("Register", () => {
     // first point at which the email is known to be real.
     expect(screen.queryByText(/First name/i)).toBeNull();
     expect(screen.queryByText(/Last name/i)).toBeNull();
+  });
+
+  test("submits selected language with registration payload", async () => {
+    let postBody = null;
+    axios.mockImplementation((reqConfig) => {
+      if (reqConfig && reqConfig.url === "register") {
+        postBody = reqConfig.data;
+        return Promise.resolve({ status: 200, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
+
+    render(<TestApp entryPoint={"/register"} />);
+    fill({});
+    await waitFor(() => {
+      expect(screen.getByText(/Check your email/i)).toBeInTheDocument();
+    });
+    expect(postBody).not.toBeNull();
+    expect(postBody.language).toBe("en");
   });
 
   test("ends on a check-your-email state rather than signing in", async () => {

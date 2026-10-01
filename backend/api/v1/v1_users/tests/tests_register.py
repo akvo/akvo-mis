@@ -31,8 +31,10 @@ class RegisterEndpointTestCase(TestCase):
         # every host is the base domain.
         extra = {"HTTP_HOST": host} if host else {}
         return self.client.post(
-            "/api/v1/register", payload,
-            content_type="application/json", **extra
+            "/api/v1/register",
+            payload,
+            content_type="application/json",
+            **extra,
         )
 
     def registered_tenants(self):
@@ -80,8 +82,10 @@ class RegisterEndpointTestCase(TestCase):
             self.register()
         res = self.client.post(
             "/api/v1/login",
-            {"email": self.payload["email"],
-             "password": self.payload["password"]},
+            {
+                "email": self.payload["email"],
+                "password": self.payload["password"],
+            },
             content_type="application/json",
         )
         self.assertEqual(res.status_code, 401)
@@ -169,3 +173,23 @@ class RegisterEndpointTestCase(TestCase):
         )
         self.assertEqual(profile.status_code, 200)
         self.assertIsNotNone(profile.json()["administration"]["id"])
+
+    def test_register_defaults_language_to_en(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register()
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="acme")
+        self.assertEqual(tenant.language, "en")
+
+    def test_register_persists_french_language(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="senegal", language="fr")
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="senegal")
+        self.assertEqual(tenant.language, "fr")
+
+    def test_register_rejects_unsupported_language(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="spanish", language="es")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Tenant.objects.filter(subdomain="spanish").exists())
