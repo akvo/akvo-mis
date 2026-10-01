@@ -41,7 +41,7 @@ from api.v1.v1_profile.constants import FeatureAccessTypes
 from django.conf import settings
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
-from utils.tenant_host import admin_subdomain, embed_hostname
+from utils.tenant_host import admin_subdomain, embed_hostname, is_admin_host
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
 
 
@@ -161,15 +161,31 @@ class LoginSerializer(serializers.Serializer):
     password = CustomCharField()
 
 
+def accounts_for_email(request, email, **extra):
+    """The accounts an emailed link may be built for, scoped by host.
+
+    Scoping on "has no tenant" is not enough: that reads the same on
+    the console, on the base domain, and on every single-host
+    deployment, where accounts do have workspaces. Only the console
+    means tenant-less, and only an operator can use what it sends --
+    so only operators are looked up there. Unscoped, `.first()`
+    returned an arbitrary account from any workspace sharing the
+    address, and the link was then built for *that* workspace.
+    """
+    qs = SystemUser.objects.filter(email=email, deleted_at=None, **extra)
+    if is_admin_host(request.get_host()):
+        return qs.filter(is_platform_admin=True, tenant__isnull=True)
+    tenant = getattr(request, "tenant", None)
+    return qs.filter(tenant=tenant) if tenant is not None else qs
+
+
 class ForgotPasswordSerializer(serializers.Serializer):
     email = CustomEmailField()
 
     def validate_email(self, email):
-        tenant = self.context.get("tenant")
-        qs = SystemUser.objects.filter(email=email, deleted_at=None)
-        if tenant is not None:
-            qs = qs.filter(tenant=tenant)
-        user = qs.first()
+        user = accounts_for_email(
+            self.context["request"], email
+        ).first()
         if not user:
             raise ValidationError("Invalid email, user not found")
         return user

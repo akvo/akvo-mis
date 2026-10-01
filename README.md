@@ -191,11 +191,19 @@ flow you get is the same one production has. Full walkthrough:
 **One-time setup**
 
 1. Pick a base domain you do not own on the real internet — `.test` is
-   reserved for exactly this by RFC 2606 — and set it in `.env`:
+   reserved for exactly this by RFC 2606 — and set it in `.env`,
+   together with the address the browser actually uses:
 
    ```bash
    BASE_DOMAIN=localapp.test
+   WEBDOMAIN="http://localapp.test:3000"
    ```
+
+   `WEBDOMAIN` is easy to skip, and skipping it is silent: every emailed
+   link takes its scheme and port from there and its host from
+   `BASE_DOMAIN`, so the shipped `http://example.com` placeholder mails
+   `http://acme.localapp.test/...` — right host, no port, opens nothing.
+   The link is only discovered to be broken by clicking it.
 
 2. Add it to `/etc/hosts`:
 
