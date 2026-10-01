@@ -1,8 +1,8 @@
 # [MT-025] Onboarding Language Selector Design Specification
 
 **Issue**: [#500](https://github.com/akvo/akvo-mis/issues/500)
-**Status**: Draft / Proposed
-**Author**: Antigravity
+**Status**: Implemented
+**Author**: Galih Pratama
 **Date**: 2026-10-01
 
 ---
@@ -171,9 +171,10 @@ Ensure `store.update((s) => { s.language.active = res.data.language || "en"; })`
 
 | Task ID | Story / Task Description | Vibe Coding (Dev) | Automated Testing | QA & Review | Total Est. | Actual Time |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **MT-025.1** | Backend Model & Migration: Add `language` field to `Tenant` model + migration | 15m | 15m | 10m | **40m** | - |
-| **MT-025.2** | Registration & Tenant Info APIs: Update `RegisterSerializer`, `register()`, and `tenant_info` | 20m | 25m | 15m | **60m (1.0h)** | - |
-| **MT-025.3** | Frontend Registration UI: Add Language Selector to `Register.jsx` and payload dispatch | 20m | 20m | 10m | **50m** | - |
-| **MT-025.4** | Frontend Tenant Context Sync: Bootstrap `store.language` from `tenant-info` payload | 15m | 15m | 10m | **40m** | - |
-| **MT-025.5** | End-to-End Test Suite & Lint Pass: Run full backend + frontend test suites and linters | 10m | 20m | 15m | **45m** | - |
-| **Total** | **End-to-End Implementation** | **80m** | **95m** | **60m** | **235m (~3.9h)** | - |
+| **MT-025.1** | Backend Model & Migration: Add `language` field to `Tenant` model + migration | 15m | 15m | 10m | **40m** | 20m |
+| **MT-025.2** | Registration & Tenant Info APIs: Update `RegisterSerializer`, `register()`, and `tenant_info` | 20m | 25m | 15m | **60m (1.0h)** | 30m |
+| **MT-025.3** | Frontend Registration UI: Add Language Selector to `Register.jsx` and payload dispatch | 20m | 20m | 10m | **50m** | 25m |
+| **MT-025.4** | Frontend Tenant Context Sync: Bootstrap `store.language` from `tenant-info` payload | 15m | 15m | 10m | **40m** | 20m |
+| **MT-025.5** | End-to-End Test Suite & Lint Pass: Run full backend + frontend test suites and linters | 10m | 20m | 15m | **45m** | 25m |
+| **Total** | **End-to-End Implementation** | **80m** | **95m** | **60m** | **235m (~3.9h)** | **120m (2.0h)** |
+
