@@ -155,14 +155,16 @@ describe("tenant util", () => {
     );
   });
 
-  test("fetchTenant stores the workspace this host serves", async () => {
+  test("fetchTenant stores the workspace this host serves and updates language", async () => {
     axios.mockResolvedValue({
       status: 200,
-      data: { subdomain: "acme" },
+      data: { subdomain: "acme", language: "fr" },
     });
     const tenant = await fetchTenant();
     expect(tenant.subdomain).toBe("acme");
+    expect(tenant.language).toBe("fr");
     expect(store.getRawState().tenant.subdomain).toBe("acme");
+    expect(store.getRawState().language.active).toBe("fr");
   });
 
   test("a 204 means there is no workspace here", async () => {
