@@ -8,7 +8,10 @@ from django.test.utils import CaptureQueriesContext, override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from api.v1.v1_forms.models import Forms, Questions
-from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_profile.tests.mixins import (
+    ProfileTestHelperMixin,
+    set_embedding,
+)
 from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
@@ -530,7 +533,7 @@ class DashboardReadPermissionTestCase(TenantIsolationTestCase):
         )
 
 
-@override_settings(USE_TZ=False, EMBED_TENANTS={"default"})
+@override_settings(USE_TZ=False)
 class EmbedReadTestCase(TestCase, ProfileTestHelperMixin):
     def setUp(self):
         call_command("administration_seeder", "--test")
@@ -541,6 +544,7 @@ class EmbedReadTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         self.published = "<iframe src='https://app.powerbi.com/view?r=1'>" \
                          "</iframe>"
         self.dashboard = Dashboard.objects.create(
