@@ -30,12 +30,16 @@ from api.v1.v1_visualization.ai.ai_service import (
     AISuggestionService,
     CircuitBreaker,
     ai_circuit_breaker,
+    calculate_ai_timeout,
     extract_family_metadata,
     normalize_grid_layout,
     validate_and_sanitize_widgets,
 )
 from api.v1.v1_visualization.constants import DashboardKind, WidgetTypes
-from api.v1.v1_visualization.models import Dashboard
+from api.v1.v1_visualization.dashboard_functions import (
+    validate_dashboard_payload,
+)
+from api.v1.v1_visualization.models import Dashboard, DashboardWidget
 
 
 @override_settings(USE_TZ=False, OPENAI_API_KEY=None)
@@ -48,9 +52,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             email="ai_viz_author@akvo.org", role_level=self.IS_SUPER_ADMIN
         )
         token = RefreshToken.for_user(self.user).access_token
-        self.header = {
-            "HTTP_AUTHORIZATION": f"Bearer {token}"
-        }
+        self.header = {"HTTP_AUTHORIZATION": f"Bearer {token}"}
         self.root = Forms.objects.get(pk=6001)
         self.monitoring = Forms.objects.get(pk=6002)
 
@@ -64,9 +66,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.suggest_dashboard_url = (
             "/api/v1/manage/dashboards/ai/suggest-dashboard"
         )
-        self.ai_status_url = (
-            "/api/v1/manage/dashboards/ai/status"
-        )
+        self.ai_status_url = "/api/v1/manage/dashboards/ai/status"
         self.suggest_widgets_url = (
             f"/api/v1/manage/dashboards/{self.dashboard.id}/ai/suggest-widgets"
         )
@@ -92,6 +92,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("id", q_item)
         self.assertIn("label", q_item)
         self.assertIn("type", q_item)
+        self.assertIn("group_name", q_item)
+        self.assertIn("option_count", q_item)
 
     def test_metadata_extraction_not_found(self):
         """Non-existent form returns None."""
@@ -250,6 +252,65 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("map", types)
         map_widget = next(w for w in result["widgets"] if w["type"] == "map")
         self.assertEqual(map_widget["col_span"], 24)
+        self.assertIsNone(map_widget["question"])
+        error = validate_dashboard_payload(
+            {
+                "name": "Borehole Points Dashboard",
+                "root_form": geo_form.id,
+                "widgets": result["widgets"],
+            },
+            self.user,
+        )
+        self.assertIsNone(error)
+
+    def test_map_widget_geo_question_sanitized_to_none(self):
+        """Map widget referencing a geo question ID is sanitized to None."""
+        geo_form = Forms.objects.create(
+            name="Water Facilities Geo",
+            type=FormTypes.registration,
+            status=FormStatus.published,
+        )
+        group = QuestionGroup.objects.create(
+            form=geo_form, name="Location", order=1
+        )
+        geo_q = Questions.objects.create(
+            form=geo_form,
+            name="Facility GPS",
+            type=QuestionTypes.geo,
+            question_group=group,
+            order=1,
+        )
+        _, sources_map = extract_family_metadata(geo_form.id, self.user)
+        raw_widgets = [
+            {
+                "type": "map",
+                "title": "Facility Map",
+                "form": geo_form.id,
+                "question": geo_q.id,
+                "col_span": 24,
+                "config": {"map_mode": "category"},
+                "rationale": "Shows spatial distribution",
+            }
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=False,
+            root_form_id=geo_form.id,
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["type"], "map")
+        self.assertIsNone(sanitized[0]["question"])
+        self.assertEqual(sanitized[0]["config"]["map_mode"], "point")
+        error = validate_dashboard_payload(
+            {
+                "name": "Sanitized Map Dashboard",
+                "root_form": geo_form.id,
+                "widgets": sanitized,
+            },
+            self.user,
+        )
+        self.assertIsNone(error)
 
     def test_starter_heuristics_high_cardinality_bar(self):
         """Option question with >5 choices generates Bar chart over Pie."""
@@ -410,16 +471,20 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             self.root.id, self.user
         )
         m_q_id = next(
-            qid for qid, q in sources_map[self.monitoring.id].items()
-            if q["type"] in (
+            qid
+            for qid, q in sources_map[self.monitoring.id].items()
+            if q["type"]
+            in (
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
                 QuestionTypes.number,
             )
         )
         r_q_id = next(
-            qid for qid, q in sources_map[self.root.id].items()
-            if q["type"] in (
+            qid
+            for qid, q in sources_map[self.root.id].items()
+            if q["type"]
+            in (
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
                 QuestionTypes.number,
@@ -679,9 +744,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
     @override_settings(OPENAI_API_KEY=None)
     def test_suggest_widgets_without_key_returns_ai_available_false(self):
         """suggest_widgets returns False and empty list without key."""
-        res = AISuggestionService.suggest_widgets(
-            self.dashboard.id, self.user
-        )
+        res = AISuggestionService.suggest_widgets(self.dashboard.id, self.user)
         self.assertIsNotNone(res)
         self.assertFalse(res["ai_available"])
         self.assertEqual(res["provider"], "none")
@@ -894,7 +957,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         """Invalid structures, bad IDs, and bad spans are sanitized."""
         sources = {
             self.root.id: {
-                6001: {"type": "number"},
+                6001: {"type": QuestionTypes.number},
             }
         }
         raw_items = [
@@ -1217,7 +1280,7 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
     # =========================================================
 
     def test_map_widget_sanitization_with_geo_question(self):
-        """Map widgets with QuestionTypes.geo are preserved and valid."""
+        """Map widgets with geo questions are sanitized to question=None."""
         group = QuestionGroup.objects.filter(form=self.root).first()
         geo_q = Questions.objects.create(
             name="Facility GPS Coordinates",
@@ -1245,7 +1308,8 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(len(sanitized), 1)
         self.assertEqual(sanitized[0]["type"], "map")
-        self.assertEqual(sanitized[0]["question"], geo_q.id)
+        self.assertIsNone(sanitized[0]["question"])
+        self.assertEqual(sanitized[0]["config"]["map_mode"], "point")
         self.assertEqual(sanitized[0]["col_span"], 24)
 
     def test_scatter_widget_sanitization_with_dual_numeric_questions(self):
@@ -1554,3 +1618,132 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 expected_type,
                 f"Query '{query_hint}' did not yield '{expected_type}'",
             )
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_suggest_widgets_excludes_already_visualized_questions(self):
+        """Questions already visualized are excluded from suggestions."""
+        q_opt = self.root.form_questions.filter(
+            type=QuestionTypes.option
+        ).first()
+        self.assertIsNotNone(q_opt)
+        existing = [
+            {
+                "form": self.root.id,
+                "question": q_opt.id,
+                "type": "bar",
+            }
+        ]
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id,
+            self.user,
+            existing_widgets=existing,
+        )
+        self.assertIsNotNone(res)
+        self.assertIn("suggestions", res)
+        # Verify q_opt.id is not re-suggested as a bar/pie chart
+        for s in res["suggestions"]:
+            if s.get("type") in ("bar", "pie"):
+                self.assertNotEqual(
+                    s.get("question"),
+                    q_opt.id,
+                    "Visualized option question was re-suggested",
+                )
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_suggest_widgets_excludes_already_present_map(self):
+        """Map widget is not suggested if dashboard already has a map."""
+        existing = [
+            {
+                "form": self.root.id,
+                "question": None,
+                "type": "map",
+            }
+        ]
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id,
+            self.user,
+            existing_widgets=existing,
+        )
+        self.assertIsNotNone(res)
+        for s in res.get("suggestions", []):
+            self.assertNotEqual(
+                s.get("type"), "map", "Duplicate map was suggested"
+            )
+
+    @override_settings(OPENAI_API_KEY="sk-test-mock-key")
+    def test_suggest_widgets_persisted_db_widgets_are_excluded(self):
+        """DB saved widgets are excluded from suggestions."""
+        q_target = self.root.form_questions.first()
+        self.assertIsNotNone(q_target)
+        DashboardWidget.objects.create(
+            dashboard=self.dashboard,
+            form=self.root,
+            question=q_target,
+            type=WidgetTypes.kpi,
+            title="Existing KPI",
+            col_span=6,
+            order=1,
+            config={"value_type": "number", "repeat_agg": None},
+        )
+        res = AISuggestionService.suggest_widgets(
+            self.dashboard.id,
+            self.user,
+        )
+        self.assertIsNotNone(res)
+        for s in res.get("suggestions", []):
+            self.assertNotEqual(
+                s.get("question"),
+                q_target.id,
+                "Persisted widget question was re-suggested",
+            )
+
+    # =========================================================
+    # 8. Adaptive Timeout by Form Size Tests
+    # =========================================================
+
+    def test_calculate_ai_timeout_empty_or_none(self):
+        """None or empty metadata returns baseline 6.0s read timeout."""
+        t_none = calculate_ai_timeout(None)
+        self.assertEqual(t_none.connect, 3.0)
+        self.assertEqual(t_none.read, 6.0)
+
+        t_empty = calculate_ai_timeout({})
+        self.assertEqual(t_empty.connect, 3.0)
+        self.assertEqual(t_empty.read, 6.0)
+
+    def test_calculate_ai_timeout_scaling_by_question_count(self):
+        """Read timeout scales with question count and is bounded <= 15s."""
+        # 10 questions -> 6.0 + 1.0 = 7.0s read
+        meta_small = {
+            "root_form": {
+                "questions": [{"id": i} for i in range(10)],
+            },
+            "monitoring_forms": [],
+        }
+        t_small = calculate_ai_timeout(meta_small)
+        self.assertEqual(t_small.connect, 3.0)
+        self.assertAlmostEqual(t_small.read, 7.0)
+
+        # 40 root + 20 monitoring = 60 questions -> 6.0 + 6.0 = 12.0s read
+        meta_large = {
+            "root_form": {
+                "questions": [{"id": i} for i in range(40)],
+            },
+            "monitoring_forms": [
+                {"questions": [{"id": i} for i in range(20)]},
+            ],
+        }
+        t_large = calculate_ai_timeout(meta_large)
+        self.assertEqual(t_large.connect, 3.0)
+        self.assertAlmostEqual(t_large.read, 12.0)
+
+        # 120 questions -> capped at 15.0s read
+        meta_massive = {
+            "root_form": {
+                "questions": [{"id": i} for i in range(120)],
+            },
+            "monitoring_forms": [],
+        }
+        t_massive = calculate_ai_timeout(meta_massive)
+        self.assertEqual(t_massive.connect, 3.0)
+        self.assertEqual(t_massive.read, 15.0)
