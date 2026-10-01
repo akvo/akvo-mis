@@ -7,7 +7,7 @@
 import json
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
 
@@ -161,9 +161,7 @@ def extract_family_metadata(
                 opt_count = 0
 
             type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
-            group_name = (
-                q.question_group.name if q.question_group else None
-            )
+            group_name = q.question_group.name if q.question_group else None
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
@@ -536,11 +534,43 @@ def validate_and_sanitize_widgets(
     return normalize_grid_layout(valid_widgets)
 
 
+def calculate_ai_timeout(
+    family_metadata: Optional[dict] = None,
+) -> Any:
+    """Compute adaptive HTTP timeout based on question count and form size.
+
+    - Base connect: 3.0s, base read: 6.0s
+    - Read timeout scales by 0.1s per question, bounded between 6.0s and 15.0s
+    - Total timeout = read_timeout + 3.0s (connect)
+    """
+    import httpx
+
+    total_questions = 0
+    if family_metadata and isinstance(family_metadata, dict):
+        root_form = family_metadata.get("root_form") or {}
+        root_qs = root_form.get("questions") or []
+        total_questions += len(root_qs)
+
+        mon_forms = family_metadata.get("monitoring_forms") or []
+        for m in mon_forms:
+            if isinstance(m, dict):
+                total_questions += len(m.get("questions") or [])
+
+    read_timeout = max(6.0, min(15.0, 6.0 + total_questions * 0.1))
+    total_timeout = read_timeout + 3.0
+    return httpx.Timeout(total_timeout, connect=3.0, read=read_timeout)
+
+
 class AISuggestionService:
     """Core recommendation orchestrator for Akvo MIS dashboards."""
 
     @classmethod
-    def _call_openai(cls, messages: list, schema: dict) -> Optional[dict]:
+    def _call_openai(
+        cls,
+        messages: list,
+        schema: dict,
+        timeout: Optional[Any] = None,
+    ) -> Optional[dict]:
         """Invoke OpenAI API with structured JSON and circuit breaker."""
         api_key = getattr(settings, "OPENAI_API_KEY", None)
         if not api_key:
@@ -554,9 +584,9 @@ class AISuggestionService:
             from openai import OpenAI
             import httpx
 
-            # Strict granular timeouts: 2.0s connect, 4.0s read
-            timeout = httpx.Timeout(5.0, connect=2.0, read=4.0)
-            client = OpenAI(api_key=api_key, timeout=timeout)
+            default_timeout = httpx.Timeout(10.0, connect=3.0, read=7.0)
+            call_timeout = timeout or default_timeout
+            client = OpenAI(api_key=api_key, timeout=call_timeout)
 
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -600,10 +630,11 @@ class AISuggestionService:
         metadata, sources_map = meta_res
         has_monitoring = metadata.get("has_monitoring", False)
 
-        # Attempt OpenAI generation
+        # Attempt OpenAI generation with adaptive timeout based on form size
         messages = build_starter_dashboard_prompt(metadata, user_intent)
+        call_timeout = calculate_ai_timeout(metadata)
         openai_result = cls._call_openai(
-            messages, STARTER_DASHBOARD_JSON_SCHEMA
+            messages, STARTER_DASHBOARD_JSON_SCHEMA, timeout=call_timeout
         )
 
         if openai_result and isinstance(openai_result, dict):
@@ -762,8 +793,11 @@ class AISuggestionService:
                 prompt_hint=prompt_hint,
                 existing_widgets=all_existing,
             )
+            call_timeout = calculate_ai_timeout(metadata)
             openai_result = cls._call_openai(
-                messages, WIDGET_SUGGESTION_JSON_SCHEMA
+                messages,
+                WIDGET_SUGGESTION_JSON_SCHEMA,
+                timeout=call_timeout,
             )
 
             if openai_result and isinstance(openai_result, dict):

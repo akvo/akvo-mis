@@ -30,6 +30,7 @@ from api.v1.v1_visualization.ai.ai_service import (
     AISuggestionService,
     CircuitBreaker,
     ai_circuit_breaker,
+    calculate_ai_timeout,
     extract_family_metadata,
     normalize_grid_layout,
     validate_and_sanitize_widgets,
@@ -1695,3 +1696,54 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 q_target.id,
                 "Persisted widget question was re-suggested",
             )
+
+    # =========================================================
+    # 8. Adaptive Timeout by Form Size Tests
+    # =========================================================
+
+    def test_calculate_ai_timeout_empty_or_none(self):
+        """None or empty metadata returns baseline 6.0s read timeout."""
+        t_none = calculate_ai_timeout(None)
+        self.assertEqual(t_none.connect, 3.0)
+        self.assertEqual(t_none.read, 6.0)
+
+        t_empty = calculate_ai_timeout({})
+        self.assertEqual(t_empty.connect, 3.0)
+        self.assertEqual(t_empty.read, 6.0)
+
+    def test_calculate_ai_timeout_scaling_by_question_count(self):
+        """Read timeout scales with question count and is bounded <= 15s."""
+        # 10 questions -> 6.0 + 1.0 = 7.0s read
+        meta_small = {
+            "root_form": {
+                "questions": [{"id": i} for i in range(10)],
+            },
+            "monitoring_forms": [],
+        }
+        t_small = calculate_ai_timeout(meta_small)
+        self.assertEqual(t_small.connect, 3.0)
+        self.assertAlmostEqual(t_small.read, 7.0)
+
+        # 40 root + 20 monitoring = 60 questions -> 6.0 + 6.0 = 12.0s read
+        meta_large = {
+            "root_form": {
+                "questions": [{"id": i} for i in range(40)],
+            },
+            "monitoring_forms": [
+                {"questions": [{"id": i} for i in range(20)]},
+            ],
+        }
+        t_large = calculate_ai_timeout(meta_large)
+        self.assertEqual(t_large.connect, 3.0)
+        self.assertAlmostEqual(t_large.read, 12.0)
+
+        # 120 questions -> capped at 15.0s read
+        meta_massive = {
+            "root_form": {
+                "questions": [{"id": i} for i in range(120)],
+            },
+            "monitoring_forms": [],
+        }
+        t_massive = calculate_ai_timeout(meta_massive)
+        self.assertEqual(t_massive.connect, 3.0)
+        self.assertEqual(t_massive.read, 15.0)
