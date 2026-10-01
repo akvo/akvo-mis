@@ -16,7 +16,11 @@ export const addPreffix = (addonBefore, theme) => {
     element = <View testID={testID}>{element}</View>;
   }
   if (element && !isValidElement(element)) {
-    element = <Text testID={testID}>{element}</Text>;
+    element = (
+      <Text testID={testID} style={{ color: theme.text.primary }}>
+        {element}
+      </Text>
+    );
   }
   return {
     leftIcon: element,
@@ -46,7 +50,11 @@ export const addSuffix = (addonAfter, theme) => {
     element = <View testID={testID}>{element}</View>;
   }
   if (element && !isValidElement(element)) {
-    element = <Text testID={testID}>{element}</Text>;
+    element = (
+      <Text testID={testID} style={{ color: theme.text.primary }}>
+        {element}
+      </Text>
+    );
   }
   return {
     rightIcon: element,

@@ -303,6 +303,8 @@ const TypeCascade = ({
                   backgroundColor: theme.bg.surfaceElevated1,
                   borderRadius: 12,
                 }}
+                itemTextStyle={{ color: theme.text.primary }}
+                activeColor={theme.bg.surfaceTranslucent}
                 data={item?.options}
                 search={hasSearch}
                 searchPlaceholder={trans.searchPlaceholder}

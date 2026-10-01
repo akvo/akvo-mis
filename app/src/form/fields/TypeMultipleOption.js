@@ -50,6 +50,7 @@ const TypeMultipleOption = ({
             borderRadius: 12,
           }}
           activeColor={theme.bg.surfaceTranslucent}
+          itemTextStyle={{ color: theme.text.primary }}
           data={option}
           search={showSearch}
           maxHeight={placement.maxHeight}

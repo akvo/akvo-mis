@@ -104,7 +104,7 @@ const ImageView = ({
   if (isRetaking) {
     content = (
       <View style={styles.processingContainer} testID={`${imageTestID}-processing`}>
-        <ActivityIndicator size="small" color="dodgerblue" />
+        <ActivityIndicator size="small" color={theme.buttonGhost.color} />
         <Text style={styles.processingText}>{processingLabel}</Text>
       </View>
     );

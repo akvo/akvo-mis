@@ -6,8 +6,10 @@ import { langConfig } from '../../pages/Settings/config';
 import DialogForm from '../../pages/Settings/DialogForm';
 import { FormState, UIState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const SaveDropdownMenu = ({ anchor, visible, setVisible, handleOnSaveAndExit, handleOnExit }) => {
+  const theme = useTheme();
   const [showLanguageSelectionDialog, setShowLanguageSelectionDialog] = useState(false);
   const activeLang = FormState.useState((s) => s.lang);
   const appLang = UIState.useState((s) => s.lang);
@@ -45,7 +47,7 @@ const SaveDropdownMenu = ({ anchor, visible, setVisible, handleOnSaveAndExit, ha
           }
         }}
         testID="save-dropdown-menu"
-        style={styles.dropdownContainer}
+        style={[styles.dropdownContainer, { backgroundColor: theme.bg.surfaceElevated1 }]}
       >
         <MenuItem
           onPress={() => {
@@ -54,6 +56,7 @@ const SaveDropdownMenu = ({ anchor, visible, setVisible, handleOnSaveAndExit, ha
             }
           }}
           testID="save-and-exit-menu-item"
+          textStyle={{ color: theme.text.primary }}
         >
           {trans.buttonSaveNExit}
         </MenuItem>
@@ -66,6 +69,7 @@ const SaveDropdownMenu = ({ anchor, visible, setVisible, handleOnSaveAndExit, ha
             }
           }}
           testID="save-and-send-to-web-menu-item"
+          textStyle={{ color: theme.text.primary }}
         >
           {trans.buttonSaveNSendToWeb}
         </MenuItem>
@@ -76,6 +80,7 @@ const SaveDropdownMenu = ({ anchor, visible, setVisible, handleOnSaveAndExit, ha
             }
           }}
           testID="exit-without-saving-menu-item"
+          textStyle={{ color: theme.text.primary }}
         >
           {trans.buttonExitWoSaving}
         </MenuItem>

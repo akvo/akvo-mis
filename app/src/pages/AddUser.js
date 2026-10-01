@@ -124,7 +124,7 @@ const AddUser = ({ navigation }) => {
       title={trans.addUserPageTitle}
       leftComponent={
         <Button type="clear" onPress={goToUsers} testID="arrow-back-button">
-          <Icon name="arrow-back" size={18} />
+          <Icon name="arrow-back" size={18} color={theme.topNav.icon} />
         </Button>
       }
       rightComponent={rightComponent}

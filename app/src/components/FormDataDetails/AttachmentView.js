@@ -117,7 +117,7 @@ const AttachmentView = ({
   if (isReattaching) {
     content = (
       <View style={styles.processingContainer} testID={`attachment-processing-${index}`}>
-        <ActivityIndicator size="small" color="dodgerblue" />
+        <ActivityIndicator size="small" color={theme.buttonGhost.color} />
         <Text style={styles.processingText}>{processingLabel}</Text>
       </View>
     );

@@ -55,6 +55,7 @@ const getStyles = (theme) =>
     fieldLabelContainer: {
       flex: 1,
       flexDirection: 'row',
+      alignItems: 'flex-start',
     },
     fieldRequiredIcon: {
       color: theme.status.error,

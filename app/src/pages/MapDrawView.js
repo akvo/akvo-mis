@@ -372,7 +372,12 @@ const MapDrawView = ({ navigation, route }) => {
         testID={testID}
         style={[styles.control, primary && styles.controlPrimary, disabled && styles.disabled]}
       >
-        <Icon type="material" name={name} size={24} color={primary ? '#ffffff' : '#1651b6'} />
+        <Icon
+          type="material"
+          name={name}
+          size={24}
+          color={primary ? theme.buttonPrimary.text : theme.buttonGhost.color}
+        />
       </TouchableOpacity>
     );
   };
@@ -511,7 +516,7 @@ const MapDrawView = ({ navigation, route }) => {
         {failures.map((failure) => (
           <Text
             key={failure.key}
-            style={styles.warningRow}
+            style={[styles.warningRow, { color: theme.text.primary }]}
             testID={`text-polygon-warning-${failure.key}`}
           >
             {`\u26A0 ${formatRuleFailure(failure, trans)}`}
@@ -694,13 +699,13 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 8,
-    backgroundColor: '#eaf2ff',
+    backgroundColor: 'rgba(234, 242, 255, 0.95)',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 3,
   },
   controlPrimary: {
-    backgroundColor: '#0d4f73',
+    backgroundColor: 'rgba(13, 79, 115, 0.95)',
   },
   disabled: {
     opacity: 0.4,

@@ -81,7 +81,7 @@ const Users = ({ navigation, route }) => {
       title={trans.usersPageTitle}
       leftComponent={
         <Button type="clear" onPress={() => navigation.navigate('Home')} testID="arrow-back-button">
-          <Icon name="arrow-back" size={18} />
+          <Icon name="arrow-back" size={18} color={theme.topNav.icon} />
         </Button>
       }
       rightComponent={false}

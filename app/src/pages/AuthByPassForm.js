@@ -9,8 +9,10 @@ import { CenterLayout, LogoImage } from '../components';
 import { api, cascades, i18n } from '../lib';
 import { AuthState, UserState, UIState } from '../store';
 import { crudSessions, crudForms, crudUsers } from '../database/crud';
+import useTheme from '../lib/theme';
 
 const AuthByPassForm = ({ navigation }) => {
+  const theme = useTheme();
   const { online: isNetworkAvailable, lang: activeLang } = UIState.useState((s) => s);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -93,7 +95,9 @@ const AuthByPassForm = ({ navigation }) => {
       <LogoImage />
       {loading ? (
         <View>
-          <Text style={styles.dialogLoadingText}>{trans.fetchingData}</Text>
+          <Text style={[styles.dialogLoadingText, { color: theme.text.secondary }]}>
+            {trans.fetchingData}
+          </Text>
         </View>
       ) : (
         <View>
@@ -112,7 +116,7 @@ const AuthByPassForm = ({ navigation }) => {
         </View>
       )}
       {error && (
-        <Text style={styles.errorText} testID="fetch-error-text">
+        <Text style={[styles.errorText, { color: theme.status.error }]} testID="fetch-error-text">
           {error}
         </Text>
       )}
@@ -138,7 +142,7 @@ const styles = StyleSheet.create({
   inputFormId: {
     width: '75%',
   },
-  errorText: { color: 'red', fontStyle: 'italic', marginHorizontal: 10, marginTop: -8 },
+  errorText: { fontStyle: 'italic', marginHorizontal: 10, marginTop: -8 },
 });
 
 export default AuthByPassForm;
