@@ -183,9 +183,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
     email = CustomEmailField()
 
     def validate_email(self, email):
-        user = accounts_for_email(
-            self.context["request"], email
-        ).first()
+        user = accounts_for_email(self.context["request"], email).first()
         if not user:
             raise ValidationError("Invalid email, user not found")
         return user
@@ -1171,6 +1169,11 @@ class RegisterSerializer(serializers.Serializer):
                 "and hyphens, and cannot start or end with a hyphen"
             )
         },
+    )
+    language = serializers.ChoiceField(
+        choices=["en", "fr"],
+        default="en",
+        required=False,
     )
 
     def validate_subdomain(self, value):

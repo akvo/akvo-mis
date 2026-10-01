@@ -306,8 +306,10 @@ def login(request, version):
     # credentials happen to land here is refused before any session is
     # minted, and told exactly what the base domain tells it -- so this
     # host reveals nothing about which addresses exist where.
-    if user and on_admin_host and not (
-        user.is_platform_admin and user.tenant_id is None
+    if (
+        user
+        and on_admin_host
+        and not (user.is_platform_admin and user.tenant_id is None)
     ):
         return Response(
             {
@@ -428,7 +430,10 @@ def tenant_info(request, version):
         # caller learns there is no workspace here, which is the answer
         # that sends it to the signup page.
         return Response(status=status.HTTP_204_NO_CONTENT)
-    body = {"subdomain": tenant.subdomain}
+    body = {
+        "subdomain": tenant.subdomain,
+        "language": getattr(tenant, "language", "en") or "en",
+    }
     if request.user.is_authenticated:
         body["embed_enabled"] = tenant_may_embed(tenant)
     return Response(body, status=status.HTTP_200_OK)
@@ -458,7 +463,10 @@ def register(request, version):
     # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
-            tenant = Tenant.objects.create(subdomain=validated["subdomain"])
+            tenant = Tenant.objects.create(
+                subdomain=validated["subdomain"],
+                language=validated.get("language", "en"),
+            )
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
                 password=validated["password"],

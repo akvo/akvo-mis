@@ -150,15 +150,26 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
     def test_workspace_host_names_its_workspace(self):
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"subdomain": "acme"})
+        self.assertEqual(
+            response.json(), {"subdomain": "acme", "language": "en"}
+        )
 
-    def test_nothing_beyond_that_one_field_is_exposed(self):
+    def test_nothing_beyond_subdomain_and_language_is_exposed(self):
         # Anonymous and cacheable, so the field list is the whole of the
         # security review — assert it exhaustively rather than by sample.
-        # The workspace's name used to be here too, for a login-page
-        # caption that no longer exists.
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
-        self.assertEqual(set(response.json().keys()), {"subdomain"})
+        self.assertEqual(
+            set(response.json().keys()), {"subdomain", "language"}
+        )
+
+    def test_workspace_host_returns_configured_language(self):
+        self.acme.tenant.language = "fr"
+        self.acme.tenant.save(update_fields=["language"])
+        response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(), {"subdomain": "acme", "language": "fr"}
+        )
 
     def test_base_domain_returns_nothing(self):
         response = self.client.get(TENANT_INFO, HTTP_HOST="app.com")
@@ -170,7 +181,9 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         # know this host is a workspace in order to show its login page.
         Tenant.objects.create(subdomain="fresh")
         response = self.client.get(TENANT_INFO, HTTP_HOST="fresh.app.com")
-        self.assertEqual(response.json(), {"subdomain": "fresh"})
+        self.assertEqual(
+            response.json(), {"subdomain": "fresh", "language": "en"}
+        )
 
     # ── the embedding entitlement (VIZ-019 D-12) ──
     #
@@ -216,4 +229,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         # — so the field must be absent, not merely false.
         set_embedding(self.acme.tenant)
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
-        self.assertEqual(set(response.json().keys()), {"subdomain"})
+        self.assertEqual(
+            set(response.json().keys()), {"subdomain", "language"}
+        )
+        self.assertNotIn("embed_enabled", response.json())

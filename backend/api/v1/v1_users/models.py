@@ -66,6 +66,8 @@ class Tenant(models.Model):
     # Unknown keys are rejected at the serializer rather than by the
     # column, which is the trade a JSON field makes.
     features = models.JSONField(default=dict, blank=True)
+    # The primary workspace language, set during registration.
+    language = models.CharField(max_length=10, default="en")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

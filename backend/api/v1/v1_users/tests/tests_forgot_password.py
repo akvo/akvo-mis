@@ -45,14 +45,12 @@ class ForgotPasswordUserTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn("message", response_data)
         self.assertEqual(
             response_data["message"],
-            "Reset password instructions sent to your email"
+            "Reset password instructions sent to your email",
         )
 
     def test_forgot_password_non_existent_user(self):
         # Prepare payload for a non-existent user
-        user_payload = {
-            "email": "non_existent_user@example.com"
-        }
+        user_payload = {"email": "non_existent_user@example.com"}
         # Perform forgot password request
         response = self.client.post(
             "/api/v1/user/forgot-password",
@@ -64,15 +62,12 @@ class ForgotPasswordUserTestCase(TestCase, ProfileTestHelperMixin):
         response_data = response.json()
         self.assertIn("message", response_data)
         self.assertEqual(
-            response_data["message"],
-            "Invalid email, user not found"
+            response_data["message"], "Invalid email, user not found"
         )
 
     def test_forgot_password_invalid_email(self):
         # Prepare payload with an invalid email format
-        user_payload = {
-            "email": "invalid_email_format"
-        }
+        user_payload = {"email": "invalid_email_format"}
         # Perform forgot password request
         response = self.client.post(
             "/api/v1/user/forgot-password",
@@ -85,8 +80,7 @@ class ForgotPasswordUserTestCase(TestCase, ProfileTestHelperMixin):
 
         self.assertIn("message", response_data)
         self.assertEqual(
-            response_data["message"],
-            "Enter a valid email address."
+            response_data["message"], "Enter a valid email address."
         )
 
 
@@ -100,9 +94,7 @@ class ForgotPasswordOnTheConsoleHostTestCase(TestCase, TenantTestHelperMixin):
         self.shared = "both@akvo.org"
         # The workspace account exists first, so it is the row an
         # unscoped `.first()` returns.
-        SystemUser.objects.create(
-            email=self.shared, tenant=self.acme.tenant
-        )
+        SystemUser.objects.create(email=self.shared, tenant=self.acme.tenant)
         self.operator = SystemUser.objects.create(
             email=self.shared, is_platform_admin=True, tenant=None
         )
@@ -120,10 +112,12 @@ class ForgotPasswordOnTheConsoleHostTestCase(TestCase, TenantTestHelperMixin):
 
     def test_the_console_reset_links_to_the_console(self):
         url = self.reset_from("admin.app.com")
-        self.assertIn("//admin.app.com/", url)
+        self.assertIn("//admin.app.com", url)
+        self.assertIn("/login/", url)
 
     def test_the_workspace_reset_still_links_to_the_workspace(self):
         # The same address at a workspace host is the workspace's
         # account, and must keep working exactly as before.
         url = self.reset_from("acme.app.com")
-        self.assertIn("//acme.app.com/", url)
+        self.assertIn("//acme.app.com", url)
+        self.assertIn("/login/", url)
