@@ -1,13 +1,28 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Text, Button, Input } from '@rneui/themed';
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  StatusBar,
+  Dimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSQLiteContext } from 'expo-sqlite';
-import { CenterLayout, LogoImage } from '../components';
 import { BuildParamsState, UIState } from '../store';
 import { api, i18n } from '../lib';
 import { crudConfig } from '../database/crud';
+import useTheme from '../lib/theme';
+import heroImage from '../../assets/onboarding-hero.png';
+
+const { height: SCREEN_H } = Dimensions.get('window');
+const IMAGE_H = SCREEN_H * 0.55;
 
 const GetStarted = ({ navigation }) => {
-  // eslint-disable-next-line global-require
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [currentConfig, setCurrentConfig] = useState({});
   const [IPAddr, setIPAddr] = useState(null);
   const serverURLState = BuildParamsState.useState((s) => s.serverURL);
@@ -38,7 +53,6 @@ const GetStarted = ({ navigation }) => {
         s.serverURL = IPAddr;
       });
       api.setServerURL(IPAddr);
-      // save server URL
       await crudConfig.updateConfig(db, { serverURL: IPAddr });
     }
     setTimeout(() => {
@@ -50,24 +64,131 @@ const GetStarted = ({ navigation }) => {
     }, 100);
   };
 
-  const titles = [trans.getStartedTitle1, trans.getStartedTitle2, trans.getStartedTitle3];
   return (
-    <CenterLayout title={titles}>
-      <LogoImage />
-      <CenterLayout.Titles items={titles} />
-      <Text>{trans.getStartedSubTitle}</Text>
-      {!isServerURLDefined && (
-        <Input
-          placeholder={trans.getStartedInputServer}
-          onChangeText={setIPAddr}
-          testID="server-url-field"
-        />
-      )}
-      <Button title="primary" onPress={goToLogin} testID="get-started-button">
-        {trans.buttonGetStarted}
-      </Button>
-    </CenterLayout>
+    <View style={[styles.container, { backgroundColor: theme.bg.surfacePrimary }]}>
+      <StatusBar
+        barStyle={theme.statusBar.style === 'light' ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
+      <Image source={heroImage} style={styles.heroImage} resizeMode="cover" />
+
+      <View
+        style={[
+          styles.textCard,
+          { backgroundColor: theme.bg.surfaceElevated3 },
+        ]}
+      >
+        <Text style={[styles.title, { color: theme.text.primary }]}>
+          {trans.getStartedTitle1}
+        </Text>
+        <Text style={[styles.title, { color: theme.text.highlight }]}>
+          {trans.getStartedTitle2}
+        </Text>
+        <Text style={[styles.title, { color: theme.text.primary }]}>
+          {trans.getStartedTitle3}
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
+          {trans.getStartedSubTitle}
+        </Text>
+      </View>
+
+      <View
+        style={[
+          styles.buttonBar,
+          {
+            backgroundColor: theme.bg.surfaceElevated3,
+            borderTopColor: theme.border.listDivider,
+            paddingBottom: Math.max(insets.bottom, 16),
+          },
+        ]}
+      >
+        {!isServerURLDefined && (
+          <TextInput
+            style={[
+              styles.serverInput,
+              {
+                backgroundColor: theme.input.bg,
+                borderColor: theme.input.border,
+                color: theme.input.textInput,
+              },
+            ]}
+            placeholder={trans.getStartedInputServer}
+            placeholderTextColor={theme.input.text}
+            onChangeText={setIPAddr}
+            testID="server-url-field"
+          />
+        )}
+
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: theme.buttonPrimary.bg }]}
+          onPress={goToLogin}
+          activeOpacity={0.8}
+          testID="get-started-button"
+        >
+          <Text style={[styles.buttonText, { color: theme.buttonPrimary.text }]}>
+            {trans.buttonGetStarted}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    gap: 8,
+  },
+  heroImage: {
+    width: '100%',
+    height: IMAGE_H,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  textCard: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    borderRadius: 24,
+    justifyContent: 'center',
+  },
+  buttonBar: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    gap: 12,
+  },
+  title: {
+    fontSize: 36,
+    fontWeight: '500',
+    lineHeight: 44,
+  },
+  subtitle: {
+    fontSize: 18,
+    fontWeight: '400',
+    lineHeight: 26,
+    marginTop: 8,
+  },
+  serverInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+  },
+  button: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  buttonText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});
 
 export default GetStarted;

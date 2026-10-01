@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Dialog, Text, Icon } from '@rneui/themed';
+import { View, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AuthState, UserState, FormState, UIState, DatapointSyncState } from '../store';
 import { api, cascades, i18n } from '../lib';
 import { openDatabase } from '../database';
 import sql from '../database/sql';
+import ConfirmDialog from './ConfirmDialog';
+import MessageNote from './MessageNote';
 
 const LogoutButton = () => {
   const [visible, setVisible] = useState(false);
@@ -19,6 +20,7 @@ const LogoutButton = () => {
   };
 
   const handleYesPress = async () => {
+    setLoading(true);
     const db = await openDatabase();
     const tables = [
       'sessions',
@@ -47,7 +49,7 @@ const LogoutButton = () => {
 
     FormState.update((s) => {
       s.form = {};
-      s.currentValues = {}; // answers
+      s.currentValues = {};
       s.visitedQuestionGroup = [];
       s.cascades = {};
       s.surveyDuration = 0;
@@ -67,14 +69,8 @@ const LogoutButton = () => {
       s.statusBar = null;
     });
 
-    /**
-     * Remove sqlite files
-     */
     await cascades.dropFiles();
     await db.closeAsync();
-    /**
-     * Reset axios token
-     */
     api.setToken(null);
 
     navigation.navigate('GetStarted');
@@ -82,50 +78,42 @@ const LogoutButton = () => {
 
   return (
     <View>
-      <TouchableOpacity
+      <MessageNote
+        tone="danger"
+        lines={[trans.settingsResetTitle, trans.settingsResetDesc]}
         onPress={() => setVisible(true)}
         testID="list-item-logout"
-        style={styles.listItem}
+      />
+      <ConfirmDialog
+        visible={visible}
+        title={trans.confirmResetTitle || 'Reset application?'}
+        message={trans.confirmReset}
+        testID="dialog-confirm-logout"
+        danger
+        onClose={handleNoPress}
+        actions={
+          loading
+            ? []
+            : [
+                {
+                  label: trans.buttonCancel,
+                  type: 'secondary',
+                  onPress: handleNoPress,
+                  testID: 'dialog-button-no',
+                },
+                {
+                  label: `${trans.buttonYes}, reset`,
+                  type: 'primary',
+                  onPress: handleYesPress,
+                  testID: 'dialog-button-yes',
+                },
+              ]
+        }
       >
-        <View style={styles.contentContainer}>
-          <Text style={styles.buttonText}>{trans.buttonReset}</Text>
-        </View>
-        <Icon name="refresh" type="ionicon" color="grey" size={24} />
-      </TouchableOpacity>
-      <Dialog testID="dialog-confirm-logout" isVisible={visible}>
-        {loading ? <Dialog.Loading /> : <Text>{trans.confirmReset}</Text>}
-        <Dialog.Actions>
-          <Dialog.Button onPress={handleYesPress} testID="dialog-button-yes">
-            {trans.buttonYes}
-          </Dialog.Button>
-          <Dialog.Button onPress={handleNoPress} testID="dialog-button-no">
-            {trans.buttonNo}
-          </Dialog.Button>
-        </Dialog.Actions>
-      </Dialog>
+        {loading && <ActivityIndicator style={{ marginVertical: 16 }} />}
+      </ConfirmDialog>
     </View>
   );
 };
 
 export default LogoutButton;
-
-const styles = StyleSheet.create({
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#212121',
-  },
-});

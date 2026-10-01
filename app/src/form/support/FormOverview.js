@@ -1,0 +1,317 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { FormState } from '../../store';
+import { onFilterDependency } from '../lib';
+import useTheme from '../../lib/theme';
+import helpers from '../../lib/helpers';
+import cascades from '../../lib/cascades';
+import { QUESTION_TYPES } from '../../lib/constants';
+import { GeometryView, toImageURL } from '../../components/FormDataDetails';
+
+const formatValue = (value, question) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    if (question?.option) {
+      return value.map((v) => question.option.find((o) => o.value === v)?.label || v).join(', ');
+    }
+    return value.filter((v) => v !== null && v !== undefined).join(', ');
+  }
+  if (question?.option) {
+    return question.option.find((o) => o.value === value)?.label || value;
+  }
+  if (value instanceof Date) {
+    return value.toLocaleDateString();
+  }
+  return String(value);
+};
+
+const isImageAnswer = (type, value) => {
+  if ([QUESTION_TYPES.image, QUESTION_TYPES.signature].includes(type)) {
+    return true;
+  }
+  return type === QUESTION_TYPES.attachment && helpers.isImageFile(value.split('.').pop());
+};
+
+/**
+ * A cascade answer is a node id. TypeCascade records its name in FormState.cascades, but
+ * only once the field has rendered — a group not opened this session (a reopened draft)
+ * has none — so fall back to the source sqlite, as the datapoint detail screen does.
+ */
+const CascadeAnswer = ({ question, textStyle }) => {
+  const { id, raw, source, value } = question;
+  const storedName = FormState.useState((s) => s.cascades?.[id]);
+  const [loadedName, setLoadedName] = useState(null);
+  const nodeId = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+
+  useEffect(() => {
+    if (storedName || !source?.file || !nodeId) {
+      return () => {};
+    }
+    let active = true;
+    cascades
+      .loadDataSource(source, nodeId)
+      .then((row) => {
+        if (active) {
+          setLoadedName(row?.full_path_name || null);
+        }
+      })
+      // Already reported to Sentry by loadDataSource; the id stays as the fallback.
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [storedName, source, nodeId]);
+
+  return (
+    <Text style={textStyle} numberOfLines={2} testID={`overview-cascade-${id}`}>
+      {storedName || loadedName || value}
+    </Text>
+  );
+};
+
+/**
+ * Files and geometries are shown the way the datapoint detail screen shows them, not as
+ * the raw path or coordinate array. Only answered questions reach here.
+ */
+const OverviewAnswer = ({ question, theme }) => {
+  const { id, type, raw, value } = question;
+  if (typeof raw === 'string' && isImageAnswer(type, raw)) {
+    return (
+      <Image
+        source={{ uri: toImageURL(raw) }}
+        style={styles.thumbnail}
+        resizeMode="contain"
+        testID={`overview-image-${id}`}
+      />
+    );
+  }
+  if (type === QUESTION_TYPES.attachment && typeof raw === 'string') {
+    return (
+      <View style={styles.fileRow}>
+        <Icon name="document-attach-outline" size={16} color={theme.text.secondary} />
+        <Text
+          style={[styles.questionValue, styles.fileName, { color: theme.text.primary }]}
+          numberOfLines={1}
+          testID={`overview-file-${id}`}
+        >
+          {raw.split('/').pop()}
+        </Text>
+      </View>
+    );
+  }
+  if (type === QUESTION_TYPES.cascade) {
+    return (
+      <CascadeAnswer
+        question={question}
+        textStyle={[styles.questionValue, { color: theme.text.primary }]}
+      />
+    );
+  }
+  if ([QUESTION_TYPES.geoshape, QUESTION_TYPES.geotrace].includes(type)) {
+    // Not touchable, so a tap on the map still reaches the row and opens the question.
+    return (
+      <View pointerEvents="none" style={styles.geometry}>
+        <GeometryView index={id} answer={raw} type={type} />
+      </View>
+    );
+  }
+  return (
+    <Text style={[styles.questionValue, { color: theme.text.primary }]} numberOfLines={2}>
+      {value}
+    </Text>
+  );
+};
+
+const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
+  const theme = useTheme();
+  const currentValues = FormState.useState((s) => s.currentValues);
+
+  const allQuestions = useMemo(
+    () => formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [],
+    [formDefinition],
+  );
+
+  const groupSummaries = useMemo(() => {
+    if (!formDefinition?.question_group) {
+      return [];
+    }
+    return formDefinition.question_group.map((group, groupIndex) => {
+      const visibleQuestions =
+        group.question?.filter((q) =>
+          onFilterDependency(group, currentValues, q, 0, allQuestions),
+        ) || [];
+
+      const questions = visibleQuestions.map((q) => {
+        const value = currentValues?.[q.id];
+        const displayValue = formatValue(value, q);
+        const isEmpty = displayValue === null || displayValue === '';
+        const isMissing = q.required && isEmpty;
+        return {
+          id: q.id,
+          type: q.type,
+          raw: value,
+          source: q.source,
+          label: q.label || q.name,
+          value: displayValue,
+          required: q.required,
+          isMissing,
+        };
+      });
+
+      return {
+        groupIndex,
+        label: group.label || group.name,
+        questions,
+        hasMissing: questions.some((q) => q.isMissing),
+      };
+    });
+  }, [formDefinition, currentValues, allQuestions]);
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      {groupSummaries.map((group) => (
+        <View key={group.groupIndex} style={styles.groupSection}>
+          <View style={styles.groupHeaderRow}>
+            <Text style={[styles.groupLabel, { color: theme.text.primary }]}>{group.label}</Text>
+            {group.hasMissing && (
+              <TouchableOpacity
+                style={[styles.editButton, { backgroundColor: theme.status.error }]}
+                onPress={() => onEditGroup(group.groupIndex)}
+                testID={`overview-edit-group-${group.groupIndex}`}
+              >
+                <Icon name="pencil" size={14} color={theme.buttonPrimary.text} />
+                <Text style={[styles.editButtonText, { color: theme.buttonPrimary.text }]}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {group.questions.map((q) => (
+            <TouchableOpacity
+              key={q.id}
+              style={[
+                styles.questionRow,
+                { borderBottomColor: theme.border.listDivider },
+                q.isMissing && [styles.missingRow, { backgroundColor: theme.isDark ? 'rgba(255, 44, 32, 0.08)' : 'rgba(239, 68, 68, 0.08)' }],
+              ]}
+              onPress={() => onEditQuestion(group.groupIndex, q.id)}
+              testID={`overview-edit-question-${q.id}`}
+            >
+              <View style={styles.questionInfo}>
+                <Text
+                  style={[
+                    styles.questionLabel,
+                    { color: q.isMissing ? theme.status.error : theme.text.secondary },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {q.label}
+                  {q.required && <Text style={{ color: theme.status.error }}> *</Text>}
+                </Text>
+                {q.value ? (
+                  <OverviewAnswer question={q} theme={theme} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.questionValue,
+                      { color: theme.text.tertiary, fontStyle: 'italic' },
+                    ]}
+                  >
+                    {q.isMissing ? 'Required' : 'Not answered'}
+                  </Text>
+                )}
+              </View>
+              <Icon
+                name="pencil"
+                size={16}
+                color={q.isMissing ? theme.status.error : theme.text.tertiary}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ))}
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 48,
+  },
+  groupSection: {
+    marginBottom: 20,
+  },
+  groupHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  groupLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    gap: 4,
+  },
+  editButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  questionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+  },
+  missingRow: {
+    backgroundColor: undefined,
+    borderBottomWidth: 0,
+    marginVertical: 2,
+  },
+  questionInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  questionLabel: {
+    fontSize: 13,
+  },
+  questionValue: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  thumbnail: {
+    width: '100%',
+    height: 120,
+    marginTop: 4,
+    borderRadius: 8,
+  },
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  fileName: {
+    flexShrink: 1,
+  },
+  geometry: {
+    marginTop: 4,
+  },
+});
+
+export default FormOverview;

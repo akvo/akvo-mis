@@ -1,81 +1,176 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { Dialog } from '@rneui/themed';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { UIState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
 
 const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit }) => {
+  const theme = useTheme();
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
 
   return (
-    <Dialog visible={visible} testID="save-dialog-menu" overlayStyle={styles.dialogMenuContainer}>
-      <Dialog.Title title={trans.unsavedChangesTitle} />
-      <Dialog.Button
-        type="solid"
-        title={trans.buttonSaveNExit}
-        testID="save-and-exit-button"
-        onPress={() => {
-          if (handleOnSaveAndExit) {
-            handleOnSaveAndExit();
-          }
-        }}
-      />
-      <Dialog.Button
-        type="outline"
-        title={trans.buttonSaveNSendToWeb}
-        testID="save-and-send-to-web-button"
-        onPress={() => {
-          if (handleOnSaveAndExit) {
-            handleOnSaveAndExit({ sendToWeb: true });
-          }
-        }}
-      />
-      <Dialog.Button
-        type="outline"
-        title={trans.buttonExitWoSaving}
-        testID="exit-without-saving-button"
-        buttonStyle={styles.buttonDanger}
-        titleStyle={styles.textDanger}
-        onPress={() => {
-          if (handleOnExit) {
-            handleOnExit();
-          }
-        }}
-      />
-      {/*
-        Clear, not outline: Cancel is the way out, not a fifth thing to weigh. As an
-        outline button it read with the same weight as "Save and send to web
-        dashboard" directly above it.
-      */}
-      <Dialog.Button
-        type="clear"
-        title={trans.buttonCancel}
-        testID="cancel-button"
-        onPress={() => {
-          setVisible(false);
-        }}
-      />
-    </Dialog>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setVisible(false)}
+      testID="save-dialog-menu"
+    >
+      <Pressable style={[styles.overlay, { backgroundColor: theme.bg.scrim }]} onPress={() => setVisible(false)}>
+        <Pressable
+          style={[styles.sheet, { backgroundColor: theme.bg.surfaceElevated1 }]}
+          onPress={() => {}}
+        >
+          <View style={[styles.handle, { backgroundColor: theme.text.tertiary }]} />
+          <Text style={[styles.title, { color: theme.text.primary }]}>
+            {trans.leaveSubmissionTitle || 'Leave this submission?'}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.optionRow}
+            testID="save-and-exit-button"
+            onPress={() => {
+              if (handleOnSaveAndExit) {
+                handleOnSaveAndExit();
+              }
+            }}
+          >
+            <Icon
+              name="time-outline"
+              size={24}
+              color={theme.text.primary}
+              style={styles.optionIcon}
+            />
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionTitle, { color: theme.text.primary }]}>
+                {trans.buttonSaveNExit}
+              </Text>
+              <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
+                {trans.saveDraftDesc || 'Keeps your progress. Reopen it from the drafts list.'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.optionRow}
+            testID="save-and-send-to-web-button"
+            onPress={() => {
+              if (handleOnSaveAndExit) {
+                handleOnSaveAndExit({ sendToWeb: true });
+              }
+            }}
+          >
+            <Icon
+              name="cloud-upload-outline"
+              size={24}
+              color={theme.text.primary}
+              style={styles.optionIcon}
+            />
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionTitle, { color: theme.text.primary }]}>
+                {trans.buttonSaveNSendToWeb}
+              </Text>
+              <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
+                {trans.sendToWebMessage}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.optionRow}
+            testID="exit-without-saving-button"
+            onPress={() => {
+              if (handleOnExit) {
+                handleOnExit();
+              }
+            }}
+          >
+            <Icon name="close" size={24} color={theme.status.error} style={styles.optionIcon} />
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionTitle, { color: theme.status.error }]}>
+                {trans.buttonExitWoSaving}
+              </Text>
+              <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
+                {trans.exitWithoutSavingDesc ||
+                  'Discards everything you have typed in this submission.'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cancelButton}
+            testID="cancel-button"
+            onPress={() => setVisible(false)}
+          >
+            <Text style={[styles.cancelText, { color: theme.text.secondary }]}>
+              {trans.buttonCancel}
+            </Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  dialogMenuContainer: {
-    // Sized by its contents. `flex: 0.2` pinned the overlay to a fifth of the screen
-    // regardless of how many buttons it held, so the last one was clipped as soon as
-    // a fourth was added.
-    flexDirection: 'column',
-    gap: 10,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderRadius: 0,
+  overlay: {
+    flex: 1,
+    backgroundColor: undefined,
+    justifyContent: 'flex-end',
   },
-  buttonDanger: {
-    borderColor: '#D63D39',
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 34,
+    paddingTop: 12,
   },
-  textDanger: {
-    color: '#D63D39',
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: undefined,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  optionIcon: {
+    marginRight: 14,
+  },
+  optionContent: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  optionDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

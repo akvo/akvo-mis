@@ -3,17 +3,16 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { View, StyleSheet } from 'react-native';
 import { Header, Text, Button } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
-import { FormState } from '../../store';
-import { generateDataPointName } from '../../form/lib';
+import useTheme from '../../lib/theme';
 
-const BackButton = ({ navigation }) => {
+const BackButton = ({ navigation, theme }) => {
   const handleGoBackPress = () => {
     navigation.goBack();
   };
 
   return navigation.canGoBack() ? (
     <Button type="clear" onPress={handleGoBackPress} testID="arrow-back-button">
-      <Icon name="arrow-back" size={18} />
+      <Icon name="arrow-back" size={18} color={theme.topNav.icon} />
     </Button>
   ) : (
     <Text />
@@ -27,51 +26,75 @@ const PageTitle = ({
   leftContainerStyle = null,
   rightComponent = null,
   rightContainerStyle = null,
+  headerBg = null,
 }) => {
   const navigation = useNavigation();
-  const selectedForm = FormState.useState((s) => s.form);
-  const currentValues = FormState.useState((s) => s.currentValues);
-  const cascades = FormState.useState((s) => s.cascades);
-  const forms = selectedForm?.json ? JSON.parse(selectedForm.json) : {};
-  const { dpName } = generateDataPointName(forms, currentValues, cascades);
+  const theme = useTheme();
 
   const handleSettingsPress = () => {
-    navigation.navigate('Settings');
+    navigation.navigate('Home', { screen: 'SettingsTab' });
   };
 
-  const subTitleText = subTitle === 'formPage' ? dpName : subTitle;
+  const hasBackButton = !leftComponent && navigation.canGoBack();
 
   return (
     <Header
       leftComponent={leftComponent}
-      leftContainerStyle={leftContainerStyle}
+      leftContainerStyle={[styles.sideContainer, leftContainerStyle]}
       rightComponent={rightComponent}
-      rightContainerStyle={rightContainerStyle}
-      backgroundColor="#f3f4f6"
+      rightContainerStyle={[styles.sideContainer, styles.sideContainerRight, rightContainerStyle]}
+      centerContainerStyle={styles.centerContainer}
+      backgroundColor={headerBg || theme.topNav.bg}
       statusBarProps={{
-        backgroundColor: '#171717',
+        backgroundColor: theme.statusBar.bg,
+        barStyle: theme.statusBar.style === 'light' ? 'light-content' : 'dark-content',
       }}
       containerStyle={styles.container}
       testID="base-layout-page-title"
     >
-      {!leftComponent && <BackButton navigation={navigation} />}
-      {subTitleText ? (
+      {!leftComponent && <BackButton navigation={navigation} theme={theme} />}
+      {subTitle ? (
         <View>
-          <Text h4Style={styles.title} testID="page-title" numberOfLines={1} h4>
+          <Text
+            h4Style={[
+              styles.title,
+              { color: theme.topNav.text },
+              !hasBackButton && styles.titleLeft,
+            ]}
+            testID="page-title"
+            numberOfLines={1}
+            h4
+          >
             {text}
           </Text>
-          <Text testID="page-subtitle" style={styles.subTitle} numberOfLines={1}>
-            {subTitleText}
+          <Text
+            testID="page-subtitle"
+            style={[
+              styles.subTitle,
+              { color: theme.topNav.textSecondary || theme.text.secondary },
+              !hasBackButton && styles.subTitleLeft,
+            ]}
+            numberOfLines={1}
+          >
+            {subTitle}
           </Text>
         </View>
       ) : (
-        <Text h4Style={styles.onlyTitle} testID="page-title" h4>
+        <Text
+          h4Style={[
+            styles.onlyTitle,
+            { color: theme.topNav.text },
+            !hasBackButton && styles.titleLeft,
+          ]}
+          testID="page-title"
+          h4
+        >
           {text}
         </Text>
       )}
       {rightComponent === null && (
         <Button type="clear" testID="more-options-button" onPress={handleSettingsPress}>
-          <Icon name="ellipsis-vertical" size={18} />
+          <Icon name="ellipsis-vertical" size={18} color={theme.topNav.icon} />
         </Button>
       )}
     </Header>
@@ -80,21 +103,42 @@ const PageTitle = ({
 
 const styles = StyleSheet.create({
   container: {
-    minheight: 78,
+    minHeight: 78,
+    alignItems: 'center',
+    borderBottomWidth: 0,
+  },
+  centerContainer: {
+    flex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  sideContainerRight: {
+    alignItems: 'flex-end',
   },
   title: {
     fontSize: 18,
     textAlign: 'center',
   },
+  titleLeft: {
+    textAlign: 'left',
+  },
   onlyTitle: {
-    paddingTop: 4,
     fontSize: 18,
     textAlign: 'center',
   },
   subTitle: {
-    fontWeight: 400,
-    fontStyle: 'italic',
+    fontWeight: '400',
+    fontSize: 13,
     textAlign: 'center',
+    marginTop: 2,
+  },
+  subTitleLeft: {
+    textAlign: 'left',
   },
 });
 

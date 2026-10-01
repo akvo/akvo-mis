@@ -8,10 +8,12 @@ import { BaseLayout } from '../../components';
 import { i18n, api, cascades } from '../../lib';
 import { UIState } from '../../store';
 import { crudForms } from '../../database/crud';
+import useTheme from '../../lib/theme';
 
 const AddNewForm = ({ navigation }) => {
   const { online: isNetworkAvailable, lang: activeLang } = UIState.useState((s) => s);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [formId, setFormId] = useState(null);
   const [error, setError] = useState(null);
@@ -79,22 +81,38 @@ const AddNewForm = ({ navigation }) => {
             value={formId}
             onChangeText={setFormId}
             keyboardType="numeric"
-            inputContainerStyle={styles.inputFormId}
+            inputStyle={{ color: theme.input.textInput }}
+            inputContainerStyle={[styles.inputFormId, { borderBottomColor: theme.input.border }]}
+            placeholderTextColor={theme.input.text}
           />
-          <Button testID="button-download-form" onPress={handleDownloadForm}>
+          <Button
+            testID="button-download-form"
+            onPress={handleDownloadForm}
+            buttonStyle={[styles.button, { backgroundColor: theme.buttonPrimary.bg }]}
+            titleStyle={[styles.buttonText, { color: theme.buttonPrimary.text }]}
+          >
             {trans.downloadFormButton}
           </Button>
           {error && (
-            <Text style={styles.errorText} testID="fetch-error-text">
+            <Text
+              style={[styles.errorText, { color: theme.input.errorText }]}
+              testID="fetch-error-text"
+            >
               {error}
             </Text>
           )}
         </View>
       </BaseLayout.Content>
       {/* Loading dialog */}
-      <Dialog isVisible={loading} style={styles.dialogLoadingContainer}>
-        <Dialog.Loading />
-        <Text style={styles.dialogLoadingText}>{trans.fetchingData}</Text>
+      <Dialog
+        isVisible={loading}
+        style={styles.dialogLoadingContainer}
+        overlayStyle={{ backgroundColor: theme.bg.surfaceElevated1 }}
+      >
+        <Dialog.Loading loadingProps={{ color: theme.buttonPrimary.bg }} />
+        <Text style={[styles.dialogLoadingText, { color: theme.text.secondary }]}>
+          {trans.fetchingData}
+        </Text>
       </Dialog>
     </BaseLayout>
   );
@@ -109,7 +127,14 @@ const styles = StyleSheet.create({
   inputFormId: {
     width: '100%',
   },
-  errorText: { color: 'red', fontStyle: 'italic', marginHorizontal: 10, marginTop: 8 },
+  button: {
+    borderRadius: 16,
+    paddingVertical: 12,
+  },
+  buttonText: {
+    fontWeight: '700',
+  },
+  errorText: { fontStyle: 'italic', marginHorizontal: 10, marginTop: 8 },
   dialogLoadingContainer: {
     flex: 1,
   },

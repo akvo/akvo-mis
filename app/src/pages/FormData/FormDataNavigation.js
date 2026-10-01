@@ -1,13 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Button } from '@rneui/themed';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { UIState } from '../../store';
 import { i18n } from '../../lib';
-
-const colorPrimary = '#1f2937';
+import useTheme from '../../lib/theme';
 
 const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
+  const theme = useTheme();
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
 
@@ -20,67 +18,87 @@ const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
 
   const disabledBack = currentPage === 0;
   const disabledNext = currentPage === totalPage - 1;
-  const colorIconBack = disabledBack ? '#9ca3af' : colorPrimary;
-  const colorIconNext = disabledNext ? '#9ca3af' : colorPrimary;
+
   return (
-    <View style={styles.container}>
-      <Button
-        type="clear"
-        testID="button-back"
-        disabled={disabledBack}
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: theme.bg.surfaceElevated3, borderTopColor: theme.border.listDivider },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.backButton}
         onPress={goBack}
-        icon={<Icon name="chevron-back" style={{ ...styles.icon, color: colorIconBack }} />}
-        buttonStyle={styles.button}
-        titleStyle={styles.buttonTitle}
+        disabled={disabledBack}
+        testID="button-back"
       >
-        {trans.buttonBack}
-      </Button>
-      <Text testID="text-pagination" style={styles.paginationText}>
-        {currentPage + 1}/{totalPage}
-      </Text>
-      <Button
-        type="clear"
-        testID="button-next"
-        disabled={disabledNext}
+        <Text
+          style={[
+            styles.backText,
+            { color: disabledBack ? theme.text.tertiary : theme.buttonGhost.color },
+          ]}
+        >
+          {trans.buttonBack}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.nextButton,
+          {
+            backgroundColor: disabledNext
+              ? theme.bg.surfaceTertiary
+              : theme.buttonPrimary.bg,
+          },
+        ]}
         onPress={goNext}
-        icon={<Icon name="chevron-forward" style={{ ...styles.icon, color: colorIconNext }} />}
-        buttonStyle={styles.button}
-        titleStyle={styles.buttonTitle}
-        iconRight
+        disabled={disabledNext}
+        testID="button-next"
       >
-        {trans.buttonNext}
-      </Button>
+        <Text
+          style={[
+            styles.nextText,
+            { color: disabledNext ? theme.text.tertiary : theme.buttonPrimary.text },
+          ]}
+        >
+          {trans.buttonNext}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    display: 'flex',
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    borderTopColor: 'grey',
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  icon: {
+  backButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  backText: {
     fontSize: 18,
-    paddingHorizontal: 4,
+    fontWeight: '600',
   },
-  button: {
-    fontSize: 14,
-    paddingHorizontal: 8,
+  nextButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
   },
-  buttonTitle: {
-    color: colorPrimary,
-  },
-  paginationText: {
-    width: '60%',
-    textAlign: 'center',
-    fontSize: 14,
-    color: colorPrimary,
+  nextText: {
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
 

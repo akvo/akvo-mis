@@ -1,7 +1,8 @@
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
 import { Text, Icon } from '@rneui/themed';
-import styles from '../styles';
+import getStyles from '../styles';
+import useTheme from '../../lib/theme';
 
 const QuestionGroupListItem = ({
   label,
@@ -11,26 +12,26 @@ const QuestionGroupListItem = ({
   visited,
   onPress,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
   // Determine icon and color based on state
   let iconName = 'circle';
   let iconType = 'font-awesome';
-  let bgColor = '#d4d4d4'; // Default gray for not visited
+  let bgColor = theme.text.tertiary;
 
   if (completedQuestionGroup) {
-    // Completed - green check
     iconName = 'check-circle';
     iconType = 'font-awesome';
-    bgColor = '#28a745'; // Green
+    bgColor = theme.status.success;
   } else if (visited && hasErrors) {
-    // Visited but has errors - orange/warning
     iconName = 'alert-circle-outline';
     iconType = 'ionicon';
-    bgColor = '#ff9800'; // Orange warning
+    bgColor = theme.status.warning;
   } else if (visited) {
-    // Visited but not completed (no required fields or all filled)
     iconName = 'circle';
     iconType = 'font-awesome';
-    bgColor = '#2884bd'; // Blue
+    bgColor = theme.text.highlight;
   }
 
   const activeOpacity = active ? styles.questionGroupListItemActive : {};

@@ -96,10 +96,9 @@ describe('FormNavigation component', () => {
   it('renders form navigation correctly', () => {
     const setActiveGroup = jest.fn();
     const onSubmit = jest.fn();
-    const mockSetShowQuestionGroupList = jest.fn();
     const mockShowDialog = jest.fn();
 
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <FormNavigation
         currentGroup={firstGroup}
         activeGroup={0}
@@ -107,17 +106,12 @@ describe('FormNavigation component', () => {
         onSubmit={onSubmit}
         totalGroup={2}
         showQuestionGroupList={false}
-        setShowQuestionGroupList={mockSetShowQuestionGroupList}
         setShowDialogMenu={mockShowDialog}
       />,
     );
 
     const btnBack = getByTestId('form-nav-btn-back');
     expect(btnBack).toBeDefined();
-
-    const groupCounter = getByTestId('form-nav-group-count');
-    expect(groupCounter).toBeDefined();
-    expect(getByText('1/2')).toBeDefined();
 
     const btnNext = getByTestId('form-nav-btn-next');
     expect(btnNext).toBeDefined();
@@ -129,7 +123,6 @@ describe('FormNavigation component', () => {
   it('should move to the next page', async () => {
     const setActiveGroup = jest.fn();
     const onSubmit = jest.fn();
-    const mockSetShowQuestionGroupList = jest.fn();
     const mockShowDialog = jest.fn();
 
     const { getByTestId, queryByTestId, rerender } = render(
@@ -140,7 +133,6 @@ describe('FormNavigation component', () => {
         onSubmit={onSubmit}
         totalGroup={2}
         showQuestionGroupList={false}
-        setShowQuestionGroupList={mockSetShowQuestionGroupList}
         setShowDialogMenu={mockShowDialog}
       />,
     );
@@ -167,7 +159,6 @@ describe('FormNavigation component', () => {
         onSubmit={onSubmit}
         totalGroup={2}
         showQuestionGroupList={false}
-        setShowQuestionGroupList={mockSetShowQuestionGroupList}
         setShowDialogMenu={mockShowDialog}
       />,
     );
@@ -183,7 +174,6 @@ describe('FormNavigation component', () => {
   it('should disable navigation button when group list show', async () => {
     const setActiveGroup = jest.fn();
     const onSubmit = jest.fn();
-    const mockSetShowQuestionGroupList = jest.fn();
     const mockShowDialog = jest.fn();
 
     const { getByTestId } = render(
@@ -194,7 +184,6 @@ describe('FormNavigation component', () => {
         onSubmit={onSubmit}
         totalGroup={2}
         showQuestionGroupList
-        setShowQuestionGroupList={mockSetShowQuestionGroupList}
         setShowDialogMenu={mockShowDialog}
       />,
     );
@@ -224,7 +213,6 @@ describe('FormNavigation component', () => {
         onSubmit={jest.fn()}
         totalGroup={2}
         showQuestionGroupList={false}
-        setShowQuestionGroupList={jest.fn()}
         setShowDialogMenu={jest.fn()}
       />,
     );
@@ -260,7 +248,6 @@ describe('FormNavigation component', () => {
         onSubmit={jest.fn()}
         totalGroup={2}
         showQuestionGroupList={false}
-        setShowQuestionGroupList={jest.fn()}
         setShowDialogMenu={jest.fn()}
       />,
     );

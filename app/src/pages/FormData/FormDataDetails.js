@@ -20,13 +20,17 @@ import {
   ImageView,
   AttachmentView,
   SubtitleContent,
-  formDataDetailsStyles as sharedStyles,
+  SectionLabel,
+  formDataDetailsStyles as getSharedStyles,
 } from '../../components';
 import FormDataNavigation from './FormDataNavigation';
 import { QUESTION_TYPES } from '../../lib/constants';
 import MIME_TYPES from '../../lib/mime_types';
+import useTheme from '../../lib/theme';
 
 const FormDataDetails = ({ navigation, route }) => {
+  const theme = useTheme();
+  const sharedStyles = getSharedStyles(theme);
   const selectedForm = FormState.useState((s) => s.form);
   const currentValues = FormState.useState((s) => s.currentValues);
   const [currentPage, setCurrentPage] = useState(0);
@@ -265,7 +269,7 @@ const FormDataDetails = ({ navigation, route }) => {
   };
 
   const renderSectionHeader = ({ section }) => (
-    <Text style={styles.sectionTitle}>{section.title}</Text>
+    <SectionLabel style={styles.sectionTitle}>{section.title}</SectionLabel>
   );
 
   useEffect(
@@ -285,7 +289,29 @@ const FormDataDetails = ({ navigation, route }) => {
   );
 
   return (
-    <BaseLayout title={route?.params?.name} rightComponent={false}>
+    <BaseLayout
+      title={route?.params?.name}
+      rightComponent={false}
+      headerBg={theme.bg.surfaceElevated3}
+    >
+      {totalPage > 0 && (
+        <View
+          style={[
+            styles.stepHeader,
+            {
+              backgroundColor: theme.bg.surfaceElevated3,
+              borderBottomColor: theme.border.listDivider,
+            },
+          ]}
+        >
+          <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
+            {`${trans.stepLabel || 'Step'} ${currentPage + 1} ${trans.ofLabel || 'of'} ${totalPage}`}
+            {currentGroup?.label || currentGroup?.name
+              ? ` — ${currentGroup.label || currentGroup.name}`
+              : ''}
+          </Text>
+        </View>
+      )}
       <View style={styles.listContainer}>
         <SectionList
           sections={sections}
@@ -305,12 +331,21 @@ const FormDataDetails = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  sectionTitle: {
-    fontWeight: '700',
-    fontSize: 14,
-    paddingVertical: 12,
+  stepHeader: {
     paddingHorizontal: 16,
-    backgroundColor: '#f2f2f2',
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  stepIndicator: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  sectionTitle: {
+    paddingTop: 16,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
   },
   listContainer: {
     width: '100%',
