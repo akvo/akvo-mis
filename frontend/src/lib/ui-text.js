@@ -1369,4 +1369,6 @@ const uiText = {
   de: {},
 };
 
+uiText.fr = uiText.en;
+
 export default uiText;
