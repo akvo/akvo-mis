@@ -62,6 +62,7 @@ from api.v1.v1_users.serializers import (
     RegisterSerializer,
     ResendActivationSerializer,
     ConfigureSerializer,
+    accounts_for_email,
     tenant_is_configured,
 )
 from mis.settings import REST_FRAMEWORK
@@ -116,20 +117,18 @@ def send_activation_email(user):
     )
 
 
-def send_invitation_email(user, invited_by=None):
+def send_invitation_email(user, invited_by):
     # For an account created by somebody else, which therefore has no
     # password. The link ends in the set-password form rather than in a
     # session: an activation link would sign the invitee in with the
     # unusable password they were created with, and the next time they
     # came back there would be nothing to sign in with.
     #
-    # `invited_by` names who sent it. The template falls back to an
-    # empty string, which reads "invited to the app by" and then stops.
     send_email(
         type=EmailTypes.user_invite,
         context={
             "send_to": [user.email],
-            "admin": invited_by.name if invited_by else "",
+            "admin": invited_by.name,
             "button_url": (
                 f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
             ),
@@ -535,22 +534,9 @@ def activate_account(request, version):
 )
 @api_view(["POST"])
 def resend_activation(request, version):
-    qs = SystemUser.objects.filter(
-        email=request.data.get("email"),
-        is_active=False,
-        deleted_at=None,
-    )
-    # Same host rule as the forgot-password lookup, for the same reason:
-    # on the console only an operator can be meant, and elsewhere an
-    # absent tenant means the resolver had nothing to resolve rather
-    # than that the account has no workspace.
-    if is_admin_host(request.get_host()):
-        qs = qs.filter(is_platform_admin=True, tenant__isnull=True)
-    else:
-        tenant = getattr(request, "tenant", None)
-        if tenant is not None:
-            qs = qs.filter(tenant=tenant)
-    user = qs.first()
+    user = accounts_for_email(
+        request, request.data.get("email"), is_active=False
+    ).first()
     if user:
         send_activation_email(user)
     # Always the same 200, whether or not anything was sent, so this cannot
@@ -1122,10 +1108,7 @@ class UserEditDeleteView(APIView):
 def forgot_password(request, version):
     serializer = ForgotPasswordSerializer(
         data=request.data,
-        context={
-            "tenant": getattr(request, "tenant", None),
-            "console": is_admin_host(request.get_host()),
-        },
+        context={"request": request},
     )
     if not serializer.is_valid():
         return Response(

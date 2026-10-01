@@ -11,7 +11,7 @@ ADMIN_HOST = "admin.app.com"
 OPERATORS = "/api/v1/admin/operators"
 
 
-@override_settings(BASE_DOMAIN="app.com")
+@override_settings(BASE_DOMAIN="app.com", WEBDOMAIN="https://app.com")
 class AdminOperatorsTestCase(TestCase, TenantTestHelperMixin):
     """Operators grow their own team; the first one cannot.
 
@@ -80,7 +80,6 @@ class AdminOperatorsTestCase(TestCase, TenantTestHelperMixin):
         )
         self.assertEqual(response.status_code, 400)
 
-    @override_settings(WEBDOMAIN="https://app.com")
     def invited_link(self, email="dedi@akvo.org"):
         """Invite someone and return the URL they are mailed."""
         with mock.patch("api.v1.v1_users.views.send_email") as send_email:

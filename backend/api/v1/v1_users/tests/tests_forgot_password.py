@@ -92,15 +92,8 @@ class ForgotPasswordUserTestCase(TestCase, ProfileTestHelperMixin):
 
 @override_settings(BASE_DOMAIN="app.com")
 class ForgotPasswordOnTheConsoleHostTestCase(TestCase, TenantTestHelperMixin):
-    """A reset started on the console must land on the console.
-
-    The lookup is scoped by the request's workspace, and the console
-    belongs to none -- so without care the queryset is every account
-    with that address, in every workspace, and `.first()` picks one at
-    random. An operator who also has a workspace account under the same
-    address then gets a link to that workspace instead, where the reset
-    completes into a session that cannot open the console.
-    """
+    """A reset started on the console must land on the console, not on
+    whichever workspace happens to share the address."""
 
     def setUp(self):
         self.acme = self.create_tenant("acme", ["Country"], "Kenya")
