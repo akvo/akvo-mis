@@ -235,11 +235,16 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # problem even though the derived-from-name path is what
             # usually trips this.
             field, message = (
-                ("slug", "slug may only contain lowercase letters, "
-                         "numbers and hyphens")
+                (
+                    "slug",
+                    "slug may only contain lowercase letters, "
+                    "numbers and hyphens",
+                )
                 if (requested_slug or "").strip()
-                else ("name", "name must contain at least one letter "
-                              "or digit")
+                else (
+                    "name",
+                    "name must contain at least one letter " "or digit",
+                )
             )
             return Response(
                 {"message": message, "field": field},
@@ -249,17 +254,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         if live.filter(slug=slug).exists():
             return Response(
                 {
-                    "message": (
-                        "a dashboard with this name already exists"
-                    ),
+                    "message": ("a dashboard with this name already exists"),
                     "suggested_slug": suggest_slug(slug, live),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
 
-        kind = KIND_IDS.get(
-            request.data.get("kind"), DashboardKind.widgets
-        )
+        kind = KIND_IDS.get(request.data.get("kind"), DashboardKind.widgets)
         is_embed = kind == DashboardKind.embed
         with transaction.atomic():
             dashboard = Dashboard.objects.create(
@@ -281,13 +282,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
                 # An embed has no data of ours to filter, so a stored filter
                 # would be a setting with no effect.
                 default_filters=(
-                    {} if is_embed
+                    {}
+                    if is_embed
                     else request.data.get("default_filters") or {}
                 ),
             )
-            if (
-                dashboard.kind == DashboardKind.widgets
-                and request.data.get("widgets")
+            if dashboard.kind == DashboardKind.widgets and request.data.get(
+                "widgets"
             ):
                 apply_widgets(dashboard, request.data.get("widgets"))
 
@@ -325,13 +326,9 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             dashboard.updated = timezone.now()
             dashboard.save()
             if dashboard.kind == DashboardKind.widgets:
-                apply_widgets(
-                    dashboard, request.data.get("widgets") or []
-                )
+                apply_widgets(dashboard, request.data.get("widgets") or [])
 
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -376,9 +373,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # answers "how fresh is what I am looking at".
             dashboard.published_at = timezone.now()
             dashboard.save()
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -414,9 +409,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # back on the public web with nobody having decided to.
         dashboard.is_public = False
         dashboard.save(update_fields=["status", "is_public"])
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -450,9 +443,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             )
         dashboard.is_public = is_public
         dashboard.save(update_fields=["is_public"])
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -539,13 +530,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         snippet = request.data.get("embed_snippet")
         if not isinstance(snippet, str) or not snippet.strip():
             return Response(
-                {"message": "embed_snippet is required",
-                 "field": "embed_snippet"},
+                {
+                    "message": "embed_snippet is required",
+                    "field": "embed_snippet",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        url = preview_url_for(
-            snippet, getattr(request.user, "tenant", None)
-        )
+        url = preview_url_for(snippet, getattr(request.user, "tenant", None))
         if url is None:
             return Response(
                 {"message": EMBED_UNAVAILABLE},
@@ -658,6 +649,9 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         existing_types = serializer.validated_data.get(
             "existing_widget_types", []
         )
+        existing_widgets = serializer.validated_data.get(
+            "existing_widgets", []
+        )
         prompt_hint = serializer.validated_data.get("prompt_hint")
 
         result = AISuggestionService.suggest_widgets(
@@ -665,6 +659,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             user=request.user,
             existing_widget_types=existing_types,
             prompt_hint=prompt_hint,
+            existing_widgets=existing_widgets,
         )
         if result is None:
             return Response(

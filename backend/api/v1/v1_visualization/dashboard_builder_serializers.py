@@ -168,7 +168,9 @@ def serialize_source_form(form, is_root):
         serialize_question(question)
         for question in form.form_questions.filter(
             type__in=SUPPORTED_QUESTION_TYPES
-        ).order_by("order", "id").prefetch_related(
+        )
+        .order_by("order", "id")
+        .prefetch_related(
             Prefetch(
                 "options",
                 queryset=QuestionOptions.objects.order_by("order", "id"),
@@ -194,9 +196,7 @@ def serialize_sources(dashboard, user):
     """
     root = dashboard.root_form
     forms = [serialize_source_form(root, is_root=True)]
-    children = Forms.objects.for_user(user).filter(
-        parent=root
-    ).order_by("id")
+    children = Forms.objects.for_user(user).filter(parent=root).order_by("id")
     forms.extend(
         serialize_source_form(child, is_root=False) for child in children
     )
@@ -213,9 +213,21 @@ class SuggestDashboardRequestSerializer(serializers.Serializer):
     )
 
 
+class ExistingWidgetDescriptorSerializer(serializers.Serializer):
+    type = serializers.CharField(required=False, allow_null=True)
+    form = serializers.IntegerField(required=False, allow_null=True)
+    question = serializers.IntegerField(required=False, allow_null=True)
+    config = serializers.DictField(required=False, allow_null=True)
+
+
 class SuggestWidgetsRequestSerializer(serializers.Serializer):
     existing_widget_types = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
+    )
+    existing_widgets = serializers.ListField(
+        child=ExistingWidgetDescriptorSerializer(),
+        required=False,
+        default=list,
     )
     prompt_hint = serializers.CharField(
         required=False, allow_blank=True, max_length=250, default=""

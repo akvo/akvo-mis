@@ -19,7 +19,10 @@ from api.v1.v1_profile.models import (
     RoleFeatureAccess,
     UserRole,
 )
-from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_profile.tests.mixins import (
+    ProfileTestHelperMixin,
+    set_embedding,
+)
 from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
@@ -628,7 +631,6 @@ EMBED_SNIPPET = (
 @override_settings(
     USE_TZ=False,
     EMBED_HOST="http://embed.example.com",
-    EMBED_TENANTS={"default"},
 )
 class EmbedDashboardCrudTestCase(TestCase, ProfileTestHelperMixin):
     def setUp(self):
@@ -640,6 +642,7 @@ class EmbedDashboardCrudTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         self.header = auth(self.user)
 
     def post(self, payload):

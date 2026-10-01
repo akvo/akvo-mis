@@ -41,8 +41,8 @@ IP_ADDRESS="http://<your_ip_address>:3000/api/v1/device"
 APK_UPLOAD_SECRET="123456789AU"
 STORAGE_PATH="./storage"
 BASE_DOMAIN=
+ADMIN_SUBDOMAIN=admin
 EMBED_HOST=
-EMBED_TENANTS=
 SENTRY_DSN="<<your sentry DSN for BACKEND>>"
 SENTRY_MOBILE_ENV="<<your sentry env>>"
 SENTRY_MOBILE_DSN="<<your_sentry_mobile_DSN>>"
@@ -125,39 +125,27 @@ exists.
 | `EMBED_HOST` | Behaviour |
 |---|---|
 | empty (**default**) | Embedding is off for the whole deployment. The create dialog does not offer it, the embed route answers 404, and any embedded dashboards that already exist stay listed while reporting that their content cannot be shown. Every other kind of dashboard is unaffected. |
-| e.g. `https://embed.example.com` | The deployment *can* render embedded dashboards. Which workspaces actually may is `EMBED_TENANTS`, below. The host must resolve, serve TLS, and route `/api` to the backend the way the app's own host does. |
+| e.g. `https://embed.example.com` | The deployment *can* render embedded dashboards. Which workspaces actually may is a per-workspace entitlement, below. The host must resolve, serve TLS, and route `/api` to the backend the way the app's own host does. |
 
 **Leaving it empty is a supported state**, not a broken one. Set it only
 for deployments that want embedded dashboards.
 
-**`EMBED_TENANTS` decides which workspaces get the feature.** Embedding
+**The entitlement decides which workspaces get the feature.** Embedding
 is a paid tier, so having somewhere safe to render a snippet is not the
-same as being entitled to one. It is a comma-separated list of
-workspace subdomains:
+same as being entitled to one. It is a per-workspace switch a platform
+operator turns on from the admin console, stored on the workspace
+itself rather than in configuration — selling the feature to a customer
+used to mean a deploy.
 
-```
-EMBED_TENANTS=acme,globex
-```
+**Both halves are required.** `EMBED_HOST` alone renders nothing, and so
+does the entitlement alone. No workspace is entitled by default.
 
-| `EMBED_TENANTS` | Behaviour |
-|---|---|
-| empty (**default**) | No workspace may embed, whatever `EMBED_HOST` says. |
-| e.g. `acme,globex` | Those two workspaces may create and render embedded dashboards. Every other workspace is told the feature is not available. |
-
-**Both settings are required.** `EMBED_HOST` alone renders nothing, and
-`EMBED_TENANTS` alone renders nothing.
-
-Single-tenant and legacy deployments are not exempt: after the tenant
-backfill their one workspace is called `default`, so they need
-`EMBED_TENANTS=default`.
-
-Removing a workspace from the list **stops its embedded dashboards
+Revoking the entitlement **stops that workspace's embedded dashboards
 rendering immediately** — including tabs already open, since the check
 runs on every request for the embed document rather than only when the
 URL is minted. Nothing is deleted: the dashboards stay listed and their
-snippets are kept, so putting the workspace back restores them with no
-action from the author. Changing the list needs a restart, as any
-environment variable does.
+snippets are kept, so restoring the entitlement restores them with no
+action from the author, and no restart.
 
 **Choosing a value.** Any hostname that is not the app's own will do.
 With `BASE_DOMAIN` set, a name one level under it — `embed.<BASE_DOMAIN>`
@@ -203,11 +191,19 @@ flow you get is the same one production has. Full walkthrough:
 **One-time setup**
 
 1. Pick a base domain you do not own on the real internet — `.test` is
-   reserved for exactly this by RFC 2606 — and set it in `.env`:
+   reserved for exactly this by RFC 2606 — and set it in `.env`,
+   together with the address the browser actually uses:
 
    ```bash
    BASE_DOMAIN=localapp.test
+   WEBDOMAIN="http://localapp.test:3000"
    ```
+
+   `WEBDOMAIN` is easy to skip, and skipping it is silent: every emailed
+   link takes its scheme and port from there and its host from
+   `BASE_DOMAIN`, so the shipped `http://example.com` placeholder mails
+   `http://acme.localapp.test/...` — right host, no port, opens nothing.
+   The link is only discovered to be broken by clicking it.
 
 2. Add it to `/etc/hosts`:
 
@@ -265,6 +261,64 @@ browser resolves the name. Tests need nothing at all — the Django test client
 takes the host as an argument, and `BASE_DOMAIN` is forced empty under
 `manage.py test`, so a test that wants host routing opts in with
 `override_settings`.
+
+#### Platform admin console locally
+
+The console is where a platform operator sees every workspace, suspends
+or renames one, invites other operators, and opens a customer's own
+application read-only to answer a support question. It is a third host
+class beside the main site and the workspaces, so it needs
+`BASE_DOMAIN` — with that empty there is no console at all, because a
+single-host install is one workspace and has nothing to administer
+across.
+
+**One-time setup**
+
+1. Do the [subdomain routing](#subdomain-routing-locally) setup above, if
+   you have not already.
+
+2. Add the console's host to `/etc/hosts`:
+
+   ```
+   127.0.0.1  admin.localapp.test
+   ```
+
+3. Create the first operator. Nobody can invite them: the invite button
+   lives inside the console, which has no one to sign in to it yet.
+
+   ```bash
+   ./dc.sh exec backend python manage.py createplatformadmin \
+       --email ops@akvo.org --password 'Console#Pass123' \
+       --first-name Ops --last-name Operator
+   ```
+
+4. Sign in at `http://admin.localapp.test:3000`. It is the app's own
+   login page on a different host; a workspace account typed into it is
+   refused, and an operator account is refused everywhere else.
+
+**Inspecting a workspace** opens that workspace's own app at its own
+address, so it needs that workspace's `/etc/hosts` line like any other —
+`Inspect` on a workspace with no entry fails at DNS, before anything
+this app controls. Suspended and deleted workspaces are not offered,
+because their hosts stop resolving.
+
+**Moving the console.** `ADMIN_SUBDOMAIN` sets the label, `admin` being
+only the default. Change it if that address is already taken — by
+another service, or by a workspace registered before the name was
+reserved. Registration and rename refuse whatever it is set to, so the
+address the console is on is always the one protected. The frontend
+cannot read a Django setting, so after changing it:
+
+```bash
+./dc.sh up -d --force-recreate backend worker
+./dc.sh exec backend python manage.py generate_config
+```
+
+Without the second command the browser keeps looking for the console at
+the old address while the server answers at the new one.
+
+More on operators, the pending state, password resets and what a rename
+breaks: [`doc/notes/platform-console.md`](doc/notes/platform-console.md).
 
 #### Start
 

@@ -367,8 +367,10 @@ const App = () => {
   const handleOnRegisterTask = useCallback(async () => {
     try {
       const allTasks = await TaskManager.getRegisteredTasksAsync();
+      const registered = allTasks.map((a) => a.taskName);
 
-      allTasks.forEach(async (a) => {
+      await allTasks.reduce(async (prev, a) => {
+        await prev;
         if (
           [
             SYNC_FORM_SUBMISSION_TASK_NAME,
@@ -378,7 +380,21 @@ const App = () => {
         ) {
           await backgroundTask.registerBackgroundTask(a.taskName);
         }
-      });
+      }, Promise.resolve());
+
+      // The two sync tasks are re-registered even when absent, because
+      // a 403 unregisters them: the device stops polling once its
+      // person is deactivated. Without this, reopening the app after
+      // reactivation would find nothing to refresh and sync would stay
+      // dead. The datapoint task is left alone -- it is registered by
+      // choice, and forcing it on would re-enable something switched
+      // off deliberately.
+      await [SYNC_FORM_VERSION_TASK_NAME, SYNC_FORM_SUBMISSION_TASK_NAME]
+        .filter((name) => !registered.includes(name))
+        .reduce(async (prev, name) => {
+          await prev;
+          await backgroundTask.registerBackgroundTask(name);
+        }, Promise.resolve());
     } catch (error) {
       Sentry.captureMessage(`handleOnRegisterTask`);
       Sentry.captureException(error);

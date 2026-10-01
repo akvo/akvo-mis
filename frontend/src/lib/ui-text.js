@@ -1339,6 +1339,31 @@ const uiText = {
     dateFromPlaceholder: "From",
     dateToPlaceholder: "To",
     viewDetails: "View Details",
+
+    // Platform console (MT-022). `de` is empty for every key in this
+    // catalogue, console strings included, so nothing here is mirrored
+    // into it: a German placeholder for this one feature would read as
+    // translated when the rest of the app is not.
+    platformConsole: "Platform Console",
+    consoleTenants: "Tenants",
+    consoleOperators: "Operators",
+    consoleSearchTenants: "Search subdomain or name",
+    consoleStateAll: "All",
+    consoleStateActive: "Active",
+    consoleStateSuspended: "Suspended",
+    consoleStateDeleted: "Deleted",
+    consoleInspect: "Inspect",
+    consoleInspectFailed: "Could not open that workspace",
+    consoleSuspend: "Suspend",
+    consoleRestore: "Restore",
+    consoleRename: "Rename",
+    consoleDelete: "Delete",
+    consoleFeatures: "Features",
+    consoleUsers: "Users",
+    consoleDeactivate: "Deactivate",
+    consoleReactivate: "Reactivate",
+    consoleInviteOperator: "Invite operator",
+    consoleRevoke: "Revoke",
   },
 
   de: {},

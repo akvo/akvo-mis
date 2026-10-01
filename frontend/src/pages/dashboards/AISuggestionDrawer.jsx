@@ -155,10 +155,107 @@ const AISuggestionDrawer = ({
     return map;
   }, [sources]);
 
+  // Derive smart, schema-aware suggestion chips from available form family
+  const dynamicPromptChips = useMemo(() => {
+    if (
+      !sources?.forms ||
+      !Array.isArray(sources.forms) ||
+      sources.forms.length === 0
+    ) {
+      return PROMPT_CHIPS;
+    }
+
+    const chips = [];
+    const allQuestions = [];
+    let hasGeo = false;
+    let hasDate = false;
+    let numericCount = 0;
+    let hasMonitoring = false;
+
+    sources.forms.forEach((form, fIdx) => {
+      if (fIdx > 0 || form.type === "monitoring") {
+        hasMonitoring = true;
+      }
+      if (form.questions && Array.isArray(form.questions)) {
+        form.questions.forEach((q) => {
+          allQuestions.push(q);
+          const qType = String(q.type || "").toLowerCase();
+          const qTypeName = String(q.type_name || "").toLowerCase();
+          if (qType === "geo" || qType === "5" || qTypeName === "geo") {
+            hasGeo = true;
+          }
+          if (qType === "date" || qType === "9" || qTypeName === "date") {
+            hasDate = true;
+          }
+          if (
+            qType === "number" ||
+            qType === "autofield" ||
+            qType === "3" ||
+            qTypeName === "number" ||
+            qTypeName === "autofield"
+          ) {
+            numericCount += 1;
+          }
+        });
+      }
+    });
+
+    // 1. Option Question Breakdown
+    const optionQuestions = allQuestions.filter((q) => {
+      const qType = String(q.type || "").toLowerCase();
+      const qTypeName = String(q.type_name || "").toLowerCase();
+      return (
+        qType === "option" ||
+        qType === "single_select" ||
+        qType === "1" ||
+        qTypeName === "option" ||
+        qTypeName === "single_select"
+      );
+    });
+
+    if (optionQuestions.length > 0) {
+      const firstOpt = optionQuestions[0];
+      const optLabel = (firstOpt.label || firstOpt.name || "Status").trim();
+      const shortLabel =
+        optLabel.length > 20 ? `${optLabel.slice(0, 18)}...` : optLabel;
+      chips.push(`${shortLabel} Breakdown`);
+    }
+
+    // 2. Temporal Trends
+    if (hasDate || hasMonitoring) {
+      chips.push("Monthly Trends");
+    }
+
+    // 3. Geographic Map
+    if (hasGeo) {
+      chips.push("Geographic Coverage");
+    }
+
+    // 4. Metric Correlations
+    if (numericCount >= 2) {
+      chips.push("Metric Correlations");
+    }
+
+    // 5. Monitoring Log Table
+    if (hasMonitoring) {
+      chips.push("Monitoring Summary");
+    }
+
+    // 6. KPIs
+    chips.push("Key KPIs");
+
+    if (chips.length <= 1) {
+      chips.unshift("Status & Functionality");
+    }
+
+    const uniqueChips = Array.from(new Set(chips));
+    return uniqueChips.slice(0, 6);
+  }, [sources]);
+
   const fetchSuggestions = useCallback(
     (customHint = null) => {
-      if (!dashboardId || !visible) {
-        return;
+      if (!dashboardId) {
+        return Promise.resolve();
       }
 
       if (abortControllerRef.current) {
@@ -170,15 +267,50 @@ const AISuggestionDrawer = ({
       setLoading(true);
       setError(null);
 
-      dashboardAi
-        .getStatus()
-        .then((statusRes) => {
+      const existingTypes = (existingWidgetsRef.current || [])
+        .map((w) => w.type)
+        .filter(Boolean);
+
+      const existingDescriptors = (existingWidgetsRef.current || [])
+        .map((w) => ({
+          type: w.type || null,
+          form:
+            typeof w.form !== "undefined" && w.form !== null
+              ? Number(w.form)
+              : null,
+          question:
+            typeof w.question !== "undefined" && w.question !== null
+              ? Number(w.question)
+              : null,
+          config: w.config || {},
+        }))
+        .filter((d) => Boolean(d.type));
+
+      const payload = {
+        existing_widget_types: existingTypes,
+        existing_widgets: existingDescriptors,
+      };
+
+      const hintToUse =
+        customHint !== null ? customHint : promptHintRef.current;
+      const trimmedHint = (hintToUse || "").trim();
+      if (trimmedHint) {
+        payload.prompt_hint = trimmedHint;
+      }
+
+      return dashboardAi
+        .suggestWidgets(dashboardId, payload, controller.signal)
+        .then((res) => {
+          const list = Array.isArray(res?.data?.suggestions)
+            ? res.data.suggestions
+            : [];
           const isAiAvail =
-            typeof statusRes?.data?.ai_available === "boolean"
-              ? statusRes.data.ai_available
-              : true;
-          setAiAvailable(isAiAvail);
-          if (!isAiAvail) {
+            typeof res?.data?.ai_available === "boolean"
+              ? res.data.ai_available
+              : list.length > 0;
+
+          if (list.length === 0 && !isAiAvail) {
+            setAiAvailable(false);
             setSuggestions([]);
             cachedRef.current = {
               dashboardId,
@@ -186,39 +318,17 @@ const AISuggestionDrawer = ({
               promptHint: "",
               aiAvailable: false,
             };
-            setLoading(false);
             return;
           }
 
-          const existingTypes = (existingWidgetsRef.current || [])
-            .map((w) => w.type)
-            .filter(Boolean);
-
-          const payload = {
-            existing_widget_types: existingTypes,
+          setAiAvailable(true);
+          setSuggestions(list);
+          cachedRef.current = {
+            dashboardId,
+            data: list,
+            promptHint: hintToUse || "",
+            aiAvailable: true,
           };
-
-          const hintToUse =
-            customHint !== null ? customHint : promptHintRef.current;
-          const trimmedHint = (hintToUse || "").trim();
-          if (trimmedHint) {
-            payload.prompt_hint = trimmedHint;
-          }
-
-          return dashboardAi
-            .suggestWidgets(dashboardId, payload, controller.signal)
-            .then((res) => {
-              const list = Array.isArray(res?.data?.suggestions)
-                ? res.data.suggestions
-                : [];
-              setSuggestions(list);
-              cachedRef.current = {
-                dashboardId,
-                data: list,
-                promptHint: hintToUse || "",
-                aiAvailable: true,
-              };
-            });
         })
         .catch((err) => {
           if (err?.name === "CanceledError" || err?.name === "AbortError") {
@@ -233,44 +343,48 @@ const AISuggestionDrawer = ({
           setLoading(false);
         });
     },
-    [dashboardId, visible]
+    [dashboardId]
   );
 
-  // Auto-load default recommendations when drawer opens, and retain existing suggestions across open/close
+  // Background prefetch when dashboardId is available, and instant restore when drawer opens
   useEffect(() => {
-    if (visible && dashboardId) {
-      if (cachedRef.current.dashboardId !== dashboardId) {
-        cachedRef.current = {
-          dashboardId,
-          data: null,
-          promptHint: "",
-          aiAvailable: true,
-        };
-        setPromptHint("");
-        setSuggestions([]);
-        setAiAvailable(true);
-        fetchSuggestions("");
-        return;
-      }
-
-      if (cachedRef.current.data !== null) {
-        if (typeof cachedRef.current.aiAvailable === "boolean") {
-          setAiAvailable(cachedRef.current.aiAvailable);
-        }
-        if (suggestions.length === 0) {
-          setSuggestions(cachedRef.current.data);
-          setPromptHint(cachedRef.current.promptHint || "");
-        }
-        return;
-      }
-
-      if (suggestions.length === 0) {
-        fetchSuggestions("");
-      }
-    } else if (!visible && abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (!dashboardId) {
+      return;
     }
-  }, [visible, dashboardId, fetchSuggestions, suggestions.length]);
+
+    if (cachedRef.current.dashboardId !== dashboardId) {
+      cachedRef.current = {
+        dashboardId,
+        data: null,
+        promptHint: "",
+        aiAvailable: true,
+      };
+      setPromptHint("");
+      setSuggestions([]);
+      setAiAvailable(true);
+      fetchSuggestions("");
+      return;
+    }
+
+    if (visible && cachedRef.current.data !== null) {
+      if (typeof cachedRef.current.aiAvailable === "boolean") {
+        setAiAvailable(cachedRef.current.aiAvailable);
+      }
+      if (suggestions.length === 0) {
+        setSuggestions(cachedRef.current.data);
+        setPromptHint(cachedRef.current.promptHint || "");
+      }
+    }
+  }, [dashboardId, visible, fetchSuggestions, suggestions.length]);
+
+  // Clean up in-flight request on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const handleSearch = useCallback(
     (value) => {
@@ -424,7 +538,7 @@ const AISuggestionDrawer = ({
               )}
               <div className="ai-suggestion-chips">
                 <span className="ai-suggestion-chips-label">Try:</span>
-                {PROMPT_CHIPS.map((chip) => (
+                {dynamicPromptChips.map((chip) => (
                   <Tag
                     key={chip}
                     className="ai-suggestion-chip"

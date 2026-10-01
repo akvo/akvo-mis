@@ -54,8 +54,8 @@ describe("AISuggestionDrawer", () => {
   });
 
   it("renders unavailable alert and empty state when ai_available is false", async () => {
-    dashboardAi.getStatus.mockResolvedValue({
-      data: { ai_available: false, provider: "none" },
+    dashboardAi.suggestWidgets.mockResolvedValue({
+      data: { ai_available: false, provider: "none", suggestions: [] },
     });
     render(
       <AISuggestionDrawer
@@ -81,7 +81,40 @@ describe("AISuggestionDrawer", () => {
     expect(
       screen.queryByText("Functionality Breakdown")
     ).not.toBeInTheDocument();
-    expect(dashboardAi.suggestWidgets).not.toHaveBeenCalled();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalled();
+  });
+
+  it("prefetches suggestions in background on mount before drawer is opened", async () => {
+    const { rerender } = render(
+      <AISuggestionDrawer
+        visible={false}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    // Initial background prefetch is triggered immediately when dashboardId is provided
+    await waitFor(() => {
+      expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
+    });
+
+    // Opening the drawer displays cached suggestions immediately without duplicate API calls
+    rerender(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={mockSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Functionality Breakdown")).toBeInTheDocument();
+    expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
   });
 
   it("automatically loads default suggestions on open", async () => {
@@ -109,7 +142,7 @@ describe("AISuggestionDrawer", () => {
 
     expect(dashboardAi.suggestWidgets).toHaveBeenCalledWith(
       1,
-      { existing_widget_types: [] },
+      { existing_widget_types: [], existing_widgets: [] },
       expect.anything()
     );
   });
@@ -170,6 +203,7 @@ describe("AISuggestionDrawer", () => {
         1,
         {
           existing_widget_types: [],
+          existing_widgets: [],
           prompt_hint: "Focus on population",
         },
         expect.anything()
@@ -446,7 +480,7 @@ describe("AISuggestionDrawer", () => {
       expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(3);
       expect(dashboardAi.suggestWidgets).toHaveBeenLastCalledWith(
         1,
-        { existing_widget_types: [] },
+        { existing_widget_types: [], existing_widgets: [] },
         expect.anything()
       );
       expect(searchInput).toHaveValue("");
@@ -468,7 +502,7 @@ describe("AISuggestionDrawer", () => {
     await screen.findByText("Functionality Breakdown");
     expect(dashboardAi.suggestWidgets).toHaveBeenCalledTimes(1);
 
-    const chip = screen.getByText("Monthly Trends");
+    const chip = screen.getByText("Functionality Status Breakdown");
     fireEvent.click(chip);
 
     await waitFor(() => {
@@ -477,11 +511,53 @@ describe("AISuggestionDrawer", () => {
         1,
         {
           existing_widget_types: [],
-          prompt_hint: "Monthly Trends",
+          existing_widgets: [],
+          prompt_hint: "Functionality Status Breakdown",
         },
         expect.anything()
       );
     });
+  });
+
+  it("dynamically generates schema-aware chips for geo, trends, and monitoring", async () => {
+    const richSources = {
+      forms: [
+        {
+          id: 101,
+          name: "Water Registration",
+          type: "registration",
+          questions: [
+            { id: 1, label: "GPS Coordinates", type: "geo" },
+            { id: 2, label: "Installation Year", type: "date" },
+            { id: 3, label: "Water Yield", type: "number" },
+            { id: 4, label: "Depth", type: "number" },
+          ],
+        },
+        {
+          id: 102,
+          name: "Water Monitoring",
+          type: "monitoring",
+          questions: [{ id: 5, label: "Inspection Date", type: "date" }],
+        },
+      ],
+    };
+
+    render(
+      <AISuggestionDrawer
+        visible={true}
+        onClose={jest.fn()}
+        dashboardId={1}
+        existingWidgets={[]}
+        sources={richSources}
+        onAddWidget={jest.fn()}
+      />
+    );
+
+    expect(await screen.findByText("Geographic Coverage")).toBeInTheDocument();
+    expect(screen.getByText("Monthly Trends")).toBeInTheDocument();
+    expect(screen.getByText("Metric Correlations")).toBeInTheDocument();
+    expect(screen.getByText("Monitoring Summary")).toBeInTheDocument();
+    expect(screen.getByText("Key KPIs")).toBeInTheDocument();
   });
 
   it("adds all widgets to dashboard when clicking Add All button", async () => {
