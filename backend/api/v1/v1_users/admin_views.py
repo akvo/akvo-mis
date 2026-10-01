@@ -39,9 +39,9 @@ from api.v1.v1_users.models import (
     TenantInspection,
 )
 # Imported by name rather than called through `views`, so that a test
-# patching `admin_views.send_activation_email` patches what this module
+# patching `admin_views.send_invitation_email` patches what this module
 # actually calls.
-from api.v1.v1_users.views import send_activation_email
+from api.v1.v1_users.views import send_invitation_email
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_generator import sqlite_path
 from utils.custom_permissions import IsPlatformAdmin
@@ -440,7 +440,7 @@ def _invite_operator(request):
     )
     invited.set_unusable_password()
     invited.save()
-    send_activation_email(invited)
+    send_invitation_email(invited, invited_by=request.user)
     return Response(
         OperatorSerializer(invited).data, status=status.HTTP_200_OK
     )

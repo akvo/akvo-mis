@@ -165,10 +165,20 @@ class ForgotPasswordSerializer(serializers.Serializer):
     email = CustomEmailField()
 
     def validate_email(self, email):
-        tenant = self.context.get("tenant")
         qs = SystemUser.objects.filter(email=email, deleted_at=None)
-        if tenant is not None:
-            qs = qs.filter(tenant=tenant)
+        if self.context.get("console"):
+            # The console serves no workspace, so "no tenant" cannot be
+            # used to scope this -- it reads the same on the base domain
+            # and on every single-host deployment, where accounts do
+            # have workspaces. Left unscoped, `.first()` returned an
+            # arbitrary account from any workspace sharing the address
+            # and the reset was built for *that* workspace, sending an
+            # operator somewhere the reset cannot open the console. Only
+            # an operator can use a console reset, so only operators are
+            # looked up here.
+            qs = qs.filter(is_platform_admin=True, tenant__isnull=True)
+        elif self.context.get("tenant") is not None:
+            qs = qs.filter(tenant=self.context["tenant"])
         user = qs.first()
         if not user:
             raise ValidationError("Invalid email, user not found")
