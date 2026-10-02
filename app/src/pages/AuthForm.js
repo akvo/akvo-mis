@@ -196,6 +196,7 @@ const AuthForm = () => {
               placeholderTextColor={theme.input.text}
               secureTextEntry={hidden}
               autoFocus
+              maxLength={8}
               value={passcode}
               onChangeText={setPasscode}
               testID="auth-password-field"
