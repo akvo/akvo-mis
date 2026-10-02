@@ -46,10 +46,51 @@ class PlatformAdminLoginTestCase(TestCase, TenantTestHelperMixin):
         self.assertIn("token", response.json())
 
     def test_workspace_account_is_refused_on_the_admin_host(self):
+        # 401 and the generic credentials failure, not the 400 this
+        # asserted while the console still evaluated workspace
+        # passwords. Narrowing console authentication to tenant-less
+        # accounts means a workspace account matches no row here at all,
+        # so it never reaches the operator check below and is refused
+        # the same way a wrong password is.
+        #
+        # The oracle this class guards against is unaffected: every
+        # failed console sign-in now answers identically, whether the
+        # address exists in a workspace or nowhere.
         response = self.client.post(
             LOGIN, self.workspace_credentials(), HTTP_HOST="admin.app.com"
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 401)
+
+    def test_an_operator_who_also_has_a_workspace_account_signs_in(self):
+        # Reported from akvotest: an invited operator could not sign in
+        # to the console, and was told to use their workspace address
+        # instead. They already held a workspace account under the same
+        # address and had reused its password when accepting the
+        # invitation -- a state the invite flow permits, because
+        # OperatorInviteSerializer refuses only a second *tenant-less*
+        # account.
+        #
+        # The console resolves no tenant, so login reaches the
+        # tenant=None branch of TenantAwareBackend, which searched every
+        # workspace on the deployment and returned the first row whose
+        # password matched. The workspace account predates the
+        # invitation and so comes first, and the operator was handed
+        # that row and refused for not being an operator.
+        twin = self.acme.admin
+        operator = SystemUser.objects.create(
+            email=twin.email, is_platform_admin=True, tenant=None
+        )
+        operator.set_password(TENANT_PASSWORD)
+        operator.save()
+        self.assertLess(twin.pk, operator.pk)
+        response = self.client.post(
+            LOGIN,
+            {"email": twin.email, "password": TENANT_PASSWORD},
+            HTTP_HOST="admin.app.com",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        # The operator's own row, not the workspace twin's.
+        self.assertEqual(response.json()["id"], operator.pk)
 
     def test_operator_is_refused_on_a_workspace_host(self):
         # TenantAwareBackend scopes the lookup to the host's tenant, and

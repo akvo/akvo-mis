@@ -300,6 +300,12 @@ def login(request, version):
         email=serializer.validated_data["email"],
         password=serializer.validated_data["password"],
         tenant=getattr(request, "tenant", None),
+        # The console admits operators and nobody else, and an operator
+        # is tenant-less by construction -- so say so, rather than
+        # leaving the backend to read a null tenant as "search
+        # everywhere". The guard below can only refuse a wrong row; it
+        # cannot pick the right one.
+        tenant_less_only=on_admin_host,
     )
 
     # The console is for operators. A workspace account whose
