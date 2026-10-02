@@ -699,12 +699,15 @@ def set_user_password(request, version):
     user.set_password(serializer.validated_data.get("password"))
     user.updated = timezone.now()
     user.save()
-    refresh = RefreshToken.for_user(user)
-    data = UserSerializer(instance=user).data
-    data["token"] = str(refresh.access_token)
-    # TODO: remove invite from response
-    data["invite"] = signing.dumps(user.pk)
-    return Response(data, status=status.HTTP_200_OK)
+    # The same response login hands back, cookie included. This used to
+    # assemble its own -- a token in the body and no Set-Cookie -- which
+    # signed the invitee in for exactly as long as the tab went
+    # unreloaded: AUTH_TOKEN is the only thing App.js bootstraps a
+    # session from, so the first full page load after accepting landed
+    # on the login page. An operator met that on the return trip from
+    # inspecting a workspace, which is two cross-origin navigations and
+    # so cannot keep anything held in memory.
+    return authenticated_response(user)
 
 
 @extend_schema(
