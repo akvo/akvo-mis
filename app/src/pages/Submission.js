@@ -593,6 +593,8 @@ const Submission = ({ navigation, route }) => {
               testID="show-drafts-checkbox"
               containerStyle={styles.filterCheckbox}
               textStyle={styles.filterCheckboxText}
+              checkedColor={theme.icon.accent}
+              uncheckedColor={theme.text.tertiary}
             />
           </View>
           {draftsOnly && datapoints.length > 0 && (

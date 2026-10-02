@@ -13,7 +13,6 @@ import {
   ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 
@@ -22,9 +21,8 @@ import { AuthState, UserState, UIState, BuildParamsState } from '../store';
 import { crudForms, crudUsers, crudConfig } from '../database/crud';
 import useTheme from '../lib/theme';
 
-const AuthForm = ({ navigation }) => {
+const AuthForm = () => {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { online: isNetworkAvailable, lang: activeLang } = UIState.useState((s) => s);
   const { appVersion, serverURL } = BuildParamsState.useState((s) => s);
   const [passcode, setPasscode] = useState(null);
@@ -65,8 +63,13 @@ const AuthForm = ({ navigation }) => {
   };
 
   const handleGetAllForms = async (formsUrl, userID) => {
+    console.info('[AuthForm] Downloading forms:', formsUrl?.length, formsUrl);
     const formsReq = formsUrl?.map((f) => api.get(f.url));
     const formsRes = await Promise.allSettled(formsReq);
+    const failed = formsRes.filter((r) => r.status === 'rejected');
+    if (failed.length) {
+      console.error('[AuthForm] Form download failures:', failed.map((r) => r.reason?.message));
+    }
     await formsRes.reduce(async (prev, { value, status }, index) => {
       await prev;
       if (status === 'fulfilled') {
@@ -107,10 +110,6 @@ const AuthForm = ({ navigation }) => {
 
         await crudConfig.updateConfig(db, { authenticationCode: passcode });
         await cascades.createSqliteDir();
-        AuthState.update((s) => {
-          s.authenticationCode = passcode;
-          s.token = bearerToken;
-        });
 
         const userID = await handleActiveUser({
           ...data,
@@ -119,9 +118,13 @@ const AuthForm = ({ navigation }) => {
 
         await handleGetAllForms(data.formsUrl, userID);
 
-        setTimeout(() => {
-          navigation.navigate('Home', { newForms: true });
-        }, 500);
+        // Set the token AFTER forms are downloaded. This triggers
+        // RootNavigator to switch from auth screens to app screens,
+        // unmounting AuthForm — anything after this line may not run.
+        AuthState.update((s) => {
+          s.authenticationCode = passcode;
+          s.token = bearerToken;
+        });
       })
       .catch((err) => {
         console.error('[AuthForm] Login error:', {
