@@ -13,6 +13,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
+from django_q.models import Schedule
 
 from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_forms.models import Forms
@@ -273,3 +274,17 @@ class PurgeCommandTestCase(PurgeTenantFixtureMixin, TestCase):
 
         self.assertIn("Skipped 1", output)
         self.assertIn("acme", output)
+
+    def test_the_purge_is_scheduled_hourly(self):
+        # The test database is built by running migrations, so this
+        # asserts that migration 0012 ran and created the row. It is
+        # the only thing standing between the feature and a purge
+        # that never fires in production.
+        row = Schedule.objects.get(name="purge-uninitiated-tenants")
+        self.assertEqual(
+            row.func, "api.v1.v1_users.tasks.purge_uninitiated_tenants"
+        )
+        self.assertEqual(row.schedule_type, Schedule.HOURLY)
+        # Forever. A schedule that ran a fixed number of times would
+        # stop purging on a date nobody wrote down.
+        self.assertEqual(row.repeats, -1)
