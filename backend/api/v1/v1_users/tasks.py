@@ -62,7 +62,7 @@ def uninitiated_tenants():
         # meaning. Finishing it off automatically would quietly
         # change what that button does.
         deleted_at=None,
-    ).exclude(Exists(has_root))
+    ).exclude(Exists(has_root)).order_by("pk")
     return [
         tenant
         for tenant in candidates

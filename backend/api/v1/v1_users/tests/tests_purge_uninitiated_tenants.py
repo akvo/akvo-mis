@@ -145,7 +145,7 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         self.assertFalse(Tenant.objects.filter(pk=tenant.pk).exists())
 
     def test_a_workspace_that_owns_a_form_is_skipped(self):
-        tenant, _ = self.register()
+        tenant, user = self.register()
         Forms.objects.create(
             name="stray", tenant=tenant, status=FormStatus.published
         )
@@ -161,6 +161,12 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         self.assertEqual(result["purged"], ["beta"])
         self.assertTrue(Tenant.objects.filter(pk=tenant.pk).exists())
         self.assertFalse(Tenant.objects.filter(pk=other.pk).exists())
+        # The atomicity invariant: the user hard-delete happens inside
+        # the same atomic block as the tenant delete, so a
+        # ProtectedError on the tenant rolls the user delete back too.
+        self.assertTrue(
+            SystemUser.objects_with_deleted.filter(pk=user.pk).exists()
+        )
 
     def test_a_soft_deleted_form_still_protects_its_workspace(self):
         # Forms is a SoftDeletes model, so tenant.forms.all() returns
@@ -184,7 +190,7 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         # candidate query and the delete. Nothing locks the tenant;
         # what saves it is that it now owns a level and a root, and
         # both FKs are PROTECT.
-        tenant, _ = self.register()
+        tenant, user = self.register()
         self.age(tenant, 49)
         stale_view_of_the_world = uninitiated_tenants()
         self.assertEqual(len(stale_view_of_the_world), 1)
@@ -201,4 +207,10 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         self.assertTrue(Tenant.objects.filter(pk=tenant.pk).exists())
         self.assertTrue(
             Administration.objects.filter(tenant=tenant).exists()
+        )
+        # Same atomicity invariant as the Forms case above: the
+        # rollback on the tenant's ProtectedError must take the user
+        # hard-delete with it.
+        self.assertTrue(
+            SystemUser.objects_with_deleted.filter(pk=user.pk).exists()
         )
