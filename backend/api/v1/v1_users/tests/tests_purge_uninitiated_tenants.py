@@ -13,6 +13,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
+from django.utils.module_loading import import_string
 from django_q.models import Schedule
 
 from api.v1.v1_forms.constants import FormStatus
@@ -201,6 +202,40 @@ class PurgeUninitiatedTenantsTestCase(
         self.assertEqual(result["purged"], [])
         self.assertTrue(Tenant.objects.filter(pk=tenant.pk).exists())
 
+    def test_the_backfill_tenant_is_never_purged(self):
+        # Migration 0004 creates 'default' on every migrated database,
+        # and on an empty one it owns nothing -- the exact shape this
+        # job purges. Four commands document it as permanently
+        # present, so it is excluded by name. The test database is
+        # rebuilt by migrations, so the real row is never stale inside
+        # a test and could not catch this; the tenant is built here by
+        # hand and aged deliberately.
+        #
+        # subdomain is unique and migration 0004 already created this
+        # row against the empty test database, so
+        # self.register(subdomain="default") would collide on it.
+        # Use the row the migration left behind instead, and attach a
+        # registrant to it the way register() would.
+        tenant = Tenant.objects.get(subdomain="default")
+        user = SystemUser.objects.create_superuser(
+            email="founder@default.org",
+            password="Secret#Pass123",
+            first_name="",
+            last_name="",
+            tenant=tenant,
+            is_active=False,
+        )
+        self.age(tenant, 24 * 365)
+
+        result = purge_uninitiated_tenants()
+
+        self.assertEqual(result["purged"], [])
+        self.assertEqual(result["skipped"], [])
+        self.assertTrue(Tenant.objects.filter(pk=tenant.pk).exists())
+        self.assertTrue(
+            SystemUser.objects_with_deleted.filter(pk=user.pk).exists()
+        )
+
     def test_configuring_mid_run_saves_the_workspace(self):
         # The registrant finishes /register/configure between the
         # candidate query and the delete. Nothing locks the tenant;
@@ -283,6 +318,12 @@ class PurgeCommandTestCase(PurgeTenantFixtureMixin, TestCase):
         row = Schedule.objects.get(name="purge-uninitiated-tenants")
         self.assertEqual(
             row.func, "api.v1.v1_users.tasks.purge_uninitiated_tenants"
+        )
+        # A string compared to a string proves nothing about whether
+        # the path still imports. This is what the assertion above
+        # claims.
+        self.assertIs(
+            import_string(row.func), purge_uninitiated_tenants
         )
         self.assertEqual(row.schedule_type, Schedule.HOURLY)
         # Forever. A schedule that ran a fixed number of times would

@@ -24,6 +24,15 @@ from api.v1.v1_users.serializers import tenant_is_configured
 
 logger = logging.getLogger(__name__)
 
+# The one tenant /register did not create. Migration 0004 writes it
+# on every migrated database -- including an empty one, where it
+# backfills nothing and so owns nothing, which is exactly the shape
+# this job purges. createsuperuser, seeder.sh, resolve_tenant and
+# fake_complete_data_seeder all document it as permanently present,
+# so deleting it would break a documented bootstrap step 48 hours
+# after install, and take any superadmin created under it along.
+BACKFILL_SUBDOMAIN = "default"
+
 
 def uninitiated_tenants():
     """Workspaces past the window that never finished configuring.
@@ -34,10 +43,12 @@ def uninitiated_tenants():
     spelling of the predicate inside a destructive job is exactly
     where the two would drift apart.
 
-    The `exclude` is index-friendly narrowing, not a second predicate.
-    It drops every workspace that already has a root unit -- the cheap
+    The `exclude` is index-friendly narrowing, not a second predicate:
+    it drops every workspace that already has a root unit -- the cheap
     half of the question -- so the job does not walk every historical
-    tenant row only to discard it in Python.
+    tenant row only to discard it in Python. A safe subset, because it
+    drops only that half: it can under-purge, never over-purge.
+    Revisit if `tenant_is_configured` gains a condition.
 
     This has to be a correlated `Exists` subquery rather than
     `.exclude(administrations__parent__isnull=True)`: that spelling
@@ -62,7 +73,11 @@ def uninitiated_tenants():
         # meaning. Finishing it off automatically would quietly
         # change what that button does.
         deleted_at=None,
-    ).exclude(Exists(has_root)).order_by("pk")
+    ).exclude(
+        Exists(has_root)
+    ).exclude(
+        subdomain=BACKFILL_SUBDOMAIN
+    ).order_by("pk")
     return [
         tenant
         for tenant in candidates
