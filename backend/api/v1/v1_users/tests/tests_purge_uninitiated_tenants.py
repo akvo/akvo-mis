@@ -24,7 +24,15 @@ from api.v1.v1_users.tasks import (
 )
 
 
-class PurgeUninitiatedTenantsTestCase(TestCase):
+class PurgeTenantFixtureMixin:
+    """The three fixtures both test cases need.
+
+    A mixin rather than a base TestCase: subclassing a TestCase to
+    inherit its helpers also inherits its tests, which then run a
+    second time under the subclass's name and tell us nothing we
+    did not already know.
+    """
+
     def register(self, subdomain="acme"):
         """Exactly what POST /api/v1/register leaves behind: a tenant
         and one inactive superadmin, and nothing else."""
@@ -53,6 +61,11 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         Tenant.objects.filter(pk=tenant.pk).update(
             created_at=timezone.now() - timedelta(hours=hours)
         )
+
+
+class PurgeUninitiatedTenantsTestCase(
+    PurgeTenantFixtureMixin, TestCase
+):
 
     def test_a_stale_unconfigured_workspace_is_purged(self):
         tenant, user = self.register()
@@ -218,7 +231,7 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         )
 
 
-class PurgeCommandTestCase(PurgeUninitiatedTenantsTestCase):
+class PurgeCommandTestCase(PurgeTenantFixtureMixin, TestCase):
     """The command is a thin wrapper, so it is tested thinly: that it
     reaches the task, that --dry-run reaches it too, and that an
     operator can read the answer off the terminal."""
