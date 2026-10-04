@@ -6,8 +6,10 @@ Every test here ages a tenant with a queryset `update`, because
 overwrite the backdated value with now.
 """
 from datetime import timedelta
+from io import StringIO
 from unittest import mock
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils import timezone
@@ -214,3 +216,47 @@ class PurgeUninitiatedTenantsTestCase(TestCase):
         self.assertTrue(
             SystemUser.objects_with_deleted.filter(pk=user.pk).exists()
         )
+
+
+class PurgeCommandTestCase(PurgeUninitiatedTenantsTestCase):
+    """The command is a thin wrapper, so it is tested thinly: that it
+    reaches the task, that --dry-run reaches it too, and that an
+    operator can read the answer off the terminal."""
+
+    def run_command(self, *args):
+        out = StringIO()
+        call_command(
+            "purge_uninitiated_tenants", *args, stdout=out, stderr=out
+        )
+        return out.getvalue()
+
+    def test_the_command_purges(self):
+        tenant, _ = self.register()
+        self.age(tenant, 49)
+
+        output = self.run_command()
+
+        self.assertIn("acme", output)
+        self.assertFalse(Tenant.objects.filter(pk=tenant.pk).exists())
+
+    def test_the_command_dry_runs(self):
+        tenant, _ = self.register()
+        self.age(tenant, 49)
+
+        output = self.run_command("--dry-run")
+
+        self.assertIn("Would purge", output)
+        self.assertIn("acme", output)
+        self.assertTrue(Tenant.objects.filter(pk=tenant.pk).exists())
+
+    def test_the_command_names_what_it_skipped(self):
+        tenant, _ = self.register()
+        Forms.objects.create(
+            name="stray", tenant=tenant, status=FormStatus.published
+        )
+        self.age(tenant, 49)
+
+        output = self.run_command()
+
+        self.assertIn("Skipped 1", output)
+        self.assertIn("acme", output)
