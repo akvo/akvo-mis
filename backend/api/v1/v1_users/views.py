@@ -79,11 +79,6 @@ from utils.tenant_host import (
 )
 
 
-# A week is long enough to survive a weekend and a spam folder, short
-# enough that a leaked link in an old mailbox is not a standing key.
-ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
-
-
 def user_web_url(user):
     """The host an emailed link for this account must point at.
 
@@ -525,7 +520,13 @@ def activate_account(request, version):
         # SignatureExpired subclasses BadSignature, so an expired link and a
         # tampered one land here together — the client is told the same thing
         # either way and offered a resend.
-        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+        # Read from settings at call time, not bound at import: the
+        # window is one setting shared with the purge job, and tests
+        # move it with override_settings.
+        pk = signing.loads(
+            str(token),
+            max_age=settings.TENANT_PURGE_AFTER_HOURS * 3600,
+        )
     except BadSignature:
         return invalid
     user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
