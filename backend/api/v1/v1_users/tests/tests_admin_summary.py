@@ -8,7 +8,7 @@ from api.v1.v1_forms.models import Forms
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
-from api.v1.v1_users.models import SystemUser
+from api.v1.v1_users.models import SystemUser, Tenant
 
 ADMIN_HOST = "admin.app.com"
 SUMMARY = "/api/v1/admin/tenants/summary"
@@ -49,12 +49,68 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
             user=fixture.admin, name="device-1"
         )
 
-    def rows(self):
+    def rows(self, query=""):
         response = self.client.get(
-            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+            SUMMARY + query, HTTP_HOST=ADMIN_HOST, **self.auth
         )
         self.assertEqual(response.status_code, 200)
-        return {row["subdomain"]: row for row in response.json()}
+        return {row["subdomain"]: row for row in response.json()["data"]}
+
+    def test_the_response_is_the_house_envelope(self):
+        # The same four keys every other paginated table in the
+        # application reads. A console with a shape of its own would be
+        # a second thing to learn for no gain.
+        #
+        # Counted from the table rather than written as a literal.
+        # 0004_backfill_default_tenant puts a `default` workspace in
+        # every database, the test one included, so setUp's two are
+        # never the whole of it -- and an assertion against the table is
+        # the stronger one anyway: it fails if the endpoint drops a row
+        # as well as if it invents one.
+        expected = Tenant.objects.count()
+        body = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(body["current"], 1)
+        self.assertEqual(body["total"], expected)
+        self.assertEqual(body["total_page"], 1)
+        self.assertEqual(len(body["data"]), expected)
+
+    def test_a_second_page_holds_the_workspaces_the_first_did_not(self):
+        # Enough workspaces for one full page and a short one. The
+        # assertion that matters is not "there are two pages" but "the
+        # two pages partition the set" -- a paginator that silently
+        # repeats rows still reports two pages.
+        for index in range(26):
+            self.create_tenant(
+                "w{0:02d}".format(index), ["Country", "D"],
+                "Root {0}".format(index),
+            )
+        expected = Tenant.objects.count()
+        self.assertGreater(expected, 25)
+        first = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        second = self.client.get(
+            SUMMARY + "?page=2", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(first["total"], expected)
+        self.assertEqual(first["total_page"], 2)
+        self.assertEqual(len(first["data"]), 25)
+        self.assertEqual(len(second["data"]), expected - 25)
+        on_first = set(row["subdomain"] for row in first["data"])
+        on_second = set(row["subdomain"] for row in second["data"])
+        self.assertEqual(on_first & on_second, set())
+        self.assertEqual(len(on_first | on_second), expected)
+
+    def test_a_page_past_the_end_is_refused(self):
+        # DRF's own behaviour, pinned because the console has to cope
+        # with it: a workspace deleted between two requests can shrink
+        # the result out from under the page an operator is standing on.
+        response = self.client.get(
+            SUMMARY + "?page=99", HTTP_HOST=ADMIN_HOST, **self.auth
+        )
+        self.assertEqual(response.status_code, 404)
 
     def test_counts_are_per_workspace(self):
         rows = self.rows()

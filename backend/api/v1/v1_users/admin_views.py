@@ -44,6 +44,7 @@ from api.v1.v1_users.models import (
 from api.v1.v1_users.views import send_invitation_email
 from api.v1.v1_visualization.models import Dashboard
 from utils.custom_generator import sqlite_path
+from utils.custom_pagination import Pagination
 from utils.custom_permissions import IsPlatformAdmin
 
 logger = logging.getLogger(__name__)
@@ -223,23 +224,41 @@ def set_tenant_features(request, version, tenant_id):
     )
 
 
+class TenantSummaryPagination(Pagination):
+    """The console's list, 25 workspaces at a time.
+
+    Subclassed from the house paginator rather than configured per view
+    so the envelope stays the one every other paginated table in the
+    application returns. The only change here is the page size: this is
+    an operator's list on a desktop console, where the house default of
+    10 would mean 42 pages where 25 means 17.
+
+    `page_size_query_param` is inherited and still honoured, capped at
+    100. The console always sends 25 and offers no size changer -- the
+    parameter is simply not worth removing from one endpoint.
+    """
+
+    page_size = 25
+
+
 @extend_schema(responses={200: TenantSummarySerializer(many=True)},
-               tags=CONSOLE_TAG, summary="Counts for every workspace")
+               tags=CONSOLE_TAG,
+               summary="Counts for every workspace, a page at a time")
 @api_view(["GET"])
 @permission_classes([IsPlatformAdmin])
 def tenants_summary(request, version):
-    """How much is in each workspace, at a cost that does not grow.
+    """A page of workspaces and how much each one holds.
 
-    Every Count carries distinct=True because the joins multiply:
-    counting forms and users in the same query without it returns
-    forms x users for both. The soft-delete filters are part of the
-    count rather than applied afterwards, so a deleted datapoint is
-    never counted and never has to be subtracted.
+    The counts come from `with_counts`, which documents why each one is
+    written the way it is. This view's only job is to decide which
+    workspaces the operator is asking about and hand back a page of
+    them.
     """
     queryset = with_counts(console_tenants())
-    return Response(
-        TenantSummarySerializer(queryset, many=True).data,
-        status=status.HTTP_200_OK,
+    paginator = TenantSummaryPagination()
+    rows = paginator.paginate_queryset(queryset, request)
+    return paginator.get_paginated_response(
+        TenantSummarySerializer(rows, many=True).data
     )
 
 
