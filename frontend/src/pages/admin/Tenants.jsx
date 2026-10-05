@@ -242,7 +242,14 @@ const Tenants = () => {
           </Radio.Group>
         </Space>
       </Space>
-      <Row gutter={14} style={{ marginTop: 16 }} id="tenant-totals">
+      <Row
+        gutter={14}
+        // Symmetric with the top margin. The tiles are a band
+        // between the filters and the table, not a header welded
+        // to either of them.
+        style={{ marginTop: 16, marginBottom: 16 }}
+        id="tenant-totals"
+      >
         {TILES.map(([key, label]) => (
           <Col span={4} key={key}>
             <Card size="small">
