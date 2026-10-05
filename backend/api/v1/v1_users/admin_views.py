@@ -29,7 +29,6 @@ from api.v1.v1_users.admin_serializers import (
     OperatorInviteSerializer,
     OperatorSerializer,
     TenantFeaturesSerializer,
-    TenantListSerializer,
     TenantRenameSerializer,
     TenantSummarySerializer,
     TenantUserSerializer,
@@ -108,43 +107,6 @@ def with_counts(queryset):
             filter=Q(forms__form_form_data__deleted_at=None),
         ),
         devices_count=Count("users__mobile_assignments", distinct=True),
-    )
-
-
-@extend_schema(responses={200: TenantListSerializer(many=True)},
-               tags=CONSOLE_TAG, summary="List every workspace")
-@api_view(["GET"])
-@permission_classes([IsPlatformAdmin])
-def list_tenants(request, version):
-    """Every workspace, optionally narrowed by name or by state.
-
-    The state vocabulary is the one the serializer reports, not a
-    second one invented here: a console that renders `state` and then
-    filters by some other spelling would be a UI that cannot round-trip
-    its own values.
-    """
-    queryset = console_tenants()
-    search = request.query_params.get("search")
-    if search:
-        queryset = queryset.filter(subdomain__icontains=search)
-    state = request.query_params.get("state")
-    if state:
-        if state not in TENANT_STATES:
-            # Refused rather than ignored, as an unknown feature key is.
-            # Silently returning every workspace would read as "this
-            # deployment has no suspended ones".
-            return Response(
-                {
-                    "message": "Unknown state '{0}'. Accepted: {1}.".format(
-                        state, ", ".join(sorted(TENANT_STATES))
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        queryset = queryset.filter(**TENANT_STATES[state])
-    return Response(
-        TenantListSerializer(queryset, many=True).data,
-        status=status.HTTP_200_OK,
     )
 
 

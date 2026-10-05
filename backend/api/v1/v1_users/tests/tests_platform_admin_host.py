@@ -100,7 +100,7 @@ class AdminHostCollisionTestCase(TestCase, TenantTestHelperMixin):
 
     def test_the_squatting_workspace_gains_no_console_access(self):
         response = self.client.get(
-            "/api/v1/admin/tenants",
+            "/api/v1/admin/tenants/summary",
             HTTP_HOST="admin.app.com",
             **self.bearer(self.squatter.admin),
         )
@@ -111,7 +111,7 @@ class AdminHostCollisionTestCase(TestCase, TenantTestHelperMixin):
         # tenant-less account on a workspace host and refuses it. An
         # operator locked out is the right side to fail on.
         response = self.client.get(
-            "/api/v1/admin/tenants",
+            "/api/v1/admin/tenants/summary",
             HTTP_HOST="admin.app.com",
             **self.bearer(self.operator),
         )
