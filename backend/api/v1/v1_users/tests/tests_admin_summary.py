@@ -240,6 +240,108 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(len(seen), expected)
         self.assertEqual(len(set(seen)), expected)
 
+    def test_the_totals_describe_the_filter_and_not_the_page(self):
+        # The test this whole feature turns on. Seed more workspaces
+        # than fit on a page, then assert that both pages report the
+        # same totals and that those totals cover every workspace --
+        # not the 25 the page happens to hold. Summing the page would
+        # produce a number that changes when you click "next", which
+        # still looks like a total.
+        for index in range(26):
+            self.create_tenant(
+                "w{0:02d}".format(index), ["Country", "D"],
+                "Root {0}".format(index),
+            )
+        first = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        second = self.client.get(
+            SUMMARY + "?page=2", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(first["summary"], second["summary"])
+        # setUp: acme 2 forms + 3 datapoints, beta 1 form + 1 datapoint,
+        # one user and one device each. The 26 new ones have one user
+        # each and nothing else, and the migration's `default` workspace
+        # has nothing at all.
+        self.assertEqual(first["summary"]["forms"], 3)
+        self.assertEqual(first["summary"]["datapoints"], 4)
+        self.assertEqual(first["summary"]["users"], 28)
+        self.assertEqual(first["summary"]["devices"], 2)
+
+    def test_the_totals_ignore_the_ordering(self):
+        # Reordering a set does not change what it sums to. Worth
+        # pinning because the aggregate runs on the same queryset the
+        # rows come from, and it would be easy to compute it after the
+        # order_by and let an ORDER BY leak into the grouping.
+        plain = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()["summary"]
+        sorted_desc = self.client.get(
+            SUMMARY + "?ordering=-datapoints", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        ).json()["summary"]
+        self.assertEqual(plain, sorted_desc)
+
+    def test_the_totals_follow_the_state_filter(self):
+        self.beta.tenant.is_active = False
+        self.beta.tenant.save(update_fields=["is_active"])
+        body = self.client.get(
+            SUMMARY + "?state=suspended", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        # beta alone: one form, one datapoint, one user, one device.
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(body["summary"]["forms"], 1)
+        self.assertEqual(body["summary"]["datapoints"], 1)
+
+    def test_the_totals_survive_a_search_and_an_ordering_together(self):
+        # The search adds an Exists subquery, the rows carry five
+        # DISTINCT-counting joins and the totals aggregate over those
+        # annotations. All three in one request is where row
+        # multiplication would show up, and it would show up as counts
+        # that are too high rather than as an error.
+        body = self.client.get(
+            SUMMARY + "?search=acme&ordering=-datapoints",
+            HTTP_HOST=ADMIN_HOST, **self.auth,
+        ).json()
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(body["data"][0]["datapoints"], 3)
+        self.assertEqual(body["summary"]["datapoints"], 3)
+        self.assertEqual(body["summary"]["forms"], 2)
+
+    def test_a_filter_that_matches_nothing_totals_to_zero_not_null(self):
+        # Sum over an empty set is NULL. A filter matching nothing is a
+        # normal outcome -- an operator searching for a workspace that
+        # does not exist -- and the console shows six zeroes, because
+        # "nothing matched" is a result. Six blanks would read as a
+        # failed request.
+        body = self.client.get(
+            SUMMARY + "?search=nosuchworkspace", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        ).json()
+        self.assertEqual(body["total"], 0)
+        self.assertEqual(
+            body["summary"],
+            {"users": 0, "forms": 0, "dashboards": 0,
+             "datapoints": 0, "devices": 0},
+        )
+
+    def test_deleted_workspaces_are_listed_and_counted_under_no_filter(self):
+        # Specified, not accidental: the counts describe the filter, and
+        # the unfiltered list includes deleted workspaces. It is also
+        # why the Workspaces tile is not a count of live customers.
+        before = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.client.delete(
+            "/api/v1/admin/tenants/{0}".format(self.beta.tenant.pk),
+            HTTP_HOST=ADMIN_HOST, **self.auth,
+        )
+        after = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(after["total"], before["total"])
+        self.assertEqual(after["summary"], before["summary"])
+
     def query_count(self):
         with CaptureQueriesContext(connection) as captured:
             self.client.get(SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth)

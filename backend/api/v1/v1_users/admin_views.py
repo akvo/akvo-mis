@@ -14,7 +14,8 @@ import logging
 import os
 
 from django.db import IntegrityError
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q, Sum
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -225,20 +226,44 @@ def set_tenant_features(request, version, tenant_id):
 
 
 class TenantSummaryPagination(Pagination):
-    """The console's list, 25 workspaces at a time.
+    """The console's list, 25 workspaces at a time, plus its totals.
 
     Subclassed from the house paginator rather than configured per view
     so the envelope stays the one every other paginated table in the
-    application returns. The only change here is the page size: this is
-    an operator's list on a desktop console, where the house default of
-    10 would mean 42 pages where 25 means 17.
+    application returns. Two changes only: the page size, and the
+    `summary` key.
 
-    `page_size_query_param` is inherited and still honoured, capped at
-    100. The console always sends 25 and offers no size changer -- the
-    parameter is simply not worth removing from one endpoint.
+    The page size is 25 rather than the house default of 10 because this
+    is an operator's list on a desktop console, where 10 would mean 42
+    pages where 25 means 17. `page_size_query_param` is inherited and
+    still honoured, capped at 100; the console always sends 25 and
+    offers no size changer.
+
+    The view sets `summary` before asking for the response. It could as
+    easily assign into `response.data` afterwards; the attribute is
+    preferred because it keeps `get_paginated_response` the single place
+    the envelope is built, which is the only way it can stay in step
+    with the schema method below it.
     """
 
     page_size = 25
+    summary = None
+
+    def get_paginated_response(self, data):
+        response = super().get_paginated_response(data)
+        response.data["summary"] = self.summary
+        return response
+
+    def get_paginated_response_schema(self, schema):
+        envelope = super().get_paginated_response_schema(schema)
+        envelope["properties"]["summary"] = {
+            "type": "object",
+            "properties": {
+                name: {"type": "integer", "example": 123}
+                for name in TENANT_TOTALS
+            },
+        }
+        return envelope
 
 
 # Wire names to the annotation aliases they sort by. A whitelist rather
@@ -252,6 +277,51 @@ TENANT_ORDERING = {
     "datapoints": "datapoints_count",
     "devices": "devices_count",
 }
+
+# The five sums, and the annotations they add up. Deliberately not
+# including the workspace count: that is the pagination envelope's
+# `total`, and one number with two sources is how they drift.
+TENANT_TOTALS = {
+    "users": "users_count",
+    "forms": "forms_count",
+    "dashboards": "dashboards_count",
+    "datapoints": "datapoints_count",
+    "devices": "devices_count",
+}
+
+
+def tenant_totals(queryset):
+    """What the filtered set adds up to, across every page of it.
+
+    Aggregated over `with_counts`'s own annotations rather than counted
+    again per model. Five soft-delete filters and five `distinct=True`
+    guards already live there with comments explaining why each is
+    written the way it is; a parallel set of direct counts would be five
+    more places to keep in step, and the failure mode is totals that
+    disagree with the rows beneath them.
+
+    `Coalesce` is not decoration. `Sum` over an empty set is NULL, and a
+    filter that matches nothing is a normal outcome -- an operator
+    searching for a workspace that does not exist. Six zeroes say
+    "nothing matched"; six blanks say "the request failed".
+
+    The ordering is cleared first. An ORDER BY inside the grouped
+    subquery buys nothing, and when the ordering names an annotation
+    Django drags it into the GROUP BY, which would make the totals
+    depend on how the page happens to be sorted.
+    """
+    # ponytail: three full passes over the annotated join per request --
+    # the page's rows, this aggregate, and the paginator's COUNT. If
+    # this becomes the console's bottleneck, the upgrade is scalar
+    # Subquery counts per column plus a COUNT over the unannotated
+    # queryset. Not caching: a total that lags the filter in front of
+    # you contradicts the one thing this feature promises.
+    return queryset.order_by().aggregate(
+        **{
+            name: Coalesce(Sum(alias), 0)
+            for name, alias in TENANT_TOTALS.items()
+        }
+    )
 
 
 @extend_schema(responses={200: TenantSummarySerializer(many=True)},
@@ -335,7 +405,11 @@ def tenants_summary(request, version):
         "-{0}".format(sort_by) if descending else sort_by, "pk"
     )
 
+    # From `queryset`, not `paginated`: the totals describe what the
+    # filter matched, not how it was sorted and not which 25 rows came
+    # back. That sentence is the acceptance criterion.
     paginator = TenantSummaryPagination()
+    paginator.summary = tenant_totals(queryset)
     rows = paginator.paginate_queryset(paginated, request)
     return paginator.get_paginated_response(
         TenantSummarySerializer(rows, many=True).data
