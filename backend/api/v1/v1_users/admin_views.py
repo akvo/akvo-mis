@@ -18,8 +18,13 @@ from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    inline_serializer,
+)
+from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
@@ -201,11 +206,17 @@ class TenantSummaryPagination(Pagination):
     still honoured, capped at 100; the console always sends 25 and
     offers no size changer.
 
-    The view sets `summary` before asking for the response. It could as
-    easily assign into `response.data` afterwards; the attribute is
-    preferred because it keeps `get_paginated_response` the single place
-    the envelope is built, which is the only way it can stay in step
-    with the schema method below it.
+    The view sets `summary` before asking for the response, so that
+    `get_paginated_response` stays the single place the envelope is
+    built.
+
+    There is deliberately no `get_paginated_response_schema` here.
+    drf-spectacular finds a paginator through `view.pagination_class`,
+    which only `GenericAPIView` has -- `@api_view` wraps a plain
+    `APIView` -- so for a function-based view that method is never
+    called by anything. One was written, and documented nothing for as
+    long as it existed. The schema is declared on the view instead, as
+    `v1_data.views` does for the same reason.
     """
 
     page_size = 25
@@ -215,17 +226,6 @@ class TenantSummaryPagination(Pagination):
         response = super().get_paginated_response(data)
         response.data["summary"] = self.summary
         return response
-
-    def get_paginated_response_schema(self, schema):
-        envelope = super().get_paginated_response_schema(schema)
-        envelope["properties"]["summary"] = {
-            "type": "object",
-            "properties": {
-                name: {"type": "integer", "example": 123}
-                for name in TENANT_TOTALS
-            },
-        }
-        return envelope
 
 
 # Wire names to the annotation aliases they sort by. A whitelist rather
@@ -286,9 +286,58 @@ def tenant_totals(queryset):
     )
 
 
-@extend_schema(responses={200: TenantSummarySerializer(many=True)},
-               tags=CONSOLE_TAG,
-               summary="Counts for every workspace, a page at a time")
+@extend_schema(
+    responses={
+        (200, "application/json"): inline_serializer(
+            "TenantSummaryPage",
+            fields={
+                "current": serializers.IntegerField(),
+                "total": serializers.IntegerField(),
+                "total_page": serializers.IntegerField(),
+                "summary": inline_serializer(
+                    "TenantSummaryTotals",
+                    fields={
+                        name: serializers.IntegerField()
+                        for name in TENANT_TOTALS
+                    },
+                ),
+                "data": TenantSummarySerializer(many=True),
+            },
+        )
+    },
+    tags=CONSOLE_TAG,
+    summary="Counts for every workspace, a page at a time",
+    parameters=[
+        OpenApiParameter(
+            name="page", required=False, type=OpenApiTypes.NUMBER,
+            location=OpenApiParameter.QUERY,
+        ),
+        OpenApiParameter(
+            name="page_size", required=False, type=OpenApiTypes.NUMBER,
+            location=OpenApiParameter.QUERY,
+            description="Defaults to 25, capped at 100.",
+        ),
+        OpenApiParameter(
+            name="search", required=False, type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description="Matches the subdomain or the workspace name.",
+        ),
+        OpenApiParameter(
+            name="state", required=False, type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            enum=sorted(TENANT_STATES),
+        ),
+        OpenApiParameter(
+            name="ordering", required=False, type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description="A '-' prefix descends. Defaults to subdomain.",
+            enum=sorted(
+                [key for key in TENANT_ORDERING]
+                + ["-{0}".format(key) for key in TENANT_ORDERING]
+            ),
+        ),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([IsPlatformAdmin])
 def tenants_summary(request, version):

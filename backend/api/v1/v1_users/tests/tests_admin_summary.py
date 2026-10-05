@@ -342,6 +342,37 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(after["total"], before["total"])
         self.assertEqual(after["summary"], before["summary"])
 
+    def test_the_published_schema_matches_what_the_endpoint_returns(self):
+        """The API documentation is part of the response contract.
+
+        drf-spectacular reads a paginator off `view.pagination_class`,
+        which only `GenericAPIView` has -- `@api_view` wraps a plain
+        `APIView`. So a paginator's `get_paginated_response_schema` is
+        never consulted for a function-based view, and this endpoint
+        went from being documented accurately (a bare array, which is
+        what it returned) to being documented wrongly the moment it
+        started returning an envelope. Every paginated endpoint in this
+        codebase is a function-based view with the same problem, which
+        is why `v1_data.views` declares its envelope with
+        `inline_serializer` by hand.
+        """
+        from drf_spectacular.generators import SchemaGenerator
+
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        operation = schema["paths"][SUMMARY]["get"]
+
+        self.assertEqual(
+            sorted(p["name"] for p in operation.get("parameters", [])),
+            ["ordering", "page", "page_size", "search", "state"],
+        )
+
+        body = operation["responses"]["200"]["content"]["application/json"]
+        component = body["schema"]["$ref"].rsplit("/", 1)[-1]
+        self.assertEqual(
+            sorted(schema["components"]["schemas"][component]["properties"]),
+            ["current", "data", "summary", "total", "total_page"],
+        )
+
     def query_count(self):
         with CaptureQueriesContext(connection) as captured:
             self.client.get(SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth)

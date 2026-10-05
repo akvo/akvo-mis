@@ -79,8 +79,18 @@ const Tenants = () => {
         setDataset(res.data.data);
         setTotal(res.data.total);
         setSummary(res.data.summary);
+        setLoading(false);
       })
       .catch((error) => {
+        // Both early returns leave `loading` set, deliberately. A newer
+        // request is already in flight and owns it. Clearing it here --
+        // which a `.finally` would do, since it runs for an abandoned
+        // request too -- un-blanks the tiles onto the previous filter's
+        // numbers and leaves them there until the newer request lands.
+        // The operator would see the new filter selected, no spinner,
+        // and the old totals: wrong in exactly the way they would
+        // believe.
+
         // An abandoned request is not a failure. This component asked
         // for it and then changed its mind.
         if (api.isCancel(error)) {
@@ -90,14 +100,14 @@ const Tenants = () => {
         // result out from under the page an operator is standing on,
         // and the endpoint answers 404. Going back to the first page is
         // the right response to a page that merely stopped existing;
-        // an error banner is not.
+        // an error banner is not. The re-run owns `loading` from here.
         if (error?.response?.status === 404 && page !== 1) {
           setPage(1);
           return;
         }
         notify({ type: "error", message: text.consoleTenants });
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   }, [page, search, state, ordering, notify, text]);
 
   // Debounced because the filter is no longer local: per-keystroke was

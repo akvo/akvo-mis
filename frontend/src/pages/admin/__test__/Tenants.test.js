@@ -168,12 +168,10 @@ describe("Tenants list", () => {
   });
 
   it("abandons a request that a newer filter has overtaken", async () => {
-    // Two filter changes in quick succession are two requests, and
-    // nothing makes the first one lose. If it lands second, the table
-    // and the tiles show the suspended workspaces under an Active
-    // filter -- which is the exact disagreement between the numbers and
-    // the filter that this feature exists to prevent. `api.get`'s
-    // cancelKey aborts the one in flight, so there is only ever one.
+    // Every request this component issues carries an abort signal; a
+    // request without one cannot be overtaken. This asserts the
+    // plumbing only -- the mocked axios ignores `signal`, so nothing is
+    // really aborted here. The behaviour is pinned by the test below.
     await renderList();
     await act(async () => {
       userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
@@ -181,11 +179,57 @@ describe("Tenants list", () => {
     await act(async () => {
       userEvent.click(screen.getByRole("radio", { name: "Active" }));
     });
-    // Every request this component issues carries an abort signal; a
-    // request without one cannot be overtaken.
     const signals = axios.mock.calls.map(([conf]) => conf.signal);
     expect(signals.length).toBeGreaterThan(1);
     expect(signals.filter(Boolean)).toHaveLength(signals.length);
+  });
+
+  it("keeps the tiles blank when an overtaken request is abandoned", async () => {
+    // The failure this guards is the one the whole feature exists to
+    // prevent, and it is not the one it looks like. Two filter changes
+    // in quick succession are two requests; `api.get` aborts the first
+    // synchronously, so its rejection lands AFTER the second request
+    // has already set `loading`. If the abandoned request is allowed to
+    // clear `loading` on its way out, the tiles un-blank onto the
+    // previous filter's numbers and stay there for as long as the
+    // second request takes -- which, on the deployment this is built
+    // for, is a three-pass aggregate over the whole annotated join.
+    //
+    // The operator sees: Suspended selected, no spinner, and the totals
+    // for All. Exactly the "wrong in a way an operator will believe"
+    // the design names.
+    await renderList();
+    const pending = [];
+    axios.mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          pending.push({ resolve, reject });
+        })
+    );
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Active" }));
+    });
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    expect(pending).toHaveLength(2);
+
+    // What the abort does, as the component sees it.
+    const aborted = new Error("canceled");
+    const realIsCancel = axios.isCancel;
+    axios.isCancel = jest.fn((error) => error === aborted);
+    try {
+      await act(async () => {
+        pending[0].reject(aborted);
+      });
+      const tiles = within(document.querySelector("#tenant-totals"));
+      expect(tiles.queryByText("900")).not.toBeInTheDocument();
+      expect(
+        document.querySelectorAll("#tenant-totals .admin-tile-pending")
+      ).toHaveLength(6);
+    } finally {
+      axios.isCancel = realIsCancel;
+    }
   });
 
   it("stays quiet when a request is cancelled rather than failing", async () => {
