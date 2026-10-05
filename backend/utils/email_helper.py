@@ -7,7 +7,12 @@ from django.core.mail.utils import DNS_NAME
 from django.template.loader import render_to_string
 from rest_framework import serializers
 from utils.custom_serializer_fields import CustomChoiceField
-from mis.settings import EMAIL_FROM, WEBDOMAIN, APP_NAME
+from mis.settings import (
+    EMAIL_FROM,
+    WEBDOMAIN,
+    APP_NAME,
+    TENANT_PURGE_AFTER_HOURS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,8 +129,10 @@ def email_context(context: dict, type: str):
             {
                 "subject": "Activate your account",
                 "body": (
-                    "Welcome! Confirm your email address to finish setting "
-                    f"up your {APP_NAME} workspace."
+                    "Welcome! Confirm your email address to finish "
+                    f"setting up your {APP_NAME} workspace. Confirm "
+                    f"within {TENANT_PURGE_AFTER_HOURS} hours — after "
+                    "that the workspace name is released."
                 ),
                 "align": "left",
                 "explore_button": False,
