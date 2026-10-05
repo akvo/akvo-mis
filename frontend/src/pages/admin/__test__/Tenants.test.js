@@ -206,13 +206,19 @@ describe("Tenants list", () => {
   });
 
   it("asks the server to sort when a column header is clicked", async () => {
+    // Scoped to the header row: the tile above repeats the column's
+    // label exactly, which is deliberate -- the tile row's position
+    // already says "total", so "Total datapoints" over a "Datapoints"
+    // column would only make a reader stop and work out which is which.
+    // The cost is that a bare getByText matches both.
     await renderList();
+    const header = () => within(document.querySelector("thead"));
     await act(async () => {
-      userEvent.click(screen.getByText("Datapoints"));
+      userEvent.click(header().getByText("Datapoints"));
     });
     expect(lastGet()).toContain("ordering=datapoints");
     await act(async () => {
-      userEvent.click(screen.getByText("Datapoints"));
+      userEvent.click(header().getByText("Datapoints"));
     });
     expect(lastGet()).toContain("ordering=-datapoints");
   });
@@ -229,6 +235,56 @@ describe("Tenants list", () => {
       userEvent.click(screen.getByTitle("2"));
     });
     expect(lastGet()).toContain("page=1");
+  });
+
+  it("renders the totals the server sent, not the sum of the page", async () => {
+    // The fixture's summary deliberately disagrees with the rows. A
+    // component that added up what it had been given would show 55
+    // users and 128,430 + 12,004 datapoints; the server said 900 and
+    // 600,000, and the server is describing every workspace the filter
+    // matched rather than these two.
+    await renderList();
+    const tiles = within(document.querySelector("#tenant-totals"));
+    expect(tiles.getByText("900")).toBeInTheDocument();
+    expect(tiles.getByText("600,000")).toBeInTheDocument();
+  });
+
+  it("takes the workspace total from the envelope, not from summary", async () => {
+    // `total` is the count of workspaces matching the filter and it is
+    // the only source for that number -- the pager below reads the same
+    // field, so the two cannot drift.
+    await renderList();
+    const tiles = within(document.querySelector("#tenant-totals"));
+    expect(tiles.getByText("2")).toBeInTheDocument();
+  });
+
+  it("repeats the totals under the columns that name them", async () => {
+    await renderList();
+    const totals = within(document.querySelector("tfoot"));
+    expect(totals.getByText("600,000")).toBeInTheDocument();
+    expect(totals.getByText("800")).toBeInTheDocument();
+  });
+
+  it("blanks the tiles while a filter is in flight", async () => {
+    // "412" standing over a table of 28 suspended workspaces is not a
+    // stale number, it is a wrong one, and it is wrong in a way an
+    // operator will believe.
+    await renderList();
+    let resolve;
+    axios.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = () => done(envelope());
+        })
+    );
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    const tiles = within(document.querySelector("#tenant-totals"));
+    expect(tiles.queryByText("900")).not.toBeInTheDocument();
+    await act(async () => {
+      resolve();
+    });
   });
 
   describe("the Inspect action", () => {

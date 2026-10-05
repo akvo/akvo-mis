@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Table, Input, Space, Tag, Radio, Button } from "antd";
+import { Table, Input, Space, Tag, Radio, Button, Card, Row, Col } from "antd";
 import { Link } from "react-router-dom";
 import debounce from "lodash.debounce";
 import { api, store, uiText } from "../../lib";
@@ -9,6 +9,19 @@ import useInspect from "./useInspect";
 const { Search } = Input;
 
 const COUNTS = ["users", "forms", "dashboards", "datapoints", "devices"];
+
+// Workspaces first, then the five counts in the order the columns
+// run. The workspace count is not in `summary` -- it is the
+// envelope's `total`, which the pager reads too, so one number has
+// one source.
+const TILES = [
+  ["workspaces", "consoleTotalWorkspaces"],
+  ["users", "consoleTotalUsers"],
+  ["forms", "consoleTotalForms"],
+  ["dashboards", "consoleTotalDashboards"],
+  ["datapoints", "consoleTotalDatapoints"],
+  ["devices", "consoleTotalDevices"],
+];
 const PAGE_SIZE = 25;
 const DEFAULT_ORDER = "subdomain";
 
@@ -27,6 +40,7 @@ const Tenants = () => {
   const [loading, setLoading] = useState(true);
   const [dataset, setDataset] = useState([]);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [state, setState] = useState("all");
@@ -64,6 +78,7 @@ const Tenants = () => {
       .then((res) => {
         setDataset(res.data.data);
         setTotal(res.data.total);
+        setSummary(res.data.summary);
       })
       .catch((error) => {
         // An abandoned request is not a failure. This component asked
@@ -217,11 +232,62 @@ const Tenants = () => {
           </Radio.Group>
         </Space>
       </Space>
+      <Row gutter={14} style={{ marginTop: 16 }} id="tenant-totals">
+        {TILES.map(([key, label]) => (
+          <Col span={4} key={key}>
+            <Card size="small">
+              <div className="admin-subtle">{text[label]}</div>
+              <div className="admin-tile-value">
+                {loading ? (
+                  <span className="admin-tile-pending" />
+                ) : (
+                  // Both halves coalesce. A response without the key
+                  // is not something the endpoint sends, but the
+                  // alternative to a zero here is `undefined.
+                  // toLocaleString()`, which white-screens the whole
+                  // console over a tile.
+                  (key === "workspaces"
+                    ? total ?? 0
+                    : summary?.[key] ?? 0
+                  ).toLocaleString("en-US")
+                )}
+              </div>
+            </Card>
+          </Col>
+        ))}
+      </Row>
       <Table
         rowKey="id"
         columns={columns}
         dataSource={dataset}
         loading={loading}
+        summary={() =>
+          // The same object the tiles read. Rendering five numbers
+          // twice is only a risk if there are two sources; there is
+          // one, so they cannot disagree. The label cell says "Total"
+          // rather than restating the workspace count, which the tile
+          // above already carries.
+          summary ? (
+            <Table.Summary>
+              <Table.Summary.Row>
+                <Table.Summary.Cell index={0}>
+                  {text.consoleTotalsRow}
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={1} />
+                {COUNTS.map((key, position) => (
+                  <Table.Summary.Cell
+                    key={key}
+                    index={2 + position}
+                    align="right"
+                  >
+                    {(summary[key] ?? 0).toLocaleString("en-US")}
+                  </Table.Summary.Cell>
+                ))}
+                <Table.Summary.Cell index={7} />
+              </Table.Summary.Row>
+            </Table.Summary>
+          ) : null
+        }
         onChange={handleChange}
         pagination={{
           current: page,
