@@ -241,6 +241,19 @@ class TenantSummaryPagination(Pagination):
     page_size = 25
 
 
+# Wire names to the annotation aliases they sort by. A whitelist rather
+# than passing `ordering` through to `order_by`, which would let a
+# caller sort by any column or traverse any relation on the model.
+TENANT_ORDERING = {
+    "subdomain": "subdomain",
+    "users": "users_count",
+    "forms": "forms_count",
+    "dashboards": "dashboards_count",
+    "datapoints": "datapoints_count",
+    "devices": "devices_count",
+}
+
+
 @extend_schema(responses={200: TenantSummarySerializer(many=True)},
                tags=CONSOLE_TAG,
                summary="Counts for every workspace, a page at a time")
@@ -298,8 +311,32 @@ def tenants_summary(request, version):
             )
         queryset = queryset.filter(**TENANT_STATES[state])
 
+    ordering = request.query_params.get("ordering") or "subdomain"
+    descending = ordering.startswith("-")
+    sort_by = TENANT_ORDERING.get(ordering[1:] if descending else ordering)
+    if sort_by is None:
+        # Refused, following the precedent `state` sets above: a
+        # parameter the API does not understand is a 400, not a silent
+        # fallback to some other order.
+        return Response(
+            {
+                "message": "Unknown ordering '{0}'. Accepted: {1}.".format(
+                    ordering, ", ".join(sorted(TENANT_ORDERING))
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    # `pk` last, always. Ordering by a count alone is not a total order
+    # -- dozens of workspaces hold zero dashboards -- and PostgreSQL is
+    # free to return tied rows in a different order for OFFSET 0 than
+    # for OFFSET 25. Without this, a workspace appears on two pages
+    # while another appears on none.
+    paginated = queryset.order_by(
+        "-{0}".format(sort_by) if descending else sort_by, "pk"
+    )
+
     paginator = TenantSummaryPagination()
-    rows = paginator.paginate_queryset(queryset, request)
+    rows = paginator.paginate_queryset(paginated, request)
     return paginator.get_paginated_response(
         TenantSummarySerializer(rows, many=True).data
     )

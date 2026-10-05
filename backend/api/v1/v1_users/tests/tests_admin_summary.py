@@ -182,6 +182,64 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Unknown state", response.json()["message"])
 
+    def test_the_default_order_is_by_subdomain(self):
+        # Asserted against the table rather than a fixed list, per the
+        # same reasoning as the envelope test: the migration's `default`
+        # workspace is in every database and is not this test's subject.
+        self.assertEqual(
+            list(self.rows()),
+            sorted(Tenant.objects.values_list("subdomain", flat=True)),
+        )
+
+    def test_ordering_by_a_count_descends(self):
+        # acme holds 3 datapoints, beta 1, and `default` none. Asserted
+        # as a monotonic sequence rather than a fixed list of
+        # subdomains, so the test says what it means -- the server
+        # ordered by the column it was asked for -- and does not have to
+        # be rewritten every time a fixture gains a workspace.
+        descending = self.rows("?ordering=-datapoints")
+        self.assertEqual(list(descending)[0], "acme")
+        counts = [row["datapoints"] for row in descending.values()]
+        self.assertEqual(counts, sorted(counts, reverse=True))
+
+        ascending = self.rows("?ordering=datapoints")
+        self.assertEqual(list(ascending)[-1], "acme")
+        counts = [row["datapoints"] for row in ascending.values()]
+        self.assertEqual(counts, sorted(counts))
+
+    def test_an_unknown_ordering_is_refused(self):
+        response = self.client.get(
+            SUMMARY + "?ordering=datapoint", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unknown ordering", response.json()["message"])
+
+    def test_tied_counts_still_page_deterministically(self):
+        # Every workspace here holds zero dashboards, so ordering by
+        # that column is not a total order and PostgreSQL may return
+        # tied rows in any order it likes -- differently for OFFSET 0
+        # than for OFFSET 25. Without the pk tiebreaker the symptom is a
+        # workspace appearing on both pages while another appears on
+        # neither, intermittently, which is about as unpleasant a bug as
+        # this feature can produce.
+        for index in range(30):
+            self.create_tenant(
+                "w{0:02d}".format(index), ["Country", "D"],
+                "Root {0}".format(index),
+            )
+        expected = Tenant.objects.count()
+        self.assertGreater(expected, 25)
+        seen = []
+        for page in (1, 2):
+            body = self.client.get(
+                "{0}?ordering=dashboards&page={1}".format(SUMMARY, page),
+                HTTP_HOST=ADMIN_HOST, **self.auth,
+            ).json()
+            seen.extend(row["subdomain"] for row in body["data"])
+        self.assertEqual(len(seen), expected)
+        self.assertEqual(len(set(seen)), expected)
+
     def query_count(self):
         with CaptureQueriesContext(connection) as captured:
             self.client.get(SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth)
