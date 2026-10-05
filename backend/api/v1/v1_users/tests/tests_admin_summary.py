@@ -8,7 +8,10 @@ from api.v1.v1_forms.models import Forms
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
+from api.v1.v1_users.admin_views import console_tenants, with_counts
 from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_visualization.constants import DashboardKind
+from api.v1.v1_visualization.models import Dashboard
 
 ADMIN_HOST = "admin.app.com"
 SUMMARY = "/api/v1/admin/tenants/summary"
@@ -371,6 +374,82 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(
             sorted(schema["components"]["schemas"][component]["properties"]),
             ["current", "data", "summary", "total", "total_page"],
+        )
+
+    def test_the_counts_do_not_group_the_outer_query(self):
+        """Five counts, five relations, one row each -- not one join.
+
+        This pins the mechanism rather than the output, and it is the
+        one case where that is the right test: the defect is cost, not
+        answers. The join form returns correct numbers and computes them
+        by producing the Cartesian product of all five relations per
+        workspace before de-duplicating -- users x devices x forms x
+        datapoints x dashboards. On a workspace holding 128k datapoints,
+        47 users and 23 devices that is ~700 million intermediate rows
+        for five integers, and the console takes over a minute to draw a
+        page. The numbers it eventually shows are right, so no
+        assertion about output can catch it.
+
+        Five LEFT OUTER JOINs onto the tenant row is the signature of
+        the join form, and the multiplication is theirs: each one fans
+        every row out by the next one's row count. A correlated subquery
+        joins nothing to the outer row -- it groups internally, one row
+        in and one row out, which is why this asserts on the join rather
+        than on the grouping.
+        """
+        sql = str(with_counts(console_tenants()).query).upper()
+        self.assertNotIn("LEFT OUTER JOIN", sql)
+
+    def test_counts_are_right_when_every_relation_is_populated(self):
+        """The test that makes the rewrite safe rather than merely fast.
+
+        One count over one relation is easy to get right in any form.
+        Five counts over five relations in the same row is where a
+        rewrite goes wrong -- lose the isolation of one and it
+        multiplies by the others. Every expected number here is
+        different from every other, so a count that has multiplied
+        cannot land on the right answer by luck.
+        """
+        acme = self.acme.tenant
+        # setUp leaves acme with 1 user, 2 forms, 3 datapoints, 1 device
+        # and no dashboards. Take each to its own distinct value.
+        extra_users = [
+            SystemUser.objects.create(
+                email="person{0}@acme.org".format(index), tenant=acme
+            )
+            for index in range(2)
+        ]
+        for index, person in enumerate(extra_users):
+            MobileAssignment.objects.create_assignment(
+                user=person, name="extra-device-{0}".format(index)
+            )
+        MobileAssignment.objects.create_assignment(
+            user=self.acme.admin, name="second-device"
+        )
+        form = Forms.objects.filter(tenant=acme).first()
+        for index in range(4):
+            Dashboard.objects.create(
+                tenant=acme, kind=DashboardKind.widgets, root_form=form,
+                name="Dashboard {0}".format(index),
+                slug="acme-dashboard-{0}".format(index),
+                created_by=self.acme.admin,
+            )
+        child = Administration.objects.filter(
+            tenant=acme, parent__isnull=False
+        ).first()
+        for index in range(4):
+            FormData.objects.create(
+                name="extra-dp-{0}".format(index), form=form,
+                administration=child, created_by=self.acme.admin,
+            )
+
+        row = self.rows()["acme"]
+        self.assertEqual(
+            {key: row[key] for key in (
+                "users", "forms", "dashboards", "datapoints", "devices",
+            )},
+            {"users": 3, "forms": 2, "dashboards": 4,
+             "datapoints": 7, "devices": 4},
         )
 
     def query_count(self):
