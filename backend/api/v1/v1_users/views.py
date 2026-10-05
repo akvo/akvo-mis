@@ -79,11 +79,6 @@ from utils.tenant_host import (
 )
 
 
-# A week is long enough to survive a weekend and a spam folder, short
-# enough that a leaked link in an old mailbox is not a standing key.
-ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
-
-
 def user_web_url(user):
     """The host an emailed link for this account must point at.
 
@@ -300,14 +295,22 @@ def login(request, version):
         email=serializer.validated_data["email"],
         password=serializer.validated_data["password"],
         tenant=getattr(request, "tenant", None),
+        # The console admits operators and nobody else, and an operator
+        # is tenant-less by construction -- so say so, rather than
+        # leaving the backend to read a null tenant as "search
+        # everywhere". The guard below can only refuse a wrong row; it
+        # cannot pick the right one.
+        tenant_less_only=on_admin_host,
     )
 
     # The console is for operators. A workspace account whose
     # credentials happen to land here is refused before any session is
     # minted, and told exactly what the base domain tells it -- so this
     # host reveals nothing about which addresses exist where.
-    if user and on_admin_host and not (
-        user.is_platform_admin and user.tenant_id is None
+    if (
+        user
+        and on_admin_host
+        and not (user.is_platform_admin and user.tenant_id is None)
     ):
         return Response(
             {
@@ -428,7 +431,10 @@ def tenant_info(request, version):
         # caller learns there is no workspace here, which is the answer
         # that sends it to the signup page.
         return Response(status=status.HTTP_204_NO_CONTENT)
-    body = {"subdomain": tenant.subdomain}
+    body = {
+        "subdomain": tenant.subdomain,
+        "language": getattr(tenant, "language", "en") or "en",
+    }
     if request.user.is_authenticated:
         body["embed_enabled"] = tenant_may_embed(tenant)
     return Response(body, status=status.HTTP_200_OK)
@@ -458,7 +464,10 @@ def register(request, version):
     # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
-            tenant = Tenant.objects.create(subdomain=validated["subdomain"])
+            tenant = Tenant.objects.create(
+                subdomain=validated["subdomain"],
+                language=validated.get("language", "en"),
+            )
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
                 password=validated["password"],
@@ -511,7 +520,13 @@ def activate_account(request, version):
         # SignatureExpired subclasses BadSignature, so an expired link and a
         # tampered one land here together — the client is told the same thing
         # either way and offered a resend.
-        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+        # Read from settings at call time, not bound at import: the
+        # window is one setting shared with the purge job, and tests
+        # move it with override_settings.
+        pk = signing.loads(
+            str(token),
+            max_age=settings.TENANT_PURGE_AFTER_HOURS * 3600,
+        )
     except BadSignature:
         return invalid
     user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
@@ -685,12 +700,15 @@ def set_user_password(request, version):
     user.set_password(serializer.validated_data.get("password"))
     user.updated = timezone.now()
     user.save()
-    refresh = RefreshToken.for_user(user)
-    data = UserSerializer(instance=user).data
-    data["token"] = str(refresh.access_token)
-    # TODO: remove invite from response
-    data["invite"] = signing.dumps(user.pk)
-    return Response(data, status=status.HTTP_200_OK)
+    # The same response login hands back, cookie included. This used to
+    # assemble its own -- a token in the body and no Set-Cookie -- which
+    # signed the invitee in for exactly as long as the tab went
+    # unreloaded: AUTH_TOKEN is the only thing App.js bootstraps a
+    # session from, so the first full page load after accepting landed
+    # on the login page. An operator met that on the return trip from
+    # inspecting a workspace, which is two cross-origin navigations and
+    # so cannot keep anything held in memory.
+    return authenticated_response(user)
 
 
 @extend_schema(

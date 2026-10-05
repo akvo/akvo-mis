@@ -43,9 +43,7 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         # clobber one that exists.
         root = tempfile.TemporaryDirectory()
         self.addCleanup(root.cleanup)
-        patch = mock.patch(
-            "utils.custom_generator.MASTER_DATA", root.name
-        )
+        patch = mock.patch("utils.custom_generator.MASTER_DATA", root.name)
         patch.start()
         self.addCleanup(patch.stop)
 
@@ -122,24 +120,32 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         from api.v1.v1_forms.constants import FormStatus
         from api.v1.v1_forms.models import Forms
         from api.v1.v1_visualization.constants import (
-            DashboardKind, DashboardStatus,
+            DashboardKind,
+            DashboardStatus,
         )
         from api.v1.v1_visualization.models import Dashboard
+
         form = Forms.objects.create(
-            name=f"{name}-form", tenant=self.acme.tenant,
+            name=f"{name}-form",
+            tenant=self.acme.tenant,
             status=FormStatus.published,
         )
         return Dashboard.objects.create(
-            tenant=self.acme.tenant, name=name, slug=name, kind=kind,
+            tenant=self.acme.tenant,
+            name=name,
+            slug=name,
+            kind=kind,
             root_form=form if kind == DashboardKind.widgets else None,
             embed_snippet=snippet,
-            status=DashboardStatus.published, is_public=public,
+            status=DashboardStatus.published,
+            is_public=public,
             published_config={"embed_snippet": snippet} if snippet else {},
         )
 
     def impact(self):
         response = self.client.get(
-            f"{self.base()}/rename-impact", HTTP_HOST=ADMIN_HOST,
+            f"{self.base()}/rename-impact",
+            HTTP_HOST=ADMIN_HOST,
             **self.auth,
         )
         self.assertEqual(response.status_code, 200)
@@ -151,6 +157,7 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         # an operator reading the dialog was told more would break than
         # exists. The two counts now partition the published set.
         from api.v1.v1_visualization.constants import DashboardKind
+
         set_embedding(self.acme.tenant)
         self.dashboard("internal-a", DashboardKind.widgets)
         self.dashboard("internal-b", DashboardKind.widgets)
@@ -170,7 +177,9 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         # operator that a rename breaks something a rename does not
         # touch.
         from api.v1.v1_visualization.constants import DashboardKind
-        from api.v1.v1_visualization.embed_views import embed_url_for
+        from api.v1.v1_visualization.embed_views import embed_url_for, SALT
+        from django.core import signing
+
         set_embedding(self.acme.tenant)
         board = self.dashboard(
             "report", DashboardKind.embed, snippet="<iframe src='x'>"
@@ -180,7 +189,19 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
             before = embed_url_for(board)
             self.assertEqual(self.rename("moh-hss").status_code, 200)
             board.refresh_from_db()
-            self.assertEqual(embed_url_for(board), before)
+            after = embed_url_for(board)
+            prefix = "https://embed.example.com/api/v1/embed/"
+            self.assertTrue(after.startswith(prefix))
+            before_token = before.rsplit("/", 1)[-1]
+            after_token = after.rsplit("/", 1)[-1]
+            self.assertEqual(
+                signing.loads(after_token, salt=SALT),
+                {"d": board.id},
+            )
+            self.assertEqual(
+                signing.loads(after_token, salt=SALT),
+                signing.loads(before_token, salt=SALT),
+            )
 
     def test_a_device_on_the_base_domain_survives_a_rename(self):
         """The reason there is no device warning, asserted end to end.
@@ -193,6 +214,7 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         described field work that does not exist.
         """
         from api.v1.v1_mobile.authentication import MobileAssignmentToken
+
         assignment = MobileAssignment.objects.filter(
             user=self.acme.admin
         ).first()
@@ -217,12 +239,14 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         from api.v1.v1_forms.constants import FormStatus
         from api.v1.v1_forms.models import Forms
         from api.v1.v1_mobile.authentication import MobileAssignmentToken
+
         other = self.create_tenant("beta", ["Country"], "Uganda")
         theirs = Forms.objects.create(
             name="theirs", tenant=other.tenant, status=FormStatus.published
         )
         mine = Forms.objects.create(
-            name="mine", tenant=self.acme.tenant,
+            name="mine",
+            tenant=self.acme.tenant,
             status=FormStatus.published,
         )
         assignment = MobileAssignment.objects.filter(
@@ -237,6 +261,7 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
         for form, expected in ((mine, 200), (theirs, 404)):
             response = self.client.get(
                 f"/api/v1/device/form/{form.id}",
-                HTTP_HOST="app.com", **auth,
+                HTTP_HOST="app.com",
+                **auth,
             )
             self.assertEqual(response.status_code, expected)

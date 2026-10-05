@@ -137,6 +137,33 @@ class AdminOperatorsTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(signin.status_code, 200, signin.content)
         self.assertTrue(signin.json()["is_platform_admin"])
 
+    def test_accepting_an_invitation_sets_the_session_cookie(self):
+        # The session a response hands back lives in the AUTH_TOKEN
+        # cookie: it is the only thing App.js bootstraps from, so a
+        # response that returns a token in the body alone signs the
+        # invitee in for exactly as long as the tab is not reloaded.
+        # `login` sets it through authenticated_response and this
+        # endpoint must too, or the first full page load after accepting
+        # -- a refresh, or the return trip from inspecting a workspace --
+        # lands on the login page.
+        token = self.invited_link().rsplit("/", 1)[-1]
+        response = self.client.put(
+            "/api/v1/user/set-password",
+            json.dumps({
+                "invite": token,
+                "password": "Str0ng#Pass1",
+                "confirm_password": "Str0ng#Pass1",
+            }),
+            content_type="application/json",
+            HTTP_HOST=ADMIN_HOST,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn("AUTH_TOKEN", response.cookies)
+        # Not compared to the token in the body: `refresh.access_token`
+        # mints a fresh one on every read, so login's two copies differ
+        # too.
+        self.assertTrue(response.cookies["AUTH_TOKEN"].value)
+
     def test_a_reset_does_not_reactivate_a_deactivated_account(self):
         # Accepting an invitation activates, because that is what the
         # invitation is for. A password reset runs through the same

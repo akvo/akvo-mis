@@ -125,3 +125,20 @@ class ActivationTestCase(TestCase):
             )
         self.assertEqual(res.status_code, 200)
         send.assert_not_called()
+
+    def test_the_link_expires_with_the_purge_window(self):
+        # The link must not outlive the workspace it activates: a
+        # purged registrant following a still-valid link would
+        # activate an account whose tenant no longer exists. The
+        # assertion is on the argument rather than on a real expiry
+        # because django.core.signing stamps tokens from the wall
+        # clock, which a test cannot move without patching time
+        # itself -- and the binding is the thing under test.
+        token = signing.dumps(self.user.pk)
+        with override_settings(TENANT_PURGE_AFTER_HOURS=1):
+            with mock.patch(
+                "api.v1.v1_users.views.signing.loads",
+                return_value=self.user.pk,
+            ) as loads:
+                self.activate(token)
+        self.assertEqual(loads.call_args.kwargs["max_age"], 3600)

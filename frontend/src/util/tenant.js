@@ -101,6 +101,9 @@ export const fetchTenant = () =>
         s.tenant = tenant;
         s.tenantMissing = missing;
         s.tenantLoaded = true;
+        if (tenant && tenant.language) {
+          s.language.active = tenant.language;
+        }
       });
       return tenant;
     });

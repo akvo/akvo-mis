@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 import sys
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 from os import environ
 from pathlib import Path
 
@@ -309,6 +310,24 @@ FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(
     environ.get("FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024)
 )
+
+# How long a workspace has to finish /register/configure before it is
+# purged (see api/v1/v1_users/tasks.py). This is also the activation
+# link's lifetime: a link that outlived the workspace it activates
+# would verify an account whose tenant had already been deleted, so
+# the two numbers are one setting rather than two that can disagree.
+TENANT_PURGE_AFTER_HOURS = int(
+    environ.get("TENANT_PURGE_AFTER_HOURS") or 48
+)
+# Refused at boot rather than defended against at every read: zero or
+# less would purge a workspace registered a second ago and expire every
+# activation link as it was issued.
+if TENANT_PURGE_AFTER_HOURS < 1:
+    raise ImproperlyConfigured(
+        "TENANT_PURGE_AFTER_HOURS must be at least 1; got {0}.".format(
+            TENANT_PURGE_AFTER_HOURS
+        )
+    )
 
 BUCKET_NAME = "mis"
 FAKE_STORAGE = False
