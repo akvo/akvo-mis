@@ -79,11 +79,6 @@ from utils.tenant_host import (
 )
 
 
-# A week is long enough to survive a weekend and a spam folder, short
-# enough that a leaked link in an old mailbox is not a standing key.
-ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
-
-
 def user_web_url(user):
     """The host an emailed link for this account must point at.
 
@@ -300,6 +295,12 @@ def login(request, version):
         email=serializer.validated_data["email"],
         password=serializer.validated_data["password"],
         tenant=getattr(request, "tenant", None),
+        # The console admits operators and nobody else, and an operator
+        # is tenant-less by construction -- so say so, rather than
+        # leaving the backend to read a null tenant as "search
+        # everywhere". The guard below can only refuse a wrong row; it
+        # cannot pick the right one.
+        tenant_less_only=on_admin_host,
     )
 
     # The console is for operators. A workspace account whose
@@ -519,7 +520,13 @@ def activate_account(request, version):
         # SignatureExpired subclasses BadSignature, so an expired link and a
         # tampered one land here together — the client is told the same thing
         # either way and offered a resend.
-        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+        # Read from settings at call time, not bound at import: the
+        # window is one setting shared with the purge job, and tests
+        # move it with override_settings.
+        pk = signing.loads(
+            str(token),
+            max_age=settings.TENANT_PURGE_AFTER_HOURS * 3600,
+        )
     except BadSignature:
         return invalid
     user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
@@ -693,12 +700,15 @@ def set_user_password(request, version):
     user.set_password(serializer.validated_data.get("password"))
     user.updated = timezone.now()
     user.save()
-    refresh = RefreshToken.for_user(user)
-    data = UserSerializer(instance=user).data
-    data["token"] = str(refresh.access_token)
-    # TODO: remove invite from response
-    data["invite"] = signing.dumps(user.pk)
-    return Response(data, status=status.HTTP_200_OK)
+    # The same response login hands back, cookie included. This used to
+    # assemble its own -- a token in the body and no Set-Cookie -- which
+    # signed the invitee in for exactly as long as the tab went
+    # unreloaded: AUTH_TOKEN is the only thing App.js bootstraps a
+    # session from, so the first full page load after accepting landed
+    # on the login page. An operator met that on the return trip from
+    # inspecting a workspace, which is two cross-origin navigations and
+    # so cannot keep anything held in memory.
+    return authenticated_response(user)
 
 
 @extend_schema(
