@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Table, Input, Space, Tag, Radio, Button } from "antd";
 import { Link } from "react-router-dom";
+import debounce from "lodash.debounce";
 import { api, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import useInspect from "./useInspect";
@@ -8,13 +9,28 @@ import useInspect from "./useInspect";
 const { Search } = Input;
 
 const COUNTS = ["users", "forms", "dashboards", "datapoints", "devices"];
+const PAGE_SIZE = 25;
+const DEFAULT_ORDER = "subdomain";
+
+// Sorting is the server's. With paging server-side, antd's own sorter
+// would reorder the 25 rows in hand and present the result as a ranking
+// of the whole deployment.
+const orderParam = (sorter) => {
+  if (!sorter || !sorter.order) {
+    return DEFAULT_ORDER;
+  }
+  return sorter.order === "descend" ? `-${sorter.columnKey}` : sorter.columnKey;
+};
 
 const Tenants = () => {
   const { notify } = useNotification();
   const [loading, setLoading] = useState(true);
   const [dataset, setDataset] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [state, setState] = useState("all");
+  const [ordering, setOrdering] = useState(DEFAULT_ORDER);
   const { inspect, inspecting } = useInspect();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -28,35 +44,94 @@ const Tenants = () => {
     }[value] || value);
 
   useEffect(() => {
+    const params = new URLSearchParams({ page, ordering });
+    if (search) {
+      params.set("search", search);
+    }
+    if (state !== "all") {
+      params.set("state", state);
+    }
+    setLoading(true);
+    // The third argument is a cancel key: a new request on the same key
+    // aborts the one in flight. Debouncing the search box is not enough
+    // on its own -- the state buttons and the sort headers fire
+    // immediately, and two of those in quick succession are two
+    // requests with nothing making the first one lose. If it lands
+    // second, the rows and the totals describe the filter the operator
+    // just moved away from.
     api
-      .get("admin/tenants/summary")
-      .then((res) => setDataset(res.data))
-      .catch(() => notify({ type: "error", message: text.consoleTenants }))
+      .get(`admin/tenants/summary?${params.toString()}`, {}, "tenants")
+      .then((res) => {
+        setDataset(res.data.data);
+        setTotal(res.data.total);
+      })
+      .catch((error) => {
+        // An abandoned request is not a failure. This component asked
+        // for it and then changed its mind.
+        if (api.isCancel(error)) {
+          return;
+        }
+        // A workspace deleted between two requests can shrink the
+        // result out from under the page an operator is standing on,
+        // and the endpoint answers 404. Going back to the first page is
+        // the right response to a page that merely stopped existing;
+        // an error banner is not.
+        if (error?.response?.status === 404 && page !== 1) {
+          setPage(1);
+          return;
+        }
+        notify({ type: "error", message: text.consoleTenants });
+      })
       .finally(() => setLoading(false));
-  }, [notify, text]);
+  }, [page, search, state, ordering, notify, text]);
 
-  // Filtered here rather than at the endpoint: the summary is one
-  // request for every workspace, so narrowing it is a client concern
-  // and a keystroke costs nothing.
-  const rows = useMemo(
+  // Debounced because the filter is no longer local: per-keystroke was
+  // free over an array in memory and is a request per character now.
+  const applySearch = useMemo(
     () =>
-      dataset.filter((row) => {
-        const matchesState = state === "all" || row.state === state;
-        const needle = search.trim().toLowerCase();
-        const matchesSearch =
-          !needle ||
-          row.subdomain.toLowerCase().includes(needle) ||
-          (row.name || "").toLowerCase().includes(needle);
-        return matchesState && matchesSearch;
-      }),
-    [dataset, search, state]
+      debounce((value) => {
+        setSearch(value.trim());
+        setPage(1);
+      }, 400),
+    []
   );
+
+  useEffect(() => () => applySearch.cancel(), [applySearch]);
+
+  // antd fires one onChange for paging and for sorting alike. A changed
+  // sort resets to the first page; otherwise the pager's own page wins.
+  const handleChange = useCallback(
+    (pagination, filters, sorter) => {
+      const next = orderParam(sorter);
+      if (next !== ordering) {
+        setOrdering(next);
+        setPage(1);
+        return;
+      }
+      setPage(pagination.current);
+    },
+    [ordering]
+  );
+
+  // Drives the header caret from the order the server was asked for,
+  // rather than letting the table remember an order of its own.
+  const sortOrderFor = (key) => {
+    if (ordering === key) {
+      return "ascend";
+    }
+    if (ordering === `-${key}`) {
+      return "descend";
+    }
+    return null;
+  };
 
   const columns = [
     {
       title: "Workspace",
       dataIndex: "subdomain",
       key: "subdomain",
+      sorter: true,
+      sortOrder: sortOrderFor("subdomain"),
       render: (subdomain, row) => (
         <>
           <Link to={`/admin/tenants/${row.id}`}>{subdomain}</Link>
@@ -68,6 +143,8 @@ const Tenants = () => {
       title: "Status",
       dataIndex: "state",
       key: "state",
+      // Not sortable: the segmented filter above the table already
+      // answers "show me the suspended ones", and answers it better.
       render: (value) => (
         <Tag color={{ active: "green", suspended: "orange" }[value]}>
           {stateLabel(value)}
@@ -79,6 +156,8 @@ const Tenants = () => {
       dataIndex: key,
       key,
       align: "right",
+      sorter: true,
+      sortOrder: sortOrderFor(key),
       render: (value) => (value ?? 0).toLocaleString("en-US"),
     })),
     {
@@ -115,12 +194,15 @@ const Tenants = () => {
           <Search
             placeholder={text.consoleSearchTenants}
             allowClear
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => applySearch(event.target.value)}
             style={{ width: 260 }}
           />
           <Radio.Group
             value={state}
-            onChange={(event) => setState(event.target.value)}
+            onChange={(event) => {
+              setState(event.target.value);
+              setPage(1);
+            }}
           >
             <Radio.Button value="all">{text.consoleStateAll}</Radio.Button>
             <Radio.Button value="active">
@@ -138,9 +220,24 @@ const Tenants = () => {
       <Table
         rowKey="id"
         columns={columns}
-        dataSource={rows}
+        dataSource={dataset}
         loading={loading}
-        pagination={false}
+        onChange={handleChange}
+        pagination={{
+          current: page,
+          total,
+          pageSize: PAGE_SIZE,
+          showSizeChanger: false,
+          // Left on deliberately. hideOnSinglePage would take the
+          // result line with it, and "9 of 9" is the answer to the
+          // question the filter just asked.
+          hideOnSinglePage: false,
+          showTotal: (count, range) =>
+            (text.consoleResultCount || "")
+              .replace("{from}", range[0])
+              .replace("{to}", range[1])
+              .replace("{total}", count),
+        }}
       />
     </div>
   );
