@@ -14,7 +14,7 @@ import logging
 import os
 
 from django.db import IntegrityError
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -255,6 +255,49 @@ def tenants_summary(request, version):
     them.
     """
     queryset = with_counts(console_tenants())
+
+    # Stripped before it is tested for truth: "   " is what a cleared
+    # search box can send, and as a filter it matches nothing and
+    # reports an empty deployment.
+    search = (request.query_params.get("search") or "").strip()
+    if search:
+        # Subdomain or name, because the console has always searched
+        # both. `name` is not a column -- it is the root administration
+        # unit's name, as TenantListSerializer.get_name documents -- so
+        # it is reached by subquery rather than by joining
+        # `administrations`. A join to a multi-valued relation inside a
+        # queryset already carrying five DISTINCT-counting annotations
+        # is exactly the row multiplication those annotations exist to
+        # survive; not creating it is cheaper than surviving it.
+        queryset = queryset.filter(
+            Q(subdomain__icontains=search)
+            | Q(
+                Exists(
+                    Administration.objects.filter(
+                        tenant=OuterRef("pk"),
+                        parent=None,
+                        name__icontains=search,
+                    )
+                )
+            )
+        )
+
+    state = request.query_params.get("state")
+    if state:
+        if state not in TENANT_STATES:
+            # Refused rather than ignored, as it was on the endpoint
+            # this filter came from. Silently returning every workspace
+            # would read as "this deployment has no suspended ones".
+            return Response(
+                {
+                    "message": "Unknown state '{0}'. Accepted: {1}.".format(
+                        state, ", ".join(sorted(TENANT_STATES))
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        queryset = queryset.filter(**TENANT_STATES[state])
+
     paginator = TenantSummaryPagination()
     rows = paginator.paginate_queryset(queryset, request)
     return paginator.get_paginated_response(

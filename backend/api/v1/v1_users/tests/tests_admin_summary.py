@@ -130,6 +130,58 @@ class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
         ).first().delete()
         self.assertEqual(self.rows()["acme"]["datapoints"], 2)
 
+    def test_search_matches_the_subdomain(self):
+        self.assertEqual(list(self.rows("?search=acm")), ["acme"])
+
+    def test_search_matches_the_workspace_name(self):
+        # The name is the root administration unit's, not a column on
+        # Tenant -- see TenantListSerializer.get_name. An operator
+        # looking for a workspace knows the organisation, not the
+        # address, and the console has always searched both. Moving the
+        # filter to the server must not quietly narrow it to subdomains.
+        self.assertEqual(list(self.rows("?search=keny")), ["acme"])
+
+    def test_a_whitespace_only_search_is_no_search(self):
+        # What a cleared search box can send. Treated as a filter it
+        # matches nothing, and the console tells an operator who just
+        # cleared a box that the deployment is empty.
+        self.assertEqual(
+            len(self.rows("?search=%20%20")), Tenant.objects.count()
+        )
+
+    def test_an_unconfigured_workspace_lists_and_is_still_searchable(self):
+        # A subdomain claimed by /register phase 1 and never configured
+        # owns no Administration at all, so its name is "" and the name
+        # half of the search can never match it. It must still appear --
+        # the console is the only place its state can be explained --
+        # and its address must still find it.
+        Tenant.objects.create(subdomain="claimed")
+        self.assertIn("claimed", self.rows())
+        found = self.rows("?search=claim")
+        self.assertEqual(list(found), ["claimed"])
+        self.assertEqual(found["claimed"]["name"], "")
+
+    def test_state_narrows_the_page_and_the_total(self):
+        self.beta.tenant.is_active = False
+        self.beta.tenant.save(update_fields=["is_active"])
+        body = self.client.get(
+            SUMMARY + "?state=suspended", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(
+            [row["subdomain"] for row in body["data"]], ["beta"]
+        )
+
+    def test_an_unknown_state_is_refused_rather_than_ignored(self):
+        # Returning everything for a typo would read to an operator as
+        # "this deployment has no suspended workspaces", which is a lie
+        # that looks like an answer.
+        response = self.client.get(
+            SUMMARY + "?state=suspdended", HTTP_HOST=ADMIN_HOST, **self.auth
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unknown state", response.json()["message"])
+
     def query_count(self):
         with CaptureQueriesContext(connection) as captured:
             self.client.get(SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth)
