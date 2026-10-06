@@ -20,9 +20,12 @@ return rather than raise so the rules can be tested without a
 serializer, and so the caller decides the status code and the field
 the message attaches to.
 """
+import gettext
 import unicodedata
+from functools import lru_cache
 
 from django.conf import settings
+import pycountry
 
 from utils.tenant_host import admin_subdomain, embed_hostname
 
@@ -80,6 +83,60 @@ RESERVED_TERMS = frozenset(
         "edit", "delete", "me", "my",
     }
 )
+
+
+COUNTRY_MESSAGE = (
+    "Country-level workspaces aren't available on self-service "
+    "sign-up. Please contact us to request one, or choose a "
+    "different name."
+)
+
+# What ISO 3166 does not carry but people type. Deliberately not ISO
+# alpha-2 or alpha-3 codes: blocking `can`, `ind` and `cub` as a class
+# would cost more in refused legitimate names than it buys, and the
+# requirement is about names.
+EXTRA_COUNTRY_NAMES = frozenset(
+    {
+        "usa", "uk", "uae", "drc", "ivorycoast", "burma",
+        "swaziland", "holland", "england", "scotland", "wales",
+        "northernireland",
+    }
+)
+
+
+def _french_translator():
+    """Country names in French, or identity if unavailable.
+
+    The catalogue is packaging rather than code, and its gettext
+    domain has been renamed across pycountry releases -- so a missing
+    or differently named one degrades to English instead of taking
+    registration down. `pycountry` is pinned, and 24.6.1 ships
+    `iso3166-1`.
+    """
+    try:
+        catalogue = gettext.translation(
+            "iso3166-1", pycountry.LOCALES_DIR, languages=["fr"]
+        )
+    except (OSError, AttributeError):
+        return lambda value: value
+    return catalogue.gettext
+
+
+# Built on first use rather than at import, so the cost lands on
+# the first registration instead of on every management command,
+# and cached so it lands once.
+@lru_cache(maxsize=1)
+def _build_country_names():
+    names = set(EXTRA_COUNTRY_NAMES)
+    translate = _french_translator()
+    for country in pycountry.countries:
+        for attribute in ("name", "official_name", "common_name"):
+            value = getattr(country, attribute, None)
+            if not value:
+                continue
+            names.add(_normalize(value))
+            names.add(_normalize(translate(value)))
+    return frozenset(names)
 
 
 def _strip_accents(value):
@@ -155,4 +212,10 @@ def self_service_reason(value):
     normalized = _normalize(value)
     if normalized in RESERVED_TERMS:
         return RESERVED_MESSAGE
+    # Reserved before country so that a name which is both gets the
+    # infrastructure message; country before profanity so that a
+    # country name near the profanity wordlist gets the polite
+    # "contact us" message rather than a profanity accusation.
+    if normalized in _build_country_names():
+        return COUNTRY_MESSAGE
     return None
