@@ -11,7 +11,6 @@ from django.utils import timezone
 from django.http import HttpResponse
 from django.db.models import Q, Count, Max, OuterRef, Subquery
 from django.db.models.functions import Coalesce
-from django_q.tasks import async_task
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     extend_schema,
@@ -474,8 +473,7 @@ class FormDataAddListView(APIView):
         data.updated = timezone.now()
         data.updated_by = user
         data.save()
-        # Refresh materialized view via async task
-        async_task("api.v1.v1_data.tasks.seed_approved_data", data)
+        data.finalize()
         return Response(
             {"message": "direct update success"}, status=status.HTTP_200_OK
         )
@@ -1155,9 +1153,8 @@ class PublishDraftFormDataView(APIView):
 
         draft_data.save()
 
-        # Save to file if it's published and not pending
         if direct_to_data:
-            async_task("api.v1.v1_data.tasks.seed_approved_data", draft_data)
+            draft_data.finalize()
 
         return Response(
             {"message": "Draft published successfully"},

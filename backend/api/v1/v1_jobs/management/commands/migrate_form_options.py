@@ -71,7 +71,7 @@ def update_json_file(datapoint_ids: list, model, form_id: int):
     data = model.objects.filter(pk__in=latest_form_data).all()
     # generate file for each data
     for d in data:
-        d.save_to_file
+        d.write_file()
 
 
 class Command(BaseCommand):

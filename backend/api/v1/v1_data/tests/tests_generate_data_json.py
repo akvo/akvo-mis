@@ -1,9 +1,12 @@
-import os
 from io import StringIO
-from mis.settings import STORAGE_PATH
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest import mock
+
 from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
+
 from api.v1.v1_data.models import FormData
 
 
@@ -32,13 +35,35 @@ class GenerateDataJSONTestCase(TestCase):
         )
         self.token = user_response.json().get("token")
         self.call_command("-r", 1)
-        call_command("generate_data_json", "--test", 1)
 
-    def test_data_json_exists(self):
-        form_data = FormData.objects.filter(is_pending=False).first()
-        self.assertTrue(
-            os.path.exists(f"{STORAGE_PATH}/datapoints/{form_data.uuid}.json"),
-            "File not exists"
+        # The command deletes orphaned files: never point it at the real
+        # storage folder from a test database (APP-517 D-7).
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patcher = mock.patch("utils.storage.STORAGE_PATH", tmp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.folder = Path(tmp.name) / "datapoints"
+        self.published = FormData.objects.filter(
+            is_pending=False, is_draft=False, form__parent__isnull=True
         )
-        # Remove the file after test
-        os.remove(f"{STORAGE_PATH}/datapoints/{form_data.uuid}.json")
+
+    def test_writes_a_file_for_every_published_registration_row(self):
+        self.assertTrue(self.published.exists())
+        call_command("generate_data_json", "--test", 1)
+        for data in self.published:
+            self.assertTrue(
+                (self.folder / f"{data.uuid}.json").exists(), data.uuid
+            )
+            self.assertIsNotNone(data.file_generated_at)
+
+    def test_dry_run_writes_nothing(self):
+        out = StringIO()
+        call_command("generate_data_json", "--dry-run", stdout=out)
+        self.assertFalse(self.folder.exists())
+        self.assertIn(
+            f"Would have rewritten {self.published.count()}", out.getvalue()
+        )
+        self.assertFalse(
+            self.published.filter(file_generated_at__isnull=False).exists()
+        )

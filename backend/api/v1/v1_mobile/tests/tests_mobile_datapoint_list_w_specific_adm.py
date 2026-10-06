@@ -53,7 +53,7 @@ class MobileDownloadDataPointListWithSpecificAdminTestCase(
             name="Test Form Data",
         )
         add_fake_answers(self.data_1)
-        self.data_1.save_to_file
+        self.data_1.write_file()
 
         # Seed form data with different administration
         self.other_administration = Administration.objects.filter(
@@ -70,7 +70,7 @@ class MobileDownloadDataPointListWithSpecificAdminTestCase(
             name="Other Admin Form Data",
         )
         add_fake_answers(self.data_2)
-        self.data_2.save_to_file
+        self.data_2.write_file()
 
     def tearDown(self):
         # Clean up the created files

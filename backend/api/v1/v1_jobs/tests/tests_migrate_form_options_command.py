@@ -127,7 +127,7 @@ class MigrateFormOptionsCommand(TestCase):
             uuids.append(answer.data.uuid)
         uuids = list(set(uuids))
         # create a new json data file
-        answer.data.save_to_file
+        answer.data.write_file()
         json_filename = f"datapoints/{answer.data.uuid}.json"
         self.assertTrue(storage.check(json_filename))
         # Remove the generated file

@@ -52,7 +52,7 @@ def mark_as_dummy(form_data):
 
     MUST be called after add_fake_answers(), which rebuilds `name` from
     the form's meta questions and would otherwise discard the prefix, and
-    before `save_to_file`, which serialises the name into the storage blob
+    before `write_file()`, which serialises the name into the storage blob
     that mobile debugging reads.
     """
     if form_data.name.startswith(DUMMY_PREFIX):
@@ -626,7 +626,7 @@ class Command(BaseCommand):
                         add_fake_answers(form_data)
                         # After add_fake_answers, which rebuilds `name`
                         # from meta questions and would discard the
-                        # prefix; before save_to_file, which serialises
+                        # prefix; before write_file(), which serialises
                         # the name into the storage blob.
                         mark_as_dummy(form_data)
 
@@ -661,7 +661,7 @@ class Command(BaseCommand):
                             ).delete()
 
                         if (not is_test and not form_data.is_pending):
-                            form_data.save_to_file
+                            form_data.write_file()
 
                         if not form_data.is_draft:
                             submitter = None

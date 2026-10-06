@@ -1,3 +1,6 @@
+from tempfile import TemporaryDirectory
+from unittest import mock
+
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.db.models import Count
@@ -35,6 +38,14 @@ class BulkUploadDataTestCase(TestCase, ProfileTestHelperMixin):
         ).first()
 
         self.test_folder = "api/v1/v1_jobs/tests/fixtures"
+
+        # A superadmin's rows are published, so their files are written
+        # (APP-517). Keep them out of the real storage folder.
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patcher = mock.patch("utils.storage.STORAGE_PATH", tmp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _make_user(self, email, data_access, administration, form):
         """Create a non-superadmin user with a role that has the given data
@@ -285,6 +296,9 @@ class BulkUploadDataTestCase(TestCase, ProfileTestHelperMixin):
             name=name2
         ).first()
         self.assertTrue(dp2)
+        # Published straight away, so listed to devices: each needs its file.
+        self.assertIsNotNone(dp1.file_generated_at)
+        self.assertIsNotNone(dp2.file_generated_at)
 
     def test_upload_update_registration_data(self):
         form = Forms.objects.get(pk=1)
@@ -334,6 +348,10 @@ class BulkUploadDataTestCase(TestCase, ProfileTestHelperMixin):
             history_count__gt=0
         ).first()
         self.assertTrue(updated_dp)
+        # Rewritten, not left stale: the stamp is no older than the edit.
+        self.assertGreaterEqual(
+            updated_dp.file_generated_at, updated_dp.updated
+        )
 
     def test_upload_new_monitoring_data(self):
         form = Forms.objects.get(pk=1)

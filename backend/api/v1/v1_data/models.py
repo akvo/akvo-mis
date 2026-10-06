@@ -1,7 +1,8 @@
-import os
 import uuid
 import json
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Q
+from django_q.tasks import async_task
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import (
@@ -12,11 +13,27 @@ from api.v1.v1_profile.models import (
 from api.v1.v1_users.models import SystemUser
 from utils.soft_deletes_model import SoftDeletes
 from utils.tenant_scoped_model import TenantManager
-from utils.draft_model import Draft, DraftSoftDeletesManager
-from utils import storage
+from utils.draft_model import (
+    Draft,
+    DraftSoftDeletesManager,
+    DraftSoftDeletesQuerySet,
+)
+from utils.datapoint_file_model import (
+    DatapointFile,
+    DatapointFileManagerMixin,
+    DatapointFileQuerySetMixin,
+)
 
 
-class FormData(SoftDeletes, Draft):
+class FormDataQuerySet(DatapointFileQuerySetMixin, DraftSoftDeletesQuerySet):
+    pass
+
+
+class FormDataManager(DatapointFileManagerMixin, DraftSoftDeletesManager):
+    queryset_class = FormDataQuerySet
+
+
+class FormData(SoftDeletes, Draft, DatapointFile):
     TENANT_PATH = "form__tenant"
     parent = models.ForeignKey(
         "self",
@@ -71,9 +88,13 @@ class FormData(SoftDeletes, Draft):
     )
 
     # Custom managers
-    objects = DraftSoftDeletesManager()
-    objects_deleted = DraftSoftDeletesManager(only_deleted=True)
-    objects_draft = DraftSoftDeletesManager(only_draft=True)
+    objects = FormDataManager()
+    objects_deleted = FormDataManager(only_deleted=True)
+    objects_draft = FormDataManager(only_draft=True)
+
+    # Monitoring data rides on its registration's file and gets none of its
+    # own. Must agree with `needs_file()`.
+    FILE_EXEMPT = Q(form__parent__isnull=False)
 
     def __str__(self):
         return self.name
@@ -110,11 +131,10 @@ class FormData(SoftDeletes, Draft):
             data.update(a.to_data_frame)
         return data
 
-    @property
-    def save_to_file(self):
-        # If the data is a child of another form, do not save to file
-        if self.form.parent:
-            return None
+    def needs_file(self) -> bool:
+        return not self.form.parent_id
+
+    def file_payload(self) -> dict:
         admin_id = self.administration_id
         if isinstance(admin_id, Administration):
             admin_id = admin_id.id
@@ -132,15 +152,18 @@ class FormData(SoftDeletes, Draft):
         ).all():
             answers.update(a.to_key)
         data.update({"answers": answers})
-        json_data = json.dumps(data)
-        file_name = f"{str(self.uuid)}.json"
-        # write to json file
-        with open(file_name, "w") as f:
-            f.write(json_data)
-        storage.upload(file=file_name, folder="datapoints")
-        # delete file
-        os.remove(file_name)
         return data
+
+    def finalize(self) -> None:
+        """Publish: the file on commit, the bookkeeping on the worker.
+
+        The file is written in the request so a stopped worker cannot leave
+        a listed datapoint without one. `seed_approved_data` still runs: it
+        sets `updated`, refreshes the materialized view, and rewrites the
+        file after moving `updated` so the stamp stays current (APP-517 D-1).
+        """
+        transaction.on_commit(self.write_file)
+        async_task("api.v1.v1_data.tasks.seed_approved_data", self)
 
     @property
     def loc(self):

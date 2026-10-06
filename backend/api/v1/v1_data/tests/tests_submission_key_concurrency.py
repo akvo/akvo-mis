@@ -1,4 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
+from tempfile import TemporaryDirectory
+from unittest import mock
 
 from django.core.management import call_command
 from django.db import close_old_connections
@@ -41,6 +43,13 @@ class SubmissionKeyConcurrencyTest(
             role_level=self.IS_SUPER_ADMIN,
             administration=self.administration,
         )
+        # This test really commits, so the stored row's file is written
+        # (APP-517). Keep it out of the real storage folder.
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        patcher = mock.patch("utils.storage.STORAGE_PATH", tmp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def submit(self, submission_key):
         try:

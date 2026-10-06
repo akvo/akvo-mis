@@ -273,7 +273,7 @@ def create_form_data(
         )
         # Save to datapoint json file if parent is None (Registration)
         if data.parent is None:
-            data.save_to_file
+            data.write_file()
         return data
     except Exception as e:
         logger.error(

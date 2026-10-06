@@ -402,12 +402,15 @@ class MobileAssignmentApiSyncNewDraftTest(
             },
         }
 
-        response = self.client.post(
-            f"/api/v1/device/sync?id={draft.id}&is_published=true",
-            payload,
-            content_type="application/json",
-            **{"HTTP_AUTHORIZATION": f"Bearer {super_token}"},
-        )
+        # The file is written when the request commits (APP-517 D-1), which
+        # a TestCase never does on its own.
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"/api/v1/device/sync?id={draft.id}&is_published=true",
+                payload,
+                content_type="application/json",
+                **{"HTTP_AUTHORIZATION": f"Bearer {super_token}"},
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -423,6 +426,7 @@ class MobileAssignmentApiSyncNewDraftTest(
             ),
             "File not exists"
         )
+        self.assertIsNotNone(published.file_generated_at)
         os.remove(f"{STORAGE_PATH}/datapoints/{published.uuid}.json")
 
     def test_sync_new_draft_with_invalid_data(self):

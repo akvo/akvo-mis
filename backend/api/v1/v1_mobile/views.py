@@ -308,8 +308,10 @@ def sync_pending_form_data(request, version):
     if is_published and draft_exists:
         draft_exists.publish()
         direct_to_data = user.is_superuser or not draft_exists.has_approval
-        if direct_to_data and not draft_exists.parent:
-            draft_exists.save_to_file
+        # Monitoring drafts too: they get no file, but this path used to skip
+        # the materialized view refresh for every draft it published.
+        if direct_to_data:
+            draft_exists.finalize()
 
     # The id lets the device store the backend identity of a draft right
     # after its first upload, so the next save syncs as ?id=<draft> instead

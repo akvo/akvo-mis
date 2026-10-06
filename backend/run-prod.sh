@@ -8,6 +8,8 @@ python manage.py generate_sqlite >/dev/null &
 python manage.py generate_config >/dev/null &
 python manage.py download_all_administrations >/dev/null &
 python manage.py generate_qr_code >/dev/null &
+# Backfill and repair datapoint files; the worker repeats it hourly (APP-517)
+python manage.py generate_data_json >/dev/null &
 
 function log {
     echo "$(date +"%T") - START INFO - $*"

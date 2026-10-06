@@ -46,22 +46,30 @@ class DraftManager(models.Manager):
 
 
 class DraftSoftDeletesManager(SoftDeletesManager):
+    # Overridable so a model can add its own queryset methods, the way
+    # FormData adds `downloadable()`. Every branch below builds from it.
+    queryset_class = DraftSoftDeletesQuerySet
+
     def __init__(self, *args, **kwargs):
         self.only_draft = kwargs.pop("only_draft", False)
         super().__init__(*args, **kwargs)
 
     def get_queryset(self):
+        queryset = self.queryset_class(self.model, using=self._db)
         if self.only_draft:
             # For draft data, we only care about non-deleted drafts
             # since drafts are always hard deleted
-            queryset = DraftSoftDeletesQuerySet(self.model)
             return queryset.without_deleted().only_draft()
-        # For non-draft queries, use the parent logic
-        return super().get_queryset()
+        if self.with_deleted:
+            return queryset
+        if self.only_deleted:
+            return queryset.only_deleted()
+        return queryset.without_deleted()
 
     def draft(self):
-        queryset = DraftSoftDeletesQuerySet(self.model)
-        return queryset.without_deleted().only_draft()
+        return self.queryset_class(
+            self.model, using=self._db
+        ).without_deleted().only_draft()
 
 
 class Draft(models.Model):

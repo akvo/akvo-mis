@@ -376,6 +376,12 @@ def seed_excel_data(job: Jobs, test: bool = False):
         answer_count = data.data_answer.count() if data else 0
         if answer_count:
             records.append(data)
+            # A superadmin's rows are published straight away, so they need
+            # their file now. Pending rows get it when the batch is approved.
+            # This path used to write none: new rows had no file and updated
+            # ones kept a stale one (APP-517).
+            if not data.is_pending:
+                data.write_file()
         if answer_count == 0 and data:
             data.delete()
     if len(records) == 0:

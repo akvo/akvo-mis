@@ -1,7 +1,6 @@
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
-from django_q.tasks import async_task
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field, inline_serializer
@@ -285,8 +284,7 @@ class SubmitFormSerializer(serializers.Serializer):
                 options=option,
                 created_by=self.context.get("user"),
             )
-        # Refresh materialized view via async task
-        async_task("api.v1.v1_data.tasks.seed_approved_data", obj_data)
+        obj_data.finalize()
 
         return object
 
@@ -760,8 +758,7 @@ class SubmitPendingFormSerializer(serializers.Serializer):
         Answers.objects.bulk_create(answers)
 
         if not is_draft and not obj_data.is_pending:
-            # Refresh materialized view via async task
-            async_task("api.v1.v1_data.tasks.seed_approved_data", obj_data)
+            obj_data.finalize()
 
         return obj_data
 
