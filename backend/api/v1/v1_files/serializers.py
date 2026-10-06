@@ -9,6 +9,12 @@ class UploadImagesSerializer(serializers.Serializer):
     )
 
 
+class UploadLogoSerializer(serializers.Serializer):
+    file = CustomFileField(
+        validators=[FileExtensionValidator(["jpg", "png", "jpeg"])]
+    )
+
+
 class AttachmentsSerializer(serializers.Serializer):
     file = CustomFileField(
         allow_empty_file=False,

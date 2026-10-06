@@ -1,8 +1,31 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Row, Col, Card, Table, Switch, Button, Space, Tag, Modal } from "antd";
-import { EyeOutlined } from "@ant-design/icons";
+import {
+  Row,
+  Col,
+  Card,
+  Table,
+  Switch,
+  Button,
+  Space,
+  Tag,
+  Modal,
+  Upload,
+} from "antd";
+import {
+  EyeOutlined,
+  UploadOutlined,
+  LoadingOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
-import { api, store, uiText } from "../../lib";
+import {
+  api,
+  config,
+  store,
+  uiText,
+  validateLogoFile,
+  LOGO_ACCEPT_TYPES,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import RenameModal from "./RenameModal";
 import useInspect from "./useInspect";
@@ -22,6 +45,8 @@ const TenantDetail = () => {
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [removingLogo, setRemovingLogo] = useState(false);
   const { inspect, inspecting } = useInspect();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -105,6 +130,75 @@ const TenantDetail = () => {
     });
   };
 
+  const beforeLogoUpload = (file) => {
+    if (!validateLogoFile(file, notify)) {
+      return Upload.LIST_IGNORE;
+    }
+    return true;
+  };
+
+  const handleLogoUpload = ({ file, onSuccess, onError }) => {
+    setUploadingLogo(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    api
+      .post("upload/logo", formData)
+      .then((uploadRes) => {
+        const filePath = uploadRes.data.file.startsWith("http")
+          ? new URL(uploadRes.data.file).pathname
+          : uploadRes.data.file;
+        return api
+          .put(`admin/tenants/${id}`, { logo: filePath })
+          .then((res) => {
+            setUploadingLogo(false);
+            setTenant(res.data);
+            notify({
+              type: "success",
+              message: text.consoleLogoUpdated || "Workspace logo updated",
+            });
+            onSuccess(res.data);
+          });
+      })
+      .catch((err) => {
+        setUploadingLogo(false);
+        notify({
+          type: "error",
+          message: err.response?.data?.message || "Failed to update logo",
+        });
+        onError(err);
+      });
+  };
+
+  const confirmRemoveLogo = () => {
+    Modal.confirm({
+      title: `Remove logo for ${tenant.subdomain}?`,
+      content:
+        "The workspace will revert to displaying the default Akvo MIS logo on its header and login page.",
+      okText: text.consoleRemoveLogo || "Remove logo",
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setRemovingLogo(true);
+        return api
+          .put(`admin/tenants/${id}`, { logo: null })
+          .then((res) => {
+            setRemovingLogo(false);
+            setTenant(res.data);
+            notify({
+              type: "success",
+              message: text.consoleLogoRemoved || "Workspace logo removed",
+            });
+          })
+          .catch(() => {
+            setRemovingLogo(false);
+            notify({
+              type: "error",
+              message: "Failed to remove logo",
+            });
+          });
+      },
+    });
+  };
+
   if (!tenant) {
     return null;
   }
@@ -146,10 +240,82 @@ const TenantDetail = () => {
   return (
     <div>
       <Link to="/admin/tenants">{text.consoleTenants}</Link>
-      <h1>
-        {tenant.subdomain} <Tag>{tenant.state}</Tag>
-      </h1>
-      <div className="admin-subtle">{tenant.name}</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          marginTop: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 56,
+            height: 56,
+            background: "#fafafa",
+            border: "1px solid #e8e8e8",
+            borderRadius: 8,
+            padding: 4,
+            flexShrink: 0,
+          }}
+        >
+          <img
+            src={tenant.logo || config.siteLogo}
+            alt={tenant.name ? `${tenant.name} Logo` : "Workspace Logo"}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+            }}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = config.siteLogo;
+            }}
+          />
+        </div>
+        <div>
+          <h1 style={{ margin: 0, lineHeight: 1.2 }}>
+            {tenant.subdomain} <Tag>{tenant.state}</Tag>
+          </h1>
+          <div className="admin-subtle">{tenant.name}</div>
+          {tenant.state !== "deleted" && (
+            <Space size="small" style={{ marginTop: 6 }}>
+              <Upload
+                name="file"
+                showUploadList={false}
+                beforeUpload={beforeLogoUpload}
+                customRequest={handleLogoUpload}
+                accept={LOGO_ACCEPT_TYPES}
+              >
+                <Button
+                  size="small"
+                  icon={
+                    uploadingLogo ? <LoadingOutlined /> : <UploadOutlined />
+                  }
+                  loading={uploadingLogo}
+                >
+                  {text.consoleUploadLogo || "Upload logo"}
+                </Button>
+              </Upload>
+              {Boolean(tenant.logo) && (
+                <Button
+                  size="small"
+                  danger
+                  icon={removingLogo ? <LoadingOutlined /> : <DeleteOutlined />}
+                  loading={removingLogo}
+                  onClick={confirmRemoveLogo}
+                >
+                  {text.consoleRemoveLogo || "Remove logo"}
+                </Button>
+              )}
+            </Space>
+          )}
+        </div>
+      </div>
 
       {/* Nothing here applies to a deleted workspace. Restore only
           flips is_active, which the deleted state ignores, so the

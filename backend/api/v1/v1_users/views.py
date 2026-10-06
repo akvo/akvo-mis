@@ -62,6 +62,7 @@ from api.v1.v1_users.serializers import (
     RegisterSerializer,
     ResendActivationSerializer,
     ConfigureSerializer,
+    TenantBrandingSerializer,
     accounts_for_email,
     tenant_is_configured,
 )
@@ -433,7 +434,9 @@ def tenant_info(request, version):
         return Response(status=status.HTTP_204_NO_CONTENT)
     body = {
         "subdomain": tenant.subdomain,
+        "name": tenant.subdomain,
         "language": getattr(tenant, "language", "en") or "en",
+        "logo": tenant.logo,
     }
     if request.user.is_authenticated:
         body["embed_enabled"] = tenant_may_embed(tenant)
@@ -616,6 +619,9 @@ def configure_project(request, version):
             name=validated["root_unit_name"],
             tenant=user.tenant,
         )
+        if validated.get("logo"):
+            user.tenant.logo = validated["logo"]
+            user.tenant.save(update_fields=["logo"])
     return Response(
         UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )
@@ -1366,4 +1372,55 @@ def update_profile(request, version):
     user = serializer.save()
     return Response(
         UserSerializer(instance=user).data, status=status.HTTP_200_OK
+    )
+
+
+@extend_schema(
+    request=TenantBrandingSerializer,
+    responses={200: DefaultResponseSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Update workspace branding (logo)",
+)
+@api_view(["PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def update_tenant_branding(request, version):
+    tenant = getattr(request.user, "tenant", None)
+    if not tenant:
+        return Response(
+            {"message": "User does not belong to a workspace"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not request.user.is_superuser:
+        return Response(
+            {"message": "Only workspace administrators can update branding"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if request.method == "DELETE":
+        tenant.logo = None
+        tenant.save(update_fields=["logo"])
+    else:
+        serializer = TenantBrandingSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"message": validate_serializers_message(serializer.errors)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tenant.logo = serializer.validated_data.get("logo") or None
+        tenant.save(update_fields=["logo"])
+
+    root_name = (
+        tenant.administrations.filter(parent=None)
+        .values_list("name", flat=True)
+        .first()
+        or ""
+    )
+    return Response(
+        {
+            "subdomain": tenant.subdomain,
+            "name": root_name,
+            "language": getattr(tenant, "language", "en") or "en",
+            "logo": tenant.logo,
+        },
+        status=status.HTTP_200_OK,
     )

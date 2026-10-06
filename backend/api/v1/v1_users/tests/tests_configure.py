@@ -78,6 +78,13 @@ class ConfigureProjectTestCase(TestCase):
         res = self.client.get("/api/v1/profile", **auth)
         self.assertEqual(res.json()["administration"]["name"], "Kenya")
 
+    def test_configure_saves_custom_logo(self):
+        user, auth = self.signup()
+        res = self.configure(auth, logo="/images/logo-custom-123.png")
+        self.assertEqual(res.status_code, 200)
+        user.tenant.refresh_from_db()
+        self.assertEqual(user.tenant.logo, "/images/logo-custom-123.png")
+
     def test_configuring_twice_is_rejected(self):
         _, auth = self.signup()
         self.configure(auth)

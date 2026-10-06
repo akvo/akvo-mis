@@ -85,5 +85,11 @@ describe("ability for an inspection session", () => {
   it("leaves an ordinary superadmin alone", () => {
     const owner = { id: 2, is_superuser: true, roles: [] };
     expect(ability(owner).can("edit", "data")).toBe(true);
+    expect(ability(owner).can("manage", "settings")).toBe(true);
+  });
+
+  it("denies settings management to regular users", () => {
+    const user = { id: 3, is_superuser: false, roles: [{ is_editor: true }] };
+    expect(ability(user).can("manage", "settings")).toBe(false);
   });
 });
