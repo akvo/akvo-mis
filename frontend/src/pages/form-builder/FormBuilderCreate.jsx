@@ -107,6 +107,8 @@ const FormBuilderCreate = () => {
             <WebformEditor
               initialValue={{}}
               onSave={saving || parentError ? null : onSave}
+              enableAutoSave={true}
+              enableDraftRecovery={true}
               limitQuestionType={Object.keys(QUESTION_TYPES)}
               settingCascadeURL={cascadeURL}
             />
