@@ -50,6 +50,6 @@ class ImageUploadTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            "File extension “txt” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
+            "File extension “txt” is not allowed. Allowed extensions are: jpg, png, jpeg, svg.",  # noqa
         )
         os.remove(filename)
