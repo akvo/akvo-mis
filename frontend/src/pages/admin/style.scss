@@ -69,4 +69,16 @@
     font-size: 26px;
     font-weight: $font-weight-semi-bold;
   }
+
+  // A tile with nothing in it yet. It holds the value's height so the
+  // row does not jump when the numbers land, and it is a placeholder
+  // rather than the previous number because a stale total is not an
+  // old answer, it is a wrong one.
+  .admin-tile-pending {
+    display: block;
+    width: 64px;
+    height: 26px;
+    border-radius: 3px;
+    background: $color-disabled;
+  }
 }
