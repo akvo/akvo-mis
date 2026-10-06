@@ -322,6 +322,81 @@ def validate_dashboard_payload(data, user, dashboard=None):
         )
         if error:
             return error
+    return _validate_filter_questions(
+        data.get("default_filters"), root_form, forms, questions,
+    )
+
+
+def _validate_filter_questions(default_filters, root_form, forms, questions):
+    """VIZ-027 D-6: `default_filters.questions`, the filter bar's questions.
+
+    Only this key is checked; the rest of default_filters is stored as it
+    always was. Each entry must name an option or multiple-option question
+    on root_form or one of its child forms, and `form` must be that
+    question's form. The family is drawn by the same `forms` queryset the
+    widget rules and serialize_sources use ("two barriers, one rule").
+    """
+    if not isinstance(default_filters, dict):
+        return None
+    if "questions" not in default_filters:
+        return None
+    field = "default_filters.questions"
+    entries = default_filters["questions"]
+    if not isinstance(entries, list):
+        return _error("questions must be a list", field=field)
+
+    def strict_int(value):
+        # Not _as_int: "12" would pass here, be stored as a string, and
+        # then match nothing at Publish, silently dropping the filter.
+        return (
+            value
+            if isinstance(value, int) and not isinstance(value, bool)
+            else None
+        )
+
+    pairs = []
+    for index, entry in enumerate(entries):
+        question_id = form_id = None
+        if isinstance(entry, dict):
+            question_id = strict_int(entry.get("question"))
+            form_id = strict_int(entry.get("form"))
+        if question_id is None or form_id is None:
+            return _error(
+                "each filter needs a question id and a form id",
+                field=f"{field}[{index}]",
+            )
+        pairs.append((index, question_id, form_id))
+    family = {root_form.id} | set(
+        forms.filter(parent=root_form).values_list("id", flat=True)
+    )
+    found = {
+        question.id: question
+        for question in questions.filter(
+            pk__in=[question_id for _, question_id, _ in pairs]
+        )
+    }
+    for index, question_id, form_id in pairs:
+        question = found.get(question_id)
+        where = f"{field}[{index}]"
+        if question is None:
+            return _error("question not found", field=f"{where}.question")
+        if question.type not in (
+            QuestionTypes.option, QuestionTypes.multiple_option,
+        ):
+            return _error(
+                "only option and multiple-option questions can be filters",
+                field=f"{where}.question",
+            )
+        if question.form_id not in family:
+            return _error(
+                "question is not in this dashboard's form family",
+                field=f"{where}.question",
+            )
+        if question.form_id != form_id:
+            return _error(
+                "form does not match the question's form",
+                field=f"{where}.form",
+            )
     return None
 
 

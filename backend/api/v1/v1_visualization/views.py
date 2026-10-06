@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import datetime
 from django.db.models import Q
+from django.http import Http404
 from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_forms.models import Forms, QuestionTypes
 from api.v1.v1_visualization.serializers import (
@@ -19,6 +20,8 @@ from api.v1.v1_visualization.models import (
 )
 from api.v1.v1_visualization.functions import (
     apply_criteria_to_monitoring_qs,
+    apply_global_exclusions,
+    parse_request_global_criteria,
     tenant_scoped_forms,
 )
 from api.v1.v1_visualization.formula import (
@@ -29,6 +32,7 @@ from api.v1.v1_visualization.public_scope import (
     check_ids,
     question_ids_in_criteria,
     question_ids_in_formula,
+    question_ids_in_global_criteria,
     resolve_view_scope,
 )
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -336,7 +340,23 @@ class GeolocationListView(APIView):
             question_ids=question_ids_in_criteria(
                 request.query_params.get("criteria")
             ),
+            filter_question_ids=question_ids_in_global_criteria(
+                request.query_params.getlist("global_criteria")
+            ),
         )
+        # VIZ-027 D-11: parsed before the serializer, so a bad filter is a
+        # 400 rather than the empty 200 an invalid serializer gets here.
+        form = tenant_scoped_forms(tenant).filter(pk=form_id).first()
+        global_criteria = None
+        if form is not None:
+            global_criteria, error = parse_request_global_criteria(
+                request, form,
+            )
+            if error:
+                return Response(
+                    {"message": error},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         serializer = GeoLocationFilterSerializer(
             data=request.GET, context={"form_id": form_id}
         )
@@ -346,9 +366,9 @@ class GeolocationListView(APIView):
                 data=[],
                 status=status.HTTP_200_OK,
             )
-        form = get_object_or_404(
-            tenant_scoped_forms(tenant), pk=form_id
-        )
+        if form is None:
+            # The same 404 get_object_or_404 gave, without a second lookup.
+            raise Http404("form not found")
         queryset = form.form_form_data.filter(
             is_pending=False,
             is_draft=False,
@@ -362,6 +382,18 @@ class GeolocationListView(APIView):
 
         from_date = serializer.validated_data.get("from_date")
         to_date = serializer.validated_data.get("to_date")
+        # D-12: pins are the path form's datapoints; on a monitoring form
+        # they reach their registration through parent_id.
+        queryset = apply_global_exclusions(
+            queryset,
+            "parent_id" if form.parent_id else "id",
+            form.parent_id or form.id,
+            {
+                "global_criteria": global_criteria,
+                "from_date": from_date,
+                "to_date": to_date,
+            },
+        )
         include_monitoring = serializer.validated_data.get(
             "include_monitoring", False
         )
@@ -530,10 +562,18 @@ def visualization_values_formula(request, version):
                 request.query_params.get("criteria")
             ),
         ],
+        filter_question_ids=question_ids_in_global_criteria(
+            request.query_params.getlist("global_criteria")
+        ),
     )
     form = get_object_or_404(
         tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
+    global_criteria, error = parse_request_global_criteria(request, form)
+    if error:
+        return Response(
+            {"message": error}, status=status.HTTP_400_BAD_REQUEST,
+        )
     formula = validated["formula"]
     criteria = validated.get("criteria")
     from_date = validated.get("from_date")
@@ -552,6 +592,18 @@ def visualization_values_formula(request, version):
         qs = qs.filter(created__date__gte=from_date)
     if to_date:
         qs = qs.filter(created__date__lte=to_date)
+    # VIZ-027 D-12: before the latest-per-parent pick below, or a
+    # filtered-out site's older submission could become its "latest".
+    qs = apply_global_exclusions(
+        qs,
+        "id" if is_registration else "parent_id",
+        form.parent_id or form.id,
+        {
+            "global_criteria": global_criteria,
+            "from_date": from_date,
+            "to_date": to_date,
+        },
+    )
 
     if is_registration:
         # Each registration datapoint is its own "group".

@@ -163,7 +163,11 @@ set" tests guard that.
 
 **Repeated keys (D-15).** `global_criteria` is an array. Axios 0.25
 sends arrays as `global_criteria[]=…`, which Django's `getlist`
-("global_criteria") does not read. Give the one call in
+("global_criteria") does not read. The backend (as built) also ignores
+`global_criteria[0]=…` and `global_criteria[]=…` on purpose, so a
+bracketed key silently filters nothing. On a public dashboard only the
+questions in the published filter bar are allowed; any other qid is a
+404. Give the one call in
 `useVisualizationRequest.js` (line 48, `api.get(endpoint, { params })`)
 a `paramsSerializer` that repeats the key without brackets:
 

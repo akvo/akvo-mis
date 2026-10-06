@@ -9,7 +9,8 @@ and prototyped on local data (§14). D-10 to D-12 added.
 "show only" deferred to a later phase (D-13); same-named monitoring
 questions read as one (D-14); repeated `global_criteria` parameter and
 no `:` in new option values (D-15).
-**Status**: Draft
+**Status**: Backend implemented 2026-10-06 (GitHub #520); frontend
+planned.
 **Parts**: [Backend](VIZ-027-backend-global-question-filter.md) · [Frontend](VIZ-027-frontend-global-question-filter.md)
 
 ---
@@ -359,12 +360,17 @@ would empty every chart.
   parameter, which every endpoint must accept and must reject when
   malformed, can be covered by one test per widget type.
 
-**Validation** (`ValuesFilterSerializer` and the other three
-serializers): every `qid` must be an option or multiple-option question
-on the widget form's registration root, or on a monitoring form whose
-parent is that root. Anything else returns 400.
+**Validation** (in each of the four views, as built): every `qid`
+must be an option or multiple-option question on the widget form's
+registration root, or on a monitoring form whose parent is that root.
+Anything else returns 400. The view reads
+`request.query_params.getlist("global_criteria")` after `check_ids`
+and after the tenant-scoped form lookup; no serializer declares the
+field, because a DRF `ListField` also accepts `global_criteria[0]=…`
+and that spelling would skip the public allowlist.
 
-The family check is written once and shared by the four serializers.
+The family check is written once (`parse_global_criteria`) and shared
+by the four views.
 It takes two `Questions` queries per request (the picked questions,
 then their name groups, D-14), whatever the number of values.
 
@@ -698,7 +704,7 @@ and its definition of done.
 
 | Part | Document | Tasks |
 |---|---|---|
-| Backend | [VIZ-027-backend-global-question-filter.md](VIZ-027-backend-global-question-filter.md) | BE-1 parse and validate; BE-2 exclusion subquery; BE-3 map, formula, table; BE-4 save, publish, allow; BE-5 admin filter on % totals (separate commit); BE-6 `EXPLAIN` before caching |
+| Backend | [VIZ-027-backend-global-question-filter.md](VIZ-027-backend-global-question-filter.md) | BE-1 parse and validate; BE-2 exclusion subquery; BE-3 map, formula, table; BE-4 save, publish, allow; BE-5 admin filter on % totals; BE-6 `EXPLAIN` before caching |
 | Frontend | [VIZ-027-frontend-global-question-filter.md](VIZ-027-frontend-global-question-filter.md) | FE-1 `serializeGlobalCriteria`; FE-2 `useWidgetData` plumbing + A7; FE-3 viewer state; FE-4 filter bar; FE-5 builder picker |
 
 ```mermaid
@@ -740,22 +746,26 @@ alone.
 
 ## 9. Security Considerations
 
-- [ ] `global_criteria` question ids pass through `check_ids` before
+- [x] `global_criteria` question ids pass through `check_ids` before
       any query runs, like `criteria` today.
-- [ ] A public dashboard can filter only on questions listed in its
-      published `default_filters.questions`.
-- [ ] The family check (D-6) prevents filtering on another form
+- [x] A public dashboard can filter only on questions listed in its
+      published `default_filters.questions`: the allowlist keeps them in
+      their own set (`filter_questions`), so a widget's question is not
+      a filter by accident.
+- [x] The family check (D-6) prevents filtering on another form
       family's questions, which would otherwise expose whether their
-      answers exist.
-- [ ] The exclusion can only remove rows from a query that is already
+      answers exist. It runs after tenant scoping, so a form outside the
+      dashboard is a 404, not a family hint.
+- [x] The exclusion can only remove rows from a query that is already
       scoped to the tenant, never add rows.
 
 ---
 
 ## 10. Testing Strategy
 
-The tests are written before the implementation and fail until it
-lands. Both parts use the same ten water points, so a number in a
+The tests were written before the implementation. The backend tests
+are green (2026-10-06); the frontend tests fail until FE-1 to FE-5
+land. Both parts use the same ten water points, so a number in a
 backend test and an id in a frontend test mean the same thing:
 
 | Form | Question | Options |
@@ -817,10 +827,12 @@ chart. Filtering out Rainwater removes 8 and 9.
 - [x] ~~What happens to a filter question deleted after Publish?~~ It
       disappears from the filter bar when the dashboard is read; the
       dashboard keeps working (decided 2026-10-06, backend BE-4).
-- [ ] Does `Answers(question_id, data_id)` have an index that makes the
-      subquery a cheap semi-join? Locally it does (A6, 0.45 ms). Check
-      with `EXPLAIN ANALYZE` on production-sized data before deciding on
-      D-1's server cache.
+- [x] ~~Does `Answers(question_id, data_id)` have an index that makes
+      the subquery a cheap semi-join?~~ Yes. Measured on 10,000 seeded
+      sites (backend BE-6, 2026-10-06): chart requests stay within +16 %.
+- [ ] **The map adds a fixed ~130 ms with a filter (+84 % on 10,000
+      sites)**, over the 20 % threshold. Follow-up task: the D-1 server
+      cache, or a "latest answer per registration" table (backend BE-6).
 - [x] ~~Malformed `global_criteria` on the map: 400 or `200 []`?~~ 400
       (D-11).
 - [x] ~~Date question on another form than the filter question?~~ Fall

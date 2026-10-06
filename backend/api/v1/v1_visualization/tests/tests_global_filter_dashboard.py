@@ -18,8 +18,8 @@ from api.v1.v1_visualization.tests.global_filter_mixin import (
     BROKEN,
     FINE,
     RAINY,
+    YES,
     GlobalFilterTestMixin,
-    pending,
 )
 
 
@@ -77,38 +77,39 @@ class FilterQuestionsConfigTestCase(GlobalFilterTestMixin, APITestCase):
             dashboard=self.dashboard,
         ))
 
-    @pending("BE-4")
     def test_school_question_is_refused(self):
         # "Does the school have a toilet?" belongs to another family.
         self.assert_refused(
             [{"question": self.Q_TOILET, "form": self.SCHOOL_ID}],
         )
 
-    @pending("BE-4")
     def test_number_question_is_refused(self):
         # "How many households...?" has no options to filter out.
         self.assert_refused(
             [{"question": self.Q_HOUSEHOLDS, "form": self.VISIT_ID}],
         )
 
-    @pending("BE-4")
     def test_wrong_form_for_the_question_is_refused(self):
         # The status question is on the check form, not the visit form.
         self.assert_refused(
             [{"question": self.Q_STATUS, "form": self.VISIT_ID}],
         )
 
-    @pending("BE-4")
     def test_unknown_question_is_refused(self):
         self.assert_refused([{"question": 999999, "form": self.CHECK_ID}])
 
-    @pending("BE-4")
+    def test_ids_must_be_integers(self):
+        # "700301" would be stored as a string and then match nothing at
+        # Publish, silently dropping the filter.
+        self.assert_refused(
+            [{"question": str(self.Q_STATUS), "form": self.CHECK_ID}],
+        )
+
     def test_questions_must_be_a_list(self):
         self.assert_refused({"question": self.Q_STATUS, "form": self.CHECK_ID})
 
     # ── publishing (D-7) ──
 
-    @pending("BE-4")
     def test_snapshot_carries_the_question_and_its_options(self):
         # A public viewer cannot read the form, so the filter bar's label
         # and choices travel in the snapshot.
@@ -132,7 +133,6 @@ class FilterQuestionsConfigTestCase(GlobalFilterTestMixin, APITestCase):
             ],
         )
 
-    @pending("BE-4")
     def test_snapshot_merges_a_name_group(self):
         # D-14: the visit form also asks the weather, same name. It labels
         # `fine` "Clear sky" and has a value the check form lacks.
@@ -168,7 +168,6 @@ class FilterQuestionsConfigTestCase(GlobalFilterTestMixin, APITestCase):
 
     # ── public viewers (§7 Public dashboards) ──
 
-    @pending("BE-4")
     def test_public_viewers_may_filter_on_the_listed_question_only(self):
         self.dashboard.published_config = {
             "default_filters": {
@@ -179,12 +178,11 @@ class FilterQuestionsConfigTestCase(GlobalFilterTestMixin, APITestCase):
             "widgets": [],
         }
         allowed = allowlist_from(self.dashboard)
-        self.assertTrue(allowed.permits_question(self.Q_STATUS))
-        self.assertFalse(allowed.permits_question(self.Q_WEATHER))
+        self.assertTrue(allowed.permits_filter_question(self.Q_STATUS))
+        self.assertFalse(allowed.permits_filter_question(self.Q_WEATHER))
 
     # ── builder (D-8, A4) ──
 
-    @pending("BE-4")
     def test_builder_sources_carry_question_names(self):
         # The builder warns when "What is the water source?" is asked on
         # both the registration and the visit form. It matches on name.
@@ -198,7 +196,6 @@ class FilterQuestionsConfigTestCase(GlobalFilterTestMixin, APITestCase):
 
 
 @override_settings(USE_TZ=False)
-@pending("BE-1, BE-4")
 class PublicViewerFilterTestCase(GlobalFilterTestMixin, APITestCase):
     """An anonymous viewer of a public dashboard.
 
@@ -272,9 +269,41 @@ class PublicViewerFilterTestCase(GlobalFilterTestMixin, APITestCase):
         response = self.sample_chart(self.filter_out(self.Q_WEATHER, FINE))
         self.assertEqual(response.status_code, 404, response.content)
 
+    def test_a_widget_question_cannot_be_used_as_a_filter(self):
+        # "Were you able to take a water sample?" is the chart's own
+        # question, so a public caller may read it, but the filter bar does
+        # not offer it: global_criteria may name filter questions only.
+        response = self.sample_chart(self.filter_out(self.Q_SAMPLE, YES))
+        self.assertEqual(response.status_code, 404, response.content)
+
+    def test_a_bracketed_key_is_ignored_not_trusted(self):
+        # Review finding (HIGH): DRF's ListField also reads
+        # `global_criteria[0]=...`, which check_ids never saw. Nothing reads
+        # that key now, so it cannot sneak in an unlisted question: the
+        # chart is exactly the unfiltered one (Yes 8).
+        response = self.client.get(self.VALUES_URL, {
+            "form_id": self.VISIT_ID,
+            "question_id": self.Q_SAMPLE,
+            "group_by": "option",
+            "dashboard_slug": "water-points",
+            "global_criteria[0]": self.filter_out(self.Q_WEATHER, FINE)[0],
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["data"][0]["value"], 8)
+
+    def test_a_form_outside_the_dashboard_is_a_404_not_a_family_hint(self):
+        # Review finding (MEDIUM): parsing used to run in the serializer,
+        # before scoping, and answered "not in this form family" for any
+        # form id. Now the form is refused first.
+        response = self.client.get(self.VALUES_URL, {
+            "form_id": self.SCHOOL_ID,
+            "dashboard_slug": "water-points",
+            "global_criteria": self.filter_out(self.Q_STATUS, BROKEN),
+        })
+        self.assertEqual(response.status_code, 404, response.content)
+
 
 @override_settings(USE_TZ=False)
-@pending("BE-4")
 class DeletedFilterQuestionTestCase(GlobalFilterTestMixin, APITestCase):
     """A filter question deleted after Publish (decided 2026-10-06).
 
@@ -312,3 +341,26 @@ class DeletedFilterQuestionTestCase(GlobalFilterTestMixin, APITestCase):
         self.assertEqual(offered(), [self.Q_STATUS, self.Q_SOURCE])
         Questions.objects.filter(pk=self.Q_STATUS).delete()
         self.assertEqual(offered(), [self.Q_SOURCE])
+
+    def test_a_filter_on_a_deleted_form_leaves_the_filter_bar(self):
+        # The whole Quick status check form is deleted: its question is
+        # no longer filterable either.
+        Dashboard.objects.create(
+            name="Water Points",
+            slug="water-points",
+            root_form=self.registration,
+            created_by=self.user,
+            status=DashboardStatus.published,
+            published_config={
+                "default_filters": {"questions": [
+                    {"question": self.Q_STATUS, "form": self.CHECK_ID},
+                ]},
+                "widgets": [],
+            },
+        )
+        Forms.objects.filter(pk=self.CHECK_ID).delete()
+        response = self.client.get("/api/v1/dashboards/water-points")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.json()["default_filters"]["questions"], [],
+        )

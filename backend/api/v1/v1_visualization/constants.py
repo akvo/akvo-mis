@@ -87,6 +87,16 @@ VALID_VALUES_CRITERIA_TYPES = {
     "threshold_lt",
 }
 
+# VIZ-027 D-10: the only type the dashboard-wide `global_criteria`
+# accepts. Never add it to VALID_VALUES_CRITERIA_TYPES:
+# _criterion_matching_ids returns [] for it, and a widget would silently
+# show no data.
+GLOBAL_CRITERIA_TYPES = {"option_not_in"}
+
+# VIZ-027 D-15: one `global_criteria` occurrence per value; this bounds
+# what a public caller can send.
+MAX_GLOBAL_CRITERIA = 50
+
 # Escalation column source types
 VALID_COLUMN_SOURCES = {
     "parent_name",

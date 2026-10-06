@@ -333,7 +333,9 @@ class IdExtractionTestCase(TestCase):
 
 class CheckIdsTestCase(TestCase):
     def setUp(self):
-        self.allowed = Allowlist(forms={6001}, questions={600101})
+        self.allowed = Allowlist(
+            forms={6001}, questions={600101}, filter_questions=set()
+        )
 
     def test_permitted_ids_pass(self):
         check_ids(self.allowed, form_ids=[6001], question_ids=[600101])

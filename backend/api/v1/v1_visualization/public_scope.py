@@ -35,6 +35,10 @@ class Allowlist(NamedTuple):
 
     forms: Optional[Set[int]]
     questions: Optional[Set[int]]
+    # VIZ-027: the questions `global_criteria` may filter on, which for a
+    # public dashboard are only the ones its filter bar offers, not every
+    # question its widgets read.
+    filter_questions: Optional[Set[int]]
 
     def permits_form(self, form_id):
         if self.forms is None:
@@ -46,10 +50,15 @@ class Allowlist(NamedTuple):
             return True
         return _as_id(question_id) in self.questions
 
+    def permits_filter_question(self, question_id):
+        if self.filter_questions is None:
+            return True
+        return _as_id(question_id) in self.filter_questions
+
 
 # What an authenticated caller gets. Their scoping is the tenant, exactly
 # as it was before this feature existed.
-ALLOW_ANY = Allowlist(forms=None, questions=None)
+ALLOW_ANY = Allowlist(forms=None, questions=None, filter_questions=None)
 
 
 def allowlist_from(dashboard):
@@ -65,7 +74,9 @@ def allowlist_from(dashboard):
         # An embedded dashboard queries none of our data endpoints, so
         # the correct set of ids it may name is empty and every data
         # endpoint 404s for a caller holding this slug (spec D-6).
-        return Allowlist(forms=set(), questions=set())
+        return Allowlist(
+            forms=set(), questions=set(), filter_questions=set()
+        )
 
     config = dashboard.published_config or {}
     widgets = config.get("widgets") or []
@@ -142,7 +153,22 @@ def allowlist_from(dashboard):
     if date_qid is not None:
         questions.add(date_qid)
 
-    return Allowlist(forms=forms, questions=questions)
+    # VIZ-027: `global_criteria` may name only the questions the filter
+    # bar offers (spec §9), checked separately from `questions` so a
+    # widget's question cannot be turned into a filter. A malformed entry
+    # narrows the allowlist rather than crashing.
+    filter_questions = set()
+    for entry in (
+        (config.get("default_filters") or {}).get("questions") or []
+    ):
+        if isinstance(entry, dict):
+            qid = _as_id(entry.get("question"))
+            if qid is not None:
+                filter_questions.add(qid)
+
+    return Allowlist(
+        forms=forms, questions=questions, filter_questions=filter_questions,
+    )
 
 
 def _as_id(value):
@@ -200,6 +226,19 @@ def question_ids_in_criteria(value):
     return ids
 
 
+def question_ids_in_global_criteria(items):
+    """`option_not_in:{qid}:{value}` occurrences -> ids (VIZ-027 D-15).
+
+    One occurrence per value, split at most twice and without stripping,
+    exactly as `functions.py:parse_global_criteria` reads it, so the two
+    cannot disagree about which question an occurrence names.
+    """
+    ids = []
+    for item in items or []:
+        ids.extend(_ints(item.split(":", 2)[1:2]))
+    return ids
+
+
 def question_ids_in_columns(value):
     """`{key}:{source}` or `{key}:{source}:{qid}` -> ids.
 
@@ -237,7 +276,7 @@ def question_ids_in_formula(value):
     return ids
 
 
-def check_ids(allowed, form_ids=(), question_ids=()):
+def check_ids(allowed, form_ids=(), question_ids=(), filter_question_ids=()):
     """Refuse the first id the dashboard's snapshot does not name.
 
     404 rather than an empty result, deliberately. An out-of-allowlist
@@ -255,6 +294,9 @@ def check_ids(allowed, form_ids=(), question_ids=()):
             continue
         if not allowed.permits_question(question_id):
             raise Http404("question is not on this dashboard")
+    for question_id in filter_question_ids:
+        if not allowed.permits_filter_question(question_id):
+            raise Http404("question is not a filter on this dashboard")
 
 
 def has_any_dashboard_access(user):

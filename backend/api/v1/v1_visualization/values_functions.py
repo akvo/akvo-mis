@@ -22,6 +22,7 @@ from api.v1.v1_visualization.functions import (
     fill_month_gaps,
     fill_date_gaps,
     apply_administration_filter,
+    apply_global_exclusions,
     apply_parent_criteria_to_qs,
 )
 
@@ -152,6 +153,8 @@ def _total_parents_in_scope(form, params):
     qs = apply_parent_criteria_to_qs(
         qs, True, params.get("parent_criteria"),
     )
+    # VIZ-027: "No info" must not count the filtered-out registrations.
+    qs = apply_global_exclusions(qs, "id", scope_form.id, params)
     return qs.count()
 
 
@@ -188,12 +191,9 @@ def handle_count_mode(form, params):
         )
         count = qs.count()
         if value_type == "percentage":
-            total = FormData.objects.filter(
-                form=form.parent,
-                parent__isnull=True,
-                is_pending=False,
-                is_draft=False,
-            ).count()
+            # Same scope as the count above: administration, parent
+            # criteria and the global filter (VIZ-027).
+            total = _total_parents_in_scope(form, params)
             value = round(
                 (count / total * 100), 2
             ) if total > 0 else 0
@@ -211,12 +211,9 @@ def handle_count_mode(form, params):
     if not group_by:
         count = qs.count()
         if value_type == "percentage" and is_monitoring:
-            total = FormData.objects.filter(
-                form=form.parent,
-                parent__isnull=True,
-                is_pending=False,
-                is_draft=False,
-            ).count()
+            # Same scope as the count above: administration, parent
+            # criteria and the global filter (VIZ-027).
+            total = _total_parents_in_scope(form, params)
             value = round(
                 (count / total * 100), 2
             ) if total > 0 else 0

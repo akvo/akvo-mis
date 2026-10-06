@@ -18,7 +18,6 @@ from api.v1.v1_visualization.tests.global_filter_mixin import (
     SURFACE,
     YES,
     GlobalFilterTestMixin,
-    pending,
 )
 
 # Read the fixture table in global_filter_mixin.py first: every number
@@ -77,7 +76,6 @@ class GlobalFilterFixtureTestCase(GlobalFilterTestMixin, APITestCase):
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-2")
 class FilterOutNonOperationalTestCase(GlobalFilterTestMixin, APITestCase):
     """The sketch: the viewer filters out "Non-operational".
 
@@ -283,7 +281,6 @@ class FilterOutNonOperationalTestCase(GlobalFilterTestMixin, APITestCase):
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-2")
 class FilterOutRainwaterTestCase(GlobalFilterTestMixin, APITestCase):
     """A filter on a registration question (D-8).
 
@@ -367,28 +364,23 @@ class GlobalFilterValuesValidationTestCase(
         self.assertEqual(response.status_code, 400, response.content)
         return response.json()["message"]
 
-    @pending("BE-1")
     def test_question_id_is_not_a_number(self):
         self.message(self.get(f"option_not_in:abc:{BROKEN}"))
 
-    @pending("BE-1")
     def test_no_options_given(self):
         self.message(self.get(f"option_not_in:{self.Q_STATUS}"))
 
-    @pending("BE-1")
     def test_empty_value_says_so(self):
         self.assertIn(
             "option_not_in requires a value",
             self.message(self.get(f"option_not_in:{self.Q_STATUS}:")),
         )
 
-    @pending("BE-1")
     def test_more_than_fifty_values_is_refused(self):
         # D-15: bounds what a public caller can send.
         values = [f"value_{i}" for i in range(51)]
         self.message(self.get(self.filter_out(self.Q_STATUS, *values)))
 
-    @pending("BE-1, BE-2")
     def test_a_value_with_delimiters_is_filtered_like_any_other(self):
         # D-15: older forms can hold values such as this one, generated
         # from a label before `:`, `,` and `|` were removed at the
@@ -403,7 +395,6 @@ class GlobalFilterValuesValidationTestCase(
             VISITED_SITES - {7},
         )
 
-    @pending("BE-1")
     def test_only_filter_out_is_supported(self):
         # "Show only Non-operational" (option_in) is not a global filter
         # in phase 1. It is a later phase, if users ask for it (D-13).
@@ -417,7 +408,6 @@ class GlobalFilterValuesValidationTestCase(
         )
         self.assertEqual(response.status_code, 400, response.content)
 
-    @pending("BE-1")
     def test_question_from_another_form_family(self):
         # "Does the school have a toilet?" is not about water points.
         self.assertIn(
@@ -425,12 +415,10 @@ class GlobalFilterValuesValidationTestCase(
             self.message(self.get(self.filter_out(self.Q_TOILET, NO))),
         )
 
-    @pending("BE-1")
     def test_question_without_options(self):
         # "How many households use this water point?" is a number.
         self.message(self.get(self.filter_out(self.Q_HOUSEHOLDS, "10")))
 
-    @pending("BE-1, BE-2")
     def test_any_form_of_the_family_can_filter_any_chart(self):
         # A registration chart filtered by a status-check question.
         response = self.get(
@@ -441,7 +429,6 @@ class GlobalFilterValuesValidationTestCase(
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-1, BE-2")
 class FilterOutRainyAcrossFormsTestCase(GlobalFilterTestMixin, APITestCase):
     """D-14: a question asked under the same name on several monitoring
     forms is one filter question, and the most recent answer wins.

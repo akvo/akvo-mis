@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.db import transaction, connection
 from django.db.models import (
     Q, Subquery, OuterRef,
@@ -6,8 +8,13 @@ from datetime import datetime as dt_datetime, timedelta, date
 from rest_framework.exceptions import ValidationError
 
 from api.v1.v1_data.models import FormData, Answers
+from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import Administration
+from api.v1.v1_visualization.constants import (
+    GLOBAL_CRITERIA_TYPES,
+    MAX_GLOBAL_CRITERIA,
+)
 
 
 @transaction.atomic
@@ -369,6 +376,217 @@ def split_criteria_by_form(criteria, form_id, parent_form_id):
     return same or None, parent or None
 
 
+# -- Dashboard-wide question filter (VIZ-027) --
+
+OPTION_TYPES = [QuestionTypes.option, QuestionTypes.multiple_option]
+
+
+def parse_global_criteria(items, form):
+    """Parse, family-check and group `global_criteria` (D-6, D-10, D-14,
+    D-15).
+
+    `items` holds one `option_not_in:<qid>:<value>` per value, split at
+    most twice so the value may contain `:`, `,` or `|`. Occurrences for
+    the same qid become one criterion whose values are ORed. Each
+    criterion carries its name group: the picked question, plus, for a
+    monitoring question, every live option question of the same `name` on
+    the family's monitoring forms. Raises ValueError with a user-facing
+    message.
+    """
+    if len(items) > MAX_GLOBAL_CRITERIA:
+        raise ValueError(
+            f"at most {MAX_GLOBAL_CRITERIA} values are allowed"
+        )
+    values_by_qid = defaultdict(list)
+    for item in items:
+        parts = item.split(":", 2)
+        if len(parts) < 3 or parts[0] not in GLOBAL_CRITERIA_TYPES:
+            raise ValueError(f"invalid entry: '{item}'")
+        if not parts[1].isdigit():
+            raise ValueError(f"invalid question id: '{item}'")
+        if not parts[2]:
+            raise ValueError(f"option_not_in requires a value: '{item}'")
+        values_by_qid[int(parts[1])].append(parts[2])
+
+    root_id = form.parent_id or form.id
+    family = Q(form_id=root_id) | Q(
+        form__parent_id=root_id, form__deleted_at__isnull=True,
+    )
+    picked = {
+        q.pk: q for q in Questions.objects.filter(
+            family, pk__in=list(values_by_qid), type__in=OPTION_TYPES,
+        )
+    }
+    missing = sorted(set(values_by_qid) - set(picked))
+    if missing:
+        raise ValueError(
+            f"question {missing[0]} is not in this form family"
+        )
+    monitoring_names = {
+        q.name for q in picked.values() if q.form_id != root_id
+    }
+    siblings = defaultdict(list)
+    if monitoring_names:
+        for pk, name, form_id in Questions.objects.filter(
+            form__parent_id=root_id,
+            form__deleted_at__isnull=True,
+            name__in=monitoring_names,
+            type__in=OPTION_TYPES,
+        ).values_list("pk", "name", "form_id"):
+            siblings[name].append((pk, form_id))
+    return [
+        {
+            "type": "option_not_in",
+            "parts": [qid, values],
+            "form_id": picked[qid].form_id,
+            "group": (
+                [(qid, picked[qid].form_id)]
+                if picked[qid].form_id == root_id
+                else siblings[picked[qid].name]
+            ),
+        }
+        for qid, values in values_by_qid.items()
+    ]
+
+
+def parse_request_global_criteria(request, form):
+    """VIZ-027: the request's `global_criteria`, parsed against `form`.
+
+    Call it AFTER check_ids and the tenant-scoped form lookup, never from
+    a serializer. It reads `getlist("global_criteria")`, the same list
+    check_ids saw. A DRF ListField would also accept
+    `global_criteria[0]=...`, which check_ids never sees: that would let an
+    anonymous caller filter on a question the dashboard does not offer.
+
+    Returns (criteria, None), (None, None) when absent, or
+    (None, "global_criteria: <reason>") for a 400.
+    """
+    items = request.query_params.getlist("global_criteria")
+    if not items:
+        return None, None
+    try:
+        return parse_global_criteria(items, form), None
+    except ValueError as error:
+        return None, f"global_criteria: {error}"
+
+
+def _any_option(values):
+    """OR of options__contains=[v]. Answers.options is a JSONField, so
+    ArrayField lookups such as __overlap do not exist."""
+    q = Q()
+    for value in values:
+        q |= Q(options__contains=[value])
+    return q
+
+
+def _in_date_range(date_filters, form_ids, date_name):
+    """Q over FormData: inside the dashboard's date range (D-14).
+
+    The date question is matched by NAME (`date_name`) on each form of the
+    group. A form without a same-named question uses `created`. Lazy: no
+    query runs until the widget's own query does.
+    """
+    if not date_filters:
+        return Q()
+    by_created = Q()
+    if date_filters.get("from_date"):
+        by_created &= Q(created__date__gte=date_filters["from_date"])
+    if date_filters.get("to_date"):
+        by_created &= Q(created__date__lte=date_filters["to_date"])
+    if not date_name:
+        return by_created
+    date_questions = Questions.objects.filter(
+        name=date_name, form_id__in=form_ids,
+    )
+    answers = Answers.objects.filter(question__in=date_questions)
+    if date_filters.get("from_date"):
+        answers = answers.filter(name__gte=date_filters["from_date"])
+    if date_filters.get("to_date"):
+        answers = answers.filter(
+            name__lte=_to_date_upper_bound(date_filters["to_date"]),
+        )
+    forms_with_date = date_questions.values("form_id")
+    return (
+        Q(form_id__in=forms_with_date, pk__in=answers.values("data_id"))
+        | (~Q(form_id__in=forms_with_date) & by_created)
+    )
+
+
+def excluded_registrations_subquery(
+    criterion, root_form_id, date_filters, date_name=None,
+):
+    """Lazy queryset of registration FormData ids to exclude.
+
+    Never NULL (D-5: one NULL would empty every chart): it selects
+    Answers.data_id, or the parent_id of submissions filtered with
+    parent__isnull=False. Ignores Answers.index, so any matching repeat
+    excludes (D-9).
+    """
+    values = criterion["parts"][1]
+    group = criterion["group"]
+    qids = [qid for qid, _ in group]
+    form_ids = {form_id for _, form_id in group}
+    matching = Answers.objects.filter(
+        _any_option(values), question_id__in=qids,
+    )
+    if form_ids == {root_form_id}:
+        # D-8: the registration answer itself; no "latest", no dates.
+        return matching.filter(
+            data__is_pending=False, data__is_draft=False,
+        ).values("data_id")
+    # D-14: per registration, the latest submission across the group's
+    # forms that answered one of the group's questions, inside the range.
+    # One DISTINCT ON pass over those submissions, not a correlated
+    # subquery per registration: BE-6 measured the correlated form at
+    # one loop per registration (+145% on a 10,000-site family).
+    latest_answered = (
+        FormData.objects.filter(
+            _in_date_range(date_filters, form_ids, date_name),
+            form_id__in=form_ids,
+            parent__isnull=False,
+            is_pending=False,
+            is_draft=False,
+            pk__in=Answers.objects.filter(
+                question_id__in=qids,
+            ).values("data_id"),
+        )
+        .order_by("parent_id", "-created", "-id")
+        .distinct("parent_id")
+        .values("id")
+    )
+    return FormData.objects.filter(
+        pk__in=latest_answered,
+        parent__isnull=False,
+        id__in=matching.values("data_id"),
+    ).values("parent_id")
+
+
+def apply_global_exclusions(qs, column, root_form_id, params):
+    """qs minus every registration a global criterion excludes (D-3).
+
+    `column` holds the row's registration id: "id" for registration rows,
+    "parent_id" for monitoring submissions. A no-op without criteria.
+    """
+    criteria = params.get("global_criteria") or []
+    if not criteria:
+        return qs
+    date_filters = build_date_filters(params)
+    # Resolved once: every criterion matches the date question by name.
+    date_qid = date_filters.get("date_question_id")
+    date_name = (
+        Questions.objects.filter(pk=date_qid)
+        .values_list("name", flat=True).first()
+        if date_qid else None
+    )
+    for criterion in criteria:
+        qs = qs.exclude(**{
+            f"{column}__in": excluded_registrations_subquery(
+                criterion, root_form_id, date_filters, date_name,
+            ),
+        })
+    return qs
+
+
 def get_base_monitoring_qs(form, monitoring_form_id, params):
     """Build base queryset for monitoring data.
 
@@ -411,6 +629,8 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
         qs = apply_parent_criteria_to_qs(
             qs, True, params.get("parent_criteria"),
         )
+        # Rows are registrations annotated with latest_id (D-3).
+        qs = apply_global_exclusions(qs, "id", parent_form.id, params)
         return qs, True, date_filters
 
     qs = FormData.objects.filter(
@@ -456,6 +676,11 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
     )
     qs = apply_parent_criteria_to_qs(
         qs, False, params.get("parent_criteria"),
+    )
+    # Monitoring submissions point at their registration; registration
+    # rows are their own (D-3).
+    qs = apply_global_exclusions(
+        qs, "parent_id" if is_monitoring else "id", parent_form.id, params,
     )
     return qs, False, date_filters
 

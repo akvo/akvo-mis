@@ -29,6 +29,7 @@ from api.v1.v1_visualization.scatter_functions import (
     handle_scatter,
 )
 from api.v1.v1_visualization.functions import (
+    parse_request_global_criteria,
     resolve_default_administration_id,
     tenant_scoped_forms,
 )
@@ -39,6 +40,7 @@ from api.v1.v1_visualization.public_scope import (
     check_ids,
     question_ids_in_columns,
     question_ids_in_criteria,
+    question_ids_in_global_criteria,
     resolve_view_scope,
 )
 from utils.custom_serializer_fields import (
@@ -239,10 +241,20 @@ def visualization_values(request, version):
                 request.query_params.get("criteria")
             ),
         ],
+        filter_question_ids=question_ids_in_global_criteria(
+            request.query_params.getlist("global_criteria")
+        ),
     )
     form = get_object_or_404(
         tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
+    # VIZ-027: parsed here, after the checks above and against the
+    # tenant-scoped form, from the same list check_ids read.
+    global_criteria, error = parse_request_global_criteria(request, form)
+    if error:
+        return Response(
+            {"message": error}, status=status.HTTP_400_BAD_REQUEST,
+        )
     question = validated.get("question")
 
     params = {
@@ -278,6 +290,7 @@ def visualization_values(request, version):
             "include_empty", False
         ),
         "admin_level": validated.get("admin_level"),
+        "global_criteria": global_criteria,
     }
 
     # Scatter mode
@@ -434,10 +447,20 @@ def visualization_escalation(request, form_id, version):
                 request.query_params.get("filter_criteria")
             ),
         ],
+        filter_question_ids=question_ids_in_global_criteria(
+            request.query_params.getlist("global_criteria")
+        ),
     )
     parent_form = get_object_or_404(
         tenant_scoped_forms(tenant), pk=form_id
     )
+    global_criteria, error = parse_request_global_criteria(
+        request, parent_form,
+    )
+    if error:
+        return Response(
+            {"message": error}, status=status.HTTP_400_BAD_REQUEST,
+        )
     result = handle_escalation(
         parent_form=parent_form,
         monitoring_form_id=validated["monitoring_form_id"],
@@ -455,6 +478,7 @@ def visualization_escalation(request, form_id, version):
                 "date_question_id"
             ),
             "filter_criteria": validated.get("filter_criteria"),
+            "global_criteria": global_criteria,
             "query_string": [
                 (k, v)
                 for k, values in request.query_params.lists()

@@ -9,11 +9,17 @@
 # Plain functions over dicts, like dashboard_functions.py. Nothing here
 # touches a request or a response.
 
-from api.v1.v1_forms.models import Forms, Questions
+from collections import defaultdict
+
+from django.db.models import Prefetch
+
+from api.v1.v1_forms.models import Forms, QuestionOptions, Questions
 from api.v1.v1_visualization.constants import DashboardKind
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardWidgetSerializer,
+    serialize_question,
 )
+from api.v1.v1_visualization.functions import OPTION_TYPES
 
 
 def build_snapshot(dashboard):
@@ -38,8 +44,129 @@ def build_snapshot(dashboard):
 
     widgets = dashboard.widgets.order_by("order", "id")
     return {
-        "default_filters": dashboard.default_filters or {},
+        "default_filters": _snapshot_default_filters(
+            dashboard.default_filters or {}, dashboard.root_form_id,
+        ),
         "widgets": DashboardWidgetSerializer(widgets, many=True).data,
+    }
+
+
+def _options_prefetch():
+    return Prefetch(
+        "options", queryset=QuestionOptions.objects.order_by("order", "id"),
+    )
+
+
+def _merge_options(option_lists):
+    """One entry per value; differing labels joined with " / " (D-14).
+
+    The first list's order and labels lead; values found only in later
+    lists follow, in their order.
+    """
+    labels = {}
+    for options in option_lists:
+        for option in options:
+            seen = labels.setdefault(option["value"], [])
+            if option["label"] not in seen:
+                seen.append(option["label"])
+    return [
+        {"value": value, "label": " / ".join(names)}
+        for value, names in labels.items()
+    ]
+
+
+def _snapshot_default_filters(default_filters, root_form_id):
+    """VIZ-027 D-7: the filter bar's questions, with label and options.
+
+    A public viewer cannot read form definitions, so what the bar shows
+    travels in the snapshot. A monitoring question's options are merged
+    over its name group (D-14). A question deleted before Publish is left
+    out; one deleted afterwards is dropped as the dashboard is read
+    (live_filter_questions).
+    """
+    entries = default_filters.get("questions")
+    if not isinstance(entries, list) or not entries:
+        return default_filters
+    ids = [
+        entry.get("question") for entry in entries
+        if isinstance(entry, dict)
+    ]
+    picked = {
+        question.id: question
+        for question in Questions.objects.filter(pk__in=ids)
+        .prefetch_related(_options_prefetch())
+    }
+    names = {
+        question.name for question in picked.values()
+        if question.form_id != root_form_id
+    }
+    siblings = defaultdict(list)
+    if names:
+        for question in (
+            Questions.objects.filter(
+                form__parent_id=root_form_id,
+                form__deleted_at__isnull=True,
+                name__in=names,
+                type__in=OPTION_TYPES,
+            )
+            .order_by("form_id", "id")
+            .prefetch_related(_options_prefetch())
+        ):
+            siblings[question.name].append(question)
+    questions = []
+    for entry in entries:
+        question = picked.get(entry.get("question"))
+        if question is None:
+            continue
+        options = [serialize_question(question).get("options") or []]
+        if question.form_id != root_form_id:
+            options += [
+                serialize_question(sibling).get("options") or []
+                for sibling in siblings[question.name]
+                if sibling.id != question.id
+            ]
+        questions.append({
+            "question": question.id,
+            "form": question.form_id,
+            "label": question.label,
+            "options": _merge_options(options),
+        })
+    return {**default_filters, "questions": questions}
+
+
+def live_filter_questions(default_filters, tenant):
+    """Copy of default_filters without filter questions that stopped
+    being filterable since Publish: deleted, moved off an option type, or
+    on a deleted form (VIZ-027, decided 2026-10-06).
+
+    Checked as the dashboard is served, like annotate_broken: a question
+    can be deleted at any time after Publish. One query, scoped by tenant
+    for the same reason annotate_broken is. The stored snapshot is not
+    touched.
+    """
+    entries = (default_filters or {}).get("questions")
+    if not isinstance(entries, list) or not entries:
+        return default_filters
+    # Still filterable means what parse_global_criteria accepts: a live
+    # option question on a live form. Anything else would 400 every widget
+    # the moment a viewer picked a value.
+    query = Questions.objects.filter(
+        id__in={
+            entry.get("question") for entry in entries
+            if isinstance(entry, dict)
+        },
+        type__in=OPTION_TYPES,
+        form__deleted_at__isnull=True,
+    )
+    if tenant is not None:
+        query = query.filter(**{Questions.TENANT_PATH: tenant})
+    live = set(query.values_list("id", flat=True))
+    return {
+        **default_filters,
+        "questions": [
+            entry for entry in entries
+            if isinstance(entry, dict) and entry.get("question") in live
+        ],
     }
 
 

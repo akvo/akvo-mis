@@ -135,6 +135,9 @@ def serialize_question(question):
     row = {
         "id": question.id,
         "label": question.label,
+        # VIZ-027 (A4): the builder matches same-named questions across
+        # the family's forms (D-8 warning, D-14 name groups).
+        "name": question.name,
         # "Multiple_Option" -> "multiple_option". BuilderInspector
         # compares against lowercase literals, so the map is lowercased
         # at the boundary rather than duplicated.
