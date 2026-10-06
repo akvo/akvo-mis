@@ -21,7 +21,9 @@ const WorkspaceNotFound = () => {
         <Col span={24} className="right-side">
           <div className="login-form-container" style={{ textAlign: "center" }}>
             <div style={{ fontSize: 46, lineHeight: 1 }}>🧭</div>
-            <Title level={2}>No workspace here</Title>
+            <Title level={2} style={{ marginTop: 12 }}>
+              No workspace here
+            </Title>
             <Text type="secondary">
               Nothing is set up at <strong>{window.location.hostname}</strong>.
               Check the address for a typo, or create this workspace.
