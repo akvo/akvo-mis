@@ -140,6 +140,19 @@ class ReservedTermsTestCase(SimpleTestCase):
     def test_an_ordinary_name_is_allowed(self):
         self.assertIsNone(self_service_reason("acme"))
 
+    def test_health_is_allowed_and_healthz_is_not(self):
+        """The line between a customer's name and an endpoint of ours.
+
+        `health` is the first name a customer of a public-health
+        information system reaches for and nothing about it reads as
+        the platform's own; `healthz` is the infrastructure
+        convention that does.
+        """
+        self.assertIsNone(self_service_reason("health"))
+        self.assertEqual(
+            self_service_reason("healthz"), RESERVED_MESSAGE
+        )
+
     def test_the_public_surface_never_raises(self):
         """Review Focus 5.
 
@@ -297,6 +310,10 @@ class CountryNamesTestCase(SimpleTestCase):
             names = module._build_country_names()
         self.assertIn("indonesia", names)
         self.assertIn("usa", names)
+        # The line that makes this prove degradation: both assertions
+        # above hold whether or not the French path actually fell
+        # back, and `allemagne` can only be present if it did not.
+        self.assertNotIn("allemagne", names)
 
 
 class ProfanityTestCase(SimpleTestCase):
@@ -529,7 +546,23 @@ class ProfanityFalsePositiveTestCase(SimpleTestCase):
             self.assertIsNone(self_service_reason(name), name)
 
     def test_agriculture_and_fisheries_names_are_accepted(self):
-        for name in ("smut-surveillance", "shrimping-survey"):
+        """Including four the French half of the wordlist refused.
+
+        `pedale` is the one worth reading twice: `pédale` is French
+        for *pedal*, "pompe à pédale" is the treadle pump, and our own
+        accent-stripping is what turned it into a wordlist match --
+        exactly the `peter` mechanism, invisible from reading either
+        list. `tanche` is a farmed fish, `gerbe` a sheaf of grain, and
+        a water butt is a rain barrel.
+        """
+        for name in (
+            "smut-surveillance",
+            "shrimping-survey",
+            "pompe-a-pedale",
+            "tanche-aquaculture",
+            "gerbe-cereales",
+            "butt-foundation",
+        ):
             self.assertIsNone(self_service_reason(name), name)
 
     def test_a_whitelisted_word_is_a_registerable_name(self):

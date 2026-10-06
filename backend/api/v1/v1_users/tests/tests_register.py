@@ -112,6 +112,14 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(
             response.json()["message"], "Subdomain is already registered"
         )
+        # Keyed by field, so the register form puts it under the input
+        # that caused it rather than in a detached toast -- the same
+        # treatment a reserved or profane name already gets, and this
+        # is the refusal registrants meet far more often.
+        self.assertEqual(
+            response.json()["details"]["subdomain"],
+            ["Subdomain is already registered"],
+        )
         self.assertFalse(
             SystemUser.objects.filter(email="owner@beta.org").exists()
         )

@@ -57,8 +57,12 @@ RESERVED_TERMS = frozenset(
         "auth", "login", "signup", "register", "static", "assets",
         "cdn", "media", "files", "storage", "upload", "uploads",
         "download", "downloads", "graphql", "rest", "v1", "v2", "ws",
-        "metrics", "health", "healthz", "ping", "robots", "sitemap",
+        "metrics", "healthz", "ping", "robots", "sitemap",
         "favicon",
+        # `health` is deliberately *not* here. It is the first name a
+        # customer of a public-health information system reaches for,
+        # and nothing about it reads as ours; `healthz` is the
+        # infrastructure convention that does.
         # Mail and domain control. RFC 2142 and the addresses a
         # certificate authority mails to validate domain control --
         # the group with a security rationale rather than a tidiness
@@ -253,6 +257,21 @@ DOMAIN_SAFE_WORDS = frozenset(
         "con",         # three letters, too ambiguous to be a signal
         "peter",       # a common name, and only here because our own
                        # accent-stripping turns `péter` into it
+        "pedale",      # `pédale` is French for *pedal*; "pompe à
+                       # pédale" is the treadle pump, standard
+                       # francophone irrigation and WASH equipment.
+                       # Same class as `peter`: manufactured by our
+                       # own accent-stripping and invisible from
+                       # reading either wordlist
+        "tanche",      # French for the tench, a farmed freshwater
+                       # fish; fisheries is a named target domain
+        "gerbe",       # a sheaf of grain
+        "butt",        # a water butt is a rain barrel, and Butt is a
+                       # common surname
+        # `hooker` is deliberately absent. The slur reading dominates
+        # the surname and place readings, and an operator can grant
+        # the name with a console rename if a real Hooker Foundation
+        # ever asks.
     }
 )
 
