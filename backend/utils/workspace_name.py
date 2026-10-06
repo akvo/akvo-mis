@@ -271,6 +271,19 @@ def _load_profanity_words():
             if entry in DOMAIN_SAFE_WORDS:
                 continue
             words.add(entry)
+    # An empty result is caught here, not at the `_PROFANITY`
+    # construction site, because `Profanity(words=[])` fails silently:
+    # the library's `custom_words or read_wordlist(default)` treats a
+    # falsy `[]` the same as `None` and loads its own 827-word bundled
+    # list instead -- the exact failure this design exists to avoid,
+    # and with no exception or log line to notice it by.
+    if not words:
+        raise RuntimeError(
+            "No profanity words loaded from {0}. An empty list "
+            "would make better_profanity silently fall back to its "
+            "bundled wordlist, which refuses `hiv`, `menstruation` "
+            "and `urine` as whole tokens.".format(_WORDLIST_PATH)
+        )
     return sorted(words)
 
 

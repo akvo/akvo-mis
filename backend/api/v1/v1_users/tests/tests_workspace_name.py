@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 from unittest import mock
 
@@ -320,6 +321,32 @@ class ProfanityTestCase(SimpleTestCase):
         self.assertNotIn("peter", words)
         for safe in DOMAIN_SAFE_WORDS:
             self.assertNotIn(safe, words)
+
+    def test_an_empty_wordlist_raises_rather_than_degrading(self):
+        """Review Focus 2.
+
+        `Profanity(words=[])` is not "no words" to better_profanity --
+        its `custom_words or read_wordlist(default)` treats a falsy
+        `[]` the same as `None` and silently loads the library's own
+        827-word bundled list instead, which refuses `hiv` and `gay`
+        as whole tokens. That is the exact failure this design exists
+        to avoid, so a wordlist that reads but yields no words (every
+        line a comment or blank, the realistic way this happens) must
+        raise rather than let `_PROFANITY` fall back to it quietly.
+        """
+        import utils.workspace_name as module
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            empty_wordlist = Path(tmp_dir) / "empty.txt"
+            empty_wordlist.write_text(
+                "# nothing but comments and blank lines\n\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                module, "_WORDLIST_PATH", empty_wordlist
+            ):
+                with self.assertRaises(RuntimeError):
+                    module._load_profanity_words()
 
 
 class ProfanityFalsePositiveTestCase(SimpleTestCase):
