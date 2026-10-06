@@ -224,3 +224,26 @@ class RegisterEndpointTestCase(TestCase):
             response.json()["details"]["subdomain"][0],
         )
         self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_profane_subdomain_is_rejected_with_its_reason(self):
+        response = self.register(subdomain="fuck-acme")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "isn't available",
+            response.json()["details"]["subdomain"][0],
+        )
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_a_clinical_name_is_accepted(self):
+        """The false positive that would be invisible in production.
+
+        A registrant refused here picks a worse name or leaves, and we
+        never hear about it -- so the accepted case is asserted at the
+        endpoint too, not only in the unit tests.
+        """
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="hiv-kenya")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Tenant.objects.filter(subdomain="hiv-kenya").exists()
+        )

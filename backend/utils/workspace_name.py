@@ -23,8 +23,10 @@ the message attaches to.
 import gettext
 import unicodedata
 from functools import lru_cache
+from pathlib import Path
 
 from django.conf import settings
+from better_profanity import Profanity
 import pycountry
 
 from utils.tenant_host import admin_subdomain, embed_hostname
@@ -99,7 +101,7 @@ EXTRA_COUNTRY_NAMES = frozenset(
     {
         "usa", "uk", "uae", "drc", "ivorycoast", "burma",
         "swaziland", "holland", "england", "scotland", "wales",
-        "northernireland",
+        "northernireland", "turkey",
     }
 )
 
@@ -185,6 +187,112 @@ def _tokens(value):
     return tokens
 
 
+PROFANITY_MESSAGE = (
+    "This name isn't available. Please choose a different one."
+)
+
+# Words the vendored list carries that a real workspace could
+# plausibly be named after. Every entry needs its reason, because an
+# entry without one is an entry nobody can audit later.
+DOMAIN_SAFE_WORDS = frozenset(
+    {
+        "fecal",       # faecal sludge management; the `unicef-fsm`
+                       # tenant is named after it
+        "sex",         # sexual and reproductive health
+        "sexual",      # ditto
+        "sexuality",   # ditto
+        "sexually",    # ditto
+        "rape",        # oilseed rape, a crop -- and GBV programming
+        "smut",        # a cereal plant disease
+        "shrimping",   # aquaculture and fisheries
+        "mong",        # the Mong (Hmong) people
+        "negro",       # Rio Negro; Negros Occidental
+        "bite",        # dog-bite and snakebite surveillance
+        "con",         # three letters, too ambiguous to be a signal
+        "peter",       # a common name, and only here because our own
+                       # accent-stripping turns `péter` into it
+    }
+)
+
+# Substring-scanned, to catch the run-together spellings the token
+# check cannot see. Curated to be collision-free *by construction*,
+# which is why it is short and hand-written rather than taken from the
+# file: `ass` (assam), `cum` (cumbria), `tit` (titicaca) and `cunt`
+# (scunthorpe, penistone) are all excluded and left to the token
+# check, and so is `merde`, which is a substring of `merdeka` --
+# Indonesian for independence, and a very common place name where
+# this software runs.
+HARD_BLOCKED = (
+    "fuck",
+    "shit",
+    "bitch",
+    "bastard",
+    "wanker",
+    "nigger",
+    "nigga",
+    "faggot",
+    "motherfuck",
+    "arsehole",
+    "asshole",
+    "dickhead",
+    "bollocks",
+    "pedophile",
+    "paedophile",
+    "putain",
+    "salope",
+    "connard",
+    "encule",
+)
+
+_WORDLIST_PATH = (
+    Path(__file__).resolve().parent / "wordlists" / "profanity.txt"
+)
+
+
+def _load_profanity_words():
+    """The vendored list, normalised and whitelisted.
+
+    `encoding` is explicit and ours rather than inherited from the
+    container locale: the file has accented French in it, and a
+    default-ASCII locale would make this a UnicodeDecodeError at
+    import.
+
+    Accents are stripped because a DNS label cannot carry one, so
+    `pédé` would otherwise be inert -- and the whitelist is applied to
+    the stripped form, which is the only way `peter` can cancel the
+    file's `péter`.
+    """
+    words = set()
+    with _WORDLIST_PATH.open(encoding="utf-8") as handle:
+        for line in handle:
+            entry = _strip_accents(line.strip().lower())
+            if not entry or entry.startswith("#"):
+                continue
+            if entry in DOMAIN_SAFE_WORDS:
+                continue
+            words.add(entry)
+    return sorted(words)
+
+
+# A private instance, and the words passed at construction. The
+# module-level `profanity` singleton would be shared state, and
+# `Profanity()` with no arguments -- or with an empty list, which the
+# library reads as "use the default" -- eagerly loads the bundled
+# 827-word list this design exists to avoid.
+_PROFANITY = Profanity(words=_load_profanity_words())
+
+
+def _profanity_reason(value):
+    normalized = _normalize(value)
+    for term in HARD_BLOCKED:
+        if term in normalized:
+            return PROFANITY_MESSAGE
+    for token in _tokens(value):
+        if _PROFANITY.contains_profanity(token):
+            return PROFANITY_MESSAGE
+    return None
+
+
 def host_collision_reason(value):
     """Would a workspace at this name shadow a host we need?
 
@@ -218,4 +326,4 @@ def self_service_reason(value):
     # "contact us" message rather than a profanity accusation.
     if normalized in _build_country_names():
         return COUNTRY_MESSAGE
-    return None
+    return _profanity_reason(value)
