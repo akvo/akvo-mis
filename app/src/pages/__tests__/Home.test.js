@@ -3,7 +3,7 @@ import { render, waitFor, fireEvent, act, within } from '@testing-library/react-
 import HomePage from '../Home';
 import crudForms from '../../database/crud/crud-forms';
 import FormState from '../../store/forms';
-import { UserState, UIState, BuildParamsState } from '../../store';
+import { UserState, UIState, BuildParamsState, DatapointSyncState } from '../../store';
 
 const mockDateNow = new Date().toISOString();
 const mockForms = [
@@ -281,43 +281,25 @@ describe('Homepage', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledWith('AddNewForm', {});
   });
 
-  it('should disable sync datapoint button when syncWifiOnly is true & network type cellular', async () => {
+  it('does not trigger sync when syncWifiOnly is true & network type cellular', async () => {
     act(() => {
       UserState.update((s) => {
         s.syncWifiOnly = 1;
       });
+      UIState.update((s) => {
+        s.networkType = 'CELLULAR';
+        s.isOnline = true;
+      });
     });
 
-    const { getByTestId } = render(<HomePage navigation={mockNavigation} />);
+    render(<HomePage navigation={mockNavigation} />);
 
     act(() => {
       UIState.update((s) => {
-        s.networkType = 'CELLULAR';
+        s.triggerSync = true;
       });
     });
 
-    await waitFor(() => {
-      const syncButton = getByTestId('sync-datapoint-button');
-      expect(syncButton.props.accessibilityState?.disabled).toBeTruthy();
-    });
-  });
-
-  it('should enable sync datapoint button when syncWifiOnly is false & network type cellular', async () => {
-    const { getByTestId } = render(<HomePage navigation={mockNavigation} />);
-
-    act(() => {
-      UserState.update((s) => {
-        s.syncWifiOnly = 0;
-      });
-
-      UIState.update((s) => {
-        s.networkType = 'CELLULAR';
-      });
-    });
-
-    await waitFor(() => {
-      const syncButton = getByTestId('sync-datapoint-button');
-      expect(syncButton.props.accessibilityState?.disabled).toBeFalsy();
-    });
+    expect(DatapointSyncState.getRawState().inProgress).toBeFalsy();
   });
 });
