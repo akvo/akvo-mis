@@ -22,7 +22,7 @@
   }
 
   #login {
-    background-color: $bg-light;
+    background-color: $bg-page;
     min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
     margin-top: -$padding-default;
     margin-bottom: -$padding-default;
