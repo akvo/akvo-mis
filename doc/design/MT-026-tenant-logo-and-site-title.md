@@ -89,7 +89,7 @@ sequenceDiagram
 **File**: `backend/api/v1/v1_users/views.py` & `backend/api/v1/v1_users/serializers.py`
 
 - Accept optional `logo` (either as an uploaded file or pre-uploaded image filename/URL).
-- Validate file type (PNG, JPEG, SVG, WebP) and maximum size (2MB).
+- Validate file type (PNG, JPEG, SVG) and maximum size (2MB).
 - Store file in `STORAGE_PATH/images/` and persist `logo` path in `tenant.logo`.
 
 #### 3. GET / PUT `/api/v1/admin/tenants/{id}` and `TenantSummarySerializer`
