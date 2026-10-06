@@ -42,7 +42,10 @@ from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
 from utils.tenant_host import is_admin_host
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
-from utils.workspace_name import host_collision_reason
+from utils.workspace_name import (
+    host_collision_reason,
+    self_service_reason,
+)
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -1177,13 +1180,16 @@ class RegisterSerializer(serializers.Serializer):
     )
 
     def validate_subdomain(self, value):
-        """Refuse a name that would shadow a host this install needs.
+        """Refuse a name sign-up may not claim.
 
-        The checks themselves live in `utils.workspace_name`, which
-        the console's rename serializer also calls. Two copies of a
-        security check are two things to keep in step.
+        Two families, both in `utils.workspace_name`: host collisions
+        apply everywhere and are shared with the console's rename,
+        while `self_service_reason` is sign-up's alone, because a
+        withheld name is one an operator can still grant.
         """
-        reason = host_collision_reason(value)
+        reason = host_collision_reason(value) or self_service_reason(
+            value
+        )
         if reason:
             raise serializers.ValidationError(reason)
         return value

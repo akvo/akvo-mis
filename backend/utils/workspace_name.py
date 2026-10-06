@@ -31,6 +31,57 @@ from utils.tenant_host import admin_subdomain, embed_hostname
 HOST_RESERVED_MESSAGE = "This subdomain is reserved."
 
 
+RESERVED_MESSAGE = (
+    "This name is reserved for system use. "
+    "Please choose a different one."
+)
+
+# Compared against the normalised name, so hyphens need no second
+# spelling: `no-reply` arrives here as `noreply`. Exact match only --
+# `akvo-indonesia` is a plausible workspace and only the bare term
+# reads as ours.
+#
+# A constant rather than a setting on purpose. Amending it is a
+# one-line pull request; an environment variable would be a knob
+# nobody turns, configured per deployment where nobody could audit it.
+RESERVED_TERMS = frozenset(
+    {
+        # Hosts and routing.
+        "www", "api", "app", "admin", "platform", "console", "portal",
+        "auth", "login", "signup", "register", "static", "assets",
+        "cdn", "media", "files", "storage", "upload", "uploads",
+        "download", "downloads", "graphql", "rest", "v1", "v2", "ws",
+        "metrics", "health", "healthz", "ping", "robots", "sitemap",
+        "favicon",
+        # Mail and domain control. RFC 2142 and the addresses a
+        # certificate authority mails to validate domain control --
+        # the group with a security rationale rather than a tidiness
+        # one.
+        "mail", "smtp", "imap", "pop", "pop3", "mx", "email",
+        "webmail", "mailer", "noreply", "postmaster", "hostmaster",
+        "webmaster", "abuse", "security", "autodiscover",
+        "autoconfig", "dkim", "dmarc", "spf",
+        # Environments.
+        "dev", "development", "test", "testing", "staging", "stage",
+        "prod", "production", "demo", "sandbox", "preview", "local",
+        "localhost", "beta", "alpha",
+        # Product and brand.
+        "akvo", "mis", "akvomis", "flow", "akvoflow", "rsr",
+        "support", "help", "helpdesk", "docs", "doc",
+        "documentation", "status", "blog", "news", "about", "contact",
+        "legal", "privacy", "terms", "pricing", "billing", "account",
+        "accounts", "settings", "dashboard", "dashboards",
+        # Generic and system. `default` earns its place twice over: it
+        # is the seeded single-host tenant's subdomain, and a
+        # workspace called `default` would be indistinguishable from
+        # it in every log line.
+        "public", "internal", "system", "root", "superuser",
+        "default", "none", "null", "undefined", "new", "create",
+        "edit", "delete", "me", "my",
+    }
+)
+
+
 def _strip_accents(value):
     """`Côte` -> `Cote`.
 
@@ -92,4 +143,16 @@ def host_collision_reason(value):
         candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN)
         if candidate.lower() == embed:
             return HOST_RESERVED_MESSAGE
+    return None
+
+
+def self_service_reason(value):
+    """Why may a self-service registrant not have this name?
+
+    Called from `RegisterSerializer` and nowhere else. The console
+    deliberately does not call it -- see the module docstring.
+    """
+    normalized = _normalize(value)
+    if normalized in RESERVED_TERMS:
+        return RESERVED_MESSAGE
     return None

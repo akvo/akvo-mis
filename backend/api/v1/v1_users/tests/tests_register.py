@@ -119,7 +119,10 @@ class RegisterEndpointTestCase(TestCase):
     def test_same_email_different_workspace_registration_succeeds(self):
         with mock.patch("api.v1.v1_users.views.send_email"):
             self.register()
-            response = self.register(subdomain="beta")
+            # Not "beta": that's a reserved environment name now, and
+            # this test's concern is the second workspace, not the
+            # name it happens to pick.
+            response = self.register(subdomain="zeta")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.registered_tenants().count(), 2)
         users = SystemUser.objects.filter(email=self.payload["email"])
@@ -142,6 +145,20 @@ class RegisterEndpointTestCase(TestCase):
         for bad in ("My App", "UPPER", "-lead", "trail-", "a_b"):
             response = self.register(subdomain=bad)
             self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_reserved_subdomain_is_rejected_with_its_reason(self):
+        # Not "admin": that name also matches ADMIN_SUBDOMAIN, and
+        # host_collision_reason is checked first, so it would return
+        # the host message instead of exercising this rule.
+        response = self.register(subdomain="platform")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "reserved for system use",
+            response.json()["details"]["subdomain"][0],
+        )
+        # The claim is what this rule protects, so assert the row is
+        # not there rather than only that the call failed.
         self.assertEqual(self.registered_tenants().count(), 0)
 
     def test_weak_password_is_rejected(self):

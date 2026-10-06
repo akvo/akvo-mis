@@ -4,9 +4,11 @@ from django.test import SimpleTestCase, override_settings
 
 from utils.workspace_name import (
     HOST_RESERVED_MESSAGE,
+    RESERVED_MESSAGE,
     _normalize,
     _tokens,
     host_collision_reason,
+    self_service_reason,
 )
 
 
@@ -87,3 +89,56 @@ class HostCollisionTestCase(SimpleTestCase):
 
     def test_an_ordinary_name_is_allowed(self):
         self.assertIsNone(host_collision_reason("acme"))
+
+
+class ReservedTermsTestCase(SimpleTestCase):
+    """Names that read as the platform's own infrastructure."""
+
+    def test_platform_hosts_are_refused(self):
+        for name in ("admin", "platform", "api", "www", "console"):
+            self.assertEqual(
+                self_service_reason(name), RESERVED_MESSAGE, name
+            )
+
+    def test_domain_control_addresses_are_refused(self):
+        """RFC 2142 names a CA will mail to validate domain control.
+
+        A workspace owning one of these hosts is a workspace that can
+        potentially be issued a certificate for it, which is why this
+        group is in the list at all.
+        """
+        for name in ("postmaster", "webmaster", "abuse", "security"):
+            self.assertEqual(
+                self_service_reason(name), RESERVED_MESSAGE, name
+            )
+
+    def test_environment_and_brand_names_are_refused(self):
+        for name in ("staging", "demo", "akvo", "mis", "default"):
+            self.assertEqual(
+                self_service_reason(name), RESERVED_MESSAGE, name
+            )
+
+    def test_hyphen_spellings_collapse_onto_the_same_term(self):
+        # `no-reply` normalises to `noreply`, so the list needs only
+        # one spelling of each.
+        self.assertEqual(
+            self_service_reason("no-reply"), RESERVED_MESSAGE
+        )
+
+    def test_a_reserved_term_as_a_prefix_is_allowed(self):
+        """Exact match only -- the bare term is what reads as ours."""
+        for name in ("akvo-indonesia", "mohhs-mis", "api-kenya"):
+            self.assertIsNone(self_service_reason(name), name)
+
+    def test_an_ordinary_name_is_allowed(self):
+        self.assertIsNone(self_service_reason("acme"))
+
+    def test_the_public_surface_never_raises(self):
+        """Review Focus 5.
+
+        DRF's `required` and `min_length` stop these at the field, so
+        these inputs never reach here through the API today. They are
+        still the module's public surface.
+        """
+        self.assertIsNone(self_service_reason(""))
+        self.assertIsNone(self_service_reason("a" * 63))
