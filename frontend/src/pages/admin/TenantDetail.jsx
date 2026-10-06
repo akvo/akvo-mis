@@ -1,8 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Row, Col, Card, Table, Switch, Button, Space, Tag, Modal } from "antd";
+import {
+  Row,
+  Col,
+  Card,
+  Table,
+  Switch,
+  Button,
+  Space,
+  Tag,
+  Modal,
+  Upload,
+} from "antd";
 import { EyeOutlined } from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
-import { api, store, uiText } from "../../lib";
+import { api, config, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import RenameModal from "./RenameModal";
 import useInspect from "./useInspect";
@@ -146,10 +157,129 @@ const TenantDetail = () => {
   return (
     <div>
       <Link to="/admin/tenants">{text.consoleTenants}</Link>
-      <h1>
-        {tenant.subdomain} <Tag>{tenant.state}</Tag>
-      </h1>
-      <div className="admin-subtle">{tenant.name}</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          marginTop: 8,
+          marginBottom: 8,
+        }}
+      >
+        <img
+          src={tenant.logo || config.siteLogo}
+          alt={tenant.name ? `${tenant.name} Logo` : "Workspace Logo"}
+          style={{
+            width: 48,
+            height: 48,
+            objectFit: "contain",
+            background: "#fafafa",
+            border: "1px solid #f0f0f0",
+            borderRadius: 6,
+            padding: 4,
+          }}
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = config.siteLogo;
+          }}
+        />
+        <div>
+          <h1 style={{ margin: 0, lineHeight: 1.2 }}>
+            {tenant.subdomain} <Tag>{tenant.state}</Tag>
+          </h1>
+          <div className="admin-subtle">{tenant.name}</div>
+          {tenant.state !== "deleted" && (
+            <Space size="small" style={{ marginTop: 4 }}>
+              <Upload
+                name="file"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  const allowed = [
+                    "image/png",
+                    "image/jpeg",
+                    "image/jpg",
+                    "image/svg+xml",
+                  ];
+                  if (!allowed.includes(file.type)) {
+                    notify({
+                      type: "error",
+                      message:
+                        "Only PNG, JPG, JPEG, and SVG files are allowed.",
+                    });
+                    return Upload.LIST_IGNORE;
+                  }
+                  if (file.size / (1024 * 1024) > 2) {
+                    notify({
+                      type: "error",
+                      message: "Image must be smaller than 2MB.",
+                    });
+                    return Upload.LIST_IGNORE;
+                  }
+                  return true;
+                }}
+                customRequest={({ file, onSuccess, onError }) => {
+                  const formData = new FormData();
+                  formData.append("file", file);
+                  api
+                    .post("upload/images", formData)
+                    .then((uploadRes) => {
+                      const filePath = uploadRes.data.file.startsWith("http")
+                        ? new URL(uploadRes.data.file).pathname
+                        : uploadRes.data.file;
+                      return api
+                        .put(`admin/tenants/${id}`, { logo: filePath })
+                        .then((res) => {
+                          setTenant(res.data);
+                          notify({
+                            type: "success",
+                            message: text.consoleLogoUpdated,
+                          });
+                          onSuccess(res.data);
+                        });
+                    })
+                    .catch((err) => {
+                      notify({
+                        type: "error",
+                        message:
+                          err.response?.data?.message ||
+                          "Failed to update logo",
+                      });
+                      onError(err);
+                    });
+                }}
+                accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+              >
+                <Button size="small">{text.consoleUploadLogo}</Button>
+              </Upload>
+              {Boolean(tenant.logo) && (
+                <Button
+                  size="small"
+                  danger
+                  onClick={() => {
+                    api
+                      .put(`admin/tenants/${id}`, { logo: null })
+                      .then((res) => {
+                        setTenant(res.data);
+                        notify({
+                          type: "success",
+                          message: text.consoleLogoRemoved,
+                        });
+                      })
+                      .catch(() => {
+                        notify({
+                          type: "error",
+                          message: "Failed to remove logo",
+                        });
+                      });
+                  }}
+                >
+                  {text.consoleRemoveLogo}
+                </Button>
+              )}
+            </Space>
+          )}
+        </div>
+      </div>
 
       {/* Nothing here applies to a deleted workspace. Restore only
           flips is_active, which the deleted state ignores, so the
