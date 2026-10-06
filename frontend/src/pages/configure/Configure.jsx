@@ -14,7 +14,7 @@ import {
 } from "antd";
 import { UploadOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Navigate, useNavigate } from "react-router-dom";
-import { api, store } from "../../lib";
+import { api, store, validateLogoFile, LOGO_ACCEPT_TYPES } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { fetchLevels } from "../../util/level";
 
@@ -41,26 +41,7 @@ const Configure = () => {
   const { user: authUser } = store.useState((s) => s);
 
   const beforeUpload = (file) => {
-    const allowedTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/jpg",
-      "image/svg+xml",
-    ];
-    const isAllowed = allowedTypes.includes(file.type);
-    const isLt2M = file.size / (1024 * 1024) <= 2;
-    if (!isAllowed) {
-      notify({
-        type: "error",
-        message: "Only PNG, JPG, JPEG, and SVG files are allowed.",
-      });
-      return Upload.LIST_IGNORE;
-    }
-    if (!isLt2M) {
-      notify({
-        type: "error",
-        message: "Image must be smaller than 2MB.",
-      });
+    if (!validateLogoFile(file, notify)) {
       return Upload.LIST_IGNORE;
     }
     return true;
@@ -274,7 +255,7 @@ const Configure = () => {
               <Form.Item
                 name="logo"
                 label="Workspace logo"
-                extra="Optional. PNG, JPG, JPEG, or SVG up to 2MB. Displayed in the top navigation and login page."
+                extra="Optional. PNG, JPG, or JPEG up to 2MB. Displayed in the top navigation and login page."
               >
                 <Upload
                   name="file"
@@ -284,7 +265,7 @@ const Configure = () => {
                   beforeUpload={beforeUpload}
                   customRequest={handleLogoUpload}
                   onRemove={handleLogoRemove}
-                  accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                  accept={LOGO_ACCEPT_TYPES}
                 >
                   {logoFileList.length < 1 && (
                     <Button

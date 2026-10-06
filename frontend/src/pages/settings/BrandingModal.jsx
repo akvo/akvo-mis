@@ -6,7 +6,14 @@ import {
   DeleteOutlined,
   LoadingOutlined,
 } from "@ant-design/icons";
-import { api, config, store, uiText } from "../../lib";
+import {
+  api,
+  config,
+  store,
+  uiText,
+  validateLogoFile,
+  LOGO_ACCEPT_TYPES,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { fetchTenant } from "../../util/tenant";
 
@@ -24,26 +31,7 @@ const BrandingModal = ({ open, onClose }) => {
   const [removing, setRemoving] = useState(false);
 
   const beforeUpload = (file) => {
-    const allowedTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/jpg",
-      "image/svg+xml",
-    ];
-    const isAllowed = allowedTypes.includes(file.type);
-    const isLt2M = file.size / (1024 * 1024) <= 2;
-    if (!isAllowed) {
-      notify({
-        type: "error",
-        message: "Only PNG, JPG, JPEG, and SVG files are allowed.",
-      });
-      return Upload.LIST_IGNORE;
-    }
-    if (!isLt2M) {
-      notify({
-        type: "error",
-        message: "Image must be smaller than 2MB.",
-      });
+    if (!validateLogoFile(file, notify)) {
       return Upload.LIST_IGNORE;
     }
     return true;
@@ -163,7 +151,7 @@ const BrandingModal = ({ open, onClose }) => {
           showUploadList={false}
           beforeUpload={beforeUpload}
           customRequest={handleUpload}
-          accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+          accept={LOGO_ACCEPT_TYPES}
         >
           <Button
             type="primary"

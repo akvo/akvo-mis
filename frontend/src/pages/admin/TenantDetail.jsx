@@ -18,7 +18,14 @@ import {
   DeleteOutlined,
 } from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
-import { api, config, store, uiText } from "../../lib";
+import {
+  api,
+  config,
+  store,
+  uiText,
+  validateLogoFile,
+  LOGO_ACCEPT_TYPES,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import RenameModal from "./RenameModal";
 import useInspect from "./useInspect";
@@ -124,19 +131,7 @@ const TenantDetail = () => {
   };
 
   const beforeLogoUpload = (file) => {
-    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"];
-    if (!allowed.includes(file.type)) {
-      notify({
-        type: "error",
-        message: "Only PNG, JPG, JPEG, and SVG files are allowed.",
-      });
-      return Upload.LIST_IGNORE;
-    }
-    if (file.size / (1024 * 1024) > 2) {
-      notify({
-        type: "error",
-        message: "Image must be smaller than 2MB.",
-      });
+    if (!validateLogoFile(file, notify)) {
       return Upload.LIST_IGNORE;
     }
     return true;
@@ -294,7 +289,7 @@ const TenantDetail = () => {
                 showUploadList={false}
                 beforeUpload={beforeLogoUpload}
                 customRequest={handleLogoUpload}
-                accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                accept={LOGO_ACCEPT_TYPES}
               >
                 <Button
                   size="small"

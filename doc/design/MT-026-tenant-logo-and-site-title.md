@@ -89,7 +89,7 @@ sequenceDiagram
 **File**: `backend/api/v1/v1_users/views.py` & `backend/api/v1/v1_users/serializers.py`
 
 - Accept optional `logo` (either as an uploaded file or pre-uploaded image filename/URL).
-- Validate file type (PNG, JPEG, SVG) and maximum size (2MB).
+- Validate file type (PNG, JPG, JPEG) and maximum size (2MB).
 - Store file in `STORAGE_PATH/images/` and persist `logo` path in `tenant.logo`.
 
 #### 3. GET / PUT `/api/v1/admin/tenants/{id}` and `TenantSummarySerializer`
@@ -164,7 +164,7 @@ sequenceDiagram
 
 1. Navigate to `/register`, complete step 1.
 2. Follow email activation link to `/configure`.
-3. Upload a custom logo (PNG/SVG) and submit.
+3. Upload a custom logo (PNG/JPG) and submit.
 4. Verify the top header displays the custom logo in the existing logo container.
 5. Verify the browser tab title reads `Akvo MIS - <RootUnitName>`.
 6. Navigate to `/forms` or other pages, verify browser tab title remains `Akvo MIS - <RootUnitName>`.

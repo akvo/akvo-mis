@@ -1,6 +1,7 @@
 from mis.settings import WEBDOMAIN
 from .serializers import (
     UploadImagesSerializer,
+    UploadLogoSerializer,
     AttachmentsSerializer,
 )
 from rest_framework.views import APIView
@@ -57,7 +58,7 @@ def upload_images(request, version):
 @extend_schema(
     tags=["Files"],
     summary="Upload Logo",
-    request=UploadImagesSerializer,
+    request=UploadLogoSerializer,
     responses={
         (200, "application/json"): inline_serializer(
             "UploadLogo",
@@ -80,7 +81,7 @@ def upload_logo(request, version):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    serializer = UploadImagesSerializer(data=request.data)
+    serializer = UploadLogoSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(
             validate_serializers_message(serializer.errors),

@@ -50,11 +50,26 @@ class ImageUploadTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            "File extension “txt” is not allowed. Allowed extensions are: jpg, png, jpeg, svg.",  # noqa
+            "File extension “txt” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
+        )
+        os.remove(filename)
+
+    def test_image_upload_rejects_svg(self):
+        filename = generate_image(filename="test_svg", extension="svg")
+        response = self.client.post(
+            "/api/v1/upload/images/",
+            {"file": open(filename, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            "File extension “svg” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
         )
         os.remove(filename)
 
     def test_logo_upload_success(self):
+        # Test PNG logo upload
         filename = generate_image(filename="test_logo", extension="png")
         response = self.client.post(
             "/api/v1/upload/logo/",
@@ -72,6 +87,22 @@ class ImageUploadTest(TestCase):
         )
         os.remove(f"{STORAGE_PATH}/logo/{uploaded_filename}")
         os.remove(filename)
+
+    def test_logo_upload_rejects_svg(self):
+        filename_svg = generate_image(
+            filename="test_logo_svg", extension="svg"
+        )
+        response_svg = self.client.post(
+            "/api/v1/upload/logo/",
+            {"file": open(filename_svg, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response_svg.status_code, 400)
+        self.assertEqual(
+            response_svg.json(),
+            "File extension “svg” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
+        )
+        os.remove(filename_svg)
 
     def test_logo_upload_forbidden_for_non_superadmin(self):
         from api.v1.v1_users.models import SystemUser
