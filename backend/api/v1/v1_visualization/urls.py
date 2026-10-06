@@ -44,6 +44,10 @@ urlpatterns = [
     ),
     # Dashboard builder AI suggestions (VIZ-AI-002)
     re_path(
+        r"^(?P<version>(v1))/manage/dashboards/ai/status$",
+        DashboardBuilderViewSet.as_view({"get": "ai_status"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/dashboards/ai/suggest-dashboard$",
         DashboardBuilderViewSet.as_view({"post": "suggest_dashboard"}),
     ),

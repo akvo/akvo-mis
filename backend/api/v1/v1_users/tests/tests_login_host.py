@@ -3,6 +3,7 @@ from django.test import TestCase, override_settings
 from api.v1.v1_profile.tests.mixins import (
     TENANT_PASSWORD,
     TenantTestHelperMixin,
+    set_embedding,
 )
 from api.v1.v1_users.models import SystemUser, Tenant
 
@@ -149,15 +150,26 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
     def test_workspace_host_names_its_workspace(self):
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"subdomain": "acme"})
+        self.assertEqual(
+            response.json(), {"subdomain": "acme", "language": "en"}
+        )
 
-    def test_nothing_beyond_that_one_field_is_exposed(self):
+    def test_nothing_beyond_subdomain_and_language_is_exposed(self):
         # Anonymous and cacheable, so the field list is the whole of the
         # security review — assert it exhaustively rather than by sample.
-        # The workspace's name used to be here too, for a login-page
-        # caption that no longer exists.
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
-        self.assertEqual(set(response.json().keys()), {"subdomain"})
+        self.assertEqual(
+            set(response.json().keys()), {"subdomain", "language"}
+        )
+
+    def test_workspace_host_returns_configured_language(self):
+        self.acme.tenant.language = "fr"
+        self.acme.tenant.save(update_fields=["language"])
+        response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(), {"subdomain": "acme", "language": "fr"}
+        )
 
     def test_base_domain_returns_nothing(self):
         response = self.client.get(TENANT_INFO, HTTP_HOST="app.com")
@@ -169,16 +181,17 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         # know this host is a workspace in order to show its login page.
         Tenant.objects.create(subdomain="fresh")
         response = self.client.get(TENANT_INFO, HTTP_HOST="fresh.app.com")
-        self.assertEqual(response.json(), {"subdomain": "fresh"})
+        self.assertEqual(
+            response.json(), {"subdomain": "fresh", "language": "en"}
+        )
 
     # ── the embedding entitlement (VIZ-019 D-12) ──
     #
     # This endpoint is the frontend's only source for it.
 
-    @override_settings(
-        EMBED_HOST="http://embed.app.com", EMBED_TENANTS={"acme"}
-    )
+    @override_settings(EMBED_HOST="http://embed.app.com")
     def test_a_signed_in_caller_is_told_the_workspace_may_embed(self):
+        set_embedding(self.acme.tenant)
         response = self.client.get(
             TENANT_INFO,
             HTTP_HOST="acme.app.com",
@@ -187,9 +200,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         self.assertEqual(response.status_code, 200)
         self.assertIs(response.json()["embed_enabled"], True)
 
-    @override_settings(
-        EMBED_HOST="http://embed.app.com", EMBED_TENANTS={"globex"}
-    )
+    @override_settings(EMBED_HOST="http://embed.app.com")
     def test_a_workspace_off_the_whitelist_is_told_it_may_not(self):
         response = self.client.get(
             TENANT_INFO,
@@ -198,10 +209,11 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         )
         self.assertIs(response.json()["embed_enabled"], False)
 
-    @override_settings(EMBED_HOST="", EMBED_TENANTS={"acme"})
-    def test_the_whitelist_alone_does_not_enable_embedding(self):
+    @override_settings(EMBED_HOST="")
+    def test_the_entitlement_alone_does_not_enable_embedding(self):
         # Being sold the feature is not the same as the deployment
         # having somewhere safe to render it. Both are required.
+        set_embedding(self.acme.tenant)
         response = self.client.get(
             TENANT_INFO,
             HTTP_HOST="acme.app.com",
@@ -209,13 +221,15 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         )
         self.assertIs(response.json()["embed_enabled"], False)
 
-    @override_settings(
-        EMBED_HOST="http://embed.app.com", EMBED_TENANTS={"acme"}
-    )
+    @override_settings(EMBED_HOST="http://embed.app.com")
     def test_an_anonymous_caller_is_not_told_which_tier_this_is(self):
         # The load-bearing half of putting the flag here. Which
         # commercial tier a customer is on is a fact about the customer,
         # and this endpoint answers a guessable host with no credentials
         # — so the field must be absent, not merely false.
+        set_embedding(self.acme.tenant)
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
-        self.assertEqual(set(response.json().keys()), {"subdomain"})
+        self.assertEqual(
+            set(response.json().keys()), {"subdomain", "language"}
+        )
+        self.assertNotIn("embed_enabled", response.json())

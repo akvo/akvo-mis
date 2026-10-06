@@ -7,7 +7,7 @@
 import json
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
 
@@ -25,14 +25,12 @@ from api.v1.v1_visualization.ai.ai_prompts import (
 )
 from api.v1.v1_visualization.constants import (
     SUPPORTED_QUESTION_TYPES,
+    VALID_REPEAT_AGG,
     WidgetTypes,
 )
 from api.v1.v1_visualization.models import Dashboard
 
 logger = logging.getLogger(__name__)
-
-# Valid aggregation methods for repeated questions
-VALID_REPEAT_AGG = {"sum", "average", "count", "min", "max"}
 
 # Non-visualized binary / asset question types
 NON_VISUALIZED_TYPES = {
@@ -40,6 +38,20 @@ NON_VISUALIZED_TYPES = {
     QuestionTypes.attachment,
     QuestionTypes.signature,
     QuestionTypes.text,  # long free-text notes
+}
+
+# Thematic questions supported on Map widgets (coloring/sizing)
+MAP_THEMATIC_QUESTION_TYPES = {
+    QuestionTypes.option,
+    QuestionTypes.multiple_option,
+    QuestionTypes.number,
+    QuestionTypes.autofield,
+}
+
+# Numeric question types supported on Scatter question_y
+NUMERIC_QUESTION_TYPES = {
+    QuestionTypes.number,
+    QuestionTypes.autofield,
 }
 
 MAX_OPTIONS_IN_PROMPT = 15
@@ -101,6 +113,7 @@ def extract_family_metadata(
         .filter(id=root_form_id, type=FormTypes.registration)
         .prefetch_related(
             "form_questions__options",
+            "form_questions__question_group",
         )
         .first()
     )
@@ -117,6 +130,7 @@ def extract_family_metadata(
     monitoring_forms = list(
         monitoring_qs.prefetch_related(
             "form_questions__options",
+            "form_questions__question_group",
         ).order_by("id")
     )
 
@@ -146,10 +160,14 @@ def extract_family_metadata(
             else:
                 opt_count = 0
 
+            type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
+            group_name = q.question_group.name if q.question_group else None
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
                 "type": q.type,
+                "type_name": type_name,
+                "group_name": group_name,
                 "option_count": opt_count,
             }
             if opts:
@@ -163,6 +181,7 @@ def extract_family_metadata(
                 "type": q.type,
                 "label": q.label or q.name,
                 "group_id": q.question_group_id,
+                "group_name": group_name,
             }
 
         sources_map[form_obj.id] = q_map
@@ -259,55 +278,51 @@ def _build_default_table_columns(
     form_qs = sources_map.get(form_id or 0, {})
     # Check date question for latest_date
     date_qs = [
-        q for q in form_qs.values()
-        if q.get("type") in (QuestionTypes.date, "date")
+        q for q in form_qs.values() if q.get("type") == QuestionTypes.date
     ]
     date_q_id = None
     if date_qs:
         date_q = date_qs[0]
         date_q_id = date_q["id"]
-        columns.append({
-            "key": f"q_{date_q_id}",
-            "source": "latest_date",
-            "question": date_q_id,
-            "label": "Last submission",
-        })
+        columns.append(
+            {
+                "key": f"q_{date_q_id}",
+                "source": "latest_date",
+                "question": date_q_id,
+                "label": "Last submission",
+            }
+        )
 
-    indicator_types = {
-        QuestionTypes.option,
-        QuestionTypes.multiple_option,
-        QuestionTypes.number,
-        QuestionTypes.autofield,
-        "option",
-        "multiple_option",
-        "number",
-        "autofield",
-    }
+    indicator_types = MAP_THEMATIC_QUESTION_TYPES
     m_indicators = [
-        q for q in form_qs.values()
+        q
+        for q in form_qs.values()
         if q.get("type") in indicator_types and q.get("id") != date_q_id
     ]
     for q in m_indicators[:3]:
-        columns.append({
-            "key": f"q_{q['id']}",
-            "source": "answer",
-            "question": q["id"],
-            "label": q.get("label") or f"Question {q['id']}",
-        })
+        columns.append(
+            {
+                "key": f"q_{q['id']}",
+                "source": "answer",
+                "question": q["id"],
+                "label": q.get("label") or f"Question {q['id']}",
+            }
+        )
 
     if len(m_indicators) < 2 and root_form_id and root_form_id in sources_map:
         root_qs = sources_map.get(root_form_id, {})
         r_indicators = [
-            q for q in root_qs.values()
-            if q.get("type") in indicator_types
+            q for q in root_qs.values() if q.get("type") in indicator_types
         ]
         for rq in r_indicators[:2]:
-            columns.append({
-                "key": f"q_{rq['id']}",
-                "source": "parent_answer",
-                "question": rq["id"],
-                "label": rq.get("label") or f"Question {rq['id']}",
-            })
+            columns.append(
+                {
+                    "key": f"q_{rq['id']}",
+                    "source": "parent_answer",
+                    "question": rq["id"],
+                    "label": rq.get("label") or f"Question {rq['id']}",
+                }
+            )
 
     return columns
 
@@ -349,6 +364,9 @@ def validate_and_sanitize_widgets(
         "map": "map",
         "map_view": "map",
         "geo_map": "map",
+        WidgetTypes.scatter: "scatter",
+        "scatter": "scatter",
+        "scatter_plot": "scatter",
     }
 
     for item in raw_widgets:
@@ -385,13 +403,7 @@ def validate_and_sanitize_widgets(
                 continue
             q_info = sources_map[form_id][q_id]
             q_type = q_info.get("type")
-            valid_types = SUPPORTED_QUESTION_TYPES | {
-                "number",
-                "option",
-                "multiple_option",
-                "date",
-                "autofield",
-            }
+            valid_types = SUPPORTED_QUESTION_TYPES | {QuestionTypes.geo}
             if q_type not in valid_types:
                 continue
 
@@ -404,6 +416,34 @@ def validate_and_sanitize_widgets(
         if repeat_agg and repeat_agg not in VALID_REPEAT_AGG:
             config["repeat_agg"] = "sum"
 
+        # Scatter widget question_y sanitization
+        if w_type == "scatter":
+            qy = config.get("question_y")
+            if qy:
+                # Validate question_y against sources_map
+                target_form_qs = sources_map.get(form_id or 0, {})
+                if qy not in target_form_qs:
+                    config["question_y"] = None
+                else:
+                    qy_type = target_form_qs[qy].get("type")
+                    if qy_type not in NUMERIC_QUESTION_TYPES:
+                        config["question_y"] = None
+
+        # Map widget question sanitization:
+        # In Akvo MIS, registration forms provide coordinates automatically.
+        # A map widget's `question` field is ONLY for optional thematic
+        # coloring (option/number) or None (point mode). It must NEVER be a
+        # `geo` question ID.
+        if w_type == "map":
+            if q_id:
+                target_form_qs = sources_map.get(form_id or 0, {})
+                q_info = target_form_qs.get(q_id, {})
+                q_type = q_info.get("type")
+                if q_type not in MAP_THEMATIC_QUESTION_TYPES:
+                    q_id = None
+            if not q_id:
+                config["map_mode"] = "point"
+
         # Table widget columns sanitization & auto-generation
         if w_type == "table":
             cols = config.get("columns")
@@ -414,8 +454,11 @@ def validate_and_sanitize_widgets(
                         continue
                     src = col.get("source")
                     if src not in (
-                        "parent_name", "administration", "answer",
-                        "parent_answer", "latest_date",
+                        "parent_name",
+                        "administration",
+                        "answer",
+                        "parent_answer",
+                        "latest_date",
                     ):
                         continue
                     col_qid = col.get("question") or col.get("question_id")
@@ -435,14 +478,16 @@ def validate_and_sanitize_widgets(
                             if not found_fid:
                                 continue
                             col_qid = int(col_qid)
-                    valid_cols.append({
-                        "key": col.get("key") or f"col_{len(valid_cols)}",
-                        "source": src,
-                        "question": col_qid,
-                        "label": (
-                            col.get("label") or col.get("key") or "Column"
-                        ),
-                    })
+                    valid_cols.append(
+                        {
+                            "key": col.get("key") or f"col_{len(valid_cols)}",
+                            "source": src,
+                            "question": col_qid,
+                            "label": (
+                                col.get("label") or col.get("key") or "Column"
+                            ),
+                        }
+                    )
 
             if not valid_cols:
                 valid_cols = _build_default_table_columns(
@@ -471,9 +516,7 @@ def validate_and_sanitize_widgets(
 
         default_title = f"{w_type.capitalize()} Widget"
         title = str(item.get("title") or default_title).strip()[:255]
-        rationale = str(
-            item.get("rationale") or "Recommended metric."
-        ).strip()
+        rationale = str(item.get("rationale") or "Recommended metric.").strip()
 
         valid_widgets.append(
             {
@@ -491,11 +534,43 @@ def validate_and_sanitize_widgets(
     return normalize_grid_layout(valid_widgets)
 
 
+def calculate_ai_timeout(
+    family_metadata: Optional[dict] = None,
+) -> Any:
+    """Compute adaptive HTTP timeout based on question count and form size.
+
+    - Base connect: 3.0s, base read: 6.0s
+    - Read timeout scales by 0.1s per question, bounded between 6.0s and 15.0s
+    - Total timeout = read_timeout + 3.0s (connect)
+    """
+    import httpx
+
+    total_questions = 0
+    if family_metadata and isinstance(family_metadata, dict):
+        root_form = family_metadata.get("root_form") or {}
+        root_qs = root_form.get("questions") or []
+        total_questions += len(root_qs)
+
+        mon_forms = family_metadata.get("monitoring_forms") or []
+        for m in mon_forms:
+            if isinstance(m, dict):
+                total_questions += len(m.get("questions") or [])
+
+    read_timeout = max(6.0, min(15.0, 6.0 + total_questions * 0.1))
+    total_timeout = read_timeout + 3.0
+    return httpx.Timeout(total_timeout, connect=3.0, read=read_timeout)
+
+
 class AISuggestionService:
     """Core recommendation orchestrator for Akvo MIS dashboards."""
 
     @classmethod
-    def _call_openai(cls, messages: list, schema: dict) -> Optional[dict]:
+    def _call_openai(
+        cls,
+        messages: list,
+        schema: dict,
+        timeout: Optional[Any] = None,
+    ) -> Optional[dict]:
         """Invoke OpenAI API with structured JSON and circuit breaker."""
         api_key = getattr(settings, "OPENAI_API_KEY", None)
         if not api_key:
@@ -509,9 +584,9 @@ class AISuggestionService:
             from openai import OpenAI
             import httpx
 
-            # Strict granular timeouts: 2.0s connect, 4.0s read
-            timeout = httpx.Timeout(5.0, connect=2.0, read=4.0)
-            client = OpenAI(api_key=api_key, timeout=timeout)
+            default_timeout = httpx.Timeout(10.0, connect=3.0, read=7.0)
+            call_timeout = timeout or default_timeout
+            client = OpenAI(api_key=api_key, timeout=call_timeout)
 
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -555,10 +630,11 @@ class AISuggestionService:
         metadata, sources_map = meta_res
         has_monitoring = metadata.get("has_monitoring", False)
 
-        # Attempt OpenAI generation
+        # Attempt OpenAI generation with adaptive timeout based on form size
         messages = build_starter_dashboard_prompt(metadata, user_intent)
+        call_timeout = calculate_ai_timeout(metadata)
         openai_result = cls._call_openai(
-            messages, STARTER_DASHBOARD_JSON_SCHEMA
+            messages, STARTER_DASHBOARD_JSON_SCHEMA, timeout=call_timeout
         )
 
         if openai_result and isinstance(openai_result, dict):
@@ -584,6 +660,8 @@ class AISuggestionService:
                     "suggested_name": s_name,
                     "description": desc,
                     "widgets": valid_widgets,
+                    "ai_available": True,
+                    "provider": "openai",
                 }
 
         # Fallback to deterministic heuristics
@@ -592,7 +670,57 @@ class AISuggestionService:
             heuristic_res["widgets"], sources_map, has_monitoring, root_form_id
         )
         heuristic_res["widgets"] = valid_widgets
+        heuristic_res["ai_available"] = False
+        heuristic_res["provider"] = "heuristics"
         return heuristic_res
+
+    @classmethod
+    def _deduplicate_suggestions(
+        cls,
+        suggestions: List[Dict],
+        existing_widgets: List[Dict],
+    ) -> List[Dict]:
+        """Post-filter suggestions to ensure no duplicate questions or maps."""
+        seen_questions = set()
+        has_map = False
+
+        for w in existing_widgets:
+            w_type = w.get("type")
+            if w_type in ("map", WidgetTypes.map):
+                has_map = True
+            q = w.get("question")
+            if q:
+                seen_questions.add(q)
+            cfg = w.get("config")
+            if isinstance(cfg, dict):
+                if cfg.get("question_y"):
+                    seen_questions.add(cfg["question_y"])
+                if cfg.get("date_question_id"):
+                    seen_questions.add(cfg["date_question_id"])
+
+        deduped = []
+        for s in suggestions:
+            stype = s.get("type")
+            sq = s.get("question")
+            if stype in ("map", WidgetTypes.map):
+                if has_map:
+                    continue
+                has_map = True
+
+            if sq and sq in seen_questions:
+                continue
+
+            cfg = s.get("config")
+            if isinstance(cfg, dict):
+                qy = cfg.get("question_y")
+                if qy and qy in seen_questions:
+                    continue
+
+            deduped.append(s)
+            if sq:
+                seen_questions.add(sq)
+
+        return deduped
 
     @classmethod
     def suggest_widgets(
@@ -601,6 +729,7 @@ class AISuggestionService:
         user,
         existing_widget_types: Optional[List[str]] = None,
         prompt_hint: Optional[str] = None,
+        existing_widgets: Optional[List[Dict]] = None,
     ) -> Optional[Dict]:
         """Generate contextual in-canvas widget suggestions."""
         dashboard = (
@@ -620,39 +749,92 @@ class AISuggestionService:
         has_monitoring = metadata.get("has_monitoring", False)
         root_form_id = dashboard.root_form_id
 
-        # Attempt OpenAI generation
-        messages = build_widget_suggestion_prompt(
-            metadata, existing_widget_types, prompt_hint
+        # Combine database-persisted widgets with client-supplied widgets
+        persisted = list(
+            dashboard.widgets.values(
+                "id", "type", "form_id", "question_id", "config", "title"
+            )
         )
-        openai_result = cls._call_openai(
-            messages, WIDGET_SUGGESTION_JSON_SCHEMA
+        all_existing: List[Dict] = []
+        for pw in persisted:
+            all_existing.append(
+                {
+                    "type": pw["type"],
+                    "form": pw["form_id"],
+                    "question": pw["question_id"],
+                    "config": pw["config"] or {},
+                    "title": pw.get("title") or "",
+                }
+            )
+        if existing_widgets and isinstance(existing_widgets, list):
+            for ew in existing_widgets:
+                if isinstance(ew, dict):
+                    all_existing.append(ew)
+
+        merged_types = list(
+            set(
+                (existing_widget_types or [])
+                + [w.get("type") for w in all_existing if w.get("type")]
+            )
         )
 
-        if openai_result and isinstance(openai_result, dict):
-            raw_suggestions = (
-                openai_result.get("suggestions")
-                or openai_result.get("widgets")
-                or openai_result.get("recommended_widgets")
-                or []
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        if not api_key:
+            return {
+                "ai_available": False,
+                "provider": "none",
+                "suggestions": [],
+            }
+
+        if not ai_circuit_breaker.is_open:
+            messages = build_widget_suggestion_prompt(
+                metadata,
+                existing_widget_types=merged_types,
+                prompt_hint=prompt_hint,
+                existing_widgets=all_existing,
             )
-            valid_suggestions = validate_and_sanitize_widgets(
-                raw_suggestions, sources_map, has_monitoring, root_form_id
+            call_timeout = calculate_ai_timeout(metadata)
+            openai_result = cls._call_openai(
+                messages,
+                WIDGET_SUGGESTION_JSON_SCHEMA,
+                timeout=call_timeout,
             )
-            if valid_suggestions:
+
+            if openai_result and isinstance(openai_result, dict):
+                raw_suggestions = (
+                    openai_result.get("suggestions")
+                    or openai_result.get("widgets")
+                    or openai_result.get("recommended_widgets")
+                    or []
+                )
+                valid_suggestions = validate_and_sanitize_widgets(
+                    raw_suggestions, sources_map, has_monitoring, root_form_id
+                )
+                deduped = cls._deduplicate_suggestions(
+                    valid_suggestions, all_existing
+                )
                 return {
-                    "suggestions": valid_suggestions
+                    "ai_available": True,
+                    "provider": "openai",
+                    "suggestions": deduped,
                 }
 
-        # Fallback to deterministic heuristics
+        # Fall back to deterministic heuristics
         heuristic_res = generate_widget_heuristics(
-            metadata, existing_widget_types, prompt_hint
+            metadata,
+            existing_widget_types=merged_types,
+            prompt_hint=prompt_hint,
+            existing_widgets=all_existing,
         )
         valid_suggestions = validate_and_sanitize_widgets(
-            heuristic_res["suggestions"],
+            heuristic_res.get("suggestions", []),
             sources_map,
             has_monitoring,
             root_form_id,
         )
+        deduped = cls._deduplicate_suggestions(valid_suggestions, all_existing)
         return {
-            "suggestions": valid_suggestions
+            "ai_available": True,
+            "provider": "heuristics",
+            "suggestions": deduped,
         }

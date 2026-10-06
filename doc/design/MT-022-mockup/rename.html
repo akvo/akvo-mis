@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rename dialog — MT-022 mockup</title>
+<link rel="stylesheet" href="mockup.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap">
+<style>
+.artboard{font-family:'Poppins',sans-serif;background:#f0f2f5;color:#141414}
+.artboard a{color:#1651b6;text-decoration:none}.artboard a:hover{color:#113d89}
+.artboard .fld{display:block;font-size:14px;color:#141414;margin-bottom:8px}
+.artboard .inp{box-sizing:border-box;padding:9px 12px;font-size:14px;font-family:inherit;border:1px solid #d9d9d9;border-radius:6px;background:#fff;color:#141414}
+</style>
+</head>
+<body>
+  <header class="chrome">
+    <a class="home" href="index.html">MT-022 mockups</a>
+    <nav>
+      <a href="tenants.html">Tenants</a>
+      <a href="tenant-detail.html">Tenant detail</a>
+      <a href="rename.html" class="here">Rename dialog</a>
+      <a href="operators.html">Operators</a>
+      <a href="inspecting.html">Inspecting</a>
+    </nav>
+  </header>
+  <main class="stage">
+    <div class="artboard">
+<div style="width: 900px; height: 700px; box-sizing: border-box; background: rgba(20,20,20,.45); display: flex; align-items: center; justify-content: center; padding: 24px;">
+
+  <div style="width: 620px; background: #ffffff; border-radius: 6px; box-shadow: 0 8px 28px rgba(21,34,50,.25); overflow: hidden; display: flex; flex-direction: column;">
+
+    <div style="padding: 18px 24px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 11px;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#cf1322" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path>
+        <path d="M12 9v4"></path><path d="M12 17h.01"></path>
+      </svg>
+      <span style="font-size: 16px; font-weight: 600;">Rename workspace</span>
+    </div>
+
+    <div style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+
+      <div>
+        <label class="fld" for="new-sub">New address</label>
+        <div style="display: flex; align-items: stretch;">
+          <input class="inp" id="new-sub" type="text" value="acme-corp" style="width: 200px; border-radius: 6px 0 0 6px; border-right: 0;">
+          <div style="display: flex; align-items: center; padding: 0 12px; background: #fafafa; border: 1px solid #d9d9d9; border-radius: 0 6px 6px 0; font-size: 14px; color: #666666;">.mis.akvo.org</div>
+        </div>
+        <div style="font-size: 12px; color: #666666; margin-top: 8px; line-height: 1.6;">
+          Currently <strong style="color: #141414; font-weight: 600;">acme.mis.akvo.org</strong>. Lowercase letters, digits and hyphens only.
+        </div>
+      </div>
+
+      <div style="background: #fff7e6; border: 1px solid #ffd591; border-radius: 6px; padding: 16px;">
+        <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#874d00" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle><path d="M12 8v5"></path><path d="M12 16h.01"></path>
+          </svg>
+          <span style="font-size: 14px; font-weight: 600; color: #874d00;">The old address stops working immediately</span>
+        </div>
+        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #874d00; line-height: 1.9;">
+          <li><strong style="font-weight: 600;">23 enrolled mobile devices</strong> will stop syncing and must each be reconfigured by hand in Settings.</li>
+          <li><strong style="font-weight: 600;">3 published dashboard links</strong> will break, including any bookmarked or printed.</li>
+          <li><strong style="font-weight: 600;">1 embedded dashboard</strong> will stop loading on the external sites hosting it.</li>
+        </ul>
+        <div style="font-size: 12px; color: #874d00; margin-top: 12px; padding-top: 12px; border-top: 1px solid #ffd591;">
+          Counted live from this workspace by <strong style="font-weight: 600;">GET /admin/tenants/42/rename-impact</strong>.
+        </div>
+      </div>
+
+      <div>
+        <label class="fld" for="confirm-sub">Type <strong style="font-weight: 600;">acme</strong> to confirm</label>
+        <input class="inp" id="confirm-sub" type="text" placeholder="acme" style="width: 100%;">
+      </div>
+
+    </div>
+
+    <div style="padding: 16px 24px; border-top: 1px solid #f0f0f0; background: #fafafa; display: flex; justify-content: flex-end; gap: 10px;">
+      <a href="tenant-detail.html" style="padding: 8px 20px; font-size: 14px; font-weight: 500; color: #141414; background: #ffffff; border: 1px solid #d9d9d9; border-radius: 999px;">Cancel</a>
+      <button type="button" disabled style="padding: 8px 20px; font-size: 14px; font-weight: 500; font-family: inherit; color: #ffffff; background: #ef7575; border: 1px solid #ef7575; border-radius: 999px; cursor: not-allowed;">Rename workspace</button>
+    </div>
+
+  </div>
+
+</div>
+    </div>
+  </main>
+</body>
+</html>

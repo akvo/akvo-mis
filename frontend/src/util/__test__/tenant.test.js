@@ -4,8 +4,10 @@ import {
   baseDomainHost,
   baseDomainUrl,
   fetchTenant,
+  onAdminHost,
   onBaseDomainHost,
   workspaceUrl,
+  adminUrl,
 } from "../tenant";
 import store from "../../lib/store";
 
@@ -16,11 +18,50 @@ const withLocation = (patch, run) => {
   delete window.location;
   window.location = { ...original, ...patch };
   try {
-    run();
+    return run();
   } finally {
     window.location = original;
   }
 };
+
+describe("the console's label", () => {
+  const appConfig = window.appConfig;
+
+  afterEach(() => {
+    window.appConfig = appConfig;
+  });
+
+  const at = (hostname, config) => {
+    window.appConfig = { ...appConfig, baseDomain: "app.com", ...config };
+    return withLocation({ hostname, protocol: "http:", port: "" }, () => ({
+      onAdmin: onAdminHost(),
+      url: adminUrl("/admin/tenants"),
+    }));
+  };
+
+  it("follows the deployment's configured label", () => {
+    // A deployment that already serves something at admin.<domain>
+    // moves the console; both the host test and the link it builds have
+    // to follow, or Exit lands nowhere.
+    const moved = { adminSubdomain: "console" };
+    expect(at("console.app.com", moved).onAdmin).toBe(true);
+    expect(at("admin.app.com", moved).onAdmin).toBe(false);
+    expect(at("console.app.com", moved).url).toBe(
+      "http://console.app.com/admin/tenants"
+    );
+  });
+
+  it("falls back to admin when config.js predates the key", () => {
+    // Regenerating config.js is a deploy step that gets missed, and a
+    // console that stops recognising its own host is a blank page.
+    // `{}` is the point: the key is absent, exactly as it is in a
+    // config.js generated before this setting existed.
+    expect(at("admin.app.com", {}).onAdmin).toBe(true);
+    expect(at("admin.app.com", {}).url).toBe(
+      "http://admin.app.com/admin/tenants"
+    );
+  });
+});
 
 describe("tenant util", () => {
   const appConfig = window.appConfig;
@@ -114,14 +155,16 @@ describe("tenant util", () => {
     );
   });
 
-  test("fetchTenant stores the workspace this host serves", async () => {
+  test("fetchTenant stores the workspace this host serves and updates language", async () => {
     axios.mockResolvedValue({
       status: 200,
-      data: { subdomain: "acme" },
+      data: { subdomain: "acme", language: "fr" },
     });
     const tenant = await fetchTenant();
     expect(tenant.subdomain).toBe("acme");
+    expect(tenant.language).toBe("fr");
     expect(store.getRawState().tenant.subdomain).toBe("acme");
+    expect(store.getRawState().language.active).toBe("fr");
   });
 
   test("a 204 means there is no workspace here", async () => {
@@ -148,5 +191,31 @@ describe("tenant util", () => {
     axios.mockRejectedValue(new Error("network"));
     await fetchTenant();
     expect(store.getRawState().tenantMissing).toBe(false);
+  });
+
+  describe("onAdminHost", () => {
+    it("is true on the console host", () => {
+      withLocation({ hostname: "admin.app.com" }, () => {
+        expect(onAdminHost()).toBe(true);
+      });
+    });
+
+    it("is false on a workspace and on the base domain", () => {
+      withLocation({ hostname: "acme.app.com" }, () => {
+        expect(onAdminHost()).toBe(false);
+      });
+      withLocation({ hostname: "app.com" }, () => {
+        expect(onAdminHost()).toBe(false);
+      });
+    });
+
+    it("is false with no base domain", () => {
+      // Unlike onBaseDomainHost, which treats a single-host install as
+      // the base domain, a single-host install has no console at all.
+      window.appConfig = { ...window.appConfig, baseDomain: "" };
+      withLocation({ hostname: "admin.app.com" }, () => {
+        expect(onAdminHost()).toBe(false);
+      });
+    });
   });
 });

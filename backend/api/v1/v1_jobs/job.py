@@ -216,9 +216,28 @@ def download_data(
     return data_items
 
 
+def _resolve_base_question_name(col_name: str, question_map: dict):
+    if col_name in question_map:
+        return col_name
+    if '_' in col_name:
+        candidate, suffix = col_name.rsplit('_', 1)
+        if suffix.isdigit() and candidate in question_map:
+            return candidate
+    return None
+
+
 def get_answer_label(answer_values, question_id):
-    if answer_values is None or answer_values != answer_values:
+    if (
+        answer_values is None
+        or answer_values != answer_values
+        or pd.isna(answer_values)
+    ):
         return answer_values
+    if not isinstance(answer_values, str):
+        if isinstance(answer_values, float) and answer_values.is_integer():
+            answer_values = str(int(answer_values))
+        else:
+            answer_values = str(answer_values)
     answer_value = answer_values.split("|")
     answer_label = []
     for value in answer_value:
@@ -227,7 +246,7 @@ def get_answer_label(answer_values, question_id):
         ).first()
         if options:
             answer_label.append(options.label)
-    return "|".join(answer_label)
+    return "|".join(answer_label) if answer_label else answer_values
 
 
 def generate_data_sheet(
@@ -270,43 +289,53 @@ def generate_data_sheet(
             question_map[question_name] = {
                 'id': question_id,
                 'type': question_type,
-                'name': question_name
+                'name': question_name,
             }
-        # Get all actual column names from the dataframe (including indexed)
-        actual_columns = [col for col in df.columns if col not in meta_columns]
-        # Ensure all question columns exist in dataframe (base and indexed)
-        for question in questions:
-            question_id, question_name, question_type = question
-            if question_name not in df:
-                df[question_name] = None
-
-        # Process labels for option-type questions (including indexed columns)
-        new_columns = {}
+        actual_columns = [
+            col for col in df.columns if col not in meta_columns
+        ]
+        # Process labels for option-type questions in-place
         if use_label:
             for col_name in actual_columns:
-                # Check if this is an indexed column (contains underscore)
-                base_question_name = (
-                    col_name.split('_')[0] if '_' in col_name else col_name
+                base_question_name = _resolve_base_question_name(
+                    col_name, question_map
                 )
-                if base_question_name in question_map:
+                if base_question_name:
                     question_info = question_map[base_question_name]
                     if question_info['type'] in [
                         QuestionTypes.option,
                         QuestionTypes.multiple_option,
                     ]:
-                        new_columns[col_name] = df[col_name].apply(
+                        df[col_name] = df[col_name].apply(
                             lambda x: get_answer_label(x, question_info['id'])
                         )
-        # Apply label transformations
-        if use_label and new_columns:
-            new_df = pd.DataFrame(new_columns)
-            df.drop(columns=list(new_columns.keys()), inplace=True)
-            df = pd.concat([df, new_df], axis=1)
-        # Reorder columns: meta columns first, then all question columns
-        available_question_columns = [
-            col for col in df.columns if col not in meta_columns
-        ]
-        final_columns = meta_columns + available_question_columns
+
+        # Build ordered question columns according to form definition schema
+        ordered_question_columns = []
+        for question in questions:
+            question_id, question_name, question_type = question
+            indexed_cols = [
+                c for c in df.columns
+                if c == question_name or re.match(
+                    rf"^{re.escape(question_name)}_\d+$", c
+                )
+            ]
+            if indexed_cols:
+                indexed_cols.sort(
+                    key=lambda c: (
+                        int(c.rsplit('_', 1)[1])
+                        if '_' in c and c.rsplit('_', 1)[1].isdigit()
+                        else 0
+                    )
+                )
+                ordered_question_columns.extend(indexed_cols)
+            else:
+                df[question_name] = None
+                ordered_question_columns.append(question_name)
+
+        final_columns = meta_columns + ordered_question_columns
+        # Only include columns that exist in the dataframe
+        final_columns = [c for c in final_columns if c in df.columns]
         df = df[final_columns]
         df.to_excel(writer, sheet_name="data", index=False)
         generate_definition_sheet(
@@ -405,45 +434,54 @@ def generate_monitoring_data_sheet(
             question_map[question_name] = {
                 'id': question_id,
                 'type': question_type,
-                'name': question_name
+                'name': question_name,
             }
         actual_columns = [
             col for col in df.columns
             if col not in monitoring_meta_columns
         ]
-        for question in questions:
-            question_id, question_name, question_type = question
-            if question_name not in df:
-                df[question_name] = None
 
-        new_columns = {}
         if use_label:
             for col_name in actual_columns:
-                base_question_name = (
-                    col_name.split('_')[0]
-                    if '_' in col_name else col_name
+                base_question_name = _resolve_base_question_name(
+                    col_name, question_map
                 )
-                if base_question_name in question_map:
+                if base_question_name:
                     question_info = question_map[base_question_name]
                     if question_info['type'] in [
                         QuestionTypes.option,
                         QuestionTypes.multiple_option,
                     ]:
-                        new_columns[col_name] = df[col_name].apply(
+                        df[col_name] = df[col_name].apply(
                             lambda x: get_answer_label(
                                 x, question_info['id']
                             )
                         )
-        if use_label and new_columns:
-            new_df = pd.DataFrame(new_columns)
-            df.drop(columns=list(new_columns.keys()), inplace=True)
-            df = pd.concat([df, new_df], axis=1)
 
-        available_question_columns = [
-            col for col in df.columns
-            if col not in monitoring_meta_columns
-        ]
-        final_columns = monitoring_meta_columns + available_question_columns
+        # Build ordered question columns according to form definition schema
+        ordered_question_columns = []
+        for question in questions:
+            question_id, question_name, question_type = question
+            indexed_cols = [
+                c for c in df.columns
+                if c == question_name or re.match(
+                    rf"^{re.escape(question_name)}_\d+$", c
+                )
+            ]
+            if indexed_cols:
+                indexed_cols.sort(
+                    key=lambda c: (
+                        int(c.rsplit('_', 1)[1])
+                        if '_' in c and c.rsplit('_', 1)[1].isdigit()
+                        else 0
+                    )
+                )
+                ordered_question_columns.extend(indexed_cols)
+            else:
+                df[question_name] = None
+                ordered_question_columns.append(question_name)
+
+        final_columns = monitoring_meta_columns + ordered_question_columns
         # Only include columns that exist in the dataframe
         final_columns = [c for c in final_columns if c in df.columns]
         df = df[final_columns]

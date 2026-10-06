@@ -62,6 +62,7 @@ from api.v1.v1_users.serializers import (
     RegisterSerializer,
     ResendActivationSerializer,
     ConfigureSerializer,
+    accounts_for_email,
     tenant_is_configured,
 )
 from mis.settings import REST_FRAMEWORK
@@ -70,28 +71,61 @@ from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
-from utils.tenant_host import tenant_may_embed, tenant_web_url
+from utils.tenant_host import (
+    console_web_url,
+    is_admin_host,
+    tenant_may_embed,
+    tenant_web_url,
+)
 
 
-# A week is long enough to survive a weekend and a spam folder, short
-# enough that a leaked link in an old mailbox is not a standing key.
-ACTIVATION_LINK_MAX_AGE = 60 * 60 * 24 * 7
+def user_web_url(user):
+    """The host an emailed link for this account must point at.
+
+    Everything past such a link is bound to one host: it ends in a
+    session, and a session is only valid where it was issued. An
+    operator has no workspace but does have a host -- the console --
+    and sending them to the base domain would hand them a session on
+    the one origin that refuses to sign them in.
+    """
+    if user.is_platform_admin and user.tenant_id is None:
+        return console_web_url()
+    return tenant_web_url(user.tenant)
 
 
 def send_activation_email(user):
+    # For an account that already has a password: the registrant chose
+    # one at signup and only has to prove the address is theirs, so the
+    # link ends in a session. An account someone else created has no
+    # password and must be sent send_invitation_email instead.
+    #
     # The signed pk is the whole token — no state to store and no row to
     # clean up if the link is never followed. `activate` bounds its age.
-    #
-    # The link points at the registrant's own workspace host, because
-    # everything past it is bound to that host: activation hands back a
-    # session, and that session is only valid there.
     send_email(
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
             "button_url": (
-                f"{tenant_web_url(user.tenant)}"
-                f"/activate/{signing.dumps(user.pk)}"
+                f"{user_web_url(user)}/activate/{signing.dumps(user.pk)}"
+            ),
+        },
+    )
+
+
+def send_invitation_email(user, invited_by):
+    # For an account created by somebody else, which therefore has no
+    # password. The link ends in the set-password form rather than in a
+    # session: an activation link would sign the invitee in with the
+    # unusable password they were created with, and the next time they
+    # came back there would be nothing to sign in with.
+    #
+    send_email(
+        type=EmailTypes.user_invite,
+        context={
+            "send_to": [user.email],
+            "admin": invited_by.name,
+            "button_url": (
+                f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
             ),
         },
     )
@@ -222,9 +256,16 @@ def signing_in_elsewhere(request, user):
 @api_view(["POST"])
 def login(request, version):
     # On a SaaS deployment the main site signs people up; signing in
-    # happens at the workspace's own address. Refusing here, before the
+    # happens at the workspace's own address. The console is the single
+    # exception, because its operators belong to no workspace and so
+    # have no workspace address to use. Refusing here, before the
     # serializer, means the credentials are never even evaluated.
-    if settings.BASE_DOMAIN and getattr(request, "tenant", None) is None:
+    on_admin_host = is_admin_host(request.get_host())
+    if (
+        settings.BASE_DOMAIN
+        and getattr(request, "tenant", None) is None
+        and not on_admin_host
+    ):
         return Response(
             {
                 "message": "Sign in at your workspace address, not the main "
@@ -254,7 +295,30 @@ def login(request, version):
         email=serializer.validated_data["email"],
         password=serializer.validated_data["password"],
         tenant=getattr(request, "tenant", None),
+        # The console admits operators and nobody else, and an operator
+        # is tenant-less by construction -- so say so, rather than
+        # leaving the backend to read a null tenant as "search
+        # everywhere". The guard below can only refuse a wrong row; it
+        # cannot pick the right one.
+        tenant_less_only=on_admin_host,
     )
+
+    # The console is for operators. A workspace account whose
+    # credentials happen to land here is refused before any session is
+    # minted, and told exactly what the base domain tells it -- so this
+    # host reveals nothing about which addresses exist where.
+    if (
+        user
+        and on_admin_host
+        and not (user.is_platform_admin and user.tenant_id is None)
+    ):
+        return Response(
+            {
+                "message": "Sign in at your workspace address, not the main "
+                "site"
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     if user:
         if user.deleted_at:
@@ -367,7 +431,10 @@ def tenant_info(request, version):
         # caller learns there is no workspace here, which is the answer
         # that sends it to the signup page.
         return Response(status=status.HTTP_204_NO_CONTENT)
-    body = {"subdomain": tenant.subdomain}
+    body = {
+        "subdomain": tenant.subdomain,
+        "language": getattr(tenant, "language", "en") or "en",
+    }
     if request.user.is_authenticated:
         body["embed_enabled"] = tenant_may_embed(tenant)
     return Response(body, status=status.HTTP_200_OK)
@@ -397,7 +464,10 @@ def register(request, version):
     # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
-            tenant = Tenant.objects.create(subdomain=validated["subdomain"])
+            tenant = Tenant.objects.create(
+                subdomain=validated["subdomain"],
+                language=validated.get("language", "en"),
+            )
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
                 password=validated["password"],
@@ -450,7 +520,13 @@ def activate_account(request, version):
         # SignatureExpired subclasses BadSignature, so an expired link and a
         # tampered one land here together — the client is told the same thing
         # either way and offered a resend.
-        pk = signing.loads(str(token), max_age=ACTIVATION_LINK_MAX_AGE)
+        # Read from settings at call time, not bound at import: the
+        # window is one setting shared with the purge job, and tests
+        # move it with override_settings.
+        pk = signing.loads(
+            str(token),
+            max_age=settings.TENANT_PURGE_AFTER_HOURS * 3600,
+        )
     except BadSignature:
         return invalid
     user = SystemUser.objects.filter(pk=pk, deleted_at=None).first()
@@ -473,15 +549,9 @@ def activate_account(request, version):
 )
 @api_view(["POST"])
 def resend_activation(request, version):
-    tenant = getattr(request, "tenant", None)
-    qs = SystemUser.objects.filter(
-        email=request.data.get("email"),
-        is_active=False,
-        deleted_at=None,
-    )
-    if tenant is not None:
-        qs = qs.filter(tenant=tenant)
-    user = qs.first()
+    user = accounts_for_email(
+        request, request.data.get("email"), is_active=False
+    ).first()
     if user:
         send_activation_email(user)
     # Always the same 200, whether or not anything was sent, so this cannot
@@ -619,15 +689,26 @@ def set_user_password(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     user: SystemUser = serializer.validated_data.get("invite")
+    # An invited account is created inactive and without a usable
+    # password, and accepting the invitation is this request -- so this
+    # is where it becomes active. Narrowed to accounts that never had a
+    # password, because the same endpoint completes a password *reset*:
+    # an account an administrator deactivated must not be able to let
+    # itself back in through "forgot password".
+    if not user.has_usable_password():
+        user.is_active = True
     user.set_password(serializer.validated_data.get("password"))
     user.updated = timezone.now()
     user.save()
-    refresh = RefreshToken.for_user(user)
-    data = UserSerializer(instance=user).data
-    data["token"] = str(refresh.access_token)
-    # TODO: remove invite from response
-    data["invite"] = signing.dumps(user.pk)
-    return Response(data, status=status.HTTP_200_OK)
+    # The same response login hands back, cookie included. This used to
+    # assemble its own -- a token in the body and no Set-Cookie -- which
+    # signed the invitee in for exactly as long as the tab went
+    # unreloaded: AUTH_TOKEN is the only thing App.js bootstraps a
+    # session from, so the first full page load after accepting landed
+    # on the login page. An operator met that on the return trip from
+    # inspecting a workspace, which is two cross-origin navigations and
+    # so cannot keep anything held in memory.
+    return authenticated_response(user)
 
 
 @extend_schema(
@@ -1045,7 +1126,7 @@ class UserEditDeleteView(APIView):
 def forgot_password(request, version):
     serializer = ForgotPasswordSerializer(
         data=request.data,
-        context={"tenant": getattr(request, "tenant", None)},
+        context={"request": request},
     )
     if not serializer.is_valid():
         return Response(
@@ -1053,7 +1134,13 @@ def forgot_password(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     user: SystemUser = serializer.validated_data.get("email")
-    url = f"{tenant_web_url(user.tenant)}/login/{signing.dumps(user.pk)}"
+    # Same host rule as send_activation_email, for the same reason: what
+    # waits at the end of this link is a session, and a session is only
+    # valid on the host that issued it. An operator has no workspace but
+    # does have a host, and the base domain refuses to sign anyone in --
+    # /login there redirects to find-workspace, so a reset sent to it
+    # can never be completed.
+    url = f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
     data = {"button_url": url, "send_to": [user.email]}
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(

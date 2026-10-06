@@ -1,12 +1,18 @@
 import React, { useState } from "react";
 import "../login/style.scss";
-import { Row, Col, Form, Input, Button, Typography } from "antd";
+import { Row, Col, Form, Input, Select, Button, Typography } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { baseDomainHost } from "../../util/tenant";
 
 const { Title, Text } = Typography;
+
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "Français" },
+];
+
 // Phase 1 of sign-up: just enough to claim a workspace. There is no login
 // here — the account is inactive until the emailed link is followed — so the
 // form ends on a confirmation state rather than a redirect.
@@ -34,6 +40,7 @@ const Register = () => {
         email: values.email,
         password: values.password,
         subdomain: values.subdomain,
+        language: values.language,
       })
       .then(() => {
         setSentTo(values.email);
@@ -126,7 +133,10 @@ const Register = () => {
               name="register-form"
               layout="vertical"
               onFinish={onFinish}
-              initialValues={{ subdomain: suggestedSubdomain }}
+              initialValues={{
+                subdomain: suggestedSubdomain,
+                language: "en",
+              }}
             >
               <Form.Item
                 name="email"
@@ -181,6 +191,22 @@ const Register = () => {
                 <Input.Password
                   disabled={loading}
                   placeholder="Repeat your password"
+                />
+              </Form.Item>
+              <Form.Item
+                name="language"
+                label="Workspace language"
+                rules={[
+                  {
+                    required: true,
+                    message: "Please select a workspace language.",
+                  },
+                ]}
+              >
+                <Select
+                  options={LANGUAGE_OPTIONS}
+                  disabled={loading}
+                  placeholder="Select language"
                 />
               </Form.Item>
               <Form.Item

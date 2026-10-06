@@ -27,41 +27,51 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "   - Generate all widget `title`, dashboard `suggested_name`, "
     "`description`, and `rationale` in the EXACT SAME LANGUAGE as the form "
     "labels.\n\n"
-    "3. APPROPRIATE VISUAL ENCODING:\n"
-    "   - Headline / Total Counts: Use `type: \"kpi\"` (col_span: 6 or 12).\n"
+    "3. APPROPRIATE VISUAL ENCODING & CARDINALITY RULES:\n"
+    '   - Headline / Total Counts: Use `type: "kpi"` (col_span: 6 or 12).\n'
     "     - Site count / registration total: `question: null`, `config: "
-    "{\"value_type\": \"number\"}`.\n"
+    '{"value_type": "number"}`.\n'
     "     - Numeric metrics: `form: <form_id>`, `question: "
-    "<question_id>`, `config: {\"value_type\": \"number\", "
-    "\"repeat_agg\": \"sum\"|\"average\"}`.\n"
-    "   - Categorical Distributions:\n"
-    "     - 2 to 5 choices: Use `type: \"pie\"` (col_span: 8 or 12), `config: "
-    "{\"group_by\": \"option\", \"variant\": \"doughnut\", \"color_scheme\": "
-    "\"categorical\"}`.\n"
-    "     - 6+ choices: Use `type: \"bar\"` (col_span: 8 or 12), `config: "
-    "{\"group_by\": \"option\", \"stack_by\": null, \"color_scheme\": "
-    "\"categorical\"}`.\n"
+    '<question_id>`, `config: {"value_type": "number", '
+    '"repeat_agg": "sum"|"average"}`.\n'
+    "   - Categorical Distributions (Check `option_count` in schema):\n"
+    '     - 2 to 5 choices (`option_count <= 5`): Use `type: "pie"` '
+    '(col_span: 8 or 12), `config: {"group_by": "option", "variant": '
+    '"doughnut", "color_scheme": "categorical"}`.\n'
+    '     - 6+ choices (`option_count >= 6`): Use `type: "bar"` '
+    '(col_span: 8 or 12), `config: {"group_by": "option", "stack_by": '
+    'null, "color_scheme": "categorical"}`.\n'
+    "   - Question Groups & Semantic Domain Clustering:\n"
+    "     - Use `group_name` (e.g. Demographics, Inspection Findings) to "
+    "cluster related questions into harmonious layouts.\n"
     "   - Temporal Trends:\n"
-    "     - Date questions on monitoring forms: Use `type: \"line\"` "
-    "(col_span: 12 or 24), `config: {\"group_by\": \"month\", "
-    "\"date_question_id\": <question_id>, \"color_scheme\": "
-    "\"categorical\"}`.\n"
+    '     - Date questions on monitoring forms: Use `type: "line"` '
+    '(col_span: 12 or 24), `config: {"group_by": "month", '
+    '"date_question_id": <question_id>, "color_scheme": '
+    '"categorical"}`.\n'
     "   - Geographic Maps:\n"
-    "     - If form has geolocation coordinates and categorical status "
-    "questions: Use `type: \"map\"` (col_span: 24), `config: "
-    "{\"map_mode\": \"category\", \"color_scheme\": \"categorical\"}`.\n"
+    "     - If form has geolocation questions (type: 5 / geo) or GPS:\n"
+    '       Use `type: "map"` (col_span: 24), `question: null` (or an '
+    "option/number question ID for thematic styling, NEVER a geo question), "
+    '`config: {"map_mode": "point", "color_scheme": '
+    '"categorical"}`.\n'
+    "   - Continuous Metric Correlations / Scatter Plots:\n"
+    "     - When comparing two continuous numeric metrics: Use "
+    '`type: "scatter"` (col_span: 12), `question: <x_question_id>`, '
+    '`config: {"question_y": <y_question_id>, '
+    '"color_scheme": "categorical"}`.\n'
     "   - Escalation / Monitoring Tables:\n"
-    "     - Use `type: \"table\"` (col_span: 24), `question: null`, ONLY on "
+    '     - Use `type: "table"` (col_span: 24), `question: null`, ONLY on '
     "child monitoring forms.\n"
     "     - `config.columns` MUST be pre-populated with standard columns:\n"
-    "       - parent_name: `{\"key\": \"parent_name\", \"source\": "
-    "\"parent_name\", \"label\": \"Datapoint name\"}`\n"
-    "       - administration: `{\"key\": \"administration\", \"source\": "
-    "\"administration\", \"label\": \"Administration\"}`\n"
-    "       - date (if any): `{\"key\": \"q_<id>\", \"source\": "
-    "\"latest_date\", \"question\": <id>, \"label\": \"Last submission\"}`\n"
-    "       - indicators: `{\"key\": \"q_<id>\", \"source\": \"answer\", "
-    "\"question\": <id>, \"label\": \"<label>\"}`\n"
+    '       - parent_name: `{"key": "parent_name", "source": '
+    '"parent_name", "label": "Datapoint name"}`\n'
+    '       - administration: `{"key": "administration", "source": '
+    '"administration", "label": "Administration"}`\n'
+    '       - date (if any): `{"key": "q_<id>", "source": '
+    '"latest_date", "question": <id>, "label": "Last submission"}`\n'
+    '       - indicators: `{"key": "q_<id>", "source": "answer", '
+    '"question": <id>, "label": "<label>"}`\n'
     "     - `config.criteria: []`.\n\n"
     "4. VISUAL DIVERSITY & PALETTE BALANCE:\n"
     "   - A starter dashboard must contain 4 to 6 complementary widgets.\n"
@@ -70,26 +80,26 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "2 distribution charts in the middle, 1 trend/map/table at bottom).\n\n"
     "5. FORM SCOPE & MEASURE RULES:\n"
     "   - For child monitoring forms (`form != root_form_id`), "
-    "ALWAYS set `config.measure: \"all_submissions\"` for line charts or "
-    "`config.measure: \"current_state\"` for bar/pie/kpi charts.\n"
+    'ALWAYS set `config.measure: "all_submissions"` for line charts or '
+    '`config.measure: "current_state"` for bar/pie/kpi charts.\n'
     "   - For the root registration form (`form == root_form_id`), "
     "NEVER set `measure` (omit or set to null).\n"
     "   - If `has_monitoring: false`, NEVER generate `table` widgets.\n\n"
     "6. OUTPUT FORMAT:\n"
     "   - Respond ONLY with a valid JSON object matching this schema:\n"
     "     {\n"
-    "       \"suggested_name\": \"string\",\n"
-    "       \"description\": \"string\",\n"
-    "       \"widgets\": [\n"
+    '       "suggested_name": "string",\n'
+    '       "description": "string",\n'
+    '       "widgets": [\n'
     "         {\n"
-    "           \"type\": \"kpi\" | \"pie\" | \"bar\" |\n"
-    "                   \"line\" | \"table\" | \"map\",\n"
-    "           \"title\": \"string\",\n"
-    "           \"col_span\": 6 | 8 | 12 | 24,\n"
-    "           \"form\": integer,\n"
-    "           \"question\": integer | null,\n"
-    "           \"config\": { ... },\n"
-    "           \"rationale\": \"string\"\n"
+    '           "type": "kpi" | "pie" | "bar" |\n'
+    '                   "line" | "table" | "map" | "scatter",\n'
+    '           "title": "string",\n'
+    '           "col_span": 6 | 8 | 12 | 24,\n'
+    '           "form": integer,\n'
+    '           "question": integer | null,\n'
+    '           "config": { ... },\n'
+    '           "rationale": "string"\n'
     "         }\n"
     "       ]\n"
     "     }"
@@ -101,25 +111,61 @@ WIDGET_SUGGESTION_SYSTEM_PROMPT = (
     "form family schema and recommend 3 to 5 complementary widgets based on "
     "user intent.\n\n"
     "RULES:\n"
-    "1. Prioritize questions related to the user's intent or "
-    "unvisualized/underrepresented questions.\n"
-    "2. Every widget must specify `form` (integer) and `question` (integer).\n"
-    "3. Use standard chart types: \"kpi\", \"pie\", \"bar\", \"line\", "
-    "\"table\", \"map\".\n"
-    "4. Match the natural language of the form schema for all titles and "
-    "rationales.\n"
-    "5. Respond ONLY with a valid JSON object matching this schema:\n"
+    "1. USER INTENT PRECEDENCE (CRITICAL):\n"
+    '   - If the user specifies a particular chart type (e.g. "map", '
+    '"scatter", "trend"/"line", "pie", "bar", "table", "kpi") '
+    'or topic (e.g. "location"/"gps", "correlation"), you MUST '
+    "generate that requested widget type as the primary first suggestion "
+    "(`suggestions[0]`).\n"
+    "   - Secondary suggestions should complement the canvas with other "
+    "unvisualized questions.\n\n"
+    "2. VISUAL ENCODING BY CHART TYPE & CARDINALITY:\n"
+    "   - `map`: Use when location/GPS is requested or for `type_name: "
+    '"geo"` fields. `col_span: 24`, `question: null` (or an option/number '
+    'question ID for thematic coloring), `config: {"map_mode": "point", '
+    '"color_scheme": "categorical"}`.\n'
+    "   - `scatter`: Use when correlation between two continuous metrics is "
+    "requested. `col_span: 12`, `question: <x_question_id>`, `config: "
+    '{"question_y": <y_question_id>, "color_scheme": '
+    '"categorical"}`.\n'
+    "   - `pie`: Use for categorical breakdowns with 2-5 options "
+    '(`option_count <= 5`). `col_span: 8` or `12`, `config: {"group_by": '
+    '"option", "variant": "doughnut", "color_scheme": "categorical"}`.\n'
+    "   - `bar`: Use for categorical distributions with 6+ options "
+    '(`option_count >= 6`). `col_span: 8` or `12`, `config: {"group_by": '
+    '"option", "stack_by": null, "color_scheme": "categorical"}`.\n'
+    "   - `line`: Use for temporal activity over time. `col_span: 12` "
+    'or `24`, `config: {"group_by": "month", "date_question_id": '
+    '<date_id>, "color_scheme": "categorical"}`.\n'
+    "   - `kpi`: Use for headline counts / numeric aggregates. `col_span: 6` "
+    'or `12`, `config: {"value_type": "number"}`.\n'
+    "   - `table`: Use for tabular monitoring logs (on child monitoring forms "
+    "only). `col_span: 24`, `question: null`.\n"
+    "   - Use `group_name` metadata to recommend cohesive widgets covering "
+    "distinct thematic areas.\n\n"
+    "3. DUPLICATE PREVENTION (CRITICAL):\n"
+    "   - Inspect the 'EXISTING WIDGETS' provided in the user context.\n"
+    "   - Do NOT suggest duplicate widgets for questions that are already "
+    "visualized on the dashboard.\n"
+    "   - Prioritize unvisualized questions and unexplored relationships.\n\n"
+    "4. FORM SCOPE & MEASURE:\n"
+    "   - For child monitoring forms (`form != root_form_id`), set "
+    '`config.measure: "all_submissions"` for line charts or '
+    '`config.measure: "current_state"` for bar/pie/kpi.\n'
+    "   - For root registration forms, omit `measure`.\n\n"
+    "5. OUTPUT FORMAT:\n"
+    "   - Respond ONLY with a valid JSON object matching this schema:\n"
     "   {\n"
-    "     \"suggestions\": [\n"
+    '     "suggestions": [\n'
     "       {\n"
-    "         \"type\": \"kpi\" | \"pie\" | \"bar\" |\n"
-    "                 \"line\" | \"table\" | \"map\",\n"
-    "         \"title\": \"string\",\n"
-    "         \"col_span\": 6 | 8 | 12 | 24,\n"
-    "         \"form\": integer,\n"
-    "         \"question\": integer | null,\n"
-    "         \"config\": { ... },\n"
-    "         \"rationale\": \"string\"\n"
+    '         "type": "kpi" | "pie" | "bar" |\n'
+    '                 "line" | "table" | "map" | "scatter",\n'
+    '         "title": "string",\n'
+    '         "col_span": 6 | 8 | 12 | 24,\n'
+    '         "form": integer,\n'
+    '         "question": integer | null,\n'
+    '         "config": { ... },\n'
+    '         "rationale": "string"\n'
     "       }\n"
     "     ]\n"
     "   }"
@@ -147,7 +193,7 @@ def build_starter_dashboard_prompt(
 
     user_content_parts = [
         "FORM FAMILY SCHEMA METADATA (JSON):",
-        f"```json\n{formatted_schema}\n```"
+        f"```json\n{formatted_schema}\n```",
     ]
 
     if sanitized_intent:
@@ -171,17 +217,34 @@ def build_starter_dashboard_prompt(
 def build_widget_suggestion_prompt(
     family_metadata: dict,
     existing_widget_types: list = None,
-    prompt_hint: str = None
+    prompt_hint: str = None,
+    existing_widgets: list = None,
 ) -> list:
     """Construct structured messages for in-canvas widget suggestions."""
     sanitized_hint = sanitize_user_input(prompt_hint)
     formatted_schema = json.dumps(family_metadata, indent=2)
 
-    types_str = str(existing_widget_types or [])
+    if existing_widgets and isinstance(existing_widgets, list):
+        summary_lines = []
+        for w in existing_widgets[:50]:
+            w_type = w.get("type", "unknown")
+            w_form = w.get("form")
+            w_q = w.get("question")
+            w_title = w.get("title") or ""
+            desc = f"Type: {w_type}, Form: {w_form}"
+            if w_q:
+                desc += f", Question ID: {w_q}"
+            if w_title:
+                desc += f" ('{w_title}')"
+            summary_lines.append(desc)
+        existing_str = "\n".join(f"- {s}" for s in summary_lines)
+    else:
+        existing_str = str(existing_widget_types or [])
+
     user_content_parts = [
         "FORM FAMILY SCHEMA METADATA (JSON):",
         f"```json\n{formatted_schema}\n```",
-        f"\nCURRENTLY EXISTING WIDGET TYPES ON CANVAS:\n{types_str}"
+        f"\nEXISTING WIDGETS ON CANVAS (DO NOT DUPLICATE):\n{existing_str}",
     ]
 
     if sanitized_hint:

@@ -128,6 +128,7 @@ def _create_map_widget(
     title: str,
     rationale: str,
     col_span: int = 24,
+    question_id: Optional[int] = None,
 ) -> Dict:
     return {
         "type": "map",
@@ -135,9 +136,32 @@ def _create_map_widget(
         "col_span": col_span,
         "color": None,
         "form": form_id,
-        "question": None,
+        "question": question_id,
         "config": {
-            "map_mode": "point",
+            "map_mode": "category" if question_id else "point",
+            "color_scheme": "categorical",
+        },
+        "rationale": rationale,
+    }
+
+
+def _create_scatter_widget(
+    form_id: int,
+    x_question_id: int,
+    y_question_id: Optional[int],
+    title: str,
+    rationale: str,
+    col_span: int = 12,
+) -> Dict:
+    return {
+        "type": "scatter",
+        "title": title,
+        "col_span": col_span,
+        "color": None,
+        "form": form_id,
+        "question": x_question_id,
+        "config": {
+            "question_y": y_question_id,
             "color_scheme": "categorical",
         },
         "rationale": rationale,
@@ -170,12 +194,14 @@ def _create_table_widget(
     if date_qs:
         date_q = date_qs[0]
         date_q_id = date_q["id"]
-        columns.append({
-            "key": f"q_{date_q_id}",
-            "source": "latest_date",
-            "question": date_q_id,
-            "label": "Last submission",
-        })
+        columns.append(
+            {
+                "key": f"q_{date_q_id}",
+                "source": "latest_date",
+                "question": date_q_id,
+                "label": "Last submission",
+            }
+        )
 
     indicator_types = [
         QuestionTypes.option,
@@ -184,28 +210,33 @@ def _create_table_widget(
         QuestionTypes.autofield,
     ]
     monitoring_indicators = [
-        q for q in _find_questions_by_type(qs, indicator_types)
+        q
+        for q in _find_questions_by_type(qs, indicator_types)
         if q.get("id") != date_q_id
     ]
     for q in monitoring_indicators[:3]:
-        columns.append({
-            "key": f"q_{q['id']}",
-            "source": "answer",
-            "question": q["id"],
-            "label": q.get("label") or f"Question {q['id']}",
-        })
+        columns.append(
+            {
+                "key": f"q_{q['id']}",
+                "source": "answer",
+                "question": q["id"],
+                "label": q.get("label") or f"Question {q['id']}",
+            }
+        )
 
     if len(monitoring_indicators) < 2 and root_questions:
         root_indicators = _find_questions_by_type(
             root_questions, indicator_types
         )
         for rq in root_indicators[:2]:
-            columns.append({
-                "key": f"q_{rq['id']}",
-                "source": "parent_answer",
-                "question": rq["id"],
-                "label": rq.get("label") or f"Question {rq['id']}",
-            })
+            columns.append(
+                {
+                    "key": f"q_{rq['id']}",
+                    "source": "parent_answer",
+                    "question": rq["id"],
+                    "label": rq.get("label") or f"Question {rq['id']}",
+                }
+            )
 
     return {
         "type": "table",
@@ -277,9 +308,7 @@ def generate_starter_heuristics(
 
     if all_cats:
         cat_q = all_cats[0]
-        opt_count = cat_q.get(
-            "option_count", len(cat_q.get("options", []))
-        )
+        opt_count = cat_q.get("option_count", len(cat_q.get("options", [])))
         if opt_count <= 5:
             widgets.append(
                 _create_pie_widget(
@@ -314,16 +343,43 @@ def generate_starter_heuristics(
             )
         )
 
-    # 4. Monitoring Form Trends / Tables (if monitoring exists)
+    # 4. Geographic Map if coordinates exist
+    geo_qs = _find_questions_by_type(root_questions, [QuestionTypes.geo])
+    if geo_qs:
+        widgets.append(
+            _create_map_widget(
+                form_id=root_id,
+                title=f"{root_name} Geographic Distribution",
+                rationale=f"Spatial map locating {root_name} sites.",
+                col_span=24,
+                question_id=None,
+            )
+        )
+
+    # 5. Scatter Plot if 2+ numeric questions exist
+    if len(numeric_qs) >= 2 and len(widgets) < 5:
+        widgets.append(
+            _create_scatter_widget(
+                form_id=root_id,
+                x_question_id=numeric_qs[0]["id"],
+                y_question_id=numeric_qs[1]["id"],
+                title=f"{numeric_qs[0]['label']} vs {numeric_qs[1]['label']}",
+                rationale=(
+                    f"Correlation between {numeric_qs[0]['label']} and "
+                    f"{numeric_qs[1]['label']}."
+                ),
+                col_span=12,
+            )
+        )
+
+    # 6. Monitoring Form Trends / Tables (if monitoring exists)
     if has_monitoring and monitoring_forms:
         m_form = monitoring_forms[0]
         m_id = m_form.get("id")
         m_name = m_form.get("name", "Monitoring")
         m_questions = m_form.get("questions", [])
 
-        date_qs = _find_questions_by_type(
-            m_questions, [QuestionTypes.date]
-        )
+        date_qs = _find_questions_by_type(m_questions, [QuestionTypes.date])
         if date_qs:
             date_q = date_qs[0]
             widgets.append(
@@ -348,16 +404,6 @@ def generate_starter_heuristics(
                 root_questions=root_questions,
             )
         )
-    elif _find_questions_by_type(root_questions, [QuestionTypes.geo]):
-        # Geographic map for registration forms with coordinates
-        widgets.append(
-            _create_map_widget(
-                form_id=root_id,
-                title=f"{root_name} Geographic Distribution",
-                rationale=f"Spatial map locating {root_name} sites.",
-                col_span=24,
-            )
-        )
 
     suggested_name = f"{root_name} Overview Dashboard"
     if user_intent:
@@ -379,19 +425,87 @@ def generate_widget_heuristics(
     metadata: Dict,
     existing_widget_types: Optional[List[str]] = None,
     prompt_hint: Optional[str] = None,
+    existing_widgets: Optional[List[Dict]] = None,
 ) -> Dict:
     """Generate 3-5 widget suggestions prioritizing unvisualized questions."""
     existing_types = set(existing_widget_types or [])
+    existing_question_ids = set()
+    has_map_widget = (
+        "map" in existing_types or WidgetTypes.map in existing_types
+    )
+
+    if existing_widgets and isinstance(existing_widgets, list):
+        for w in existing_widgets:
+            w_type = w.get("type")
+            if w_type:
+                existing_types.add(w_type)
+            q_id = w.get("question")
+            if q_id:
+                existing_question_ids.add(q_id)
+            config = w.get("config")
+            if isinstance(config, dict):
+                qy = config.get("question_y")
+                if qy:
+                    existing_question_ids.add(qy)
+                if config.get("date_question_id"):
+                    existing_question_ids.add(config["date_question_id"])
+            if w_type in ("map", WidgetTypes.map):
+                has_map_widget = True
+
     root_form = metadata.get("root_form", {})
     root_id = root_form.get("id")
+    root_name = root_form.get("name", "Registration")
     root_questions = root_form.get("questions", [])
 
     monitoring_forms = metadata.get("monitoring_forms", [])
     has_monitoring = metadata.get("has_monitoring", bool(monitoring_forms))
 
     suggestions: List[Dict] = []
+    used_suggestion_questions = set()
 
-    # 1. Check if Bar / Pie is missing
+    # 1. Check if Map is missing and Geo question exists
+    geo_qs = _find_questions_by_type(root_questions, [QuestionTypes.geo])
+    if geo_qs and not has_map_widget:
+        suggestions.append(
+            _create_map_widget(
+                form_id=root_id,
+                title=f"{root_name} Geographic Map",
+                rationale="Spatial map visualizing geographic distribution.",
+                col_span=24,
+                question_id=None,
+            )
+        )
+
+    # 2. Check if Scatter missing & 2+ unvisualized numeric questions exist
+    numeric_qs = _find_questions_by_type(
+        root_questions, [QuestionTypes.number, QuestionTypes.autofield]
+    )
+    unvis_numeric = [
+        q for q in numeric_qs if q["id"] not in existing_question_ids
+    ]
+    if (
+        len(unvis_numeric) >= 2
+        and "scatter" not in existing_types
+        and WidgetTypes.scatter not in existing_types
+    ):
+        label_x = unvis_numeric[0]["label"]
+        label_y = unvis_numeric[1]["label"]
+        suggestions.append(
+            _create_scatter_widget(
+                form_id=root_id,
+                x_question_id=unvis_numeric[0]["id"],
+                y_question_id=unvis_numeric[1]["id"],
+                title=f"{label_x} vs {label_y} Correlation",
+                rationale=(
+                    f"Scatter plot comparing {label_x} against {label_y}."
+                ),
+                col_span=12,
+            )
+        )
+        used_suggestion_questions.add(unvis_numeric[0]["id"])
+        used_suggestion_questions.add(unvis_numeric[1]["id"])
+
+    # 3. Check for unvisualized Bar / Pie option questions
     option_qs = _find_questions_by_type(
         root_questions,
         [
@@ -400,40 +514,51 @@ def generate_widget_heuristics(
             QuestionTypes.autofield,
         ],
     )
-    if option_qs:
-        for opt_q in option_qs[:2]:
-            suggestions.append(
-                _create_bar_widget(
-                    form_id=root_id,
-                    question_id=opt_q["id"],
-                    title=f"{opt_q['label']} Comparison",
-                    rationale=f"Visualizes {opt_q['label']}.",
-                    col_span=12,
-                )
+    unvis_options = [
+        q
+        for q in option_qs
+        if q["id"] not in existing_question_ids
+        and q["id"] not in used_suggestion_questions
+    ]
+    for opt_q in unvis_options[:3]:
+        suggestions.append(
+            _create_bar_widget(
+                form_id=root_id,
+                question_id=opt_q["id"],
+                title=f"{opt_q['label']} Comparison",
+                rationale=f"Visualizes {opt_q['label']}.",
+                col_span=12,
             )
+        )
+        used_suggestion_questions.add(opt_q["id"])
 
-    # 2. Check if Line chart is available
+    # 4. Check if Line chart is available on monitoring form
     if has_monitoring and monitoring_forms:
         m_form = monitoring_forms[0]
         m_id = m_form.get("id")
         m_questions = m_form.get("questions", [])
-        date_qs = _find_questions_by_type(
-            m_questions, [QuestionTypes.date]
-        )
-        if date_qs and WidgetTypes.line not in existing_types:
+        date_qs = _find_questions_by_type(m_questions, [QuestionTypes.date])
+        unvis_date = [
+            q for q in date_qs if q["id"] not in existing_question_ids
+        ]
+        if unvis_date and WidgetTypes.line not in existing_types:
             suggestions.append(
                 _create_line_widget(
                     form_id=m_id,
-                    date_q_id=date_qs[0]["id"],
+                    date_q_id=unvis_date[0]["id"],
                     title="Submission Trends",
                     rationale="Tracks chronological activity over time.",
                     col_span=12,
                     measure="all_submissions",
                 )
             )
+            used_suggestion_questions.add(unvis_date[0]["id"])
 
         # Table suggestion
-        if WidgetTypes.table not in existing_types:
+        if (
+            WidgetTypes.table not in existing_types
+            and "table" not in existing_types
+        ):
             suggestions.append(
                 _create_table_widget(
                     form_id=m_id,
@@ -445,12 +570,15 @@ def generate_widget_heuristics(
                 )
             )
 
-    # 3. Numeric KPI if unrepresented
-    numeric_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.number]
-    )
-    if numeric_qs and WidgetTypes.kpi not in existing_types:
-        num_q = numeric_qs[0]
+    # 5. Numeric KPI for unvisualized numeric questions
+    unvis_kpi_numeric = [
+        q
+        for q in numeric_qs
+        if q["id"] not in existing_question_ids
+        and q["id"] not in used_suggestion_questions
+    ]
+    if unvis_kpi_numeric and WidgetTypes.kpi not in existing_types:
+        num_q = unvis_kpi_numeric[0]
         suggestions.append(
             _create_kpi_widget(
                 form_id=root_id,
@@ -460,19 +588,26 @@ def generate_widget_heuristics(
                 col_span=6,
             )
         )
+        used_suggestion_questions.add(num_q["id"])
 
-    # Ensure at least 3 suggestions
+    # Ensure at least 3 suggestions with generic KPI if questions are saturated
     if len(suggestions) < 3:
-        suggestions.append(
-            _create_kpi_widget(
-                form_id=root_id,
-                question_id=None,
-                title="Registration Total",
-                rationale="Instant KPI metric of all recorded entries.",
-                col_span=6,
-            )
+        has_total_kpi = any(
+            w.get("type") == "kpi" and w.get("question") is None
+            for w in (existing_widgets or [])
         )
+        if not has_total_kpi and not any(
+            s.get("type") == "kpi" and s.get("question") is None
+            for s in suggestions
+        ):
+            suggestions.append(
+                _create_kpi_widget(
+                    form_id=root_id,
+                    question_id=None,
+                    title="Registration Total",
+                    rationale="Instant KPI metric of all recorded entries.",
+                    col_span=6,
+                )
+            )
 
-    return {
-        "suggestions": suggestions[:5]
-    }
+    return {"suggestions": suggestions[:5]}
