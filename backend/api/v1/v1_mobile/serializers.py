@@ -34,7 +34,12 @@ class MobileDataPointDownloadListSerializer(serializers.Serializer):
 
     @extend_schema_field(OpenApiTypes.DATETIME)
     def get_last_updated(self, obj):
-        return obj["updated"] if obj["updated"] else obj["created"]
+        # A rewritten file counts as a change: the device skips any datapoint
+        # whose `last_updated` it already holds, so without the stamp it
+        # would keep a stale copy forever (APP-517 D-5).
+        changed = obj["updated"] if obj["updated"] else obj["created"]
+        stamp = obj.get("file_generated_at")
+        return max(changed, stamp) if stamp else changed
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

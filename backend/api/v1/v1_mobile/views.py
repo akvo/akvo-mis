@@ -851,14 +851,25 @@ def get_datapoint_download_list(request, version):
     # conclude it was complete. See spec D-5.
     candidates = queryset
 
+    # Only rows a device can actually download: a registration row is listed
+    # once its file is written and newer than the row. Applied AFTER
+    # `candidates` on purpose -- a plot whose file is still owed is still a
+    # registered plot, and `geometry_total` must keep counting it, or the
+    # device would pass an overlap check against a set missing it (APP-517
+    # D-3). Monitoring rows have no file and are listed as before.
+    queryset = queryset.downloadable()
+
     geometry_full = (
         bool(geometry_question_ids)
         and request.GET.get("geometry_full") == "true"
     )
     if assignment.last_synced_at and not geometry_full:
+        # A rewritten file is a change too, or a regenerated file would never
+        # reach a device that had already synced (APP-517 D-5).
         queryset = queryset.filter(
             Q(created__gte=assignment.last_synced_at)
             | Q(updated__gte=assignment.last_synced_at)
+            | Q(file_generated_at__gte=assignment.last_synced_at)
         )
     queryset = queryset.values(
         "uuid",
@@ -868,6 +879,7 @@ def get_datapoint_download_list(request, version):
         "administration_id",
         "created",
         "updated",
+        "file_generated_at",
     ).order_by("-created")
 
     instance = paginator.paginate_queryset(queryset, request)

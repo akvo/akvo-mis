@@ -1,5 +1,6 @@
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from api.v1.v1_mobile.tests.mixins import DatapointFilesWrittenMixin
 from django.utils import timezone
 from rest_framework import status
 
@@ -23,7 +24,9 @@ LIST_ROW_KEYS = [
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
+class MobileDatapointGeometryTestCase(
+    DatapointFilesWrittenMixin, TestCase, ProfileTestHelperMixin
+):
     def setUp(self):
         call_command("administration_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)

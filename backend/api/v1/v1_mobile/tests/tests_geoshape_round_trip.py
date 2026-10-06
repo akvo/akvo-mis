@@ -1,5 +1,6 @@
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from api.v1.v1_mobile.tests.mixins import DatapointFilesWrittenMixin
 from rest_framework import status
 
 from api.v1.v1_data.models import Answers, FormData
@@ -19,7 +20,7 @@ MOVED_PLOT = [[9.05, 38.76], [9.06, 38.76], [9.06, 38.77]]
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class GeoshapeRoundTripTestCase(TestCase):
+class GeoshapeRoundTripTestCase(DatapointFilesWrittenMixin, TestCase):
     """A polygon must survive submit, storage and sync unchanged.
 
     Before this branch it could not be submitted at all: geoshape was in

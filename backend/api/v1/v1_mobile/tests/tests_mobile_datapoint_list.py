@@ -1,5 +1,6 @@
 from mis.settings import WEBDOMAIN
 from django.test import TestCase
+from api.v1.v1_mobile.tests.mixins import DatapointFilesWrittenMixin
 from django.core.management import call_command
 from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import (
@@ -12,7 +13,9 @@ from api.v1.v1_data.functions import add_fake_answers
 from rest_framework import status
 
 
-class MobileDataPointDownloadListTestCase(TestCase, ProfileTestHelperMixin):
+class MobileDataPointDownloadListTestCase(
+    DatapointFilesWrittenMixin, TestCase, ProfileTestHelperMixin
+):
     def setUp(self):
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")

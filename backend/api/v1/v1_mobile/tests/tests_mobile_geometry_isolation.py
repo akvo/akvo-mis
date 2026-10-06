@@ -6,6 +6,7 @@ from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import QuestionGroup, Questions
 from api.v1.v1_mobile.authentication import MobileAssignmentToken
 from api.v1.v1_mobile.models import MobileAssignment
+from api.v1.v1_mobile.tests.mixins import DatapointFilesWrittenMixin
 from api.v1.v1_profile.models import Administration
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -22,7 +23,9 @@ TENANT_PLOTS = {"acme": ADDIS_PLOT, "beta": TOKYO_PLOT}
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class GeometryTenantIsolationTestCase(TenantIsolationTestCase):
+class GeometryTenantIsolationTestCase(
+    DatapointFilesWrittenMixin, TenantIsolationTestCase
+):
     """Geometry is a new bulk field, which is an easy place to leak.
 
     `Answers.objects` is not tenant-scoped on its own: `TenantManager`
@@ -146,7 +149,9 @@ class GeometryTenantIsolationTestCase(TenantIsolationTestCase):
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class GeometryAssignmentScopingTestCase(TenantIsolationTestCase):
+class GeometryAssignmentScopingTestCase(
+    DatapointFilesWrittenMixin, TenantIsolationTestCase
+):
     """Within one tenant, an enumerator sees only their administrations.
 
     A datapoint they could not already see must not become visible just
