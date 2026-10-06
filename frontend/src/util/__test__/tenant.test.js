@@ -155,24 +155,35 @@ describe("tenant util", () => {
     );
   });
 
-  test("fetchTenant stores the workspace this host serves and updates language", async () => {
+  test("fetchTenant stores the workspace this host serves and updates language and title", async () => {
     axios.mockResolvedValue({
       status: 200,
-      data: { subdomain: "acme", language: "fr" },
+      data: {
+        subdomain: "acme",
+        name: "Acme Corp",
+        logo: "/images/logo.png",
+        language: "fr",
+      },
     });
     const tenant = await fetchTenant();
     expect(tenant.subdomain).toBe("acme");
+    expect(tenant.name).toBe("Acme Corp");
+    expect(tenant.logo).toBe("/images/logo.png");
     expect(tenant.language).toBe("fr");
     expect(store.getRawState().tenant.subdomain).toBe("acme");
+    expect(store.getRawState().tenant.name).toBe("Acme Corp");
+    expect(store.getRawState().tenant.logo).toBe("/images/logo.png");
     expect(store.getRawState().language.active).toBe("fr");
+    expect(document.title).toBe("Akvo MIS - Acme Corp");
   });
 
-  test("a 204 means there is no workspace here", async () => {
+  test("a 204 means there is no workspace here and resets title", async () => {
     // axios gives an empty body as "", which must not be mistaken for a
     // workspace whose subdomain happens to be blank.
     axios.mockResolvedValue({ status: 204, data: "" });
     expect(await fetchTenant()).toBeNull();
     expect(store.getRawState().tenant).toBeNull();
+    expect(document.title).toBe("Akvo MIS");
   });
 
   test("a 404 means this host serves no workspace at all", async () => {

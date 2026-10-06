@@ -105,5 +105,10 @@ export const fetchTenant = () =>
           s.language.active = tenant.language;
         }
       });
+      if (tenant && tenant.name) {
+        document.title = `Akvo MIS - ${tenant.name}`;
+      } else {
+        document.title = "Akvo MIS";
+      }
       return tenant;
     });

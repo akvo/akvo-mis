@@ -2,7 +2,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 
 module.exports = function (app) {
   app.use(
-    ["/api/**", "/static-files/**"],
+    ["/api/**", "/static-files/**", "/images/**"],
     createProxyMiddleware({
       target: "http://127.0.0.1:8000",
       // Deliberately false. changeOrigin rewrites the Host header to the
