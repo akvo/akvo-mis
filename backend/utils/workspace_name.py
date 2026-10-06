@@ -21,6 +21,7 @@ serializer, and so the caller decides the status code and the field
 the message attaches to.
 """
 import gettext
+import re
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
@@ -174,17 +175,7 @@ def _tokens(value):
     two words even though it is a single DNS label, and splitting on
     digits is what stops that spelling walking past a word check.
     """
-    tokens = []
-    current = ""
-    for char in _strip_accents(value.lower()):
-        if char.isalpha():
-            current += char
-        elif current:
-            tokens.append(current)
-            current = ""
-    if current:
-        tokens.append(current)
-    return tokens
+    return re.findall(r"[a-z]+", _strip_accents(value.lower()))
 
 
 PROFANITY_MESSAGE = (
@@ -295,12 +286,75 @@ def _load_profanity_words():
 _PROFANITY = Profanity(words=_load_profanity_words())
 
 
+# What a digit stands in for when it is standing in for a letter.
+# Applied to the HARD_BLOCKED scan only -- see `_profanity_reason`.
+_LEET_FOLD = str.maketrans("0134578", "oieasst")
+
+
 def _profanity_reason(value):
-    normalized = _normalize(value)
-    for term in HARD_BLOCKED:
-        if term in normalized:
-            return PROFANITY_MESSAGE
-    for token in _tokens(value):
+    """Why this name reads as profane, or None.
+
+    Both halves of the match run **per token**, and that is the whole
+    point of this function. Scanning `HARD_BLOCKED` against
+    `_normalize(value)` -- the hyphen-free spelling -- turned every
+    hyphen into a word boundary the list was never audited against,
+    and the result was `wash-items` refused on a WASH platform
+    (`wash` + `items` -> `shit`), along with
+    `sludge-disposal-open-defecation` and `disposal-operations`
+    (-> `salope`), `handwashing-habit-change` (-> `bitch`) and
+    `relawan-kerja`, everyday Indonesian for volunteer work
+    (-> `wanker`). Those are the names this product's customers
+    actually have.
+
+    Three forms of each token are compared, because the two
+    tokenisers fail in opposite directions:
+
+    1. `_tokens(value)` splits on every non-letter, which is what
+       catches `acme2fuck`, and keeps working for the other callers
+       and tests that rely on it.
+    2. A punctuation-only split *preserves digits*, so the library
+       sees `sh1t` as one token and can match it against the
+       spelling variants it generates. `_tokens` shredded exactly
+       those: `sh1t-acme` became ['sh', 't', 'acme'] and `n1gga-data`
+       became ['n', 'gga', 'data'], so a racial slur was claimable
+       with the mechanism that catches it installed and switched off
+       by our own tokeniser.
+    3. The same token with digits folded onto the letters they stand
+       in for, which is what catches the run-together `n1ggadata`
+       that neither of the first two forms can see. The fold is fed
+       to the `HARD_BLOCKED` scan **only**: that list is
+       collision-free within a token, which bounds the false
+       positives the fold can invent, while the vendored thousand-word
+       list is not, so folding into it would be reckless. `water4all`
+       and `sdg6-monitoring` are the test that this stayed bounded.
+
+    Two trades are deliberate and worth stating, because both are
+    invisible from the code:
+
+    - **The hyphen-split evasion is given up.** `fu-ck-acme` was
+      refused before this change and is claimable after it, because
+      no token of it is profane. That is the price of not inventing
+      word boundaries, and it is the right price: a false positive
+      refuses a real customer *silently* -- they pick a worse name or
+      leave, and we never hear about it -- while a false negative is
+      one subdomain an operator renames from the console.
+    - **The leet fold has a ceiling.** A run-together leet spelling
+      whose base word is not in `HARD_BLOCKED` still gets through,
+      because the library half is whole-token and the fold does not
+      reach it. Widening the fold to the full wordlist is not the
+      upgrade path; adding the word to `HARD_BLOCKED` is, and only
+      if it is collision-free there.
+    """
+    stripped = _strip_accents(value.lower())
+    tokens = _tokens(value) + [
+        token for token in re.split(r"[^a-z0-9]+", stripped) if token
+    ]
+    for token in tokens:
+        for term in HARD_BLOCKED:
+            if term in token or term in token.translate(_LEET_FOLD):
+                return PROFANITY_MESSAGE
+        # The library sees only the unfolded token, so `sh1t` is
+        # answered by its own variant generation, not our fold.
         if _PROFANITY.contains_profanity(token):
             return PROFANITY_MESSAGE
     return None
