@@ -484,13 +484,21 @@ def register(request, version):
         # serializer would only be a read before a write — two concurrent
         # sign-ups would both pass it and one would still lose here. The
         # rolled-back transaction lets us name the field that lost.
-        taken = (
-            "Subdomain"
-            if Tenant.objects.filter(subdomain=validated["subdomain"]).exists()
-            else "Email"
-        )
+        subdomain_taken = Tenant.objects.filter(
+            subdomain=validated["subdomain"]
+        ).exists()
+        field = "subdomain" if subdomain_taken else "email"
+        taken = "Subdomain" if subdomain_taken else "Email"
+        message = f"{taken} is already registered"
+        # `details` is keyed by field name because that is the shape
+        # the serializer's own 400 has, and the register form maps it
+        # onto the input that caused it. Without it, a *taken* name --
+        # much the more frequent refusal -- fell through to the toast
+        # while a reserved one explained itself under the field, which
+        # is an inconsistency the registrant meets in practice. The
+        # `message` is unchanged for callers that still read it.
         return Response(
-            {"message": f"{taken} is already registered"},
+            {"message": message, "details": {field: [message]}},
             status=status.HTTP_400_BAD_REQUEST,
         )
     send_activation_email(user)

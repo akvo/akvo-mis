@@ -38,11 +38,14 @@ from utils.custom_serializer_fields import (
     CustomMultipleChoiceField,
 )
 from api.v1.v1_profile.constants import FeatureAccessTypes
-from django.conf import settings
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
-from utils.tenant_host import admin_subdomain, embed_hostname, is_admin_host
+from utils.tenant_host import is_admin_host
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
+from utils.workspace_name import (
+    host_collision_reason,
+    self_service_reason,
+)
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -1171,14 +1174,28 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     # A valid DNS label, because the subdomain will one day be one:
     # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
+    #
+    # The minimum is a reservation rule rather than a format rule:
+    # one- and two-character labels are the scarcest names in a global
+    # namespace, so they are granted deliberately, like country names.
+    # Expressed here rather than in `self_service_reason` because DRF
+    # already states it, and a hand-rolled length check would be
+    # re-implementing a built-in. DRF runs field constraints before
+    # `validate_subdomain`, so a short name reports its length and
+    # never reaches the name rules -- there is no point telling
+    # somebody a name is reserved when it is also too short to use.
     subdomain = serializers.RegexField(
         regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        min_length=3,
         max_length=63,
         error_messages={
             "invalid": (
                 "Subdomain may only contain lowercase letters, digits "
                 "and hyphens, and cannot start or end with a hyphen"
-            )
+            ),
+            "min_length": (
+                "Workspace name must be at least 3 characters"
+            ),
         },
     )
     language = serializers.ChoiceField(
@@ -1188,31 +1205,18 @@ class RegisterSerializer(serializers.Serializer):
     )
 
     def validate_subdomain(self, value):
-        """Refuse a subdomain that would collide with the embed host.
+        """Refuse a name sign-up may not claim.
 
-        `EMBED_HOST` serves author-pasted third-party markup, and the
-        only thing protecting this application from it is that the two
-        sit on different origins. A workspace registered at that exact
-        host would put them back on the same one: a snippet served there
-        could then read the `AUTH_TOKEN` cookie of anyone signed in to
-        that workspace, since it is not HttpOnly.
-
-        Compared as whole hosts rather than as labels, so it stays
-        correct whatever `EMBED_HOST` is set to, and inert when either
-        setting is empty.
+        Two families, both in `utils.workspace_name`: host collisions
+        apply everywhere and are shared with the console's rename,
+        while `self_service_reason` is sign-up's alone, because a
+        withheld name is one an operator can still grant.
         """
-        # The console's own host. A workspace here would not merely
-        # collide -- it would shadow the only address from which this
-        # deployment can be administered.
-        if value.lower() == admin_subdomain():
-            raise serializers.ValidationError("This subdomain is reserved.")
-        embed = embed_hostname()
-        if embed and settings.BASE_DOMAIN:
-            candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
-            if candidate == embed:
-                raise serializers.ValidationError(
-                    "This subdomain is reserved."
-                )
+        reason = host_collision_reason(value) or self_service_reason(
+            value
+        )
+        if reason:
+            raise serializers.ValidationError(reason)
         return value
 
     # Uniqueness of email and subdomain is left to the database
