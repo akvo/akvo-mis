@@ -11,7 +11,12 @@ import {
   Modal,
   Upload,
 } from "antd";
-import { EyeOutlined } from "@ant-design/icons";
+import {
+  EyeOutlined,
+  UploadOutlined,
+  LoadingOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
 import { api, config, store, uiText } from "../../lib";
 import { useNotification } from "../../util/hooks";
@@ -33,6 +38,8 @@ const TenantDetail = () => {
   const [users, setUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [removingLogo, setRemovingLogo] = useState(false);
   const { inspect, inspecting } = useInspect();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -116,6 +123,87 @@ const TenantDetail = () => {
     });
   };
 
+  const beforeLogoUpload = (file) => {
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"];
+    if (!allowed.includes(file.type)) {
+      notify({
+        type: "error",
+        message: "Only PNG, JPG, JPEG, and SVG files are allowed.",
+      });
+      return Upload.LIST_IGNORE;
+    }
+    if (file.size / (1024 * 1024) > 2) {
+      notify({
+        type: "error",
+        message: "Image must be smaller than 2MB.",
+      });
+      return Upload.LIST_IGNORE;
+    }
+    return true;
+  };
+
+  const handleLogoUpload = ({ file, onSuccess, onError }) => {
+    setUploadingLogo(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    api
+      .post("upload/images", formData)
+      .then((uploadRes) => {
+        const filePath = uploadRes.data.file.startsWith("http")
+          ? new URL(uploadRes.data.file).pathname
+          : uploadRes.data.file;
+        return api
+          .put(`admin/tenants/${id}`, { logo: filePath })
+          .then((res) => {
+            setUploadingLogo(false);
+            setTenant(res.data);
+            notify({
+              type: "success",
+              message: text.consoleLogoUpdated || "Workspace logo updated",
+            });
+            onSuccess(res.data);
+          });
+      })
+      .catch((err) => {
+        setUploadingLogo(false);
+        notify({
+          type: "error",
+          message: err.response?.data?.message || "Failed to update logo",
+        });
+        onError(err);
+      });
+  };
+
+  const confirmRemoveLogo = () => {
+    Modal.confirm({
+      title: `Remove logo for ${tenant.subdomain}?`,
+      content:
+        "The workspace will revert to displaying the default Akvo MIS logo on its header and login page.",
+      okText: text.consoleRemoveLogo || "Remove logo",
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setRemovingLogo(true);
+        return api
+          .put(`admin/tenants/${id}`, { logo: null })
+          .then((res) => {
+            setRemovingLogo(false);
+            setTenant(res.data);
+            notify({
+              type: "success",
+              message: text.consoleLogoRemoved || "Workspace logo removed",
+            });
+          })
+          .catch(() => {
+            setRemovingLogo(false);
+            notify({
+              type: "error",
+              message: "Failed to remove logo",
+            });
+          });
+      },
+    });
+  };
+
   if (!tenant) {
     return null;
   }
@@ -166,114 +254,67 @@ const TenantDetail = () => {
           marginBottom: 8,
         }}
       >
-        <img
-          src={tenant.logo || config.siteLogo}
-          alt={tenant.name ? `${tenant.name} Logo` : "Workspace Logo"}
+        <div
           style={{
-            width: 48,
-            height: 48,
-            objectFit: "contain",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 56,
+            height: 56,
             background: "#fafafa",
-            border: "1px solid #f0f0f0",
-            borderRadius: 6,
+            border: "1px solid #e8e8e8",
+            borderRadius: 8,
             padding: 4,
+            flexShrink: 0,
           }}
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = config.siteLogo;
-          }}
-        />
+        >
+          <img
+            src={tenant.logo || config.siteLogo}
+            alt={tenant.name ? `${tenant.name} Logo` : "Workspace Logo"}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+            }}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = config.siteLogo;
+            }}
+          />
+        </div>
         <div>
           <h1 style={{ margin: 0, lineHeight: 1.2 }}>
             {tenant.subdomain} <Tag>{tenant.state}</Tag>
           </h1>
           <div className="admin-subtle">{tenant.name}</div>
           {tenant.state !== "deleted" && (
-            <Space size="small" style={{ marginTop: 4 }}>
+            <Space size="small" style={{ marginTop: 6 }}>
               <Upload
                 name="file"
                 showUploadList={false}
-                beforeUpload={(file) => {
-                  const allowed = [
-                    "image/png",
-                    "image/jpeg",
-                    "image/jpg",
-                    "image/svg+xml",
-                  ];
-                  if (!allowed.includes(file.type)) {
-                    notify({
-                      type: "error",
-                      message:
-                        "Only PNG, JPG, JPEG, and SVG files are allowed.",
-                    });
-                    return Upload.LIST_IGNORE;
-                  }
-                  if (file.size / (1024 * 1024) > 2) {
-                    notify({
-                      type: "error",
-                      message: "Image must be smaller than 2MB.",
-                    });
-                    return Upload.LIST_IGNORE;
-                  }
-                  return true;
-                }}
-                customRequest={({ file, onSuccess, onError }) => {
-                  const formData = new FormData();
-                  formData.append("file", file);
-                  api
-                    .post("upload/images", formData)
-                    .then((uploadRes) => {
-                      const filePath = uploadRes.data.file.startsWith("http")
-                        ? new URL(uploadRes.data.file).pathname
-                        : uploadRes.data.file;
-                      return api
-                        .put(`admin/tenants/${id}`, { logo: filePath })
-                        .then((res) => {
-                          setTenant(res.data);
-                          notify({
-                            type: "success",
-                            message: text.consoleLogoUpdated,
-                          });
-                          onSuccess(res.data);
-                        });
-                    })
-                    .catch((err) => {
-                      notify({
-                        type: "error",
-                        message:
-                          err.response?.data?.message ||
-                          "Failed to update logo",
-                      });
-                      onError(err);
-                    });
-                }}
+                beforeUpload={beforeLogoUpload}
+                customRequest={handleLogoUpload}
                 accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
               >
-                <Button size="small">{text.consoleUploadLogo}</Button>
+                <Button
+                  size="small"
+                  icon={
+                    uploadingLogo ? <LoadingOutlined /> : <UploadOutlined />
+                  }
+                  loading={uploadingLogo}
+                >
+                  {text.consoleUploadLogo || "Upload logo"}
+                </Button>
               </Upload>
               {Boolean(tenant.logo) && (
                 <Button
                   size="small"
                   danger
-                  onClick={() => {
-                    api
-                      .put(`admin/tenants/${id}`, { logo: null })
-                      .then((res) => {
-                        setTenant(res.data);
-                        notify({
-                          type: "success",
-                          message: text.consoleLogoRemoved,
-                        });
-                      })
-                      .catch(() => {
-                        notify({
-                          type: "error",
-                          message: "Failed to remove logo",
-                        });
-                      });
-                  }}
+                  icon={removingLogo ? <LoadingOutlined /> : <DeleteOutlined />}
+                  loading={removingLogo}
+                  onClick={confirmRemoveLogo}
                 >
-                  {text.consoleRemoveLogo}
+                  {text.consoleRemoveLogo || "Remove logo"}
                 </Button>
               )}
             </Space>

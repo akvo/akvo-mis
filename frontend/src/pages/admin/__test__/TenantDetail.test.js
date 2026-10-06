@@ -274,4 +274,15 @@ describe("Tenant detail", () => {
     expect(screen.getByText(/upload logo/i)).toBeInTheDocument();
     expect(screen.getByText(/remove logo/i)).toBeInTheDocument();
   });
+
+  it("confirms before removing workspace logo", async () => {
+    await renderDetail({ logo: "/images/custom-logo.png" });
+    axios.mockClear();
+    await act(async () => {
+      userEvent.click(screen.getByRole("button", { name: /remove logo/i }));
+    });
+    expect(
+      await screen.findByText(/revert to displaying the default akvo mis logo/i)
+    ).toBeInTheDocument();
+  });
 });
