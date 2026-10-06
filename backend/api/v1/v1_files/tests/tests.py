@@ -53,3 +53,53 @@ class ImageUploadTest(TestCase):
             "File extension “txt” is not allowed. Allowed extensions are: jpg, png, jpeg, svg.",  # noqa
         )
         os.remove(filename)
+
+    def test_logo_upload_success(self):
+        filename = generate_image(filename="test_logo", extension="png")
+        response = self.client.post(
+            "/api/v1/upload/logo/",
+            {"file": open(filename, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.json()), ["message", "file"])
+        uploaded_filename = response.json().get("file")
+        self.assertIn("/logo/", uploaded_filename)
+        uploaded_filename = uploaded_filename.split("/")[-1]
+        self.assertTrue(
+            storage.check(f"/logo/{uploaded_filename}"),
+            "Logo file exists",
+        )
+        os.remove(f"{STORAGE_PATH}/logo/{uploaded_filename}")
+        os.remove(filename)
+
+    def test_logo_upload_forbidden_for_non_superadmin(self):
+        from api.v1.v1_users.models import SystemUser
+
+        SystemUser.objects.create_user(
+            email="regular@akvo.org",
+            password="password",
+            first_name="Regular",
+            last_name="User",
+            is_superuser=False,
+        )
+        login_res = self.client.post(
+            "/api/v1/login",
+            {"email": "regular@akvo.org", "password": "password"},
+            content_type="application/json",
+        )
+        token = login_res.json().get("token")
+        filename = generate_image(
+            filename="test_regular_logo", extension="png"
+        )
+        response = self.client.post(
+            "/api/v1/upload/logo/",
+            {"file": open(filename, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json().get("message"),
+            "Only Super Admin can upload logo.",
+        )
+        os.remove(filename)

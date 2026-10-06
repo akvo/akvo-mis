@@ -54,6 +54,48 @@ def upload_images(request, version):
     )
 
 
+@extend_schema(
+    tags=["Files"],
+    summary="Upload Logo",
+    request=UploadImagesSerializer,
+    responses={
+        (200, "application/json"): inline_serializer(
+            "UploadLogo",
+            fields={
+                "message": serializers.CharField(),
+                "file": serializers.CharField(),
+            },
+        )
+    },
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser])
+def upload_logo(request, version):
+    is_super = getattr(request.user, "is_superuser", False)
+    is_plat = getattr(request.user, "is_platform_admin", False)
+    if not (is_super or is_plat):
+        return Response(
+            {"message": "Only Super Admin can upload logo."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    serializer = UploadImagesSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            validate_serializers_message(serializer.errors),
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    filename = handle_upload(request=request, folder="logo")
+    return Response(
+        {
+            "message": "File uploaded successfully",
+            "file": f"{WEBDOMAIN}/logo/{filename}",
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 class UploadAttachmentsView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser]
@@ -82,10 +124,38 @@ class UploadAttachmentsView(APIView):
                 ),
                 type={"type": "array", "items": {"type": "string"}},
                 enum=[
-                    "pdf", "docx", "xlsx", "pptx", "txt", "csv", "zip", "rar",
-                    "jpg", "jpeg", "png", "gif", "bmp", "doc", "xls", "ppt",
-                    "mp4", "avi", "mov", "mkv", "flv", "wmv", "mp3", "wav",
-                    "ogg", "flac", "aac", "wma", "m4a", "opus", "webm", "3gp",
+                    "pdf",
+                    "docx",
+                    "xlsx",
+                    "pptx",
+                    "txt",
+                    "csv",
+                    "zip",
+                    "rar",
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "gif",
+                    "bmp",
+                    "doc",
+                    "xls",
+                    "ppt",
+                    "mp4",
+                    "avi",
+                    "mov",
+                    "mkv",
+                    "flv",
+                    "wmv",
+                    "mp3",
+                    "wav",
+                    "ogg",
+                    "flac",
+                    "aac",
+                    "wma",
+                    "m4a",
+                    "opus",
+                    "webm",
+                    "3gp",
                 ],
             ),
             OpenApiParameter(
@@ -95,7 +165,7 @@ class UploadAttachmentsView(APIView):
                 location=OpenApiParameter.QUERY,
             ),
         ],
-        description="Upload attachments to the server."
+        description="Upload attachments to the server.",
     )
     def post(self, request, version):
         # Get the allowed file types from the query parameter
@@ -105,7 +175,7 @@ class UploadAttachmentsView(APIView):
             data=request.data,
             context={
                 "allowed_file_types": allowed_file_types,
-            }
+            },
         )
         if not serializer.is_valid():
             return Response(

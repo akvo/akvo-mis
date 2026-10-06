@@ -47,4 +47,9 @@ urlpatterns = [
         serve,
         {"document_root": os.path.join(settings.STORAGE_PATH, "images")},
     ),
+    re_path(
+        r"^logo/(?P<path>.*)$",
+        serve,
+        {"document_root": os.path.join(settings.STORAGE_PATH, "logo")},
+    ),
 ]
