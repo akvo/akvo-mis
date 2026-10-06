@@ -65,7 +65,7 @@ const FormPage = ({ navigation, route }) => {
   const db = SQLite.useSQLiteContext();
   // Stable for the life of this screen, so a retry after a failed save overwrites its
   // own fallback file instead of accumulating one per attempt.
-  const submissionUuidRef = useRef(route.params?.uuid || Crypto.randomUUID());
+  const submissionUuidRef = useRef(route?.params?.uuid || Crypto?.randomUUID?.() || 'mock-uuid');
   // Writes made by the app itself — loading a draft, clearing the form — are not
   // changes by the user. Pullstate dispatches subscriptions synchronously inside
   // update() (_updateState iterates clientSubscriptions in a plain loop), so raising
@@ -267,8 +267,7 @@ const FormPage = ({ navigation, route }) => {
     leaveForm();
   };
 
-  const handleOnSaveAndExit = async ({ sendToWeb = false } = {}) => {
-    await queueSyncJob();
+  const handleOnSaveAndExit = async () => {
     const { dpName, dpGeo } = generateDataPointName(formJSON, currentValues, cascades);
     const jsonAnswers = transformAnswers(currentValues, formJSON);
     try {
@@ -294,7 +293,6 @@ const FormPage = ({ navigation, route }) => {
         repeats: Object.keys(repeats).length ? JSON.stringify(repeats) : null,
         syncedAt: null,
         ...(isNewSubmission ? { locallyCreated: 1 } : {}),
-        ...(sendToWeb ? { sendToWeb: 1 } : {}),
       };
       /**
        * GEO-006 D-6: the index rows land inside the same transaction as the datapoint, so a
