@@ -432,15 +432,9 @@ def tenant_info(request, version):
         # caller learns there is no workspace here, which is the answer
         # that sends it to the signup page.
         return Response(status=status.HTTP_204_NO_CONTENT)
-    root_name = (
-        tenant.administrations.filter(parent=None)
-        .values_list("name", flat=True)
-        .first()
-        or ""
-    )
     body = {
         "subdomain": tenant.subdomain,
-        "name": root_name,
+        "name": tenant.subdomain,
         "language": getattr(tenant, "language", "en") or "en",
         "logo": tenant.logo,
     }

@@ -154,7 +154,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
             response.json(),
             {
                 "subdomain": "acme",
-                "name": "Kenya",
+                "name": "acme",
                 "language": "en",
                 "logo": None,
             },
@@ -178,7 +178,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
             response.json(),
             {
                 "subdomain": "acme",
-                "name": "Kenya",
+                "name": "acme",
                 "language": "en",
                 "logo": "/images/logo-acme.png",
             },
@@ -193,7 +193,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
             response.json(),
             {
                 "subdomain": "acme",
-                "name": "Kenya",
+                "name": "acme",
                 "language": "fr",
                 "logo": None,
             },
@@ -213,7 +213,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
             response.json(),
             {
                 "subdomain": "fresh",
-                "name": "",
+                "name": "fresh",
                 "language": "en",
                 "logo": None,
             },

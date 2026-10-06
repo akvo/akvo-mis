@@ -174,7 +174,7 @@ describe("tenant util", () => {
     expect(store.getRawState().tenant.name).toBe("Acme Corp");
     expect(store.getRawState().tenant.logo).toBe("/images/logo.png");
     expect(store.getRawState().language.active).toBe("fr");
-    expect(document.title).toBe("Akvo MIS - Acme Corp");
+    expect(document.title).toBe("Akvo MIS - Acme");
   });
 
   test("fetchTenant falls back to title-cased subdomain when tenant name is empty", async () => {

@@ -8,7 +8,7 @@
 This feature enables multi-tenant branding across Akvo MIS by allowing workspaces to customize their brand identity:
 
 1. **Tenant Logo Upload & Management**: Workspaces can upload a custom logo during initial onboarding (`/configure`) and update or remove it later via Workspace Settings or the Platform Admin Console.
-2. **Site Title**: The browser document title is set to `Akvo MIS - {tenant_name}` (where `{tenant_name}` is the workspace root administration unit name).
+2. **Site Title**: The browser document title is set to `Akvo MIS - {tenant_name}` (where `{tenant_name}` is the title-cased tenant subdomain).
 3. **Graceful Fallbacks**: If no custom logo is uploaded, or when browsing on the base platform domain without a tenant in scope, the application gracefully defaults to the standard Akvo MIS logo (`/logo.svg`) and base title (`Akvo MIS`).
 
 ---

@@ -106,7 +106,7 @@ export const fetchTenant = () =>
           s.language.active = tenant.language;
         }
       });
-      const rawTitle = tenant?.name || tenant?.subdomain;
+      const rawTitle = tenant?.subdomain || tenant?.name;
       if (rawTitle) {
         document.title = `Akvo MIS - ${startCase(rawTitle)}`;
       } else {
