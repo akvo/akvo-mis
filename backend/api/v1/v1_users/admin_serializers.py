@@ -40,6 +40,7 @@ class TenantListSerializer(serializers.ModelSerializer):
             "subdomain",
             "name",
             "language",
+            "logo",
             "state",
             "features",
             "created_at",

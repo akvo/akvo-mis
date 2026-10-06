@@ -1144,6 +1144,17 @@ class ConfigureSerializer(serializers.Serializer):
     # why the form carries examples.
     level_0_name = serializers.CharField(max_length=50)
     root_unit_name = serializers.CharField(max_length=255)
+    logo = serializers.CharField(
+        max_length=255, required=False, allow_null=True, allow_blank=True,
+        default=None
+    )
+
+
+class TenantBrandingSerializer(serializers.Serializer):
+    logo = serializers.CharField(
+        max_length=255, required=False, allow_null=True, allow_blank=True,
+        default=None
+    )
 
 
 class ResendActivationSerializer(serializers.Serializer):
