@@ -67,6 +67,7 @@ EXEMPT_PATHS = (
     "/api/v1/health/check",
     "/api/v1/config.js",
     "/api/v1/embed/",
+    "/images/",
 )
 
 

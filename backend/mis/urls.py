@@ -13,7 +13,11 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.urls import path, include
+
+import os
+from django.conf import settings
+from django.urls import path, re_path, include
+from django.views.static import serve
 from drf_spectacular.views import SpectacularSwaggerView, SpectacularAPIView
 
 urlpatterns = [
@@ -37,5 +41,10 @@ urlpatterns = [
         "api/doc/",
         SpectacularSwaggerView.as_view(url_name="schema"),
         name="swagger-ui",
+    ),
+    re_path(
+        r"^images/(?P<path>.*)$",
+        serve,
+        {"document_root": os.path.join(settings.STORAGE_PATH, "images")},
     ),
 ]
