@@ -156,4 +156,56 @@ describe("Register", () => {
     render(<TestApp entryPoint={"/register?subdomain=sleman"} />);
     expect(await screen.findByPlaceholderText("acme")).toHaveValue("sleman");
   });
+
+  test("shows a field error under the workspace address input", async () => {
+    // The API returns {message, details}; `details` is what names the
+    // field, and a toast detached from the input is what this
+    // replaces.
+    axios.mockImplementation((reqConfig) => {
+      if (reqConfig && reqConfig.url === "register") {
+        return Promise.reject({
+          response: {
+            data: {
+              message: "This name is reserved for system use.",
+              details: {
+                subdomain: [
+                  "This name is reserved for system use. Please choose a different one.",
+                ],
+              },
+            },
+          },
+        });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
+
+    render(<TestApp entryPoint={"/register"} />);
+    // An earlier test in this file leaves the tenant lookup mid-flight
+    // in the shared store; wait for the form to actually be there
+    // before driving it, same as every other test here that follows
+    // one of the redirect tests.
+    await screen.findByPlaceholderText("you@organisation.org");
+    fill({});
+    await waitFor(() => {
+      expect(screen.getByText(/reserved for system use/i)).toBeInTheDocument();
+    });
+    // Still on the form, not on the confirmation screen.
+    expect(screen.queryByText(/Check your email/i)).toBeNull();
+  });
+
+  test("reports a short name by its length, not by the pattern", async () => {
+    // The pattern and the minimum are separate rule objects on
+    // purpose: merged into one, antd would report "Use lowercase
+    // letters, numbers and hyphens" for a two-character name, which
+    // is not what is wrong with it.
+    render(<TestApp entryPoint={"/register"} />);
+    fireEvent.change(await screen.findByPlaceholderText("acme"), {
+      target: { value: "ab" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Create workspace/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/no leading or trailing hyphen/i)).toBeNull();
+  });
 });
