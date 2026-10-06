@@ -1,11 +1,13 @@
-# DRAFT-002: Remove Drafts Syncing and Web Draft Management
+# DRAFT-002: Remove Drafts Syncing, Web Draft Management, and Database Schema
 
 ## Overview
-This specification details the complete removal of data submission draft syncing capabilities between the mobile app and backend, as well as the complete removal of the "Manage Drafts" module from the web platform.
+This specification details the complete decommissioning and removal of draft synchronization between the mobile app and backend, the complete removal of the "Manage Drafts" module from the web platform, and the full physical removal of the `is_draft` column, `Draft` model mixin, and draft records from the PostgreSQL database schema.
 
 Following this change:
-1. **Mobile App**: Drafts will remain strictly offline/local-only on the device. Users can create, save, reopen, edit, and delete drafts locally. Drafts will NEVER be uploaded to the backend or downloaded during datapoint sync.
-2. **Web Platform & Backend**: The "Manage Drafts" UI, navigation, routes, and corresponding backend API endpoints (for web and device draft listing, fetching, updating, publishing, and deleting) will be completely removed.
+1. **Mobile App**: Drafts remain strictly offline/local-only on the device (stored in local SQLite with `submitted = 0`). Drafts will NEVER be uploaded to the backend or downloaded during datapoint sync.
+2. **Web Platform**: The "Manage Drafts" UI, navigation, routes, and corresponding translation strings will be completely removed.
+3. **Backend REST API**: All endpoints for web and device draft listing, fetching, updating, publishing, and deleting will be decommissioned.
+4. **Database & Schema**: All historical server draft rows will be permanently deleted via an atomic data migration, the Materialized View `view_data_options` will be rebuilt without `is_draft`, and the `is_draft` column will be dropped from table `data` (`FormData`).
 
 ---
 
@@ -37,37 +39,54 @@ Following this change:
 
 ---
 
-### 📦 Task 2: Remove Manage Drafts Functionality from Web Platform & Backend
+### 📦 Task 2: Remove Manage Drafts from Web Platform Frontend
 
 #### User Acceptance Criteria (UAC)
 - [ ] **Sidebar Cleanup**: The "Manage Drafts" link is completely removed from the web platform sidebar navigation menu.
 - [ ] **Web Route Decommissioning**: Direct URL navigation to `/manage-draft` or `/manage-draft/:formId` redirects to a valid page or returns 404 (no broken/blank views).
 - [ ] **Web Manage Draft Removal**: The web draft list, draft submission detail, and draft editing/publishing views are completely removed.
-- [ ] **API Decommissioning**: All backend draft endpoints for web management and device draft listing/deletion are decommissioned.
-- [ ] **Orphaned Drafts Cleanup Command (Optional / Operational)**:
-  - An administrative Django management command (`python manage.py purge_orphaned_drafts`) is available to safely preview (`--dry-run`) and hard/soft delete lingering historical backend draft rows (`FormData.objects_draft.all()`).
 
 #### Technical Acceptance Criteria (TAC)
-- [ ] **Frontend Deletion**:
+- [ ] **Frontend Directory Deletion**:
   - Delete `frontend/src/pages/manage-draft/` directory (`DraftDetail.jsx`, `ManageDraft.jsx`, `ManageDraftForm.jsx`, `style.scss`).
   - Remove `ManageDraft` and `ManageDraftForm` exports from `frontend/src/pages/index.js`.
   - Remove `/manage-draft` and `/manage-draft/:formId` routes from `frontend/src/App.js`.
   - Remove `menuManageDraft` item from `frontend/src/components/sidebar/index.jsx`.
-  - Remove unused draft translation strings from `frontend/src/lib/ui-text.js` and update Jest snapshots (`frontend/src/lib/__test__/__snapshots__/ui-text.test.js.snap`).
-- [ ] **Backend Mobile API Cleanup**:
+  - Remove unused draft translation strings (`menuManageDraft`, `manageDraftTitle`, `manageDraftText`) from `frontend/src/lib/ui-text.js`.
+  - Update Jest snapshots (`frontend/src/lib/__test__/__snapshots__/ui-text.test.js.snap`).
+
+---
+
+### 📦 Task 3: Backend API Decommission, Database Purge & Schema Removal
+
+#### User Acceptance Criteria (UAC)
+- [ ] **API Decommissioning**: All backend draft endpoints for web management (`/api/v1/data/draft/`) and device draft listing/deletion (`/api/v1/mobile/device/draft-list/`) return 404.
+- [ ] **Permanent Server Draft Purge**: All historical server draft rows in `form_data` (table `data`) are permanently purged prior to schema changes.
+- [ ] **Schema & Column Removal**: The `is_draft` column is dropped from PostgreSQL table `data`, and `Draft` model mixins/managers are completely removed from backend code.
+- [ ] **Zero Regression in Dashboards & Submissions**: Live submissions (`submitted = 1`) and visualizations operate seamlessly without `is_draft` query filters.
+
+#### Technical Acceptance Criteria (TAC)
+- [ ] **Backend API & Serializer Removal**:
   - Remove `/device/draft-list` and `/device/draft-list/<pk>` routes from `backend/api/v1/v1_mobile/urls.py`.
   - Remove `DraftFormDataViewSet` and `DraftFormDataSerializer` from `backend/api/v1/v1_mobile/views.py` and `serializers.py`.
-  - Remove `is_draft` parameter handling in `SyncDataViewSet` and `SyncSerializer`.
-- [ ] **Backend Web Data API Cleanup**:
+  - Remove `is_draft` parameter from `SyncDataViewSet` and `SyncSerializer`.
   - Remove `/data/draft/` routes (`DraftFormDataListView`, `DraftFormDataDetailView`, `PublishDraftFormDataView`) from `backend/api/v1/v1_data/urls.py` and `views.py`.
   - Remove `FilterDraftFormDataSerializer` and `DraftFormDataDetailSerializer` from `backend/api/v1/v1_data/serializers.py`.
-- [ ] **Backend Cleanup Management Command**:
-  - Create `backend/api/v1/v1_data/management/commands/purge_orphaned_drafts.py` supporting `--dry-run` and optional `--tenant` filtering to delete historical server drafts.
-  - Create unit tests for `purge_orphaned_drafts` command in `backend/api/v1/v1_data/tests/tests_purge_orphaned_drafts.py`.
+- [ ] **Database Migrations (Deterministic 4-Step Chain)**:
+  1. `v1_data` Data Migration: Delete all existing rows with `is_draft = True` (`FormData.objects.filter(is_draft=True).delete()`).
+  2. `v1_visualization` Schema Migration: `DROP MATERIALIZED VIEW view_data_options;`.
+  3. `v1_data` Schema Migration: `migrations.RemoveField(model_name='formdata', name='is_draft')`.
+  4. `v1_visualization` Schema Migration: `CREATE MATERIALIZED VIEW view_data_options AS ...` without `AND is_draft = FALSE`.
+- [ ] **Model & Manager Cleanup**:
+  - Update `FormData` in `backend/api/v1/v1_data/models.py` to inherit only from `SoftDeletes` (`class FormData(SoftDeletes):`).
+  - Set `objects = SoftDeletesManager()` and `objects_deleted = SoftDeletesManager(only_deleted=True)`. Remove `objects_draft`.
+  - Delete `backend/utils/draft_model.py`.
+- [ ] **Queryset Cleanup**:
+  - Remove `is_draft=False` and `children__is_draft=False` filters across `v1_data/views.py`, `v1_visualization/views.py`, `values_functions.py`, `functions.py`, and `escalation_functions.py`.
 - [ ] **Test Suite Cleanup**:
-  - Remove obsolete test files: `tests_mobile_draft_list.py`, `tests_mobile_draft_delete.py`, and `tests_draft_data_*.py`.
-  - Ensure all backend tests pass (`./dc.sh exec backend python manage.py test api.v1.v1_mobile api.v1.v1_data`) and flake8 passes.
-  - Ensure all frontend tests pass (`./dc.sh exec frontend npm test -- -u`) and eslint passes.
+  - Delete obsolete test files: `tests_mobile_draft_list.py`, `tests_mobile_draft_delete.py`, `tests_draft_data_list.py`, `tests_draft_data_details.py`, `tests_update_draft_data.py`, `tests_publish_draft_data.py`, `tests_delete_draft_data.py`, `tests_add_new_draft.py`.
+  - Update visualization test fixtures to remove `is_draft` parameters.
+  - All backend tests pass (`./dc.sh exec backend python manage.py test`) and `flake8` passes.
 
 ---
 
@@ -76,10 +95,11 @@ Following this change:
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Submitter as Mobile User (Enumerator)
+    actor Submitter as Mobile Enumerator
     participant Mobile as Mobile App (Offline SQLite)
     participant Backend as Backend REST API
-    actor Admin as Web User (Admin)
+    participant DB as PostgreSQL Database
+    actor Admin as Web Admin
     participant Web as Web Frontend
 
     Note over Submitter, Mobile: Local Draft Lifecycle (Retained)
@@ -87,166 +107,156 @@ sequenceDiagram
     Mobile->>Mobile: Save row with submitted=0 in local SQLite
     Submitter->>Mobile: Trigger Sync / Auto-sync
     Mobile->>Backend: Sync ONLY submitted=1 datapoints via POST /sync
-    Note over Mobile, Backend: No draft download or upload occurs
+    Backend->>DB: Insert live submission into table 'data' (No is_draft field)
 
-    Note over Admin, Web: Web Platform (Manage Drafts Removed)
-    Admin->>Web: Navigate to Sidebar
-    Note over Web: "Manage Drafts" removed from navigation & routes
+    Note over Admin, Web: Web Platform (Drafts Decommissioned)
+    Admin->>Web: Navigate to Workspace
+    Note over Web: "Manage Drafts" removed from Sidebar & Routes
+    Admin->>Backend: Access Dashboards / Data Views
+    Backend->>DB: Query live data without is_draft filters
 ```
 
 ---
 
-## 🗄️ Database & Migration Strategy (Backend & Mobile)
+## 🗄️ Database & Migration Sequence
 
-### 1. Recommended Backend Approach: API Decommissioning (Zero Migrations)
-- **Decision: Retain `Draft` mixin on `FormData` and avoid database migrations**
-  - `FormData(SoftDeletes, Draft)` inherits `is_draft = models.BooleanField(default=False)` from the `Draft` abstract model.
-  - **Why this is the safest and recommended approach**:
-    1. **Schema Stability & Zero Downtime**: No DDL table locks on the large `form_data` table. `makemigrations` produces `No changes detected`.
-    2. **View Integrity**: Existing database views (such as `view_data_options` in `backend/api/v1/v1_visualization/migrations/0001_create_view_data_options.py`) query `AND is_draft = FALSE` and remain 100% stable without recreation.
-    3. **Automatic Isolation**: `DraftSoftDeletesManager` ensures that `FormData.objects.all()` automatically excludes draft records (`is_draft=False`) across all active APIs, exports, and dashboards.
-    4. **Clean Operational Purge**: `FormData.objects_draft` is retained exclusively for the administrative command `python manage.py purge_orphaned_drafts` to safely clean up historical server drafts.
-  - **Verdict**: Backend requires **0 new migrations**.
+```mermaid
+flowchart TD
+    M1["1. v1_data Data Migration<br>(Delete all rows WHERE is_draft = TRUE)"] --> M2["2. v1_visualization Migration<br>(DROP MATERIALIZED VIEW view_data_options)"]
+    M2 --> M3["3. v1_data Schema Migration<br>(Drop column is_draft from table data)"]
+    M3 --> M4["4. v1_visualization Migration<br>(CREATE MATERIALIZED VIEW view_data_options without is_draft)"]
+```
 
----
+### Step 1: Pre-Migration Data Purge
+```python
+def purge_server_drafts(apps, schema_editor):
+    FormData = apps.get_model('v1_data', 'FormData')
+    # Hard delete all draft records to cascade delete answers and avoid orphaned data
+    FormData.objects.filter(is_draft=True).delete()
+```
 
-### 2. Alternative Backend Scenario: Full DB Migration Removal
-If the team decides to physically eliminate the `is_draft` column and `Draft` model manager from PostgreSQL via migrations, the following sequence must be handled:
+### Step 2: Drop Materialized View
+```sql
+DROP MATERIALIZED VIEW IF EXISTS view_data_options;
+```
 
-1. **Mandatory Data Purge Migration (Step 1)**:
-   - *Risk*: Dropping the `is_draft` column causes existing server draft rows in `form_data` to lose their `is_draft = True` flag. They would immediately be exposed as **live, published submissions** across all tenant dashboards, exports, and reports.
-   - *Requirement*: A custom Django data migration must run first to delete all existing rows where `is_draft=True`:
-     ```python
-     def purge_existing_drafts(apps, schema_editor):
-         FormData = apps.get_model('v1_data', 'FormData')
-         FormData.objects.filter(is_draft=True).delete()
-     ```
-2. **PostgreSQL View Rebuild Migration (Step 2)**:
-   - *Risk*: The SQL view `view_data_options` (created in `v1_visualization/migrations/0001_create_view_data_options.py`) explicitly references `AND is_draft = FALSE`. PostgreSQL will **fail and reject** dropping `is_draft` with a dependency error (`cannot drop column is_draft of relation form_data because view_data_options depends on it`).
-   - *Requirement*: A migration in `v1_visualization` must:
-     - Execute `DROP VIEW view_data_options;`
-     - Allow `v1_data` to drop the column `is_draft`.
-     - Execute `CREATE VIEW view_data_options AS ...` without the `is_draft` column reference.
-3. **Model & Wide-Scale Queryset Refactoring (Step 3)**:
-   - Remove `Draft` mixin from `class FormData(SoftDeletes, Draft):` → `class FormData(SoftDeletes):`.
-   - Update `FormData.objects = SoftDeletesManager()`.
-   - Audit and remove `is_draft=False` and `children__is_draft=False` filters across **25+ querysets** in `v1_data/views.py`, `v1_visualization/views.py`, `values_functions.py`, `functions.py`, and `escalation_functions.py`.
-4. **Django Schema Migration (Step 4)**:
-   - Run `makemigrations` to generate `RemoveField(model_name='formdata', name='is_draft')`.
+### Step 3: Drop Column in `FormData`
+```python
+migrations.RemoveField(
+    model_name='formdata',
+    name='is_draft',
+),
+```
 
----
-
-### 3. Mobile SQLite Strategy (Zero Migrations)
-- **Zero SQLite Migrations Needed Across All Scenarios**:
-  - Local drafts rely strictly on `submitted = 0` (which remains in SQLite storage).
-  - The auxiliary `sendToWeb` column already has `DEFAULT 0`. Leaving the column dormant causes zero issues and completely eliminates the risk of SQLite table recreation or schema rebuilds.
-  - Mobile requires **0 SQLite migrations**.
-
----
-
-### 4. Strategy Trade-Off Comparison
-
-| Factor | Option A: API Decommission (Recommended) | Option B: Full DB Migration Removal |
-| :--- | :--- | :--- |
-| **Backend Migrations** | **0 migrations** | **2+ migrations** (Data purge + View drop/rebuild) |
-| **Mobile SQLite Migrations** | **0 migrations** | **0 migrations** (Leave `sendToWeb` dormant) |
-| **Database Lock / Downtime Risk** | **Zero risk** | **Medium/High** (DDL table lock on `form_data` + View rebuild) |
-| **Codebase Refactor Scope** | Localized strictly to draft endpoints & UI | Wide (25+ backend querysets across visualization, escalation, data) |
-| **Total Estimated Effort** | **5.5 hours** | **10.0 – 12.0 hours** |
-| **Data Integrity Guarantee** | Drafts remain dormant & invisible by default manager | Requires prerequisite data purge migration to prevent data leaks |
-
----
-
-## 1. Task 1: Remove Draft Syncing from Mobile App (Preserve Local Drafts)
-
-### 1.1 Touchpoint Files
-- `[MODIFY]` `app/src/components/SyncService.js`:
-  - Remove `onSyncDraftDatapoint` and its invocation from the sync cycle.
-  - Remove `fetchDraftDatapointsPageByPage` imports.
-- `[MODIFY]` `app/src/lib/sync-datapoints.js`:
-  - Remove `fetchDraftDatapointsPageByPage`.
-- `[MODIFY]` `app/src/lib/background-task.js`:
-  - In `processBatch`: Remove `syncURL` draft conditional logic (`?is_draft=true`), ensure `/sync` is only called for completed submissions (`submitted = 1`).
-- `[MODIFY]` `app/src/database/crud/crud-datapoints.js`:
-  - In `selectSubmissionToSync`: Filter strictly by `datapoints.submitted = 1`. Remove `datapoints.draftId IS NOT NULL` and `datapoints.sendToWeb = 1` branches.
-  - Remove unused draft sync queries (`getDraftPendingSync`, `deleteDraftIdIsNull`, `deleteDraftSynced`, `setSendToWeb`).
-- `[MODIFY]` `app/src/form/support/SaveDropdownMenu.js` & `app/src/form/support/SaveDialogMenu.js`:
-  - Remove the "Save and send to web dashboard" option, keeping only standard local "Save as draft" and "Discard".
-- `[MODIFY]` `app/src/pages/FormPage.js`:
-  - Simplify `handleOnSaveAndExit` to always save locally without `sendToWeb` flag.
-- `[MODIFY]` `app/src/pages/Submission.js`:
-  - Remove "Send to Web" context action, modal confirm state, and toast.
-- `[MODIFY]` `app/src/components/DatapointCard.js`:
-  - Remove `pendingWeb` badge / draft upload status indicators.
-- `[MODIFY]` `app/src/store/datapoint-sync.js` & `app/src/pages/Home.js`:
-  - Remove `draftInProgress` property and listeners.
-- `[MODIFY]` `app/src/lib/i18n/ui-text.js`:
-  - Remove `sendToWebTitle`, `sendToWebMessage`, `sendToWebToast`, `buttonSaveNSendToWeb` (EN & FR).
-- `[TEST]` Update mobile test suites:
-  - `app/src/components/__tests__/DatapointCard.test.js`
-  - `app/src/pages/__tests__/Submission.test.js`
-  - `app/src/pages/__tests__/FormPage.test.js`
-  - `app/src/pages/__tests__/Home.test.js`
-  - `app/src/lib/__test__/background-datapoint-sync.test.js`
+### Step 4: Recreate Materialized View (without `is_draft`)
+```sql
+CREATE MATERIALIZED VIEW view_data_options as
+    SELECT
+        row_number() over (partition by true) as id,
+        d.parent_id as parent_data_id,
+        tmp.data_id,
+        d.administration_id,
+        d.form_id,
+        to_jsonb(array_agg(
+            concat(tmp.question_id, '||',
+                lower(tmp.option_ids::text))
+        )) as options
+    FROM (
+        SELECT
+            a.data_id,
+            a.question_id,
+            a.id as answer_id,
+            jsonb_agg(qo.id) as option_ids
+        FROM answer a
+        LEFT JOIN question q on q.id = a.question_id
+        LEFT JOIN option qo ON qo.question_id = a.question_id
+            AND qo.value = ANY(SELECT jsonb_array_elements_text(a.options))
+        WHERE (q.type = 5 OR q.type = 6) AND a.options IS NOT NULL
+        GROUP BY a.data_id, a.question_id, a.id
+    ) tmp
+    LEFT JOIN (
+        SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY parent_id, form_id ORDER BY created DESC) as rn
+        FROM data
+        WHERE parent_id IS NOT NULL
+            AND is_pending = FALSE
+    ) d ON d.id = tmp.data_id AND d.rn = 1
+    LEFT JOIN form f ON f.id = d.form_id
+    WHERE f.parent_id IS NOT NULL
+    GROUP BY tmp.data_id, d.administration_id, d.form_id, d.parent_id;
+```
 
 ---
 
-## 2. Task 2: Remove Manage Drafts from Web Platform & Decommission Backend Draft APIs
+## 📁 Touchpoint Files
 
-### 2.1 Web Frontend Touchpoint Files
-- `[DELETE]` `frontend/src/pages/manage-draft/` (entire directory):
-  - `DraftDetail.jsx`
-  - `ManageDraft.jsx`
-  - `ManageDraftForm.jsx`
-  - `style.scss`
-- `[MODIFY]` `frontend/src/pages/index.js`:
-  - Remove exports for `ManageDraft` and `ManageDraftForm`.
-- `[MODIFY]` `frontend/src/App.js`:
-  - Remove imports and `<Route>` entries for `/manage-draft` and `/manage-draft/:formId`.
-- `[MODIFY]` `frontend/src/components/sidebar/index.jsx`:
-  - Remove "Manage Drafts" navigation link / menu item.
-- `[MODIFY]` `frontend/src/lib/ui-text.js`:
-  - Remove `menuManageDraft`, `manageDraftTitle`, `manageDraftText` (EN & FR).
-- `[TEST]` `frontend/src/lib/__test__/ui-text.test.js`:
-  - Update snapshot tests to reflect removed strings.
+### Mobile App Touchpoints
+- `[MODIFY]` `app/src/components/SyncService.js`
+- `[MODIFY]` `app/src/lib/sync-datapoints.js`
+- `[MODIFY]` `app/src/lib/background-task.js`
+- `[MODIFY]` `app/src/database/crud/crud-datapoints.js`
+- `[MODIFY]` `app/src/form/support/SaveDropdownMenu.js`
+- `[MODIFY]` `app/src/form/support/SaveDialogMenu.js`
+- `[MODIFY]` `app/src/pages/FormPage.js`
+- `[MODIFY]` `app/src/pages/Submission.js`
+- `[MODIFY]` `app/src/components/DatapointCard.js`
+- `[MODIFY]` `app/src/store/datapoint-sync.js`
+- `[MODIFY]` `app/src/pages/Home.js`
+- `[MODIFY]` `app/src/lib/i18n/ui-text.js`
+- `[TEST]` `app/src/components/__tests__/DatapointCard.test.js`
+- `[TEST]` `app/src/pages/__tests__/Submission.test.js`
+- `[TEST]` `app/src/pages/__tests__/FormPage.test.js`
+- `[TEST]` `app/src/pages/__tests__/Home.test.js`
+- `[TEST]` `app/src/lib/__test__/background-datapoint-sync.test.js`
 
-### 2.2 Backend Touchpoint Files
-- `[MODIFY]` `backend/api/v1/v1_mobile/urls.py`:
-  - Remove `/device/draft-list` and `/device/draft-list/<pk>` URL patterns.
-- `[MODIFY]` `backend/api/v1/v1_mobile/views.py`:
-  - Remove `DraftFormDataViewSet`.
-  - In `SyncDataViewSet`: Remove `is_draft` parameter handling from `post()` action.
-- `[MODIFY]` `backend/api/v1/v1_mobile/serializers.py`:
-  - Remove `DraftFormDataSerializer`.
-  - Remove `is_draft` parameter from `SyncSerializer`.
-- `[MODIFY]` `backend/api/v1/v1_data/urls.py`:
-  - Remove `DraftFormDataListView`, `DraftFormDataDetailView`, `PublishDraftFormDataView` routes.
-- `[MODIFY]` `backend/api/v1/v1_data/views.py`:
-  - Remove `DraftFormDataListView`, `DraftFormDataDetailView`, `PublishDraftFormDataView`.
-- `[MODIFY]` `backend/api/v1/v1_data/serializers.py`:
-  - Remove `FilterDraftFormDataSerializer`, `DraftFormDataDetailSerializer`.
-- `[CREATE]` `backend/api/v1/v1_data/management/commands/purge_orphaned_drafts.py`:
-  - Add management command to purge historical orphaned server draft rows (`FormData.objects_draft.all()`) with `--dry-run` and optional `--tenant` support.
-- `[CREATE]` `backend/api/v1/v1_data/tests/tests_purge_orphaned_drafts.py`:
-  - Add test coverage for the purge command.
-- `[DELETE]` / `[MODIFY]` Backend Tests:
-  - Remove `backend/api/v1/v1_mobile/tests/tests_mobile_draft_list.py`
-  - Remove `backend/api/v1/v1_mobile/tests/tests_mobile_draft_delete.py`
-  - Remove `backend/api/v1/v1_data/tests/tests_draft_data_list.py`
-  - Remove `backend/api/v1/v1_data/tests/tests_draft_data_details.py`
-  - Remove `backend/api/v1/v1_data/tests/tests_update_draft_data.py`
-  - Remove `backend/api/v1/v1_data/tests/tests_publish_draft_data.py`
-  - Remove `backend/api/v1/v1_data/tests/tests_delete_draft_data.py`
-  - Remove `backend/api/v1/v1_data/tests/tests_add_new_draft.py`
+### Web Frontend Touchpoints
+- `[DELETE]` `frontend/src/pages/manage-draft/DraftDetail.jsx`
+- `[DELETE]` `frontend/src/pages/manage-draft/ManageDraft.jsx`
+- `[DELETE]` `frontend/src/pages/manage-draft/ManageDraftForm.jsx`
+- `[DELETE]` `frontend/src/pages/manage-draft/style.scss`
+- `[MODIFY]` `frontend/src/pages/index.js`
+- `[MODIFY]` `frontend/src/App.js`
+- `[MODIFY]` `frontend/src/components/sidebar/index.jsx`
+- `[MODIFY]` `frontend/src/lib/ui-text.js`
+- `[TEST]` `frontend/src/lib/__test__/ui-text.test.js`
+
+### Backend Touchpoints
+- `[MODIFY]` `backend/api/v1/v1_data/models.py`
+- `[DELETE]` `backend/utils/draft_model.py`
+- `[MODIFY]` `backend/api/v1/v1_mobile/urls.py`
+- `[MODIFY]` `backend/api/v1/v1_mobile/views.py`
+- `[MODIFY]` `backend/api/v1/v1_mobile/serializers.py`
+- `[MODIFY]` `backend/api/v1/v1_data/urls.py`
+- `[MODIFY]` `backend/api/v1/v1_data/views.py`
+- `[MODIFY]` `backend/api/v1/v1_data/serializers.py`
+- `[MODIFY]` `backend/api/v1/v1_visualization/views.py`
+- `[MODIFY]` `backend/api/v1/v1_visualization/functions.py`
+- `[MODIFY]` `backend/api/v1/v1_visualization/values_functions.py`
+- `[MODIFY]` `backend/api/v1/v1_visualization/escalation_functions.py`
+- `[MODIFY]` `backend/api/v1/v1_jobs/job.py`
+- `[MODIFY]` `backend/api/v1/v1_forms/management/commands/form_seeder.py`
+- `[CREATE]` `backend/api/v1/v1_data/migrations/0006_purge_draft_data.py`
+- `[CREATE]` `backend/api/v1/v1_visualization/migrations/0006_drop_view_data_options.py`
+- `[CREATE]` `backend/api/v1/v1_data/migrations/0007_remove_formdata_is_draft_and_recreate_index.py`
+- `[CREATE]` `backend/api/v1/v1_visualization/migrations/0007_recreate_view_data_options.py`
+- `[DELETE]` Backend Test Files:
+  - `backend/api/v1/v1_mobile/tests/tests_mobile_draft_list.py`
+  - `backend/api/v1/v1_mobile/tests/tests_mobile_draft_delete.py`
+  - `backend/api/v1/v1_data/tests/tests_draft_data_list.py`
+  - `backend/api/v1/v1_data/tests/tests_draft_data_details.py`
+  - `backend/api/v1/v1_data/tests/tests_update_draft_data.py`
+  - `backend/api/v1/v1_data/tests/tests_publish_draft_data.py`
+  - `backend/api/v1/v1_data/tests/tests_delete_draft_data.py`
+  - `backend/api/v1/v1_data/tests/tests_add_new_draft.py`
 
 ---
 
-## 3. Deterministic Verification Plan
+## 5. Deterministic Verification Plan
 
 ### Automated Test Commands
 1. **Backend Tests**:
    ```bash
-   ./dc.sh exec backend python manage.py test api.v1.v1_mobile api.v1.v1_data
+   ./dc.sh exec backend python manage.py test api.v1.v1_mobile api.v1.v1_data api.v1.v1_visualization
    ```
 2. **Backend Lint**:
    ```bash
@@ -269,18 +279,15 @@ If the team decides to physically eliminate the `is_draft` column and `Draft` mo
    ./dc-mobile.sh exec mobile npm run lint
    ```
 
-### Manual Verification Checklist
-1. **Mobile Local Draft**: Open a form on mobile, fill in some fields, tap "Save as draft". Verify the draft appears in the form's draft list, can be reopened and edited, but does not attempt to upload during sync.
-2. **Mobile Form Submit**: Submit a completed form, trigger sync, and verify it successfully uploads to backend (`/sync`).
-3. **Web Sidebar**: Verify "Manage Drafts" no longer appears in the web navigation sidebar.
-4. **Web Route Guard**: Manually navigating to `http://<tenant>.mis.local:3000/manage-draft` redirects or returns 404.
-
 ---
 
-## 4. Vibe Coding Estimation Standard
+## 6. Vibe Coding Estimation Standard ⏱️
 
-| Task ID | Story / Task Description | Vibe Coding (Dev) | Automated Testing | QA & Review | Total Est. Time |
+| Task ID | Component & Story Description | Vibe Coding (Dev) | Automated Testing | QA & Review | Total Est. Time |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **TASK-01** | **Mobile App**: Remove draft sync & send-to-web capabilities while preserving offline local drafts | 90m (1.5h) | 45m (0.75h) | 30m (0.5h) | **165m (2.75h)** |
-| **TASK-02** | **Web & Backend**: Remove web Manage Drafts UI, routes, sidebar entry, and backend draft APIs | 90m (1.5h) | 45m (0.75h) | 30m (0.5h) | **165m (2.75h)** |
-| **TOTAL** | **Full Feature Delivery** | **3.0h** | **1.5h** | **1.0h** | **5.5h (≤ 6.0h)** |
+| **TASK-01** | **Mobile App Draft Sync Removal** (Preserve local SQLite drafts, remove Send-to-Web, sanitize sync cycle) | 45m | 30m | 15m | **90m (1.5h)** |
+| **TASK-02** | **Web Frontend Deletion** (Delete `pages/manage-draft/`, remove routes, remove sidebar item, clean up i18n) | 30m | 20m | 15m | **65m (~1.1h)** |
+| **TASK-03** | **Backend API Decommission** (Remove `/device/draft-list`, `/data/draft/`, serializers, delete obsolete test files) | 40m | 30m | 15m | **85m (~1.4h)** |
+| **TASK-04** | **Database Purge, Materialized View Rebuild & Schema Drop** (Purge draft rows, rebuild `view_data_options`, drop `is_draft` column, remove `draft_model.py`) | 50m | 35m | 20m | **105m (1.75h)** |
+| **TASK-05** | **Queryset Refactor & Test Realignment** (Remove `is_draft=False` filters across visualization/data querysets, update test fixtures) | 45m | 40m | 20m | **105m (1.75h)** |
+| **TOTAL** | **Full Feature Delivery** | **210m (3.5h)** | **155m (2.6h)** | **85m (1.4h)** | **450m (7.5h)** |
