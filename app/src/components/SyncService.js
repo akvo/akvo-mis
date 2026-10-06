@@ -627,20 +627,25 @@ const SyncService = () => {
       // space" visibly true rather than just advice.
       await refreshStorageWarning();
 
+      /**
+       * A datapoint job that outlived the sequence did not finish: downloads failed or the finish
+       * step threw, and it is kept PENDING for another attempt. Saying "Done!" over it sent the
+       * enumerator from Retry straight back into the same overlap refusal (GEO-007 D-10).
+       */
+      const unfinished = await crudJobs.getActiveJob(db, SYNC_DATAPOINT_JOB_NAME);
+
       // All phases complete
       UIState.update((s) => {
         s.isManualSynced = false;
         s.refreshPage = true;
-        s.statusBar = {
-          type: SYNC_STATUS.success,
-          bgColor: '#16a34a',
-          icon: 'checkmark-done',
-        };
+        s.statusBar = unfinished
+          ? { type: SYNC_STATUS.failed, bgColor: '#ec003f', icon: 'alert' }
+          : { type: SYNC_STATUS.success, bgColor: '#16a34a', icon: 'checkmark-done' };
       });
     } finally {
       syncLockRef.current = false;
     }
-  }, [onSync, onSyncDraftDatapoint, onSyncDataPoint]);
+  }, [db, onSync, onSyncDraftDatapoint, onSyncDataPoint]);
 
   useEffect(() => {
     const unsubsDataSync = DatapointSyncState.subscribe(

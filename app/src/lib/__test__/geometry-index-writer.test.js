@@ -2,6 +2,7 @@ import {
   finishDatapointSync,
   formsOwingFullPull,
   geometryIndexNeedsFullPull,
+  isFormGeometryReady,
   markFormGeometryComplete,
   markFormGeometryReady,
   readGeometryTotals,
@@ -296,6 +297,17 @@ describe('geometry-index-writer', () => {
       crudConfig.updateConfig.mockClear();
       await markFormGeometryReady({}, 1);
       expect(crudConfig.updateConfig).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The device flag stays 0 when any form's pull had an error. Reading it here refused every
+     * form on the device until all of them downloaded cleanly, which on a real device with one
+     * unreachable datapoint file was never (GEO-006 D-4, amended 2026-10-06).
+     */
+    it('answers readiness for the form asked about, whatever the device flag says', async () => {
+      config({ geometryIndexReady: 0, geometryReadyForms: '["1"]' });
+      expect(await isFormGeometryReady({}, 1)).toBe(true);
+      expect(await isFormGeometryReady({}, 2)).toBe(false);
     });
   });
 });

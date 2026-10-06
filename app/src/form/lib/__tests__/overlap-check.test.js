@@ -10,7 +10,6 @@ import {
 import { signatureOf } from '../overlap';
 
 jest.mock('../../../database/crud', () => ({
-  crudConfig: { getConfig: jest.fn() },
   crudSyncQueue: { hasIncomplete: jest.fn(), getAllProgress: jest.fn() },
   crudDataPoints: { countSyncedByFormId: jest.fn(), selectJsonByIds: jest.fn() },
   crudGeometryIndex: { findOverlapCandidates: jest.fn(), countByForm: jest.fn() },
@@ -19,16 +18,16 @@ jest.mock('../../../database/crud', () => ({
 
 jest.mock('../../../lib/geometry-index-writer', () => ({
   readGeometryTotals: jest.fn(),
+  isFormGeometryReady: jest.fn(),
 }));
 
 const {
-  crudConfig,
   crudSyncQueue,
   crudDataPoints,
   crudGeometryIndex,
   crudJobs,
 } = require('../../../database/crud');
-const { readGeometryTotals } = require('../../../lib/geometry-index-writer');
+const { isFormGeometryReady, readGeometryTotals } = require('../../../lib/geometry-index-writer');
 
 const FORM_ID = 123;
 const QUESTION = { id: 987, required: true, extra: { geoConfig: { detectOverlaps: true } } };
@@ -62,7 +61,7 @@ const candidateAnswers = (points, id = 11, uuid = 'neighbour-uuid') => [
 ];
 
 const healthy = () => {
-  crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 1 });
+  isFormGeometryReady.mockResolvedValue(true);
   crudSyncQueue.hasIncomplete.mockResolvedValue(false);
   crudSyncQueue.getAllProgress.mockResolvedValue({ [FORM_ID]: { total: 10 } });
   crudDataPoints.countSyncedByFormId.mockResolvedValue(10);
@@ -77,12 +76,13 @@ beforeEach(() => {
 });
 
 describe('overlapPreflight', () => {
-  it('refuses when the index has never been populated', async () => {
-    crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 0 });
+  it('refuses when no full pull of this form has landed', async () => {
+    isFormGeometryReady.mockResolvedValue(false);
     const result = await overlapPreflight({}, { formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.unavailable);
     expect(result.cause).toBe(UNAVAILABLE_CAUSE.indexNotReady);
     expect(result.retryable).toBe(true);
+    expect(isFormGeometryReady).toHaveBeenCalledWith({}, FORM_ID);
   });
 
   /**
@@ -134,7 +134,7 @@ describe('overlapPreflight', () => {
   });
 
   it('offers no Retry for a local database failure', async () => {
-    crudConfig.getConfig.mockRejectedValue(new Error('no such table'));
+    isFormGeometryReady.mockRejectedValue(new Error('no such table'));
     const result = await overlapPreflight({}, { formId: FORM_ID });
     expect(result.cause).toBe(UNAVAILABLE_CAUSE.localFailure);
     expect(result.retryable).toBe(false);
@@ -148,7 +148,7 @@ describe('overlapPreflight', () => {
 
 describe('runOverlapCheck', () => {
   it('never reaches the index when the candidate set is untrustworthy', async () => {
-    crudConfig.getConfig.mockResolvedValue({ geometryIndexReady: 0 });
+    isFormGeometryReady.mockResolvedValue(false);
     const result = await runOverlapCheck({}, { points: PLOT, question: QUESTION, formId: FORM_ID });
     expect(result.status).toBe(OVERLAP_STATUS.unavailable);
     expect(crudGeometryIndex.findOverlapCandidates).not.toHaveBeenCalled();

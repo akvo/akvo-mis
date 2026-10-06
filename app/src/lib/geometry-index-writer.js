@@ -200,6 +200,16 @@ export const formsOwingFullPull = async (db, formIds = [], resumingIds = new Set
   return owing;
 };
 
+/**
+ * Has a full, error-free pull of this form landed? GEO-007's readiness gate.
+ *
+ * Per form, not `geometryIndexReady`: that flag needs a run with zero errors across every
+ * assigned form, so one unreachable datapoint file anywhere kept validation refused on every
+ * form, and Retry repeated the failure (GEO-006 D-4, amended 2026-10-06).
+ */
+export const isFormGeometryReady = async (db, formId) =>
+  (await readReadyForms(db)).includes(`${formId}`);
+
 /** Record that a full pull of this form finished every page without an error. */
 export const markFormGeometryReady = async (db, formId) => {
   const ready = await readReadyForms(db);

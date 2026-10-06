@@ -226,6 +226,27 @@ retire the job while any assigned form owes a full pull. The background task sti
 one, so it leaves the job to the foreground. The array is empty on upgrade, so every form owes one
 full pull. Reset truncates `config` and clears it with everything else.
 
+**Amended 2026-10-06 — GEO-007 reads per-form readiness, not the device flag.** Found on a real
+device: Retry sync ran to "Done!", and Validate still refused with `indexNotReady`. The device
+flag flips only when a run finishes with **zero** download errors across **every** assigned form,
+so one datapoint whose file download fails, in any form, keeps it at `0`. Every Retry then
+repeats the same failure, and after `MAX_ATTEMPT` a fresh job fails the same way. The emulator's
+clean data never produced an error, so it passed there.
+
+**Confirmed the same day:** the trigger was server-side. The datapoint JSON files on
+`mis.akvotest.org` were missing or out of date, which is APP-407 §7's deferred gap: the file is
+written only by the worker's `seed_approved_data` task, and nothing detects a missing one. Running
+`generate_data_json` on the server let the **unchanged** app build validate after Retry. The change
+below limits how far one bad file reaches. It does not fix the server.
+
+The device flag says nothing the per-form gate does not say better. A form is in
+`geometryReadyForms` only after a full pull of **that form** stored every item, and the
+`geometry_total` gap check (D-9) catches rows that went missing later. So GEO-007's preflight now
+refuses only when **the form being validated** is not in `geometryReadyForms`. A broken
+datapoint in form B no longer blocks validation in form A. A broken datapoint in form A still
+blocks form A, which is correct, because that plot really is not indexed. `geometryIndexReady`
+stays, and still decides whether every form owes a full pull (`formsOwingFullPull`).
+
 ### D-9: Completeness is measured against `geometry_total`, not datapoint counts *(2026-09-23)*
 
 **Decision**: `config.geometryTotals` holds the server's `geometry_total` per
@@ -359,7 +380,7 @@ new table, no second writer and no reset change — but affords only one bbox pe
 | Indexed question type | `geoshape` only |
 | Bbox source | GEO-005 response (sync), local computation (local create/edit) |
 | Coordinate source at validation | `datapoints.json`, survivors only (D-5) |
-| Readiness gate | `config.geometryIndexReady` — `0` blocks GEO-007 (D-4) |
+| Readiness gate | `config.geometryReadyForms` — a form not listed blocks GEO-007 for that form (D-4, amended 2026-10-06). `config.geometryIndexReady` only decides whether every form owes a full pull |
 | Row identity | `(uuid, formId, questionId, repeatIndex)` |
 
 ---

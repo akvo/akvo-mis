@@ -6,16 +6,10 @@
  * GEO-007 D-10 (refuse, never caveat-pass) and GEO-006 D-5 (the index carries bounding boxes,
  * not coordinates).
  */
-import {
-  crudConfig,
-  crudDataPoints,
-  crudGeometryIndex,
-  crudJobs,
-  crudSyncQueue,
-} from '../../database/crud';
+import { crudDataPoints, crudGeometryIndex, crudJobs, crudSyncQueue } from '../../database/crud';
 import { jobStatus, SYNC_DATAPOINT_JOB_NAME } from '../../lib/constants';
 import { boundingBox, summarizeAccuracy } from '../../lib/geometry-index';
-import { readGeometryTotals } from '../../lib/geometry-index-writer';
+import { isFormGeometryReady, readGeometryTotals } from '../../lib/geometry-index-writer';
 import { polygonArea } from './geometry';
 import {
   OVERLAP_CONFIG_KEY,
@@ -88,8 +82,11 @@ const unavailable = (cause) => ({
  */
 export const overlapPreflight = async (db, { formId } = {}) => {
   try {
-    const config = await crudConfig.getConfig(db);
-    if (!config || config.geometryIndexReady !== 1) {
+    /**
+     * This form's readiness, not the device's: one unreachable datapoint in another form must not
+     * refuse this one forever (GEO-006 D-4, amended 2026-10-06).
+     */
+    if (!(await isFormGeometryReady(db, formId))) {
       return unavailable(UNAVAILABLE_CAUSE.indexNotReady);
     }
     /**

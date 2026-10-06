@@ -331,7 +331,7 @@ branch (because each would otherwise report a confident "no overlap"):
 
 | Cause | How the device knows | Recoverable by sync? | Retry does |
 |---|---|---|---|
-| **Index not ready** (upgrade / post-reset) | `config.geometryIndexReady = 0` (GEO-006 D-4) | Yes | Start / resume datapoint sync |
+| **Index not ready** (upgrade / post-reset / form never fully pulled) | The form is not in `config.geometryReadyForms` (GEO-006 D-4, amended 2026-10-06; this used the device-wide `geometryIndexReady` until then) | Yes | Start / resume datapoint sync |
 | **Download incomplete or interrupted** | Sync queue still has forms with `lastPage < totalPage`, or datapoint sync is in progress | Yes | Resume datapoint sync |
 | **Gapped index after a "finished" sync** | Local `geometry_index` row count for the form ≠ server `geometry_total` (GEO-005) | Yes | Force a full geometry re-pull (e.g. `geometry_full=true` / clear cursor and sync again) |
 | **A sync is running** | A `sync-form-datapoints` job is `ON_PROGRESS` | — | No Retry: one is already running. Copy says to validate again when it finishes |
@@ -372,6 +372,13 @@ not itself a validation-time signal. Validation-time gates are the rows above.
 - **Retry** is shown only for the recoverable rows; it kicks datapoint sync and returns the
   enumerator to the form (they press Validate again when sync finishes — do not auto-pass)
 - Required questions: same submit block as "not validated" (D-1 / D-7)
+
+**The sync banner must not say "Done!" over a failed sync** *(2026-10-06)*. Retry's whole contract
+is "sync, then press Validate again", so the banner is the only thing that tells the enumerator
+whether to bother. It used to turn green unconditionally once the sync sequence ended, including
+when downloads failed and the job was left pending, so on device Retry ended in "Done!" followed by
+the same refusal. The sequence now shows the failed state while a datapoint-sync job is still
+active.
 
 **Why not caveat-pass**: field users treat green as done; a recorded "pass (incomplete)" is
 indistinguishable from a real pass once the submission leaves the device. That is the false
