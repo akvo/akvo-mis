@@ -10,7 +10,9 @@ import {
   Steps,
   Tag,
   Typography,
+  Upload,
 } from "antd";
+import { UploadOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api, store } from "../../lib";
 import { useNotification } from "../../util/hooks";
@@ -26,6 +28,8 @@ const Configure = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null);
+  const [logoFileList, setLogoFileList] = useState([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const justFinished = useRef(false);
   // Watched rather than mirrored into state: the preview is what makes the
   // tier/unit distinction concrete before the names are committed, and the
@@ -35,6 +39,69 @@ const Configure = () => {
   const rootUnitName = Form.useWatch("root_unit_name", form);
   const { notify } = useNotification();
   const { user: authUser } = store.useState((s) => s);
+
+  const beforeUpload = (file) => {
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/jpg",
+      "image/svg+xml",
+    ];
+    const isAllowed = allowedTypes.includes(file.type);
+    const isLt2M = file.size / (1024 * 1024) <= 2;
+    if (!isAllowed) {
+      notify({
+        type: "error",
+        message: "Only PNG, JPG, JPEG, and SVG files are allowed.",
+      });
+      return Upload.LIST_IGNORE;
+    }
+    if (!isLt2M) {
+      notify({
+        type: "error",
+        message: "Image must be smaller than 2MB.",
+      });
+      return Upload.LIST_IGNORE;
+    }
+    return true;
+  };
+
+  const handleLogoUpload = ({ file, onSuccess, onError }) => {
+    setUploadingLogo(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    api
+      .post("upload/images", formData)
+      .then((res) => {
+        setUploadingLogo(false);
+        const filePath = res.data.file.startsWith("http")
+          ? new URL(res.data.file).pathname
+          : res.data.file;
+        form.setFieldsValue({ logo: filePath });
+        setLogoFileList([
+          {
+            uid: "-1",
+            name: file.name,
+            status: "done",
+            url: res.data.file,
+          },
+        ]);
+        onSuccess(res.data);
+      })
+      .catch((err) => {
+        setUploadingLogo(false);
+        notify({
+          type: "error",
+          message: err.response?.data?.message || "Failed to upload logo",
+        });
+        onError(err);
+      });
+  };
+
+  const handleLogoRemove = () => {
+    form.setFieldsValue({ logo: null });
+    setLogoFileList([]);
+  };
 
   // Reached without a session, or after the work is already done: both are
   // wrong turns rather than states this form should render.
@@ -59,6 +126,9 @@ const Configure = () => {
         justFinished.current = true;
         store.update((s) => {
           s.user = res.data;
+          if (s.tenant && values.logo) {
+            s.tenant.logo = values.logo;
+          }
         });
         setDone({
           firstName: values.first_name,
@@ -185,6 +255,33 @@ const Configure = () => {
                 rules={[{ required: true, message: "Name your top unit." }]}
               >
                 <Input placeholder="Kenya" />
+              </Form.Item>
+              <Form.Item
+                name="logo"
+                label="Workspace logo"
+                extra="Optional. PNG, JPG, JPEG, or SVG up to 2MB. Displayed in the top navigation and login page."
+              >
+                <Upload
+                  name="file"
+                  listType="picture"
+                  maxCount={1}
+                  fileList={logoFileList}
+                  beforeUpload={beforeUpload}
+                  customRequest={handleLogoUpload}
+                  onRemove={handleLogoRemove}
+                  accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                >
+                  {logoFileList.length < 1 && (
+                    <Button
+                      icon={
+                        uploadingLogo ? <LoadingOutlined /> : <UploadOutlined />
+                      }
+                      loading={uploadingLogo}
+                    >
+                      Upload logo
+                    </Button>
+                  )}
+                </Upload>
               </Form.Item>
 
               <Alert

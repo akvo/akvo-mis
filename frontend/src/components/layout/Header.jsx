@@ -8,7 +8,7 @@ import { eraseCookieFromAllPaths } from "../../util/date";
 import PublicDashboardMenu from "./PublicDashboardMenu";
 
 const Header = ({ className = "header", ...props }) => {
-  const { isLoggedIn, user } = store.useState();
+  const { isLoggedIn, user, tenant } = store.useState();
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = store.useState((s) => s);
@@ -83,8 +83,12 @@ const Header = ({ className = "header", ...props }) => {
             <div className="logo-wrapper">
               <img
                 className="small-logo"
-                src={config.siteLogo}
-                alt={config.siteLogo}
+                src={tenant?.logo || config.siteLogo}
+                alt={tenant?.name ? `${tenant.name} Logo` : "Akvo MIS"}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = config.siteLogo;
+                }}
               />
             </div>
           </Link>
