@@ -177,6 +177,19 @@ describe("tenant util", () => {
     expect(document.title).toBe("Akvo MIS - Acme Corp");
   });
 
+  test("fetchTenant falls back to title-cased subdomain when tenant name is empty", async () => {
+    axios.mockResolvedValue({
+      status: 200,
+      data: {
+        subdomain: "test-workspace",
+        name: "",
+        logo: null,
+      },
+    });
+    await fetchTenant();
+    expect(document.title).toBe("Akvo MIS - Test Workspace");
+  });
+
   test("a 204 means there is no workspace here and resets title", async () => {
     // axios gives an empty body as "", which must not be mistaken for a
     // workspace whose subdomain happens to be blank.
