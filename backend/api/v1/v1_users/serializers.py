@@ -38,11 +38,11 @@ from utils.custom_serializer_fields import (
     CustomMultipleChoiceField,
 )
 from api.v1.v1_profile.constants import FeatureAccessTypes
-from django.conf import settings
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
-from utils.tenant_host import admin_subdomain, embed_hostname, is_admin_host
+from utils.tenant_host import is_admin_host
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
+from utils.workspace_name import host_collision_reason
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -1177,31 +1177,15 @@ class RegisterSerializer(serializers.Serializer):
     )
 
     def validate_subdomain(self, value):
-        """Refuse a subdomain that would collide with the embed host.
+        """Refuse a name that would shadow a host this install needs.
 
-        `EMBED_HOST` serves author-pasted third-party markup, and the
-        only thing protecting this application from it is that the two
-        sit on different origins. A workspace registered at that exact
-        host would put them back on the same one: a snippet served there
-        could then read the `AUTH_TOKEN` cookie of anyone signed in to
-        that workspace, since it is not HttpOnly.
-
-        Compared as whole hosts rather than as labels, so it stays
-        correct whatever `EMBED_HOST` is set to, and inert when either
-        setting is empty.
+        The checks themselves live in `utils.workspace_name`, which
+        the console's rename serializer also calls. Two copies of a
+        security check are two things to keep in step.
         """
-        # The console's own host. A workspace here would not merely
-        # collide -- it would shadow the only address from which this
-        # deployment can be administered.
-        if value.lower() == admin_subdomain():
-            raise serializers.ValidationError("This subdomain is reserved.")
-        embed = embed_hostname()
-        if embed and settings.BASE_DOMAIN:
-            candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
-            if candidate == embed:
-                raise serializers.ValidationError(
-                    "This subdomain is reserved."
-                )
+        reason = host_collision_reason(value)
+        if reason:
+            raise serializers.ValidationError(reason)
         return value
 
     # Uniqueness of email and subdomain is left to the database
