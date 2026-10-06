@@ -24,6 +24,7 @@
   #login {
     background-color: $bg-page;
     min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
+    flex: 1;
     margin-top: -$padding-default;
     margin-bottom: -$padding-default;
     margin-left: -$layout-padding-small-screen;
