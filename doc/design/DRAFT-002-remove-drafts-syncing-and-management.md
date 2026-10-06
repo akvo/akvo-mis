@@ -157,7 +157,7 @@ If the team decides to physically eliminate the `is_draft` column and `Draft` mo
 
 ---
 
-## 1. Task 1: Mobile App Changes
+## 1. Task 1: Remove Draft Syncing from Mobile App (Preserve Local Drafts)
 
 ### 1.1 Touchpoint Files
 - `[MODIFY]` `app/src/components/SyncService.js`:
@@ -191,7 +191,7 @@ If the team decides to physically eliminate the `is_draft` column and `Draft` mo
 
 ---
 
-## 2. Task 2: Web Platform & Backend Changes
+## 2. Task 2: Remove Manage Drafts from Web Platform & Decommission Backend Draft APIs
 
 ### 2.1 Web Frontend Touchpoint Files
 - `[DELETE]` `frontend/src/pages/manage-draft/` (entire directory):
