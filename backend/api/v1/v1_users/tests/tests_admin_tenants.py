@@ -8,6 +8,9 @@ from api.v1.v1_users.models import SystemUser, Tenant
 
 ADMIN_HOST = "admin.app.com"
 TENANTS = "/api/v1/admin/tenants"
+# The list itself. `TENANTS` stays as the prefix the detail routes
+# hang off -- deactivate, activate and delete are untouched.
+SUMMARY = TENANTS + "/summary"
 
 
 @override_settings(BASE_DOMAIN="app.com")
@@ -35,9 +38,9 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
         return self.client.post(path, HTTP_HOST=ADMIN_HOST, **self.auth)
 
     def test_lists_every_workspace(self):
-        response = self.get(TENANTS)
+        response = self.get(SUMMARY)
         self.assertEqual(response.status_code, 200)
-        subdomains = [row["subdomain"] for row in response.json()]
+        subdomains = [row["subdomain"] for row in response.json()["data"]]
         # Both, plus the `default` row the tenant backfill migration
         # leaves behind. Seeing a workspace the operator has no
         # membership of is the whole point -- for_user() would have
@@ -46,17 +49,21 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
         self.assertIn("beta", subdomains)
 
     def test_carries_the_root_unit_name(self):
-        rows = {row["subdomain"]: row for row in self.get(TENANTS).json()}
+        rows = {
+            row["subdomain"]: row
+            for row in self.get(SUMMARY).json()["data"]
+        }
         self.assertEqual(rows["acme"]["name"], "Kenya")
 
     def test_a_workspace_user_is_refused(self):
         response = self.client.get(
-            TENANTS, HTTP_HOST=ADMIN_HOST, **self.bearer(self.acme.admin)
+            SUMMARY, HTTP_HOST=ADMIN_HOST,
+            **self.bearer(self.acme.admin)
         )
         self.assertEqual(response.status_code, 403)
 
     def test_an_anonymous_caller_is_refused(self):
-        response = self.client.get(TENANTS, HTTP_HOST=ADMIN_HOST)
+        response = self.client.get(SUMMARY, HTTP_HOST=ADMIN_HOST)
         self.assertIn(response.status_code, (401, 403))
 
     def test_deactivate_then_activate(self):
@@ -84,12 +91,15 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
 
     def test_state_reflects_the_columns(self):
         self.post(f"{TENANTS}/{self.beta.tenant.pk}/deactivate")
-        rows = {row["subdomain"]: row for row in self.get(TENANTS).json()}
+        rows = {
+            row["subdomain"]: row
+            for row in self.get(SUMMARY).json()["data"]
+        }
         self.assertEqual(rows["acme"]["state"], "active")
         self.assertEqual(rows["beta"]["state"], "suspended")
 
     def test_search_narrows_by_subdomain(self):
-        rows = self.get(f"{TENANTS}?search=acm").json()
+        rows = self.get(f"{SUMMARY}?search=acm").json()["data"]
         subdomains = [row["subdomain"] for row in rows]
         self.assertEqual(subdomains, ["acme"])
 
@@ -114,7 +124,9 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
         }
         for state, present in expected.items():
             with self.subTest(state=state):
-                rows = self.get(f"{TENANTS}?state={state}").json()
+                rows = self.get(
+                    f"{SUMMARY}?state={state}"
+                ).json()["data"]
                 self.assertTrue(rows, f"no workspace reported {state}")
                 for row in rows:
                     self.assertEqual(row["state"], state)
@@ -133,18 +145,22 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
         )
         suspended = [
             row["subdomain"]
-            for row in self.get(f"{TENANTS}?state=suspended").json()
+            for row in self.get(
+                f"{SUMMARY}?state=suspended"
+            ).json()["data"]
         ]
         deleted = [
             row["subdomain"]
-            for row in self.get(f"{TENANTS}?state=deleted").json()
+            for row in self.get(
+                f"{SUMMARY}?state=deleted"
+            ).json()["data"]
         ]
         self.assertNotIn("acme", suspended)
         self.assertIn("acme", deleted)
 
     def test_an_unknown_state_is_refused(self):
         # Ignoring it would read as "this deployment has none of those".
-        response = self.get(f"{TENANTS}?state=archived")
+        response = self.get(f"{SUMMARY}?state=archived")
         self.assertEqual(response.status_code, 400)
 
     def test_toggles_a_feature(self):

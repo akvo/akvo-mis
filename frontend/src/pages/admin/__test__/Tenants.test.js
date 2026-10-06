@@ -35,8 +35,41 @@ const rows = [
   },
 ];
 
-const renderList = async () => {
-  axios.mockResolvedValue({ status: 200, data: rows });
+// The summary deliberately disagrees with the sum of `rows`. Every
+// assertion about a total therefore distinguishes "rendered what the
+// server said" from "added up what is on screen" -- a fixture whose
+// numbers agreed could not tell the two implementations apart.
+const summary = {
+  users: 900,
+  forms: 800,
+  dashboards: 700,
+  datapoints: 600000,
+  devices: 500,
+};
+
+const envelope = (overrides = {}) => ({
+  status: 200,
+  data: {
+    current: 1,
+    total: 2,
+    total_page: 1,
+    summary,
+    data: rows,
+    ...overrides,
+  },
+});
+
+// The URL of the most recent GET the component issued. `api.get` passes
+// no `method` key, so a GET is a config object without one.
+const lastGet = () => {
+  const calls = axios.mock.calls.filter(
+    ([conf]) => !conf.method || conf.method === "GET"
+  );
+  return calls[calls.length - 1][0].url;
+};
+
+const renderList = async (overrides) => {
+  axios.mockResolvedValue(envelope(overrides));
   await act(async () => {
     render(
       <MemoryRouter>
@@ -46,12 +79,25 @@ const renderList = async () => {
   });
 };
 
+// Real timers throughout. lodash.debounce captures `Date.now` when it is
+// imported, so Jest's fake timers move the clock the scheduler reads
+// without moving the one lodash compares against, and the debounced call
+// never fires. Waiting out a 400ms debounce is cheaper than that trap.
+const flushDebounce = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
+  });
+
 // The state filter's buttons carry the same labels as the state tags, so
 // every assertion about a row's state is scoped to the table body. A bare
 // getByText("Active") matches the filter control too.
 const body = () => within(document.querySelector("tbody"));
 
 describe("Tenants list", () => {
+  beforeEach(() => {
+    axios.mockReset();
+  });
+
   it("renders a row per workspace with its counts", async () => {
     await renderList();
     expect(screen.getByText("mohhs")).toBeInTheDocument();
@@ -75,6 +121,214 @@ describe("Tenants list", () => {
     const actions = screen.getAllByRole("button", { name: "Inspect" });
     expect(actions).toHaveLength(1);
     expect(actions[0].closest("tr")).toHaveTextContent("mohhs");
+  });
+
+  it("asks the server for the chosen state instead of filtering here", async () => {
+    await renderList();
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    expect(lastGet()).toContain("state=suspended");
+    // Both rows are still rendered: the component shows what the server
+    // sent, and the mock sent both. Asserting that "mohhs" disappeared
+    // would be asserting that the browser still filters.
+    expect(screen.getByText("mohhs")).toBeInTheDocument();
+  });
+
+  it("returns to the first page whenever the filter changes", async () => {
+    // Enough workspaces for a second page, and standing on it, so that
+    // the reset has something to undo. Rendered on page 1 the assertion
+    // would hold whether or not the component resets anything.
+    await renderList({ total: 60, total_page: 3 });
+    await act(async () => {
+      userEvent.click(screen.getByTitle("2"));
+    });
+    expect(lastGet()).toContain("page=2");
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    expect(lastGet()).toContain("page=1");
+    expect(lastGet()).toContain("state=suspended");
+  });
+
+  it("debounces the search box into one request", async () => {
+    await renderList();
+    const before = axios.mock.calls.length;
+    const box = screen.getByPlaceholderText("Search subdomain or name");
+    await act(async () => {
+      fireEvent.change(box, { target: { value: "sle" } });
+      fireEvent.change(box, { target: { value: "slem" } });
+      fireEvent.change(box, { target: { value: "sleman" } });
+    });
+    // Nothing yet: three keystrokes must not be three requests.
+    expect(axios.mock.calls.length).toBe(before);
+    await flushDebounce();
+    expect(axios.mock.calls.length).toBe(before + 1);
+    expect(lastGet()).toContain("search=sleman");
+  });
+
+  it("abandons a request that a newer filter has overtaken", async () => {
+    // Every request this component issues carries an abort signal; a
+    // request without one cannot be overtaken. This asserts the
+    // plumbing only -- the mocked axios ignores `signal`, so nothing is
+    // really aborted here. The behaviour is pinned by the test below.
+    await renderList();
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Active" }));
+    });
+    const signals = axios.mock.calls.map(([conf]) => conf.signal);
+    expect(signals.length).toBeGreaterThan(1);
+    expect(signals.filter(Boolean)).toHaveLength(signals.length);
+  });
+
+  it("keeps the tiles blank when an overtaken request is abandoned", async () => {
+    // The failure this guards is the one the whole feature exists to
+    // prevent, and it is not the one it looks like. Two filter changes
+    // in quick succession are two requests; `api.get` aborts the first
+    // synchronously, so its rejection lands AFTER the second request
+    // has already set `loading`. If the abandoned request is allowed to
+    // clear `loading` on its way out, the tiles un-blank onto the
+    // previous filter's numbers and stay there for as long as the
+    // second request takes -- which, on the deployment this is built
+    // for, is a three-pass aggregate over the whole annotated join.
+    //
+    // The operator sees: Suspended selected, no spinner, and the totals
+    // for All. Exactly the "wrong in a way an operator will believe"
+    // the design names.
+    await renderList();
+    const pending = [];
+    axios.mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          pending.push({ resolve, reject });
+        })
+    );
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Active" }));
+    });
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    expect(pending).toHaveLength(2);
+
+    // What the abort does, as the component sees it.
+    const aborted = new Error("canceled");
+    const realIsCancel = axios.isCancel;
+    axios.isCancel = jest.fn((error) => error === aborted);
+    try {
+      await act(async () => {
+        pending[0].reject(aborted);
+      });
+      const tiles = within(document.querySelector("#tenant-totals"));
+      expect(tiles.queryByText("900")).not.toBeInTheDocument();
+      expect(
+        document.querySelectorAll("#tenant-totals .admin-tile-pending")
+      ).toHaveLength(6);
+    } finally {
+      axios.isCancel = realIsCancel;
+    }
+  });
+
+  it("stays quiet when a request is cancelled rather than failing", async () => {
+    // An aborted request is not an error an operator needs to hear
+    // about. It is this component abandoning work it no longer wants.
+    await renderList();
+    const realIsCancel = axios.isCancel;
+    axios.isCancel = jest.fn().mockReturnValue(true);
+    try {
+      axios.mockRejectedValueOnce(new Error("canceled"));
+      await act(async () => {
+        userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+      });
+      expect(axios.isCancel).toHaveBeenCalled();
+    } finally {
+      axios.isCancel = realIsCancel;
+    }
+  });
+
+  it("asks the server to sort when a column header is clicked", async () => {
+    // Scoped to the header row: the tile above repeats the column's
+    // label exactly, which is deliberate -- the tile row's position
+    // already says "total", so "Total datapoints" over a "Datapoints"
+    // column would only make a reader stop and work out which is which.
+    // The cost is that a bare getByText matches both.
+    await renderList();
+    const header = () => within(document.querySelector("thead"));
+    await act(async () => {
+      userEvent.click(header().getByText("Datapoints"));
+    });
+    expect(lastGet()).toContain("ordering=datapoints");
+    await act(async () => {
+      userEvent.click(header().getByText("Datapoints"));
+    });
+    expect(lastGet()).toContain("ordering=-datapoints");
+  });
+
+  it("falls back to the first page when a page stops existing", async () => {
+    // A workspace deleted between two requests can shrink the result
+    // out from under the page an operator is standing on, and the
+    // endpoint answers 404. Showing an error for a page that merely
+    // stopped existing is the wrong response to an ordinary race.
+    await renderList({ total: 60, total_page: 3 });
+    axios.mockRejectedValueOnce({ response: { status: 404 } });
+    axios.mockResolvedValue(envelope());
+    await act(async () => {
+      userEvent.click(screen.getByTitle("2"));
+    });
+    expect(lastGet()).toContain("page=1");
+  });
+
+  it("renders the totals the server sent, not the sum of the page", async () => {
+    // The fixture's summary deliberately disagrees with the rows. A
+    // component that added up what it had been given would show 55
+    // users and 128,430 + 12,004 datapoints; the server said 900 and
+    // 600,000, and the server is describing every workspace the filter
+    // matched rather than these two.
+    await renderList();
+    const tiles = within(document.querySelector("#tenant-totals"));
+    expect(tiles.getByText("900")).toBeInTheDocument();
+    expect(tiles.getByText("600,000")).toBeInTheDocument();
+  });
+
+  it("takes the workspace total from the envelope, not from summary", async () => {
+    // `total` is the count of workspaces matching the filter and it is
+    // the only source for that number -- the pager below reads the same
+    // field, so the two cannot drift.
+    await renderList();
+    const tiles = within(document.querySelector("#tenant-totals"));
+    expect(tiles.getByText("2")).toBeInTheDocument();
+  });
+
+  it("repeats the totals under the columns that name them", async () => {
+    await renderList();
+    const totals = within(document.querySelector("tfoot"));
+    expect(totals.getByText("600,000")).toBeInTheDocument();
+    expect(totals.getByText("800")).toBeInTheDocument();
+  });
+
+  it("blanks the tiles while a filter is in flight", async () => {
+    // "412" standing over a table of 28 suspended workspaces is not a
+    // stale number, it is a wrong one, and it is wrong in a way an
+    // operator will believe.
+    await renderList();
+    let resolve;
+    axios.mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = () => done(envelope());
+        })
+    );
+    await act(async () => {
+      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
+    });
+    const tiles = within(document.querySelector("#tenant-totals"));
+    expect(tiles.queryByText("900")).not.toBeInTheDocument();
+    await act(async () => {
+      resolve();
+    });
   });
 
   describe("the Inspect action", () => {
@@ -124,31 +378,5 @@ describe("Tenants list", () => {
       });
       expect(window.location.replace).not.toHaveBeenCalled();
     });
-  });
-
-  it("narrows the table to one state", async () => {
-    await renderList();
-    expect(screen.getByText("mohhs")).toBeInTheDocument();
-    await act(async () => {
-      userEvent.click(screen.getByRole("radio", { name: "Suspended" }));
-    });
-    expect(screen.queryByText("mohhs")).not.toBeInTheDocument();
-    expect(screen.getByText("sleman")).toBeInTheDocument();
-  });
-
-  it("narrows the table by subdomain and by name", async () => {
-    await renderList();
-    const box = screen.getByPlaceholderText("Search subdomain or name");
-    await act(async () => {
-      fireEvent.change(box, { target: { value: "sleman" } });
-    });
-    expect(screen.queryByText("mohhs")).not.toBeInTheDocument();
-    await act(async () => {
-      fireEvent.change(box, { target: { value: "ministry" } });
-    });
-    // Matching the root unit's name, not just the address: an operator
-    // looking for a workspace knows the organisation, not the label.
-    expect(screen.getByText("mohhs")).toBeInTheDocument();
-    expect(screen.queryByText("sleman")).not.toBeInTheDocument();
   });
 });
