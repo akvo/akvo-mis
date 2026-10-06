@@ -88,60 +88,6 @@ RESERVED_TERMS = frozenset(
 )
 
 
-COUNTRY_MESSAGE = (
-    "Country-level workspaces aren't available on self-service "
-    "sign-up. Please contact us to request one, or choose a "
-    "different name."
-)
-
-# What ISO 3166 does not carry but people type. Deliberately not ISO
-# alpha-2 or alpha-3 codes: blocking `can`, `ind` and `cub` as a class
-# would cost more in refused legitimate names than it buys, and the
-# requirement is about names.
-EXTRA_COUNTRY_NAMES = frozenset(
-    {
-        "usa", "uk", "uae", "drc", "ivorycoast", "burma",
-        "swaziland", "holland", "england", "scotland", "wales",
-        "northernireland", "turkey",
-    }
-)
-
-
-def _french_translator():
-    """Country names in French, or identity if unavailable.
-
-    The catalogue is packaging rather than code, and its gettext
-    domain has been renamed across pycountry releases -- so a missing
-    or differently named one degrades to English instead of taking
-    registration down. `pycountry` is pinned, and 24.6.1 ships
-    `iso3166-1`.
-    """
-    try:
-        catalogue = gettext.translation(
-            "iso3166-1", pycountry.LOCALES_DIR, languages=["fr"]
-        )
-    except (OSError, AttributeError):
-        return lambda value: value
-    return catalogue.gettext
-
-
-# Built on first use rather than at import, so the cost lands on
-# the first registration instead of on every management command,
-# and cached so it lands once.
-@lru_cache(maxsize=1)
-def _build_country_names():
-    names = set(EXTRA_COUNTRY_NAMES)
-    translate = _french_translator()
-    for country in pycountry.countries:
-        for attribute in ("name", "official_name", "common_name"):
-            value = getattr(country, attribute, None)
-            if not value:
-                continue
-            names.add(_normalize(value))
-            names.add(_normalize(translate(value)))
-    return frozenset(names)
-
-
 def _strip_accents(value):
     """`Côte` -> `Cote`.
 
@@ -176,6 +122,111 @@ def _tokens(value):
     digits is what stops that spelling walking past a word check.
     """
     return re.findall(r"[a-z]+", _strip_accents(value.lower()))
+
+
+COUNTRY_MESSAGE = (
+    "Country-level workspaces aren't available on self-service "
+    "sign-up. Please contact us to request one, or choose a "
+    "different name."
+)
+
+# What ISO 3166 does not carry *in any form a derivation can reach*,
+# but people type. Deliberately not ISO alpha-2 or alpha-3 codes:
+# blocking `can`, `ind` and `cub` as a class would cost more in refused
+# legitimate names than it buys, and the requirement is about names.
+#
+# Entries are listed with their French twin, because the ISO side of
+# the set is bilingual through the gettext catalogue and a one-language
+# extras list leaves every entry with a claimable twin. Two French
+# twins are deliberately absent: `eau` for the UAE is French for
+# *water*, which on a WASH platform is the worst false positive this
+# module could invent, and `arabie` for Saudi Arabia is a region
+# rather than a country.
+EXTRA_COUNTRY_NAMES = frozenset(
+    {
+        # Abbreviations and colloquial English names.
+        "usa", "uk", "uae", "drc", "drcongo", "rdc", "ivorycoast",
+        "burma", "swaziland", "turkey", "saudi",
+        # Names the standard spells differently enough that
+        # normalisation cannot bridge the gap: ISO has `Russian
+        # Federation`, `Cabo Verde`, `Brunei Darussalam`, `Bosnia and
+        # Herzegovina`, `North Macedonia`, `Timor-Leste` and `Holy See
+        # (Vatican City State)`. `russia` and `palestine` are the two
+        # that carry the clearest claim to represent a country, which
+        # is the reason this rule exists at all.
+        "russia", "capeverde", "brunei", "bosnia", "macedonia",
+        "easttimor", "vatican", "vaticancity",
+        # `coteivoire` with one `r`, which is how the name is as often
+        # typed as the `d'` spelling ISO carries.
+        "coteivoire",
+        # The United Kingdom's constituent countries and the island,
+        # none of which ISO 3166-1 carries, plus the French forms the
+        # catalogue cannot supply because the English entries are ours.
+        "england", "scotland", "wales", "northernireland",
+        "britain", "greatbritain",
+        "angleterre", "ecosse", "paysdegalles", "irlandedunord",
+        "grandebretagne",
+        # French twins of the entries above.
+        "hollande", "holland", "bosnie", "macedoine",
+    }
+)
+
+
+def _french_translator():
+    """Country names in French, or identity if unavailable.
+
+    The catalogue is packaging rather than code, and its gettext
+    domain has been renamed across pycountry releases -- so a missing
+    or differently named one degrades to English instead of taking
+    registration down. `pycountry` is pinned, and 24.6.1 ships
+    `iso3166-1`.
+    """
+    try:
+        catalogue = gettext.translation(
+            "iso3166-1", pycountry.LOCALES_DIR, languages=["fr"]
+        )
+    except (OSError, AttributeError):
+        return lambda value: value
+    return catalogue.gettext
+
+
+# Built on first use rather than at import, so the cost lands on
+# the first registration instead of on every management command,
+# and cached so it lands once.
+@lru_cache(maxsize=1)
+def _build_country_names():
+    """Every spelling of every country, normalised, in two languages.
+
+    ISO qualifies a good many names with a comma or a parenthetical --
+    `Korea, Republic of`, `Palestine, State of`, `Micronesia,
+    Federated States of`, `Falkland Islands (Malvinas)`, `Holy See
+    (Vatican City State)` -- and those qualifiers normalise into the
+    key rather than off it, so the short form a person actually types
+    was absent from the set while the long form nobody types was in
+    it. Taking the part before the first comma and the form with the
+    parenthetical removed is what closes that gap for 26 names at
+    once, which is why it is derived here rather than hand-listed in
+    `EXTRA_COUNTRY_NAMES`: a hand-written entry per country is a list
+    that drifts out of step with the next pycountry bump.
+    """
+    names = set(EXTRA_COUNTRY_NAMES)
+    translate = _french_translator()
+    for country in pycountry.countries:
+        for attribute in ("name", "official_name", "common_name"):
+            value = getattr(country, attribute, None)
+            if not value:
+                continue
+            for spelling in (value, translate(value)):
+                names.add(_normalize(spelling))
+                names.add(_normalize(spelling.split(",")[0]))
+                names.add(
+                    _normalize(re.sub(r"\(.*?\)", " ", spelling))
+                )
+    # `_normalize("")` is the empty string, and an empty candidate
+    # must not match anything -- `self_service_reason("")` is part of
+    # the public surface and has a test.
+    names.discard("")
+    return frozenset(names)
 
 
 PROFANITY_MESSAGE = (

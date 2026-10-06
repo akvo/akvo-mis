@@ -190,7 +190,60 @@ class CountryNamesTestCase(SimpleTestCase):
             )
 
     def test_colloquial_names_iso_does_not_carry_are_refused(self):
-        for name in ("usa", "uk", "swaziland", "holland", "turkey"):
+        """The names ISO spells differently, or not at all.
+
+        `russia` and `palestine` are the two carrying the clearest
+        claim to represent a country, which is the reason this rule
+        exists -- and both were claimable, because ISO says `Russian
+        Federation` and `Palestine, State of`.
+        """
+        for name in (
+            "usa", "uk", "swaziland", "holland", "turkey",
+            "russia", "palestine", "bosnia", "macedonia",
+            "capeverde", "brunei", "easttimor", "vatican",
+            "drcongo", "saudi",
+            # `coteivoire` with one `r`, as often typed as the `d'`
+            # spelling ISO carries.
+            "coteivoire",
+            "britain", "greatbritain",
+        ):
+            self.assertEqual(
+                self_service_reason(name), COUNTRY_MESSAGE, name
+            )
+
+    def test_the_french_twin_of_every_extra_is_refused(self):
+        """The asymmetry the extras set had.
+
+        The ISO side is bilingual through the gettext catalogue, but
+        a hand-written English extras list leaves every entry with a
+        claimable French twin. `hollande` was claimable while
+        `holland` was not.
+        """
+        for name in (
+            "russie", "bosnie", "macedoine", "grandebretagne",
+            "angleterre", "ecosse", "paysdegalles", "irlandedunord",
+            "hollande",
+        ):
+            self.assertEqual(
+                self_service_reason(name), COUNTRY_MESSAGE, name
+            )
+
+    def test_the_short_form_of_a_qualified_iso_name_is_refused(self):
+        """What the comma and the parenthetical used to hide.
+
+        ISO qualifies a good many names -- `Korea, Republic of`,
+        `Micronesia, Federated States of`, `Falkland Islands
+        (Malvinas)`, `Holy See (Vatican City State)` -- and the
+        qualifier normalises *into* the key rather than off it. So the
+        long form nobody types was in the set and the short form
+        everybody types was not. Derived in `_build_country_names`
+        rather than hand-listed, which is why this test names one of
+        each shape instead of all 26.
+        """
+        for name in (
+            "korea", "coree", "micronesia", "falklandislands",
+            "virginislands", "holysee",
+        ):
             self.assertEqual(
                 self_service_reason(name), COUNTRY_MESSAGE, name
             )
