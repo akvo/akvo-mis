@@ -96,6 +96,67 @@ sequenceDiagram
 
 ---
 
+## 🗄️ Database & Migration Strategy (Backend & Mobile)
+
+### 1. Recommended Backend Approach: API Decommissioning (Zero Migrations)
+- **Decision: Retain `Draft` mixin on `FormData` and avoid database migrations**
+  - `FormData(SoftDeletes, Draft)` inherits `is_draft = models.BooleanField(default=False)` from the `Draft` abstract model.
+  - **Why this is the safest and recommended approach**:
+    1. **Schema Stability & Zero Downtime**: No DDL table locks on the large `form_data` table. `makemigrations` produces `No changes detected`.
+    2. **View Integrity**: Existing database views (such as `view_data_options` in `backend/api/v1/v1_visualization/migrations/0001_create_view_data_options.py`) query `AND is_draft = FALSE` and remain 100% stable without recreation.
+    3. **Automatic Isolation**: `DraftSoftDeletesManager` ensures that `FormData.objects.all()` automatically excludes draft records (`is_draft=False`) across all active APIs, exports, and dashboards.
+    4. **Clean Operational Purge**: `FormData.objects_draft` is retained exclusively for the administrative command `python manage.py purge_orphaned_drafts` to safely clean up historical server drafts.
+  - **Verdict**: Backend requires **0 new migrations**.
+
+---
+
+### 2. Alternative Backend Scenario: Full DB Migration Removal
+If the team decides to physically eliminate the `is_draft` column and `Draft` model manager from PostgreSQL via migrations, the following sequence must be handled:
+
+1. **Mandatory Data Purge Migration (Step 1)**:
+   - *Risk*: Dropping the `is_draft` column causes existing server draft rows in `form_data` to lose their `is_draft = True` flag. They would immediately be exposed as **live, published submissions** across all tenant dashboards, exports, and reports.
+   - *Requirement*: A custom Django data migration must run first to delete all existing rows where `is_draft=True`:
+     ```python
+     def purge_existing_drafts(apps, schema_editor):
+         FormData = apps.get_model('v1_data', 'FormData')
+         FormData.objects.filter(is_draft=True).delete()
+     ```
+2. **PostgreSQL View Rebuild Migration (Step 2)**:
+   - *Risk*: The SQL view `view_data_options` (created in `v1_visualization/migrations/0001_create_view_data_options.py`) explicitly references `AND is_draft = FALSE`. PostgreSQL will **fail and reject** dropping `is_draft` with a dependency error (`cannot drop column is_draft of relation form_data because view_data_options depends on it`).
+   - *Requirement*: A migration in `v1_visualization` must:
+     - Execute `DROP VIEW view_data_options;`
+     - Allow `v1_data` to drop the column `is_draft`.
+     - Execute `CREATE VIEW view_data_options AS ...` without the `is_draft` column reference.
+3. **Model & Wide-Scale Queryset Refactoring (Step 3)**:
+   - Remove `Draft` mixin from `class FormData(SoftDeletes, Draft):` → `class FormData(SoftDeletes):`.
+   - Update `FormData.objects = SoftDeletesManager()`.
+   - Audit and remove `is_draft=False` and `children__is_draft=False` filters across **25+ querysets** in `v1_data/views.py`, `v1_visualization/views.py`, `values_functions.py`, `functions.py`, and `escalation_functions.py`.
+4. **Django Schema Migration (Step 4)**:
+   - Run `makemigrations` to generate `RemoveField(model_name='formdata', name='is_draft')`.
+
+---
+
+### 3. Mobile SQLite Strategy (Zero Migrations)
+- **Zero SQLite Migrations Needed Across All Scenarios**:
+  - Local drafts rely strictly on `submitted = 0` (which remains in SQLite storage).
+  - The auxiliary `sendToWeb` column already has `DEFAULT 0`. Leaving the column dormant causes zero issues and completely eliminates the risk of SQLite table recreation or schema rebuilds.
+  - Mobile requires **0 SQLite migrations**.
+
+---
+
+### 4. Strategy Trade-Off Comparison
+
+| Factor | Option A: API Decommission (Recommended) | Option B: Full DB Migration Removal |
+| :--- | :--- | :--- |
+| **Backend Migrations** | **0 migrations** | **2+ migrations** (Data purge + View drop/rebuild) |
+| **Mobile SQLite Migrations** | **0 migrations** | **0 migrations** (Leave `sendToWeb` dormant) |
+| **Database Lock / Downtime Risk** | **Zero risk** | **Medium/High** (DDL table lock on `form_data` + View rebuild) |
+| **Codebase Refactor Scope** | Localized strictly to draft endpoints & UI | Wide (25+ backend querysets across visualization, escalation, data) |
+| **Total Estimated Effort** | **5.5 hours** | **10.0 – 12.0 hours** |
+| **Data Integrity Guarantee** | Drafts remain dormant & invisible by default manager | Requires prerequisite data purge migration to prevent data leaks |
+
+---
+
 ## 1. Task 1: Mobile App Changes
 
 ### 1.1 Touchpoint Files
