@@ -36,6 +36,7 @@ const uiText = {
     menuDocumentation: "Documentation",
     menuFormBuilder: "Form Builder",
     menuDashboards: "Dashboards",
+    menuSettings: "Settings",
     // Dashboards
     dashboardListTitle: "My dashboards",
     dashboardListSubtitle: "Build and manage your custom data dashboards.",
@@ -1424,6 +1425,7 @@ uiText.fr = {
   menuDocumentation: "Documentation",
   menuFormBuilder: "Générateur de formulaires",
   menuDashboards: "Tableaux de bord",
+  menuSettings: "Paramètres",
 
   // Dashboards
   dashboardListTitle: "Mes tableaux de bord",

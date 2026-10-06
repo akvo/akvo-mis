@@ -147,7 +147,7 @@ const TenantDetail = () => {
     const formData = new FormData();
     formData.append("file", file);
     api
-      .post("upload/images", formData)
+      .post("upload/logo", formData)
       .then((uploadRes) => {
         const filePath = uploadRes.data.file.startsWith("http")
           ? new URL(uploadRes.data.file).pathname

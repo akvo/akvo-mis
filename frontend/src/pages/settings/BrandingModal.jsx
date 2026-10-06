@@ -54,7 +54,7 @@ const BrandingModal = ({ open, onClose }) => {
     const formData = new FormData();
     formData.append("file", file);
     api
-      .post("upload/images", formData)
+      .post("upload/logo", formData)
       .then((uploadRes) => {
         const filePath = uploadRes.data.file.startsWith("http")
           ? new URL(uploadRes.data.file).pathname
@@ -115,11 +115,7 @@ const BrandingModal = ({ open, onClose }) => {
       title={text.brandingModalTitle}
       visible={open}
       onCancel={onClose}
-      footer={[
-        <Button key="close" onClick={onClose}>
-          {text.cancelButton || "Close"}
-        </Button>,
-      ]}
+      footer={null}
     >
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div

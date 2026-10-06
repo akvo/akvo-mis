@@ -71,7 +71,7 @@ const Configure = () => {
     const formData = new FormData();
     formData.append("file", file);
     api
-      .post("upload/images", formData)
+      .post("upload/logo", formData)
       .then((res) => {
         setUploadingLogo(false);
         const filePath = res.data.file.startsWith("http")

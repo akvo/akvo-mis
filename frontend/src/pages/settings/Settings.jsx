@@ -8,6 +8,8 @@ import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { Can } from "../../components/can";
 import BrandingModal from "./BrandingModal";
 
+const SHOW_ORGANISATIONS_PANEL = false;
+
 const Settings = () => {
   const { language, tenant } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -34,36 +36,38 @@ const Settings = () => {
       />
       <Divider />
       <Row gutter={[16, 16]}>
-        <Can I="manage" a="master-data">
-          <Col className="card-wrapper" span={12}>
-            <Card bordered={false} hoverable>
-              <div className="row">
-                <div className="flex-1">
-                  <h2>{text.orgPanelTitle}</h2>
-                  <span>{text.orgPanelDescription}</span>
-                  <Link
-                    to="/control-center/master-data/organisations"
-                    className="explore"
-                  >
-                    <Button type="primary" shape="round">
-                      {text.orgPanelButton}
-                    </Button>
-                  </Link>
+        {SHOW_ORGANISATIONS_PANEL && (
+          <Can I="manage" a="master-data">
+            <Col className="card-wrapper" span={12}>
+              <Card bordered={false} style={{ paddingBottom: 20 }}>
+                <div className="row">
+                  <div className="flex-1">
+                    <h2>{text.orgPanelTitle}</h2>
+                    <span>{text.orgPanelDescription}</span>
+                    <Link
+                      to="/control-center/master-data/organisations"
+                      className="explore"
+                    >
+                      <Button type="primary" shape="round">
+                        {text.orgPanelButton}
+                      </Button>
+                    </Link>
+                  </div>
+                  <div>
+                    <img
+                      src="/assets/personal-information.png"
+                      width={100}
+                      height={100}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <img
-                    src="/assets/personal-information.png"
-                    width={100}
-                    height={100}
-                  />
-                </div>
-              </div>
-            </Card>
-          </Col>
-        </Can>
+              </Card>
+            </Col>
+          </Can>
+        )}
         <Can I="manage" a="all">
           <Col className="card-wrapper" span={12}>
-            <Card bordered={false} hoverable>
+            <Card bordered={false} hoverable style={{ paddingBottom: 20 }}>
               <div className="row">
                 <div className="flex-1">
                   <h2>{text.brandingPanelTitle}</h2>
@@ -85,16 +89,16 @@ const Settings = () => {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    width: 100,
-                    height: 100,
+                    width: 75,
+                    height: 75,
                   }}
                 >
                   <img
                     src={tenant?.logo || config.siteLogo}
                     alt="Workspace Logo"
                     style={{
-                      maxWidth: 80,
-                      maxHeight: 80,
+                      maxWidth: 100,
+                      maxHeight: 65,
                       objectFit: "contain",
                     }}
                     onError={(e) => {
