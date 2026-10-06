@@ -78,14 +78,24 @@ const Configure = () => {
           ? new URL(res.data.file).pathname
           : res.data.file;
         form.setFieldsValue({ logo: filePath });
+        const thumbUrl =
+          typeof window !== "undefined" && window.URL?.createObjectURL
+            ? window.URL.createObjectURL(file)
+            : filePath;
         setLogoFileList([
           {
             uid: "-1",
             name: file.name,
             status: "done",
-            url: res.data.file,
+            url: filePath,
+            thumbUrl,
           },
         ]);
+        store.update((s) => {
+          if (s.tenant) {
+            s.tenant.logo = filePath;
+          }
+        });
         onSuccess(res.data);
       })
       .catch((err) => {
@@ -101,6 +111,11 @@ const Configure = () => {
   const handleLogoRemove = () => {
     form.setFieldsValue({ logo: null });
     setLogoFileList([]);
+    store.update((s) => {
+      if (s.tenant) {
+        s.tenant.logo = null;
+      }
+    });
   };
 
   // Reached without a session, or after the work is already done: both are
