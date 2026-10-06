@@ -247,3 +247,27 @@ class RegisterEndpointTestCase(TestCase):
         self.assertTrue(
             Tenant.objects.filter(subdomain="hiv-kenya").exists()
         )
+
+    def test_a_name_under_three_characters_is_rejected(self):
+        for bad in ("a", "ab"):
+            response = self.register(subdomain=bad)
+            self.assertEqual(response.status_code, 400, bad)
+            self.assertIn(
+                "at least 3 characters",
+                response.json()["details"]["subdomain"][0],
+                bad,
+            )
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_three_characters_is_enough(self):
+        """The accepted side of the boundary.
+
+        A `min_length=4` typo would pass a test that only checked
+        that `ab` fails.
+        """
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="abc")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Tenant.objects.filter(subdomain="abc").exists()
+        )

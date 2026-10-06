@@ -1163,14 +1163,28 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     # A valid DNS label, because the subdomain will one day be one:
     # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
+    #
+    # The minimum is a reservation rule rather than a format rule:
+    # one- and two-character labels are the scarcest names in a global
+    # namespace, so they are granted deliberately, like country names.
+    # Expressed here rather than in `self_service_reason` because DRF
+    # already states it, and a hand-rolled length check would be
+    # re-implementing a built-in. DRF runs field constraints before
+    # `validate_subdomain`, so a short name reports its length and
+    # never reaches the name rules -- there is no point telling
+    # somebody a name is reserved when it is also too short to use.
     subdomain = serializers.RegexField(
         regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        min_length=3,
         max_length=63,
         error_messages={
             "invalid": (
                 "Subdomain may only contain lowercase letters, digits "
                 "and hyphens, and cannot start or end with a hyphen"
-            )
+            ),
+            "min_length": (
+                "Workspace name must be at least 3 characters"
+            ),
         },
     )
     language = serializers.ChoiceField(
