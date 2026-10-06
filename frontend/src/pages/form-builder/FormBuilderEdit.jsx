@@ -94,6 +94,19 @@ const FormBuilderEdit = () => {
     loadVersions();
   };
 
+  const onAutoSave = useCallback(
+    async (editorOutput) => {
+      const res = await api.put(
+        `/manage/forms/${formId}?allow_delete=true`,
+        editorOutput
+      );
+      setFormLatestVersion(res.data.latest_version);
+      setFormVersion(res.data.version);
+      setFormStatus(res.data.status);
+    },
+    [formId]
+  );
+
   const onSave = (editorOutput) => {
     setSaving(true);
     api
@@ -431,6 +444,10 @@ const FormBuilderEdit = () => {
             <WebformEditor
               initialValue={loading ? {} : initialValue}
               onSave={saving ? null : onSave}
+              onAutoSave={saving ? null : onAutoSave}
+              enableAutoSave={true}
+              autoSaveInterval={30000}
+              enableDraftRecovery={true}
               limitQuestionType={Object.keys(QUESTION_TYPES)}
               settingCascadeURL={cascadeURL}
             />
