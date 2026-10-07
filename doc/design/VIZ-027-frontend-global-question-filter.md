@@ -18,23 +18,25 @@ D-1 to D-15. Decision IDs (D-x) and findings (A-x) refer to the parent.
 The frontend owns:
 
 - **Viewer**: a "Filters" button in the filter bar that opens a
-  checklist per filter question, ticked = shown (D-16). The unticked
-  options are serialized into one sorted `global_criteria` list that
-  every widget request carries (D-15).
-- **Builder**: picking which questions the filter bar offers, with the
-  same-named question warning (D-8).
+  checklist per filter question, ticked = shown (D-16, D-21). The
+  ticked options of each touched question are serialized into one
+  sorted `global_criteria` list of `option_in` entries, plus
+  `global_match` when it is "any", that every widget request carries.
+- **Builder**: picking which questions the filter bar offers, by form
+  and name (D-20).
 - **A7**: the cross-form series request's wrong parameter name.
 - **Date question** (FE-7, D-18): the builder control for the date the
   dashboard's range uses.
 - **Defaults** (FE-8, D-19): new dashboards start with the date and
   administration filters on.
 
-Not in this phase: a true "show only" that also hides datapoints with
-no answer. The checklist reads like "show only" (ticked = shown), but
-it sends the unticked options as `option_not_in`, so unanswered data
-stays and the panel says so (D-5, D-16). Hiding unanswered data is the
-later phase in D-13; it would add a mode per question in the builder,
-and an entry without `mode` keeps today's behaviour.
+**Show only (D-21, 2026-10-07).** The checklist means what it shows:
+the ticked options are sent as `option_in`, as in the WAI portal, and
+datapoints without an answer to a filtered question are hidden. Before
+D-21 the plan sent the unticked options as `option_not_in`, which kept
+unanswered datapoints and could show no cloudy point after ticking only
+"Cloudy". Not in this phase: a "(No answer)" row that keeps unanswered
+datapoints.
 
 Not in this phase either: FE-6, option codes without `:`, `,` or `|` in
 `akvo-react-form-editor`. The backend enforces the rule (backend BE-7).
@@ -45,7 +47,7 @@ Line numbers are as of 2026-10-06 on the epic branch.
 
 | Contract | Shape | From backend task |
 |---|---|---|
-| `global_criteria` query parameter on `/visualization/values`, `/values/formula`, `/escalation/:id`, `/maps/geolocation/:id` | **Repeated**, one `option_not_in:<form_id>:<name>:<value>` per value (D-15, D-20) | BE-1, BE-9 |
+| `global_criteria` query parameter on `/visualization/values`, `/values/formula`, `/escalation/:id`, `/maps/geolocation/:id` | **Repeated**, one `option_in:<form_id>:<name>:<value>` per ticked value (D-15, D-20, D-21); optional `global_match=all\|any` | BE-1, BE-9, BE-10 |
 | Published snapshot `default_filters.questions[]` | `{form, name, label, options: [{value, label}]}` | BE-4, BE-9 |
 | Saved `default_filters.questions[]` | `{form, name}`: the registration form means the whole family, a monitoring form that form only (D-20). A 400 names `field: "default_filters.questions…"` | BE-4, BE-9 |
 | `/manage/dashboards/<pk>/sources` question rows | gain `name` | BE-4 |
@@ -91,7 +93,7 @@ cache keys.
 
 **Technical acceptance criteria**
 - [ ] Takes `{"<form>:<name>": [values]}` and returns an **array** of
-      `option_not_in:<form>:<name>:<value>`, one entry per value (D-15,
+      `option_in:<form>:<name>:<value>`, one entry per value (D-15,
       D-20): keys sorted (numeric-aware), values sorted within a key.
 - [ ] Questions with an empty list are dropped. Returns `null` for `{}`,
       `null`, `undefined` or all-empty input.
@@ -102,16 +104,16 @@ cache keys.
 
 ```js
 // VIZ-027 (D-15, D-20): {"<form>:<name>": [values]} -> one
-// "option_not_in:<form>:<name>:<value>" per value, or null. Sorted, so
+// "option_in:<form>:<name>:<value>" per value, or null. Sorted, so
 // equal selections give equal lists and widgets keep sharing cache keys.
 // null lets compact() drop the parameter, so an unfiltered dashboard
 // sends exactly what it sends today.
-export const serializeGlobalCriteria = (exclusions) => {
-  const entries = Object.entries(exclusions || {})
+export const serializeGlobalCriteria = (selections) => {
+  const entries = Object.entries(selections || {})
     .filter(([, values]) => values?.length)
     .sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
     .flatMap(([key, values]) =>
-      [...values].sort().map((v) => `option_not_in:${key}:${v}`)
+      [...values].sort().map((v) => `option_in:${key}:${v}`)
     );
   return entries.length ? entries : null;
 };
@@ -227,15 +229,15 @@ serialized filter.
 - [ ] Clearing a filter restores the unfiltered numbers.
 
 **Technical acceptance criteria**
-- [ ] `EMPTY_FILTERS` has `exclusions: {}` and is reset on slug change.
+- [ ] `EMPTY_FILTERS` has `selections: {}` and is reset on slug change.
 - [ ] The grid's filters come from one `useMemo` over `filters`.
       `global_criteria` is derived only through `serializeGlobalCriteria`.
-- [ ] `exclusions` never appears as a request parameter.
+- [ ] `selections` never appears as a request parameter.
 - [ ] One filter change re-renders the grid once.
 - [ ] `pages/dashboards/__test__/DashboardViewer.globalFilter.test.js`
       green, and `DashboardViewer.test.js` stays green.
 
-1. `EMPTY_FILTERS` (line 21) gains `exclusions: {}`. It is already
+1. `EMPTY_FILTERS` (line 21) gains `selections: {}`. It is already
    reset when the slug changes (line 59).
 2. The filter bar keeps writing the whole `filters` object through
    `onChange={setFilters}` (line 201). The grid (line 204) gets a
@@ -245,7 +247,7 @@ serialized filter.
    const gridFilters = useMemo(
      () => ({
        ...filters,
-       global_criteria: serializeGlobalCriteria(filters.exclusions),
+       global_criteria: serializeGlobalCriteria(filters.selections),
      }),
      [filters]
    );
@@ -255,7 +257,7 @@ serialized filter.
    change (FE-4 contract), so the request builders recompute once per
    change. `global_criteria` is an array or `null` (FE-1, D-15). `DashboardGrid` is already `React.memo` (line 187 there).
 
-3. `exclusions` stays out of the request params: the builders read
+3. `selections` stays out of the request params: the builders read
    named keys only, and `global_criteria` is the only one added.
 
 **Turns green**: `pages/dashboards/__test__/DashboardViewer.globalFilter.test.js`.
@@ -279,7 +281,7 @@ common checklist idiom (ticked = shown), with one reload per Apply
                                    │   ☑ Surface water                    │
                                    │   ☑ Rainwater                        │
                                    │ Data without an answer to a question │
-                                   │ is always shown.                     │
+                                   │ is hidden while it is filtered.      │
                                    │                [Clear all] [Apply]   │
                                    └──────────────────────────────────────┘
 ```
@@ -301,7 +303,10 @@ common checklist idiom (ticked = shown), with one reload per Apply
       has no option ticked (the panel says why).
 - [ ] The button shows how many questions are filtered (badge "1").
 - [ ] "Clear all" ticks every option again and applies at once.
-- [ ] The panel says that data without an answer is always shown (D-5).
+- [ ] The panel says that data without an answer to a filtered
+      question is hidden (D-21).
+- [ ] With two or more filtered questions, the panel shows "Match: all
+      filters / any filter" (`global_match`, default all) (D-21).
 - [ ] It works on a public dashboard, without logging in.
 - [ ] Copy is in English and French.
 - [ ] The button, checkboxes and actions work with the keyboard; a
@@ -312,17 +317,19 @@ common checklist idiom (ticked = shown), with one reload per Apply
 - [ ] `data-testid`s: `question-filters-button`, `question-filter-<form>-<name>`
       (one group per question), `question-filters-apply`,
       `question-filters-clear`.
-- [ ] State stays `value.exclusions = {"<form>:<name>": [unticked values]}`; the
-      panel shows `options − exclusions[qid]` as ticked. FE-1 and the
-      backend (`option_not_in`) are unchanged.
+- [ ] State is `value.selections = {"<form>:<name>": [ticked values]}`
+      for **touched** questions only; an untouched question is absent and
+      shows every option ticked. A question ticked back to all options is
+      removed from `selections` (no filter). `value.match` is `"all"` or
+      `"any"`; `global_match` is sent only when it is `"any"`.
 - [ ] Ticks hold option `value`s; labels are display only. A renamed or
       translated label must not change what is filtered (the WAI portal
       matches lower-cased names and breaks on renames, parent §15).
 - [ ] `onChange` fires only on Apply with a real change, or on Clear
       all when something was filtered. It emits
-      `{...value, exclusions: next}`, where `next` keeps only questions
-      with at least one unticked value.
-- [ ] The badge counts keys of `value.exclusions` (applied state, not
+      `{...value, selections: next, match}`, where `next` keeps only
+      questions with at least one option unticked (their ticked values).
+- [ ] The badge counts keys of `value.selections` (applied state, not
       the draft).
 - [ ] The header comment (lines 33–35) no longer says the "Filters"
       pill is not built.
@@ -350,16 +357,16 @@ common checklist idiom (ticked = shown), with one reload per Apply
    `label`, and a `Checkbox.Group` of the snapshot's `options`. For a
    name group (D-14) the snapshot already holds the merged options,
    with labels such as "Fine / Clear sky"; render them as they are.
-5. **Draft and apply**: copy `value.exclusions` into a local draft when
+5. **Draft and apply**: copy `value.selections` into a local draft when
    the panel opens; ticking edits the draft only.
-   - **Apply**: emit if the draft differs from `value.exclusions`, then
+   - **Apply**: emit if the draft differs from `value.selections`, then
      close.
    - **Close** without Apply: drop the draft.
-   - **Clear all**: emit `exclusions: {}` if anything was filtered, then
+   - **Clear all**: emit `selections: {}` if anything was filtered, then
      close.
-   - A question with every option unticked would hide every answered
-     datapoint and keep only the unanswered ones. Apply stays disabled
-     and the question shows "Tick at least one option".
+   - A question with every option unticked would show nothing at all.
+     Apply stays disabled and the question shows "Tick at least one
+     option".
 6. **Text**: add keys to `lib/ui-text.js` in `en` (line 14) and `fr`
    (`uiText.fr`, around line 1440); `de` is empty and falls back. At
    least: "Filters", "Apply", "Clear all", the unanswered note, "Tick at
@@ -606,8 +613,8 @@ Surface water, Rainwater).
 
 The frontend tests still use question ids (`700301`, `700101`). Move
 them to `form:name` keys before implementing: `serializeGlobalCriteria`
-expects `option_not_in:<form>:<name>:<value>`; the viewer and filter bar
-key exclusions by `"<form>:<name>"`; the builder saves `{form, name}`,
+expects `option_in:<form>:<name>:<value>` (D-21); the viewer and filter bar
+key selections by `"<form>:<name>"`; the builder saves `{form, name}`,
 offers "All forms" and per-monitoring-form entries, and the D-8 swap
 test is replaced by a "Covers:" test.
 
@@ -634,12 +641,14 @@ fixture (questions 700301 and 700101):
 |---|---|
 | The button shows only with questions | No questions and both toggles off renders nothing; questions with both toggles off show the bar and the button |
 | The panel lists every option, all ticked | Opening shows both questions by label; all five options ticked |
-| Applied state shows as unticked | `exclusions: {700301: ["non_operational"]}` → "Non-operational" unticked, badge 1 |
-| Untick two, Apply once | Unticking Surface water and Rainwater calls `onChange` once, on Apply, with `{700101: ["rainwater", "surface_water"]}` (any order) |
-| A second question keeps the first | Existing `700301` exclusion stays when `700101` changes |
+| Applied state shows as ticked | `selections: {"7003:infrastructure_status": ["operational"]}` → only "Operational" ticked, badge 1 |
+| Untick two, Apply once | Unticking Surface water and Rainwater calls `onChange` once, on Apply, with `{"7001:water_source": ["ground_water"]}` |
+| A second question keeps the first | The existing status selection stays when the water source changes |
+| Ticking everything back removes the filter | The key disappears from `selections` |
+| Match toggle | Hidden with one filtered question; with two, "any" emits `match: "any"` |
 | Close without Apply discards | Untick, click outside: no `onChange`; reopening shows the applied state |
 | Apply disabled when unchanged or a question is empty | Both cases, with the "Tick at least one option" hint |
-| Clear all | Calls `onChange` once with `exclusions: {}`; not called when nothing was filtered |
+| Clear all | Calls `onChange` once with `selections: {}`; not called when nothing was filtered |
 | Disabled in the builder | `disabled` renders the button disabled |
 
 ### Test changes for D-15 (made 2026-10-06)

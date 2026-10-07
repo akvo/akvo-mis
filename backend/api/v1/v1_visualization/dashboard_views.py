@@ -30,6 +30,7 @@ from api.v1.v1_visualization.scatter_functions import (
 )
 from api.v1.v1_visualization.functions import (
     GLOBAL_CRITERIA_PARAMETER,
+    GLOBAL_MATCH_PARAMETER,
     parse_request_global_criteria,
     resolve_request_date_question,
     resolve_default_administration_id,
@@ -42,7 +43,7 @@ from api.v1.v1_visualization.public_scope import (
     check_ids,
     question_ids_in_columns,
     question_ids_in_criteria,
-    question_ids_in_global_criteria,
+    filter_keys_in_global_criteria,
     resolve_view_scope,
 )
 from utils.custom_serializer_fields import (
@@ -153,6 +154,7 @@ from utils.custom_serializer_fields import (
             location=OpenApiParameter.QUERY,
         ),
         GLOBAL_CRITERIA_PARAMETER,
+        GLOBAL_MATCH_PARAMETER,
         OpenApiParameter(
             name="administration_id", required=False,
             type=OpenApiTypes.INT,
@@ -244,7 +246,7 @@ def visualization_values(request, version):
                 request.query_params.get("criteria")
             ),
         ],
-        filter_question_ids=question_ids_in_global_criteria(
+        filter_keys=filter_keys_in_global_criteria(
             request.query_params.getlist("global_criteria")
         ),
     )
@@ -403,6 +405,7 @@ def visualization_values(request, version):
             location=OpenApiParameter.QUERY,
         ),
         GLOBAL_CRITERIA_PARAMETER,
+        GLOBAL_MATCH_PARAMETER,
         OpenApiParameter(
             name="filter_criteria", required=False,
             type=OpenApiTypes.STR,
@@ -453,7 +456,7 @@ def visualization_escalation(request, form_id, version):
                 request.query_params.get("filter_criteria")
             ),
         ],
-        filter_question_ids=question_ids_in_global_criteria(
+        filter_keys=filter_keys_in_global_criteria(
             request.query_params.getlist("global_criteria")
         ),
     )

@@ -20,8 +20,9 @@ from api.v1.v1_visualization.models import (
 )
 from api.v1.v1_visualization.functions import (
     GLOBAL_CRITERIA_PARAMETER,
+    GLOBAL_MATCH_PARAMETER,
     apply_criteria_to_monitoring_qs,
-    apply_global_exclusions,
+    apply_global_filters,
     build_date_filters,
     date_question_name,
     in_date_range,
@@ -36,7 +37,7 @@ from api.v1.v1_visualization.public_scope import (
     check_ids,
     question_ids_in_criteria,
     question_ids_in_formula,
-    question_ids_in_global_criteria,
+    filter_keys_in_global_criteria,
     resolve_view_scope,
 )
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -324,6 +325,7 @@ class GeolocationListView(APIView):
                 ),
             ),
             GLOBAL_CRITERIA_PARAMETER,
+            GLOBAL_MATCH_PARAMETER,
             OpenApiParameter(
                 name="monitoring_form_id",
                 required=False,
@@ -359,7 +361,7 @@ class GeolocationListView(APIView):
                 ),
                 request.query_params.get("date_question_id"),
             ],
-            filter_question_ids=question_ids_in_global_criteria(
+            filter_keys=filter_keys_in_global_criteria(
                 request.query_params.getlist("global_criteria")
             ),
         )
@@ -410,7 +412,7 @@ class GeolocationListView(APIView):
         date_name = date_question_name(date_question_id)
         # D-12: pins are the path form's datapoints; on a monitoring form
         # they reach their registration through parent_id.
-        queryset = apply_global_exclusions(
+        queryset = apply_global_filters(
             queryset,
             "parent_id" if form.parent_id else "id",
             form.parent_id or form.id,
@@ -549,6 +551,7 @@ class GeolocationListView(APIView):
             ),
         ),
         GLOBAL_CRITERIA_PARAMETER,
+        GLOBAL_MATCH_PARAMETER,
     ],
 )
 @api_view(["GET"])
@@ -599,7 +602,7 @@ def visualization_values_formula(request, version):
             ),
             validated.get("date_question_id"),
         ],
-        filter_question_ids=question_ids_in_global_criteria(
+        filter_keys=filter_keys_in_global_criteria(
             request.query_params.getlist("global_criteria")
         ),
     )
@@ -634,7 +637,7 @@ def visualization_values_formula(request, version):
     ))
     # VIZ-027 D-12: before the latest-per-parent pick below, or a
     # filtered-out site's older submission could become its "latest".
-    qs = apply_global_exclusions(
+    qs = apply_global_filters(
         qs,
         "id" if is_registration else "parent_id",
         form.parent_id or form.id,

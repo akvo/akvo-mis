@@ -22,7 +22,7 @@ from api.v1.v1_visualization.functions import (
     fill_month_gaps,
     fill_date_gaps,
     apply_administration_filter,
-    apply_global_exclusions,
+    apply_global_filters,
     apply_parent_criteria_to_qs,
 )
 
@@ -154,7 +154,7 @@ def _total_parents_in_scope(form, params):
         qs, True, params.get("parent_criteria"),
     )
     # VIZ-027: "No info" must not count the filtered-out registrations.
-    qs = apply_global_exclusions(qs, "id", scope_form.id, params)
+    qs = apply_global_filters(qs, "id", scope_form.id, params)
     return qs.count()
 
 

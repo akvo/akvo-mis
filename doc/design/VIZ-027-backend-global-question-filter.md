@@ -7,7 +7,9 @@
 **Date**: 2026-10-06
 **Status**: Implemented 2026-10-06: BE-1 to BE-5 and BE-7. BE-8
 (dashboard date question, D-18) implemented 2026-10-07. BE-9
-(filters by form and name, D-20) planned 2026-10-07. BE-6 measured: cases 1 to 4 within the threshold, the map over it (follow-up task).
+(filters by form and name, D-20) implemented 2026-10-07. BE-10 (show
+only, `global_match`, D-21) implemented 2026-10-07; measured over the
+20 % threshold (follow-up task, see BE-10). BE-6 measured: cases 1 to 4 within the threshold, the map over it (follow-up task).
 
 ---
 
@@ -24,9 +26,9 @@ The backend owns:
 - saving, publishing and allowing `default_filters.questions`;
 - the `name` key on builder sources.
 
-Not in this phase: "show only" (`option_in` in `global_criteria`). It
-is a later phase, built only if users ask for it (D-13). Phase 1 keeps
-it open: the subquery and the parser need no change to add it later.
+"Show only" (`option_in`) and `global_match`, first deferred (D-13),
+were added on 2026-10-07 as BE-10 (D-21): the filter bar sends
+`option_in`, as the WAI portal does.
 
 Line numbers are as of 2026-10-06 on the epic branch. They will drift;
 the function names will not.
@@ -98,8 +100,8 @@ with 400, and hands handlers a parsed list in `params["global_criteria"]`.
       correctly.
 - [x] 400 for: a non-integer qid; a missing value segment; an empty
       value (message contains `option_not_in requires a value`); any
-      type other than `option_not_in` (including `option_in`, a later
-      phase per D-13); a question outside the family; a question that is
+      type other than `option_not_in` (`option_in` too, until BE-10
+      allowed it, D-21); a question outside the family; a question that is
       not option or multiple option; more than 50 occurrences. The
       message starts with `global_criteria:`.
 - [x] `option_not_in` inside a widget's `criteria` is a 400.
@@ -950,22 +952,22 @@ Replaces the question id in `global_criteria` and in
 `default_filters.questions`.
 
 **User acceptance criteria**
-- [ ] Filtering out "rainy" on `weather_condition` **of the registration
+- [x] Filtering out "rainy" on `weather_condition` **of the registration
       form** judges each water point by its latest weather answer from
       any form of the family.
-- [ ] The same filter **of the Quick Monitoring form** judges only Quick
+- [x] The same filter **of the Quick Monitoring form** judges only Quick
       Monitoring submissions; a newer Monitoring answer does not count.
-- [ ] A question asked on the registration form and re-asked on a
+- [x] A question asked on the registration form and re-asked on a
       monitoring form (`water_source`), filtered at the family scope:
       a newer monitoring answer overrides the registration answer; a
       water point never monitored is judged by its registration answer.
-- [ ] A dashboard saved with a filter keeps working after the form is
+- [x] A dashboard saved with a filter keeps working after the form is
       edited and the question gets a new id under the same name.
-- [ ] Saving a filter whose name contains `:`, or a name with no option
+- [x] Saving a filter whose name contains `:`, or a name with no option
       question in the chosen scope, is refused with a message.
 
 **Technical acceptance criteria**
-- [ ] Grammar `option_not_in:<form_id>:<name>:<value>`, split at most
+- [x] Grammar `option_not_in:<form_id>:<name>:<value>`, split at most
       three times. `parse_global_criteria` returns one criterion per
       `(form_id, name)`: its values, the live option questions in scope
       (`qids`), and whether the scope includes the registration form.
@@ -973,7 +975,7 @@ Replaces the question id in `global_criteria` and in
       family, no live option question named `<name>` in the scope,
       empty value, more than 50 occurrences. Two `Questions` queries per
       request, as before.
-- [ ] `excluded_registrations_subquery`:
+- [x] `excluded_registrations_subquery`:
       - monitoring part: the latest submission per registration, among
         the scope's monitoring forms, that answered one of `qids` inside
         the date range (`DISTINCT ON (parent_id)`, as BE-6 built it);
@@ -983,26 +985,50 @@ Replaces the question id in `global_criteria` and in
         submission. No date range on the registration answer (D-8).
       - The union is returned as one subquery of registration ids; still
         no Python id list (D-1).
-- [ ] `public_scope`: `filter_keys_in_global_criteria(items)` returns
+- [x] `public_scope`: `filter_keys_in_global_criteria(items)` returns
       `(form_id, name)` pairs exactly as the parser reads them;
       `Allowlist.filter_questions` holds `(form_id, name)` pairs;
       `check_ids(..., filter_keys=...)` raises 404 for any pair not
       published. Replaces `question_ids_in_global_criteria`.
-- [ ] `default_filters.questions[]` is `{form, name}`: `form` a strict
+- [x] `default_filters.questions[]` is `{form, name}`: `form` a strict
       integer in the family, `name` a non-empty string without `:` with
       a live option question in the scope. Error fields
       `default_filters.questions[i].form` / `.name`.
-- [ ] Snapshot entries are `{form, name, label, options}`: `label` from
+- [x] Snapshot entries are `{form, name, label, options}`: `label` from
       the scope's question on the chosen form if it has one, else from
       the first monitoring form by id; `options` merged across the scope
       by value (D-14's `_merge_options`). `live_filter_questions` keeps
       an entry while one live option question with that name exists in
       its scope.
-- [ ] The OpenAPI description of `global_criteria` shows the new
+- [x] The OpenAPI description of `global_criteria` shows the new
       grammar.
 
-**Tests**: the mixin's `filter_out(form_id, name, *values)` builds the
-new occurrences, so most VIZ-027 tests change in one place. Expected
+**As built (2026-10-07).** `parse_global_criteria` and
+`global_filter_scope` in `functions.py`; the exclusion is a union of a
+monitoring part (`DISTINCT ON (parent_id)`, unchanged from BE-6) and,
+at the family scope, a registration part restricted to registrations
+with no answered monitoring submission in range. `public_scope` keys the
+allowlist on `(form_id, name)` (`filter_keys_in_global_criteria`,
+`Allowlist.permits_filter`, `check_ids(filter_keys=…)`).
+`_validate_filter_questions`, `_snapshot_default_filters` and
+`live_filter_questions` take `{form, name}`. The previous id version is
+kept on the branch `feature/520-viz-027-filter-dashboard-backend-question_id`.
+
+Code review fixes (2026-10-07): the monitoring part and the
+registration part are excluded one after the other
+(`excluded_registrations_subqueries` returns both), never as one OR of
+subqueries, which Postgres cannot turn into joins and would answer with
+a scan of the whole `data` table per filter. A monitoring-only filter
+builds the same SQL as the id version. A form id must be ASCII digits;
+`live_filter_questions` only reads the entries' forms and their child
+forms. Tests added for the date-range fallback (a visit outside the
+range leaves the registration answer to decide), a family filter asked
+only on a monitoring form, and malformed allowlist entries.
+
+**Tests**: the mixin's `filter_out(question_id, *values)` maps a
+question to its own `(form, name)`, and `filter_out_on(form_id, name,
+*values)` names a scope directly, so most VIZ-027 tests change in one
+place. Expected
 results that change with the scope rule:
 
 | Test | Before (id) | After (form, name) |
@@ -1018,6 +1044,100 @@ question (soft-deleted, recreated under the same name) still filters;
 save refuses a `:` in the name and a name missing from the scope; the
 public allowlist accepts the published `(form, name)` only, and a
 different form for the same name is a 404.
+
+---
+
+### BE-10: Show only, and `global_match` (D-21)
+
+**Goal**: the filter bar's ticked values keep only the matching
+registration datapoints on every widget, and filters combine with AND
+or OR.
+
+**User acceptance criteria**
+- [x] Showing only "Operational" keeps the water points whose latest
+      check is Operational, on every widget; a water point never checked
+      is hidden.
+- [x] Showing only "Rainwater" (registration, family scope) keeps the
+      rainwater points only.
+- [x] Two filters with `global_match=all` keep the points matching both;
+      with `any`, the points matching either.
+- [x] With a date range, a water point is judged by its latest answer in
+      the range, and hidden without one.
+
+**Technical acceptance criteria**
+- [x] `GLOBAL_CRITERIA_TYPES = {"option_not_in", "option_in"}`. Criteria
+      are grouped by `(form_id, name)`; both types on one pair is a 400.
+- [x] `matching_registrations_subqueries` (renamed from
+      `excluded_registrations_subqueries`, same parts) returns the
+      registrations whose latest answer in scope matches.
+- [x] `apply_global_filters` (renamed from `apply_global_exclusions`)
+      builds one keep-condition per criterion: `option_in` → the row's
+      registration is in one of the parts; `option_not_in` → in none.
+      `all` applies them one after another; `any` ORs them in one
+      `filter()`. Still no Python id list (D-1), never NULL (D-5).
+- [x] `parse_request_global_criteria` also reads `global_match` (`all`
+      when absent, else `all`|`any`, else 400) and returns
+      `{"match", "criteria"}`; the four views pass it on unchanged.
+- [x] OpenAPI: `global_match` (enum) on the four endpoints; the
+      `global_criteria` description and examples use `option_in`.
+- [x] The public allowlist is unchanged: `(form, name)` whatever the type.
+
+**Safeguards** (decided 2026-10-07, keeping both types):
+1. Measured on the BE-6 seed again before release (below).
+2. Swagger's `global_criteria` description and examples lead with
+   `option_in`; `option_not_in` is shown as the alternative.
+
+**As built (2026-10-07).** `GLOBAL_CRITERIA_TYPES` holds both types and
+`GLOBAL_MATCH_VALUES` `{all, any}`. `parse_request_global_criteria`
+returns `{"match", "criteria"}`; `matching_registrations_subqueries`
+(renamed) and `apply_global_filters` (renamed) as specified. With
+`all`, `option_not_in` still excludes part by part, so its SQL is the
+BE-9 one. `GLOBAL_MATCH_PARAMETER` is declared on the four endpoints.
+12 tests in `tests_global_filter_show_only.py`; the old "show only is
+refused" test now checks that a widget type (`option_equals`) is.
+
+**Measurement (2026-10-07, safeguard 1).** BE-6's seed (10,000
+registrations, 5 visits and 5 checks each, about 325,000 answers) plus
+`water_source` re-asked on half the visits, so a family filter has a
+registration part and a monitoring part. Median of 7 runs after a
+warm-up; the seed was removed afterwards.
+
+| Request (visit-form chart unless noted) | Without | With | Overhead |
+|---|---|---|---|
+| A `option_not_in`, check form (the BE-9 shape) | 272 ms | 346 ms | +27 % |
+| B `option_in`, check form | 270 ms | 411 ms | **+53 %** |
+| C `option_in`, family scope, 2 parts | 263 ms | 185 ms | −30 % |
+| D `global_match=any`, B or C | 266 ms | 479 ms | **+80 %** |
+| E `global_match=all`, B and C | 264 ms | 332 ms | +26 % |
+| F map, `option_in` | 137 ms | 297 ms | **+117 %** |
+
+- The fixed cost is the same in every case: the `DISTINCT ON` pass that
+  finds each registration's latest answered submission sorts 50,000
+  submissions (about 80 ms, spilling to disk). A filter that shrinks the
+  rows (C) can even make the widget faster.
+- B costs more than A because Postgres estimates `options @> '["…"]'` at
+  50 rows where 39,878 match, and picks nested loops.
+- D runs the parts as hashed SubPlans, each with its own sort.
+- Per the safeguard, the optimisation is a **separate task**, together
+  with the map's (BE-6): the D-1 server cache keyed by (dashboard,
+  `global_criteria`, `global_match`, dates, administration) shared by
+  every widget of one load, or a "latest answer per registration" table;
+  also cheaper: restricting the `DISTINCT ON` pass to the widget's
+  administration.
+
+**Tests** (new `tests_global_filter_show_only.py`, on the fixture):
+
+| Test | Expected |
+|---|---|
+| Show only Operational (check form) | visit chart sites {1, 2, 3, 7, 8, 9}; registration KPI 6 (site 10 never checked: hidden) |
+| Show only Rainwater (registration, family) | {8, 9} |
+| Operational AND Rainwater (`all`) | {8, 9} |
+| Operational OR Rainwater (`any`) | {1, 2, 3, 7, 8, 9} |
+| Show only Operational, range ends 02-28 | {4} (the D-13 table) |
+| A check with two pumps, Operational + Non-operational | shown for either value (D-9) |
+| Map, table, status colours, show only Operational | {1, 2, 3, 7, 8, 9} each |
+| Both types on one `(form, name)`; `global_match=both` | 400 |
+| Public dashboard: `option_in` on the published filter | 200; another pair 404 |
 
 ---
 

@@ -87,11 +87,15 @@ VALID_VALUES_CRITERIA_TYPES = {
     "threshold_lt",
 }
 
-# VIZ-027 D-10: the only type the dashboard-wide `global_criteria`
-# accepts. Never add it to VALID_VALUES_CRITERIA_TYPES:
-# _criterion_matching_ids returns [] for it, and a widget would silently
-# show no data.
-GLOBAL_CRITERIA_TYPES = {"option_not_in"}
+# VIZ-027 D-10, D-21: the types the dashboard-wide `global_criteria`
+# accepts: `option_in` (show only, what the filter bar sends) and
+# `option_not_in` (filter out). Never add `option_not_in` to
+# VALID_VALUES_CRITERIA_TYPES: _criterion_matching_ids returns [] for it,
+# and a widget would silently show no data.
+GLOBAL_CRITERIA_TYPES = {"option_in", "option_not_in"}
+
+# VIZ-027 D-21: how different filters combine.
+GLOBAL_MATCH_VALUES = {"all", "any"}
 
 # VIZ-027 D-15: one `global_criteria` occurrence per value; this bounds
 # what a public caller can send.

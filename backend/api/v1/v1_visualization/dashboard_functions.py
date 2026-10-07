@@ -378,13 +378,15 @@ def _validate_date_question(default_filters, root_form, forms, questions):
 
 
 def _validate_filter_questions(default_filters, root_form, forms, questions):
-    """VIZ-027 D-6: `default_filters.questions`, the filter bar's questions.
+    """VIZ-027 D-6, D-20: `default_filters.questions`, the filter bar.
 
     Only this key is checked; the rest of default_filters is stored as it
-    always was. Each entry must name an option or multiple-option question
-    on root_form or one of its child forms, and `form` must be that
-    question's form. The family is drawn by the same `forms` queryset the
-    widget rules and serialize_sources use ("two barriers, one rule").
+    always was. Each entry is `{form, name}`: `form` the registration form
+    (the whole family) or one of its child forms (that form only), `name`
+    a question name without `:` (the grammar's delimiter) that some live
+    option question in that scope carries. The family is drawn by the
+    same `forms` queryset the widget rules and serialize_sources use
+    ("two barriers, one rule").
     """
     if not isinstance(default_filters, dict):
         return None
@@ -404,46 +406,45 @@ def _validate_filter_questions(default_filters, root_form, forms, questions):
             else None
         )
 
+    family = _family_ids(root_form, forms)
     pairs = []
     for index, entry in enumerate(entries):
-        question_id = form_id = None
-        if isinstance(entry, dict):
-            question_id = strict_int(entry.get("question"))
-            form_id = strict_int(entry.get("form"))
-        if question_id is None or form_id is None:
-            return _error(
-                "each filter needs a question id and a form id",
-                field=f"{field}[{index}]",
-            )
-        pairs.append((index, question_id, form_id))
-    family = _family_ids(root_form, forms)
-    found = {
-        question.id: question
-        for question in questions.filter(
-            pk__in=[question_id for _, question_id, _ in pairs]
-        )
-    }
-    for index, question_id, form_id in pairs:
-        question = found.get(question_id)
         where = f"{field}[{index}]"
-        if question is None:
-            return _error("question not found", field=f"{where}.question")
-        if question.type not in (
-            QuestionTypes.option, QuestionTypes.multiple_option,
-        ):
+        form_id = name = None
+        if isinstance(entry, dict):
+            form_id = strict_int(entry.get("form"))
+            name = entry.get("name")
+        if form_id is None or not isinstance(name, str) or not name:
             return _error(
-                "only option and multiple-option questions can be filters",
-                field=f"{where}.question",
+                "each filter needs a form id and a question name",
+                field=where,
             )
-        if question.form_id not in family:
+        if ":" in name:
             return _error(
-                "question is not in this dashboard's form family",
-                field=f"{where}.question",
+                "a question name with ':' cannot be a filter; rename it",
+                field=f"{where}.name",
             )
-        if question.form_id != form_id:
+        if form_id not in family:
             return _error(
-                "form does not match the question's form",
+                "form is not in this dashboard's form family",
                 field=f"{where}.form",
+            )
+        pairs.append((index, form_id, name))
+    found = set(
+        questions.filter(
+            form_id__in=family,
+            name__in={name for _, _, name in pairs},
+            type__in=(QuestionTypes.option, QuestionTypes.multiple_option),
+        ).values_list("form_id", "name")
+    )
+    for index, form_id, name in pairs:
+        # The scope rule of functions.global_filter_scope, restated: this
+        # module stays free of DRF (see its header).
+        scope = family if form_id == root_form.id else {form_id}
+        if not any((fid, name) in found for fid in scope):
+            return _error(
+                "no option question with this name in the form's scope",
+                field=f"{field}[{index}].name",
             )
     return None
 

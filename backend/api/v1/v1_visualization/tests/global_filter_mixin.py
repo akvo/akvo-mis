@@ -296,15 +296,33 @@ class GlobalFilterTestMixin(ProfileTestHelperMixin):
 
     # ── request helpers ──
 
-    @staticmethod
-    def filter_out(question_id, *values):
-        """`global_criteria` occurrences that filter these answers out.
+    def filter_out(self, question_id, *values):
+        """`global_criteria` occurrences that filter these answers out, on
+        the question's own form and name (D-20): the registration form's
+        question covers the whole family, a monitoring form's question
+        that form only.
 
-        One `option_not_in:<qid>:<value>` per value (D-15); the test
-        client repeats the query key for a list. Combine two filters by
-        adding their lists.
+        One occurrence per value (D-15); the test client repeats the query
+        key for a list. Combine two filters by adding their lists.
         """
-        return [f"option_not_in:{question_id}:{value}" for value in values]
+        question = Questions.objects_with_deleted.get(pk=question_id)
+        return self.filter_out_on(question.form_id, question.name, *values)
+
+    @staticmethod
+    def filter_out_on(form_id, name, *values):
+        """`option_not_in:<form_id>:<name>:<value>`, one per value."""
+        return [f"option_not_in:{form_id}:{name}:{value}" for value in values]
+
+    def show_only(self, question_id, *values):
+        """`option_in` occurrences on the question's own form and name:
+        what the filter bar sends for the ticked values (D-21)."""
+        question = Questions.objects_with_deleted.get(pk=question_id)
+        return self.show_only_on(question.form_id, question.name, *values)
+
+    @staticmethod
+    def show_only_on(form_id, name, *values):
+        """`option_in:<form_id>:<name>:<value>`, one per value."""
+        return [f"option_in:{form_id}:{name}:{value}" for value in values]
 
     def values(self, **params):
         return self.client.get(self.VALUES_URL, params)
