@@ -85,6 +85,7 @@ from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 from utils.tenant_host import (
     console_web_url,
     is_admin_host,
+    is_base_domain,
     tenant_may_embed,
     tenant_web_url,
 )
@@ -462,6 +463,18 @@ def tenant_info(request, version):
 @api_view(["POST"])
 @throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def register(request, version):
+    # Self-service sign-up belongs to the SaaS deployment's base domain
+    # and nowhere else. 403 rather than 404: whether a deployment offers
+    # sign-up is observable from its front page, so there is no secret
+    # to keep, and a 404 on a route that exists sends the next debugger
+    # hunting for a routing bug.
+    if not settings.SIGNUP_ENABLED or not is_base_domain(
+        request.get_host()
+    ):
+        return Response(
+            {"message": "Self-service sign-up is not available here"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     serializer = RegisterSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(

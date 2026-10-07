@@ -76,6 +76,29 @@ TESTING = sys.argv[1:2] == ["test"]
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
+# Whether this deployment offers self-service sign-up. The default
+# follows BASE_DOMAIN, which is what distinguishes the multi-tenant
+# SaaS from a dedicated single-customer deployment: mohhs-mis and
+# unicef-fsm run with BASE_DOMAIN unset, have no sign-up page, and
+# should not quietly accept a POST to /register.
+#
+# Forced on under `manage.py test`, because BASE_DOMAIN is forced empty
+# there (above) and the default would otherwise turn every existing
+# registration test into a 403. The gate's own tests set it explicitly.
+#
+# Local development also runs with BASE_DOMAIN unset, so working on the
+# sign-up form means setting SIGNUP_ENABLED=true in .env. That is in
+# env.example, which is the file a developer already copies -- without
+# it, the form renders and the endpoint refuses it, which is a
+# confusing afternoon.
+_SIGNUP_ENABLED = environ.get("SIGNUP_ENABLED", "").strip().lower()
+if TESTING:
+    SIGNUP_ENABLED = True
+elif _SIGNUP_ENABLED in ("true", "false"):
+    SIGNUP_ENABLED = _SIGNUP_ENABLED == "true"
+else:
+    SIGNUP_ENABLED = bool(BASE_DOMAIN)
+
 # The label the platform console answers on, under BASE_DOMAIN -- see
 # env.example and doc/notes/platform-console.md. Normalised here and
 # nowhere else: "" would put the console at ".<BASE_DOMAIN>", which no
