@@ -78,6 +78,13 @@ class ConfigureProjectTestCase(TestCase):
         res = self.client.get("/api/v1/profile", **auth)
         self.assertEqual(res.json()["administration"]["name"], "Kenya")
 
+    def test_configure_saves_custom_logo(self):
+        user, auth = self.signup()
+        res = self.configure(auth, logo="/images/logo-custom-123.png")
+        self.assertEqual(res.status_code, 200)
+        user.tenant.refresh_from_db()
+        self.assertEqual(user.tenant.logo, "/images/logo-custom-123.png")
+
     def test_configuring_twice_is_rejected(self):
         _, auth = self.signup()
         self.configure(auth)
@@ -102,8 +109,12 @@ class ConfigureProjectTestCase(TestCase):
 
     def test_tenants_configure_independently(self):
         acme_user, acme = self.signup()
-        beta_user, beta = self.signup(
-            email="owner@beta.org", subdomain="beta"
+        # Not "beta": that's a reserved environment name now (workspace-
+        # name blacklist, issue #511), and this test's concern is two
+        # workspaces configuring independently, not the name either one
+        # happens to pick.
+        zeta_user, zeta = self.signup(
+            email="owner@zeta.org", subdomain="zeta"
         )
         self.configure(acme)
         # Configuring one workspace must not mark the other configured.
@@ -111,10 +122,10 @@ class ConfigureProjectTestCase(TestCase):
             self.client.get("/api/v1/profile", **acme).json()["configured"]
         )
         self.assertFalse(
-            self.client.get("/api/v1/profile", **beta).json()["configured"]
+            self.client.get("/api/v1/profile", **zeta).json()["configured"]
         )
         self.assertFalse(
-            Levels.objects.filter(tenant=beta_user.tenant).exists()
+            Levels.objects.filter(tenant=zeta_user.tenant).exists()
         )
 
     def test_configure_works_on_a_seeded_database(self):

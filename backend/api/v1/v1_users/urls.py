@@ -22,6 +22,7 @@ from api.v1.v1_users.views import (
     resend_activation,
     configure_project,
     tenant_info,
+    update_tenant_branding,
 )
 from api.v1.v1_users.admin_views import (
     activate_tenant,
@@ -116,6 +117,7 @@ urlpatterns = [
     re_path(r"^(?P<version>(v1))/profile", get_profile),
     re_path(r"^(?P<version>(v1))/login", login),
     re_path(r"^(?P<version>(v1))/tenant-info$", tenant_info),
+    re_path(r"^(?P<version>(v1))/tenant/branding$", update_tenant_branding),
     re_path(r"^(?P<version>(v1))/register/activate$", activate_account),
     re_path(r"^(?P<version>(v1))/register/configure$", configure_project),
     re_path(
