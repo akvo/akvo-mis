@@ -5,6 +5,7 @@ from django.test.utils import override_settings
 from rest_framework.test import APITestCase
 
 from api.v1.v1_data.models import FormData
+from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_users.models import Tenant
@@ -12,8 +13,10 @@ from api.v1.v1_visualization.constants import DashboardStatus
 from api.v1.v1_visualization.models import Dashboard
 from api.v1.v1_visualization.tests.global_filter_mixin import (
     BROKEN,
+    GROUND,
     OPERATIONAL,
     RAIN,
+    SURFACE,
     YES,
     GlobalFilterTestMixin,
 )
@@ -330,3 +333,56 @@ class PublicShowOnlyTestCase(GlobalFilterTestMixin, APITestCase):
     def test_another_filter_is_refused(self):
         response = self.sample_chart(self.show_only(self.Q_SOURCE, RAIN))
         self.assertEqual(response.status_code, 404, response.content)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class ShowOnlyOnTheChartedQuestionTestCase(GlobalFilterTestMixin, APITestCase):
+    """D-22: a chart of the filtered question itself counts only the
+    ticked values, as a slicer does. On top of the fixture, the
+    registration form asks "What is the water used for?" (multiple
+    option): site 8 drinking + irrigation, site 9 drinking.
+    Show only irrigation -> site 8, which also answered drinking.
+    """
+
+    Q_USES = 700105
+
+    def setUp(self):
+        super().setUp()
+        self._question(
+            self.registration, self.Q_USES, "water_uses",
+            "What is the water used for?",
+            [("drinking", "Drinking"), ("irrigation", "Irrigation")],
+            type_=QuestionTypes.multiple_option,
+        )
+        self._answer(
+            self.site[8], self.Q_USES, options=["drinking", "irrigation"],
+        )
+        self._answer(self.site[9], self.Q_USES, options=["drinking"])
+        self.irrigation = self.show_only(self.Q_USES, "irrigation")
+
+    def test_the_filtered_question_counts_only_the_ticked_values(self):
+        counts = self.by_option(self.values(
+            form_id=self.REG_ID, question_id=self.Q_USES, group_by="option",
+            global_criteria=self.irrigation,
+        ))
+        self.assertEqual(
+            (counts["irrigation"], counts["drinking"]), (1, 0),
+        )
+
+    def test_another_question_charts_every_answer_of_the_shown_points(self):
+        # Site 8 is shown; its water source is Rainwater.
+        counts = self.by_option(self.values(
+            form_id=self.REG_ID, question_id=self.Q_SOURCE,
+            group_by="option", global_criteria=self.irrigation,
+        ))
+        self.assertEqual(
+            (counts[RAIN], counts[GROUND], counts[SURFACE]), (1, 0, 0),
+        )
+
+    def test_without_a_filter_every_value_counts(self):
+        counts = self.by_option(self.values(
+            form_id=self.REG_ID, question_id=self.Q_USES, group_by="option",
+        ))
+        self.assertEqual(
+            (counts["irrigation"], counts["drinking"]), (1, 2),
+        )

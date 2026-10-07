@@ -596,6 +596,31 @@ def in_date_range(date_filters, form_ids, date_name):
     )
 
 
+def registration_in_date_range(date_filters, root_form_id, date_name):
+    """Q over registration FormData: activity inside the range (D-23).
+
+    Kept when the registration's own date, or the date of one of its
+    non-pending, non-draft monitoring submissions, is in the range. Each
+    is dated as in_date_range dates it: the date question by name, else
+    `created`. A monitoring family's activity is mostly monitoring, so
+    the registration's `created` alone emptied every registration widget.
+    """
+    own = in_date_range(date_filters, [root_form_id], date_name)
+    if not date_filters or not (
+        date_filters.get("from_date") or date_filters.get("to_date")
+    ):
+        return own
+    child_forms = Forms.objects.filter(parent_id=root_form_id).values("id")
+    monitored = FormData.objects.filter(
+        in_date_range(date_filters, child_forms, date_name),
+        form_id__in=child_forms,
+        parent__isnull=False,
+        is_pending=False,
+        is_draft=False,
+    )
+    return own | Q(pk__in=monitored.values("parent_id"))
+
+
 def matching_registrations_subqueries(
     criterion, root_form_id, date_filters, date_name=None,
 ):
@@ -835,7 +860,16 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
             qs, administration_id
         )
 
-    if date_filters:
+    if date_filters and not is_monitoring:
+        # Registration rows: their own date or a monitoring one (D-23).
+        if "date_question_name" in params:
+            date_name = params["date_question_name"]
+        else:
+            date_name = date_question_name(date_question_id)
+        qs = qs.filter(
+            registration_in_date_range(date_filters, form.id, date_name)
+        )
+    elif date_filters:
         if date_question_id:
             matching_ids = Answers.objects.filter(
                 data__form_id=monitoring_form_id,

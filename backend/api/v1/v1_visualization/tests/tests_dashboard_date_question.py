@@ -130,10 +130,14 @@ class DashboardDateQuestionTestCase(DateQuestionFixtureMixin, APITestCase):
         # bounded by when each water point was registered, not emptied.
         # (The fixture's 2025-01-01 is stored as 2024-12-31 23:00: the
         # tests run in Fiji time, on summer time in January. The bound
-        # sits between that and site 8's 2024-12-01.)
+        # sits between that and site 8's 2024-12-01.) The range ends
+        # before any monitoring, which would also count (D-23): site 8's
+        # visit is dated 02-15.
         self.assertEqual(
             self.sites_on_registration(
-                **self.by_visit_date, from_date="2024-12-15",
+                **self.by_visit_date,
+                from_date="2024-12-15",
+                to_date="2025-01-05",
             ),
             set(range(1, 11)) - {8},
         )
