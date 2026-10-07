@@ -13,7 +13,6 @@ services:
   frontend:
     network_mode: service:mainnetwork
     volumes:
-      - ${STORAGE_PATH}/images:/app/public/images:delegated
       - ${STORAGE_PATH}/attachments:/app/public/attachments:delegated
       - ${STORAGE_PATH}/batch_attachments:/app/public/batch_attachments:delegated
       - ${STORAGE_PATH}/datapoints:/app/public/datapoints:delegated

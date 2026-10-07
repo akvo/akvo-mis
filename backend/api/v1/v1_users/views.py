@@ -62,6 +62,7 @@ from api.v1.v1_users.serializers import (
     RegisterSerializer,
     ResendActivationSerializer,
     ConfigureSerializer,
+    TenantBrandingSerializer,
     accounts_for_email,
     tenant_is_configured,
 )
@@ -433,7 +434,9 @@ def tenant_info(request, version):
         return Response(status=status.HTTP_204_NO_CONTENT)
     body = {
         "subdomain": tenant.subdomain,
+        "name": tenant.subdomain,
         "language": getattr(tenant, "language", "en") or "en",
+        "logo": tenant.logo,
     }
     if request.user.is_authenticated:
         body["embed_enabled"] = tenant_may_embed(tenant)
@@ -481,13 +484,21 @@ def register(request, version):
         # serializer would only be a read before a write — two concurrent
         # sign-ups would both pass it and one would still lose here. The
         # rolled-back transaction lets us name the field that lost.
-        taken = (
-            "Subdomain"
-            if Tenant.objects.filter(subdomain=validated["subdomain"]).exists()
-            else "Email"
-        )
+        subdomain_taken = Tenant.objects.filter(
+            subdomain=validated["subdomain"]
+        ).exists()
+        field = "subdomain" if subdomain_taken else "email"
+        taken = "Subdomain" if subdomain_taken else "Email"
+        message = f"{taken} is already registered"
+        # `details` is keyed by field name because that is the shape
+        # the serializer's own 400 has, and the register form maps it
+        # onto the input that caused it. Without it, a *taken* name --
+        # much the more frequent refusal -- fell through to the toast
+        # while a reserved one explained itself under the field, which
+        # is an inconsistency the registrant meets in practice. The
+        # `message` is unchanged for callers that still read it.
         return Response(
-            {"message": f"{taken} is already registered"},
+            {"message": message, "details": {field: [message]}},
             status=status.HTTP_400_BAD_REQUEST,
         )
     send_activation_email(user)
@@ -608,6 +619,9 @@ def configure_project(request, version):
             name=validated["root_unit_name"],
             tenant=user.tenant,
         )
+        if validated.get("logo"):
+            user.tenant.logo = validated["logo"]
+            user.tenant.save(update_fields=["logo"])
     return Response(
         UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )
@@ -1358,4 +1372,55 @@ def update_profile(request, version):
     user = serializer.save()
     return Response(
         UserSerializer(instance=user).data, status=status.HTTP_200_OK
+    )
+
+
+@extend_schema(
+    request=TenantBrandingSerializer,
+    responses={200: DefaultResponseSerializer, 400: DefaultResponseSerializer},
+    tags=["Auth"],
+    summary="Update workspace branding (logo)",
+)
+@api_view(["PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def update_tenant_branding(request, version):
+    tenant = getattr(request.user, "tenant", None)
+    if not tenant:
+        return Response(
+            {"message": "User does not belong to a workspace"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not request.user.is_superuser:
+        return Response(
+            {"message": "Only workspace administrators can update branding"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if request.method == "DELETE":
+        tenant.logo = None
+        tenant.save(update_fields=["logo"])
+    else:
+        serializer = TenantBrandingSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"message": validate_serializers_message(serializer.errors)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tenant.logo = serializer.validated_data.get("logo") or None
+        tenant.save(update_fields=["logo"])
+
+    root_name = (
+        tenant.administrations.filter(parent=None)
+        .values_list("name", flat=True)
+        .first()
+        or ""
+    )
+    return Response(
+        {
+            "subdomain": tenant.subdomain,
+            "name": root_name,
+            "language": getattr(tenant, "language", "en") or "en",
+            "logo": tenant.logo,
+        },
+        status=status.HTTP_200_OK,
     )

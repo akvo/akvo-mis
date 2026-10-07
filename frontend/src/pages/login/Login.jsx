@@ -29,7 +29,7 @@ const Login = () => {
   const [invitedUser, setInvitedUser] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { language } = store.useState((s) => s);
+  const { language, tenant } = store.useState((s) => s);
   const { active: activeLang } = language;
   const text = useMemo(() => {
     return uiText[activeLang];
@@ -96,7 +96,16 @@ const Login = () => {
                     </div>
                   ) : (
                     <div className="login-form-container">
-                      <img src="./logo-square.svg" alt="login-logo" />
+                      <img
+                        src={tenant?.logo || "./logo-square.svg"}
+                        alt={
+                          tenant?.name ? `${tenant.name} Logo` : "login-logo"
+                        }
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "./logo-square.svg";
+                        }}
+                      />
                       <div className="login-content">
                         <h1>{text.loginTitle}</h1>
                         {/* No workspace name here. It was added so that

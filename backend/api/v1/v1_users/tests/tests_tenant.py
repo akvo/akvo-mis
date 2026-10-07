@@ -37,3 +37,15 @@ class TenantModelTestCase(TestCase):
         )
         tenant.refresh_from_db()
         self.assertEqual(tenant.language, "fr")
+
+    def test_tenant_defaults_logo_to_none(self):
+        tenant = Tenant.objects.create(subdomain="default-logo")
+        self.assertIsNone(tenant.logo)
+
+    def test_tenant_persists_custom_logo(self):
+        tenant = Tenant.objects.create(
+            subdomain="branded-workspace",
+            logo="/images/logo-branded-123.png",
+        )
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.logo, "/images/logo-branded-123.png")
