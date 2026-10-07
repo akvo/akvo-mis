@@ -99,6 +99,19 @@ elif _SIGNUP_ENABLED in ("true", "false"):
 else:
     SIGNUP_ENABLED = bool(BASE_DOMAIN)
 
+# Cloudflare Turnstile. Empty TURNSTILE_SECRET means the check is off,
+# which is how this ships.
+#
+# Enabling is two steps, in this order. /config.js is proxy-cached by
+# nginx for a day, so a browser can hold a config with no site key for
+# up to 24 hours after one is set. Set TURNSTILE_SITE_KEY first and let
+# the cache turn over, which starts clients sending tokens; set
+# TURNSTILE_SECRET afterwards, which starts the backend requiring them.
+# Both at once rejects every registrant whose cached bootstrap script
+# cannot produce a token.
+TURNSTILE_SITE_KEY = environ.get("TURNSTILE_SITE_KEY", "")
+TURNSTILE_SECRET = environ.get("TURNSTILE_SECRET", "")
+
 # The label the platform console answers on, under BASE_DOMAIN -- see
 # env.example and doc/notes/platform-console.md. Normalised here and
 # nowhere else: "" would put the console at ".<BASE_DOMAIN>", which no

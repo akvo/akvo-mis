@@ -475,7 +475,9 @@ def register(request, version):
             {"message": "Self-service sign-up is not available here"},
             status=status.HTTP_403_FORBIDDEN,
         )
-    serializer = RegisterSerializer(data=request.data)
+    serializer = RegisterSerializer(
+        data=request.data, context={"request": request}
+    )
     if not serializer.is_valid():
         return Response(
             {

@@ -56,3 +56,8 @@ openai>=1.30.0
 # Do not unpin without moving the image to 3.10+.
 better-profanity==0.7.0
 pycountry==24.6.1
+
+# Turnstile verification (issue #525) posts to Cloudflare. `requests`
+# was already arriving transitively and two modules already imported
+# it; declaring it stops the third caller from relying on that.
+requests==2.31.0
