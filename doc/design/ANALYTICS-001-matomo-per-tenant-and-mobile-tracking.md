@@ -1,23 +1,23 @@
-# ANALYTICS-001: Matomo Analytics for Akvo MIS (Per-Tenant Access & Mobile Submissions)
+# ANALYTICS-001: Matomo Analytics for Akvo MIS (Per-Tenant Access & Data Submissions)
 
 ## Overview
 This specification defines the analytics architecture and implementation plan for Akvo MIS using a self-hosted (or cloud) Matomo instance. The solution tracks:
-1. **Per-Tenant Access**: Web portal visits and pageviews dynamically tagged with `tenant_name` and `tenant_subdomain`.
-2. **Mobile Data Submissions**: Reliable, offline-resilient submission event tracking capturing `tenant_name`, `form_name`, and `submitter` as custom parameters for historical aggregation and reporting.
+1. **Per-Tenant Web Access**: Web portal visits and pageviews dynamically tagged with `tenant_name` and `tenant_subdomain`.
+2. **Data Submissions (Mobile & Web)**: Reliable submission event tracking capturing `tenant_name`, `form_name`, and `platform` (`mobile` vs `web`) for historical aggregation, channel comparison, and tenant reporting.
 3. **Matomo Reporting Dashboard**: Standardized setup for visualizing multi-tenant activity, submission growth curves, and form distribution.
 
 ---
 
 ## 5W1H Analysis
 - **Who**: MIS Superadmins, Tenant Administrators, and Project Managers.
-- **What**: Web access metrics per tenant and historical mobile submission event tracking with tenant tagging.
+- **What**: Web access metrics per tenant and historical data submission event tracking across Mobile App and Webforms with tenant tagging.
 - **Where**:
-  - Backend: `backend/utils/matomo.py`, `backend/api/v1/v1_mobile/views.py`, `backend/mis/settings.py`.
+  - Backend: `backend/utils/matomo.py`, `backend/api/v1/v1_mobile/views.py` (Mobile Sync), `backend/api/v1/v1_data/views.py` (Webform Submit), `backend/mis/settings.py`.
   - Frontend: `frontend/src/util/matomo.js`, `frontend/src/App.js`, `frontend/src/lib/config.js`.
   - Matomo: Self-hosted instance (Docker/VM), Custom Dimensions, Event Tracking, Custom Dashboard.
-- **When**: Real-time on web page views; asynchronously on backend receipt and persistence of mobile submissions (`/sync`).
-- **Why**: Provide historical visibility into workspace adoption and mobile enumerator productivity across multiple tenants without leaking PII or adding mobile network overhead.
-- **How**: Hybrid model — client-side Matomo JS tracker for SPA web visits + server-side non-blocking Matomo HTTP Tracking API for mobile submissions.
+- **When**: Real-time on web page views; asynchronously on backend receipt and persistence of mobile and webform submissions.
+- **Why**: Provide full historical visibility into workspace adoption and data collection volume across multiple tenants without leaking PII or adding client-side network overhead.
+- **How**: Hybrid model — client-side Matomo JS tracker for SPA web visits + server-side non-blocking Matomo HTTP Tracking API for mobile sync and webform submissions.
 
 ---
 
@@ -27,27 +27,39 @@ This specification defines the analytics architecture and implementation plan fo
 sequenceDiagram
     autonumber
     actor Enumerator as Mobile App
+    actor WebUser as Webform User
     participant BE as Akvo MIS Backend (Django)
     participant Worker as Django-Q Worker
     participant DB as PostgreSQL
     participant Matomo as Matomo Server (Self-Hosted)
-    actor Browser as Web Browser (Tenant User)
+    actor Browser as Web Browser (Tenant Navigation)
 
     rect rgb(240, 248, 255)
     Note over Browser,Matomo: 1. Web Portal Access Tracking
     Browser->>BE: GET /api/v1/tenant-info (Resolves Subdomain)
     BE-->>Browser: { name: "Kenya Water", subdomain: "kenya-water" }
-    Browser->>Matomo: JS Tracker: setCustomDimension(1, "Kenya Water") + trackPageView()
+    Browser->>Matomo: JS Tracker: setCustomDimension(tenant, "Kenya Water") + trackPageView()
     end
 
     rect rgb(245, 255, 245)
     Note over Enumerator,Matomo: 2. Mobile Submission Tracking
-    Enumerator->>BE: POST /api/v1/sync (Form Data + Answers)
+    Enumerator->>BE: POST /api/v1/sync (Form Data)
     BE->>DB: Save FormData & Answer records
     DB-->>BE: Commit Success (HTTP 200)
-    BE->>Worker: Enqueue matomo_track_submission_task(data)
+    BE->>Worker: Enqueue matomo_track_submission(source="mobile", tenant="Kenya Water")
     BE-->>Enumerator: Return HTTP 200 (id, message)
-    Worker->>Matomo: POST matomo.php (Event: "Mobile Submission", dim1="Kenya Water")
+    Worker->>Matomo: POST matomo.php (Event: "Data Submission", action="Mobile Sync")
+    Matomo-->>Worker: HTTP 200 Tracking Confirmed
+    end
+
+    rect rgb(255, 250, 240)
+    Note over WebUser,Matomo: 3. Webform Submission Tracking
+    WebUser->>BE: POST /api/v1/forms/{id}/data (Webform Submit)
+    BE->>DB: Save FormData & Answer records
+    DB-->>BE: Commit Success (HTTP 200)
+    BE->>Worker: Enqueue matomo_track_submission(source="web", tenant="Kenya Water")
+    BE-->>WebUser: Return HTTP 200 (id, message)
+    Worker->>Matomo: POST matomo.php (Event: "Data Submission", action="Webform Submit")
     Matomo-->>Worker: HTTP 200 Tracking Confirmed
     end
 ```
@@ -61,21 +73,28 @@ sequenceDiagram
 - Implements a resilient client for the [Matomo HTTP Tracking API](https://developer.matomo.org/api-reference/tracking-api).
 - Sends tracking payloads using `requests.post` to `https://<MATOMO_URL>/matomo.php`.
 - Supports:
-  - `track_page_view(url, tenant_name, user_id=None)`
-  - `track_event(category, action, name=None, value=None, tenant_name=None, custom_dimensions=None, user_id=None)`
+  - `track_page_view(url, tenant_name=None, user_id=None)`
+  - `track_submission_event(tenant_name, form_name, form_id, source="mobile", user_id=None)`
 - Configured with non-blocking error trapping: errors are logged to Sentry/Logger but **never fail the caller**.
+- Strict early-exit if `MATOMO_SITE_ID` is `None` or `MATOMO_URL` is empty.
 
-### 1.2 Mobile Sync Integration
-**File**: `backend/api/v1/v1_mobile/views.py`
-- In `sync_pending_form_data(request, version)`:
-  - When a form is successfully saved and published (not an interim draft), dispatch a tracking event:
-    - **Category**: `"Mobile Submission"`
-    - **Action**: `"Form Published"`
-    - **Name**: `form.name` (e.g. `"Water Point Survey"`)
-    - **Dimension 1 (`dimension1`)**: `user.tenant.name` (or `"Default"`)
-    - **Dimension 2 (`dimension2`)**: `form.id`
-    - **User ID**: `str(user.id)`
-  - Offload to background worker or async helper to ensure zero latency overhead on mobile sync.
+### 1.2 Mobile & Webform Submission Integration
+- **Mobile Submissions** (`backend/api/v1/v1_mobile/views.py`):
+  - In `sync_pending_form_data(request, version)`:
+    - When a form is successfully saved and published (not an interim draft), dispatch:
+      - **Category (`e_c`)**: `"Data Submission"`
+      - **Action (`e_a`)**: `"Mobile Sync"`
+      - **Name (`e_k`)**: `form.name` (e.g. `"Water Point Survey"`)
+      - **Custom Dimension (Tenant)**: `user.tenant.name` (if `MATOMO_DIM_TENANT` is configured)
+      - **User ID (`uid`)**: `str(user.id)`
+- **Webform Submissions** (`backend/api/v1/v1_data/views.py`):
+  - In `SubmitDirectFormData` and `SubmitFormDataAnswerSerializer`:
+    - When form data is submitted and published via web:
+      - **Category (`e_c`)**: `"Data Submission"`
+      - **Action (`e_a`)**: `"Webform Submit"`
+      - **Name (`e_k`)**: `form.name`
+      - **Custom Dimension (Tenant)**: `request.user.tenant.name` (if `MATOMO_DIM_TENANT` is configured)
+      - **User ID (`uid`)**: `str(request.user.id)`
 
 ### 1.3 Settings Configuration
 **File**: `backend/mis/settings.py`
@@ -115,22 +134,68 @@ sequenceDiagram
 
 ---
 
-## 3. Matomo Self-Hosted Configuration & Dashboard Setup
+---
 
-### 3.1 Custom Dimensions Setup
-1. **Dimension 1**: `Tenant Name` (*Scope: Visit & Action*)
-2. **Dimension 2**: `Subdomain` (*Scope: Visit*)
-3. **Dimension 3**: `Platform` (*Scope: Action*)
+## 3. Matomo Self-Hosted Configuration & Prerequisites
 
-### 3.2 Reporting Dashboard Widgets
+### 3.1 Step-by-Step Setup on Matomo Server (One-Time)
+Before running the integration code in production, configure the following on the self-hosted Matomo instance:
+
+1. **Step 1: Create or Note the Measurable (Site)**
+   - Go to **Administration (⚙️) -> Measurables -> Manage**.
+   - Click **Add a new measurable** -> select **Website**:
+     - **Name**: `Akvo MIS`
+     - **Main URL**: `https://<your-base-domain>`
+   - Note the generated **`Site ID`** (e.g. `1`).
+
+2. **Step 2: Create Custom Dimensions**
+   - Go to **Measurables -> Custom Dimensions** (ensure Custom Dimensions plugin is active in System -> Plugins).
+   - Click **Create a new custom dimension**:
+     - **Name**: `Tenant Name` | **Scope**: `Visit` | **Active**: `Yes`
+     - Note the assigned **Dimension ID** (e.g. `1`).
+   - Click **Create a new custom dimension** (Optional for subdomain):
+     - **Name**: `Subdomain` | **Scope**: `Visit` | **Active**: `Yes`
+     - Note the assigned **Dimension ID** (e.g. `2`).
+
+3. **Step 3: Generate Auth Token (`token_auth`) for Backend Server-Side Tracking**
+   - Go to **Personal -> Security -> Auth tokens**.
+   - Click **Create new token** with description `Akvo MIS Backend Tracking`.
+   - Copy the 32-character hexadecimal token (used by Django to authenticate tracking requests to `matomo.php`).
+
+4. **Step 4: Configure Privacy & IP Anonymization**
+   - Go to **Privacy -> Anonymize data**.
+   - Ensure **Anonymize Visitors' IP addresses** is checked (masking 2 bytes, e.g. `192.168.xxx.xxx`) for GDPR compliance.
+
+### 3.2 Environment Variables Configuration
+
+#### Backend (`backend/.env`):
+```bash
+MATOMO_URL=https://matomo.your-server.com
+MATOMO_SITE_ID=1
+MATOMO_AUTH_TOKEN=your_generated_token_auth
+MATOMO_DIM_TENANT=1
+```
+
+#### Frontend (`frontend/.env`):
+```bash
+REACT_APP_MATOMO_URL=https://matomo.your-server.com
+REACT_APP_MATOMO_SITE_ID=1
+REACT_APP_MATOMO_DIM_TENANT=1
+REACT_APP_MATOMO_DIM_SUBDOMAIN=2
+```
+
+### 3.3 Reporting Dashboard & Key Widgets Setup
+Inside Matomo, create a dedicated dashboard (**Dashboard -> Create new dashboard** named `Akvo MIS - Tenant & Submissions Overview`):
 1. **Historical Submissions per Tenant**:
    - Report: `Visitors -> Custom Dimensions -> Tenant Name`
-   - Secondary Dimension: `Event Name` (Form Name)
+   - Secondary Dimension: `Event Action` (`Mobile Sync` vs `Webform Submit`)
 2. **Submission Trends Evolution**:
-   - Report: `Behavior -> Events -> Event Categories (Mobile Submission)`
+   - Report: `Behavior -> Events -> Event Categories (Data Submission)`
    - Graph: Row evolution / daily line chart
 3. **Web Portal Access per Tenant**:
    - Report: `Visitors -> Custom Dimensions -> Tenant Name` (Metric: Visits, Actions, Unique Visitors)
+4. **Channel Breakdown**:
+   - Report: `Behavior -> Events -> Event Actions` (Comparison of Mobile Sync vs Webform Submit counts)
 
 ---
 
@@ -139,15 +204,16 @@ sequenceDiagram
 ### 4.1 Automated Tests
 - **Backend Tests**:
   - `tests_matomo_service.py`: Verify HTTP tracking payloads, error silencing, and dimension mapping.
-  - `tests_mobile_sync_analytics.py`: Verify `sync_pending_form_data` triggers Matomo tracking call with correct tenant name.
-  - Command: `./dc.sh exec backend python manage.py test api.v1.v1_mobile.tests utils.tests`
+  - `tests_mobile_sync_analytics.py`: Verify `sync_pending_form_data` triggers Matomo tracking with `action="Mobile Sync"`.
+  - `tests_webform_analytics.py`: Verify webform submission triggers Matomo tracking with `action="Webform Submit"`.
+  - Command: `./dc.sh exec backend python manage.py test api.v1.v1_mobile.tests api.v1.v1_data.tests utils.tests`
 - **Frontend Tests**:
   - `matomo.test.js`: Verify `_paq` script injection and pageview dispatch on route change.
   - Command: `./dc.sh exec frontend npm test src/util/__test__/matomo.test.js`
 
 ### 4.2 Manual Verification
-1. Submit a form from the mobile app (or mock `/sync` payload).
-2. Inspect Matomo **Real-Time Event Log** to confirm event under Category `Mobile Submission` with `Tenant Name = <Tenant>`.
+1. Submit a form from the mobile app $\rightarrow$ verify Matomo event `Category="Data Submission"`, `Action="Mobile Sync"`, `Tenant="<Tenant>"`.
+2. Submit a form from the web dashboard $\rightarrow$ verify Matomo event `Category="Data Submission"`, `Action="Webform Submit"`, `Tenant="<Tenant>"`.
 3. Browse the web frontend across two different workspace subdomains and verify visits reflect under the respective `Tenant Name` dimensions.
 
 ---
@@ -160,7 +226,7 @@ sequenceDiagram
 | Task ID | Component & Description | Vibe Coding (Dev) | Automated Testing | QA & Review | Total Est. Time | Priority |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **ANA-01** | Backend Matomo Service Helper (`utils/matomo.py` + settings) | 30m | 20m | 15m | **65m (1.1h)** | P1 |
-| **ANA-02** | Mobile Sync Event Tracking in `v1_mobile/views.py` | 30m | 25m | 15m | **70m (1.2h)** | P1 |
+| **ANA-02** | Mobile & Webform Submission Event Tracking (`v1_mobile` & `v1_data`) | 35m | 30m | 15m | **80m (1.3h)** | P1 |
 | **ANA-03** | Frontend Matomo Tracker Helper & Route Listener (`App.js`) | 35m | 20m | 15m | **70m (1.2h)** | P1 |
 | **ANA-04** | Matomo Dashboard & Segment Documentation Guide | 20m | - | 15m | **35m (0.6h)** | P2 |
-| **Total** | **Full Feature Implementation** | **115m** | **65m** | **60m** | **240m (4.0h)** | - |
+| **Total** | **Full Feature Implementation** | **120m** | **70m** | **60m** | **250m (4.2h)** | - |
