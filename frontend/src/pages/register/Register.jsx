@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "../login/style.scss";
 import { Row, Col, Form, Input, Select, Button, Typography } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
@@ -12,6 +12,13 @@ const LANGUAGE_OPTIONS = [
   { value: "en", label: "English" },
   { value: "fr", label: "Français" },
 ];
+
+// Cloudflare's widget is a script and a div, so there is no npm
+// dependency here. It loads from this component rather than from
+// index.html because index.html is every page of every workspace,
+// while this form is one route on the base domain.
+const TURNSTILE_SCRIPT =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
 // Keys the API may return in `details` that correspond to inputs on
 // this form. Anything else has no field to land on and stays a toast.
@@ -38,24 +45,101 @@ const Register = () => {
   // name already typed there is the one being claimed here.
   const suggestedSubdomain = searchParams.get("subdomain") || "";
 
+  // Empty on any deployment without a site key, which is the default
+  // and means no captcha at all.
+  const siteKey = window?.appConfig?.turnstileSiteKey || "";
+  const widgetRef = useRef(null);
+  const widgetIdRef = useRef(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  // Held here rather than in the antd form: FORM_FIELDS drives
+  // form.setFields, which needs a registered antd field, and this
+  // control is Cloudflare's iframe rather than an Input.
+  const [captchaError, setCaptchaError] = useState("");
+
+  useEffect(() => {
+    if (!siteKey) {
+      return () => {};
+    }
+    let cancelled = false;
+    const renderWidget = () => {
+      if (
+        cancelled ||
+        !widgetRef.current ||
+        widgetIdRef.current !== null ||
+        !window.turnstile
+      ) {
+        return;
+      }
+      widgetIdRef.current = window.turnstile.render(widgetRef.current, {
+        sitekey: siteKey,
+        callback: (value) => {
+          setCaptchaToken(value);
+        },
+        // A solved widget whose token has expired looks solved. Clear
+        // the token so the next submit is refused by the server with a
+        // message, rather than silently sending a stale one.
+        "expired-callback": () => {
+          setCaptchaToken("");
+        },
+        "error-callback": () => {
+          setCaptchaToken("");
+        },
+      });
+    };
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const script = document.createElement("script");
+      script.src = TURNSTILE_SCRIPT;
+      script.async = true;
+      script.onload = renderWidget;
+      document.head.appendChild(script);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [siteKey]);
+
+  const resetCaptcha = () => {
+    if (window.turnstile && widgetIdRef.current !== null) {
+      window.turnstile.reset(widgetIdRef.current);
+    }
+    setCaptchaToken("");
+  };
+
   const onFinish = (values) => {
     setLoading(true);
+    setCaptchaError("");
     api
       .post("register", {
         email: values.email,
         password: values.password,
         subdomain: values.subdomain,
         language: values.language,
+        captcha_token: captchaToken,
       })
       .then(() => {
         setSentTo(values.email);
       })
       .catch((err) => {
+        // Any 400 means this submit is being retried, and a Turnstile
+        // token is single-use, so the widget is reset even when the
+        // captcha was not what failed.
+        resetCaptcha();
         // A field error belongs under the field. The API answers a 400
         // with {message, details}; `details` is keyed by field name,
         // so anything matching an input on this form is pushed onto
         // it and the toast is kept for errors with nowhere to land.
         const details = err.response?.data?.details || {};
+        // The captcha is not an antd field, so its message is rendered
+        // from state. Taken out before the mapping below, and treated
+        // as handled, so it never also raises a toast.
+        const captchaErrors = details.captcha_token;
+        if (captchaErrors) {
+          setCaptchaError(
+            Array.isArray(captchaErrors) ? captchaErrors[0] : captchaErrors
+          );
+        }
         const fields = Object.entries(details)
           .filter(([name]) => FORM_FIELDS.includes(name))
           .map(([name, errors]) => ({
@@ -64,6 +148,8 @@ const Register = () => {
           }));
         if (fields.length) {
           form.setFields(fields);
+        }
+        if (fields.length || captchaErrors) {
           return;
         }
         notify({
@@ -249,6 +335,14 @@ const Register = () => {
               >
                 <Input placeholder="acme" addonAfter={addressSuffix} />
               </Form.Item>
+              {siteKey ? (
+                <Form.Item
+                  validateStatus={captchaError ? "error" : ""}
+                  help={captchaError || null}
+                >
+                  <div id="turnstile-widget" ref={widgetRef} />
+                </Form.Item>
+              ) : null}
               <Form.Item>
                 <Button
                   type="primary"
