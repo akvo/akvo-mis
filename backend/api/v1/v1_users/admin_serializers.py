@@ -6,12 +6,11 @@ them apart makes the unscoped surface one file a reviewer can hold in
 their head.
 """
 
-from django.conf import settings
 from rest_framework import serializers
 
 from api.v1.v1_profile.constants import FeatureFlags
 from api.v1.v1_users.models import SystemUser, Tenant
-from utils.tenant_host import admin_subdomain, embed_hostname
+from utils.workspace_name import host_collision_reason
 
 
 # The three states a workspace can be in, and the rows each one selects.
@@ -40,6 +39,7 @@ class TenantListSerializer(serializers.ModelSerializer):
             "subdomain",
             "name",
             "language",
+            "logo",
             "state",
             "features",
             "created_at",
@@ -153,15 +153,17 @@ class TenantRenameSerializer(serializers.Serializer):
     )
 
     def validate_subdomain(self, value):
-        if value.lower() == admin_subdomain():
-            raise serializers.ValidationError("This subdomain is reserved.")
-        embed = embed_hostname()
-        if embed and settings.BASE_DOMAIN:
-            candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
-            if candidate == embed:
-                raise serializers.ValidationError(
-                    "This subdomain is reserved."
-                )
+        """Only the host checks, deliberately.
+
+        The console is where a withheld name gets granted: an operator
+        may rename a workspace to a country name or a two-character
+        name, and `self_service_reason` is never called from here. See
+        the design doc, "How a country workspace actually gets
+        created".
+        """
+        reason = host_collision_reason(value)
+        if reason:
+            raise serializers.ValidationError(reason)
         return value
 
 

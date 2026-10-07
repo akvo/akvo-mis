@@ -265,4 +265,24 @@ describe("Tenant detail", () => {
     ).toBe(true);
     expect(await screen.findByText(/3 dashboard links/)).toBeInTheDocument();
   });
+
+  it("displays tenant logo and operator controls", async () => {
+    await renderDetail({ logo: "/images/custom-logo.png" });
+    const logoImg = screen.getByAltText(/Ministry of Health HSS Logo/i);
+    expect(logoImg).toBeInTheDocument();
+    expect(logoImg).toHaveAttribute("src", "/images/custom-logo.png");
+    expect(screen.getByText(/upload logo/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove logo/i)).toBeInTheDocument();
+  });
+
+  it("confirms before removing workspace logo", async () => {
+    await renderDetail({ logo: "/images/custom-logo.png" });
+    axios.mockClear();
+    await act(async () => {
+      userEvent.click(screen.getByRole("button", { name: /remove logo/i }));
+    });
+    expect(
+      await screen.findByText(/revert to displaying the default akvo mis logo/i)
+    ).toBeInTheDocument();
+  });
 });

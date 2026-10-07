@@ -112,6 +112,14 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(
             response.json()["message"], "Subdomain is already registered"
         )
+        # Keyed by field, so the register form puts it under the input
+        # that caused it rather than in a detached toast -- the same
+        # treatment a reserved or profane name already gets, and this
+        # is the refusal registrants meet far more often.
+        self.assertEqual(
+            response.json()["details"]["subdomain"],
+            ["Subdomain is already registered"],
+        )
         self.assertFalse(
             SystemUser.objects.filter(email="owner@beta.org").exists()
         )
@@ -119,7 +127,10 @@ class RegisterEndpointTestCase(TestCase):
     def test_same_email_different_workspace_registration_succeeds(self):
         with mock.patch("api.v1.v1_users.views.send_email"):
             self.register()
-            response = self.register(subdomain="beta")
+            # Not "beta": that's a reserved environment name now, and
+            # this test's concern is the second workspace, not the
+            # name it happens to pick.
+            response = self.register(subdomain="zeta")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.registered_tenants().count(), 2)
         users = SystemUser.objects.filter(email=self.payload["email"])
@@ -142,6 +153,20 @@ class RegisterEndpointTestCase(TestCase):
         for bad in ("My App", "UPPER", "-lead", "trail-", "a_b"):
             response = self.register(subdomain=bad)
             self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_reserved_subdomain_is_rejected_with_its_reason(self):
+        # Not "admin": that name also matches ADMIN_SUBDOMAIN, and
+        # host_collision_reason is checked first, so it would return
+        # the host message instead of exercising this rule.
+        response = self.register(subdomain="platform")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "reserved for system use",
+            response.json()["details"]["subdomain"][0],
+        )
+        # The claim is what this rule protects, so assert the row is
+        # not there rather than only that the call failed.
         self.assertEqual(self.registered_tenants().count(), 0)
 
     def test_weak_password_is_rejected(self):
@@ -182,10 +207,15 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(tenant.language, "en")
 
     def test_register_persists_french_language(self):
+        # `senegal-rural-water`, not `senegal`: a bare country name is
+        # withheld from self-service sign-up, and a country prefix is
+        # deliberately still allowed.
         with mock.patch("api.v1.v1_users.views.send_email"):
-            response = self.register(subdomain="senegal", language="fr")
+            response = self.register(
+                subdomain="senegal-rural-water", language="fr"
+            )
         self.assertEqual(response.status_code, 200)
-        tenant = Tenant.objects.get(subdomain="senegal")
+        tenant = Tenant.objects.get(subdomain="senegal-rural-water")
         self.assertEqual(tenant.language, "fr")
 
     def test_register_rejects_unsupported_language(self):
@@ -193,3 +223,59 @@ class RegisterEndpointTestCase(TestCase):
             response = self.register(subdomain="spanish", language="es")
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Tenant.objects.filter(subdomain="spanish").exists())
+
+    def test_country_subdomain_is_rejected_with_its_reason(self):
+        response = self.register(subdomain="indonesia")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "aren't available on self-service",
+            response.json()["details"]["subdomain"][0],
+        )
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_profane_subdomain_is_rejected_with_its_reason(self):
+        response = self.register(subdomain="fuck-acme")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "isn't available",
+            response.json()["details"]["subdomain"][0],
+        )
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_a_clinical_name_is_accepted(self):
+        """The false positive that would be invisible in production.
+
+        A registrant refused here picks a worse name or leaves, and we
+        never hear about it -- so the accepted case is asserted at the
+        endpoint too, not only in the unit tests.
+        """
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="hiv-kenya")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Tenant.objects.filter(subdomain="hiv-kenya").exists()
+        )
+
+    def test_a_name_under_three_characters_is_rejected(self):
+        for bad in ("a", "ab"):
+            response = self.register(subdomain=bad)
+            self.assertEqual(response.status_code, 400, bad)
+            self.assertIn(
+                "at least 3 characters",
+                response.json()["details"]["subdomain"][0],
+                bad,
+            )
+        self.assertEqual(self.registered_tenants().count(), 0)
+
+    def test_three_characters_is_enough(self):
+        """The accepted side of the boundary.
+
+        A `min_length=4` typo would pass a test that only checked
+        that `ab` fails.
+        """
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="abc")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Tenant.objects.filter(subdomain="abc").exists()
+        )

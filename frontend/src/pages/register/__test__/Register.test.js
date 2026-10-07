@@ -156,4 +156,70 @@ describe("Register", () => {
     render(<TestApp entryPoint={"/register?subdomain=sleman"} />);
     expect(await screen.findByPlaceholderText("acme")).toHaveValue("sleman");
   });
+
+  test("shows a field error under the workspace address input", async () => {
+    // `message` and `details` are given deliberately different text:
+    // a regression that dropped the field mapping and fell back to the
+    // toast would show `message` and never the `details` sentence, so
+    // asserting on the distinction is what actually exercises the
+    // mapping rather than just "something rendered somewhere".
+    axios.mockImplementation((reqConfig) => {
+      if (reqConfig && reqConfig.url === "register") {
+        return Promise.reject({
+          response: {
+            data: {
+              message: "Registration failed",
+              details: {
+                subdomain: [
+                  "This name is reserved for system use. Please choose a different one.",
+                ],
+              },
+            },
+          },
+        });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
+
+    render(<TestApp entryPoint={"/register"} />);
+    // An earlier test in this file leaves the tenant lookup mid-flight
+    // in the shared store; wait for the form to actually be there
+    // before driving it, same as every other test here that follows
+    // one of the redirect tests.
+    await screen.findByPlaceholderText("you@organisation.org");
+    fill({});
+    await waitFor(() => {
+      expect(screen.getByText(/reserved for system use/i)).toBeInTheDocument();
+    });
+    // That text exists nowhere but `details.subdomain`, so finding it
+    // inside the field's own error container -- not merely somewhere
+    // on the page -- is what pins it to the field rather than a toast
+    // that happens to render into the DOM too.
+    expect(
+      screen
+        .getByText(/reserved for system use/i)
+        .closest(".ant-form-item-explain-error")
+    ).not.toBeNull();
+    // The toast-only message must not appear: that is what fails if
+    // the mapping regresses to the old toast fallback.
+    expect(screen.queryByText("Registration failed")).toBeNull();
+    // Still on the form, not on the confirmation screen.
+    expect(screen.queryByText(/Check your email/i)).toBeNull();
+  });
+
+  test("reports a short name by its length, not by the pattern", async () => {
+    // The pattern and the minimum are separate rule objects on
+    // purpose: merged into one, antd would report "Use lowercase
+    // letters, numbers and hyphens" for a two-character name, which
+    // is not what is wrong with it.
+    render(<TestApp entryPoint={"/register"} />);
+    fireEvent.change(await screen.findByPlaceholderText("acme"), {
+      target: { value: "ab" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Create workspace/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/no leading or trailing hyphen/i)).toBeNull();
+  });
 });

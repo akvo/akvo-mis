@@ -13,6 +13,7 @@ import {
   FormOutlined,
   AndroidOutlined,
   BarChartOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { AbilityContext } from "../can";
 
@@ -306,6 +307,17 @@ const Sidebar = () => {
               data-url="/downloads"
             >
               {text.menuDownloads}
+            </Menu.Item>
+          )}
+
+          {/* Settings */}
+          {ability.can("manage", "settings") && (
+            <Menu.Item
+              key="menu-settings"
+              icon={<SettingOutlined />}
+              data-url="/settings"
+            >
+              {text.menuSettings || "Settings"}
             </Menu.Item>
           )}
         </Menu>

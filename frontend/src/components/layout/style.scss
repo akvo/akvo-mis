@@ -15,7 +15,9 @@
   .layout {
     min-width: 100vw;
     min-height: 100vh;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    background-color: $bg-page;
 
     .banner,
     .header,
@@ -32,6 +34,9 @@
     }
 
     .body {
+      flex: 1 0 auto;
+      min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
+      background-color: $bg-page;
       padding-top: calc(
         #{$header-height} + #{$padding-default} + var(--inspection-offset)
       );

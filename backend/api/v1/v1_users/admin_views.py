@@ -182,8 +182,8 @@ def with_counts(queryset):
 
 
 @extend_schema(responses={200: TenantSummarySerializer}, tags=CONSOLE_TAG,
-               summary="One workspace, or soft-delete it")
-@api_view(["GET", "DELETE"])
+               summary="One workspace, update it, or soft-delete it")
+@api_view(["GET", "PUT", "DELETE"])
 @permission_classes([IsPlatformAdmin])
 def tenant_detail(request, version, tenant_id):
     # Annotated, because the console's detail page is six stat tiles
@@ -197,6 +197,10 @@ def tenant_detail(request, version, tenant_id):
         # riskier piece of work.
         tenant.deleted_at = timezone.now()
         tenant.save(update_fields=["deleted_at"])
+    elif request.method == "PUT":
+        if "logo" in request.data:
+            tenant.logo = request.data.get("logo") or None
+            tenant.save(update_fields=["logo"])
     return Response(
         TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
