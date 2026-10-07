@@ -45,8 +45,16 @@ from utils.upload_administration import (
 )
 from utils.custom_helper import clean_array_param, maybe_int
 from utils.default_serializers import DefaultResponseSerializer
+from utils.throttling import (
+    EmailDispatchEmailThrottle,
+    EmailDispatchIPThrottle,
+)
 from utils.custom_pagination import Pagination
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -75,6 +83,11 @@ from utils.bulk_upload_gate import (
     summary="Send feedback",
 )
 @api_view(["POST"])
+# The fifth anonymous endpoint that sends mail through our own SMTP
+# credentials, with caller-supplied content, synchronously in the
+# request. Same relay exposure as register, resend-activation and
+# forgot-password, so it shares their budget.
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def send_feedback(request, version):
     name = request.data.get("name")
     email = request.data.get("email")

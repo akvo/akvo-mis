@@ -101,6 +101,23 @@ class TurnstileVerificationTestCase(TestCase):
         )
 
     @override_settings(TURNSTILE_SECRET="a-secret")
+    def test_an_oversize_token_is_refused_before_the_outbound_call(self):
+        """Otherwise the fail-open path is an attacker's off switch.
+
+        Unbounded, a caller can send a token large enough that
+        Cloudflare answers with something that is not JSON. `.json()`
+        raises, the broad except fires, and the registration proceeds
+        with the captcha bypassed -- repeatably, and looking like an
+        outage in Sentry. A length bound makes it a 400 on the field
+        before anything is sent.
+        """
+        with mock.patch("utils.turnstile.requests.post") as post:
+            response = self.register(captcha_token="x" * 500000)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("captcha_token", response.json()["details"])
+        post.assert_not_called()
+
+    @override_settings(TURNSTILE_SECRET="a-secret")
     def test_the_helper_needs_no_request(self):
         """Callable outside a view, so the rule is testable alone."""
         with mock.patch("utils.turnstile.requests.post") as post:

@@ -59,7 +59,15 @@ const LoginForm = () => {
         navigate("/control-center");
       })
       .catch((err) => {
-        if (err.response.status === 401 || err.response.status === 400) {
+        // 429 is reachable since the login endpoint gained per-IP and
+        // per-email throttles. Without it here, setLoading(false) never
+        // ran and no notification fired: the button stayed disabled
+        // forever with no explanation.
+        if (
+          err.response?.status === 401 ||
+          err.response?.status === 400 ||
+          err.response?.status === 429
+        ) {
           setLoading(false);
           // The backend flags a correct password on an account that never
           // followed its activation link. Offering the resend here is the
@@ -69,7 +77,11 @@ const LoginForm = () => {
           }
           notify({
             type: "error",
-            message: err.response?.data?.message,
+            // DRF's throttle body is {detail: "...Expected available in
+            // N seconds."} and carries no `message`, so reading only
+            // `message` would show an empty notification on a 429 --
+            // and `detail` is the part that tells somebody to wait.
+            message: err.response?.data?.message || err.response?.data?.detail,
           });
         }
       });

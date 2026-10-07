@@ -48,4 +48,42 @@ describe("Login and Registration", () => {
     expect(screen.getByText(/Set New Password/i)).toBeInTheDocument();
     expect(registrationPage.asFragment()).toMatchSnapshot("RegistrationPage");
   });
+
+  test("a throttled sign-in says so instead of spinning forever", async () => {
+    // The per-email and per-IP login limits make 429 reachable on this
+    // form. The old catch handled only 401 and 400, so a 429 left
+    // setLoading(true) in place with no notification: a permanently
+    // disabled button and no explanation.
+    axios.mockImplementation((reqConfig) => {
+      if (reqConfig && reqConfig.url === "login") {
+        return Promise.reject({
+          response: {
+            status: 429,
+            data: {
+              detail:
+                "Request was throttled. Expected available in 3600 seconds.",
+            },
+          },
+        });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
+
+    render(<TestApp entryPoint={"/login"} />);
+    const email = await screen.findByPlaceholderText("Email");
+    userEvent.type(email, "member@acme.org");
+    userEvent.type(screen.getByPlaceholderText("Password"), "wrong-pass");
+    // The site header carries its own "Log in" button, so the form's is
+    // selected by submit type rather than by label.
+    const submit = document.querySelector('button[type="submit"]');
+    await act(async () => {
+      userEvent.click(submit);
+    });
+
+    expect(
+      await screen.findByText(/Request was throttled/i)
+    ).toBeInTheDocument();
+    // Usable again, not stuck in its loading state.
+    expect(submit.classList.contains("ant-btn-loading")).toBe(false);
+  });
 });

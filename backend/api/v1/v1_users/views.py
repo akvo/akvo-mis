@@ -344,6 +344,16 @@ def login(request, version):
                 {"message": "This account belongs to a different workspace"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        # Forget this address's earlier attempts. Any per-email login
+        # limit can be spent by anyone who knows the address, which is
+        # why the rate is generous; clearing it here removes the
+        # commoner case, where somebody mistypes their own password a
+        # few times, gets in, and would otherwise carry those attempts
+        # for the rest of the hour.
+        email_throttle = LoginEmailThrottle()
+        throttle_key = email_throttle.get_cache_key(request, None)
+        if throttle_key:
+            email_throttle.cache.delete(throttle_key)
         return authenticated_response(user)
     # authenticate() returns None for a wrong password AND for a correct
     # password on an unverified account. Telling those apart is what lets the

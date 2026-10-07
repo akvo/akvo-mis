@@ -1208,8 +1208,17 @@ class RegisterSerializer(serializers.Serializer):
     # Optional in the schema because the check ships off, and because
     # a client holding a cached config.js with no site key cannot send
     # one. `validate` decides whether its absence is acceptable.
+    # Bounded because the value is forwarded to a third party.
+    # Unbounded, a caller can send a token large enough that Cloudflare
+    # answers with something that is not JSON; `.json()` then raises,
+    # the fail-open branch catches it, and the registration proceeds
+    # with the captcha bypassed -- repeatably, while looking like an
+    # outage. A real Turnstile token is far under this.
     captcha_token = serializers.CharField(
-        required=False, allow_blank=True, write_only=True
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        max_length=2048,
     )
 
     def validate_subdomain(self, value):
