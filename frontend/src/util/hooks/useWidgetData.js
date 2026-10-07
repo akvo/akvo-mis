@@ -75,6 +75,16 @@ const dateFilters = (filters) => ({
   date_question_id: filters?.date_question_id,
 });
 
+// VIZ-027: the dashboard's question filters, on EVERY request a widget
+// makes. The endpoints silently drop a parameter they do not know, so a
+// builder that forgot these would show unfiltered data without an error.
+// `global_criteria` is an array (one entry per ticked value, D-15) or
+// null; `global_match` is "any" or null (D-21). compact() drops nulls.
+const globalFilters = (filters) => ({
+  global_criteria: filters?.global_criteria,
+  global_match: filters?.global_match,
+});
+
 // ── What to ask for ──────────────────────────────────────────────────
 
 /**
@@ -107,6 +117,7 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
         ...expandMeasure(widget, rootFormId),
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
+        ...globalFilters(filters),
         dashboard_slug: dashboardSlug,
       }),
     };
@@ -139,6 +150,7 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
         page_size: config.page_size || 20,
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
+        ...globalFilters(filters),
         dashboard_slug: dashboardSlug,
       }),
     };
@@ -163,13 +175,14 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
         // `administration`, not `administration_id`. This endpoint predates
         // the /visualization grammar and never adopted it.
         administration: filters?.administration_id,
-        from_date: filters?.from_date,
-        to_date: filters?.to_date,
-        // It has no date_question_id either. Bounding the window on
-        // monitoring activity rather than on registration date is spelled
-        // include_monitoring + monitoring_form_id instead.
+        // The dashboard's date question is matched by name on each form
+        // (D-18). Bounding the window on monitoring activity rather than
+        // on registration date is spelled include_monitoring +
+        // monitoring_form_id.
+        ...dateFilters(filters),
         include_monitoring: isMonitoringForm ? true : null,
         monitoring_form_id: isMonitoringForm ? widget.form : null,
+        ...globalFilters(filters),
         dashboard_slug: dashboardSlug,
       }),
     };
@@ -211,6 +224,7 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
         administration_id: filters?.administration_id,
         ...dateFilters(filters),
         date_question_id: config.date_question_id,
+        ...globalFilters(filters),
         dashboard_slug: dashboardSlug,
       }),
     };
@@ -242,6 +256,7 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
       option_value: config.option_value,
       administration_id: filters?.administration_id,
       ...dateFilters(filters),
+      ...globalFilters(filters),
       dashboard_slug: dashboardSlug,
     }),
   };
@@ -288,8 +303,8 @@ const buildStatusRequest = (widget, filters, dashboardSlug) => {
         })),
         default: { value: "_no_info", label: "_no_info" },
       }),
-      from_date: filters?.from_date,
-      to_date: filters?.to_date,
+      ...dateFilters(filters),
+      ...globalFilters(filters),
       dashboard_slug: dashboardSlug,
     }),
   };
@@ -364,8 +379,8 @@ const buildValueRequest = (widget, filters, rootFormId, dashboardSlug) => {
       // different question from how submissions do. Null unless the
       // author picked one, and compact() drops it.
       repeat_agg: config.repeat_agg,
-      from_date: filters?.from_date,
-      to_date: filters?.to_date,
+      ...dateFilters(filters),
+      ...globalFilters(filters),
       dashboard_slug: dashboardSlug,
     }),
   };
@@ -412,7 +427,10 @@ const buildSeriesRequest = (widget, filters, dashboardSlug) => {
       stack_by: "option",
       administration_id: filters?.administration_id,
       ...dateFilters(filters),
-      dashboard: dashboardSlug,
+      ...globalFilters(filters),
+      // `dashboard_slug`, as every other request: without it the series
+      // request on a public dashboard names no dashboard and 404s (A7).
+      dashboard_slug: dashboardSlug,
     }),
   };
 };

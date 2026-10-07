@@ -14,9 +14,9 @@ jest.mock("../hooks/useVisualizationRequest");
 const ROOT = 7001; // Water point registration
 const MONITORING = 7002; // Water quality visit
 const SLUG = "water-points";
-// "Is the infrastructure operational?" -> filter out Non-operational.
-// An array, one entry per value (D-15).
-const GLOBAL = ["option_not_in:700301:non_operational"];
+// "Is the infrastructure operational?" -> show only Operational. An
+// array, one entry per value (D-15), by form and name (D-20, D-21).
+const GLOBAL = ["option_in:7003:infrastructure_status:operational"];
 
 const WIDGETS = {
   // 700201 "Were you able to take a water sample?" Yes | No
@@ -148,7 +148,49 @@ describe.each(Object.entries(WIDGETS))("%s", (name, widget) => {
       expect(params).not.toHaveProperty("global_criteria");
     });
   });
+
+  test("every request carries global_match when it is any (D-21)", () => {
+    const requests = requestsFor(widget, {
+      global_criteria: GLOBAL,
+      global_match: "any",
+    });
+    requests.forEach(({ endpoint, params }) => {
+      expect({ endpoint, value: params.global_match }).toEqual({
+        endpoint,
+        value: "any",
+      });
+    });
+  });
+
+  test("no request names global_match when it is unset", () => {
+    const requests = requestsFor(widget, {
+      global_criteria: GLOBAL,
+      global_match: null,
+    });
+    requests.forEach(({ params }) => {
+      expect(params).not.toHaveProperty("global_match");
+    });
+  });
 });
+
+// D-18: the dashboard's date question dates map pins, colours and sizes
+// too; the backend matches it by name on each form.
+test.each(["map + status colours", "map + value question"])(
+  "%s: every request carries date_question_id",
+  (name) => {
+    const requests = requestsFor(WIDGETS[name], {
+      from_date: "2025-01-01",
+      date_question_id: 700203,
+    });
+    expect(requests.length).toBe(EXPECTED_REQUESTS[name]);
+    requests.forEach(({ endpoint, params }) => {
+      expect({ endpoint, value: params.date_question_id }).toEqual({
+        endpoint,
+        value: 700203,
+      });
+    });
+  }
+);
 
 test("the cross-form series request names the public dashboard (A7)", () => {
   const requests = requestsFor(WIDGETS["bar stacked across forms"], {});

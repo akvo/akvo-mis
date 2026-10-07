@@ -47,6 +47,14 @@ const VizPie = ({ config, data, filters }) => {
         : isDoughnut
         ? ["40%", "70%"]
         : "70%";
+    const slices = chartData.map((d) => ({
+      name: d.name ?? d.label ?? "-",
+      value: d.value ?? 0,
+    }));
+    // Every value 0 (a filter that leaves nothing, VIZ-027): ECharts would
+    // split the pie into equal slices, which reads as data. An empty ring
+    // says "nothing here"; ECharts draws it only for empty series data.
+    const isEmpty = !slices.some((slice) => Number(slice.value) > 0);
 
     return {
       color: colors,
@@ -63,10 +71,10 @@ const VizPie = ({ config, data, filters }) => {
           type: "pie",
           center: pieCenter,
           radius: pieRadius,
-          data: chartData.map((d) => ({
-            name: d.name ?? d.label ?? "-",
-            value: d.value ?? 0,
-          })),
+          stillShowZeroSum: false,
+          showEmptyCircle: true,
+          emptyCircleStyle: { color: "#f0f2f5" },
+          data: isEmpty ? [] : slices,
         },
       ],
     };

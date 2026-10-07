@@ -35,23 +35,25 @@ test("an array repeats the key, without brackets", async () => {
   const query = await serializedFor({
     form_id: 7002,
     global_criteria: [
-      "option_not_in:700301:non_operational",
-      "option_not_in:700301:operational",
+      "option_in:7003:infrastructure_status:non_operational",
+      "option_in:7003:infrastructure_status:operational",
     ],
   });
   expect(query).not.toContain("%5B%5D");
   expect(new URLSearchParams(query).getAll("global_criteria")).toEqual([
-    "option_not_in:700301:non_operational",
-    "option_not_in:700301:operational",
+    "option_in:7003:infrastructure_status:non_operational",
+    "option_in:7003:infrastructure_status:operational",
   ]);
 });
 
 test("a value with `:`, `,` and `|` survives the round trip", async () => {
   const query = await serializedFor({
-    global_criteria: ["option_not_in:700301:pump:_broken,_leaking|pipe"],
+    global_criteria: [
+      "option_in:7003:infrastructure_status:pump:_broken,_leaking|pipe",
+    ],
   });
   expect(new URLSearchParams(query).getAll("global_criteria")).toEqual([
-    "option_not_in:700301:pump:_broken,_leaking|pipe",
+    "option_in:7003:infrastructure_status:pump:_broken,_leaking|pipe",
   ]);
 });
 
