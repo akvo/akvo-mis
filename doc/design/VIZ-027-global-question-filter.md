@@ -16,10 +16,12 @@ question is matched by name per form (D-18); new dashboards start with
 the date and administration filters on (D-19). Filters name a question
 by form and name, the form setting the scope (D-20). The filter bar
 shows only the ticked values, as in the WAI portal, and filters combine
-by `global_match` (D-21).
+by `global_match` (D-21). A chart of the filtered question counts only
+the ticked values (D-22).
 **Status**: Backend BE-1 to BE-7 implemented 2026-10-06, BE-8 and
-BE-9 (D-20) and BE-10 (D-21) on 2026-10-07 (GitHub #520); frontend
-planned.
+BE-9 (D-20) and BE-10 (D-21) on 2026-10-07 (GitHub #520); D-22 and D-23
+on 2026-10-07. Frontend FE-1 to FE-5, FE-7 and FE-8 implemented
+2026-10-07 (GitHub #524); FE-6 deferred.
 **Parts**: [Backend](VIZ-027-backend-global-question-filter.md) · [Frontend](VIZ-027-frontend-global-question-filter.md)
 
 ---
@@ -96,9 +98,9 @@ sequenceDiagram
       multiple-option questions from the dashboard's form family as
       dashboard filters, next to the date and administration toggles.
 - [ ] On the published dashboard, a "Filters" button in the filter bar
-      opens a checklist of each marked question's options, all ticked
-      (D-16).
-- [ ] Ticking only some options shows only the registration datapoints
+      opens a checklist of each marked question's options, none ticked
+      (D-16, revised).
+- [ ] Ticking options shows only the registration datapoints
       whose latest answer to that question is one of them, on every
       widget at once: cards, maps, charts and tables (D-21).
 - [ ] While a question is filtered, registration datapoints with no
@@ -729,6 +731,13 @@ becomes `yes,_partly`. A comma-and-pipe grammar breaks on such values.
 
 ### D-16: The viewer filters through a checklist, ticked = shown
 
+> **Revised 2026-10-07 (after D-21, seen in the browser):** nothing is
+> ticked at first. With every option ticked by default, an unticked box
+> had to be read as "filtered", which nobody does by instinct. Now an
+> empty checklist means no filter, and ticking options shows only those,
+> as the WAI portal does. "Tick at least one option" is gone: unticking
+> everything removes the filter.
+
 Decided 2026-10-07.
 
 **Context**: The first FE-4 plan put one multi-select per question in
@@ -821,7 +830,9 @@ registration form finds no date answers and goes empty.
   every handler keeps receiving a plain `date_question_id`, now one that
   belongs to its form.
 - Registration widgets keep today's behaviour (`created`), since the
-  date question normally lives on monitoring forms.
+  date question normally lives on monitoring forms. **Revised by D-23**:
+  a registration is also in range when one of its monitoring
+  submissions is.
 
 **Consequences**:
 - Backend BE-8: resolve in the four views, after `check_ids`; validate
@@ -948,6 +959,69 @@ cloudy water point on every card, map and chart.
   toggle; tests change accordingly.
 - A "(No answer)" row that keeps unanswered datapoints is a later phase
   if users ask.
+
+### D-22: A chart of the filtered question counts only the ticked values
+
+Decided 2026-10-07, seen in the browser on the local Rural Water
+Project.
+
+**Context**: "Show only School" on `project_target_group` (multiple
+option) kept the one project that serves schools, and the pie of that
+same question drew Settlements 1, Government Stations 1 and School 1:
+every target group of that project. Read next to a "School" chip, that
+looks wrong.
+
+**Decision**: when a widget charts, grouped by option, a question in an
+`option_in` filter's group (its name in the filter's scope), only the
+ticked values are counted; the other options show 0. This is how a BI
+slicer behaves, and it is the rule widget `criteria` already follow
+(`_extract_criteria_option_values`: "the tally should only count those
+specific values — not every value in a multiple_option answer array").
+Every other widget, and every other question, is unchanged: the
+datapoints are the filtered ones, with all their answers.
+
+**Consequences**: backend only, one helper
+(`values_functions._extract_criteria_option_values` reads the global
+filter's `option_in` too). `option_not_in` needs nothing: a datapoint
+whose latest answer contains a hidden value is gone already.
+
+### D-23: A registration is in the date range when it has activity in it
+
+Decided 2026-10-07, seen in the browser on the local Rural Water
+Project. This revises D-18's "Registration widgets keep today's
+behaviour (`created`)".
+
+**Context**: a monitoring submission made today, with the dashboard's
+range set to this week, changed nothing: every registration widget
+(KPI, pie, bar, map) read 0. Their registrations were created months
+ago, and the range only looked at the registration's own `created`.
+A dashboard range means "what happened in this period", and on a
+monitoring family almost everything that happens is monitoring.
+
+**Options considered**:
+1. Activity: the registration's own date, or the date of any of its
+   monitoring submissions, falls in the range.
+2. Latest submission: only the family's latest submission counts. A
+   site visited on 3 October and again on 10 October would drop out of
+   1–7 October.
+3. Keep `created`.
+
+**Decision**: Option 1. It is also how the global filter reads a
+registration: its latest answer inside the range (D-14).
+
+**Rule**: on a widget whose rows are registrations (the registration
+form's `/values` handlers, scatter, the map, the status colours), a
+registration is kept when its own date or the date of a non-pending,
+non-draft monitoring submission of the family is inside the range. Each
+date is read the same way as before (D-18): the dashboard's date
+question by name where the form asks it, else `created`. Widgets on a
+monitoring form are unchanged: they already date the monitoring
+submissions.
+
+**Consequences**: backend only, one helper
+(`functions.registration_in_date_range`) used where registration rows
+were bounded by `in_date_range` or `created`
+(`get_base_monitoring_qs`, the map and `/values/formula` views).
 
 ---
 

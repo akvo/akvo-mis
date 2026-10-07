@@ -707,6 +707,16 @@ def _extract_criteria_option_values(params, question_id):
             values.add(parts[1])
         elif ctype == "option_in":
             values.update(parts[1])
+    # VIZ-027 D-22: the dashboard's "show only" on this very question (its
+    # name group in the filter's scope) restricts the tally the same way,
+    # as a slicer does: a project that serves schools and villages, shown
+    # for "School", counts under School only.
+    global_filters = params.get("global_criteria") or {}
+    for criterion in global_filters.get("criteria") or []:
+        if criterion["type"] == "option_in" and question_id in {
+            qid for qid, _ in criterion["group"]
+        }:
+            values.update(criterion["values"])
     return values or None
 
 

@@ -167,12 +167,20 @@ def serialize_source_form(form, is_root):
     }
     if not is_root:
         row["parent"] = form.parent_id
+    # VIZ-027: the builder's filter picker groups questions, since the
+    # same label can sit in two groups. Question order restarts in every
+    # group, so the group's order leads.
     row["questions"] = [
-        serialize_question(question)
+        {
+            **serialize_question(question),
+            "group": question.question_group.label
+            or question.question_group.name,
+        }
         for question in form.form_questions.filter(
             type__in=SUPPORTED_QUESTION_TYPES
         )
-        .order_by("order", "id")
+        .select_related("question_group")
+        .order_by("question_group__order", "question_group_id", "order", "id")
         .prefetch_related(
             Prefetch(
                 "options",

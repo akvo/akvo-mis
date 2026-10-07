@@ -49,3 +49,10 @@ Pillow==9.5.0
 
 # AI Chatbot
 openai>=1.30.0
+
+# Workspace name rules (issue #511).
+# pycountry is held at 24.6.1 deliberately: it is the last release
+# that supports Python 3.8, which is what backend/Dockerfile runs.
+# Do not unpin without moving the image to 3.10+.
+better-profanity==0.7.0
+pycountry==24.6.1

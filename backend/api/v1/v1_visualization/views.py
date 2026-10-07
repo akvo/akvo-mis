@@ -27,6 +27,7 @@ from api.v1.v1_visualization.functions import (
     date_question_name,
     in_date_range,
     parse_request_global_criteria,
+    registration_in_date_range,
     tenant_scoped_forms,
 )
 from api.v1.v1_visualization.formula import (
@@ -444,6 +445,11 @@ class GeolocationListView(APIView):
             queryset = queryset.filter(
                 id__in=dated_children.values("parent_id"),
             )
+        elif form.parent_id is None:
+            # Registration pins: their own date or a monitoring one (D-23).
+            queryset = queryset.filter(
+                registration_in_date_range(date_filters, form.id, date_name),
+            )
         else:
             queryset = queryset.filter(
                 in_date_range(date_filters, [form.id], date_name),
@@ -630,11 +636,15 @@ def visualization_values_formula(request, version):
     )
     if criteria:
         qs = apply_criteria_to_monitoring_qs(qs, False, criteria)
-    qs = qs.filter(in_date_range(
-        build_date_filters({"from_date": from_date, "to_date": to_date}),
-        [form.id],
-        date_name,
-    ))
+    date_filters = build_date_filters(
+        {"from_date": from_date, "to_date": to_date}
+    )
+    # Registration rows: their own date or a monitoring one (D-23).
+    qs = qs.filter(
+        registration_in_date_range(date_filters, form.id, date_name)
+        if is_registration
+        else in_date_range(date_filters, [form.id], date_name)
+    )
     # VIZ-027 D-12: before the latest-per-parent pick below, or a
     # filtered-out site's older submission could become its "latest".
     qs = apply_global_filters(

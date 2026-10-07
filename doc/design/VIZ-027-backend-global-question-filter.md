@@ -10,6 +10,11 @@
 (filters by form and name, D-20) implemented 2026-10-07. BE-10 (show
 only, `global_match`, D-21) implemented 2026-10-07; measured over the
 20 % threshold (follow-up task, see BE-10). BE-6 measured: cases 1 to 4 within the threshold, the map over it (follow-up task).
+Added 2026-10-07 while building the frontend: D-22 (a chart of the
+filtered question counts only the ticked values), D-23 (a registration
+is in the date range when it or one of its monitoring submissions is)
+and question groups on `/sources` (the builder's filter modal); see the
+addenda after BE-10.
 
 ---
 
@@ -934,7 +939,7 @@ fixture, with a same-named date question added to the check form):
 |---|---|
 | Visit-form widget, visit date range | Counts by 700203's answer, as today |
 | Check-form widget, same range | Counts by the check form's "Visit date", not empty |
-| Registration widget, same range | Falls back to `created` |
+| Registration widget, same range | Falls back to `created` (revised by D-23: or a monitoring submission in the range; see the addendum after BE-10) |
 | Global filter on a registration widget | "Latest" still judged by visit date on monitoring forms |
 | Save validation | Number question → 400; another family's date question → 400; `null` → 200 |
 | Public dashboard | The stored date question is accepted; another date question is a 404 (allowlist) |
@@ -1082,6 +1087,11 @@ or OR.
       `global_criteria` description and examples use `option_in`.
 - [x] The public allowlist is unchanged: `(form, name)` whatever the type.
 
+**D-22 addendum (2026-10-07).** A chart grouped by option of a
+question in an `option_in` filter's group counts only the ticked values:
+`_extract_criteria_option_values` reads the global filter as it reads
+widget `criteria`. Tests: `ShowOnlyOnTheChartedQuestionTestCase`.
+
 **Safeguards** (decided 2026-10-07, keeping both types):
 1. Measured on the BE-6 seed again before release (below).
 2. Swagger's `global_criteria` description and examples lead with
@@ -1138,6 +1148,29 @@ warm-up; the seed was removed afterwards.
 | Map, table, status colours, show only Operational | {1, 2, 3, 7, 8, 9} each |
 | Both types on one `(form, name)`; `global_match=both` | 400 |
 | Public dashboard: `option_in` on the published filter | 200; another pair 404 |
+
+**D-23 addendum (2026-10-07).** A registration widget's date range used
+to read only the registration's own `created`, so a family monitored this
+week but registered months ago showed 0 everywhere. Now a registration is
+in the range when its own date, or the date of one of its non-pending,
+non-draft monitoring submissions, is in it; each dated as before (the
+date question by name, else `created`). One helper,
+`functions.registration_in_date_range`, used where registration rows were
+bounded: `get_base_monitoring_qs` (every `/values` handler and scatter),
+the map view and `/values/formula`. Widgets on a monitoring form and the
+table are unchanged. Tests: `tests_global_filter_date_activity.py` (6:
+chart, map, status colours, own date still counts, date question,
+pending and draft ignored); two older tests narrowed their range to end
+before any monitoring (`tests_dashboard_date_question.py`,
+`tests_geolocation_criteria.py`), plus one for a site monitored in range.
+
+**`/sources` question groups (2026-10-07).** The builder chooses filter
+questions in a modal, under their question groups (the same label sits in
+several groups). Each source question now carries `group` (the group's
+label, else its name), and questions are ordered by group order, then
+question order: question order restarts in every group, so ordering by it
+alone interleaved the groups. Test:
+`tests_dashboard_sources.test_questions_carry_their_group_in_the_forms_order`.
 
 ---
 

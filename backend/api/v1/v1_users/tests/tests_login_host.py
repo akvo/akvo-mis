@@ -151,15 +151,37 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(), {"subdomain": "acme", "language": "en"}
+            response.json(),
+            {
+                "subdomain": "acme",
+                "name": "acme",
+                "language": "en",
+                "logo": None,
+            },
         )
 
-    def test_nothing_beyond_subdomain_and_language_is_exposed(self):
+    def test_nothing_beyond_subdomain_name_language_logo_is_exposed(self):
         # Anonymous and cacheable, so the field list is the whole of the
         # security review — assert it exhaustively rather than by sample.
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(
-            set(response.json().keys()), {"subdomain", "language"}
+            set(response.json().keys()),
+            {"subdomain", "name", "language", "logo"},
+        )
+
+    def test_workspace_host_returns_configured_logo(self):
+        self.acme.tenant.logo = "/images/logo-acme.png"
+        self.acme.tenant.save(update_fields=["logo"])
+        response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "subdomain": "acme",
+                "name": "acme",
+                "language": "en",
+                "logo": "/images/logo-acme.png",
+            },
         )
 
     def test_workspace_host_returns_configured_language(self):
@@ -168,7 +190,13 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(), {"subdomain": "acme", "language": "fr"}
+            response.json(),
+            {
+                "subdomain": "acme",
+                "name": "acme",
+                "language": "fr",
+                "logo": None,
+            },
         )
 
     def test_base_domain_returns_nothing(self):
@@ -182,7 +210,13 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         Tenant.objects.create(subdomain="fresh")
         response = self.client.get(TENANT_INFO, HTTP_HOST="fresh.app.com")
         self.assertEqual(
-            response.json(), {"subdomain": "fresh", "language": "en"}
+            response.json(),
+            {
+                "subdomain": "fresh",
+                "name": "fresh",
+                "language": "en",
+                "logo": None,
+            },
         )
 
     # ── the embedding entitlement (VIZ-019 D-12) ──
@@ -230,6 +264,7 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
         set_embedding(self.acme.tenant)
         response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
         self.assertEqual(
-            set(response.json().keys()), {"subdomain", "language"}
+            set(response.json().keys()),
+            {"subdomain", "name", "language", "logo"},
         )
         self.assertNotIn("embed_enabled", response.json())

@@ -203,6 +203,36 @@ class DashboardSourcesTestCase(TestCase, ProfileTestHelperMixin):
             len(few.captured_queries), len(many.captured_queries)
         )
 
+    def test_questions_carry_their_group_in_the_forms_order(self):
+        # VIZ-027: the builder's filter picker groups questions, since
+        # the same label can sit in two groups. Question order restarts
+        # in every group, so ordering by it alone interleaves groups.
+        first = QuestionGroup.objects.create(
+            form=self.monitoring, name="first", label="First", order=-2
+        )
+        second = QuestionGroup.objects.create(
+            form=self.monitoring, name="second", order=-1
+        )
+        for group, order in ((second, 1), (first, 2), (first, 1)):
+            Questions.objects.create(
+                form=self.monitoring,
+                question_group=group,
+                label="Q",
+                name="q_{0}_{1}".format(group.name, order),
+                type=QuestionTypes.number,
+                order=order,
+            )
+        questions = self.get().json()["forms"][1]["questions"]
+        self.assertEqual(
+            [(q["group"], q["name"]) for q in questions[:3]],
+            [
+                ("First", "q_first_1"),
+                ("First", "q_first_2"),
+                # No label: the group's name stands in.
+                ("second", "q_second_1"),
+            ],
+        )
+
     def test_question_type_ids_are_the_five_aggregatable_ones(self):
         # Guards the import: if SUPPORTED_QUESTION_TYPES ever changes,
         # this test says so rather than /sources silently widening.

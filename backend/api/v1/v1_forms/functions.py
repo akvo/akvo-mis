@@ -732,9 +732,7 @@ def _geo_config_issues(geo_config) -> list:
     for key in _GEO_CONFIG_BOOLEANS:
         value = geo_config.get(key)
         if value is not None and not isinstance(value, bool):
-            issues.append(
-                (f"extra.geoConfig.{key}", "must be true or false")
-            )
+            issues.append((f"extra.geoConfig.{key}", "must be true or false"))
 
     for key, upper in _GEO_CONFIG_NUMBERS:
         value = geo_config.get(key)
@@ -772,6 +770,7 @@ def _overlap_clamp_issues(geo_config) -> list:
     containing `"20"` reports the type error alone instead of adding a
     comparison against a string.
     """
+
     def usable(key, default):
         value = geo_config.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -782,10 +781,12 @@ def _overlap_clamp_issues(geo_config) -> list:
     ceiling = usable("overlapThreshold", DEFAULT_OVERLAP_THRESHOLD)
     if floor is None or ceiling is None or floor <= ceiling:
         return []
-    return [(
-        "extra.geoConfig.overlapThresholdFloor",
-        "must be less than or equal to overlapThreshold",
-    )]
+    return [
+        (
+            "extra.geoConfig.overlapThresholdFloor",
+            "must be less than or equal to overlapThreshold",
+        )
+    ]
 
 
 def validate_form_payload(data, partial=False):
@@ -929,11 +930,23 @@ def store_version_snapshot(form, data, user):
     Forms, QuestionGroup, Questions, or QuestionOptions rows. active_version
     and Forms.version remain unchanged.
 
+    If a pending snapshot exists (a version newer than active_version),
+    subsequent saves/autosaves update that snapshot in-place instead of
+    incrementing the version number. A new version number is only created if
+    no pending snapshot exists.
+
     Missing top-level fields inherit from the current active version's schema
     so the snapshot is always complete.
     """
+    # Lock the form row so concurrent saves/autosaves cannot create duplicates.
+    Forms.objects.select_for_update().get(pk=form.pk)
     last = form.published_versions.order_by("-version").first()
-    next_version = (last.version + 1) if last else 1
+    pending = last if last and last.id != form.active_version_id else None
+
+    if pending:
+        next_version = pending.version
+    else:
+        next_version = (last.version + 1) if last else 1
 
     active_schema = form.active_version.schema if form.active_version else {}
     schema = {
@@ -977,12 +990,18 @@ def store_version_snapshot(form, data, user):
         ),
     }
 
-    pv = FormPublishedVersion.objects.create(
-        form=form,
-        version=next_version,
-        schema=schema,
-        published_by=user,
-    )
+    if pending:
+        pending.schema = schema
+        pending.published_by = user
+        pending.save(update_fields=["schema", "published_by"])
+        pv = pending
+    else:
+        pv = FormPublishedVersion.objects.create(
+            form=form,
+            version=next_version,
+            schema=schema,
+            published_by=user,
+        )
     form.updated_by = user
     form.updated = timezone.now()
     form.save(update_fields=["updated_by", "updated"])

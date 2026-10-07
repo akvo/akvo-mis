@@ -21,7 +21,7 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
               class="logo-wrapper"
             >
               <img
-                alt="/logo.svg"
+                alt="Akvo MIS"
                 class="small-logo"
                 src="/logo.svg"
               />
@@ -319,7 +319,7 @@ exports[`Login and Registration test if the registration form exists: Registrati
               class="logo-wrapper"
             >
               <img
-                alt="/logo.svg"
+                alt="John Doe Logo"
                 class="small-logo"
                 src="/logo.svg"
               />
