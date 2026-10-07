@@ -70,13 +70,11 @@ class SnapshotOnlyPutTestCase(TestCase):
                 cur.execute(
                     f"SELECT setval("
                     f"pg_get_serial_sequence('{tbl}', 'id'),"
-                    f"(SELECT COALESCE(MAX(id), 0) FROM \"{tbl}\") + 1,"
+                    f'(SELECT COALESCE(MAX(id), 0) FROM "{tbl}") + 1,'
                     f"false)"
                 )
         self.header = _login(self.client)
-        self.admin = SystemUser.objects.filter(
-            email="admin@akvo.org"
-        ).first()
+        self.admin = SystemUser.objects.filter(email="admin@akvo.org").first()
 
     def _create_form(self, payload=None):
         res = self.client.post(
@@ -137,13 +135,20 @@ class SnapshotOnlyPutTestCase(TestCase):
 
         group = detail["question_group"][0]
         q = group["question"][0]
-        self._put(form_id, {
-            "name": "New Name",
-            "question_group": [{
-                **group,
-                "question": [{**q, "label": "Updated Label", "option": []}],
-            }],
-        })
+        self._put(
+            form_id,
+            {
+                "name": "New Name",
+                "question_group": [
+                    {
+                        **group,
+                        "question": [
+                            {**q, "label": "Updated Label", "option": []}
+                        ],
+                    }
+                ],
+            },
+        )
 
         # Live question row must be unchanged
         q_after = Questions.objects.get(pk=q_id)
@@ -165,13 +170,20 @@ class SnapshotOnlyPutTestCase(TestCase):
 
         group = detail["question_group"][0]
         q = group["question"][0]
-        self._put(form_id, {
-            "name": "Snapshot Name",
-            "question_group": [{
-                **group,
-                "question": [{**q, "label": "Snapshot Label", "option": []}],
-            }],
-        })
+        self._put(
+            form_id,
+            {
+                "name": "Snapshot Name",
+                "question_group": [
+                    {
+                        **group,
+                        "question": [
+                            {**q, "label": "Snapshot Label", "option": []}
+                        ],
+                    }
+                ],
+            },
+        )
         # Publish activates the pending v2 snapshot; GET must now reflect it.
         self._publish(form_id)
 
@@ -213,6 +225,46 @@ class SnapshotOnlyPutTestCase(TestCase):
         self.assertEqual(data["status"], "published")
         self.assertEqual(data["name"], "Updated")
 
+    def test_multiple_puts_on_published_form_reuse_pending_snapshot(self):
+        """Repeated PUTs on a published form update the pending snapshot
+        in-place instead of creating new versions."""
+        form_id = self._create_form()
+        self._publish(form_id)  # v1 (active=v1)
+
+        # First PUT creates pending snapshot v2
+        res1 = self._put(form_id, {"name": "Edit 1"})
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.json()["latest_version"], 2)
+        self.assertEqual(
+            FormPublishedVersion.objects.filter(form_id=form_id).count(), 2
+        )
+
+        # Second PUT updates pending snapshot v2 in-place (no v3 created)
+        res2 = self._put(form_id, {"name": "Edit 2"})
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.json()["latest_version"], 2)
+        self.assertEqual(
+            FormPublishedVersion.objects.filter(form_id=form_id).count(), 2
+        )
+
+        # Verify the pending snapshot content was updated
+        pending = FormPublishedVersion.objects.get(form_id=form_id, version=2)
+        self.assertEqual(pending.schema["name"], "Edit 2")
+
+        # Publishing activates v2
+        self._publish(form_id)
+        form = Forms.objects.get(pk=form_id)
+        self.assertEqual(form.version, 2)
+        self.assertEqual(form.name, "Edit 2")
+
+        # Next PUT after publishing creates new pending snapshot v3
+        res3 = self._put(form_id, {"name": "Edit 3"})
+        self.assertEqual(res3.status_code, 200)
+        self.assertEqual(res3.json()["latest_version"], 3)
+        self.assertEqual(
+            FormPublishedVersion.objects.filter(form_id=form_id).count(), 3
+        )
+
     # ─────────────────────────────────────────────
     # publish on already-published form
     # ─────────────────────────────────────────────
@@ -221,8 +273,8 @@ class SnapshotOnlyPutTestCase(TestCase):
         """Explicit publish on an already-published form activates the latest
         existing snapshot — no new snapshot is created."""
         form_id = self._create_form()
-        self._publish(form_id)                          # v1 (active=v1)
-        self._put(form_id, {"name": "Pending Edit"})   # v2 snapshot
+        self._publish(form_id)  # v1 (active=v1)
+        self._put(form_id, {"name": "Pending Edit"})  # v2 snapshot
         self.assertEqual(
             FormPublishedVersion.objects.filter(form_id=form_id).count(), 2
         )
@@ -234,7 +286,8 @@ class SnapshotOnlyPutTestCase(TestCase):
         )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(
-            FormPublishedVersion.objects.filter(form_id=form_id).count(), 2,
+            FormPublishedVersion.objects.filter(form_id=form_id).count(),
+            2,
             "Publish on already-published must not create new snapshot",
         )
         form = Forms.objects.get(pk=form_id)
@@ -243,7 +296,7 @@ class SnapshotOnlyPutTestCase(TestCase):
     def test_publish_already_active_is_noop(self):
         """Publish when latest IS already active: count unchanged, v1 stays."""
         form_id = self._create_form()
-        self._publish(form_id)   # v1, active=v1, no pending PUTs
+        self._publish(form_id)  # v1, active=v1, no pending PUTs
 
         self.client.post(
             f"/api/v1/manage/forms/{form_id}/publish",
@@ -270,7 +323,7 @@ class SnapshotOnlyPutTestCase(TestCase):
         self.assertIsNotNone(original_published_at)
 
         self._unpublish(form_id)
-        self._publish(form_id)   # re-publish (draft → published)
+        self._publish(form_id)  # re-publish (draft → published)
 
         form_after = Forms.objects.get(pk=form_id)
         self.assertEqual(
@@ -296,7 +349,7 @@ class SnapshotOnlyPutTestCase(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["status"], "draft")
         form = Forms.objects.get(pk=form_id)
-        self.assertEqual(form.status, 1)   # FormStatus.draft
+        self.assertEqual(form.status, 1)  # FormStatus.draft
 
     def test_unpublish_already_draft_returns_400(self):
         """POST .../unpublish on a draft form returns 400."""
@@ -314,18 +367,23 @@ class SnapshotOnlyPutTestCase(TestCase):
         auto-activates the latest before setting status=draft.
         After unpublish, live rows reflect the latest snapshot's state."""
         form_id = self._create_form()
-        self._publish(form_id)            # v1 (active=v1)
+        self._publish(form_id)  # v1 (active=v1)
 
         detail = self._get(form_id).json()
         group = detail["question_group"][0]
         q = group["question"][0]
-        self._put(form_id, {
-            "name": "V2 Name",
-            "question_group": [{
-                **group,
-                "question": [{**q, "label": "V2 Label", "option": []}],
-            }],
-        })
+        self._put(
+            form_id,
+            {
+                "name": "V2 Name",
+                "question_group": [
+                    {
+                        **group,
+                        "question": [{**q, "label": "V2 Label", "option": []}],
+                    }
+                ],
+            },
+        )
         # Still v1 active
         self.assertEqual(
             Forms.objects.get(pk=form_id).active_version.version, 1
@@ -340,7 +398,8 @@ class SnapshotOnlyPutTestCase(TestCase):
 
         form = Forms.objects.get(pk=form_id)
         self.assertEqual(
-            form.active_version.version, 2,
+            form.active_version.version,
+            2,
             "unpublish must auto-activate latest snapshot",
         )
         self.assertEqual(form.status, 1)  # draft
@@ -412,7 +471,7 @@ class SnapshotOnlyPutTestCase(TestCase):
         """publish → unpublish → draft PUT (live rows change) → re-publish
         creates a new snapshot from corrected live rows."""
         form_id = self._create_form()
-        self._publish(form_id)   # v1
+        self._publish(form_id)  # v1
 
         self._unpublish(form_id)
         self.assertEqual(Forms.objects.get(pk=form_id).status, 1)  # draft
@@ -420,17 +479,22 @@ class SnapshotOnlyPutTestCase(TestCase):
         detail = self._get(form_id).json()
         group = detail["question_group"][0]
         q = group["question"][0]
-        self._put(form_id, {
-            "name": "Corrected Form",
-            "question_group": [{
-                **group,
-                "question": [
-                    {**q, "label": "Corrected Question", "option": []}
+        self._put(
+            form_id,
+            {
+                "name": "Corrected Form",
+                "question_group": [
+                    {
+                        **group,
+                        "question": [
+                            {**q, "label": "Corrected Question", "option": []}
+                        ],
+                    }
                 ],
-            }],
-        })
+            },
+        )
 
-        res = self._publish(form_id)   # re-publish: new snapshot
+        res = self._publish(form_id)  # re-publish: new snapshot
         self.assertEqual(res["status"], "published")
         self.assertEqual(res["name"], "Corrected Form")
 
@@ -449,11 +513,15 @@ class SnapshotOnlyPutTestCase(TestCase):
         that inherits languages, default_language, and translations from the
         active version's schema."""
         payload = json.loads(json.dumps(FORM_PAYLOAD))
-        payload.update({
-            "languages": ["en", "id"],
-            "default_language": "en",
-            "translations": [{"language": "id", "name": "Formulir Snapshot"}],
-        })
+        payload.update(
+            {
+                "languages": ["en", "id"],
+                "default_language": "en",
+                "translations": [
+                    {"language": "id", "name": "Formulir Snapshot"}
+                ],
+            }
+        )
         form_id = self._create_form(payload)
         self._publish(form_id)
 
@@ -476,21 +544,26 @@ class SnapshotOnlyPutTestCase(TestCase):
     def test_activate_restores_translation_fields(self):
         """Rolling back to v1 restores the form's translation fields."""
         payload = json.loads(json.dumps(FORM_PAYLOAD))
-        payload.update({
-            "languages": ["en", "id"],
-            "default_language": "en",
-            "translations": [{"language": "id", "name": "V1 Terjemahan"}],
-        })
+        payload.update(
+            {
+                "languages": ["en", "id"],
+                "default_language": "en",
+                "translations": [{"language": "id", "name": "V1 Terjemahan"}],
+            }
+        )
         form_id = self._create_form(payload)
         self._publish(form_id)
         v1 = FormPublishedVersion.objects.get(form_id=form_id, version=1)
 
         # PUT with different languages → v2 snapshot
-        self._put(form_id, {
-            "languages": ["en", "fr"],
-            "translations": [{"language": "fr", "name": "V2 Traductions"}],
-        })
-        self._publish(form_id)   # activates v2
+        self._put(
+            form_id,
+            {
+                "languages": ["en", "fr"],
+                "translations": [{"language": "fr", "name": "V2 Traductions"}],
+            },
+        )
+        self._publish(form_id)  # activates v2
 
         # Roll back to v1
         res = self.client.post(
@@ -519,27 +592,29 @@ class SnapshotOnlyPutTestCase(TestCase):
         center = [-7.3898275, 109.4638907]
         geo_config = {"accuracyThreshold": 20, "detectOverlaps": False}
         payload = json.loads(json.dumps(FORM_PAYLOAD))
-        payload["question_group"][0]["question"].append({
-            "id": None,
-            "order": 2,
-            "label": "Draw your plot",
-            "short_label": None,
-            "name": "draw_your_plot",
-            "type": "geoshape",
-            "meta": False,
-            "required": True,
-            "rule": None,
-            "dependency": None,
-            "dependency_rule": "AND",
-            "api": None,
-            "extra": {"geoConfig": geo_config},
-            "tooltip": None,
-            "fn": None,
-            "pre": None,
-            "display_only": False,
-            "center": center,
-            "option": [],
-        })
+        payload["question_group"][0]["question"].append(
+            {
+                "id": None,
+                "order": 2,
+                "label": "Draw your plot",
+                "short_label": None,
+                "name": "draw_your_plot",
+                "type": "geoshape",
+                "meta": False,
+                "required": True,
+                "rule": None,
+                "dependency": None,
+                "dependency_rule": "AND",
+                "api": None,
+                "extra": {"geoConfig": geo_config},
+                "tooltip": None,
+                "fn": None,
+                "pre": None,
+                "display_only": False,
+                "center": center,
+                "option": [],
+            }
+        )
         form_id = self._create_form(payload)
         self.assertEqual(
             self._get(form_id).json()["question_group"][0]["question"][1][
@@ -567,29 +642,34 @@ class SnapshotOnlyPutTestCase(TestCase):
         response disappears from the next snapshot."""
         center = [-7.3898275, 109.4638907]
         payload = json.loads(json.dumps(FORM_PAYLOAD))
-        payload["question_group"][0]["question"].append({
-            "id": None,
-            "order": 2,
-            "label": "Draw your plot",
-            "name": "draw_your_plot",
-            "type": "geoshape",
-            "meta": False,
-            "required": True,
-            "dependency_rule": "AND",
-            "display_only": False,
-            "center": center,
-            "option": [],
-        })
+        payload["question_group"][0]["question"].append(
+            {
+                "id": None,
+                "order": 2,
+                "label": "Draw your plot",
+                "name": "draw_your_plot",
+                "type": "geoshape",
+                "meta": False,
+                "required": True,
+                "dependency_rule": "AND",
+                "display_only": False,
+                "center": center,
+                "option": [],
+            }
+        )
         form_id = self._create_form(payload)
         self._publish(form_id)
 
         # Round-trip the GET payload straight back through PUT, the way the
         # editor does, then activate that snapshot.
         detail = self._get(form_id).json()
-        self._put(form_id, {
-            "name": detail["name"],
-            "question_group": detail["question_group"],
-        })
+        self._put(
+            form_id,
+            {
+                "name": detail["name"],
+                "question_group": detail["question_group"],
+            },
+        )
         self._publish(form_id)
 
         geoshape = self._get(form_id).json()["question_group"][0]["question"][
