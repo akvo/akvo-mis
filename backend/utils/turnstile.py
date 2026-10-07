@@ -7,9 +7,13 @@ this scale, and the same verify-the-token-server-side shape.
 Inert unless TURNSTILE_SECRET is set. See that setting for why
 enabling is two steps and why their order matters.
 """
+import logging
+
 import requests
 from django.conf import settings
 from sentry_sdk import capture_exception
+
+logger = logging.getLogger(__name__)
 
 VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 # Short, and explicit. Without a timeout this call would hang on the
@@ -54,7 +58,11 @@ def turnstile_failure_reason(token, remote_ip=None):
         # on the sign-up form, and the failure modes here include
         # timeouts, DNS, TLS and a non-JSON body. Captured rather than
         # swallowed -- `send_email` is what swallowing silently looks
-        # like a year later.
+        # like a year later. Logged as well as captured, because
+        # sentry_sdk.init only runs when SENTRY_DSN is set, so on any
+        # deployment without one capture_exception() is a no-op and a
+        # bypassed captcha would leave no trace at all.
+        logger.exception("Turnstile verification failed; allowing sign-up")
         capture_exception()
         return None
     if verdict.get("success"):

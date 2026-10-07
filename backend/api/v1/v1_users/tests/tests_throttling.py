@@ -6,6 +6,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
+from api.v1.v1_users.models import SystemUser, Tenant
 from utils.throttling import (
     EmailDispatchEmailThrottle,
     EmailDispatchIPThrottle,
@@ -85,6 +86,46 @@ class ThrottleKeyTestCase(TestCase):
                 HTTP_X_FORWARDED_FOR="1.2.3.4, 203.0.113.7, 35.191.0.1",
             )
         self.assertEqual(honest, prefixed)
+
+    def test_two_client_addresses_get_different_keys(self):
+        """The assertion the prefix tests cannot make.
+
+        Both NUM_PROXIES tests above compare two keys for equality, so
+        a get_cache_key that returned a constant would satisfy them
+        both -- and a constant key is exactly what a misconfigured
+        NUM_PROXIES produces in a deployment, where every caller
+        collapses onto the proxy's own address. This is the test that
+        fails for that.
+        """
+        with self.settings(REST_FRAMEWORK={"NUM_PROXIES": 2}):
+            one = self.key_for(
+                EmailDispatchIPThrottle,
+                HTTP_X_FORWARDED_FOR="203.0.113.7, 35.191.0.1",
+            )
+            two = self.key_for(
+                EmailDispatchIPThrottle,
+                HTTP_X_FORWARDED_FOR="198.51.100.4, 35.191.0.1",
+            )
+        self.assertNotEqual(one, two)
+
+    def test_a_short_header_under_two_proxies_follows_the_client(self):
+        """Why the default is 0 and not the deployed 2.
+
+        DRF clamps its index with min(NUM_PROXIES, len(addrs)), so with
+        NUM_PROXIES=2 and a one-entry header -- which is what arrives
+        anywhere there is no GCLB in front -- the key is taken from the
+        entry the *client* sent. Two callers varying that header get
+        two budgets. This pins the hazard that justifies the default;
+        if it ever stops holding, the comment on NUM_PROXIES is stale.
+        """
+        with self.settings(REST_FRAMEWORK={"NUM_PROXIES": 2}):
+            spoofed_one = self.key_for(
+                EmailDispatchIPThrottle, HTTP_X_FORWARDED_FOR="1.1.1.1"
+            )
+            spoofed_two = self.key_for(
+                EmailDispatchIPThrottle, HTTP_X_FORWARDED_FOR="2.2.2.2"
+            )
+        self.assertNotEqual(spoofed_one, spoofed_two)
 
     def test_email_key_is_case_and_whitespace_insensitive(self):
         request = drf_request(
@@ -181,6 +222,39 @@ class ThrottleRateTestCase(TestCase):
                 EmailDispatchEmailThrottle().allow_request(second, None)
             )
 
+    def test_a_counter_survives_many_other_keys(self):
+        """A throttle cache has a capacity, and the default is 300.
+
+        Django's cache backends cull on every set() once MAX_ENTRIES is
+        reached, deleting num_entries/CULL_FREQUENCY entries at random.
+        With the defaults that is 100 random counters discarded per
+        write past 300 keys -- so in a deployment, where one key exists
+        per client address and per submitted email across four
+        endpoints, no counter would live long enough to reach its
+        budget and the throttles would quietly stop working under
+        exactly the load they exist for.
+        """
+        victim = drf_request(
+            self.factory, "/api/v1/register", {"email": "victim@acme.org"}
+        )
+        with mock.patch.object(
+            EmailDispatchEmailThrottle, "rate", "1/hour"
+        ):
+            self.assertTrue(
+                EmailDispatchEmailThrottle().allow_request(victim, None)
+            )
+            # Well past the 300-entry default.
+            for n in range(400):
+                other = drf_request(
+                    self.factory,
+                    "/api/v1/register",
+                    {"email": "filler{0}@acme.org".format(n)},
+                )
+                EmailDispatchEmailThrottle().allow_request(other, None)
+            self.assertFalse(
+                EmailDispatchEmailThrottle().allow_request(victim, None)
+            )
+
     def test_rates_are_inert_under_the_test_suite_by_default(self):
         """Without an explicit patch, nothing throttles.
 
@@ -249,6 +323,9 @@ class ThrottledEndpointTestCase(TestCase):
         endpoints = (
             "/api/v1/user/forgot-password",
             "/api/v1/register/resend-activation",
+            # AllowAny, calls send_email with caller-supplied content:
+            # the same relay exposure as the other two.
+            "/api/v1/feedback",
         )
         for url in endpoints:
             with self.subTest(url=url):
@@ -279,6 +356,45 @@ class ThrottledEndpointTestCase(TestCase):
                 content_type="application/json",
             )
         self.assertEqual(response.status_code, 429)
+
+    def test_a_successful_login_clears_the_per_email_counter(self):
+        """So a user's own typos cannot accumulate into a lockout.
+
+        Any per-email login limit can be spent by anyone who knows the
+        address, which is the reason the rate is generous. Clearing on
+        success removes the commoner case: somebody who mistypes their
+        password a few times, gets in, and would otherwise carry those
+        attempts for the rest of the hour.
+        """
+        tenant = Tenant.objects.create(subdomain="loginclear")
+        SystemUser.objects.create_superuser(
+            email="member@acme.org",
+            password="Secret#Pass123",
+            first_name="M",
+            last_name="X",
+            tenant=tenant,
+        )
+        with mock.patch.object(LoginEmailThrottle, "rate", "3/hour"):
+            for _ in range(2):
+                self.client.post(
+                    "/api/v1/login",
+                    {"email": "member@acme.org", "password": "wrong"},
+                    content_type="application/json",
+                )
+            good = self.client.post(
+                "/api/v1/login",
+                {"email": "member@acme.org", "password": "Secret#Pass123"},
+                content_type="application/json",
+            )
+            self.assertEqual(good.status_code, 200)
+            # The budget was 3 and three requests have been made. Without
+            # the reset the next one is refused.
+            again = self.client.post(
+                "/api/v1/login",
+                {"email": "member@acme.org", "password": "wrong"},
+                content_type="application/json",
+            )
+        self.assertNotEqual(again.status_code, 429)
 
     def test_unparseable_body_is_a_400_not_a_500(self):
         """ParseError must reach DRF's handler, not die in a throttle.

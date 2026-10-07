@@ -154,7 +154,13 @@ const Register = () => {
         }
         notify({
           type: "error",
-          message: err.response?.data?.message || "Registration failed",
+          // `detail` before the generic fallback: a 429 from the
+          // throttles carries only `detail`, and it is the part that
+          // says waiting will help rather than "Registration failed".
+          message:
+            err.response?.data?.message ||
+            err.response?.data?.detail ||
+            "Registration failed",
         });
       })
       .finally(() => {

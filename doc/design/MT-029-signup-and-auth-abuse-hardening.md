@@ -19,16 +19,17 @@ creates a superadmin `SystemUser`; and it sends an email synchronously,
 inside the request.
 
 Nothing limits how often anyone may do that. The same is true of the
-three sibling endpoints on the same public surface —
-`register/resend-activation`, `login`, and `user/forgot-password`. All
-four are plain `@api_view(["POST"])` with no `throttle_classes`, and
+four sibling endpoints on the same public surface —
+`register/resend-activation`, `login`, `user/forgot-password` and
+`feedback`. All five are plain `@api_view(["POST"])` with no
+`throttle_classes`, and
 `REST_FRAMEWORK` in `backend/mis/settings.py` sets no defaults, so
 every one of them will serve an unbounded request rate to an anonymous
 caller.
 
 **Outbound email is the largest exposure.** `send_email`
 (`backend/utils/email_helper.py`) runs in the request thread and
-swallows every exception. Three of the four endpoints call it. An
+swallows every exception. Four of the five endpoints call it. An
 unthrottled caller therefore has a free, anonymous SMTP relay through
 our own credentials, pointed at any address they like. The cost is
 sender reputation, which is slow to build, slow to repair, and relied on
@@ -68,7 +69,7 @@ expected them in, and the email relay above.
 SaaS, single-host and local-dev deployments and can be exercised by the
 test suite: resolve the real client address so a per-IP throttle
 keys on something meaningful; give throttle counters a cache nothing
-else clears; throttle the four endpoints per IP *and* per submitted
+else clears; throttle the five endpoints per IP *and* per submitted
 email; verify a Cloudflare Turnstile token at `register`, wired now and
 switched off until launch. Plus the host gate, which is a correctness
 fix rather than a rate control.
@@ -112,7 +113,18 @@ rules we want belong in Django. See *Out of scope*.
 ### 1. Client address resolution
 
 `REST_FRAMEWORK["NUM_PROXIES"]`, read from a `NUM_PROXIES` environment
-variable, defaulting to 0, and set to 2 in both k8s secrets.
+variable, defaulting to 0, and set to 2 as a literal `value` in both
+deployment manifests.
+
+It is a literal rather than a `secretKeyRef`, which is the one thing
+this design first got wrong. Proxy topology is not a secret, and
+delivering it as an *optional* Vault key meant it would be absent until
+somebody populated Vault. Absent, the backend falls back to 0, every
+caller resolves to the single nginx pod's address, and the per-IP
+budgets stop being per-IP: `login_ip` at 60/hour becomes 60 sign-ins an
+hour for the whole platform. A literal takes effect on deploy and has
+no ordering hazard. The Turnstile keys stay Vault secrets, because they
+are secrets and because their absence is the shipped state.
 
 The deployed request path is GCLB (GCE Ingress) → `frontend` Service
 (NodePort) → nginx pod → `backend` Service → backend pod. The
@@ -185,6 +197,23 @@ cross-process race the `embed` comment describes, and throttle counters
 are more sensitive to it than cached previews: one worker spending
 another's budget fails tests by shuffle order.
 
+**A cache of counters has a capacity.** Django's cache backends cull
+on every `set()` once `MAX_ENTRIES` is reached, discarding
+`num_entries / CULL_FREQUENCY` entries at random, and the defaults are
+300 and 3. One key exists per client address and per submitted email
+across five endpoints, so a deployment passes 300 keys within hours;
+past that, every write throws away a third of the counters and none
+survives long enough to reach its budget. The throttles would stop
+working under exactly the load they exist for, with no error, no log
+line, and nothing a test holding a handful of keys could see. The alias
+therefore sets `MAX_ENTRIES` to 50000 and `CULL_FREQUENCY` to 10, and a
+test writes 400 keys and asserts the first one's counter survived.
+
+The real ceiling is `FileBasedCache._list_cache_files()`, an
+`os.listdir` on every `set()`, so that number trades correctness
+against per-request cost. A shared atomic store is the upgrade path,
+and the one-pod assumption below is what defers it.
+
 **Stated assumption: one pod.** Both environments run the backend at
 `replicas: 1` with the HorizontalPodAutoscaler pinned
 `minReplicas: 1, maxReplicas: 1`, so a pod-local cache is globally
@@ -205,13 +234,13 @@ following the shape `DashboardAIThrottle` already established in
 | `email_dispatch_ip` | client address | `10/hour` |
 | `email_dispatch_email` | submitted email, lowercased and hashed | `3/hour` |
 | `login_ip` | client address | `60/hour` |
-| `login_email` | submitted email, lowercased and hashed | `10/hour` |
+| `login_email` | submitted email, lowercased and hashed | `30/hour` |
 
 `register`, `register/resend-activation` and `user/forgot-password`
 each carry both `email_dispatch_*` throttles; `login` carries both
-`login_*`. Rates sit in `DEFAULT_THROTTLE_RATES`, each read from an
-environment variable, because they are pre-launch guesses and a limit
-that bites a real user should be a secret change rather than a release.
+`login_*`. Rates sit in `DEFAULT_THROTTLE_RATES` as literals. Retuning
+one is a one-line pull request, which is reviewable; an environment
+variable nobody sets would hide where the real value came from.
 
 These subclass `SimpleRateThrottle` rather than `AnonRateThrottle` on
 purpose: `AnonRateThrottle` exempts authenticated callers, and an
@@ -243,11 +272,25 @@ hour rolls over. At these rates few registrants will reach
 it, and splitting the scopes later is a settings change and two class
 attributes.
 
-**Why `login_ip` is loose and `login_email` is tight.** An entire
-office arrives from one NAT address, so a tight per-IP login limit
-locks out a customer. `60/hour` is useless as a stuffing budget per
-address while staying out of a shared office line's way; the real limit
-is the `10/hour` per email.
+**Why `login_ip` is loose, and `login_email` is not tight either.**
+An entire office arrives from one NAT address, so a tight per-IP login
+limit locks out a customer. `60/hour` is useless as a stuffing budget
+per address while staying out of a shared office line's way; the
+per-email limit is the one aimed at a single account.
+
+That limit is `30/hour`, for the same reason the `forgot-password` rate
+is capped rather than tightened: any per-email limit can be spent by
+anyone who knows the address, so a tight one is a lockout weapon.
+`10/hour` was the first choice and it was wrong — inside the range a
+real person reaches with two devices and a typo, and cheap for an
+attacker to exhaust on purpose. A successful sign-in also clears the
+counter, so somebody's own earlier typos cannot accumulate toward a
+refusal across the hour.
+
+What remains is a deliberate attacker able to slow one account down,
+which no per-account limit can prevent, and which the alternative — no
+per-email limit at all — trades for unmetered stuffing against a known
+address.
 
 **Why `3/hour` is not lower.** A sufficiently tight per-email
 limit on `forgot-password` is itself an attack: it lets anyone who
@@ -269,7 +312,14 @@ not from `public/index.html`, which would pull third-party JavaScript
 into every page of every workspace to serve one form on the base
 domain. There is no npm dependency; the widget is a script and a div.
 
-`RegisterSerializer` gains an optional write-only `captcha_token`.
+`RegisterSerializer` gains an optional write-only `captcha_token`,
+bounded at 2048 characters. The bound is load-bearing rather than
+tidiness: unbounded, a caller can send a token large enough that
+Cloudflare answers with something that is not JSON, `.json()` raises,
+the fail-open branch below catches it, and the registration proceeds
+with the captcha bypassed — repeatably, and looking like an outage in
+Sentry. The bound makes that a 400 on the field before anything is
+sent.
 When `TURNSTILE_SECRET` is set, `validate()` posts the token, the
 secret and the client address to Cloudflare's `siteverify` and refuses
 the registration on a negative verdict, keyed to `captcha_token`.
@@ -283,15 +333,35 @@ the backend requiring them. Both together opens a window of up to a day
 in which the backend rejects every registrant whose cached bootstrap
 script cannot produce a token.
 
-**Fail open on a verification outage.** If the `siteverify` call errors
-or times out, the registration proceeds and the failure is captured to
-Sentry. Pre-launch, with no observed abuse, a Cloudflare outage closing
-the sign-up form entirely is the worse outcome. The decision is
-revisable: inverting it is one `return None`, written out rather than
-folded into the `try` block so that the next reader can find it. The
-call takes an explicit short timeout; without one it would hang on the
-single backend pod, inside a request already holding a synchronous SMTP
-connection.
+**Unreachable fails open; rejected fails closed.** These are two
+different outcomes and the difference is operationally sharp.
+
+If the `siteverify` call raises — a timeout, DNS, TLS, a body that is
+not JSON — the registration proceeds, and the failure is logged and
+captured to Sentry. Pre-launch, with no observed abuse, a Cloudflare
+outage closing the sign-up form entirely is the worse outcome. The
+decision is revisable: inverting it is one `return None`, written out
+rather than folded into the `try` block so that the next reader can
+find it. It is logged as well as captured because `sentry_sdk.init`
+only runs when `SENTRY_DSN` is set, so on a deployment without one
+`capture_exception()` is a no-op and a bypassed captcha would leave no
+trace at all.
+
+If Cloudflare *answers* and the verdict is negative, the registration
+is refused. That covers a bad token, and it also covers a bad secret,
+which is worth stating because it is not the case the paragraph above
+describes. A wrong `turnstile-secret` returns HTTP 400 with a JSON body
+— `{"success": false, "error-codes": ["invalid-input-secret"]}` — so
+`.json()` succeeds, nothing raises, and every registration is refused
+until the secret is fixed. A typo in Vault takes sign-up down rather
+than quietly disabling the captcha. That is the safer direction, but it
+means the secret must be verified in `test` before `production`, and it
+is the first thing to check if sign-up starts refusing everyone shortly
+after the captcha is switched on.
+
+The call takes an explicit short timeout; without one it would hang on
+the single backend pod, inside a request already holding a synchronous
+SMTP connection.
 
 `requests` is declared in `backend/requirements.txt` as part of this
 work. It was already arriving transitively and two modules already
@@ -323,7 +393,7 @@ existing registration test into a 403.
 
 ## API contract
 
-No new endpoints and no model changes. Four endpoints gain refusals.
+No new endpoints and no model changes. Five endpoints gain refusals.
 
 | Method | URL | New responses |
 |---|---|---|
@@ -331,6 +401,7 @@ No new endpoints and no model changes. Four endpoints gain refusals.
 | POST | `/api/v1/register/resend-activation` | 429 throttle |
 | POST | `/api/v1/login` | 429 throttle |
 | POST | `/api/v1/user/forgot-password` | 429 throttle |
+| POST | `/api/v1/feedback` | 429 throttle |
 
 `register` accepts one new optional field:
 
@@ -365,14 +436,10 @@ header.
 
 | Variable | Default | Deployed |
 |---|---|---|
-| `NUM_PROXIES` | `0` | `2` (both environments) |
+| `NUM_PROXIES` | `0` | `2`, literal in both manifests |
 | `SIGNUP_ENABLED` | follows `BASE_DOMAIN` | unset |
 | `TURNSTILE_SITE_KEY` | empty | empty, then set at launch |
 | `TURNSTILE_SECRET` | empty | empty, then set after the site key |
-| `THROTTLE_EMAIL_DISPATCH_IP` | `10/hour` | unset |
-| `THROTTLE_EMAIL_DISPATCH_EMAIL` | `3/hour` | unset |
-| `THROTTLE_LOGIN_IP` | `60/hour` | unset |
-| `THROTTLE_LOGIN_EMAIL` | `10/hour` | unset |
 
 `SIGNUP_ENABLED` is deliberately absent from the manifests: both SaaS
 deployments set `BASE_DOMAIN`, so the default already resolves to on,
@@ -457,7 +524,7 @@ before anything depends on it.
 
 1. **Throttle plumbing.** The `throttle` cache alias, `NUM_PROXIES` and
    `DEFAULT_THROTTLE_RATES` in `backend/mis/settings.py`; a new
-   `backend/utils/throttling.py`; the variables in `env.example`; unit
+   `backend/utils/throttling.py`; `NUM_PROXIES` in `env.example`; unit
    tests in `backend/api/v1/v1_users/tests/tests_throttling.py`.
 2. **Apply the throttles.** Four `@throttle_classes` decorators in
    `backend/api/v1/v1_users/views.py`, plus endpoint tests. The whole
@@ -477,12 +544,19 @@ before anything depends on it.
    error slot in `frontend/src/pages/register/Register.jsx`, with
    `Register.test.js`.
 6. **The deployment variables**, in `akvo-config` — a separate
-   repository and a separate pull request. `num-proxies: "2"` and the
-   two empty Turnstile keys in `3-secrets.yml`, and the matching
-   `optional: true` env entries in `8-deployment-backend.yml`, for both
-   `test` and `production`. Nothing above takes effect in staging or
-   production until it lands: `NUM_PROXIES` stays 0 and every caller
-   shares one rate-limit bucket.
+   repository and a separate pull request. `NUM_PROXIES: "2"` as a
+   literal `value`, and the two Turnstile keys as `optional: true`
+   `secretKeyRef`s, in `8-deployment-backend.yml` for both `test` and
+   `production`. Nothing above takes effect in staging or production
+   until it lands: `NUM_PROXIES` stays 0 and every caller resolves to
+   the nginx pod's address, which makes every per-IP budget a
+   platform-wide one.
+
+   `3-secrets.yml` is not touched, and cannot be: it holds no values.
+   It is a `VaultStaticSecret` syncing `kv/<env>/akvo-mis`, so the
+   Turnstile values are set in Vault when the captcha is switched on,
+   not in this repository. That is also why `NUM_PROXIES` is a literal
+   rather than a key in that secret.
 
 `SIGNUP_ENABLED` is deliberately left out of task 6, for the reason
 given under *Configuration*.
@@ -491,10 +565,14 @@ given under *Configuration*.
 
 **`NUM_PROXIES` is correct only for the current proxy chain.** Putting
 Cloudflare, another load balancer, or a service mesh in front of the
-GCLB changes the arithmetic, and it fails silently: every client shares one
-bucket, or each client gets a fresh one per request. The client-address
-keying test is what makes that visible, and it is the first thing to
-re-read if the ingress changes.
+GCLB changes the arithmetic, and it fails silently: every client shares
+one bucket, or each client gets a fresh one per request. Sharing one
+bucket is the worse half — the per-IP budgets become platform-wide, so
+the 61st sign-in of the hour across all customers is refused. Two tests
+pin the keying, including one asserting that two client addresses get
+*different* keys, which is the assertion that fails if the chain
+collapses them. It is the first thing to re-read if the ingress
+changes.
 
 **Scaling the backend out silently multiplies every limit** by the
 replica count, because the throttle cache is pod-local. See Component 2.
@@ -502,6 +580,19 @@ replica count, because the throttle cache is pod-local. See Component 2.
 **The captcha's two-step enable can be done backwards**, breaking
 sign-up for up to a day. Nothing in the code prevents it; the ordering
 is documented in `env.example` and in the settings comment.
+
+**A wrong `turnstile-secret` takes sign-up down.** Cloudflare answers a
+bad secret with a negative verdict rather than an error, so it is
+refused rather than failed open — see Component 4. Verify the secret in
+`test` before `production`, and check it first if sign-up begins
+refusing everyone just after the captcha is switched on.
+
+**A deliberate attacker can slow one account's sign-in down.** Any
+per-email login limit can be spent by whoever knows the address. The
+rate is set high enough that no real person reaches it and a successful
+sign-in clears it, which removes the accidental case; the deliberate
+one is accepted, because the alternative is unmetered credential
+stuffing against a known address. See Component 3.
 
 **The throttles are live from the moment this ships**, with the captcha
 off. A legitimate flow that exceeds them — a demo day where one person

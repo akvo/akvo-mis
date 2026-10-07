@@ -248,11 +248,26 @@ NUM_PROXIES = int(environ.get("NUM_PROXIES") or 0)
 # deliberately not lower than 3: a tight per-email limit on
 # forgot-password is itself an attack, because anyone who knows an
 # address could then deny its owner password recovery.
+# `or` rather than a default argument throughout: a present-but-empty
+# variable -- which is what an unset Vault key or a blank line in a
+# secret delivers -- would otherwise be "", and parse_rate("") raises
+# on every single request, forever.
 THROTTLE_RATES = {
     "email_dispatch_ip": "10/hour",
     "email_dispatch_email": "3/hour",
     "login_ip": "60/hour",
-    "login_email": "10/hour",
+    # 30 rather than 10. Any per-email login limit is a lockout vector
+    # -- anyone who knows an address can spend its budget -- and the
+    # same argument is why `email_dispatch_email` is capped rather than
+    # tightened. 10/hour is inside the range a real person reaches with
+    # two devices and a typo; 30 is not, while staying useless as a
+    # credential-stuffing budget against one account. A successful
+    # sign-in also clears this counter, so a user's own earlier typos
+    # cannot accumulate toward a refusal. What remains is a deliberate
+    # attacker slowing one account down, which no per-account limit can
+    # prevent and which the alternative -- no per-email limit at all --
+    # trades for unmetered stuffing.
+    "login_email": "30/hour",
 }
 # Inert under `manage.py test`. Every Django test request arrives from
 # 127.0.0.1 and the cache is process-wide, so live rates would make
@@ -391,6 +406,25 @@ CACHES = {
             else "django.core.cache.backends.filebased.FileBasedCache"
         ),
         "LOCATION": "/var/tmp/cache-throttle",
+        # A cache of counters needs a capacity, and Django's default is
+        # 300 entries with CULL_FREQUENCY 3 -- meaning every set() past
+        # 300 keys deletes a third of the cache at random. One key
+        # exists per client address and per submitted email across four
+        # endpoints, so a deployment passes 300 within hours and no
+        # counter would then survive long enough to reach its budget:
+        # the throttles would stop working under exactly the load they
+        # exist for, silently, with no error and no log line.
+        #
+        # 50000 is far above the key count this platform's traffic
+        # produces in one rate window, and entries are reaped as they
+        # expire because every request reads its own key. CULL_FREQUENCY
+        # 10 drops a tenth rather than a third if the ceiling is ever
+        # reached. The real ceiling is the `_list_cache_files()`
+        # os.listdir that FileBasedCache runs on every set(), so this
+        # number trades correctness against per-request cost; a shared
+        # atomic store is the upgrade path, and the one-pod assumption
+        # below is what defers it.
+        "OPTIONS": {"MAX_ENTRIES": 50000, "CULL_FREQUENCY": 10},
     },
 }
 CACHE_FOLDER = "/tmp/cache/"

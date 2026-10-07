@@ -297,4 +297,30 @@ describe("Register", () => {
       expect(screen.queryByText("Registration failed")).toBeNull();
     });
   });
+  test("a throttled sign-up surfaces the retry message", async () => {
+    // DRF's throttle body is {detail: "..."} with no `message`, so
+    // reading only `message` told a throttled registrant "Registration
+    // failed" and nothing about waiting.
+    axios.mockImplementation((reqConfig) => {
+      if (reqConfig && reqConfig.url === "register") {
+        return Promise.reject({
+          response: {
+            status: 429,
+            data: {
+              detail:
+                "Request was throttled. Expected available in 3600 seconds.",
+            },
+          },
+        });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
+
+    render(<TestApp entryPoint={"/register"} />);
+    await screen.findByPlaceholderText("you@organisation.org");
+    fill({});
+    expect(
+      await screen.findByText(/Request was throttled/i)
+    ).toBeInTheDocument();
+  });
 });
