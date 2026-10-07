@@ -144,7 +144,6 @@ def latest_monitoring_subquery(form_id, date_filters=None):
         parent=OuterRef("pk"),
         form_id=form_id,
         is_pending=False,
-        is_draft=False,
     )
     if date_filters:
         date_qid = date_filters.get("date_question_id")
@@ -393,7 +392,6 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
             form=parent_form,
             parent__isnull=True,
             is_pending=False,
-            is_draft=False,
         ).annotate(
             latest_id=latest_monitoring_subquery(
                 monitoring_form_id,
@@ -416,7 +414,6 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
     qs = FormData.objects.filter(
         form_id=monitoring_form_id,
         is_pending=False,
-        is_draft=False,
     )
     if administration_id:
         qs = apply_administration_filter(

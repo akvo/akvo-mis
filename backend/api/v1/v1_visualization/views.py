@@ -80,7 +80,6 @@ def formdata_stats(request, form_id, version):
         data = []
         for d in form.form_form_data.filter(
             is_pending=False,
-            is_draft=False,
         ).all():
             if question.type == QuestionTypes.number:
                 data.extend([
@@ -119,7 +118,6 @@ def formdata_stats(request, form_id, version):
         parent_form = form.parent
         form_data = parent_form.form_form_data.filter(
             is_pending=False,
-            is_draft=False,
         ).all()
         data = [
             {
@@ -130,7 +128,6 @@ def formdata_stats(request, form_id, version):
             for ld in [fd.children.filter(
                 form_id=form_id,
                 is_pending=False,
-                is_draft=False,
             ).last()] if ld
             for a in ld.data_answer.filter(
                 question_id=question.id
@@ -351,7 +348,6 @@ class GeolocationListView(APIView):
         )
         queryset = form.form_form_data.filter(
             is_pending=False,
-            is_draft=False,
             geo__isnull=False
         )
         criteria = serializer.validated_data.get("criteria")
@@ -377,7 +373,6 @@ class GeolocationListView(APIView):
                 child_q &= Q(children__created__date__lte=to_date)
             child_filter = {
                 "children__is_pending": False,
-                "children__is_draft": False,
             }
             if monitoring_form_id:
                 child_filter["children__form_id"] = monitoring_form_id
@@ -543,7 +538,6 @@ def visualization_values_formula(request, version):
 
     qs = form.form_form_data.filter(
         is_pending=False,
-        is_draft=False,
         parent__isnull=is_registration,
     )
     if criteria:
