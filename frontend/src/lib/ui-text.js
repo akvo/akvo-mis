@@ -31,7 +31,6 @@ const uiText = {
     menuPendingSubmissions: "Submissions",
     menuApprovals: "Approvals",
     menuDownloads: "Downloads",
-    menuManageDraft: "Manage Drafts",
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
     menuFormBuilder: "Form Builder",
@@ -1286,34 +1285,7 @@ const uiText = {
     moreItems: "More Items",
     moreCount: "+{{count}} more",
     allEntities: "All Entities",
-    manageDraftTitle: "Manage Drafts",
-    manageDraftText: (
-      <Fragment>
-        This is where you can manage your drafts. You can:
-        <ul>
-          <li>View your saved drafts</li>
-          <li>Edit existing drafts</li>
-          <li>Delete existing drafts</li>
-        </ul>
-      </Fragment>
-    ),
-    deleteDraftTitle: "Delete Draft",
-    deleteDraftContent: "Are you sure you want to delete {{draftName}}?",
-    deleteDraftSuccess: "Draft deleted successfully",
-    deleteDraftError: "Unable to delete draft",
-    draftCreatedByCol: "Created by",
-    draftUpdatedByPrefix: "by",
-    editAndPublishDraft: "Edit and Publish Draft",
-    editDraft: "Edit Draft",
-    createDraftMonitoring: "Create Draft Monitoring Data",
     rejectText: "Reject",
-    draftFormPublishConfirmTitle: "Publish Draft",
-    draftFormPublishConfirmContent:
-      "Are you sure you want to publish this draft ? This action cannot be undone.",
-    draftFormPublishSuccess: "Draft published successfully",
-    draftFormPublishError: "Unable to publish draft",
-    draftFormSaveSuccess: "Draft saved successfully",
-    draftFormSaveError: "Unable to save draft",
     selectRowsToDownload: "Please select rows to download",
     manageDataTabList: "Datapoint List",
     manageDataTabMap: "Map View",
@@ -1399,7 +1371,6 @@ uiText.fr = {
   menuPendingSubmissions: "Soumissions",
   menuApprovals: "Approbations",
   menuDownloads: "Téléchargements",
-  menuManageDraft: "Gérer les brouillons",
   menuDownloadApps: "Télécharger l'application",
   menuDocumentation: "Documentation",
   menuFormBuilder: "Générateur de formulaires",

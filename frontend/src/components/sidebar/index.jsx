@@ -210,12 +210,6 @@ const Sidebar = () => {
               {text.menuManageData}
             </Menu.Item>
 
-            {ability.can("manage", "draft") && (
-              <Menu.Item key="menu-draft" data-url="/control-center/data/draft">
-                {text.menuManageDraft}
-              </Menu.Item>
-            )}
-
             {ability.can("manage", "submissions") && (
               <Menu.Item
                 key="menu-submissions"
