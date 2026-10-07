@@ -224,7 +224,7 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             # Verify parent_id references valid registration data
             reg_ids = set(
                 self.form.form_form_data.filter(
-                    is_pending=False, is_draft=False
+                    is_pending=False
                 ).values_list("id", flat=True)
             )
             for pid in df["parent_id"].dropna():
@@ -313,7 +313,6 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
             FormData.objects.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         if len(children) >= 2:
@@ -360,7 +359,7 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
 
         # Pick one registration and push its created date far into the past
         reg = self.form.form_form_data.filter(
-            is_pending=False, is_draft=False
+            is_pending=False
         ).first()
         self.assertIsNotNone(reg)
         FormData.objects.filter(pk=reg.pk).update(
@@ -369,7 +368,7 @@ class ZipDownloadTestCase(TestCase, ProfileTestHelperMixin):
 
         # Set its monitoring child to be within the date range
         child = self.child_form.form_form_data.filter(
-            parent=reg, is_pending=False, is_draft=False
+            parent=reg, is_pending=False
         ).first()
         self.assertIsNotNone(child)
         FormData.objects.filter(pk=child.pk).update(

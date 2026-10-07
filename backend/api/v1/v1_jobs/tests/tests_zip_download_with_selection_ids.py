@@ -136,7 +136,6 @@ class ZipDownloadWithSelectionIdsTestCase(TestCase, ProfileTestHelperMixin):
             FormData.objects.filter(
                 form=self.form,
                 is_pending=False,
-                is_draft=False,
             )
             .order_by("id")
             .values_list("id", flat=True)
@@ -421,7 +420,6 @@ class ZipDownloadApiWithSelectionIdsTestCase(
             FormData.objects.filter(
                 form=self.form,
                 is_pending=False,
-                is_draft=False,
             ).values_list("id", flat=True)[:1]
         )
         self.assertGreaterEqual(len(reg_ids), 1)
