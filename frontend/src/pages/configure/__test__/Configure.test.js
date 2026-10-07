@@ -48,6 +48,7 @@ describe("Configure", () => {
     // an example: the tier is "Country", the unit at it is "Kenya".
     expect(screen.getByText(/Top level name/i)).toBeInTheDocument();
     expect(screen.getByText(/Top unit name/i)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace logo/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Country")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Kenya")).toBeInTheDocument();
   });

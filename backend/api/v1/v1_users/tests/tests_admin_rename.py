@@ -265,3 +265,21 @@ class AdminRenameTestCase(TestCase, TenantTestHelperMixin):
                 **auth,
             )
             self.assertEqual(response.status_code, expected)
+
+    def test_an_operator_may_grant_a_country_name(self):
+        """The escape hatch the self-service rules depend on.
+
+        Country names are withheld from sign-up, not forbidden, and
+        this is where one gets granted. A change that applied
+        `self_service_reason` uniformly would close the only path by
+        which a country-level workspace can exist, so it is asserted
+        here rather than left implied.
+        """
+        self.assertEqual(self.rename("indonesia").status_code, 200)
+        self.acme.tenant.refresh_from_db()
+        self.assertEqual(self.acme.tenant.subdomain, "indonesia")
+
+    def test_an_operator_may_grant_a_two_character_name(self):
+        self.assertEqual(self.rename("id").status_code, 200)
+        self.acme.tenant.refresh_from_db()
+        self.assertEqual(self.acme.tenant.subdomain, "id")

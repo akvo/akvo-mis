@@ -1,3 +1,4 @@
+import { startCase } from "lodash";
 import { api, store } from "../lib";
 
 // Is this deployment serving one workspace per host?
@@ -105,5 +106,11 @@ export const fetchTenant = () =>
           s.language.active = tenant.language;
         }
       });
+      const rawTitle = tenant?.subdomain || tenant?.name;
+      if (rawTitle) {
+        document.title = `Akvo MIS - ${startCase(rawTitle)}`;
+      } else {
+        document.title = "Akvo MIS";
+      }
       return tenant;
     });

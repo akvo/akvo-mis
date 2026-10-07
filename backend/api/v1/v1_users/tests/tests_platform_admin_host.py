@@ -65,15 +65,25 @@ class AdminHostTestCase(TestCase):
     def test_registration_refuses_the_reserved_subdomain(self):
         self.assertEqual(self.register("admin").status_code, 400)
 
-    @override_settings(ADMIN_SUBDOMAIN="console")
+    @override_settings(ADMIN_SUBDOMAIN="ops-desk")
     def test_the_reservation_moves_with_the_console(self):
         # The label the console is actually on is the one that must be
-        # refused. Reserving "admin" on a deployment whose console lives
-        # at console.<domain> protects an address nothing serves and
-        # leaves the real one registrable -- a workspace that would
-        # shadow the only host this deployment can be administered from.
-        self.assertEqual(self.register("console").status_code, 400)
-        self.assertEqual(self.register("admin").status_code, 200)
+        # refused, and the vacated former label becomes claimable again
+        # -- a reservation that tracks the setting, not a name baked in.
+        #
+        # Neither label here is "admin" or "console": both are
+        # independently in RESERVED_TERMS now (workspace-name
+        # blacklist, issue #511), so either would stay refused even
+        # after the console moved off it, proving nothing about the
+        # reservation itself moving. "ops-desk" and "mission-control"
+        # carry no such independent reservation, so a 400 on them can
+        # only come from them being the console's current host.
+        self.assertEqual(self.register("ops-desk").status_code, 400)
+        with override_settings(ADMIN_SUBDOMAIN="mission-control"):
+            self.assertEqual(
+                self.register("mission-control").status_code, 400
+            )
+            self.assertEqual(self.register("ops-desk").status_code, 200)
 
 
 @override_settings(BASE_DOMAIN="app.com")

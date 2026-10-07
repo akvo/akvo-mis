@@ -68,6 +68,10 @@ class Tenant(models.Model):
     features = models.JSONField(default=dict, blank=True)
     # The primary workspace language, set during registration.
     language = models.CharField(max_length=10, default="en")
+    # Relative path to the workspace logo (e.g. /images/logo-xxx.png)
+    logo = models.CharField(
+        max_length=255, null=True, blank=True, default=None
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

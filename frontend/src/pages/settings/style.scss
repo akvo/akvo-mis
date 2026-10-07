@@ -2,7 +2,43 @@
 
 #root {
   #settings {
-    min-height: 65vh;
+    margin: -24px -50px;
+    position: relative;
+
+    .ant-layout {
+      min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
+      &.site-layout {
+        margin-left: 200px;
+        .description-container {
+          padding: 16px 24px;
+          background: white;
+        }
+      }
+      .site-layout-background {
+        width: 200px;
+      }
+      .ant-layout-sider {
+        overflow: hidden;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        box-shadow: 0px 2px 8px 0px rgba(0, 0, 0, 0.15);
+        margin-top: calc(#{$header-height} + var(--inspection-offset));
+        .ant-layout-sider-children {
+          display: flex;
+          flex-direction: column;
+          height: calc(100vh - #{$header-height} - var(--inspection-offset));
+          & > div {
+            background-color: #fff !important;
+          }
+        }
+        .ant-menu-item {
+          padding: 0px 16px !important;
+          margin-bottom: 0px;
+        }
+      }
+    }
 
     .ant-card {
       margin-top: 20px;
