@@ -25,6 +25,19 @@ describe("Register", () => {
     axios.mockResolvedValue({ status: 200, data: [] });
   });
 
+  const withSiteKey = async (run) => {
+    const original = window.appConfig;
+    // Only the site key: setting baseDomain too would make
+    // onBaseDomainHost() false under jsdom's "localhost" host, and the
+    // /register route would redirect away before rendering anything.
+    window.appConfig = { ...original, turnstileSiteKey: "0xK" };
+    try {
+      await run();
+    } finally {
+      window.appConfig = original;
+    }
+  };
+
   const fill = ({
     password = "Secret#Pass123",
     confirm = "Secret#Pass123",
@@ -221,5 +234,67 @@ describe("Register", () => {
       expect(screen.getByText(/at least 3 characters/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/no leading or trailing hyphen/i)).toBeNull();
+  });
+
+  test("renders no captcha when no site key is configured", async () => {
+    render(<TestApp entryPoint={"/register"} />);
+    // Awaited: the app's first paint is not synchronous, and asserting
+    // straight after render() would pass against an empty document
+    // whether or not the widget is suppressed.
+    await screen.findByPlaceholderText("acme");
+    expect(document.querySelector("#turnstile-widget")).toBeNull();
+  });
+
+  test("renders the captcha container when a site key is configured", async () => {
+    await withSiteKey(async () => {
+      render(<TestApp entryPoint={"/register"} />);
+      await screen.findByPlaceholderText("acme");
+      expect(document.querySelector("#turnstile-widget")).not.toBeNull();
+    });
+  });
+
+  test("shows a captcha error under the widget", async () => {
+    await withSiteKey(async () => {
+      // Keyed on the request, not mockRejectedValueOnce: the app makes
+      // other calls on mount and a "once" rejection would be spent on
+      // whichever of those fired first.
+      axios.mockImplementation((reqConfig) => {
+        if (reqConfig && reqConfig.url === "register") {
+          return Promise.reject({
+            response: {
+              status: 400,
+              data: {
+                message: "Registration failed",
+                details: {
+                  captcha_token: ["Verification failed. Please try again."],
+                },
+              },
+            },
+          });
+        }
+        return Promise.resolve({ status: 200, data: [] });
+      });
+
+      render(<TestApp entryPoint={"/register"} />);
+      await screen.findByPlaceholderText("you@organisation.org");
+      fill({});
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Verification failed. Please try again./i)
+        ).toBeInTheDocument();
+      });
+      // Inside the widget's own Form.Item error container rather than
+      // merely somewhere on the page: that is what pins it under the
+      // widget instead of in the detached toast.
+      expect(
+        screen
+          .getByText(/Verification failed. Please try again./i)
+          .closest(".ant-form-item-explain-error")
+      ).not.toBeNull();
+      // `message` differs from `details`, so a regression that dropped
+      // the captcha mapping and fell back to the toast would show this
+      // instead.
+      expect(screen.queryByText("Registration failed")).toBeNull();
+    });
   });
 });
