@@ -22,7 +22,11 @@ from drf_spectacular.utils import (
 )
 from jsmin import jsmin
 from rest_framework import status, serializers
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -71,6 +75,12 @@ from utils.custom_permissions import AddUserAccess, IsSuperAdmin
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
+from utils.throttling import (
+    EmailDispatchEmailThrottle,
+    EmailDispatchIPThrottle,
+    LoginEmailThrottle,
+    LoginIPThrottle,
+)
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 from utils.tenant_host import (
     console_web_url,
@@ -255,6 +265,7 @@ def signing_in_elsewhere(request, user):
     tags=["Auth"],
 )
 @api_view(["POST"])
+@throttle_classes([LoginIPThrottle, LoginEmailThrottle])
 def login(request, version):
     # On a SaaS deployment the main site signs people up; signing in
     # happens at the workspace's own address. The console is the single
@@ -449,6 +460,7 @@ def tenant_info(request, version):
     tags=["Auth"],
 )
 @api_view(["POST"])
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def register(request, version):
     serializer = RegisterSerializer(data=request.data)
     if not serializer.is_valid():
@@ -559,6 +571,7 @@ def activate_account(request, version):
     summary="Resend an activation email",
 )
 @api_view(["POST"])
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def resend_activation(request, version):
     user = accounts_for_email(
         request, request.data.get("email"), is_active=False
@@ -1137,6 +1150,7 @@ class UserEditDeleteView(APIView):
     summary="To send reset password instructions",
 )
 @api_view(["POST"])
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def forgot_password(request, version):
     serializer = ForgotPasswordSerializer(
         data=request.data,

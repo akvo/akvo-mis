@@ -9,6 +9,7 @@ from rest_framework.test import APIRequestFactory
 from utils.throttling import (
     EmailDispatchEmailThrottle,
     EmailDispatchIPThrottle,
+    LoginEmailThrottle,
 )
 
 
@@ -196,3 +197,103 @@ class ThrottleRateTestCase(TestCase):
             for _ in range(20)
         ]
         self.assertTrue(all(allowed))
+
+
+class ThrottledEndpointTestCase(TestCase):
+    """That the limits are actually wired to the endpoints.
+
+    One endpoint per family is enough to prove the wiring; the key and
+    rate logic is covered above. What these catch is a decorator that
+    was never added, or added in the wrong order.
+    """
+
+    def setUp(self):
+        caches["throttle"].clear()
+
+    def register(self, email="founder@acme.org", subdomain="acme"):
+        return self.client.post(
+            "/api/v1/register",
+            {
+                "email": email,
+                "password": "Secret#Pass123",
+                "subdomain": subdomain,
+            },
+            content_type="application/json",
+        )
+
+    def test_register_refuses_past_the_per_email_limit(self):
+        with mock.patch.object(
+            EmailDispatchEmailThrottle, "rate", "2/hour"
+        ):
+            self.register(subdomain="acme")
+            self.register(subdomain="acmetwo")
+            response = self.register(subdomain="acmethree")
+        self.assertEqual(response.status_code, 429)
+
+    def test_register_refuses_past_the_per_ip_limit(self):
+        """A different address each time, so only the IP key is spent."""
+        with mock.patch.object(EmailDispatchIPThrottle, "rate", "2/hour"):
+            self.register(email="a@acme.org", subdomain="acmea")
+            self.register(email="b@acme.org", subdomain="acmeb")
+            response = self.register(
+                email="c@acme.org", subdomain="acmec"
+            )
+        self.assertEqual(response.status_code, 429)
+
+    def test_every_mail_endpoint_refuses_past_the_per_email_limit(self):
+        """One body, several endpoints, one shared budget.
+
+        `register` has its own case above because its payload is
+        bigger; these take the same body and differ only in URL.
+        """
+        endpoints = (
+            "/api/v1/user/forgot-password",
+            "/api/v1/register/resend-activation",
+        )
+        for url in endpoints:
+            with self.subTest(url=url):
+                caches["throttle"].clear()
+                body = {"email": "nobody@acme.org"}
+                with mock.patch.object(
+                    EmailDispatchEmailThrottle, "rate", "1/hour"
+                ):
+                    self.client.post(
+                        url, body, content_type="application/json"
+                    )
+                    response = self.client.post(
+                        url, body, content_type="application/json"
+                    )
+                self.assertEqual(response.status_code, 429)
+
+    def test_login_refuses_past_the_per_email_limit(self):
+        with mock.patch.object(LoginEmailThrottle, "rate", "2/hour"):
+            for _ in range(2):
+                self.client.post(
+                    "/api/v1/login",
+                    {"email": "nobody@acme.org", "password": "wrong"},
+                    content_type="application/json",
+                )
+            response = self.client.post(
+                "/api/v1/login",
+                {"email": "nobody@acme.org", "password": "wrong"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 429)
+
+    def test_unparseable_body_is_a_400_not_a_500(self):
+        """ParseError must reach DRF's handler, not die in a throttle.
+
+        The email throttle touches request.data, which is where the
+        parse happens. Catching it there would turn a malformed body
+        into a silent success; letting it propagate gives the 400 it
+        deserves.
+        """
+        with mock.patch.object(
+            EmailDispatchEmailThrottle, "rate", "5/hour"
+        ):
+            response = self.client.post(
+                "/api/v1/register",
+                "{not json",
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 400)
