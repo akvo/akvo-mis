@@ -175,6 +175,59 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "mis.wsgi.application"
 
+# How many proxies sit between a client and this process. DRF's
+# throttles use it to find the client address in X-Forwarded-For, and
+# they count from the right-hand end -- `addrs[-NUM_PROXIES]` -- which
+# is the only safe reading. The GCLB preserves whatever the caller sent
+# and appends to it, so the leftmost entries are attacker-controlled
+# and the rightmost ones are not. Nothing in this codebase should parse
+# the header by hand; DRF's `BaseThrottle.get_ident` is the one reader,
+# and `RegisterSerializer` uses it too so the captcha and the throttles
+# cannot disagree about who the caller is.
+#
+# 0, the default, means "use REMOTE_ADDR", which is correct wherever
+# nothing trustworthy sets the header: local development, the test
+# suite, and every single-host deployment. Leaving the setting out
+# entirely is NOT equivalent -- DRF then keys on the whole header,
+# attacker-supplied prefix included. A non-zero default is worse:
+# DRF clamps the index with min(NUM_PROXIES, len(addrs)), so where
+# there is no proxy a one-entry header resolves to the entry the client
+# sent, which is the key rotation this is meant to deny.
+#
+# The deployed value is 2, from the k8s secret: the GCLB appends both
+# the client address and its own, giving
+# "[<client-supplied>, ]<client-ip>, <GFE-ip>", and nginx passes the
+# header through without appending, so the client sits second from the
+# right.
+NUM_PROXIES = int(environ.get("NUM_PROXIES") or 0)
+
+# Rates for the throttles in utils/throttling.py. Literals rather than
+# env overrides: retuning one is a one-line pull request, which is
+# reviewable, and a variable nobody sets would only hide where the real
+# value came from.
+#
+# `login_ip` is deliberately loose. A whole office arrives from one NAT
+# address, so a tight per-IP login limit locks out a customer; the
+# tight limit there is per-email. `email_dispatch_email` is
+# deliberately not lower than 3: a tight per-email limit on
+# forgot-password is itself an attack, because anyone who knows an
+# address could then deny its owner password recovery.
+THROTTLE_RATES = {
+    "email_dispatch_ip": "10/hour",
+    "email_dispatch_email": "3/hour",
+    "login_ip": "60/hour",
+    "login_email": "10/hour",
+}
+# Inert under `manage.py test`. Every Django test request arrives from
+# 127.0.0.1 and the cache is process-wide, so live rates would make
+# unrelated endpoint tests fail by call count and by shuffle order. A
+# rate of None makes SimpleRateThrottle.allow_request return True
+# before it touches the cache. The throttle tests patch `rate` on the
+# class instead -- see utils/throttling.py for why override_settings
+# cannot reach it.
+if TESTING:
+    THROTTLE_RATES = {scope: None for scope in THROTTLE_RATES}
+
 # Rest Settings
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -192,6 +245,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS":
     "rest_framework.pagination.LimitOffsetPagination",
     "PAGE_SIZE": 10,
+    "NUM_PROXIES": NUM_PROXIES,
+    "DEFAULT_THROTTLE_RATES": THROTTLE_RATES,
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": APP_NAME,
@@ -280,6 +335,26 @@ CACHES = {
     "embed": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
         "LOCATION": "/var/tmp/cache-embed",
+    },
+    # Throttle counters, in a third alias rather than a corner of
+    # `default`, because v1_forms.signals clears `default` wholesale on
+    # any form change: a budget that resets whenever somebody edits a
+    # form is not a budget. Same reasoning as `embed` above, which asks
+    # unrelated callers to do exactly this.
+    #
+    # LocMemCache under `manage.py test`. A file-based cache shared
+    # between `--parallel` workers is the cross-process race `embed`
+    # describes, and throttle counters are far more sensitive to it:
+    # one worker spending another's budget fails tests by shuffle
+    # order. LocMemCache is per-process, which is the isolation a
+    # throttle test wants anyway.
+    "throttle": {
+        "BACKEND": (
+            "django.core.cache.backends.locmem.LocMemCache"
+            if TESTING
+            else "django.core.cache.backends.filebased.FileBasedCache"
+        ),
+        "LOCATION": "/var/tmp/cache-throttle",
     },
 }
 CACHE_FOLDER = "/tmp/cache/"
