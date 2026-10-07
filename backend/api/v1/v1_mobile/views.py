@@ -116,9 +116,10 @@ def get_mobile_forms(request, version):
     try:
         passcode = CustomPasscode().encode(code)
         mobile_assignment = MobileAssignment.objects.get(passcode=passcode)
-        keep_last_synced_at = request.query_params.get(
-            "keep_last_synced_at", "false"
-        ).lower() == "true"
+        keep_last_synced_at = (
+            request.query_params.get("keep_last_synced_at", "false").lower()
+            == "true"
+        )
         if not keep_last_synced_at:
             mobile_assignment.last_synced_at = None
         mobile_assignment.save()
@@ -162,16 +163,16 @@ def get_mobile_form_details(request: Request, version, form_id):
 @api_view(["POST"])
 @permission_classes([IsMobileAssignment])
 def sync_pending_form_data(request, version):
-    if not request.data.get("answers"):
-        return Response(
-            {"message": "Answers is required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
     assignment = cast(MobileAssignmentToken, request.auth).assignment
     form = get_object_or_404(
         Forms.objects.for_user(assignment.user),
         pk=request.data.get("formId"),
     )
+    if not request.data.get("answers"):
+        return Response(
+            {"message": "Answers is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     user = assignment.user
     administration = assignment.administrations.order_by(
         "level__level"
@@ -187,11 +188,12 @@ def sync_pending_form_data(request, version):
     answers = []
     qna = request.data.get("answers") or {}
     adm_id = administration.id
-    adm_qs = Questions.objects.filter(
-        type=QuestionTypes.cascade, form_id=form.id
-    ).filter(
-        Q(extra__isnull=True) | ~Q(extra__type__in=["entity"])
-    ).order_by("order").first()
+    adm_qs = (
+        Questions.objects.filter(type=QuestionTypes.cascade, form_id=form.id)
+        .filter(Q(extra__isnull=True) | ~Q(extra__type__in=["entity"]))
+        .order_by("order")
+        .first()
+    )
     adm_key = str(adm_qs.id) if adm_qs else None
     if adm_key and adm_key in qna:
         adm_id = qna[adm_key]
@@ -203,16 +205,18 @@ def sync_pending_form_data(request, version):
         where the base question ID is "1"
         """
         index = 0
-        if '-' in str(q_key):
-            [base_q_id, q_index] = str(q_key).split('-')
+        if "-" in str(q_key):
+            [base_q_id, q_index] = str(q_key).split("-")
             index = q_index
         else:
             base_q_id = str(q_key)
-        answers.append({
-            "question": base_q_id,
-            "value": qna[q_key],
-            "index": index,
-        })
+        answers.append(
+            {
+                "question": base_q_id,
+                "value": qna[q_key],
+                "index": index,
+            }
+        )
     payload = {
         "administration": adm_id,
         "name": request.data.get("name"),
@@ -233,7 +237,7 @@ def sync_pending_form_data(request, version):
         context={
             "user": user,
             "form": form,
-        }
+        },
     )
     if not serializer.is_valid():
         return Response(
@@ -343,10 +347,38 @@ class UploadAttachmentsView(APIView):
                 ),
                 type={"type": "array", "items": {"type": "string"}},
                 enum=[
-                    "pdf", "docx", "xlsx", "pptx", "txt", "csv", "zip", "rar",
-                    "jpg", "jpeg", "png", "gif", "bmp", "doc", "xls", "ppt",
-                    "mp4", "avi", "mov", "mkv", "flv", "wmv", "mp3", "wav",
-                    "ogg", "flac", "aac", "wma", "m4a", "opus", "webm", "3gp",
+                    "pdf",
+                    "docx",
+                    "xlsx",
+                    "pptx",
+                    "txt",
+                    "csv",
+                    "zip",
+                    "rar",
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "gif",
+                    "bmp",
+                    "doc",
+                    "xls",
+                    "ppt",
+                    "mp4",
+                    "avi",
+                    "mov",
+                    "mkv",
+                    "flv",
+                    "wmv",
+                    "mp3",
+                    "wav",
+                    "ogg",
+                    "flac",
+                    "aac",
+                    "wma",
+                    "m4a",
+                    "opus",
+                    "webm",
+                    "3gp",
                 ],
             )
         ],
@@ -487,8 +519,7 @@ def upload_apk_file(request, version):
     file_cache.write(download.content)
     file_cache.close()
     storage.upload(
-        cache_file_name, folder="apk",
-        filename=f"{APK_SHORT_NAME}.apk"
+        cache_file_name, folder="apk", filename=f"{APK_SHORT_NAME}.apk"
     )
     serializer.save()
     return Response({"message": "ok"}, status=status.HTTP_201_CREATED)
@@ -526,36 +557,36 @@ class MobileAssignmentViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         search = getattr(self, "_validated_search", None)
-        mobile_users = MobileAssignment.objects.for_user(
-            user
-        ).prefetch_related("administrations", "forms").filter(user=user)
+        mobile_users = (
+            MobileAssignment.objects.for_user(user)
+            .prefetch_related("administrations", "forms")
+            .filter(user=user)
+        )
         adm_q = Q()
         if user.is_superuser:
-            adm = Administration.objects.for_user(user).filter(
-                parent__isnull=True
-            ).first()
-            adm_q = Q(
-                administrations__path__startswith=f"{adm.id}."
+            adm = (
+                Administration.objects.for_user(user)
+                .filter(parent__isnull=True)
+                .first()
             )
+            adm_q = Q(administrations__path__startswith=f"{adm.id}.")
         for ur in user.user_user_role.filter(
             role__role_role_access__data_access=DataAccessTypes.submit
         ).all():
             adm = ur.administration
-            path = f"{adm.path}{adm.id}." \
-                if adm.path else f"{adm.id}."
+            path = f"{adm.path}{adm.id}." if adm.path else f"{adm.id}."
             adm_q |= Q(administrations__path__startswith=path)
         if adm_q:
-            descendant_users = MobileAssignment.objects.for_user(
-                user
-            ).prefetch_related(
-                "administrations", "forms"
-            ).filter(adm_q)
+            descendant_users = (
+                MobileAssignment.objects.for_user(user)
+                .prefetch_related("administrations", "forms")
+                .filter(adm_q)
+            )
             mobile_users |= descendant_users
         qs = mobile_users.order_by("-id").distinct()
         if search:
             qs = qs.filter(
-                Q(name__icontains=search)
-                | Q(user__email__icontains=search)
+                Q(name__icontains=search) | Q(user__email__icontains=search)
             )
         return qs
 
@@ -597,29 +628,33 @@ def get_forms_tree(request, version):
     # Both the outer query and the children prefetch go through for_user:
     # scoping only the parents would still surface another tenant's
     # monitoring forms under a same-named registration form.
-    registration_forms = Forms.objects.for_user(request.user).filter(
-        parent__isnull=True,
-        status=FormStatus.published
-    ).prefetch_related(
-        Prefetch(
-            "children",
-            queryset=Forms.objects.for_user(request.user).filter(
-                status=FormStatus.published
-            ).order_by("name")
+    registration_forms = (
+        Forms.objects.for_user(request.user)
+        .filter(parent__isnull=True, status=FormStatus.published)
+        .prefetch_related(
+            Prefetch(
+                "children",
+                queryset=Forms.objects.for_user(request.user)
+                .filter(status=FormStatus.published)
+                .order_by("name"),
+            )
         )
-    ).order_by("name")
+        .order_by("name")
+    )
 
     result = []
     for reg in registration_forms:
-        result.append({
-            "id": reg.id,
-            "name": reg.name,
-            "type": "registration",
-            "children": [
-                {"id": m.id, "name": m.name, "type": "monitoring"}
-                for m in reg.children.all()
-            ]
-        })
+        result.append(
+            {
+                "id": reg.id,
+                "name": reg.name,
+                "type": "registration",
+                "children": [
+                    {"id": m.id, "name": m.name, "type": "monitoring"}
+                    for m in reg.children.all()
+                ],
+            }
+        )
     return Response(result, status=status.HTTP_200_OK)
 
 
@@ -687,9 +722,7 @@ class MobileDataPointDownloadListRowSerializer(
                         "this becomes the whole candidate count."
                     )
                 ),
-                "data": MobileDataPointDownloadListRowSerializer(
-                    many=True
-                ),
+                "data": MobileDataPointDownloadListRowSerializer(many=True),
                 "total_page": serializers.IntegerField(),
                 "current": serializers.IntegerField(),
                 "complete": serializers.BooleanField(
@@ -725,10 +758,7 @@ def get_datapoint_download_list(request, version):
     assignment = cast(MobileAssignmentToken, request.auth).assignment
     forms = assignment.forms.values("id")
     administrations = [
-        {
-            "id": a.id,
-            "path": f"{a.path}{a.id}." if a.path else f"{a.id}."
-        }
+        {"id": a.id, "path": f"{a.path}{a.id}." if a.path else f"{a.id}."}
         for a in assignment.administrations.all()
     ]
     paginator = Pagination()
@@ -753,9 +783,7 @@ def get_datapoint_download_list(request, version):
     # Build path query by combining conditions for all administration paths
     path_query = Q()
     for admin in administrations:
-        path_query |= Q(
-            administration__path__startswith=admin["path"]
-        )
+        path_query |= Q(administration__path__startswith=admin["path"])
     # Combine both queries with the form filter
     queryset = FormData.objects.for_user(assignment.user).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
