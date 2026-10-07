@@ -5,7 +5,9 @@
 **Sibling**: [VIZ-027-frontend-global-question-filter.md](VIZ-027-frontend-global-question-filter.md)
 **Branch**: `epic/478-viz-global-question-filter`
 **Date**: 2026-10-06
-**Status**: Implemented 2026-10-06: BE-1 to BE-5 and BE-7. BE-6 measured: cases 1 to 4 within the threshold, the map over it (follow-up task).
+**Status**: Implemented 2026-10-06: BE-1 to BE-5 and BE-7. BE-8
+(dashboard date question, D-18) implemented 2026-10-07. BE-9
+(filters by form and name, D-20) planned 2026-10-07. BE-6 measured: cases 1 to 4 within the threshold, the map over it (follow-up task).
 
 ---
 
@@ -838,6 +840,184 @@ entry point, so the form editor library does not need to change
       and no values; builder create with `a:b`, `a,b`, `a|b` → 400 with
       the message; builder update of a form whose existing option is
       `a:b` → 200; JSON and XLSForm imports with `a:b` → error.
+
+---
+
+### BE-8: The dashboard date question works on every widget (D-18)
+
+**Goal**: one date question chosen for the dashboard bounds every
+widget, on whichever form of the family the widget sits.
+
+**User acceptance criteria**
+- [x] With "Visit date" chosen and a range set, widgets on the visit
+      form and on the check form (which asks "Visit date" too) both
+      count submissions by that answer.
+- [x] A widget on a form that does not ask "Visit date" (the
+      registration form) is bounded by its submission date, not emptied.
+- [x] The global filter keeps judging "latest" by the visit date on
+      every monitoring form, whichever widget asks.
+- [x] Map pins, colours and sizes follow the same date as the charts
+      (decided 2026-10-07): with a range set, a pin is shown by its
+      visit date, not by its submission date.
+- [x] Saving a dashboard whose date question is not a date question, or
+      belongs to another form family, is refused with a message.
+
+**Technical acceptance criteria**
+- [x] New `resolve_date_question(date_qid, form_id)` in `functions.py`:
+      returns `(id, name)`: the id of the live `date` question on
+      `form_id` with the same `name` as `date_qid` (or `None`), and that
+      name. Two small queries; `(None, None)` without `date_qid`.
+- [x] `/values` and `/escalation/:id` call it after `check_ids` and the
+      tenant-scoped form lookup, next to `parse_request_global_criteria`,
+      against the form whose submissions are dated (`/values`: the
+      widget form; escalation: `monitoring_form_id`). They pass the id
+      as `params["date_question_id"]` and the name as
+      `params["date_question_name"]`. No handler in `values_functions.py`
+      changes. Escalation's paging links keep the requested id (they are
+      built from the raw query string).
+- [x] `apply_global_exclusions` reads `params["date_question_name"]`
+      when the key is present, instead of resolving the id itself, so a
+      widget whose form lacks the question does not switch the global
+      filter to `created`.
+- [x] `/maps/geolocation/:id` and `/values/formula` accept
+      `date_question_id` (serializer field, included in `check_ids`).
+      Their `created__date` bounds are replaced by
+      `_in_date_range(date_filters, form_ids, date_name)`, the helper the
+      global filter already uses: by name per form, `created` where a
+      form lacks the question. The map's `include_monitoring` branch
+      becomes `id__in=<dated children>.values("parent_id")` instead of
+      the `children__created` join. Both pass `date_question_id` on to
+      `apply_global_exclusions`.
+- [x] A widget-level `config.date_question_id` (line charts) resolves to
+      itself: same form, same id.
+- [x] `validate_dashboard_payload` checks
+      `default_filters.date.date_question`: absent or `null` is fine;
+      otherwise an integer id of a live `date` question in the root form
+      or one of its monitoring forms. Errors name the field
+      `default_filters.date.date_question`.
+- [x] `build_snapshot` keeps `date.date_question` as is; the allowlist
+      already includes it (`public_scope.py:149-154`).
+- [x] Without `date_question_id`, nothing changes.
+
+**As built (2026-10-07).** `resolve_date_question` and
+`resolve_request_date_question` in `functions.py`; `_in_date_range` is
+now the public `in_date_range`, shared with the map and formula views,
+and returns no bound when only a date question is sent without a range
+(it used to drop the submissions that skipped the date question).
+`_validate_date_question` in `dashboard_functions.py`.
+
+Code review fixes (2026-10-07):
+- **A replaced date question keeps working.** A form edit soft-deletes
+  "Date of visit" and adds a live row of the same name, while the
+  published dashboard keeps the old id. `date_question_name` reads the
+  name with `objects_with_deleted`, so matching by name reaches the live
+  successor instead of falling back to `created`. The save check accepts
+  the stale id when such a successor exists in the family.
+- **Name matching requires type `date`** in `in_date_range`, as
+  `resolve_date_question` does, so a same-named text question never
+  dates a widget.
+- `in_date_range(None, …)` is safe; map and formula look up the name
+  only; `_family_ids` is shared by both save checks; the OpenAPI schema
+  of the map and formula lists `date_question_id`.
+
+17 tests in `tests_dashboard_date_question.py`, including the review's
+gaps: the map without `monitoring_form_id`, the table and its paging
+link, the public map, a date question without a range, and a replaced
+date question.
+
+**Tests** (new `tests_dashboard_date_question.py`, on the VIZ-027
+fixture, with a same-named date question added to the check form):
+
+| Test | Checks |
+|---|---|
+| Visit-form widget, visit date range | Counts by 700203's answer, as today |
+| Check-form widget, same range | Counts by the check form's "Visit date", not empty |
+| Registration widget, same range | Falls back to `created` |
+| Global filter on a registration widget | "Latest" still judged by visit date on monitoring forms |
+| Save validation | Number question → 400; another family's date question → 400; `null` → 200 |
+| Public dashboard | The stored date question is accepted; another date question is a 404 (allowlist) |
+| Map, monitoring path form, range by visit date | Pins follow the check form's "Visit date"; site 4's breakdown dated 02-25 is inside a range ending 02-28 |
+| Formula (map colours), same range | Statuses follow the same date |
+| Map and formula without `date_question_id` | Unchanged: `created` |
+
+---
+
+### BE-9: Filters by form and name (D-20)
+
+**Goal**: a filter names a question by form and name; the registration
+form means the whole family, a monitoring form means that form only.
+Replaces the question id in `global_criteria` and in
+`default_filters.questions`.
+
+**User acceptance criteria**
+- [ ] Filtering out "rainy" on `weather_condition` **of the registration
+      form** judges each water point by its latest weather answer from
+      any form of the family.
+- [ ] The same filter **of the Quick Monitoring form** judges only Quick
+      Monitoring submissions; a newer Monitoring answer does not count.
+- [ ] A question asked on the registration form and re-asked on a
+      monitoring form (`water_source`), filtered at the family scope:
+      a newer monitoring answer overrides the registration answer; a
+      water point never monitored is judged by its registration answer.
+- [ ] A dashboard saved with a filter keeps working after the form is
+      edited and the question gets a new id under the same name.
+- [ ] Saving a filter whose name contains `:`, or a name with no option
+      question in the chosen scope, is refused with a message.
+
+**Technical acceptance criteria**
+- [ ] Grammar `option_not_in:<form_id>:<name>:<value>`, split at most
+      three times. `parse_global_criteria` returns one criterion per
+      `(form_id, name)`: its values, the live option questions in scope
+      (`qids`), and whether the scope includes the registration form.
+      Errors: invalid entry, non-integer form id, form outside the
+      family, no live option question named `<name>` in the scope,
+      empty value, more than 50 occurrences. Two `Questions` queries per
+      request, as before.
+- [ ] `excluded_registrations_subquery`:
+      - monitoring part: the latest submission per registration, among
+        the scope's monitoring forms, that answered one of `qids` inside
+        the date range (`DISTINCT ON (parent_id)`, as BE-6 built it);
+        excluded when its answer matches.
+      - registration part (family scope only): registrations whose own
+        answer matches **and** that have no such answered monitoring
+        submission. No date range on the registration answer (D-8).
+      - The union is returned as one subquery of registration ids; still
+        no Python id list (D-1).
+- [ ] `public_scope`: `filter_keys_in_global_criteria(items)` returns
+      `(form_id, name)` pairs exactly as the parser reads them;
+      `Allowlist.filter_questions` holds `(form_id, name)` pairs;
+      `check_ids(..., filter_keys=...)` raises 404 for any pair not
+      published. Replaces `question_ids_in_global_criteria`.
+- [ ] `default_filters.questions[]` is `{form, name}`: `form` a strict
+      integer in the family, `name` a non-empty string without `:` with
+      a live option question in the scope. Error fields
+      `default_filters.questions[i].form` / `.name`.
+- [ ] Snapshot entries are `{form, name, label, options}`: `label` from
+      the scope's question on the chosen form if it has one, else from
+      the first monitoring form by id; `options` merged across the scope
+      by value (D-14's `_merge_options`). `live_filter_questions` keeps
+      an entry while one live option question with that name exists in
+      its scope.
+- [ ] The OpenAPI description of `global_criteria` shows the new
+      grammar.
+
+**Tests**: the mixin's `filter_out(form_id, name, *values)` builds the
+new occurrences, so most VIZ-027 tests change in one place. Expected
+results that change with the scope rule:
+
+| Test | Before (id) | After (form, name) |
+|---|---|---|
+| D-14 "most recent answer wins across forms" | Picked by the check form's id | Picked at the registration form (family scope); the check form alone ignores the visit's answer |
+| "Either copy gives the same result" | Same result for both ids | Replaced: family scope vs each monitoring form give different results |
+| "Registration question is not part of a group" | Visit's `water_source` never counted | Family scope counts the newer visit answer; registration-only scope no longer exists |
+| D-8 registration question, no date range | Unchanged | Unchanged when no monitoring form asks the name |
+
+New tests: family scope falls back to the registration answer; a
+monitoring scope ignores the other monitoring forms; a renamed-id
+question (soft-deleted, recreated under the same name) still filters;
+save refuses a `:` in the name and a name missing from the scope; the
+public allowlist accepts the published `(form, name)` only, and a
+different form for the same name is a 404.
 
 ---
 

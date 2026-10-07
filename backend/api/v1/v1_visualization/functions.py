@@ -6,6 +6,7 @@ from django.db.models import (
 )
 from datetime import datetime as dt_datetime, timedelta, date
 from rest_framework.exceptions import ValidationError
+from drf_spectacular.utils import OpenApiParameter
 
 from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_forms.constants import QuestionTypes
@@ -449,6 +450,25 @@ def parse_global_criteria(items, form):
     ]
 
 
+# VIZ-027: the OpenAPI shape of `global_criteria`, shared by the four
+# endpoints. An array in the query, exploded: one repeated key per value.
+GLOBAL_CRITERIA_PARAMETER = OpenApiParameter(
+    name="global_criteria",
+    required=False,
+    # drf-spectacular 0.21 has no `many=`: spell the array out.
+    type={"type": "array", "items": {"type": "string"}},
+    style="form",
+    explode=True,
+    location=OpenApiParameter.QUERY,
+    description=(
+        "Dashboard filter, repeated once per value: "
+        "`option_not_in:<question id>:<option value>`. Removes every "
+        "registration datapoint whose latest answer to that question is "
+        "that value (VIZ-027 D-15)."
+    ),
+)
+
+
 def parse_request_global_criteria(request, form):
     """VIZ-027: the request's `global_criteria`, parsed against `form`.
 
@@ -479,14 +499,18 @@ def _any_option(values):
     return q
 
 
-def _in_date_range(date_filters, form_ids, date_name):
+def in_date_range(date_filters, form_ids, date_name):
     """Q over FormData: inside the dashboard's date range (D-14).
 
     The date question is matched by NAME (`date_name`) on each form of the
     group. A form without a same-named question uses `created`. Lazy: no
     query runs until the widget's own query does.
     """
-    if not date_filters:
+    # A date question without a range bounds nothing: it must not drop
+    # the submissions that skipped the date question.
+    if not date_filters or not (
+        date_filters.get("from_date") or date_filters.get("to_date")
+    ):
         return Q()
     by_created = Q()
     if date_filters.get("from_date"):
@@ -496,7 +520,7 @@ def _in_date_range(date_filters, form_ids, date_name):
     if not date_name:
         return by_created
     date_questions = Questions.objects.filter(
-        name=date_name, form_id__in=form_ids,
+        name=date_name, form_id__in=form_ids, type=QuestionTypes.date,
     )
     answers = Answers.objects.filter(question__in=date_questions)
     if date_filters.get("from_date"):
@@ -541,7 +565,7 @@ def excluded_registrations_subquery(
     # one loop per registration (+145% on a 10,000-site family).
     latest_answered = (
         FormData.objects.filter(
-            _in_date_range(date_filters, form_ids, date_name),
+            in_date_range(date_filters, form_ids, date_name),
             form_id__in=form_ids,
             parent__isnull=False,
             is_pending=False,
@@ -561,6 +585,61 @@ def excluded_registrations_subquery(
     ).values("parent_id")
 
 
+def date_question_name(date_qid):
+    """The `name` of a date question id, or None (D-18).
+
+    Includes soft-deleted rows: a form edit replaces "Date of visit" with
+    a new live row of the same name, while a published dashboard keeps
+    the old id. Matching by name then reaches the live successor instead
+    of silently falling back to `created`.
+    """
+    if not date_qid:
+        return None
+    return (
+        Questions.objects_with_deleted.filter(pk=date_qid)
+        .values_list("name", flat=True).first()
+    )
+
+
+def resolve_date_question(date_qid, form_id):
+    """VIZ-027 D-18: the dashboard's date question, as asked on `form_id`.
+
+    Returns `(id, name)`: the live date question on `form_id` named like
+    `date_qid` (None when the form does not ask it, so the handlers fall
+    back to `created`), and that name, for the global filter. A widget
+    on the visit form and one on the check form are then both dated by
+    "Date of visit", whichever copy the dashboard stores.
+    """
+    name = date_question_name(date_qid)
+    if name is None:
+        return None, None
+    resolved = (
+        Questions.objects.filter(
+            form_id=form_id, name=name, type=QuestionTypes.date,
+        )
+        .values_list("pk", flat=True).first()
+    )
+    return resolved, name
+
+
+def resolve_request_date_question(params, form_id):
+    """`params` with `date_question_id` resolved on `form_id` (D-18).
+
+    `date_question_name` keeps the requested question's name, so the
+    global filter stays on the dashboard's date when `form_id` does not
+    ask it. Called by the views after check_ids, which saw the id the
+    client sent.
+    """
+    resolved, name = resolve_date_question(
+        params.get("date_question_id"), form_id,
+    )
+    return {
+        **params,
+        "date_question_id": resolved,
+        "date_question_name": name,
+    }
+
+
 def apply_global_exclusions(qs, column, root_form_id, params):
     """qs minus every registration a global criterion excludes (D-3).
 
@@ -572,12 +651,12 @@ def apply_global_exclusions(qs, column, root_form_id, params):
         return qs
     date_filters = build_date_filters(params)
     # Resolved once: every criterion matches the date question by name.
-    date_qid = date_filters.get("date_question_id")
-    date_name = (
-        Questions.objects.filter(pk=date_qid)
-        .values_list("name", flat=True).first()
-        if date_qid else None
-    )
+    # The views pass the dashboard's name (D-18); it survives a widget
+    # form that does not ask the question.
+    if "date_question_name" in params:
+        date_name = params["date_question_name"]
+    else:
+        date_name = date_question_name(date_filters.get("date_question_id"))
     for criterion in criteria:
         qs = qs.exclude(**{
             f"{column}__in": excluded_registrations_subquery(

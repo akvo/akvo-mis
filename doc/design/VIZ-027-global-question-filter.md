@@ -9,8 +9,14 @@ and prototyped on local data (§14). D-10 to D-12 added.
 "show only" deferred to a later phase (D-13); same-named monitoring
 questions read as one (D-14); repeated `global_criteria` parameter and
 no `:` in new option values (D-15).
-**Status**: Backend implemented 2026-10-06 (GitHub #520); frontend
-planned.
+2026-10-07: the viewer uses a "Filters" panel with a checklist,
+ticked = shown (D-16). The builder suggests widget questions as
+filters first, without restricting (D-17). The dashboard's date
+question is matched by name per form (D-18); new dashboards start with
+the date and administration filters on (D-19). Filters name a question
+by form and name, the form setting the scope (D-20).
+**Status**: Backend BE-1 to BE-7 implemented 2026-10-06, BE-8 on
+2026-10-07 (GitHub #520); BE-9 (D-20) and the frontend planned.
 **Parts**: [Backend](VIZ-027-backend-global-question-filter.md) · [Frontend](VIZ-027-frontend-global-question-filter.md)
 
 ---
@@ -86,14 +92,20 @@ sequenceDiagram
 - [ ] In the builder, an author can mark one or more option or
       multiple-option questions from the dashboard's form family as
       dashboard filters, next to the date and administration toggles.
-- [ ] On the published dashboard, each marked question appears in the
-      filter bar as a multi-select of its options.
+- [ ] On the published dashboard, a "Filters" button in the filter bar
+      opens a checklist of each marked question's options, all ticked;
+      unticking an option hides it (D-16).
 - [ ] Excluding an option removes every registration datapoint whose
       latest answer to that question is that option, from every widget
       at once.
 - [ ] Registration datapoints with no answer to the filter question
       stay on the dashboard.
 - [ ] The filter works on public dashboards.
+- [ ] In the builder, an author can pick the date question the
+      dashboard's date range uses; without one it uses the submission
+      date. Every widget honours it, on whichever form it sits (D-18).
+- [ ] A new dashboard starts with the date and administration filters
+      on (D-19).
 
 ### Technical Acceptance Criteria
 - [ ] One request parameter, `global_criteria`, accepted by all four
@@ -164,25 +176,32 @@ No new endpoints. One new query parameter on four existing ones:
 ### Parameter grammar
 
 One **repeated** query parameter, one option value per occurrence
-(D-15):
+(D-15). A filter names a question by **form and name**; the form sets
+the scope (D-20):
 
 ```
-global_criteria=option_not_in:1043:no_water
-global_criteria=option_not_in:1043:seasonal
-global_criteria=option_not_in:1102:broken
+global_criteria=option_not_in:12:water_source:no_water
+global_criteria=option_not_in:12:water_source:seasonal
+global_criteria=option_not_in:14:infrastructure_status:broken
 ```
 
-- Each occurrence is `option_not_in:<qid>:<value>`. The server splits it
-  at most twice on `:`, so the value may itself contain `:`, `,` or `|`
-  (for example `type_a:_hand_pump` or `yes,_partly`).
-- Occurrences with the same `qid` are ORed: a registration datapoint is
-  excluded if its latest answer contains **any** of them.
-- Different `qid`s are ANDed: a datapoint stays only if it passes every
-  question, so it is excluded if **any** question excludes it.
+- Each occurrence is `option_not_in:<form_id>:<name>:<value>`. The
+  server splits it at most three times on `:`, so the value may itself
+  contain `:`, `,` or `|` (for example `type_a:_hand_pump`). A name
+  cannot contain `:`; such a question cannot be saved as a filter.
+- **Scope** (D-20): `<form_id>` is the registration form → the latest
+  answer to `<name>` across the whole family (registration and every
+  monitoring form). `<form_id>` is a monitoring form → that form only.
+- Occurrences with the same `(form_id, name)` are ORed: a registration
+  datapoint is excluded if its latest answer contains **any** of them.
+- Different `(form_id, name)` pairs are ANDed: a datapoint stays only if
+  it passes every filter, so it is excluded if **any** filter excludes
+  it.
 - `option_not_in` is the only type `global_criteria` accepts. Any other
-  type, a non-integer qid, a missing or empty value
-  (`option_not_in:1043:`), or more than 50 occurrences returns 400. The
-  empty-value message is `option_not_in requires a value: '<item>'`.
+  type, a non-integer form id, a form outside the family, a name with no
+  live option question in the scope, a missing or empty value
+  (`option_not_in:12:water_source:`), or more than 50 occurrences
+  returns 400.
 - Widget `criteria` keep their comma-separated grammar; they are outside
   VIZ-027.
 
@@ -191,13 +210,13 @@ global_criteria=option_not_in:1102:broken
 ```
 GET /api/v1/visualization/values
     ?form_id=12&question_id=301&group_by=option
-    &global_criteria=option_not_in:1043:no_water
+    &global_criteria=option_not_in:12:water_source:no_water
     &dashboard_slug=water-points
 
 200 — same response shape as today, over fewer registration datapoints.
 
-GET ...&global_criteria=option_not_in:9999:x   (9999 not in the family)
-400 {"message": "global_criteria: question 9999 is not in this form family"}
+GET ...&global_criteria=option_not_in:12:no_such_question:x
+400 {"message": "global_criteria: no option question 'no_such_question' in form 12 or its monitoring forms"}
 ```
 
 ---
@@ -391,6 +410,9 @@ on screen waits for Publish.
 
 ### D-8: Filters on registration questions match the registration answer only, with no date filter
 
+> **Revised by D-20 (2026-10-07):** filters now name a question by
+> form and name; see D-20 for the scope rule.
+
 A filter question on the registration form needs no tracing back to a
 registration datapoint: the answer is already on it.
 
@@ -559,15 +581,18 @@ mode), estimated at about 1 to 1.5 developer days:
 - Builder: a mode per entry, stored as
   `default_filters.questions[].mode`. An entry without `mode` means
   "filter out", so existing dashboards need **no migration**.
-- Viewer: the placeholder follows the mode ("Show only…" or "Filter
-  out…"). `serializeGlobalCriteria` emits `option_in` for those
-  questions.
+- Viewer: the checklist stays as in D-16; for a "show only" question
+  `serializeGlobalCriteria` emits the **ticked** options as `option_in`,
+  and the "always shown" note is dropped for it.
 - Option 4 is the fallback if monitoring questions prove too
   surprising in "show only".
 
 Nothing in phase 1 needs to change to keep this open.
 
 ### D-14: Same-named monitoring questions are one filter question
+
+> **Revised by D-20 (2026-10-07):** filters now name a question by
+> form and name; see D-20 for the scope rule.
 
 Decided 2026-10-06. Revises D-4 and D-8 for monitoring questions.
 
@@ -642,6 +667,9 @@ exists on Monitoring and Quick Monitoring. Filter out Rainy:
 
 ### D-15: One parameter per value; option values lose `:` at the source
 
+> **Revised by D-20 (2026-10-07):** filters now name a question by
+> form and name; see D-20 for the scope rule.
+
 Decided 2026-10-06.
 
 **Problem**: option values are generated from labels by lower-casing
@@ -683,6 +711,174 @@ becomes `yes,_partly`. A comma-and-pipe grammar breaks on such values.
 - The public allowlist reads question ids per occurrence (BE-1).
 - A cap of 50 occurrences per request bounds what a public caller can
   send.
+
+### D-16: The viewer filters through a checklist, ticked = shown
+
+Decided 2026-10-07.
+
+**Context**: The first FE-4 plan put one multi-select per question in
+the filter bar, where a selected tag meant "filtered out". In most
+interfaces a selected tag means "show only this", so viewers would read
+it backwards. The bar also crowds past two or three questions.
+
+**Options Considered**:
+1. Inline multi-select per question, selected = hidden (first plan).
+2. The builder mockup's "Filters" button (`VIZ-Example/index.html:387`)
+   opening a panel of checklists, every option ticked by default,
+   unticking = hidden.
+3. Option 2 plus a "(No answer)" row that can be unticked, which needs a
+   new backend criterion.
+
+**Decision**: Option 2, with a badge counting the filtered questions,
+"Apply", and "Clear all".
+
+**Rationale**:
+- Ticked = shown is the spreadsheet filter idiom (Excel, Google Sheets
+  "Filter by values"), so no one has to learn a reversed meaning.
+- **No backend change**: the unticked options are exactly the
+  `option_not_in` values (D-15). FE-1 and FE-2 are unchanged.
+- One panel holds any number of questions; the bar stays one line.
+- Apply gives one reload per change, as the dropdown close did.
+
+**Consequences**:
+- Unlike a spreadsheet, data with no answer cannot be hidden (D-5). The
+  panel says "Data without an answer to a question is always shown".
+  Option 3 is the later phase in D-13 if users need it.
+- Unticking every option of a question would leave only unanswered
+  data, which reads as a bug; Apply is disabled in that state.
+- The FE-4 tests are rewritten before the implementation (frontend §6).
+
+### D-17: The builder suggests widget questions as filters, without restricting
+
+Decided 2026-10-07.
+
+**Context**: To avoid a filter bar that offers questions unrelated to
+the dashboard, the author could be limited to questions the widgets
+already use.
+
+**Options Considered**:
+1. Offer every option question of the family, unranked (first plan).
+2. Strict: only questions used by a widget.
+3. Suggest: widget questions listed first, every other family question
+   still available.
+
+**Decision**: Option 3.
+
+**Rationale**:
+- The main use case filters on a question **no widget shows**: hide the
+  non-operational water points (quick status check) from the water
+  sample charts (visit). Option 2 would force a dummy widget for it.
+- The harmful mistakes (a non-option question, another family's
+  question, a deleted question) are already refused on save (BE-4).
+- Computed in the builder from the widgets on the canvas, so it follows
+  unsaved changes and needs no backend change.
+
+**Consequences**: frontend only (FE-5). `BuilderInspector` receives the
+builder's `widgets`. Nothing is stored: removing a widget does not
+remove a filter question that was picked from it.
+
+### D-18: The dashboard's date question is matched by name on each widget's form
+
+Decided 2026-10-07.
+
+**Context**: The viewer already sends `default_filters.date.date_question`
+as `date_question_id` to every widget (`DashboardViewFilters.jsx:67`),
+and the public allowlist already accepts it, but the builder has no
+control to set it. About twelve handlers match it by **id**
+(`question_id=date_qid`), and an id belongs to one form. With a visit
+date chosen and a range set, every widget on the check form or the
+registration form finds no date answers and goes empty.
+
+**Options Considered**:
+1. Keep the id match; let the author pick a date question per widget.
+2. Resolve the dashboard date question per widget form, by `name`, in
+   the views before any handler runs. A form without a question of
+   that name falls back to the submission date (`created`).
+3. Rewrite each handler to match by name.
+
+**Decision**: Option 2.
+
+**Rationale**:
+- Same rule as the global filter, which already matches the date
+  question by name with a `created` fallback (D-14, `_in_date_range`).
+  One rule for the whole dashboard.
+- One resolution at the entry point instead of edits in twelve handlers:
+  every handler keeps receiving a plain `date_question_id`, now one that
+  belongs to its form.
+- Registration widgets keep today's behaviour (`created`), since the
+  date question normally lives on monitoring forms.
+
+**Consequences**:
+- Backend BE-8: resolve in the four views, after `check_ids`; validate
+  `default_filters.date.date_question` on save.
+- The global filter must keep the **dashboard's** date name even when a
+  widget's form lacks the question, so the resolution keeps the name
+  for `apply_global_exclusions`.
+- Frontend FE-7: a date question picker in the builder, offering date
+  questions grouped by name.
+
+### D-19: New dashboards start with the date and administration filters on
+
+Decided 2026-10-07.
+
+**Context**: Both filters are off until the author switches them on,
+so a new dashboard has no filter bar. Most dashboards want both.
+
+**Decision**: The create modal sends
+`default_filters: {date: {enabled: true}, administration: {enabled: true}}`
+for a widgets dashboard. The author can switch either off in the
+builder. Embed dashboards are unchanged (the backend stores `{}` for
+them), and existing dashboards are not touched: no migration.
+
+**Consequences**: frontend only (FE-8). The backend already accepts
+`default_filters` on create.
+
+### D-20: Filters name a question by form and name; the form sets the scope
+
+Decided 2026-10-07. Revises D-6 (validation), D-8, D-14 and D-15 (the
+grammar); replaces the question id in `global_criteria` and in
+`default_filters.questions`.
+
+**Context**: Monitoring forms of one family are meant to share question
+names (D-14), and a name is more stable than an id: a form edit gives a
+question a new id under the same name (backend BE-8, M1). An id also
+fixes the scope by accident: picking the visit form's weather question
+silently meant "every monitoring form", while a registration question
+never reached the monitoring forms (D-8).
+
+**Decision**: a filter is `(form, name)`.
+- **Registration form** → family scope: the latest answer to `name`
+  across the registration form and every monitoring form. The
+  registration answer is the oldest, so any monitoring submission that
+  answered (inside the date range) wins; without one, the registration
+  answer decides.
+- **Monitoring form** → that form only: its latest submission that
+  answered.
+- Names that differ between forms (`can_take_sample` on one form,
+  `water_sample_collected` on another) are not reconciled: rename them
+  in the forms.
+- No id form is kept: the feature is unreleased, so nothing stored uses
+  it.
+
+**Rationale**:
+- One rule the author can say aloud: "this form, this question name;
+  the registration form means everywhere".
+- `(form, name)` is unique: `unique_active_form_question` covers live
+  questions of a form.
+- Stored dashboards survive form edits, since the name does not change.
+- It removes the D-8 builder warning ("use the visit question
+  instead"): the family scope already includes the visit form.
+
+**Consequences**:
+- Backend BE-9 reworks BE-1 (parser), BE-2 (exclusion across
+  registration and monitoring for the family scope), and BE-4
+  (`default_filters.questions[]` is `{form, name}`; the snapshot and the
+  public allowlist key on `(form, name)`).
+- A question name containing `:` cannot be saved as a filter (0 of
+  1,525 names locally, 2026-10-07). Names are not otherwise restricted.
+- The date question (D-18) keeps its stored id, already matched by name.
+- Frontend: FE-1 keys exclusions by `form:name`; FE-5 offers each name
+  once per scope and drops the D-8 swap warning.
 
 ---
 
@@ -957,7 +1153,7 @@ the `answer_search` view.
 | Loads matching ids into Python, then `IN (ids)` | Grows with the data; a large `IN` list | One SQL subquery per widget (D-1) |
 | Single form per page | No cross-form filtering | Whole registration family (D-6) |
 | Any option question of the form is filterable, chosen at view time | Fine for logged-in staff; unsafe for public pages | Author curates `default_filters.questions`; public viewers are limited to that list (§9) |
-| Each tick refetches every call | N clicks, N rounds of requests | Apply on dropdown close (FE-4) |
+| Each tick refetches every call | N clicks, N rounds of requests | One reload per Apply (FE-4, D-16) |
 | `q` validated only by `[0-9]*\|(.*)`; a bad value is a bare 400 | — | Family and type checked, message names the problem (D-6, D-10) |
 
 ### What to borrow

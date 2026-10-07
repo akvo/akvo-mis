@@ -29,7 +29,9 @@ from api.v1.v1_visualization.scatter_functions import (
     handle_scatter,
 )
 from api.v1.v1_visualization.functions import (
+    GLOBAL_CRITERIA_PARAMETER,
     parse_request_global_criteria,
+    resolve_request_date_question,
     resolve_default_administration_id,
     tenant_scoped_forms,
 )
@@ -150,6 +152,7 @@ from utils.custom_serializer_fields import (
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
         ),
+        GLOBAL_CRITERIA_PARAMETER,
         OpenApiParameter(
             name="administration_id", required=False,
             type=OpenApiTypes.INT,
@@ -292,6 +295,8 @@ def visualization_values(request, version):
         "admin_level": validated.get("admin_level"),
         "global_criteria": global_criteria,
     }
+    # VIZ-027 D-18: the dashboard's date question, as this form asks it.
+    params = resolve_request_date_question(params, form.id)
 
     # Scatter mode
     if validated.get("mode") == "scatter":
@@ -397,6 +402,7 @@ def visualization_values(request, version):
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
         ),
+        GLOBAL_CRITERIA_PARAMETER,
         OpenApiParameter(
             name="filter_criteria", required=False,
             type=OpenApiTypes.STR,
@@ -466,7 +472,9 @@ def visualization_escalation(request, form_id, version):
         monitoring_form_id=validated["monitoring_form_id"],
         criteria=validated["criteria"],
         columns=validated["columns"],
-        params={
+        # VIZ-027 D-18: dated on the monitoring form. Paging links keep
+        # the requested id: they are built from `query_string`.
+        params=resolve_request_date_question({
             "page": validated.get("page", 1),
             "page_size": validated.get("page_size", 20),
             "administration_id": resolve_default_administration_id(
@@ -484,6 +492,6 @@ def visualization_escalation(request, form_id, version):
                 for k, values in request.query_params.lists()
                 for v in values
             ],
-        },
+        }, validated["monitoring_form_id"]),
     )
     return Response(result, status=status.HTTP_200_OK)

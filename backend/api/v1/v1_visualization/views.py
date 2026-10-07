@@ -19,8 +19,12 @@ from api.v1.v1_visualization.models import (
     ViewDataOptions,
 )
 from api.v1.v1_visualization.functions import (
+    GLOBAL_CRITERIA_PARAMETER,
     apply_criteria_to_monitoring_qs,
     apply_global_exclusions,
+    build_date_filters,
+    date_question_name,
+    in_date_range,
     parse_request_global_criteria,
     tenant_scoped_forms,
 )
@@ -304,10 +308,22 @@ class GeolocationListView(APIView):
                 location=OpenApiParameter.QUERY,
                 description=(
                     "When true, from_date / to_date filter by the "
-                    "datapoint's monitoring children's created date "
-                    "instead of the datapoint's own created date."
+                    "datapoint's monitoring children's date "
+                    "instead of the datapoint's own date."
                 ),
             ),
+            OpenApiParameter(
+                name="date_question_id",
+                required=False,
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    "The dashboard's date question. Matched by name on "
+                    "each form; a form without it uses the created "
+                    "date (VIZ-027 D-18)."
+                ),
+            ),
+            GLOBAL_CRITERIA_PARAMETER,
             OpenApiParameter(
                 name="monitoring_form_id",
                 required=False,
@@ -337,9 +353,12 @@ class GeolocationListView(APIView):
                 form_id,
                 request.query_params.get("monitoring_form_id"),
             ],
-            question_ids=question_ids_in_criteria(
-                request.query_params.get("criteria")
-            ),
+            question_ids=[
+                *question_ids_in_criteria(
+                    request.query_params.get("criteria")
+                ),
+                request.query_params.get("date_question_id"),
+            ],
             filter_question_ids=question_ids_in_global_criteria(
                 request.query_params.getlist("global_criteria")
             ),
@@ -382,6 +401,13 @@ class GeolocationListView(APIView):
 
         from_date = serializer.validated_data.get("from_date")
         to_date = serializer.validated_data.get("to_date")
+        date_question_id = serializer.validated_data.get("date_question_id")
+        date_filters = build_date_filters({
+            "from_date": from_date, "to_date": to_date,
+        })
+        # VIZ-027 D-18: dated by the dashboard's date question, matched by
+        # name on each form; `created` where a form does not ask it.
+        date_name = date_question_name(date_question_id)
         # D-12: pins are the path form's datapoints; on a monitoring form
         # they reach their registration through parent_id.
         queryset = apply_global_exclusions(
@@ -392,6 +418,7 @@ class GeolocationListView(APIView):
                 "global_criteria": global_criteria,
                 "from_date": from_date,
                 "to_date": to_date,
+                "date_question_name": date_name,
             },
         )
         include_monitoring = serializer.validated_data.get(
@@ -401,26 +428,24 @@ class GeolocationListView(APIView):
         monitoring_form_id = serializer.validated_data.get(
             "monitoring_form_id"
         )
-        if include_monitoring and (from_date or to_date):
-            child_q = Q()
-            if from_date:
-                child_q &= Q(children__created__date__gte=from_date)
-            if to_date:
-                child_q &= Q(children__created__date__lte=to_date)
-            child_filter = {
-                "children__is_pending": False,
-                "children__is_draft": False,
-            }
-            if monitoring_form_id:
-                child_filter["children__form_id"] = monitoring_form_id
+        if include_monitoring and date_filters:
+            child_forms = (
+                [monitoring_form_id] if monitoring_form_id
+                else Forms.objects.filter(parent_id=form.id).values("id")
+            )
+            dated_children = FormData.objects.filter(
+                in_date_range(date_filters, child_forms, date_name),
+                form_id__in=child_forms,
+                is_pending=False,
+                is_draft=False,
+            )
             queryset = queryset.filter(
-                child_q, **child_filter
-            ).distinct()
+                id__in=dated_children.values("parent_id"),
+            )
         else:
-            if from_date:
-                queryset = queryset.filter(created__date__gte=from_date)
-            if to_date:
-                queryset = queryset.filter(created__date__lte=to_date)
+            queryset = queryset.filter(
+                in_date_range(date_filters, [form.id], date_name),
+            )
 
         if serializer.validated_data.get("administration"):
             adm = serializer.validated_data.get("administration")
@@ -513,6 +538,17 @@ class GeolocationListView(APIView):
             type=OpenApiTypes.DATE,
             location=OpenApiParameter.QUERY,
         ),
+        OpenApiParameter(
+            name="date_question_id", required=False,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "The dashboard's date question. Matched by name on the "
+                "form; created date if the form does not ask it "
+                "(VIZ-027 D-18)."
+            ),
+        ),
+        GLOBAL_CRITERIA_PARAMETER,
     ],
 )
 @api_view(["GET"])
@@ -561,6 +597,7 @@ def visualization_values_formula(request, version):
             *question_ids_in_criteria(
                 request.query_params.get("criteria")
             ),
+            validated.get("date_question_id"),
         ],
         filter_question_ids=question_ids_in_global_criteria(
             request.query_params.getlist("global_criteria")
@@ -574,6 +611,8 @@ def visualization_values_formula(request, version):
         return Response(
             {"message": error}, status=status.HTTP_400_BAD_REQUEST,
         )
+    # VIZ-027 D-18: dated by the dashboard's date question, by name.
+    date_name = date_question_name(validated.get("date_question_id"))
     formula = validated["formula"]
     criteria = validated.get("criteria")
     from_date = validated.get("from_date")
@@ -588,10 +627,11 @@ def visualization_values_formula(request, version):
     )
     if criteria:
         qs = apply_criteria_to_monitoring_qs(qs, False, criteria)
-    if from_date:
-        qs = qs.filter(created__date__gte=from_date)
-    if to_date:
-        qs = qs.filter(created__date__lte=to_date)
+    qs = qs.filter(in_date_range(
+        build_date_filters({"from_date": from_date, "to_date": to_date}),
+        [form.id],
+        date_name,
+    ))
     # VIZ-027 D-12: before the latest-per-parent pick below, or a
     # filtered-out site's older submission could become its "latest".
     qs = apply_global_exclusions(
@@ -602,6 +642,7 @@ def visualization_values_formula(request, version):
             "global_criteria": global_criteria,
             "from_date": from_date,
             "to_date": to_date,
+            "date_question_name": date_name,
         },
     )
 

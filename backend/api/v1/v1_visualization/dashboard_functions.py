@@ -324,7 +324,57 @@ def validate_dashboard_payload(data, user, dashboard=None):
             return error
     return _validate_filter_questions(
         data.get("default_filters"), root_form, forms, questions,
+    ) or _validate_date_question(
+        data.get("default_filters"), root_form, forms, questions,
     )
+
+
+def _family_ids(root_form, forms):
+    """root_form and its child forms, as drawn by `forms` (D-6)."""
+    return {root_form.id} | set(
+        forms.filter(parent=root_form).values_list("id", flat=True)
+    )
+
+
+def _validate_date_question(default_filters, root_form, forms, questions):
+    """VIZ-027 D-18: `default_filters.date.date_question`.
+
+    Absent or null means the submission date. Otherwise a strict integer
+    id of a live date question on root_form or one of its child forms;
+    the endpoints match it by name on each widget's form.
+    """
+    if not isinstance(default_filters, dict):
+        return None
+    date = default_filters.get("date")
+    if not isinstance(date, dict) or date.get("date_question") is None:
+        return None
+    field = "default_filters.date.date_question"
+    question_id = date["date_question"]
+    if not isinstance(question_id, int) or isinstance(question_id, bool):
+        return _error("date question must be a question id", field=field)
+    family = _family_ids(root_form, forms)
+    question = questions.filter(pk=question_id).first()
+    if question is None:
+        # A form edit may have replaced the stored question with a live
+        # one of the same name; the endpoints follow the name, so the
+        # dashboard must stay savable (D-18).
+        question = questions.filter(
+            name__in=Questions.objects_with_deleted.filter(
+                pk=question_id,
+            ).values("name"),
+            type=QuestionTypes.date,
+            form_id__in=family,
+        ).first()
+    if question is None:
+        return _error("question not found", field=field)
+    if question.type != QuestionTypes.date:
+        return _error("only a date question can date the dashboard",
+                      field=field)
+    if question.form_id not in family:
+        return _error(
+            "question is not in this dashboard's form family", field=field,
+        )
+    return None
 
 
 def _validate_filter_questions(default_filters, root_form, forms, questions):
@@ -366,9 +416,7 @@ def _validate_filter_questions(default_filters, root_form, forms, questions):
                 field=f"{field}[{index}]",
             )
         pairs.append((index, question_id, form_id))
-    family = {root_form.id} | set(
-        forms.filter(parent=root_form).values_list("id", flat=True)
-    )
+    family = _family_ids(root_form, forms)
     found = {
         question.id: question
         for question in questions.filter(
