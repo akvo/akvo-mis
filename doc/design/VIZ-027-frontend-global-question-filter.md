@@ -4,7 +4,7 @@
 **Parent design**: [VIZ-027-global-question-filter.md](VIZ-027-global-question-filter.md)
 **Sibling**: [VIZ-027-backend-global-question-filter.md](VIZ-027-backend-global-question-filter.md)
 **Branch**: `epic/478-viz-global-question-filter`
-**Date**: 2026-10-06
+**Date**: 2026-10-06 (FE-4 revised 2026-10-07: Filters panel, D-16)
 **Status**: Draft
 
 ---
@@ -17,17 +17,26 @@ D-1 to D-15. Decision IDs (D-x) and findings (A-x) refer to the parent.
 
 The frontend owns:
 
-- **Viewer**: one multi-select per filter question in the filter bar,
-  and the selection serialized into one sorted `global_criteria` list
-  that every widget request carries (D-15).
-- **Builder**: picking which questions the filter bar offers, with the
-  same-named question warning (D-8).
+- **Viewer**: a "Filters" button in the filter bar that opens a
+  checklist per filter question, ticked = shown (D-16, D-21). The
+  ticked options of each touched question are serialized into one
+  sorted `global_criteria` list of `option_in` entries, plus
+  `global_match` when it is "any", that every widget request carries.
+- **Builder**: picking which questions the filter bar offers, by form
+  and name (D-20).
 - **A7**: the cross-form series request's wrong parameter name.
+- **Date question** (FE-7, D-18): the builder control for the date the
+  dashboard's range uses.
+- **Defaults** (FE-8, D-19): new dashboards start with the date and
+  administration filters on.
 
-Not in this phase: "show only". The filter bar only filters options
-out. "Show only" is a later phase, built only if users ask for it
-(D-13). It would add a mode per question in the builder; an entry
-without `mode` stays "filter out", so nothing built here changes.
+**Show only (D-21, 2026-10-07).** The checklist means what it shows:
+the ticked options are sent as `option_in`, as in the WAI portal, and
+datapoints without an answer to a filtered question are hidden. Before
+D-21 the plan sent the unticked options as `option_not_in`, which kept
+unanswered datapoints and could show no cloudy point after ticking only
+"Cloudy". Not in this phase: a "(No answer)" row that keeps unanswered
+datapoints.
 
 Not in this phase either: FE-6, option codes without `:`, `,` or `|` in
 `akvo-react-form-editor`. The backend enforces the rule (backend BE-7).
@@ -38,9 +47,9 @@ Line numbers are as of 2026-10-06 on the epic branch.
 
 | Contract | Shape | From backend task |
 |---|---|---|
-| `global_criteria` query parameter on `/visualization/values`, `/values/formula`, `/escalation/:id`, `/maps/geolocation/:id` | **Repeated**, one `option_not_in:<qid>:<value>` per value (D-15) | BE-1 |
-| Published snapshot `default_filters.questions[]` | `{question, form, label, options: [{value, label}]}` | BE-4 |
-| Saved `default_filters.questions[]` | `{question, form}`. A 400 names `field: "default_filters.questions…"` | BE-4 |
+| `global_criteria` query parameter on `/visualization/values`, `/values/formula`, `/escalation/:id`, `/maps/geolocation/:id` | **Repeated**, one `option_in:<form_id>:<name>:<value>` per ticked value (D-15, D-20, D-21); optional `global_match=all\|any` | BE-1, BE-9, BE-10 |
+| Published snapshot `default_filters.questions[]` | `{form, name, label, options: [{value, label}]}` | BE-4, BE-9 |
+| Saved `default_filters.questions[]` | `{form, name}`: the registration form means the whole family, a monitoring form that form only (D-20). A 400 names `field: "default_filters.questions…"` | BE-4, BE-9 |
 | `/manage/dashboards/<pk>/sources` question rows | gain `name` | BE-4 |
 
 The viewer never reads form definitions. Everything the filter bar shows
@@ -54,6 +63,9 @@ flowchart LR
     FE2[FE-2 useWidgetData plumbing + A7] --> FE3
     FE3 --> FE4[FE-4 Filter bar]
     FE5[FE-5 Builder picker]
+    FE7[FE-7 Date question picker]
+    FE8[FE-8 Default filters on create]
+    BE8([backend BE-8]) -.-> FE7
     BE1([backend BE-1]) -.-> FE2
     BE4([backend BE-4]) -.-> FE4
     BE4 -.-> FE5
@@ -80,9 +92,9 @@ cache keys.
 - [ ] An option whose value contains `:` or `,` filters like any other.
 
 **Technical acceptance criteria**
-- [ ] Returns an **array** of `option_not_in:<qid>:<value>`, one entry
-      per value (D-15): qids sorted as numbers, values sorted within a
-      qid.
+- [ ] Takes `{"<form>:<name>": [values]}` and returns an **array** of
+      `option_in:<form>:<name>:<value>`, one entry per value (D-15,
+      D-20): keys sorted (numeric-aware), values sorted within a key.
 - [ ] Questions with an empty list are dropped. Returns `null` for `{}`,
       `null`, `undefined` or all-empty input.
 - [ ] Values are not escaped or split: `pump:_broken,_leaking` is passed
@@ -91,16 +103,17 @@ cache keys.
 - [ ] `util/__test__/dashboardGlobalFilter.test.js` green.
 
 ```js
-// VIZ-027 (D-15): {qid: [values]} -> one "option_not_in:<qid>:<value>"
-// per value, or null. Sorted, so equal selections give equal lists and
-// widgets keep sharing cache keys. null lets compact() drop the
-// parameter, so an unfiltered dashboard sends exactly what it sends today.
-export const serializeGlobalCriteria = (exclusions) => {
-  const entries = Object.entries(exclusions || {})
+// VIZ-027 (D-15, D-20): {"<form>:<name>": [values]} -> one
+// "option_in:<form>:<name>:<value>" per value, or null. Sorted, so
+// equal selections give equal lists and widgets keep sharing cache keys.
+// null lets compact() drop the parameter, so an unfiltered dashboard
+// sends exactly what it sends today.
+export const serializeGlobalCriteria = (selections) => {
+  const entries = Object.entries(selections || {})
     .filter(([, values]) => values?.length)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .flatMap(([qid, values]) =>
-      [...values].sort().map((v) => `option_not_in:${qid}:${v}`)
+    .sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+    .flatMap(([key, values]) =>
+      [...values].sort().map((v) => `option_in:${key}:${v}`)
     );
   return entries.length ? entries : null;
 };
@@ -132,6 +145,11 @@ reordered in place. That is a test case.
 - [ ] All eight builders send `global_criteria: filters?.global_criteria`.
       `compact()` drops it when `null`.
 - [ ] `buildSeriesRequest` sends `dashboard_slug`, not `dashboard`.
+- [ ] The three map requests (`buildRequest` map branch,
+      `buildStatusRequest`, `buildValueRequest`) send
+      `date_question_id: filters?.date_question_id` too (backend BE-8,
+      D-18). The comment "It has no date_question_id either" (line 168)
+      is removed.
 - [ ] The number of requests per widget is unchanged.
 - [ ] The request URL repeats `global_criteria=` once per value, with no
       `[]`. Other parameters are encoded exactly as before.
@@ -163,7 +181,11 @@ set" tests guard that.
 
 **Repeated keys (D-15).** `global_criteria` is an array. Axios 0.25
 sends arrays as `global_criteria[]=…`, which Django's `getlist`
-("global_criteria") does not read. Give the one call in
+("global_criteria") does not read. The backend (as built) also ignores
+`global_criteria[0]=…` and `global_criteria[]=…` on purpose, so a
+bracketed key silently filters nothing. On a public dashboard only the
+questions in the published filter bar are allowed; any other qid is a
+404. Give the one call in
 `useVisualizationRequest.js` (line 48, `api.get(endpoint, { params })`)
 a `paramsSerializer` that repeats the key without brackets:
 
@@ -207,15 +229,15 @@ serialized filter.
 - [ ] Clearing a filter restores the unfiltered numbers.
 
 **Technical acceptance criteria**
-- [ ] `EMPTY_FILTERS` has `exclusions: {}` and is reset on slug change.
+- [ ] `EMPTY_FILTERS` has `selections: {}` and is reset on slug change.
 - [ ] The grid's filters come from one `useMemo` over `filters`.
       `global_criteria` is derived only through `serializeGlobalCriteria`.
-- [ ] `exclusions` never appears as a request parameter.
+- [ ] `selections` never appears as a request parameter.
 - [ ] One filter change re-renders the grid once.
 - [ ] `pages/dashboards/__test__/DashboardViewer.globalFilter.test.js`
       green, and `DashboardViewer.test.js` stays green.
 
-1. `EMPTY_FILTERS` (line 21) gains `exclusions: {}`. It is already
+1. `EMPTY_FILTERS` (line 21) gains `selections: {}`. It is already
    reset when the slug changes (line 59).
 2. The filter bar keeps writing the whole `filters` object through
    `onChange={setFilters}` (line 201). The grid (line 204) gets a
@@ -225,7 +247,7 @@ serialized filter.
    const gridFilters = useMemo(
      () => ({
        ...filters,
-       global_criteria: serializeGlobalCriteria(filters.exclusions),
+       global_criteria: serializeGlobalCriteria(filters.selections),
      }),
      [filters]
    );
@@ -235,45 +257,85 @@ serialized filter.
    change (FE-4 contract), so the request builders recompute once per
    change. `global_criteria` is an array or `null` (FE-1, D-15). `DashboardGrid` is already `React.memo` (line 187 there).
 
-3. `exclusions` stays out of the request params: the builders read
+3. `selections` stays out of the request params: the builders read
    named keys only, and `global_criteria` is the only one added.
 
 **Turns green**: `pages/dashboards/__test__/DashboardViewer.globalFilter.test.js`.
 
 ---
 
-### FE-4: Filter bar (`components/dashboard/DashboardViewFilters.jsx`)
+### FE-4: Filters panel (`components/dashboard/DashboardViewFilters.jsx`)
 
-**Goal**: the viewer filters options out from the filter bar, with one
-reload per change.
+**Goal**: the viewer hides options from a "Filters" panel, using the
+common checklist idiom (ticked = shown), with one reload per Apply
+(D-16).
+
+```
+[📅 From → To] [All locations ▾]                         ( ⏷ Filters  1 )
+                                   ┌──────────────────────────────────────┐
+                                   │ Is the infrastructure operational?   │
+                                   │   ☑ Operational                      │
+                                   │   ☐ Non-operational                  │
+                                   │ What is the water source?            │
+                                   │   ☑ Ground water                     │
+                                   │   ☑ Surface water                    │
+                                   │   ☑ Rainwater                        │
+                                   │ Data without an answer to a question │
+                                   │ is hidden while it is filtered.      │
+                                   │                [Clear all] [Apply]   │
+                                   └──────────────────────────────────────┘
+```
 
 **User acceptance criteria**
-- [ ] Each offered question appears in the filter bar as a multi-select
-      named by the question ("Is the infrastructure operational?"),
-      listing its option labels ("Operational", "Non-operational").
-- [ ] The bar shows even when the date and administration filters are
-      off, and stays hidden when there is nothing to show.
-- [ ] Ticking options does not reload the charts. Closing the dropdown
-      reloads them once.
-- [ ] Removing a tag with its × or clearing the select applies at once.
-- [ ] Options already filtered out show as tags.
+- [ ] When the dashboard offers filter questions, the filter bar shows a
+      "Filters" button on its right, as in the builder mockup
+      (`VIZ-Example/index.html:387`), even when the date and
+      administration filters are off. Without filter questions it is
+      not shown.
+- [ ] The button opens a panel listing each question by its label, with
+      a checkbox per option. Every option is ticked until the viewer
+      unticks it: ticked means shown.
+- [ ] Unticking options does not reload the charts. "Apply" reloads
+      them once and closes the panel.
+- [ ] Closing the panel without "Apply" (click outside, Esc) discards
+      the changes.
+- [ ] "Apply" is disabled while nothing changed, and while a question
+      has no option ticked (the panel says why).
+- [ ] The button shows how many questions are filtered (badge "1").
+- [ ] "Clear all" ticks every option again and applies at once.
+- [ ] The panel says that data without an answer to a filtered
+      question is hidden (D-21).
+- [ ] With two or more filtered questions, the panel shows "Match: all
+      filters / any filter" (`global_match`, default all) (D-21).
 - [ ] It works on a public dashboard, without logging in.
-- [ ] The placeholder and accessible labels are in English and French.
-- [ ] The select can be reached and used with the keyboard, and a screen
-      reader announces the question.
+- [ ] Copy is in English and French.
+- [ ] The button, checkboxes and actions work with the keyboard; a
+      screen reader announces each question as the group's name, and
+      the button's active count.
 
 **Technical acceptance criteria**
-- [ ] Each select sits in `data-testid="question-filter-<qid>"`.
-- [ ] The selection holds option `value`s; labels are display only. A
-      renamed or translated label must not change what is filtered (the
-      WAI portal matches lower-cased names and breaks on renames, parent
-      §15).
-- [ ] `onChange` follows item 4 below: never on an unchanged close; once
-      per close with a change; at once on tag removal or clear while
-      closed; other questions' selections kept.
-- [ ] The header comment (lines 33–35) no longer says per-question
-      filters are not built.
+- [ ] `data-testid`s: `question-filters-button`, `question-filter-<form>-<name>`
+      (one group per question), `question-filters-apply`,
+      `question-filters-clear`.
+- [ ] State is `value.selections = {"<form>:<name>": [ticked values]}`
+      for **touched** questions only; an untouched question is absent and
+      shows every option ticked. A question ticked back to all options is
+      removed from `selections` (no filter). `value.match` is `"all"` or
+      `"any"`; `global_match` is sent only when it is `"any"`.
+- [ ] Ticks hold option `value`s; labels are display only. A renamed or
+      translated label must not change what is filtered (the WAI portal
+      matches lower-cased names and breaks on renames, parent §15).
+- [ ] `onChange` fires only on Apply with a real change, or on Clear
+      all when something was filtered. It emits
+      `{...value, selections: next, match}`, where `next` keeps only
+      questions with at least one option unticked (their ticked values).
+- [ ] The badge counts keys of `value.selections` (applied state, not
+      the draft).
+- [ ] The header comment (lines 33–35) no longer says the "Filters"
+      pill is not built.
 - [ ] New `uiText` keys exist in `en` and `fr`.
+- [ ] In the builder canvas (`disabled`), the button is rendered but
+      disabled.
 - [ ] `VizMap`'s `colorKey` is untouched, so maps do not remount on a
       filter change.
 - [ ] `components/dashboard/__test__/DashboardViewFilters.questions.test.js`
@@ -282,37 +344,40 @@ reload per change.
 1. **Show the bar** when `defaultFilters.questions` is non-empty, even
    with date and administration off. Today the early return (line 53)
    checks only those two.
-2. **Update the header comment** (lines 33–35). It says per-question
-   filters are "not built" because no format existed to save them. Now
-   one does: `default_filters.questions`.
-3. **One `Select mode="multiple"` per question**, in the same
-   `dashboard-view-filters-card` `Space` (line 78), wrapped in
-   `data-testid={`question-filter-${q.question}`}`. Options come from
-   the snapshot entry's `options`, labelled with `label`. The value is
-   `value.exclusions[q.question] || []`. For a name group (D-14) the
-   snapshot already holds the merged options, with labels such as
-   "Fine / Clear sky"; the filter bar renders them as they are.
-4. **When a change applies**. The goal: picking three options sends one
-   request per widget, not three.
-   - Keep a local draft per question while the dropdown is open.
-   - `onDropdownVisibleChange(false)`: emit if the draft differs from
-     `value.exclusions[qid]`; otherwise emit nothing.
-   - Removing a tag (`onDeselect`) or clearing (`allowClear`) while the
-     dropdown is **closed**: emit at once. Neither opens the dropdown,
-     so waiting for a close would never apply them.
-   - The emitted value is
-     `{...value, exclusions: {...value.exclusions, [qid]: next}}`.
-     Other questions' selections stay.
-5. **Text**: add keys to `lib/ui-text.js` in `en` (line 14) and `fr`
+2. **Update the header comment** (lines 33–35). It says the "Filters"
+   pill is "not built" because no format existed to save per-question
+   filters. Now one does: `default_filters.questions`.
+3. **The button**: an antd `Button` with `FilterOutlined`, pushed right
+   in the `dashboard-view-filters-card` row (line 78), wrapped in a
+   `Badge` whose count is the number of filtered questions. Its
+   `aria-label` includes the count.
+4. **The panel**: an antd `Popover` (`trigger="click"`,
+   `placement="bottomRight"`), body scrollable past about 60 vh. One
+   `<fieldset>` per question with a `<legend>` holding the snapshot's
+   `label`, and a `Checkbox.Group` of the snapshot's `options`. For a
+   name group (D-14) the snapshot already holds the merged options,
+   with labels such as "Fine / Clear sky"; render them as they are.
+5. **Draft and apply**: copy `value.selections` into a local draft when
+   the panel opens; ticking edits the draft only.
+   - **Apply**: emit if the draft differs from `value.selections`, then
+     close.
+   - **Close** without Apply: drop the draft.
+   - **Clear all**: emit `selections: {}` if anything was filtered, then
+     close.
+   - A question with every option unticked would show nothing at all.
+     Apply stays disabled and the question shows "Tick at least one
+     option".
+6. **Text**: add keys to `lib/ui-text.js` in `en` (line 14) and `fr`
    (`uiText.fr`, around line 1440); `de` is empty and falls back. At
-   least: the select's placeholder (for example "Filter out…") and an
-   `aria-label` built from the question label. Use the question's own
-   `label` from the snapshot as the visible name, not a translation.
+   least: "Filters", "Apply", "Clear all", the unanswered note, "Tick at
+   least one option", and the button's `aria-label` with the count. The
+   question and option labels come from the snapshot, not from
+   `uiText`.
 
-**Turns green**: `components/dashboard/__test__/DashboardViewFilters.questions.test.js`.
-The existing `DashboardViewFilters.test.js` must stay green: "both
-disabled renders no bar at all" still holds when there are no
-questions.
+**Turns green**: `components/dashboard/__test__/DashboardViewFilters.questions.test.js`,
+rewritten for D-16 before the implementation (§6). The existing
+`DashboardViewFilters.test.js` must stay green: "both disabled renders
+no bar at all" still holds when there are no questions.
 
 ---
 
@@ -324,37 +389,47 @@ questions.
 - [ ] In the dashboard settings, next to the date and administration
       toggles, the author finds a control to add filter questions.
 - [ ] It offers only questions with options, from the dashboard's own
-      forms, each shown by its question text.
+      forms, each shown by its question text and its scope: "All forms"
+      (the registration form: every form of the family that asks it) or
+      one monitoring form (that form only) (D-20).
+- [ ] Questions already used by a widget on the canvas are listed first,
+      under "Used in your widgets"; every other option question of the
+      form family stays available under "Other questions in this form
+      family" (D-17). Adding or removing a widget updates the groups,
+      before saving.
 - [ ] The author can add and remove questions. The choice is saved with
       the dashboard and reaches viewers on Publish.
-- [ ] Picking "What is the water source?" on the registration form shows
-      a warning that the visit form asks it too, with a one-click "Use
-      Water quality visit question instead". The list keeps its order.
 - [ ] A refused save shows an error message.
-- [ ] Picking "What is the weather?" on the check form shows "Also asked
-      on: Water quality visit", because the visit form asks it under the
-      same name (D-14).
+- [ ] Picking "What is the weather?" for "All forms" shows "Covers:
+      Water quality visit, Quick status check": the forms that ask it
+      under that name (D-20).
 - [ ] If the visit form's weather question has an option the check form
-      lacks ("Stormy"), the builder warns which forms have it. The author
-      can still save.
+      lacks ("Stormy"), an "All forms" entry warns which forms have it.
+      The author can still save.
 
 **Technical acceptance criteria**
 - [ ] New file `pages/dashboards/DashboardQuestionFilters.jsx` with props
-      `{sources, value, onChange}`; `BuilderInspector.jsx` only mounts
-      it.
+      `{sources, widgets, value, onChange}`; `BuilderInspector.jsx` only
+      mounts it. `DashboardBuilder` passes its `widgets` state to the
+      inspector (it already passes it to `AISuggestionDrawer`).
+- [ ] The suggested group is computed from `widgets` alone, with no
+      request: `widget.question`, and in `widget.config`: `question_y`,
+      `stack_question`, `category_question_id`, `value_question`,
+      `criteria[].question` and `columns[].question`. Kept only when the
+      question is an option or multiple-option question of
+      `sources.forms`. A suggestion is the question's **name** at the
+      "All forms" scope. An entry is listed once, in one group.
 - [ ] `data-testid="question-filter-picker"` and
-      `question-filter-entry-<qid>`; a "Remove" button per entry.
-- [ ] Offers only types `option` and `multiple_option`, and never a
-      question that is already picked.
+      `question-filter-entry-<form>-<name>`; a "Remove" button per entry.
+- [ ] Offers only types `option` and `multiple_option`, one entry per
+      name at "All forms" (the root form id) and one per monitoring form
+      asking it; never an entry already picked. Names containing `:`
+      are not offered (the backend refuses them).
 - [ ] Saves through
       `onDashboardChange("default_filters", {...defaultFilters, questions})`,
       keeping `date`, `administration` and `toolbox`.
-- [ ] Same-named detection: the form has no `parent`, and a child form
-      has a question with the same `name`. One swap button per matching
-      child form.
-- [ ] Name-group hint for a monitoring entry: the other monitoring forms
-      with a question of the same `name`, listed by form name. No
-      warning role: it is information, not a problem.
+- [ ] "Covers" hint for an "All forms" entry: the forms that ask the
+      name, listed by form name. No warning role: it is information.
 - [ ] Copy in `uiText` for `en` and `fr`.
 - [ ] `pages/dashboards/__test__/DashboardQuestionFilters.test.js` green,
       and `BuilderInspector.test.js` stays green.
@@ -366,6 +441,7 @@ administration toggles (around lines 406–430):
 ```jsx
 <DashboardQuestionFilters
   sources={sources}
+  widgets={widgets}
   value={defaultFilters?.questions || []}
   onChange={(questions) =>
     onDashboardChange("default_filters", { ...defaultFilters, questions })
@@ -377,25 +453,25 @@ administration toggles (around lines 406–430):
 
 - **Picker**: an antd `Select` in `data-testid="question-filter-picker"`.
   It offers option and multiple-option questions from every form in
-  `sources.forms`. Each option is titled with the question label.
-  Questions already picked are not offered again. Picking calls
-  `onChange([...value, {question, form}])`.
-- **Entries**: each picked question renders in
-  `data-testid="question-filter-entry-<qid>"`, with a button whose
-  accessible name is "Remove".
-- **Same-named warning (D-8)**: an entry is a registration question
-  (its form has no `parent`) and a child form has a question with the
-  same `name`. The entry then shows a `role="alert"` warning with a
-  button "Use <child form name> question instead". The button swaps
-  the entry **in place**, keeping the list order. If several child
-  forms match, offer one button per form.
-- **Name group (D-14)**: when a picked monitoring question shares its
-  `name` with questions on other monitoring forms, the entry shows
-  "Also asked on: <form names>". The filter reads the latest answer
-  across those forms, so the author needs to see them. Computed from
-  `sources.forms` alone: same `name`, other forms with a `parent`.
-- **Option mismatch warning (D-14)**: when the questions of a name
-  group do not all have the same option values, the entry shows a
+  `sources.forms`, in two `OptGroup`s: "Used in your widgets" first,
+  then "Other questions in this form family" (D-17). Each option is
+  titled with the question label and shows its scope ("All forms" or a
+  monitoring form's name). Entries already picked are not offered
+  again. Picking calls `onChange([...value, {form, name}])`, where
+  `form` is the root form id for "All forms" (D-20). The groups are a ranking,
+  never a restriction: a filter on a question no widget shows (the
+  status question while the charts show water samples) is the main use
+  case.
+- **Entries**: each picked filter renders in
+  `data-testid="question-filter-entry-<form>-<name>"`, with a button
+  whose accessible name is "Remove".
+- **No swap warning**: D-8's "use the visit question instead" is gone;
+  "All forms" already includes the visit form (D-20).
+- **Covers (D-20)**: an "All forms" entry shows "Covers: <form names>",
+  the forms of `sources.forms` with a live option question of that
+  `name`. The filter reads the latest answer across them.
+- **Option mismatch warning (D-14)**: when the questions an "All forms"
+  entry covers do not all have the same option values, the entry shows a
   `role="alert"` warning listing each value that is missing from some
   forms, with its label and the forms that have it, for example
   "Stormy: only on Water quality visit". It does not block saving.
@@ -406,9 +482,73 @@ administration toggles (around lines 406–430):
 
 Builder copy (warning text, button labels, the picker placeholder) goes
 into `lib/ui-text.js` in `en` and `fr`. The tests match the English
-strings "Remove" and "Use Water quality visit question instead".
+strings "Remove", "All forms" and "Covers:".
 
-**Turns green**: `pages/dashboards/__test__/DashboardQuestionFilters.test.js`.
+**Turns green**: `pages/dashboards/__test__/DashboardQuestionFilters.test.js`,
+with the D-17 tests added before the implementation (§6).
+
+---
+
+### FE-7: Date question picker in the builder (D-18)
+
+**Goal**: the author chooses which date the dashboard's date range uses.
+
+```
+Default filters
+  Date                         [●  ]
+    Date to filter on
+    [ Submission date                          ▾ ]
+       Submission date
+       Visit date            Water quality visit, Quick status check
+       Registration date     Water point registration
+  Location (administration)    [●  ]
+```
+
+**User acceptance criteria**
+- [ ] Under the Date switch, while it is on, the author picks "Submission
+      date" (the default) or a date question of the form family.
+- [ ] A date question asked on several forms under the same name shows
+      once, with the forms that ask it.
+- [ ] The viewer's date range then bounds every widget by that date
+      (backend BE-8).
+- [ ] Copy in English and French.
+
+**Technical acceptance criteria**
+- [ ] In the `BuilderInspector.jsx` "Default filters" block (lines
+      395–431), a `Select` in `data-testid="date-question-picker"`
+      writes `onDashboardChange("default_filters", {...defaultFilters,
+      date: {...defaultFilters?.date, date_question: id | null}})`.
+- [ ] Options come from `sources.forms`: questions of type `date`,
+      grouped by `name`. The stored id is the first question of the
+      group, registration form first, then by form order; the backend
+      resolves the rest by name.
+- [ ] Hidden while Date is off; the stored value is kept.
+- [ ] `DashboardViewFilters` keeps sending it as `date_question_id`
+      (line 67, unchanged).
+- [ ] `pages/dashboards/__test__/BuilderInspector.dateQuestion.test.js`
+      green, and `BuilderInspector.test.js` stays green.
+
+---
+
+### FE-8: New dashboards start with date and administration on (D-19)
+
+**Goal**: a new dashboard has a filter bar without extra steps.
+
+**User acceptance criteria**
+- [ ] After creating a widgets dashboard, the builder shows Date and
+      Location switched on; the author can switch them off.
+- [ ] Creating an embed dashboard is unchanged.
+
+**Technical acceptance criteria**
+- [ ] `CreateDashboardModal.jsx` `createPayload` (line 184) gains
+      `default_filters: {date: {enabled: true}, administration:
+      {enabled: true}}`, for the AI and the empty starter alike. The
+      embed branch (line 141) does not send it.
+- [ ] A test in `pages/dashboards/__test__/CreateDashboardModal.test.js`
+      checks both payloads.
+- [ ] `CreateDashboardModalAI.test.js` asserts the exact create payload
+      (lines 127 and 167); add `default_filters` there. That is an
+      expected change, not a regression.
 
 ---
 
@@ -445,8 +585,9 @@ recompute only when `filters` changes, requests are cached by their
 parameters, and a loading widget keeps its previous data. On top of
 that:
 
-- Emit only real changes (FE-4). A new `filters` object with the same
-  content re-runs every builder and re-renders every chart.
+- Emit only real changes (FE-4: Apply with a change, Clear all when
+  filtered). A new `filters` object with the same content re-runs every
+  builder and re-renders every chart.
 - Sort before serializing (FE-1), so `a|b` and `b|a` share a cache key.
 - Do not remount maps. `VizMap`'s `MapCluster` key is `colorKey`
   (`VizMap.jsx:202-214`): colours, `map_mode`, `map_aggregate`,
@@ -459,7 +600,7 @@ that:
 | `util/__test__/dashboardGlobalFilter.test.js` | FE-1 | Suite fails: module missing |
 | `util/__test__/useWidgetData.globalCriteria.test.js` | FE-2 | 18 green (request counts, no param when unset), 10 red; plus the page-reset guard, green (run 2026-10-06) |
 | `pages/dashboards/__test__/DashboardViewer.globalFilter.test.js` | FE-3 | 1 green, 3 red |
-| `components/dashboard/__test__/DashboardViewFilters.questions.test.js` | FE-4 | 1 green, 8 red |
+| `components/dashboard/__test__/DashboardViewFilters.questions.test.js` | FE-4 | To be rewritten for the Filters panel (D-16), see below; was 1 green, 8 red against the multi-select |
 | `pages/dashboards/__test__/DashboardQuestionFilters.test.js` | FE-5, including the D-14 "Also asked on" hint and option mismatch warning | Suite fails: module missing |
 | `util/__test__/useVisualizationRequest.paramsSerializer.test.js` | FE-2 (D-15 repeated keys) | 3 red: no `paramsSerializer` yet |
 
@@ -467,6 +608,48 @@ The tests use the backend fixture's questions and ids (sibling §5):
 700301 "Is the infrastructure operational?" (Operational,
 Non-operational), and 700101 "What is the water source?" (Ground water,
 Surface water, Rainwater).
+
+### Test changes for D-20 (to make before FE-1, FE-4, FE-5)
+
+The frontend tests still use question ids (`700301`, `700101`). Move
+them to `form:name` keys before implementing: `serializeGlobalCriteria`
+expects `option_in:<form>:<name>:<value>` (D-21); the viewer and filter bar
+key selections by `"<form>:<name>"`; the builder saves `{form, name}`,
+offers "All forms" and per-monitoring-form entries, and the D-8 swap
+test is replaced by a "Covers:" test.
+
+### Test changes for D-17 (to make before FE-5)
+
+Add to `DashboardQuestionFilters.test.js`, with a bar widget on 700201
+("Were you able to take a water sample?") and a table criterion on
+700101:
+
+| Test | Checks |
+|---|---|
+| Widget questions are suggested first | 700201 and 700101 sit under "Used in your widgets", 700301 under "Other questions in this form family" |
+| Nothing is restricted | 700301, used by no widget, can still be picked |
+| Suggestions follow the canvas | Re-rendering without the bar widget moves 700201 to the other group |
+| Non-option widget questions are not suggested | A KPI on a number question adds nothing to either group |
+
+### Test changes for D-16 (to make before FE-4)
+
+`DashboardViewFilters.questions.test.js` was written for one
+multi-select per question. Rewrite it against the panel, keeping the
+fixture (questions 700301 and 700101):
+
+| Test | Checks |
+|---|---|
+| The button shows only with questions | No questions and both toggles off renders nothing; questions with both toggles off show the bar and the button |
+| The panel lists every option, all ticked | Opening shows both questions by label; all five options ticked |
+| Applied state shows as ticked | `selections: {"7003:infrastructure_status": ["operational"]}` → only "Operational" ticked, badge 1 |
+| Untick two, Apply once | Unticking Surface water and Rainwater calls `onChange` once, on Apply, with `{"7001:water_source": ["ground_water"]}` |
+| A second question keeps the first | The existing status selection stays when the water source changes |
+| Ticking everything back removes the filter | The key disappears from `selections` |
+| Match toggle | Hidden with one filtered question; with two, "any" emits `match: "any"` |
+| Close without Apply discards | Untick, click outside: no `onChange`; reopening shows the applied state |
+| Apply disabled when unchanged or a question is empty | Both cases, with the "Tick at least one option" hint |
+| Clear all | Calls `onChange` once with `selections: {}`; not called when nothing was filtered |
+| Disabled in the builder | `disabled` renders the button disabled |
 
 ### Test changes for D-15 (made 2026-10-06)
 
@@ -507,8 +690,8 @@ disable rules.
       `useWidgetData.test.js`, `BuilderInspector.test.js`,
       `viewerPreviewParity.test.js`.
 - [ ] `npm run lint` and `npm run prettier` clean.
-- [ ] Manual check on a published **public** dashboard: pick two
-      options, close the dropdown, and see one request per widget in the
+- [ ] Manual check on a published **public** dashboard: untick two
+      options, press Apply, and see one request per widget in the
       network tab, each with the same `global_criteria`.
 - [ ] Manual check on a map widget: the map does not remount on a
       filter change.

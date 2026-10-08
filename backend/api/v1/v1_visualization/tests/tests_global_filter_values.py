@@ -18,7 +18,6 @@ from api.v1.v1_visualization.tests.global_filter_mixin import (
     SURFACE,
     YES,
     GlobalFilterTestMixin,
-    pending,
 )
 
 # Read the fixture table in global_filter_mixin.py first: every number
@@ -77,7 +76,6 @@ class GlobalFilterFixtureTestCase(GlobalFilterTestMixin, APITestCase):
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-2")
 class FilterOutNonOperationalTestCase(GlobalFilterTestMixin, APITestCase):
     """The sketch: the viewer filters out "Non-operational".
 
@@ -268,6 +266,25 @@ class FilterOutNonOperationalTestCase(GlobalFilterTestMixin, APITestCase):
             self.sites_on_visit_form(global_criteria=both), {1, 2, 3, 8, 9},
         )
 
+    def test_the_filter_survives_a_recreated_question(self):
+        # D-20: a form edit soft-deletes the status question and creates
+        # it again, same name, new id. The filter names (form, name), so
+        # it keeps working on the new question: site 7's newer check
+        # answers it Non-operational and site 7 goes. Answers to the old
+        # version no longer count, so 4, 5 and 6 come back.
+        Questions.objects.filter(pk=self.Q_STATUS).delete()
+        recreated = self._question(
+            self.check_form, 700306, "infrastructure_status",
+            "Is the infrastructure operational?",
+            [(OPERATIONAL, "Operational"), (BROKEN, "Non-operational")],
+        )
+        check = self._check(7, datetime(2025, 3, 20), [])
+        self._answer(check, recreated.id, options=[BROKEN])
+        self.assertEqual(
+            self.sites_on_visit_form(global_criteria=self.no_broken),
+            VISITED_SITES - {7},
+        )
+
     def test_filter_runs_inside_the_chart_query(self):
         # D-1: no separate query loads the filtered-out ids. The status
         # match (`options @> ...`) only appears nested under NOT (... IN).
@@ -283,7 +300,6 @@ class FilterOutNonOperationalTestCase(GlobalFilterTestMixin, APITestCase):
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-2")
 class FilterOutRainwaterTestCase(GlobalFilterTestMixin, APITestCase):
     """A filter on a registration question (D-8).
 
@@ -327,17 +343,51 @@ class FilterOutRainwaterTestCase(GlobalFilterTestMixin, APITestCase):
         self.assertIn(9, sites)
         self.assertNotIn(8, sites)
 
-    def test_answer_given_during_a_visit_is_ignored(self):
+    def test_a_newer_visit_answer_overrides_the_registration(self):
         # The visit form asks "What is the water source?" again, with the
-        # same `name`. Site 1 answers Rainwater there, but its
-        # registration says Ground water, so it stays (D-8).
+        # same `name`. Filtered on the registration form, the scope is the
+        # whole family (D-20): site 1's visit (02-15) answers Rainwater,
+        # newer than its registration's Ground water, so site 1 leaves.
+        # Site 8, never asked again, is judged by its registration.
         visit = FormData.objects.get(
             form=self.visit_form, parent=self.site[1],
         )
         self._answer(visit, self.Q_SOURCE_SEEN, options=[RAIN])
         sites = self.sites_on_visit_form(global_criteria=self.no_rain)
-        self.assertIn(1, sites)
+        self.assertNotIn(1, sites)
         self.assertNotIn(8, sites)
+
+    def test_a_newer_visit_answer_can_bring_a_point_back(self):
+        # Site 9 registered Rainwater; its visit says Ground water now.
+        visit = FormData.objects.get(
+            form=self.visit_form, parent=self.site[9],
+        )
+        self._answer(visit, self.Q_SOURCE_SEEN, options=[GROUND])
+        sites = self.sites_on_visit_form(global_criteria=self.no_rain)
+        self.assertIn(9, sites)
+        self.assertNotIn(8, sites)
+
+    def test_a_visit_outside_the_range_leaves_the_registration_to_decide(
+        self,
+    ):
+        # Site 1's visit (02-15) says Rainwater, its registration Ground
+        # water; site 9's visit says Ground water, its registration
+        # Rainwater. With the range ending 02-10, no visit is in range, so
+        # each registration answer decides: site 1 stays, site 9 goes.
+        for n, source in ((1, RAIN), (9, GROUND)):
+            visit = FormData.objects.get(
+                form=self.visit_form, parent=self.site[n],
+            )
+            self._answer(visit, self.Q_SOURCE_SEEN, options=[source])
+        sites = self.sites_on_registration(
+            global_criteria=self.no_rain, to_date="2025-02-10",
+        )
+        self.assertIn(1, sites)
+        self.assertNotIn(9, sites)
+        # Without the range both visits speak: the opposite.
+        sites = self.sites_on_registration(global_criteria=self.no_rain)
+        self.assertNotIn(1, sites)
+        self.assertIn(9, sites)
 
     def test_two_options_of_one_question(self):
         # Filter out Surface water AND Rainwater: only ground water
@@ -367,33 +417,47 @@ class GlobalFilterValuesValidationTestCase(
         self.assertEqual(response.status_code, 400, response.content)
         return response.json()["message"]
 
-    @pending("BE-1")
-    def test_question_id_is_not_a_number(self):
-        self.message(self.get(f"option_not_in:abc:{BROKEN}"))
+    def test_form_id_is_not_a_number(self):
+        self.message(self.get(
+            f"option_not_in:abc:infrastructure_status:{BROKEN}",
+        ))
 
-    @pending("BE-1")
     def test_no_options_given(self):
-        self.message(self.get(f"option_not_in:{self.Q_STATUS}"))
+        self.message(self.get(
+            f"option_not_in:{self.CHECK_ID}:infrastructure_status",
+        ))
 
-    @pending("BE-1")
+    def test_the_old_question_id_grammar_is_refused(self):
+        # D-20 replaced `option_not_in:<qid>:<value>`.
+        self.message(self.get(f"option_not_in:{self.Q_STATUS}:{BROKEN}"))
+
     def test_empty_value_says_so(self):
         self.assertIn(
             "option_not_in requires a value",
-            self.message(self.get(f"option_not_in:{self.Q_STATUS}:")),
+            self.message(self.get(
+                f"option_not_in:{self.CHECK_ID}:infrastructure_status:",
+            )),
         )
 
-    @pending("BE-1")
+    def test_a_name_missing_from_the_form_is_refused(self):
+        # The status question is on the check form, not the visit form.
+        self.assertIn(
+            "no option question",
+            self.message(self.get(self.filter_out_on(
+                self.VISIT_ID, "infrastructure_status", BROKEN,
+            ))),
+        )
+
     def test_more_than_fifty_values_is_refused(self):
         # D-15: bounds what a public caller can send.
         values = [f"value_{i}" for i in range(51)]
         self.message(self.get(self.filter_out(self.Q_STATUS, *values)))
 
-    @pending("BE-1, BE-2")
     def test_a_value_with_delimiters_is_filtered_like_any_other(self):
         # D-15: older forms can hold values such as this one, generated
         # from a label before `:`, `,` and `|` were removed at the
-        # source. One parameter per value, split at most twice, keeps it
-        # intact. Site 7's latest check reports it -> site 7 goes.
+        # source. One parameter per value, split at most three times,
+        # keeps it intact. Site 7's latest check reports it -> site 7 goes.
         odd = "pump:_broken,_leaking|pipe"
         self._check(7, datetime(2025, 3, 20), [odd])
         self.assertEqual(
@@ -403,11 +467,12 @@ class GlobalFilterValuesValidationTestCase(
             VISITED_SITES - {7},
         )
 
-    @pending("BE-1")
-    def test_only_filter_out_is_supported(self):
-        # "Show only Non-operational" (option_in) is not a global filter
-        # in phase 1. It is a later phase, if users ask for it (D-13).
-        self.message(self.get(f"option_in:{self.Q_STATUS}:{BROKEN}"))
+    def test_only_show_only_and_filter_out_are_supported(self):
+        # D-21: `option_in` and `option_not_in`. A widget criteria type
+        # such as `option_equals` is not a global filter.
+        self.message(self.get(
+            f"option_equals:{self.CHECK_ID}:infrastructure_status:{BROKEN}",
+        ))
 
     def test_filter_out_is_refused_in_a_widgets_own_criteria(self):
         # D-10: inside a widget's criteria it would empty the widget.
@@ -417,7 +482,6 @@ class GlobalFilterValuesValidationTestCase(
         )
         self.assertEqual(response.status_code, 400, response.content)
 
-    @pending("BE-1")
     def test_question_from_another_form_family(self):
         # "Does the school have a toilet?" is not about water points.
         self.assertIn(
@@ -425,12 +489,10 @@ class GlobalFilterValuesValidationTestCase(
             self.message(self.get(self.filter_out(self.Q_TOILET, NO))),
         )
 
-    @pending("BE-1")
     def test_question_without_options(self):
         # "How many households use this water point?" is a number.
         self.message(self.get(self.filter_out(self.Q_HOUSEHOLDS, "10")))
 
-    @pending("BE-1, BE-2")
     def test_any_form_of_the_family_can_filter_any_chart(self):
         # A registration chart filtered by a status-check question.
         response = self.get(
@@ -441,17 +503,17 @@ class GlobalFilterValuesValidationTestCase(
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-1, BE-2")
 class FilterOutRainyAcrossFormsTestCase(GlobalFilterTestMixin, APITestCase):
-    """D-14: a question asked under the same name on several monitoring
-    forms is one filter question, and the most recent answer wins.
+    """D-14, D-20: a question asked under the same name on several
+    monitoring forms, filtered on the registration form (family scope):
+    the most recent answer from any of them wins.
 
     On top of the fixture, the visit form also asks "What is the weather
     during the visit?" under the same name, `weather`, as the check form.
       site 5: visit 02-15 Rainy, newer than its only check (01-20, Fine)
       site 6: visit 02-15 Rainy, older than its check (03-10, Fine)
 
-    Filter: weather -> filter out Rainy.
+    Filter: weather, family scope -> filter out Rainy.
     Expect: site 5 disappears (its latest weather answer is Rainy);
             site 6 stays (its latest weather answer is Fine).
     """
@@ -471,7 +533,9 @@ class FilterOutRainyAcrossFormsTestCase(GlobalFilterTestMixin, APITestCase):
                 form=self.visit_form, parent=self.site[n],
             )
             self._answer(visit, self.Q_WEATHER_VISIT, options=[RAINY])
-        self.no_rain = self.filter_out(self.Q_WEATHER, RAINY)
+        # The registration form does not ask the weather; at the family
+        # scope its monitoring forms do.
+        self.no_rain = self.filter_out_on(self.REG_ID, "weather", RAINY)
 
     def test_the_most_recent_answer_wins_across_forms(self):
         self.assertEqual(
@@ -479,13 +543,20 @@ class FilterOutRainyAcrossFormsTestCase(GlobalFilterTestMixin, APITestCase):
             VISITED_SITES - {5},
         )
 
-    def test_either_copy_of_the_question_gives_the_same_result(self):
-        # The author may pick the visit form's copy instead.
+    def test_a_monitoring_form_scope_reads_that_form_only(self):
+        # D-20: on the visit form, only visits count: sites 5 and 6 both
+        # reported Rainy there. On the check form, only checks: all Fine.
         self.assertEqual(
             self.sites_on_visit_form(
                 global_criteria=self.filter_out(self.Q_WEATHER_VISIT, RAINY),
             ),
-            VISITED_SITES - {5},
+            VISITED_SITES - {5, 6},
+        )
+        self.assertEqual(
+            self.sites_on_visit_form(
+                global_criteria=self.filter_out(self.Q_WEATHER, RAINY),
+            ),
+            VISITED_SITES,
         )
 
     def test_a_newer_submission_that_skipped_the_question_does_not_count(self):
@@ -540,12 +611,12 @@ class FilterOutRainyAcrossFormsTestCase(GlobalFilterTestMixin, APITestCase):
             VISITED_SITES,
         )
 
-    def test_the_registration_question_is_not_part_of_a_group(self):
+    def test_the_visit_form_scope_leaves_out_the_registration(self):
         # "What is the water source?" is on the registration form and,
-        # under the same name, on the visit form. Filtering out Rainwater
-        # on the visit's copy reads visit answers only (none here), not
-        # the registration's: sites 8 and 9 stay. On the registration
-        # question itself they go.
+        # under the same name, on the visit form. Filtered on the visit
+        # form, only visit answers count (none here): sites 8 and 9 stay.
+        # Filtered on the registration form (family scope, D-20), their
+        # registration answers decide and they go.
         self.assertEqual(
             self.sites_on_visit_form(
                 global_criteria=self.filter_out(self.Q_SOURCE_SEEN, RAIN),

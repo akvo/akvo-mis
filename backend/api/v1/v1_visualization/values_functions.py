@@ -22,6 +22,7 @@ from api.v1.v1_visualization.functions import (
     fill_month_gaps,
     fill_date_gaps,
     apply_administration_filter,
+    apply_global_filters,
     apply_parent_criteria_to_qs,
 )
 
@@ -152,6 +153,8 @@ def _total_parents_in_scope(form, params):
     qs = apply_parent_criteria_to_qs(
         qs, True, params.get("parent_criteria"),
     )
+    # VIZ-027: "No info" must not count the filtered-out registrations.
+    qs = apply_global_filters(qs, "id", scope_form.id, params)
     return qs.count()
 
 
@@ -188,12 +191,9 @@ def handle_count_mode(form, params):
         )
         count = qs.count()
         if value_type == "percentage":
-            total = FormData.objects.filter(
-                form=form.parent,
-                parent__isnull=True,
-                is_pending=False,
-                is_draft=False,
-            ).count()
+            # Same scope as the count above: administration, parent
+            # criteria and the global filter (VIZ-027).
+            total = _total_parents_in_scope(form, params)
             value = round(
                 (count / total * 100), 2
             ) if total > 0 else 0
@@ -211,12 +211,9 @@ def handle_count_mode(form, params):
     if not group_by:
         count = qs.count()
         if value_type == "percentage" and is_monitoring:
-            total = FormData.objects.filter(
-                form=form.parent,
-                parent__isnull=True,
-                is_pending=False,
-                is_draft=False,
-            ).count()
+            # Same scope as the count above: administration, parent
+            # criteria and the global filter (VIZ-027).
+            total = _total_parents_in_scope(form, params)
             value = round(
                 (count / total * 100), 2
             ) if total > 0 else 0
@@ -710,6 +707,16 @@ def _extract_criteria_option_values(params, question_id):
             values.add(parts[1])
         elif ctype == "option_in":
             values.update(parts[1])
+    # VIZ-027 D-22: the dashboard's "show only" on this very question (its
+    # name group in the filter's scope) restricts the tally the same way,
+    # as a slicer does: a project that serves schools and villages, shown
+    # for "School", counts under School only.
+    global_filters = params.get("global_criteria") or {}
+    for criterion in global_filters.get("criteria") or []:
+        if criterion["type"] == "option_in" and question_id in {
+            qid for qid, _ in criterion["group"]
+        }:
+            values.update(criterion["values"])
     return values or None
 
 

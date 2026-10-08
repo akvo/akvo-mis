@@ -9,12 +9,10 @@ from api.v1.v1_visualization.tests.global_filter_mixin import (
     GROUND,
     NO,
     GlobalFilterTestMixin,
-    pending,
 )
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-@pending("BE-3")
 class FilterOutNonOperationalOnOtherWidgetsTestCase(
     GlobalFilterTestMixin, APITestCase
 ):
@@ -216,19 +214,22 @@ class OtherWidgetsValidationTestCase(GlobalFilterTestMixin, APITestCase):
     def assert_all_400(self, value):
         self.assert_all_status(value, 400)
 
-    @pending("BE-1")
-    def test_question_id_is_not_a_number(self):
-        self.assert_all_400(f"option_not_in:abc:{BROKEN}")
+    def test_form_id_is_not_a_number(self):
+        self.assert_all_400(
+            f"option_not_in:abc:infrastructure_status:{BROKEN}",
+        )
 
-    @pending("BE-1")
     def test_empty_option_list(self):
-        self.assert_all_400(f"option_not_in:{self.Q_STATUS}:")
+        self.assert_all_400(
+            f"option_not_in:{self.CHECK_ID}:infrastructure_status:",
+        )
 
-    @pending("BE-1")
+    def test_the_old_question_id_grammar_is_refused(self):
+        self.assert_all_400(f"option_not_in:{self.Q_STATUS}:{BROKEN}")
+
     def test_question_from_another_form_family(self):
         self.assert_all_400(self.filter_out(self.Q_TOILET, NO))
 
-    @pending("BE-1")
     def test_question_without_options(self):
         self.assert_all_400(self.filter_out(self.Q_HOUSEHOLDS, "10"))
 

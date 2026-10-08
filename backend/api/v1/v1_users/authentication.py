@@ -7,6 +7,7 @@ mechanism resolves from there. That is what lets the entire existing
 React app work unchanged against someone else's workspace.
 """
 from django.conf import settings
+from drf_spectacular.contrib.rest_framework_simplejwt import SimpleJWTScheme
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS
 from rest_framework_simplejwt.tokens import AccessToken
@@ -122,3 +123,16 @@ class InspectionAwareJWTAuthentication(AssignmentAwareJWTAuthentication):
         operator.is_superuser = True
         operator.is_inspecting = True
         return operator
+
+
+class InspectionAwareJWTScheme(SimpleJWTScheme):
+    """The OpenAPI bearer scheme for the project's JWT authentication.
+
+    drf-spectacular only knows simplejwt's own class, so without this the
+    schema has no security scheme and Swagger (/api/doc) shows no
+    Authorize button. Registered by being defined.
+    """
+
+    target_class = (
+        "api.v1.v1_users.authentication.InspectionAwareJWTAuthentication"
+    )
