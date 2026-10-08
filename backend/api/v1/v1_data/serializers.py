@@ -620,12 +620,80 @@ class ListPendingFormDataSerializer(serializers.ModelSerializer):
         ]
 
 
+EMPTY = (None, "", [], {})
+
+
+def _dependency_met(dep, value):
+    if value in EMPTY:
+        return False
+    if "options" in dep:
+        values = value if isinstance(value, list) else [value]
+        return any(str(v) in dep["options"] for v in values)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return ("min" not in dep or number >= float(dep["min"])) and (
+        "max" not in dep or number <= float(dep["max"])
+    )
+
+
 class SubmitPendingFormSerializer(serializers.Serializer):
     data = SubmitFormDataSerializer()
     answer = SubmitFormDataAnswerSerializer(many=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def validate(self, attrs):
+        answers = {}  # {question_id: {index: value}}
+        for a in attrs.get("answer", []):
+            q_id = a["question"].id
+            idx = int(a.get("index") or 0)
+            answers.setdefault(q_id, {})[idx] = a["value"]
+
+        form = self.context.get("form")
+        if not form:
+            return attrs
+
+        questions = (
+            form.form_questions
+            .filter(required=True)
+            .exclude(display_only=True)
+            .exclude(disabled=True)
+        )
+        group_indexes = {}
+        for q in form.form_questions.all():
+            idx = {i for i in answers.get(q.id, {})}
+            group_indexes.setdefault(q.question_group_id, {0}).update(idx)
+
+        missing = []
+        for q in questions:
+            for index in group_indexes.get(q.question_group_id, {0}):
+                if q.dependency:
+                    results = [
+                        _dependency_met(
+                            d,
+                            answers.get(d["id"], {}).get(
+                                index, answers.get(d["id"], {}).get(0)
+                            ),
+                        )
+                        for d in q.dependency
+                    ]
+                    rule = (
+                        any if (q.dependency_rule or "AND").upper() == "OR"
+                        else all
+                    )
+                    if not rule(results):
+                        continue
+                if answers.get(q.id, {}).get(index) in EMPTY:
+                    missing.append(q.name or str(q.id))
+        if missing:
+            names = ", ".join(sorted(set(missing)))
+            raise ValidationError(
+                {"answer": [f"Required answers missing: {names}"]}
+            )
+        return attrs
 
     def create(self, validated_data):
         data = validated_data.get("data")

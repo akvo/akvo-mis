@@ -239,6 +239,8 @@ CREATE MATERIALIZED VIEW view_data_options as
 - `[CREATE]` `backend/api/v1/v1_visualization/migrations/0006_drop_view_data_options.py`
 - `[CREATE]` `backend/api/v1/v1_data/migrations/0007_remove_formdata_is_draft_and_recreate_index.py`
 - `[CREATE]` `backend/api/v1/v1_visualization/migrations/0007_recreate_view_data_options.py`
+- `[CREATE]` `backend/api/v1/v1_mobile/tests/tests_api_sync_draft_rejection.py`
+- `[CREATE]` `backend/api/v1/v1_data/tests/tests_submit_pending_validation.py`
 - `[DELETE]` Backend Test Files:
   - `backend/api/v1/v1_mobile/tests/tests_mobile_draft_list.py`
   - `backend/api/v1/v1_mobile/tests/tests_mobile_draft_delete.py`
@@ -248,6 +250,10 @@ CREATE MATERIALIZED VIEW view_data_options as
   - `backend/api/v1/v1_data/tests/tests_publish_draft_data.py`
   - `backend/api/v1/v1_data/tests/tests_delete_draft_data.py`
   - `backend/api/v1/v1_data/tests/tests_add_new_draft.py`
+
+### 🔒 Legacy Mobile Draft Rejection & Input Validation
+1. **Legacy Draft Sync Rejection**: In `backend/api/v1/v1_mobile/views.py` (`sync_pending_form_data`), requests with `?is_draft=true` (including `?id=X&is_draft=true`) are immediately rejected with HTTP 400 Bad Request to prevent un-upgraded APKs from creating duplicate live records.
+2. **Serializer Required-Answer Validation**: In `SubmitPendingFormSerializer` (`backend/api/v1/v1_data/serializers.py`), validation enforces required answers (excluding `display_only` and `disabled`), evaluates question dependencies (`AND`/`OR` rules, option lists, min/max numbers), and validates repeat groups per index.
 
 ---
 

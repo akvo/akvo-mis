@@ -188,6 +188,7 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
                 106: ["wife__husband__partner"],
                 107: "photo.jpeg",
                 108: "2024-04-29",
+                114: ["no"],
             },
         }
         response = self.client.post(
