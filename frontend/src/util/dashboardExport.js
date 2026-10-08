@@ -153,10 +153,31 @@ export const freezeAnimations = (clonedDoc) => {
   clonedDoc.head.appendChild(frozen);
 };
 
+/**
+ * Show the clone's export-only elements (`.dashboard-export-only`).
+ *
+ * The filter bar is controls, which mean nothing on paper, so it carries
+ * `data-html2canvas-ignore`. In its place the export shows a one-line
+ * summary of the active filters (ExportFilterSummary), hidden on screen
+ * by `display: none` and revealed here, in the copy html2canvas draws.
+ *
+ * @param {Document} clonedDoc  html2canvas's cloned document.
+ */
+export const showExportOnly = (clonedDoc) => {
+  const shown = clonedDoc.createElement("style");
+  shown.textContent = ".dashboard-export-only { display: block !important; }";
+  clonedDoc.head.appendChild(shown);
+};
+
+const prepareClone = (clonedDoc) => {
+  freezeAnimations(clonedDoc);
+  showExportOnly(clonedDoc);
+};
+
 const capture = async (node, geometry) => {
   const { default: html2canvas } = await import("html2canvas-pro");
   return html2canvas(node, {
-    onclone: freezeAnimations,
+    onclone: prepareClone,
     // The tile layer asks for CORS mode (VizMap), and this is the other
     // half of that arrangement: without it html2canvas re-fetches images
     // in no-CORS mode and taints the canvas anyway.

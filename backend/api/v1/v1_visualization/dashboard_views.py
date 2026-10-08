@@ -29,6 +29,10 @@ from api.v1.v1_visualization.scatter_functions import (
     handle_scatter,
 )
 from api.v1.v1_visualization.functions import (
+    GLOBAL_CRITERIA_PARAMETER,
+    GLOBAL_MATCH_PARAMETER,
+    parse_request_global_criteria,
+    resolve_request_date_question,
     resolve_default_administration_id,
     tenant_scoped_forms,
 )
@@ -39,6 +43,7 @@ from api.v1.v1_visualization.public_scope import (
     check_ids,
     question_ids_in_columns,
     question_ids_in_criteria,
+    filter_keys_in_global_criteria,
     resolve_view_scope,
 )
 from utils.custom_serializer_fields import (
@@ -147,7 +152,22 @@ from utils.custom_serializer_fields import (
             name="date_question_id", required=False,
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
+            description=(
+                "The dashboard's date question: bounds from_date and "
+                "to_date (VIZ-027 D-18)."
+            ),
         ),
+        OpenApiParameter(
+            name="period_question_id", required=False,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "The date a time series groups its points by (a line's "
+                "own X axis). Defaults to date_question_id."
+            ),
+        ),
+        GLOBAL_CRITERIA_PARAMETER,
+        GLOBAL_MATCH_PARAMETER,
         OpenApiParameter(
             name="administration_id", required=False,
             type=OpenApiTypes.INT,
@@ -235,14 +255,25 @@ def visualization_values(request, version):
             validated.get("stack_question_id"),
             validated.get("value_question_id"),
             validated.get("date_question_id"),
+            validated.get("period_question_id"),
             *question_ids_in_criteria(
                 request.query_params.get("criteria")
             ),
         ],
+        filter_keys=filter_keys_in_global_criteria(
+            request.query_params.getlist("global_criteria")
+        ),
     )
     form = get_object_or_404(
         tenant_scoped_forms(tenant), pk=validated["form_id"]
     )
+    # VIZ-027: parsed here, after the checks above and against the
+    # tenant-scoped form, from the same list check_ids read.
+    global_criteria, error = parse_request_global_criteria(request, form)
+    if error:
+        return Response(
+            {"message": error}, status=status.HTTP_400_BAD_REQUEST,
+        )
     question = validated.get("question")
 
     params = {
@@ -265,6 +296,7 @@ def visualization_values(request, version):
         "date_question_id": validated.get(
             "date_question_id"
         ),
+        "period_question_id": validated.get("period_question_id"),
         "administration_id": resolve_default_administration_id(
             validated.get("administration_id"), tenant,
         ),
@@ -278,7 +310,10 @@ def visualization_values(request, version):
             "include_empty", False
         ),
         "admin_level": validated.get("admin_level"),
+        "global_criteria": global_criteria,
     }
+    # VIZ-027 D-18: the dashboard's date question, as this form asks it.
+    params = resolve_request_date_question(params, form.id)
 
     # Scatter mode
     if validated.get("mode") == "scatter":
@@ -384,6 +419,8 @@ def visualization_values(request, version):
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
         ),
+        GLOBAL_CRITERIA_PARAMETER,
+        GLOBAL_MATCH_PARAMETER,
         OpenApiParameter(
             name="filter_criteria", required=False,
             type=OpenApiTypes.STR,
@@ -434,16 +471,28 @@ def visualization_escalation(request, form_id, version):
                 request.query_params.get("filter_criteria")
             ),
         ],
+        filter_keys=filter_keys_in_global_criteria(
+            request.query_params.getlist("global_criteria")
+        ),
     )
     parent_form = get_object_or_404(
         tenant_scoped_forms(tenant), pk=form_id
     )
+    global_criteria, error = parse_request_global_criteria(
+        request, parent_form,
+    )
+    if error:
+        return Response(
+            {"message": error}, status=status.HTTP_400_BAD_REQUEST,
+        )
     result = handle_escalation(
         parent_form=parent_form,
         monitoring_form_id=validated["monitoring_form_id"],
         criteria=validated["criteria"],
         columns=validated["columns"],
-        params={
+        # VIZ-027 D-18: dated on the monitoring form. Paging links keep
+        # the requested id: they are built from `query_string`.
+        params=resolve_request_date_question({
             "page": validated.get("page", 1),
             "page_size": validated.get("page_size", 20),
             "administration_id": resolve_default_administration_id(
@@ -455,11 +504,12 @@ def visualization_escalation(request, form_id, version):
                 "date_question_id"
             ),
             "filter_criteria": validated.get("filter_criteria"),
+            "global_criteria": global_criteria,
             "query_string": [
                 (k, v)
                 for k, values in request.query_params.lists()
                 for v in values
             ],
-        },
+        }, validated["monitoring_form_id"]),
     )
     return Response(result, status=status.HTTP_200_OK)

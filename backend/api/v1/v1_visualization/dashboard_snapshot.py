@@ -9,10 +9,19 @@
 # Plain functions over dicts, like dashboard_functions.py. Nothing here
 # touches a request or a response.
 
-from api.v1.v1_forms.models import Forms, Questions
+from collections import defaultdict
+
+from django.db.models import Prefetch, Q
+
+from api.v1.v1_forms.models import Forms, QuestionOptions, Questions
 from api.v1.v1_visualization.constants import DashboardKind
 from api.v1.v1_visualization.dashboard_builder_serializers import (
     DashboardWidgetSerializer,
+    serialize_question,
+)
+from api.v1.v1_visualization.functions import (
+    OPTION_TYPES,
+    global_filter_scope,
 )
 
 
@@ -38,8 +47,142 @@ def build_snapshot(dashboard):
 
     widgets = dashboard.widgets.order_by("order", "id")
     return {
-        "default_filters": dashboard.default_filters or {},
+        "default_filters": _snapshot_default_filters(
+            dashboard.default_filters or {}, dashboard.root_form_id,
+        ),
         "widgets": DashboardWidgetSerializer(widgets, many=True).data,
+    }
+
+
+def _options_prefetch():
+    return Prefetch(
+        "options", queryset=QuestionOptions.objects.order_by("order", "id"),
+    )
+
+
+def _merge_options(option_lists):
+    """One entry per value; differing labels joined with " / " (D-14).
+
+    The first list's order and labels lead; values found only in later
+    lists follow, in their order.
+    """
+    labels = {}
+    for options in option_lists:
+        for option in options:
+            seen = labels.setdefault(option["value"], [])
+            if option["label"] not in seen:
+                seen.append(option["label"])
+    return [
+        {"value": value, "label": " / ".join(names)}
+        for value, names in labels.items()
+    ]
+
+
+def _snapshot_default_filters(default_filters, root_form_id):
+    """VIZ-027 D-7, D-20: the filter bar's filters, with label and options.
+
+    A public viewer cannot read form definitions, so what the bar shows
+    travels in the snapshot. Each `{form, name}` entry gets the options of
+    every live option question of that name in its scope, merged by value
+    (D-14): the whole family for the registration form, that form alone
+    otherwise. The chosen form's own question names the filter; failing
+    that, the first form by id. An entry with nothing left in its scope
+    is left out; one emptied after Publish is dropped as the dashboard is
+    read (live_filter_questions).
+    """
+    entries = default_filters.get("questions")
+    if not isinstance(entries, list) or not entries:
+        return default_filters
+    family = set(
+        Forms.objects.filter(Q(pk=root_form_id) | Q(parent_id=root_form_id))
+        .values_list("pk", flat=True)
+    )
+    names = {
+        entry.get("name") for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+    }
+    by_name = defaultdict(list)
+    for question in (
+        Questions.objects.filter(
+            form_id__in=family, name__in=names, type__in=OPTION_TYPES,
+        )
+        .order_by("form_id", "id")
+        .prefetch_related(_options_prefetch())
+    ):
+        by_name[question.name].append(question)
+    questions = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        form_id, name = entry.get("form"), entry.get("name")
+        if form_id not in family:
+            continue
+        scope = global_filter_scope(root_form_id, form_id, family)
+        # Stable sort: the chosen form's question first, then form order.
+        group = sorted(
+            (q for q in by_name.get(name, []) if q.form_id in scope),
+            key=lambda question: question.form_id != form_id,
+        )
+        if not group:
+            continue
+        questions.append({
+            "form": form_id,
+            "name": name,
+            "label": group[0].label,
+            "options": _merge_options([
+                serialize_question(question).get("options") or []
+                for question in group
+            ]),
+        })
+    return {**default_filters, "questions": questions}
+
+
+def live_filter_questions(default_filters, tenant):
+    """Copy of default_filters without filters that stopped being
+    filterable since Publish: no live option question of that name left
+    in the scope, or the form deleted (VIZ-027, decided 2026-10-06; D-20).
+
+    Checked as the dashboard is served, like annotate_broken: a question
+    can be deleted at any time after Publish. One query, scoped by tenant
+    for the same reason annotate_broken is. The stored snapshot is not
+    touched.
+    """
+    entries = (default_filters or {}).get("questions")
+    if not isinstance(entries, list) or not entries:
+        return default_filters
+    # Still filterable means what parse_global_criteria accepts: a live
+    # option question of that name on a live form of the scope. A question
+    # on a monitoring form also counts for the family scope of its parent
+    # (the registration form). Anything else would 400 every widget the
+    # moment a viewer picked a value.
+    forms = {
+        entry.get("form") for entry in entries if isinstance(entry, dict)
+    }
+    query = Questions.objects.filter(
+        Q(form_id__in=forms) | Q(form__parent_id__in=forms),
+        name__in={
+            entry.get("name") for entry in entries
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+        },
+        type__in=OPTION_TYPES,
+        form__deleted_at__isnull=True,
+    )
+    if tenant is not None:
+        query = query.filter(**{Questions.TENANT_PATH: tenant})
+    live = set()
+    for form_id, parent_id, name in query.values_list(
+        "form_id", "form__parent_id", "name",
+    ):
+        live.add((form_id, name))
+        if parent_id is not None:
+            live.add((parent_id, name))
+    return {
+        **default_filters,
+        "questions": [
+            entry for entry in entries
+            if isinstance(entry, dict)
+            and (entry.get("form"), entry.get("name")) in live
+        ],
     }
 
 

@@ -1,5 +1,6 @@
 from django.test.utils import override_settings
 from rest_framework.test import APITestCase
+from api.v1.v1_data.models import FormData
 from api.v1.v1_visualization.tests.mixins import (
     VisualizationValuesTestMixin,
 )
@@ -521,3 +522,36 @@ class ValuesCountTestCases(VisualizationValuesTestMixin, APITestCase):
         self.assertEqual(values_by_group["pending"], 50.0)
         # Zero-count option still present for pie chart stability
         self.assertEqual(values_by_group["active"], 0.0)
+
+    def _unmonitored_registration_in_parent_administration(self):
+        # A third site, never monitored, outside adm_child. If the
+        # percentage total ignored administration_id it would count this
+        # site and turn adm_child's 1 of 1 into 1 of 3.
+        FormData.objects.create(
+            name="Site Gamma",
+            form=self.registration,
+            administration=self.adm_parent,
+            created_by=self.user,
+        )
+
+    def test_percentage_total_respects_administration_sum_by_parent(self):
+        """sum_by=parent_id: adm_child has 1 site, monitored -> 100%."""
+        self._unmonitored_registration_in_parent_administration()
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            "&monitoring=latest&sum_by=parent_id&value_type=percentage"
+            f"&administration_id={self.adm_child.id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"][0]["value"], 100.0)
+
+    def test_percentage_total_respects_administration_no_sum_by(self):
+        """No sum_by: the same denominator, the other code path."""
+        self._unmonitored_registration_in_parent_administration()
+        response = self.client.get(
+            f"{self.BASE_URL}?form_id={self.monitoring.id}"
+            "&monitoring=latest&value_type=percentage"
+            f"&administration_id={self.adm_child.id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"][0]["value"], 100.0)

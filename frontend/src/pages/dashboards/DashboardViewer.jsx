@@ -8,6 +8,7 @@ import DashboardGrid from "../../components/dashboard/DashboardGrid";
 import DashboardViewFilters from "../../components/dashboard/DashboardViewFilters";
 import EmbedFrame from "../../components/dashboard/EmbedFrame";
 import { store, uiText } from "../../lib";
+import { serializeGlobalCriteria } from "../../util/dashboardGlobalFilter";
 import "./viewer.scss";
 
 // =========================================================
@@ -23,6 +24,12 @@ const EMPTY_FILTERS = {
   to_date: null,
   date_question_id: null,
   administration_id: null,
+  // VIZ-027: the filter bar's own state. `selections` holds the ticked
+  // values of each touched question, keyed "<form>:<name>" (D-20, D-21);
+  // `match` is how filters combine. Neither is a request parameter: the
+  // grid gets them serialized (gridFilters below).
+  selections: {},
+  match: "all",
 };
 
 const DashboardViewer = () => {
@@ -35,6 +42,20 @@ const DashboardViewer = () => {
   const [dashboard, setDashboard] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+
+  // What every widget request carries. Derived once per real filter
+  // change, so the request builders recompute once (the filter bar emits
+  // only real changes). global_match only means something with a filter,
+  // and only "any" differs from the backend's default.
+  const gridFilters = useMemo(() => {
+    const { selections, match, ...requestFilters } = filters;
+    const globalCriteria = serializeGlobalCriteria(selections);
+    return {
+      ...requestFilters,
+      global_criteria: globalCriteria,
+      global_match: globalCriteria && match === "any" ? "any" : null,
+    };
+  }, [filters]);
 
   // The element html2canvas photographs. It wraps the header, the filter
   // bar and the grid — but NOT `.dashboard-view-content`, which is the
@@ -203,7 +224,7 @@ const DashboardViewer = () => {
 
             <DashboardGrid
               widgets={dashboard.widgets}
-              filters={filters}
+              filters={gridFilters}
               defaultFilters={dashboard.default_filters}
               rootFormId={dashboard.root_form?.id}
               dashboardSlug={slug}
