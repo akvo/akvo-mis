@@ -142,6 +142,37 @@ test("+N opens the rest below, each still removable", async () => {
   });
 });
 
+describe("keyboard users", () => {
+  // A span with role="button" is focusable but ignores Enter and Space;
+  // a native button gets both for free. jsdom does not turn a key press
+  // into a click, so the element itself is what is checked.
+  test("+N is a native button", () => {
+    draw({ maxCount: 1 });
+    expect(
+      screen.getByRole("button", { name: "+2 more filters" }).tagName
+    ).toBe("BUTTON");
+  });
+
+  test("each chip's remove control is a native button", () => {
+    draw();
+    expect(
+      screen.getByRole("button", {
+        name: "Remove filter What is the water source?: Rainwater",
+      }).tagName
+    ).toBe("BUTTON");
+  });
+
+  test("focusing the info icon shows the question", async () => {
+    draw();
+    fireEvent.focus(
+      within(
+        screen.getByTestId(`question-filter-chip-${SOURCE_KEY}:rainwater`)
+      ).getByRole("img", { name: SOURCE.label })
+    );
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(SOURCE.label);
+  });
+});
+
 test("in the builder the chips cannot be removed", () => {
   draw({ disabled: true });
   expect(screen.queryByRole("button", { name: /remove filter/i })).toBeNull();

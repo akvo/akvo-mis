@@ -324,7 +324,9 @@ common checklist idiom (ticked = shown), with one reload per Apply
       the question, as the WAI portal's tags do ("Yes" alone does not say
       what it answers; the tooltip keeps the chip short). The icon's
       accessible name is the question, and the close button's names the
-      question and the value. The section is set off
+      question and the value. The close control and "+N" are native
+      buttons, so Enter and Space work, and the tooltip also opens on
+      keyboard focus (code review, 2026-10-08). The section is set off
       by a top border. The row is one line: what does not fit collapses
       into "+N", whose popover (hover or click, below) lists the rest.
       Closing any chip removes that value at once, as the WAI portal's

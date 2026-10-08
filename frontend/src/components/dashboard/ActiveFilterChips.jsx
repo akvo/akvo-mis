@@ -66,8 +66,14 @@ const ActiveFilterChips = ({
     });
   };
 
+  // Native buttons, not role="button" spans: Enter and Space work, and the
+  // info icon's tooltip opens on keyboard focus too.
   const chip = (item) => (
-    <Tooltip key={item.key} title={item.question.label}>
+    <Tooltip
+      key={item.key}
+      title={item.question.label}
+      trigger={["hover", "focus"]}
+    >
       <Tag
         className="dashboard-question-filter-chip"
         data-testid={`question-filter-chip-${item.key}`}
@@ -80,10 +86,13 @@ const ActiveFilterChips = ({
         }
         closable={!disabled}
         closeIcon={
-          <CloseOutlined
-            role="button"
+          <button
+            type="button"
+            className="dashboard-question-filter-chip-close"
             aria-label={`${text.dashboardFiltersRemove} ${item.question.label}: ${item.label}`}
-          />
+          >
+            <CloseOutlined aria-hidden />
+          </button>
         }
         onClose={(event) => {
           // The chip goes when the state does; antd must not hide it.
@@ -114,15 +123,14 @@ const ActiveFilterChips = ({
               </Space>
             }
           >
-            <Tag
-              className="dashboard-question-filter-chip dashboard-filter-chips-rest-tag"
+            <button
+              type="button"
+              className="ant-tag dashboard-question-filter-chip dashboard-filter-chips-rest-tag"
               data-testid="question-filter-chips-rest"
-              tabIndex={0}
-              role="button"
               aria-label={`+${omitted.length} ${text.dashboardFiltersMore}`}
             >
               +{omitted.length}
-            </Tag>
+            </button>
           </Popover>
         )}
       />
