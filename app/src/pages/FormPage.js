@@ -63,9 +63,7 @@ const FormPage = ({ navigation, route }) => {
   const [currentDataPoint, setCurrentDataPoint] = useState({});
   const [loading, setLoading] = useState(false);
   const db = SQLite.useSQLiteContext();
-  // Stable for the life of this screen, so a retry after a failed save overwrites its
-  // own fallback file instead of accumulating one per attempt.
-  const submissionUuidRef = useRef(route?.params?.uuid || Crypto?.randomUUID?.() || 'mock-uuid');
+  const submissionUuidRef = useRef(route?.params?.uuid || Crypto.randomUUID());
   // Writes made by the app itself — loading a draft, clearing the form — are not
   // changes by the user. Pullstate dispatches subscriptions synchronously inside
   // update() (_updateState iterates clientSubscriptions in a plain loop), so raising
