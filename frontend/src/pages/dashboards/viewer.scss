@@ -112,12 +112,23 @@ $view-gutter: 50px;
   padding-right: $view-gutter;
 }
 
-/* No background of its own. The page is grey and the white belongs to
-   things you can act on — the filter controls and the cards. A full-bleed
-   white strip behind the title read as a third band of chrome stacked on
-   two others. */
+/* White from edge to edge, as in the mockup (index.html:375-391), while
+   the content stays in the 1120px column. The header and the filter bar
+   sit inside the capture element, which is capped to that column for the
+   export, so the white is painted sideways by a border-image outset
+   instead of by widening the element: the layout and the exported image
+   keep their width. Not a spread shadow cut by clip-path: clip-path also
+   cuts the dropdowns that open inside the bar (the administration
+   cascade renders its list in its parent). An outset clips nothing and
+   adds no scroll. */
+.dashboard-view-shell .dashboard-view-header,
+.dashboard-view-shell .dashboard-view-filters {
+  background: #fff;
+  border-image: linear-gradient(#fff, #fff) fill 0 / /0 100vmax;
+}
+
 .dashboard-view-header {
-  padding: 20px 0 4px;
+  padding: 20px 0;
 }
 
 /* A row since Export joined the title (VIZ-023). The column width and
@@ -152,10 +163,15 @@ $view-gutter: 50px;
 
 /* ── Filter bar ── */
 
-/* The bar is a layout row, not a surface: it positions the controls in the
-   page column and paints nothing. */
+/* The bar is the white band below the header, with a hairline under it
+   as wide as the page (the gradient's last pixel, in the same outset). */
 .dashboard-view-filters {
-  padding: 8px 0 16px;
+  padding: 12px 0;
+  margin-bottom: 16px;
+}
+
+.dashboard-view-shell .dashboard-view-filters {
+  border-image: linear-gradient(to top, #e8ebef 1px, #fff 1px) fill 0 / /0 100vmax;
 }
 
 .dashboard-view-filters-inner {
@@ -165,14 +181,14 @@ $view-gutter: 50px;
   flex-wrap: wrap;
 }
 
-/* The white is the card, and the card is the width of its controls. It
-   used to be a strip spanning the page, most of which was empty. */
+/* Date and location side by side; the band is the surface now. */
 .dashboard-view-filters-card {
-  background: #fff;
-  border: 1px solid #edf0f3;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(21, 34, 50, 0.08);
-  padding: 8px 12px;
+  padding: 0;
+}
+
+/* The "Filters" pill sits at the right end of the bar. */
+.dashboard-view-filters-end {
+  margin-left: auto;
 }
 
 /* ── Grid ── */
@@ -499,5 +515,131 @@ $view-gutter: 50px;
   /* So a short viewport squeezes the frame, never the title. */
   .dashboard-view-header {
     flex: none;
+  }
+}
+
+// VIZ-027: the question filters panel (QuestionFilters.jsx).
+.dashboard-question-filters-panel {
+  display: flex;
+  flex-direction: column;
+  max-width: 360px;
+  max-height: 60vh;
+
+  // The questions scroll; Clear all and Apply stay in view.
+  .dashboard-question-filters-body {
+    overflow-y: auto;
+  }
+
+  .dashboard-question-filter {
+    margin: 0 0 12px;
+    padding: 0;
+    border: 0;
+
+    legend {
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #081c40;
+      border: 0;
+    }
+
+    .ant-checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+  }
+
+  .dashboard-question-filter-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #cf1322;
+  }
+
+  .dashboard-question-filters-match {
+    margin: 0 0 12px;
+    padding: 0;
+    border: 0;
+
+    legend {
+      margin-bottom: 4px;
+      font-size: 13px;
+      border: 0;
+    }
+  }
+
+  .dashboard-question-filters-note {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #5b6472;
+  }
+
+  .dashboard-question-filters-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 8px;
+    border-top: 1px solid #edf0f3;
+  }
+}
+
+// Applied filter values: a section under the bar, set off by a top
+// border, in the same column as the controls. One line; the rest is "+N".
+.dashboard-view-filters-chips {
+  max-width: $view-column;
+  margin: 0 auto;
+  padding: 0 $view-gutter;
+}
+
+.dashboard-filter-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #edf0f3;
+}
+
+.dashboard-question-filter-chip {
+  margin-right: 0;
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: #1651b6;
+  background: #eef2fb;
+  border-color: #cfdcf5;
+  white-space: nowrap;
+
+  /* The info icon: its tooltip names the question. */
+  .anticon-info-circle {
+    color: #4a6aa8;
+    cursor: help;
+  }
+}
+
+.dashboard-filter-chips-rest-tag {
+  cursor: pointer;
+}
+
+.dashboard-filter-chips-more {
+  max-width: 360px;
+}
+
+/* ── Export only (VIZ-027) ──
+   Shown by dashboardExport's showExportOnly in the copy it draws; the
+   filter bar it replaces carries data-html2canvas-ignore. */
+.dashboard-export-only {
+  display: none;
+}
+
+.dashboard-export-filters {
+  max-width: $view-column;
+  margin: 0 auto 16px;
+  padding: 0 $view-gutter;
+  font-size: 13px;
+  color: #5b6472;
+
+  strong {
+    color: #1f2937;
   }
 }

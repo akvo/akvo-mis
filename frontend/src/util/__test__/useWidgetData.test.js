@@ -460,7 +460,8 @@ describe("filter merge", () => {
     // The wrong name here is accepted and silently dropped, not rejected.
     expect(params.administration).toBe(42);
     expect(params).not.toHaveProperty("administration_id");
-    expect(params).not.toHaveProperty("date_question_id");
+    // VIZ-027 D-18: the map is dated by the dashboard's date question too.
+    expect(params.date_question_id).toBe(600204);
     expect(params.from_date).toBe("2026-01-01");
   });
 

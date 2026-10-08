@@ -22,6 +22,13 @@ import { store, uiText } from "../../lib";
 import dashboardApi from "../../util/dashboardApi";
 import dashboardAi from "../../util/dashboardAi";
 
+// What a new widgets dashboard starts with (VIZ-027 D-19). An embed
+// dashboard has no data of ours to filter and is created without it.
+const DEFAULT_FILTERS = {
+  date: { enabled: true },
+  administration: { enabled: true },
+};
+
 const INTENT_PRESETS = [
   "Executive KPI Overview",
   "Regional & Spatial Breakdown",
@@ -184,6 +191,9 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
         const createPayload = {
           name: values.name.trim(),
           root_form: values.root_form,
+          // VIZ-027 D-19: a new dashboard has a filter bar from the start;
+          // the author can switch either control off in the builder.
+          default_filters: DEFAULT_FILTERS,
         };
         if (starterWidgets) {
           createPayload.widgets = starterWidgets;

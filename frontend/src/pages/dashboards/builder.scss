@@ -262,6 +262,8 @@
    surfaces. */
 .builder-canvas-inner .dashboard-view-filters {
   padding: 0 0 16px;
+  /* The viewer's band spacing; the canvas has its own. */
+  margin-bottom: 0;
 
   .dashboard-view-filters-inner {
     padding-left: 0;
@@ -1189,4 +1191,119 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 4px;
+}
+
+// VIZ-027: filter questions and the date question in the dashboard panel.
+.builder-inspector-date-question {
+  margin: 4px 0 10px;
+}
+
+.builder-inspector-sublabel {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #5b6472;
+}
+
+.builder-question-filters {
+  margin-top: 10px;
+
+  .builder-question-filter-entry {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border: 1px solid #edf0f3;
+    border-radius: 6px;
+  }
+
+  .builder-question-filter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .builder-question-filter-covers {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #5b6472;
+  }
+
+  .builder-question-filter-warning {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #ad6800;
+  }
+
+  .builder-question-filter-choose {
+    margin-top: 8px;
+  }
+}
+
+.builder-question-filter-modal {
+  .builder-question-filter-modal-tools {
+    display: grid;
+    grid-template-columns: minmax(160px, 240px) 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .builder-question-filter-modal-list {
+    max-height: 60vh;
+    overflow-y: auto;
+
+    h4 {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      margin: 0;
+      padding: 8px 0 4px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      color: #5b6472;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+  }
+
+  .builder-question-filter-option {
+    display: flex;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      background: #f5f7fa;
+    }
+  }
+
+  .builder-question-filter-option-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .builder-question-filter-option-label {
+    font-size: 14px;
+  }
+
+  .builder-question-filter-option-group {
+    margin-left: 6px;
+    font-size: 11px;
+  }
+
+  .builder-question-filter-option-meta {
+    overflow: hidden;
+    font-size: 12px;
+    color: #5b6472;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 575px) {
+  .builder-question-filter-modal .builder-question-filter-modal-tools {
+    grid-template-columns: 1fr;
+  }
 }
