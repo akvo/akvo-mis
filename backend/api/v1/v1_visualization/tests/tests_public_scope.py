@@ -167,6 +167,18 @@ class AllowlistTestCase(TestCase):
         ])
         self.assertEqual(allowed.questions, {600203, 600204})
 
+    def test_a_line_category_question_is_collected(self):
+        # A line grouped by category sends it as question_id instead of
+        # the widget's own question, so check_ids sees this id.
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {"category_question_id": 600205},
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203, 600205})
+
     def test_a_value_question_is_collected(self):
         allowed = self.build([
             {

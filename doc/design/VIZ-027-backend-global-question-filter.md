@@ -916,6 +916,10 @@ widget, on whichever form of the family the widget sits.
       public allowlist (`config.date_question_id`) take it. Tests:
       `tests_line_period_question.py`,
       `AllowlistTestCase.test_a_line_period_question_is_collected`.
+      The allowlist also collects a line's `config.category_question_id`,
+      which the line sends as `question_id`; without it a public line
+      grouped by category was a 404
+      (`test_a_line_category_question_is_collected`).
 - [x] `validate_dashboard_payload` checks
       `default_filters.date.date_question`: absent or `null` is fine;
       otherwise an integer id of a live `date` question in the root form

@@ -122,10 +122,13 @@ def allowlist_from(dashboard):
         if stack_form_id is not None:
             forms.add(stack_form_id)
 
-        # A line's own X-axis date, sent as period_question_id (VIZ-027).
-        period_qid = _as_id(widget_config.get("date_question_id"))
-        if period_qid is not None:
-            questions.add(period_qid)
+        # A line's own X-axis date, sent as period_question_id (VIZ-027),
+        # and the category it splits its lines by, sent as question_id in
+        # place of the widget's own question.
+        for key in ("date_question_id", "category_question_id"):
+            qid = _as_id(widget_config.get(key))
+            if qid is not None:
+                questions.add(qid)
 
         # The number question a bar is measured by (VIZ-015.b).
         value_qid = _as_id(widget_config.get("value_question"))
