@@ -3,13 +3,9 @@
 **Task ID**: VIZ-027 (GitHub [#478](https://github.com/akvo/akvo-mis/issues/478)), frontend part
 **Parent design**: [VIZ-027-global-question-filter.md](VIZ-027-global-question-filter.md)
 **Sibling**: [VIZ-027-backend-global-question-filter.md](VIZ-027-backend-global-question-filter.md)
-**Branch**: `feature/524-viz-027-filter-dashboard-frontend` (into `epic/478-viz-global-question-filter`)
-**Date**: 2026-10-06 (revised 2026-10-07: D-16 to D-21)
-**Status**: Implemented 2026-10-07 (FE-1 to FE-5, FE-7, FE-8); manual
-checks in §7 pending. FE-6 deferred. Revised the same day after a
-browser review: the builder picker is a modal with question groups
-(FE-5), chips name their question in a tooltip (FE-4), and the export
-replaces the filter bar with a summary of the active filters (FE-4).
+**Branch**: `epic/478-viz-global-question-filter`
+**Date**: 2026-10-06 (FE-4 revised 2026-10-07: Filters panel, D-16)
+**Status**: Draft
 
 ---
 
