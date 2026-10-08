@@ -222,8 +222,12 @@ const buildRequest = (widget, filters, rootFormId, dashboardSlug, page = 1) => {
           : null,
         admin_level: hasAdminStack ? config.admin_level ?? 1 : null,
         administration_id: filters?.administration_id,
+        // The dashboard's date question bounds the range, as on every
+        // widget (D-18); the line's own date question only places its
+        // points on the X axis. One parameter used to do both, so a line
+        // filtered by a different date than the rest of the dashboard.
         ...dateFilters(filters),
-        date_question_id: config.date_question_id,
+        period_question_id: config.date_question_id,
         ...globalFilters(filters),
         dashboard_slug: dashboardSlug,
       }),

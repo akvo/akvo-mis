@@ -217,6 +217,14 @@ dashboard named, and returns 404.
 **Turns green**: `util/__test__/useWidgetData.globalCriteria.test.js`
 (9 widget kinds, 3 checks each, plus A7).
 
+**Line date (revised 2026-10-08, code review).** The line builder used to
+spread `dateFilters(filters)` and then set
+`date_question_id: config.date_question_id`, overwriting the dashboard's
+date question (with `null` when the line had none). It now sends the
+dashboard's `date_question_id` like every widget, and its own date as
+`period_question_id`, the X-axis date (parent D-18, precedence note).
+Tests: the two line cases in `useWidgetData.test.js` ("filter merge").
+
 ---
 
 ### FE-3: Viewer state (`pages/dashboards/DashboardViewer.jsx`)

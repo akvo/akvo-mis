@@ -907,7 +907,15 @@ widget, on whichever form of the family the widget sits.
       the `children__created` join. Both pass `date_question_id` on to
       `apply_global_exclusions`.
 - [x] A widget-level `config.date_question_id` (line charts) resolves to
-      itself: same form, same id.
+      itself: same form, same id. **Revised 2026-10-08:** it is sent as
+      `period_question_id`, the date a time series groups by, apart from
+      the dashboard's `date_question_id`, which bounds the range (parent
+      D-18, precedence note). `values_functions._period_question_id`
+      reads it in the ten period handlers and falls back to
+      `date_question_id`; the `/values` serializer, `check_ids` and the
+      public allowlist (`config.date_question_id`) take it. Tests:
+      `tests_line_period_question.py`,
+      `AllowlistTestCase.test_a_line_period_question_is_collected`.
 - [x] `validate_dashboard_payload` checks
       `default_filters.date.date_question`: absent or `null` is fine;
       otherwise an integer id of a live `date` question in the root form

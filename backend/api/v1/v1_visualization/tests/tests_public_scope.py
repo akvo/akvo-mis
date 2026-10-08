@@ -155,6 +155,18 @@ class AllowlistTestCase(TestCase):
         ])
         self.assertEqual(allowed.forms, {6001, 6002})
 
+    def test_a_line_period_question_is_collected(self):
+        # A line's own X-axis date reaches /values as
+        # period_question_id; the dashboard's date filter stays apart.
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {"date_question_id": 600204},
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203, 600204})
+
     def test_a_value_question_is_collected(self):
         allowed = self.build([
             {

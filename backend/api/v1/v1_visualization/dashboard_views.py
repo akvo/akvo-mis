@@ -152,6 +152,19 @@ from utils.custom_serializer_fields import (
             name="date_question_id", required=False,
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
+            description=(
+                "The dashboard's date question: bounds from_date and "
+                "to_date (VIZ-027 D-18)."
+            ),
+        ),
+        OpenApiParameter(
+            name="period_question_id", required=False,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description=(
+                "The date a time series groups its points by (a line's "
+                "own X axis). Defaults to date_question_id."
+            ),
         ),
         GLOBAL_CRITERIA_PARAMETER,
         GLOBAL_MATCH_PARAMETER,
@@ -242,6 +255,7 @@ def visualization_values(request, version):
             validated.get("stack_question_id"),
             validated.get("value_question_id"),
             validated.get("date_question_id"),
+            validated.get("period_question_id"),
             *question_ids_in_criteria(
                 request.query_params.get("criteria")
             ),
@@ -282,6 +296,7 @@ def visualization_values(request, version):
         "date_question_id": validated.get(
             "date_question_id"
         ),
+        "period_question_id": validated.get("period_question_id"),
         "administration_id": resolve_default_administration_id(
             validated.get("administration_id"), tenant,
         ),

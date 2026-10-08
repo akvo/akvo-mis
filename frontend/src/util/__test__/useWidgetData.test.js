@@ -429,6 +429,31 @@ describe("filter merge", () => {
     expect(params.administration_id).toBe(42);
   });
 
+  test("a line keeps its own axis date and takes the dashboard's date filter", async () => {
+    // Its own date question used to overwrite the dashboard's, so a line
+    // filtered by a different date than every other widget.
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(
+      widget({ type: "line", config: { date_question_id: 600299 } }),
+      ALL_FILTERS
+    );
+    await settle(probe);
+
+    const { params } = axios.mock.calls[0][0];
+    expect(params.date_question_id).toBe(600204);
+    expect(params.period_question_id).toBe(600299);
+  });
+
+  test("a line without its own axis date sends none", async () => {
+    axios.mockResolvedValue({ data: { data: [], labels: [] } });
+    const probe = run(widget({ type: "line", config: {} }), ALL_FILTERS);
+    await settle(probe);
+
+    const { params } = axios.mock.calls[0][0];
+    expect(params.date_question_id).toBe(600204);
+    expect(params).not.toHaveProperty("period_question_id");
+  });
+
   test("/escalation takes all four parameters", async () => {
     axios.mockResolvedValue({ data: { count: 0, results: [] } });
     const probe = run(

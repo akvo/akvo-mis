@@ -843,6 +843,18 @@ registration form finds no date answers and goes empty.
 - Frontend FE-7: a date question picker in the builder, offering date
   questions grouped by name.
 
+**Precedence for a line's own date (decided 2026-10-08, code review).**
+A line chart has its own date question (`config.date_question_id`), the
+date its points sit at on the X axis. It used to travel as
+`date_question_id` and overwrite the dashboard's, so a line was filtered
+by a different date than every other widget. The two are now separate
+parameters: `date_question_id` is always the dashboard's range, and
+`period_question_id` is the line's axis date (it defaults to
+`date_question_id` for callers that send only that). A line therefore
+counts the datapoints in the dashboard's range and places them by its own
+date; with both bounds set, its axis shows only the periods inside the
+range (the gap fill's window).
+
 ### D-19: New dashboards start with the date and administration filters on
 
 Decided 2026-10-07.
