@@ -8,6 +8,7 @@ from django.test.utils import override_settings
 from api.v1.v1_forms.functions import (
     normalize_form_definition,
     option_value_from_label,
+    option_values,
     validate_form_definition,
 )
 from api.v1.v1_forms.models import QuestionGroup, QuestionOptions, Questions
@@ -94,6 +95,30 @@ class OptionValueFromLabelTestCase(TestCase):
         )
 
 
+class OptionValuesTestCase(TestCase):
+    """The codes of one question's options: removing the delimiters must
+    not leave a code empty (global_criteria cannot carry one) or equal to
+    a sibling's (the (question, value) unique constraint)."""
+
+    def test_a_label_of_only_delimiters_gets_a_code(self):
+        self.assertEqual(option_values([{"label": ":"}]), ["option"])
+
+    def test_generated_codes_never_collide(self):
+        self.assertEqual(
+            option_values([
+                {"label": "AB"}, {"label": "A:B"}, {"label": ":"},
+                {"label": "|"},
+            ]),
+            ["ab", "ab_1", "option", "option_1"],
+        )
+
+    def test_a_given_code_is_kept_and_a_generated_one_avoids_it(self):
+        self.assertEqual(
+            option_values([{"label": "A:B"}, {"label": "X", "value": "ab"}]),
+            ["ab_1", "ab"],
+        )
+
+
 @override_settings(USE_TZ=False, TEST_ENV=True)
 class BuilderOptionValueTestCase(TestCase):
     """The form builder's create and update (validate_form_payload)."""
@@ -155,6 +180,22 @@ class BuilderOptionValueTestCase(TestCase):
                 ).values_list("value", flat=True)
             ),
             ["type_a_hand_pump"],
+        )
+
+    def test_labels_that_clean_to_the_same_code_still_save(self):
+        res = self.create([
+            {"label": "AB", "value": ""},
+            {"label": "A:B", "value": ""},
+            {"label": ":", "value": ""},
+        ])
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(
+            sorted(
+                QuestionOptions.objects.filter(
+                    question__form_id=res.json()["id"],
+                ).values_list("value", flat=True)
+            ),
+            ["ab", "ab_1", "option"],
         )
 
     def test_an_existing_code_with_a_delimiter_can_still_be_saved(self):

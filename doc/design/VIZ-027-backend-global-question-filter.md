@@ -848,6 +848,17 @@ entry point, so the form editor library does not need to change
       the message; builder update of a form whose existing option is
       `a:b` → 200; JSON and XLSForm imports with `a:b` → error.
 
+**Review fix (2026-10-08): generated codes are never empty or shared.**
+Removing the delimiters could leave a generated code empty (label `:`),
+which `global_criteria` cannot carry, or equal to a sibling's (`A:B` and
+`AB` both gave `ab`), which hit the `(question, value)` unique constraint
+on save or import. `option_values(options)` now computes the codes of
+one question's options together: a given code is kept; a generated one
+falls back to `option` when empty and gets `_1`, `_2`… when a sibling
+already has it, as question names do. The four save paths use it. Tests:
+`OptionValuesTestCase` and
+`BuilderOptionValueTestCase.test_labels_that_clean_to_the_same_code_still_save`.
+
 ---
 
 ### BE-8: The dashboard date question works on every widget (D-18)

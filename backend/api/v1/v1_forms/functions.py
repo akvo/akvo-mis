@@ -97,6 +97,36 @@ def option_value_from_label(label):
     return re.sub(r"\s+", "_", cleaned.strip())
 
 
+def option_values(options):
+    """The code of each of one question's options, in order.
+
+    A given code is kept. A missing one is generated from the label, never
+    empty (a label of only delimiters, which global_criteria could not
+    carry) and never equal to a sibling's (the (question, value) unique
+    constraint): `_1`, `_2`… is appended, as for question names.
+    """
+    given = [opt.get("value") for opt in options]
+    taken = {value for value in given if value}
+    values = []
+    for opt, value in zip(options, given):
+        if not value:
+            value = _unique_value(
+                option_value_from_label(opt.get("label", "")) or "option",
+                taken,
+            )
+        values.append(value)
+    return values
+
+
+def _unique_value(base, taken):
+    value, counter = base, 1
+    while value in taken:
+        value = f"{base}_{counter}"
+        counter += 1
+    taken.add(value)
+    return value
+
+
 def stored_option_pairs(groups):
     """{(question id, value)} already stored for the questions in `groups`.
 
@@ -252,15 +282,15 @@ def _save_questions(
         if not skip_option_delete:
             question.options.all().delete()
         last_opt_order = 0
-        for opt in q_data.get("option") or []:
+        options = q_data.get("option") or []
+        for opt, value in zip(options, option_values(options)):
             opt_label = opt.get("label", "")
             last_opt_order = opt.get("order") or (last_opt_order + 1)
             QuestionOptions.objects.create(
                 question=question,
                 order=last_opt_order,
                 label=opt_label,
-                value=opt.get("value")
-                or option_value_from_label(opt_label),
+                value=value,
                 other=opt.get("other", False),
                 color=opt.get("color"),
                 translations=opt.get("translations"),
@@ -636,14 +666,14 @@ def restore_from_snapshot(form, pv):
                 question_db[q_obj.id] = q_obj
                 live_q_id = q_obj.id
 
-            for opt in q_data.get("option", []):
+            options = q_data.get("option", [])
+            for opt, value in zip(options, option_values(options)):
                 new_options.append(
                     QuestionOptions(
                         question_id=live_q_id,
                         order=opt["order"],
                         label=opt["label"],
-                        value=opt.get("value")
-                        or option_value_from_label(opt["label"]),
+                        value=value,
                         other=opt.get("other", False),
                         color=opt.get("color"),
                         translations=opt.get("translations"),
@@ -1766,14 +1796,14 @@ def _apply_import_create_path(norm, user, parent_form, force_new_id):
             if q_id is not None:
                 final_q_id_map[q_id] = q_obj.id
 
-            for opt in q.get("option") or []:
+            options = q.get("option") or []
+            for opt, value in zip(options, option_values(options)):
                 new_options.append(
                     QuestionOptions(
                         question_id=q_obj.id,
                         order=opt.get("order", 1),
                         label=opt["label"],
-                        value=opt.get("value")
-                        or option_value_from_label(opt["label"]),
+                        value=value,
                         other=opt.get("other", False),
                         color=opt.get("color"),
                         translations=opt.get("translations"),
@@ -1998,14 +2028,14 @@ def _apply_import_update_path(
                     question_db[q_id] = q_obj
                 live_q_id = q_obj.id
 
-            for opt in q.get("option") or []:
+            options = q.get("option") or []
+            for opt, value in zip(options, option_values(options)):
                 new_options.append(
                     QuestionOptions(
                         question_id=live_q_id,
                         order=opt.get("order", 1),
                         label=opt["label"],
-                        value=opt.get("value")
-                        or option_value_from_label(opt["label"]),
+                        value=value,
                         other=opt.get("other", False),
                         color=opt.get("color"),
                         translations=opt.get("translations"),
