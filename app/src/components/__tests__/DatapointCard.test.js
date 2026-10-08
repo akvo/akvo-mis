@@ -12,8 +12,6 @@ describe('getStatus', () => {
   it.each([
     [{ needsRetake: true, submitted: 0 }, 'missing'],
     [{ needsRetake: true, submitted: 1, isSynced: false }, 'missing'],
-    [{ submitted: 0, sendToWeb: 1, isSynced: false }, 'pendingWeb'],
-    [{ submitted: 0, draftId: 7, isSynced: true }, 'onWeb'],
     [{ submitted: 0 }, 'draft'],
     [{ submitted: 1, isSynced: false }, 'pending'],
     [{ submitted: 1, isSynced: true }, 'synced'],
@@ -48,17 +46,16 @@ describe.each([
     expect(StyleSheet.flatten(icon.props.style).color).toBe(palette.status.success);
   });
 
-  it('explains only the icons the list shows, cloud states included', () => {
+  it('explains only the icons the list shows', () => {
     const items = [
-      { id: 1, submitted: 0, sendToWeb: 1, isSynced: false },
-      { id: 2, submitted: 0, draftId: 9, isSynced: true },
+      { id: 1, submitted: 0, isSynced: false },
+      { id: 2, submitted: 1, isSynced: false },
       { id: 3, submitted: 1, isSynced: true },
     ];
     const { getByText, queryByText } = render(<DatapointLegend trans={trans} items={items} />);
-    expect(getByText(trans.pendingWebLabel)).toBeTruthy();
-    expect(getByText(trans.onWebLabel)).toBeTruthy();
+    expect(getByText(trans.draftText)).toBeTruthy();
+    expect(getByText(trans.legendPending)).toBeTruthy();
     expect(getByText(trans.legendSynced)).toBeTruthy();
-    expect(queryByText(trans.legendPending)).toBeNull();
-    expect(queryByText(trans.draftText)).toBeNull();
+    expect(queryByText(trans.photoMissingText)).toBeNull();
   });
 });

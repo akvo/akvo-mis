@@ -12,7 +12,7 @@ exports[`Homepage renders correctly 1`] = `
   }
   style={
     {
-      "backgroundColor": "#EEEEEE",
+      "backgroundColor": "#EAEAEA",
       "flex": 1,
     }
   }
@@ -173,6 +173,7 @@ exports[`Homepage renders correctly 1`] = `
         "borderTopColor": "#000",
         "borderTopWidth": 0,
         "padding": 8,
+        "paddingHorizontal": 16,
         "width": "100%",
       }
     }

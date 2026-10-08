@@ -45,37 +45,6 @@ export const fetchDatapointsPageByPage = async (onPageReceived, pageSize = 100) 
 };
 
 /**
- * Iteratively fetches draft datapoints page by page.
- *
- * @param {Function} onPageReceived - async callback(pageData, pageNumber, totalPages)
- * @param {number} pageSize - page size to request (default 100, backend max)
- * @returns {Promise<{totalProcessed: number}>}
- */
-export const fetchDraftDatapointsPageByPage = async (onPageReceived, pageSize = 100) => {
-  let totalProcessed = 0;
-
-  // Async recursion is stack-safe: each `await` unwinds the call frame,
-  // so recursion depth equals 1 regardless of page count.
-  // At page_size=100, 10,000 datapoints = 100 pages.
-  const fetchPage = async (currentPage, totalPages) => {
-    if (currentPage > totalPages) {
-      return;
-    }
-    const { data: apiData } = await api.get(
-      `/draft-list?page=${currentPage}&page_size=${pageSize}`,
-    );
-    const { data, total_page: totalPage, current: page } = apiData;
-
-    await onPageReceived(data, page, totalPage);
-    totalProcessed += data.length;
-    await fetchPage(page + 1, totalPage);
-  };
-
-  await fetchPage(1, 1);
-  return { totalProcessed };
-};
-
-/**
  * Fetches datapoints for a single form page by page using form_id filter.
  * Only one page of data is in memory at a time, reducing peak memory usage.
  *

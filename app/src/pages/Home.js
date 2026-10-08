@@ -311,12 +311,12 @@ const Home = ({ navigation, route }) => {
 
   useEffect(() => {
     const unsubsDataSync = DatapointSyncState.subscribe(
-      ({ inProgress, draftInProgress }) => ({ inProgress, draftInProgress }),
-      ({ inProgress, draftInProgress }) => {
-        if (!syncLoading && (inProgress || draftInProgress)) {
+      (s) => s.inProgress,
+      (inProgress) => {
+        if (!syncLoading && inProgress) {
           setSyncLoading(true);
         }
-        if (!inProgress && !draftInProgress) {
+        if (!inProgress) {
           setSyncLoading(false);
         }
       },

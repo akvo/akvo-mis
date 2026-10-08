@@ -2,13 +2,14 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import SaveDialogMenu from '../SaveDialogMenu';
 
+jest.mock('../../../lib/background-task', () => ({}));
+
 describe('SaveDialogMenu component', () => {
   it('should not show dialog if visible prop false', () => {
     const wrapper = render(<SaveDialogMenu visible={false} setVisible={jest.fn()} />);
 
     const dialogElement = wrapper.queryByTestId('save-dialog-menu');
-    expect(dialogElement).toBeTruthy();
-    expect(dialogElement.props.visible).toEqual(false);
+    expect(dialogElement).toBeNull();
   });
 
   it('should show dialog if visible prop true', () => {

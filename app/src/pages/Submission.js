@@ -54,7 +54,6 @@ const Submission = ({ navigation, route }) => {
   const styles = getStyles(theme);
   const db = SQLite.useSQLiteContext();
   const refreshPage = UIState.useState((s) => s.refreshPage);
-  const isOnline = UIState.useState((s) => s.online);
 
   // The registration list is the only place monitoring rollups make sense: a
   // monitoring list is already scoped to one uuid and has no children of its own.
@@ -445,11 +444,6 @@ const Submission = ({ navigation, route }) => {
         UIState.update((s) => {
           s.refreshPage = true;
         });
-      } else {
-        await crudDataPoints.setSendToWeb(db, item.id);
-        if (Platform.OS === 'android') {
-          ToastAndroid.show(trans.sendToWebToast, ToastAndroid.LONG);
-        }
       }
       await fetchData();
     } catch (error) {
@@ -461,15 +455,7 @@ const Submission = ({ navigation, route }) => {
     }
   };
 
-  // A web-known draft cannot be deleted offline, and finding that out after
-  // confirming is worse than not being offered it: say so on the tap instead.
   const askDelete = (item) => {
-    if (item.draftId && !isOnline) {
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(trans.deleteNeedsConnectionText, ToastAndroid.LONG);
-      }
-      return;
-    }
     setConfirmAction({ type: 'delete', item });
   };
 
@@ -508,7 +494,7 @@ const Submission = ({ navigation, route }) => {
         onPress={() => openFamilyDraft(item)}
         containerStyle={styles.swipeItem}
         testID={`submission-item-${item.id}`}
-        leftWidth={112}
+        leftWidth={56}
         minSlideWidth={40}
         leftContent={
           <View style={styles.swipeActions}>
@@ -519,15 +505,6 @@ const Submission = ({ navigation, route }) => {
             >
               <Icon name="trash-outline" size={22} color={theme.status.error} />
             </TouchableOpacity>
-            {!item.draftId && !item.sendToWeb && (
-              <TouchableOpacity
-                onPress={() => setConfirmAction({ type: 'sendToWeb', item })}
-                testID={`send-to-web-${item.id}`}
-                style={styles.swipeAction}
-              >
-                <Icon name="cloud-upload-outline" size={22} color={theme.icon.accent} />
-              </TouchableOpacity>
-            )}
           </View>
         }
       >
@@ -628,14 +605,8 @@ const Submission = ({ navigation, route }) => {
       <ConfirmDialog
         visible={!!confirmAction}
         danger={confirmAction?.type === 'delete'}
-        title={confirmAction?.type === 'delete' ? trans.deleteDraftTitle : trans.sendToWebTitle}
-        message={
-          confirmAction?.type === 'delete'
-            ? `${trans.deleteDraftMessage}${
-                confirmAction?.item?.draftId ? ` ${trans.deleteDraftWebToo}` : ''
-              }`
-            : trans.sendToWebMessage
-        }
+        title={trans.deleteDraftTitle}
+        message={trans.deleteDraftMessage}
         onClose={() => setConfirmAction(null)}
         actions={[
           {
@@ -646,7 +617,7 @@ const Submission = ({ navigation, route }) => {
           },
           {
             label: trans.buttonYes,
-            type: confirmAction?.type === 'delete' ? 'danger' : 'primary',
+            type: 'danger',
             onPress: handleConfirmAction,
             testID: 'confirm-action-button',
           },
