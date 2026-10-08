@@ -163,6 +163,18 @@ def get_mobile_form_details(request: Request, version, form_id):
 @api_view(["POST"])
 @permission_classes([IsMobileAssignment])
 def sync_pending_form_data(request, version):
+    # Legacy APKs still push drafts (DRAFT-002). A 4xx makes the device keep
+    # it locally (saveAsDraft / saveAsPending) until it is submitted properly.
+    if request.GET.get("is_draft") == "true":
+        return Response(
+            {
+                "message": (
+                    "Draft sync is no longer supported. "
+                    "Submit the form to sync it."
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     assignment = cast(MobileAssignmentToken, request.auth).assignment
     form = get_object_or_404(
         Forms.objects.for_user(assignment.user),
