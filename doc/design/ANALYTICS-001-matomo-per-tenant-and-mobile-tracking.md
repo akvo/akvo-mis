@@ -271,9 +271,88 @@ In the top dashboard sub-bar, click **Widgets** (or **Add a widget**) and select
    - Category: `Behavior`
    - Select: `Pages` (shows URL paths such as `/control-center`, `/data`, `/reports`)
 
-#### Step 3: Organize Layout
-- Drag and drop widgets by their title bars to arrange them into your preferred layout.
-- Use the date range selector at the top (e.g., *Last 30 days*, *Current Month*, or *Custom date range*) to inspect real-time and historical data.
+#### Step 3: Create Recommended Custom Reports (Custom Widget Names & Multi-Level Breakdowns)
+
+Standard Matomo widgets use fixed system titles (e.g. *Actions: Event Actions*). To have **custom widget names** and nested breakdowns, navigate to **Custom Reports** $\rightarrow$ **Manage Custom Reports** (or click **Create new report**) and create the following 4 reports:
+
+---
+
+##### Report 1: Tenant Submissions Overview (Mobile vs Web) — *Primary Submissions Tracker*
+* **Purpose**: Track total form submissions per tenant workspace and see the distribution between Mobile App and Webform.
+* **Report Name**: `Tenant Submissions Overview` *(Becomes widget title)*
+* **Report Type**: `Table`
+* **Dimensions**:
+  1. Dimension 1: `Visitors` $\rightarrow$ `Tenant Name`
+  2. Dimension 2: `Events` $\rightarrow$ `Event Action` *(breaks down into `Mobile Sync` vs `Webform Submit`)*
+* **Metrics**:
+  - `Events` $\rightarrow$ `Total events` *(submission counts)*
+  - `Visitors` $\rightarrow$ `Visits`
+  - `Visitors` $\rightarrow$ `Unique Visitors`
+* **Filter**:
+  - `Events` $\rightarrow$ `Event Category` **equals** `Data Submission`
+
+---
+
+##### Report 2: Submissions by Form & Workspace — *Form-Level Volume Breakdown*
+* **Purpose**: Identify which specific surveys/forms are receiving submissions within each workspace.
+* **Report Name**: `Submissions by Form & Tenant`
+* **Report Type**: `Table`
+* **Dimensions**:
+  1. Dimension 1: `Visitors` $\rightarrow$ `Tenant Name`
+  2. Dimension 2: `Events` $\rightarrow$ `Event Name` *(individual Form Title)*
+  3. Dimension 3: `Events` $\rightarrow$ `Event Action` *(Mobile vs Web)*
+* **Metrics**:
+  - `Events` $\rightarrow$ `Total events`
+* **Filter**:
+  - `Events` $\rightarrow$ `Event Category` **equals** `Data Submission`
+
+---
+
+##### Report 3: Tenant Web Activity & Page Usage — *Workspace Engagement*
+* **Purpose**: Track user engagement, pageviews, and feature usage (`/control-center`, `/data`, `/reports`) per workspace.
+* **Report Name**: `Tenant Web Activity`
+* **Report Type**: `Table`
+* **Dimensions**:
+  1. Dimension 1: `Visitors` $\rightarrow$ `Tenant Name`
+  2. Dimension 2: `Actions` $\rightarrow$ `Page URL` (or `Page Title`)
+* **Metrics**:
+  - `Actions` $\rightarrow$ `Pageviews`
+  - `Actions` $\rightarrow$ `Unique Pageviews`
+  - `Actions` $\rightarrow$ `Avg. time on page`
+  - `Visitors` $\rightarrow$ `Visits`
+* **Filter**: *None (records all web browsing activity)*
+
+---
+
+##### Report 4: Submission Trends Over Time — *Historical Growth Chart*
+* **Purpose**: Visual timeline chart showing how submissions grow over weeks/months across channels.
+* **Report Name**: `Submission Trends Over Time`
+* **Report Type**: `Evolution` *(renders a time-series graph)*
+* **Dimensions**:
+  1. Dimension 1: `Events` $\rightarrow$ `Event Action` (or `Tenant Name`)
+* **Metrics**:
+  - `Events` $\rightarrow$ `Total events`
+* **Filter**:
+  - `Events` $\rightarrow$ `Event Category` **equals** `Data Submission`
+
+---
+
+#### Step 4: Add Custom Reports to Dashboard & Organize Layout
+
+1. Go back to **Dashboard** in the left navigation.
+2. Click **Manage Dashboard** $\rightarrow$ **Add a widget** (or the top **Widgets** dropdown).
+3. Under the category **Custom Reports**, click each of your new custom reports to add them to the dashboard.
+4. **Recommended 2-Column Dashboard Layout**:
+   - **Left Column**:
+     - `Tenant Submissions Overview` (Table)
+     - `Submissions by Form & Tenant` (Table)
+   - **Right Column**:
+     - `Submission Trends Over Time` (Evolution Graph)
+     - `Tenant Web Activity` (Table)
+     - `Visits in real-time` (Real-time live visits stream)
+5. **Date Scope & Real-time Verification**:
+   - Set the date range at the top to **"Today"** or **"Day"** for real-time validation.
+   - Select **"Week / Month"** for aggregated historical trend analysis.
 
 ---
 
