@@ -40,7 +40,7 @@ services:
       - ./ci/test:/test:ro
     working_dir: /test
   db:
-    image: postgres:12-alpine
+    image: postgres:18.6-alpine
     command:
       postgres -c 'shared_buffers=128MB' -c 'fsync=off' -c 'synchronous_commit=off'
       -c 'full_page_writes=off' -c 'max_connections=100' -c 'bgwriter_lru_maxpages=0'
@@ -52,7 +52,7 @@ services:
     restart: always
     volumes:
       - ./db/docker-entrypoint-initdb.d/000-init.sql:/docker-entrypoint-initdb.d/000-init.sql
-      - pg-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 10s
