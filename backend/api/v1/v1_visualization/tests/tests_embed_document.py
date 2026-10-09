@@ -11,6 +11,7 @@ import json
 
 from django.core import signing
 from django.core.cache import caches
+from django.conf import settings
 from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -34,6 +35,17 @@ EMBED_ORIGIN = "http://embed.example.com"
 EMBED_HOSTNAME = "embed.example.com"
 PUBLISHED = "<iframe src='https://app.powerbi.com/view?r=published'></iframe>"
 EDITED = "<iframe src='https://app.powerbi.com/view?r=edited'></iframe>"
+
+# The embed cache is a directory every `--parallel` process shares, and
+# these setUps clear it: one process's clear() deleted another's preview
+# mid-test (a 404). In-memory, it is each process's own.
+PROCESS_EMBED_CACHE = {
+    **settings.CACHES,
+    "embed": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "tests-embed",
+    },
+}
 
 
 @override_settings(USE_TZ=False, EMBED_HOST=EMBED_ORIGIN)
@@ -190,7 +202,9 @@ class EmbedDocumentTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIsNone(self.url(widgets))
 
 
-@override_settings(USE_TZ=False, EMBED_HOST=EMBED_ORIGIN)
+@override_settings(
+    USE_TZ=False, EMBED_HOST=EMBED_ORIGIN, CACHES=PROCESS_EMBED_CACHE,
+)
 class EmbedPreviewTestCase(TestCase, ProfileTestHelperMixin):
     """Preview must show what a viewer sees, including unsaved markup."""
 
@@ -345,7 +359,9 @@ class EmbedSubdomainReservationTestCase(TestCase):
         self.assertLess(res.status_code, 300, res.content)
 
 
-@override_settings(USE_TZ=False, EMBED_HOST=EMBED_ORIGIN)
+@override_settings(
+    USE_TZ=False, EMBED_HOST=EMBED_ORIGIN, CACHES=PROCESS_EMBED_CACHE,
+)
 class EmbedEntitlementTestCase(TestCase, ProfileTestHelperMixin):
     """Embedding is a commercial tier, and losing it stops the render.
 

@@ -22,6 +22,7 @@ from api.v1.v1_visualization.functions import (
     fill_month_gaps,
     fill_date_gaps,
     apply_administration_filter,
+    apply_global_filters,
     apply_parent_criteria_to_qs,
 )
 
@@ -130,6 +131,18 @@ def build_stack_labels(options):
     return labels
 
 
+def _period_question_id(params):
+    """The date a time series groups its points by.
+
+    `period_question_id` (a line's own X-axis date) when sent, else
+    `date_question_id`, which before VIZ-027 did both jobs. The range
+    itself is bounded by `date_question_id` alone, upstream in
+    get_base_monitoring_qs, so a line keeps its axis while the dashboard's
+    date filter applies to it as to every widget.
+    """
+    return params.get("period_question_id") or params.get("date_question_id")
+
+
 def _should_fill_gaps(params):
     """Only gap-fill when both from_date and to_date are provided."""
     return bool(
@@ -152,6 +165,8 @@ def _total_parents_in_scope(form, params):
     qs = apply_parent_criteria_to_qs(
         qs, True, params.get("parent_criteria"),
     )
+    # VIZ-027: "No info" must not count the filtered-out registrations.
+    qs = apply_global_filters(qs, "id", scope_form.id, params)
     return qs.count()
 
 
@@ -188,12 +203,9 @@ def handle_count_mode(form, params):
         )
         count = qs.count()
         if value_type == "percentage":
-            total = FormData.objects.filter(
-                form=form.parent,
-                parent__isnull=True,
-                is_pending=False,
-                is_draft=False,
-            ).count()
+            # Same scope as the count above: administration, parent
+            # criteria and the global filter (VIZ-027).
+            total = _total_parents_in_scope(form, params)
             value = round(
                 (count / total * 100), 2
             ) if total > 0 else 0
@@ -211,12 +223,9 @@ def handle_count_mode(form, params):
     if not group_by:
         count = qs.count()
         if value_type == "percentage" and is_monitoring:
-            total = FormData.objects.filter(
-                form=form.parent,
-                parent__isnull=True,
-                is_pending=False,
-                is_draft=False,
-            ).count()
+            # Same scope as the count above: administration, parent
+            # criteria and the global filter (VIZ-027).
+            total = _total_parents_in_scope(form, params)
             value = round(
                 (count / total * 100), 2
             ) if total > 0 else 0
@@ -244,7 +253,7 @@ def handle_count_mode(form, params):
 
 def _count_group_by_month(qs, is_latest, params):
     """Count grouped by month."""
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
 
     if is_latest:
         data_ids = get_monitoring_data_ids(qs, is_latest)
@@ -388,7 +397,7 @@ def _count_group_by_id(qs, is_latest):
 
 def _count_group_by_date(qs, is_latest, params):
     """Count grouped by individual date (not month bucket)."""
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     data_ids = get_monitoring_data_ids(qs, is_latest)
 
     if date_qid:
@@ -619,7 +628,7 @@ def _option_value_group_by_month(
     by a date question (e.g. project deadline). When `sum_by` is
     `parent_id`, counts distinct parents per month.
     """
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
 
     matching_ids = list(Answers.objects.filter(
         data_id__in=data_ids,
@@ -710,6 +719,16 @@ def _extract_criteria_option_values(params, question_id):
             values.add(parts[1])
         elif ctype == "option_in":
             values.update(parts[1])
+    # VIZ-027 D-22: the dashboard's "show only" on this very question (its
+    # name group in the filter's scope) restricts the tally the same way,
+    # as a slicer does: a project that serves schools and villages, shown
+    # for "School", counts under School only.
+    global_filters = params.get("global_criteria") or {}
+    for criterion in global_filters.get("criteria") or []:
+        if criterion["type"] == "option_in" and question_id in {
+            qid for qid, _ in criterion["group"]
+        }:
+            values.update(criterion["values"])
     return values or None
 
 
@@ -963,7 +982,7 @@ def _number_group_by_date(question, data_ids, params):
     """Number or numeric autofield question grouped by date."""
     repeat_agg = params.get("repeat_agg", "average")
     agg_func = AGG_FUNCS.get(repeat_agg, Avg)
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     base = _numeric_answers_qs(question, data_ids)
 
     if date_qid:
@@ -1017,7 +1036,7 @@ def _number_group_by_month(
     question, data_ids, agg_func, value_type, params
 ):
     """Number or numeric autofield question grouped by month."""
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     base = _numeric_answers_qs(question, data_ids)
 
     if date_qid:
@@ -1165,7 +1184,7 @@ def _stack_option_by_period(
     O(periods x options) queries. Honors date_question_id when
     provided so the bucket aligns with the filter dimension.
     """
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     option_values = {o.value for o in options}
 
     base = Answers.objects.filter(
@@ -1506,7 +1525,7 @@ def _stack_admin_by_period(
     Fetches all answers in one query, then buckets in Python —
     O(N) instead of O(groups) queries.
     """
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     repeat_agg = params.get("repeat_agg", "average")
 
     by_day = period == "date"
@@ -1583,7 +1602,7 @@ def _count_stack_admin_by_period(
     period="month",
 ):
     """Count submissions per admin area, grouped by period."""
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     by_day = period == "date"
     width = 10 if by_day else 7
     format_label = format_date_group if by_day else format_month_label
@@ -1708,7 +1727,7 @@ def _stack_parent_by_date(
     Prefetches date keys and aggregated values per data_id in two
     bulk queries instead of N+1 per-point queries.
     """
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
 
     all_data_ids = []
     for p in parents:
@@ -1780,7 +1799,7 @@ def _stack_parent_by_month(
     When date_question_id is provided, buckets by the month of that
     date answer (via Subquery) instead of FormData.created.
     """
-    date_qid = params.get("date_question_id")
+    date_qid = _period_question_id(params)
     all_rows = {}
 
     for p in parents:

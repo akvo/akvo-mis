@@ -59,6 +59,8 @@ class ValuesFilterSerializer(serializers.Serializer):
     from_date = serializers.DateField(required=False)
     to_date = serializers.DateField(required=False)
     date_question_id = serializers.IntegerField(required=False)
+    # A line's own X-axis date (VIZ-027): apart from the date filter.
+    period_question_id = serializers.IntegerField(required=False)
     administration_id = serializers.IntegerField(required=False)
     mode = serializers.ChoiceField(
         choices=["scatter"], required=False,

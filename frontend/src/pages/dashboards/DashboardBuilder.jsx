@@ -660,6 +660,7 @@ const DashboardBuilder = () => {
               <BuilderInspector
                 widget={selectedWidget}
                 sources={sources}
+                widgets={widgets}
                 dashboardName={dashboard.name}
                 dashboardDesc={dashboard.description || ""}
                 defaultFilters={dashboard.default_filters}

@@ -8,6 +8,11 @@ import dashboardApi from "../../../util/dashboardApi";
 import dashboardAi from "../../../util/dashboardAi";
 import { store } from "../../../lib";
 
+const DEFAULT_FILTERS = {
+  date: { enabled: true },
+  administration: { enabled: true },
+};
+
 jest.mock("../../../util/dashboardApi");
 jest.mock("../../../util/dashboardAi");
 
@@ -128,6 +133,8 @@ describe("CreateDashboardModal AI Starter Generation", () => {
         name: "Water Overview",
         root_form: 6001,
         widgets: suggestedWidgets,
+        // VIZ-027 D-19: new dashboards start with both filters on.
+        default_filters: DEFAULT_FILTERS,
       });
     });
 
@@ -167,6 +174,7 @@ describe("CreateDashboardModal AI Starter Generation", () => {
       expect(dashboardApi.create).toHaveBeenCalledWith({
         name: "Water Fallback",
         root_form: 6001,
+        default_filters: DEFAULT_FILTERS,
       });
     });
 
