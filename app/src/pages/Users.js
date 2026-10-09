@@ -15,8 +15,10 @@ import { BaseLayout } from '../components';
 import { UserState, UIState, AuthState } from '../store';
 import { api, i18n } from '../lib';
 import { crudConfig, crudUsers } from '../database/crud';
+import useTheme from '../lib/theme';
 
 const Users = ({ navigation, route }) => {
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const currUserID = UserState.useState((s) => s.id);
@@ -96,11 +98,11 @@ const Users = ({ navigation, route }) => {
             <TouchableOpacity
               onPress={() => handleSelectUser(user)}
               testID={`list-item-user-${user.id}`}
-              style={styles.userItem}
+              style={[styles.userItem, { borderBottomColor: theme.border.listDivider }]}
             >
-              <Text testID={`title-username-${user.id}`}>{user.name}</Text>
+              <Text testID={`title-username-${user.id}`} style={{ color: theme.text.primary }}>{user.name}</Text>
               {user.active === 1 && (
-                <Icon name="checkmark" size={18} testID={`icon-checkmark-${user.id}`} />
+                <Icon name="checkmark" size={18} color={theme.status.success} testID={`icon-checkmark-${user.id}`} />
               )}
             </TouchableOpacity>
           )}
@@ -120,7 +122,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: undefined,
   },
 });
 

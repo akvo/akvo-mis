@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, Text } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FieldLabel } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { i18n, cascades } from '../../lib';
+import useTheme from '../../lib/theme';
+import useDropdownPlacement from '../lib/dropdown-placement';
 
 const TypeCascade = ({
   onChange,
@@ -20,11 +21,16 @@ const TypeCascade = ({
   requiredSign = '*',
   disabled = false,
   tooltip = null,
+  hasError = false,
 }) => {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [dataSource, setDataSource] = useState([]);
   const [dropdownItems, setDropdownItems] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  // One anchor per level; only one list is open at a time, so one placement serves all.
+  const anchors = useRef([]);
+  const { placement, place } = useDropdownPlacement();
   const prevAdmAnswer = FormState.useState((s) => s.prevAdmAnswer);
   const cascadesValue = FormState.useState((s) => s.cascades?.[id]);
   const activeLang = FormState.useState((s) => s.lang);
@@ -273,26 +279,50 @@ const TypeCascade = ({
       <View style={styles.cascadeContainer}>
         {dropdownItems.map((item, index) => {
           const hasSearch = item?.options.length > 3;
-          const style = disabled
-            ? { ...styles.dropdownField, ...styles.dropdownFieldDisabled }
-            : styles.dropdownField;
+          const style = {
+            ...styles.dropdownField,
+            ...(disabled ? styles.dropdownFieldDisabled : {}),
+            ...(hasError ? styles.inputFieldError : {}),
+          };
           return (
-            <Dropdown
+            <View
               // eslint-disable-next-line react/no-array-index-key
               key={index}
-              labelField="name"
-              valueField="id"
-              testID={`dropdown-cascade-${index}`}
-              containerStyle={{ marginBottom: insets.bottom }}
-              data={item?.options}
-              search={hasSearch}
-              searchPlaceholder={trans.searchPlaceholder}
-              onChange={({ id: selectedID, level }) => handleOnChange(index, selectedID, level)}
-              value={item.value}
-              style={style}
-              placeholder={trans.selectItem}
-              disable={disabled}
-            />
+              ref={(node) => {
+                anchors.current[index] = node;
+              }}
+              collapsable={false}
+            >
+              <Dropdown
+                dropdownPosition={placement.dropdownPosition}
+                onFocus={() => place({ current: anchors.current[index] })}
+                labelField="name"
+                valueField="id"
+                testID={`dropdown-cascade-${index}`}
+                containerStyle={{
+                  backgroundColor: theme.bg.surfaceElevated1,
+                  borderRadius: 12,
+                }}
+                data={item?.options}
+                search={hasSearch}
+                searchPlaceholder={trans.searchPlaceholder}
+                onChange={({ id: selectedID, level }) => handleOnChange(index, selectedID, level)}
+                value={item.value}
+                style={style}
+                placeholder={trans.selectItem}
+                placeholderStyle={{ color: theme.input.text }}
+                selectedTextStyle={{ color: theme.input.textInput }}
+                inputSearchStyle={{
+                  borderRadius: 12,
+                  backgroundColor: theme.bg.surfaceTertiary,
+                  borderColor: 'transparent',
+                  color: theme.text.primary,
+                  paddingHorizontal: 12,
+                }}
+                maxHeight={placement.maxHeight}
+                disable={disabled}
+              />
+            </View>
           );
         })}
       </View>

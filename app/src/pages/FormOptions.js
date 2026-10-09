@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, SectionList, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { View, SectionList, StyleSheet, TouchableOpacity } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { FormState, UIState } from '../store';
 import { i18n } from '../lib';
-import { BaseLayout } from '../components';
+import { BaseLayout, FormCard, SectionLabel, SettingRow } from '../components';
 import { crudDataPoints, crudForms } from '../database/crud';
 
 const FormOptions = ({ navigation, route }) => {
@@ -48,30 +47,32 @@ const FormOptions = ({ navigation, route }) => {
     });
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      key={item.id}
-      onPress={() => (item?.isData ? goToDetails() : goToSubmission(item))}
-      testID={`form-item-${item.id}`}
-      style={styles.itemContainer}
-      activeOpacity={0.6}
-    >
-      <View style={styles.itemContent}>
-        {item?.isData ? (
-          <Text style={styles.itemLabel}>{item.name}</Text>
-        ) : (
-          <View>
-            <Text style={styles.itemTitle}>
-              {item.name} {item?.submitted ? `(${item.submitted})` : ''}
-            </Text>
-
-            <Text style={styles.itemVersion}>{`${trans.versionLabel}${item.version}`}</Text>
-          </View>
-        )}
-      </View>
-      <Icon name="chevron-right" size={18} color="#ccc" />
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }) =>
+    item?.isData ? (
+      <SettingRow
+        icon="document-text-outline"
+        label={item.name}
+        description={trans.viewDetailsDesc}
+        onPress={goToDetails}
+        testID={`form-item-${item.id}`}
+      />
+    ) : (
+      <TouchableOpacity
+        onPress={() => goToSubmission(item)}
+        testID={`form-item-${item.id}`}
+        style={styles.card}
+        activeOpacity={0.6}
+      >
+        <FormCard
+          variant="monitoring"
+          title={item.name}
+          version={item.version}
+          submitted={item.submitted}
+          draft={item.draft}
+          synced={item.synced}
+        />
+      </TouchableOpacity>
+    );
 
   const fetchForms = useCallback(async () => {
     let rows = await crudForms.getFormOptions(db, {
@@ -117,7 +118,9 @@ const FormOptions = ({ navigation, route }) => {
             contentContainerStyle={styles.flatListContent}
             stickySectionHeadersEnabled={false}
             renderSectionHeader={({ section: { title, isData } }) => (
-              <Text style={isData ? styles.sectionHeader : styles.sectionHeaderForm}>{title}</Text>
+              <SectionLabel style={isData ? styles.sectionHeader : styles.sectionHeaderForm}>
+                {title}
+              </SectionLabel>
             )}
           />
         </View>
@@ -132,51 +135,19 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   flatListContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  itemContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'white',
-    marginBottom: 0,
-    borderBottomColor: '#E0E0E0',
-    borderBottomWidth: 1,
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#212121',
-    marginBottom: 4,
-  },
-  itemLabel: {
-    fontSize: 14,
-    color: '#757575',
-  },
-  itemVersion: {
-    fontSize: 12,
-    color: '#9e9e9e',
+  card: {
+    marginBottom: 8,
   },
   sectionHeader: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#212121',
-    backgroundColor: '#f5f5f5',
-    paddingVertical: 12,
-    paddingLeft: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   sectionHeaderForm: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#212121',
-    backgroundColor: '#f5f5f5',
-    paddingVertical: 12,
-    paddingLeft: 16,
-    marginTop: 24,
+    paddingTop: 32,
+    paddingBottom: 8,
   },
 });
 

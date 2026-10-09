@@ -1,27 +1,32 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Homepage renders correctly 1`] = `
-<View
-  style={
+<RNCSafeAreaView
+  edges={
     {
-      "backgroundColor": "#f9fafb",
-      "flex": 1,
-      "flexDirection": "column",
-      "flexWrap": "wrap",
+      "bottom": "additive",
+      "left": "additive",
+      "right": "additive",
+      "top": "off",
     }
   }
-  testID="stack-container"
+  style={
+    {
+      "backgroundColor": "#EAEAEA",
+      "flex": 1,
+    }
+  }
 >
   <View
     style={
       {
         "alignItems": "center",
-        "backgroundColor": "#f3f4f6",
+        "backgroundColor": "#EAEAEA",
         "borderBottomColor": "#f2f2f2",
-        "borderBottomWidth": 0.5,
+        "borderBottomWidth": 0,
         "flexDirection": "row",
         "justifyContent": "space-between",
-        "minheight": 78,
+        "minHeight": 78,
         "paddingHorizontal": 10,
         "paddingVertical": 10,
       }
@@ -49,85 +54,43 @@ exports[`Homepage renders correctly 1`] = `
           {
             "alignItems": "flex-start",
             "flex": 1,
+            "justifyContent": "center",
           }
         }
       >
         <View
           style={
-            [
-              {
-                "overflow": "hidden",
-              },
-              {
-                "borderRadius": 2,
-              },
-              undefined,
-              false,
-            ]
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "gap": 6,
+              "paddingLeft": 4,
+            }
           }
-          testID="RNE_BUTTON_WRAPPER"
         >
-          <View
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": false,
-                "checked": undefined,
-                "disabled": false,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onClick={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
+          <Text />
+          <Text
+            numberOfLines={1}
             style={
-              {
-                "opacity": 1,
-              }
-            }
-            testID="button-users"
-          >
-            <View
-              style={
+              [
                 {
-                  "alignItems": "center",
-                  "backgroundColor": "transparent",
-                  "borderColor": "#2089dc",
-                  "borderRadius": 2,
-                  "borderWidth": 0,
-                  "flexDirection": "row",
-                  "justifyContent": "center",
-                  "padding": 8,
-                  "paddingHorizontal": 10,
-                }
-              }
-            >
-              <Text />
-            </View>
-          </View>
+                  "fontSize": 14,
+                  "fontWeight": "600",
+                },
+                {
+                  "color": "#020617",
+                },
+              ]
+            }
+          />
         </View>
       </View>
       <View
         style={
           {
             "alignItems": "center",
-            "flex": 3,
+            "flex": 2,
+            "justifyContent": "center",
           }
         }
       >
@@ -135,10 +98,9 @@ exports[`Homepage renders correctly 1`] = `
           accessibilityRole="text"
           style={
             {
-              "color": "#242424",
+              "color": "#020617",
               "fontSize": 18,
-              "paddingTop": 4,
-              "textAlign": "center",
+              "textAlign": "left",
             }
           }
           testID="page-title"
@@ -151,78 +113,53 @@ exports[`Homepage renders correctly 1`] = `
           {
             "alignItems": "flex-end",
             "flex": 1,
+            "justifyContent": "center",
           }
         }
       >
         <View
-          style={
-            [
-              {
-                "overflow": "hidden",
-              },
-              {
-                "borderRadius": 2,
-              },
-              undefined,
-              false,
-            ]
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
           }
-          testID="RNE_BUTTON_WRAPPER"
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onClick={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "rgba(0,0,0,0.06)",
+              "borderRadius": 18,
+              "height": 36,
+              "justifyContent": "center",
+              "marginRight": 4,
+              "opacity": 1,
+              "width": 36,
+            }
+          }
+          testID="button-users"
         >
-          <View
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": false,
-                "checked": undefined,
-                "disabled": false,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onClick={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "opacity": 1,
-              }
-            }
-            testID="more-options-button"
-          >
-            <View
-              style={
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "transparent",
-                  "borderColor": "#2089dc",
-                  "borderRadius": 2,
-                  "borderWidth": 0,
-                  "flexDirection": "row",
-                  "justifyContent": "center",
-                  "padding": 8,
-                  "paddingHorizontal": 10,
-                }
-              }
-            >
-              <Text />
-            </View>
-          </View>
+          <Text />
         </View>
       </View>
     </RNCSafeAreaView>
@@ -230,12 +167,14 @@ exports[`Homepage renders correctly 1`] = `
   <View
     style={
       {
-        "backgroundColor": "#393e42",
+        "backgroundColor": "#EAEAEA",
         "borderBottomColor": "#000",
-        "borderBottomWidth": 1,
+        "borderBottomWidth": 0,
         "borderTopColor": "#000",
-        "borderTopWidth": 1,
+        "borderTopWidth": 0,
         "padding": 8,
+        "paddingHorizontal": 16,
+        "width": "100%",
       }
     }
     testID="RNE__SearchBar-wrapper"
@@ -254,10 +193,10 @@ exports[`Homepage renders correctly 1`] = `
         style={
           {
             "alignItems": "center",
-            "backgroundColor": "#303337",
+            "backgroundColor": "#FFFFFF",
             "borderBottomWidth": 0,
             "borderColor": "#86939e",
-            "borderRadius": 3,
+            "borderRadius": 12,
             "flexDirection": "row",
             "minHeight": 30,
             "overflow": "hidden",
@@ -322,16 +261,15 @@ exports[`Homepage renders correctly 1`] = `
           onChangeText={[Function]}
           onFocus={[Function]}
           placeholder="Search form"
-          placeholderTextColor="#86939e"
+          placeholderTextColor="#475569"
           platform="default"
           style={
             {
-              "color": "#86939e",
+              "color": "#020617",
               "flex": 1,
-              "fontSize": 18,
+              "fontSize": 16,
               "marginLeft": 10,
               "minHeight": 40,
-              "width": "100%",
             }
           }
           testID="search-bar"
@@ -375,154 +313,10 @@ exports[`Homepage renders correctly 1`] = `
   <View
     style={
       {
-        "backgroundColor": "#f9fafb",
         "flex": 1,
-        "flexDirection": "row",
-        "flexWrap": "wrap",
-      }
-    }
-    testID="stack-container"
-  />
-  <View
-    collapsable={false}
-    style={
-      {
-        "alignItems": "center",
-        "borderRadius": 28,
-        "flexDirection": "row",
-        "justifyContent": "center",
-        "marginBottom": 16,
-        "opacity": 1,
-        "transform": [
-          {
-            "scale": 1,
-          },
-        ],
         "width": "100%",
       }
     }
-  >
-    <View
-      style={
-        [
-          {
-            "overflow": "hidden",
-          },
-          {
-            "borderRadius": 2,
-          },
-          {
-            "borderRadius": 28,
-            "elevation": 4,
-          },
-          false,
-        ]
-      }
-      testID="RNE_BUTTON_WRAPPER"
-    >
-      <View
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": false,
-            "checked": undefined,
-            "disabled": false,
-            "expanded": undefined,
-            "selected": undefined,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onClick={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "opacity": 1,
-          }
-        }
-        testID="sync-datapoint-button"
-      >
-        <View
-          style={
-            {
-              "alignItems": "center",
-              "backgroundColor": "#1651b6",
-              "borderColor": "#2089dc",
-              "borderRadius": 2,
-              "borderWidth": 0,
-              "flexDirection": "row",
-              "height": 48,
-              "justifyContent": "center",
-              "padding": 8,
-              "paddingHorizontal": 16,
-            }
-          }
-        >
-          <View
-            style={
-              {
-                "marginHorizontal": 5,
-                "overflow": "hidden",
-              }
-            }
-            testID="RNE__ICON__CONTAINER"
-          >
-            <View
-              accessibilityRole="button"
-              android_ripple={
-                {
-                  "borderless": false,
-                  "color": "rgba(0, 0, 0, 0.3)",
-                  "radius": -5,
-                }
-              }
-              disabled={false}
-              testID="RNE__ICON__CONTAINER_ACTION"
-            >
-              <View
-                style={
-                  {
-                    "alignItems": "center",
-                    "backgroundColor": "transparent",
-                    "justifyContent": "center",
-                  }
-                }
-                testID="RNE__ICON"
-              >
-                <Text />
-              </View>
-            </View>
-          </View>
-          <Text
-            style={
-              {
-                "color": "#ffffff",
-                "fontSize": 18,
-                "marginHorizontal": 8,
-                "paddingVertical": 1,
-                "textAlign": "center",
-              }
-            }
-          >
-            Sync Datapoint
-          </Text>
-        </View>
-      </View>
-    </View>
-  </View>
-</View>
+  />
+</RNCSafeAreaView>
 `;
