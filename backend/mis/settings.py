@@ -415,3 +415,22 @@ LOGGING = {
         "level": environ.get("LOG_LEVEL", "INFO"),
     },
 }
+
+# Matomo Analytics
+MATOMO_URL = environ.get("MATOMO_URL", "").rstrip("/")
+MATOMO_SITE_ID = (
+    int(environ["MATOMO_SITE_ID"])
+    if environ.get("MATOMO_SITE_ID")
+    else None
+)
+MATOMO_AUTH_TOKEN = environ.get("MATOMO_AUTH_TOKEN", "")
+MATOMO_DIM_TENANT = (
+    int(environ["MATOMO_DIM_TENANT"])
+    if environ.get("MATOMO_DIM_TENANT")
+    else None
+)
+MATOMO_DIM_SUBDOMAIN = (
+    int(environ["MATOMO_DIM_SUBDOMAIN"])
+    if environ.get("MATOMO_DIM_SUBDOMAIN")
+    else None
+)
