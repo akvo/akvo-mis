@@ -56,7 +56,7 @@ The application is containerized using Docker Compose with the following service
 - `backend`: Django backend API server (port 8000)
 - `worker`: Django-Q background worker for async tasks
 - `frontend`: React development server (port 3000) / Nginx production server
-- `db`: PostgreSQL 12 database (port 5432)
+- `db`: PostgreSQL 18 database (port 5432)
 - `pgadmin`: Database administration UI (port 5050)
 
 ### Backend Architecture (Django)
@@ -84,7 +84,7 @@ Located in `./backend/`
 - **Data Access Types**: Form data has approval workflows with different access levels (view, submit, approve)
 
 #### Database
-- PostgreSQL 12 with schema name `mis`
+- PostgreSQL 18 with schema name `mis`
 - DBML diagram auto-generated in `backend/db.dbml`
 - Administration hierarchy supports multi-level geographic/organizational structure
 - Form data supports parent-child relationships for complex forms

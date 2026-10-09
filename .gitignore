@@ -18,3 +18,6 @@ android/.claude/
 agent_docs/
 task.md
 chatbot_qa_test_sheet.csv
+# Local PG dump produced by db/script/dump-db.sh for the PG12->18 volume
+# migration; replayed by initdb on a fresh volume. Never commit it.
+db/docker-entrypoint-initdb.d/001-init.sql
