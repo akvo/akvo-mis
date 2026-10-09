@@ -136,20 +136,66 @@ sequenceDiagram
 
 ---
 
-## 3. Matomo Self-Hosted Configuration & Prerequisites
+## 3. Matomo Self-Hosted Configuration & Prerequisites (Multi-Project Shared Instance)
 
-### 3.1 Step-by-Step Setup on Matomo Server (One-Time)
-Before running the integration code in production, configure the following on the self-hosted Matomo instance:
+### 3.1 Multi-Project Shared Instance Isolation Safeguards
+When your Matomo instance is shared across multiple applications (e.g. Akvo MIS, Flow, Lumen, RSR), follow these isolation rules to prevent cross-project pollution:
 
-1. **Step 1: Create or Note the Measurable (Site)**
-   - Go to **Administration (⚙️) -> Measurables -> Manage**.
-   - Click **Add a new measurable** -> select **Website**:
-     - **Name**: `Akvo MIS`
-     - **Main URL**: `https://<your-base-domain>`
-   - Note the generated **`Site ID`** (e.g. `1`).
+1. **Website (Site ID) Isolation**:
+   - Akvo MIS MUST have its own dedicated Website entry (e.g. `Akvo MIS`) with its own distinct `Site ID`.
+   - All tracking data, custom dimensions, and dashboard reports are strictly partitioned by this `Site ID`.
+2. **Per-Site Custom Dimensions Scoping**:
+   - Matomo binds Custom Dimensions to the active website. **Always select `Akvo MIS` in the top site dropdown** before creating custom dimensions.
+   - This guarantees that `Dimension 1` (`Tenant Name`) in Akvo MIS operates independently and never collides with `Dimension 1` in other projects.
+3. **Dedicated Least-Privilege Service Account (`token_auth`)**:
+   - Do NOT use a global Superuser token.
+   - Create a dedicated user (e.g. `mis-backend-tracker`) under **Administration -> System -> Users**.
+   - Grant this user **`Write` (or `Admin`) permission ONLY to the Akvo MIS Website/Site ID** (and `No Access` to other projects).
+   - Generate the `token_auth` from this service user. If rotated or compromised, other projects remain completely unaffected.
 
-2. **Step 2: Create Custom Dimensions**
-   - Go to **Measurables -> Custom Dimensions** (ensure Custom Dimensions plugin is active in System -> Plugins).
+### 3.2 Mandatory Sequential Order of Operations
+> [!IMPORTANT]
+> **Order of Setup is Critical**: You MUST create the Website (`Akvo MIS`) **first** before configuring custom dimensions. Custom dimensions in Matomo are attached directly to a specific Website (Site ID). Configuring dimensions before creating the site will cause dimensions to attach to other projects or fail.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ 1. Add Website ("Akvo MIS") ➔ Matomo assigns unique Site ID (e.g. 3)  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 2. Select "Akvo MIS" in top site dropdown ➔ Create Custom Dimensions   │
+│    - Dimension 1: "Tenant Name" (Scope: Visit)                         │
+│    - Dimension 2: "Subdomain" (Scope: Visit)                           │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 3. Create Service User ("mis-backend-tracker") ➔ Grant Write to Site 3 │
+│    - Generate token_auth for Django backend tracking                   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 4. Configure Privacy ➔ Enable 2-byte IP Anonymization                  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 Step-by-Step Server Setup Guide (One-Time)
+Before running the integration code in production, execute the following steps in sequence on the shared Matomo instance:
+
+1. **Step 1: Create Dedicated Website for Akvo MIS (FIRST)**
+   - Click the **Gear icon (⚙️)** in the top bar to open **Administration**.
+   - Navigate to **Websites -> Manage** (in some Matomo versions/themes, labeled **Measurables -> Manage**, or click the site selector at top-left and select **"Manage Websites"**).
+   - Click **Add a new website**:
+     - **Name**: `Akvo MIS` (or `Akvo MIS Production`)
+     - **Main URL**: `https://<your-base-domain>` (e.g. `https://akvo.org`)
+   - Click **Save** and note the generated **`Site ID`** (e.g. `3`).
+
+2. **Step 2: Create Custom Dimensions (Scoped to Akvo MIS Site)**
+   - Select **`Akvo MIS`** from the website selector dropdown at the top navigation bar.
+   - Go to **Websites -> Custom Dimensions** (or **Measurables -> Custom Dimensions**).
+     *(Note: If Custom Dimensions is not listed in the menu, go to **Administration -> System -> Plugins** and activate the built-in **CustomDimensions** plugin).*
    - Click **Create a new custom dimension**:
      - **Name**: `Tenant Name` | **Scope**: `Visit` | **Active**: `Yes`
      - Note the assigned **Dimension ID** (e.g. `1`).
@@ -158,20 +204,25 @@ Before running the integration code in production, configure the following on th
      - Note the assigned **Dimension ID** (e.g. `2`).
 
 3. **Step 3: Generate Auth Token (`token_auth`) for Backend Server-Side Tracking**
-   - Go to **Personal -> Security -> Auth tokens**.
-   - Click **Create new token** with description `Akvo MIS Backend Tracking`.
-   - Copy the 32-character hexadecimal token (used by Django to authenticate tracking requests to `matomo.php`).
+   - **Fastest Method**:
+     - Click **Personal** on the left menu (or your user avatar in the top-right) -> **Security -> Auth tokens**.
+     - Click **Create new token** with description `Akvo MIS Backend Tracking`.
+     - Enter your password to confirm and copy the 32-character hexadecimal token.
+   - **Alternative (Dedicated Service User for strict multi-project isolation)**:
+     - Go to **Administration (⚙️) -> System -> Users -> Add a new user** (Username: `mis-backend-tracker`, Email: any team email e.g. `tech@akvo.org`).
+     - In **User Permissions**, assign **`Write`** access to `Akvo MIS` (and `No Access` to other projects).
+     - Log in as `mis-backend-tracker` -> **Personal -> Security -> Auth tokens** -> generate token.
 
 4. **Step 4: Configure Privacy & IP Anonymization**
-   - Go to **Privacy -> Anonymize data**.
+   - Go to **Administration (⚙️) -> Privacy -> Anonymize data**.
    - Ensure **Anonymize Visitors' IP addresses** is checked (masking 2 bytes, e.g. `192.168.xxx.xxx`) for GDPR compliance.
 
-### 3.2 Environment Variables Configuration
+### 3.4 Environment Variables Configuration
 
 #### Backend (`backend/.env`):
 ```bash
 MATOMO_URL=https://matomo.your-server.com
-MATOMO_SITE_ID=1
+MATOMO_SITE_ID=3
 MATOMO_AUTH_TOKEN=your_generated_token_auth
 MATOMO_DIM_TENANT=1
 ```
@@ -179,12 +230,12 @@ MATOMO_DIM_TENANT=1
 #### Frontend (`frontend/.env`):
 ```bash
 REACT_APP_MATOMO_URL=https://matomo.your-server.com
-REACT_APP_MATOMO_SITE_ID=1
+REACT_APP_MATOMO_SITE_ID=3
 REACT_APP_MATOMO_DIM_TENANT=1
 REACT_APP_MATOMO_DIM_SUBDOMAIN=2
 ```
 
-### 3.3 Reporting Dashboard & Key Widgets Setup
+### 3.5 Reporting Dashboard & Key Widgets Setup
 Inside Matomo, create a dedicated dashboard (**Dashboard -> Create new dashboard** named `Akvo MIS - Tenant & Submissions Overview`):
 1. **Historical Submissions per Tenant**:
    - Report: `Visitors -> Custom Dimensions -> Tenant Name`
