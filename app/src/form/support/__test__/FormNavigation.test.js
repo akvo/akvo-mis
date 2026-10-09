@@ -1,4 +1,5 @@
 import React from 'react';
+import { ToastAndroid } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import FormNavigation from '../FormNavigation';
 import { FormState } from '../../../store';
@@ -18,6 +19,9 @@ jest
   .setSystemTime(new Date('2024-03-15'));
 jest.mock('expo-font');
 jest.mock('expo-asset');
+// Pulled in transitively via src/lib; their native modules are absent under Jest.
+jest.mock('expo-task-manager', () => ({}));
+jest.mock('expo-background-task', () => ({}));
 
 const firstGroup = {
   name: 'registration',
@@ -276,6 +280,97 @@ describe('FormNavigation component', () => {
 
     await waitFor(() => {
       expect(FormState.getRawState().feedback[32]).not.toBe(true);
+    });
+  });
+
+  describe('submit', () => {
+    const staffGroup = {
+      id: 1,
+      label: 'Staff',
+      question: [{ id: 31, label: 'Number of staff', type: 'number', required: true }],
+    };
+    const formDefinition = { question_group: [staffGroup, lastGroup] };
+
+    const renderLastGroup = () => {
+      const handlers = {
+        setActiveGroup: jest.fn(),
+        onSubmit: jest.fn(),
+        setShowQuestionGroupList: jest.fn(),
+      };
+      const utils = render(
+        <FormNavigation
+          currentGroup={lastGroup}
+          formDefinition={formDefinition}
+          activeGroup={1}
+          setActiveGroup={handlers.setActiveGroup}
+          onSubmit={handlers.onSubmit}
+          totalGroup={2}
+          showQuestionGroupList={false}
+          setShowQuestionGroupList={handlers.setShowQuestionGroupList}
+          setShowDialogMenu={jest.fn()}
+        />,
+      );
+      return { ...utils, ...handlers };
+    };
+
+    const answer = (values) =>
+      act(() => {
+        FormState.update((s) => {
+          s.currentValues = values;
+        });
+      });
+
+    beforeEach(() => {
+      jest.spyOn(ToastAndroid, 'show').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('names the invalid answer and opens its group when every field is filled', async () => {
+      const { getByTestId, onSubmit, setActiveGroup, setShowQuestionGroupList } = renderLastGroup();
+      answer({ 31: '2.5', 21: ['yes'] });
+
+      fireEvent.press(getByTestId('form-btn-submit'));
+
+      await waitFor(() => {
+        expect(ToastAndroid.show).toHaveBeenCalledWith(
+          'Staff: Number of staff must be an integer',
+          ToastAndroid.LONG,
+        );
+      });
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(setActiveGroup).toHaveBeenCalledWith(0);
+      expect(setShowQuestionGroupList).toHaveBeenCalledWith(false);
+      expect(FormState.getRawState().feedback[31]).toBe('this must be an integer');
+    });
+
+    it('keeps the required-fields message when an answer is missing', async () => {
+      const { getByTestId, onSubmit, setActiveGroup } = renderLastGroup();
+      answer({ 21: ['yes'] });
+
+      fireEvent.press(getByTestId('form-btn-submit'));
+
+      await waitFor(() => {
+        expect(ToastAndroid.show).toHaveBeenCalledWith(
+          'Please complete all required fields in all sections before submitting',
+          ToastAndroid.LONG,
+        );
+      });
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(setActiveGroup).toHaveBeenCalledWith(0);
+    });
+
+    it('submits when every answer is valid', async () => {
+      const { getByTestId, onSubmit } = renderLastGroup();
+      answer({ 31: '2', 21: ['yes'] });
+
+      fireEvent.press(getByTestId('form-btn-submit'));
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });
