@@ -74,7 +74,7 @@ class AdministrationBulkUploadTemplateExportTestCase(
         df = pd.read_excel(response.content, sheet_name='data')
         levels = [
             col
-            for lvl in Levels.objects.all()
+            for lvl in Levels.objects.order_by('level')
             for col in [f'{lvl.id}|{lvl.name}', f'{lvl.id}|{lvl.name} Code']
         ]
         attributes = [
