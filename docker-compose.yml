@@ -73,6 +73,7 @@ services:
       - REACT_APP_MATOMO_SITE_ID=$MATOMO_SITE_ID
       - REACT_APP_MATOMO_DIM_TENANT=$MATOMO_DIM_TENANT
       - REACT_APP_MATOMO_DIM_SUBDOMAIN=$MATOMO_DIM_SUBDOMAIN
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
     volumes:
       - ./frontend:/app:delegated
     working_dir: /app
