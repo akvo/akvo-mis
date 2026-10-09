@@ -219,20 +219,57 @@ Before running the integration code in production, execute the following steps i
 
 ### 3.4 Environment Variables Configuration
 
-#### Backend (`backend/.env`):
+#### Backend & Worker (`backend/.env` / Worker):
 ```bash
 MATOMO_URL=https://matomo.your-server.com
 MATOMO_SITE_ID=3
 MATOMO_AUTH_TOKEN=your_generated_token_auth
 MATOMO_DIM_TENANT=1
+MATOMO_DIM_SUBDOMAIN=2
 ```
 
 #### Frontend (`frontend/.env`):
+> [!NOTE]
+> Frontend dynamic runtime reads from `window.appConfig` (generated from Django backend on startup). Local dev build can optionally use `REACT_APP_MATOMO_*`.
 ```bash
 REACT_APP_MATOMO_URL=https://matomo.your-server.com
 REACT_APP_MATOMO_SITE_ID=3
 REACT_APP_MATOMO_DIM_TENANT=1
 REACT_APP_MATOMO_DIM_SUBDOMAIN=2
+```
+
+#### Kubernetes Deployment (`backend-deployment` & `worker-deployment`):
+All Matomo settings (URL, site ID, dimensions, and auth token) should be retrieved from the keyring-managed Kubernetes Secret (e.g. `akvo-mis-secrets` or `backend-secrets`):
+
+```yaml
+containers:
+  - name: backend # and worker
+    env:
+      - name: MATOMO_URL
+        valueFrom:
+          secretKeyRef:
+            name: akvo-mis-secrets
+            key: matomo-url
+      - name: MATOMO_SITE_ID
+        valueFrom:
+          secretKeyRef:
+            name: akvo-mis-secrets
+            key: matomo-site-id
+      - name: MATOMO_DIM_TENANT
+        valueFrom:
+          secretKeyRef:
+            name: akvo-mis-secrets
+            key: matomo-dim-tenant
+      - name: MATOMO_DIM_SUBDOMAIN
+        valueFrom:
+          secretKeyRef:
+            name: akvo-mis-secrets
+            key: matomo-dim-subdomain
+      - name: MATOMO_AUTH_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: akvo-mis-secrets
+            key: matomo-auth-token
 ```
 
 ### 3.5 Reporting Dashboard & Key Widgets Setup
@@ -294,13 +331,13 @@ Standard Matomo widgets use fixed system titles (e.g. *Actions: Event Actions*).
 ---
 
 ##### Report 2: Submissions by Form & Workspace — *Form-Level Volume Breakdown*
-* **Purpose**: Identify which specific surveys/forms are receiving submissions within each workspace.
+* **Purpose**: Identify which specific surveys/forms are receiving submissions across workspaces.
 * **Report Name**: `Submissions by Form & Tenant`
 * **Report Type**: `Table`
 * **Dimensions**:
-  1. Dimension 1: `Visitors` $\rightarrow$ `Tenant Name`
-  2. Dimension 2: `Events` $\rightarrow$ `Event Name` *(individual Form Title)*
-  3. Dimension 3: `Events` $\rightarrow$ `Event Action` *(Mobile vs Web)*
+  1. Dimension 1: `Events` $\rightarrow$ `Event Name` *(e.g. `Test Form 5`)*
+  2. Dimension 2: `Visitors` $\rightarrow$ `Tenant Name` *(e.g. `default`)*
+  3. Dimension 3: `Events` $\rightarrow$ `Event Action` *(e.g. `Mobile Sync`)*
 * **Metrics**:
   - `Total Events`
 * **Filter**:
