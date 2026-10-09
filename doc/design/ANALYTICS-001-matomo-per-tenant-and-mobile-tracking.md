@@ -236,17 +236,44 @@ REACT_APP_MATOMO_DIM_SUBDOMAIN=2
 ```
 
 ### 3.5 Reporting Dashboard & Key Widgets Setup
-Inside Matomo, create a dedicated dashboard (**Dashboard -> Create new dashboard** named `Akvo MIS - Tenant & Submissions Overview`):
-1. **Historical Submissions per Tenant**:
-   - Report: `Visitors -> Custom Dimensions -> Tenant Name`
-   - Secondary Dimension: `Event Action` (`Mobile Sync` vs `Webform Submit`)
-2. **Submission Trends Evolution**:
-   - Report: `Behavior -> Events -> Event Categories (Data Submission)`
-   - Graph: Row evolution / daily line chart
-3. **Web Portal Access per Tenant**:
-   - Report: `Visitors -> Custom Dimensions -> Tenant Name` (Metric: Visits, Actions, Unique Visitors)
-4. **Channel Breakdown**:
-   - Report: `Behavior -> Events -> Event Actions` (Comparison of Mobile Sync vs Webform Submit counts)
+
+Follow these step-by-step instructions in the Matomo UI to create and configure the dashboard:
+
+#### Step 1: Create the Dashboard
+1. Log in to your Matomo instance (e.g., `https://matomo.cloud.akvo.org`).
+2. Select your website from the top website selector (e.g. site ID `8`).
+3. In the left navigation menu, click **Dashboard**.
+4. In the top sub-bar (next to the date picker), click the **Dashboard** dropdown menu (or click **Dashboard** $\rightarrow$ **Manage dashboards**).
+5. Click **Create new dashboard**.
+6. Enter the name: `Akvo MIS - Tenant & Submissions Overview`.
+7. Choose your preferred layout (e.g. **2 columns** or **3 columns**) or select **Empty dashboard** to customize from scratch.
+8. Click **Create** / **Save**.
+
+#### Step 2: Add Recommended Widgets
+In the top dashboard sub-bar, click **Widgets** (or **Add a widget**) and select the following widgets:
+
+1. **Submissions by Channel (Mobile vs Web)**:
+   - Category: `Behavior` $\rightarrow$ `Events`
+   - Select: `Event Actions` (shows `Mobile Sync` vs `Webform Submit` counts and totals)
+2. **Submissions by Form**:
+   - Category: `Behavior` $\rightarrow$ `Events`
+   - Select: `Event Names` (shows breakdown of submissions per form name)
+3. **Data Submissions Evolution (Trend Over Time)**:
+   - Category: `Behavior` $\rightarrow$ `Events`
+   - Select: `Events Overview` or `Event Categories` $\rightarrow$ click row evolution on `Data Submission`
+4. **Traffic & Visits per Tenant**:
+   - Category: `Visitors` $\rightarrow$ `Custom Dimensions`
+   - Select: `tenant_name` (Dimension 1) to view visits, actions, and unique users per workspace
+5. **Subdomain Distribution**:
+   - Category: `Visitors` $\rightarrow$ `Custom Dimensions`
+   - Select: `subdomain` (Dimension 2)
+6. **Top Visited MIS Pages**:
+   - Category: `Behavior`
+   - Select: `Pages` (shows URL paths such as `/control-center`, `/data`, `/reports`)
+
+#### Step 3: Organize Layout
+- Drag and drop widgets by their title bars to arrange them into your preferred layout.
+- Use the date range selector at the top (e.g., *Last 30 days*, *Current Month*, or *Custom date range*) to inspect real-time and historical data.
 
 ---
 
