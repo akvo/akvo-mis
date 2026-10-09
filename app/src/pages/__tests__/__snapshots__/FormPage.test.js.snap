@@ -1,47 +1,1785 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`FormPage component should render component correctly 1`] = `
-<View
-  style={
+<RNCSafeAreaView
+  edges={
     {
-      "backgroundColor": "#f9fafb",
-      "flex": 1,
-      "flexDirection": "column",
-      "flexWrap": "wrap",
+      "bottom": "off",
+      "left": "additive",
+      "right": "additive",
+      "top": "off",
     }
   }
-  testID="stack-container"
+  style={
+    {
+      "backgroundColor": "#EAEAEA",
+      "flex": 1,
+    }
+  }
 >
   <View
     style={
       {
+        "alignItems": "center",
+        "backgroundColor": "#FFFFFF",
+        "borderBottomColor": "#f2f2f2",
+        "borderBottomWidth": 0,
+        "flexDirection": "row",
+        "justifyContent": "space-between",
+        "minHeight": 78,
+        "paddingHorizontal": 10,
+        "paddingVertical": 10,
+      }
+    }
+    testID="base-layout-page-title"
+  >
+    <RNCSafeAreaView
+      edges={
+        {
+          "bottom": "off",
+          "left": "additive",
+          "right": "additive",
+          "top": "additive",
+        }
+      }
+      style={
+        {
+          "flexDirection": "row",
+          "width": "100%",
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "flex-start",
+            "flex": 1,
+            "justifyContent": "center",
+          }
+        }
+      >
+        <View
+          style={
+            [
+              {
+                "overflow": "hidden",
+              },
+              {
+                "borderRadius": 2,
+              },
+              undefined,
+              false,
+            ]
+          }
+          testID="RNE_BUTTON_WRAPPER"
+        >
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "opacity": 1,
+              }
+            }
+            testID="arrow-back-button"
+          >
+            <View
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "transparent",
+                  "borderColor": "#2089dc",
+                  "borderRadius": 2,
+                  "borderWidth": 0,
+                  "flexDirection": "row",
+                  "justifyContent": "center",
+                  "padding": 8,
+                  "paddingHorizontal": 10,
+                }
+              }
+            >
+              <Text />
+            </View>
+          </View>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flex": 2,
+            "justifyContent": "center",
+          }
+        }
+      >
+        <Text
+          accessibilityRole="text"
+          style={
+            {
+              "color": "#020617",
+              "fontSize": 18,
+              "textAlign": "left",
+            }
+          }
+          testID="page-title"
+        >
+          New Submission
+        </Text>
+      </View>
+      <View
+        style={
+          {
+            "alignItems": "flex-end",
+            "flex": 1,
+            "justifyContent": "center",
+          }
+        }
+      >
+        <View
+          collapsable={false}
+          testID="save-dropdown-menu"
+        >
+          <View
+            style={
+              [
+                {
+                  "overflow": "hidden",
+                },
+                {
+                  "borderRadius": 2,
+                },
+                undefined,
+                false,
+              ]
+            }
+            testID="RNE_BUTTON_WRAPPER"
+          >
+            <View
+              accessibilityRole="button"
+              accessibilityState={
+                {
+                  "busy": false,
+                  "checked": undefined,
+                  "disabled": false,
+                  "expanded": undefined,
+                  "selected": undefined,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onClick={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "opacity": 1,
+                }
+              }
+              testID="form-page-kebab-menu"
+            >
+              <View
+                style={
+                  {
+                    "alignItems": "center",
+                    "backgroundColor": "transparent",
+                    "borderColor": "#2089dc",
+                    "borderRadius": 2,
+                    "borderWidth": 0,
+                    "flexDirection": "row",
+                    "justifyContent": "center",
+                    "padding": 8,
+                    "paddingHorizontal": 10,
+                  }
+                }
+              >
+                <Text />
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+    </RNCSafeAreaView>
+  </View>
+  <View
+    style={
+      [
+        {
+          "borderBottomLeftRadius": 24,
+          "borderBottomRightRadius": 24,
+          "paddingBottom": 16,
+          "paddingHorizontal": 16,
+          "paddingTop": 4,
+        },
+        {
+          "backgroundColor": "#FFFFFF",
+          "borderBottomColor": "#E2E2E2",
+          "borderBottomWidth": 0.5,
+        },
+      ]
+    }
+  >
+    <Text
+      style={
+        [
+          {
+            "fontSize": 24,
+            "fontWeight": "400",
+          },
+          {
+            "color": "#020617",
+          },
+        ]
+      }
+    />
+    <Text
+      style={
+        [
+          {
+            "fontSize": 14,
+            "fontWeight": "400",
+            "marginTop": 4,
+          },
+          {
+            "color": "#333333",
+          },
+        ]
+      }
+    >
+      Step 1 of 2
+       — Registration
+    </Text>
+  </View>
+  <View
+    style={
+      {
         "flex": 1,
-        "flexDirection": "column",
-        "justifyContent": "center",
         "width": "100%",
       }
     }
   >
-    <ActivityIndicator />
-  </View>
-  <Modal
-    hardwareAccelerated={false}
-    onRequestClose={[Function]}
-    testID="save-dialog-menu"
-    transparent={true}
-    visible={false}
-  />
-  <Modal
-    hardwareAccelerated={false}
-    onRequestClose={[Function]}
-    style={
-      {
-        "width": "100%",
+    <View
+      style={
+        {
+          "flex": 1,
+        }
       }
+    >
+      <View
+        collapsable={false}
+        style={
+          {
+            "flex": 1,
+          }
+        }
+      >
+        <RCTScrollView
+          ListFooterComponent={null}
+          contentContainerStyle={
+            {
+              "paddingBottom": 16,
+            }
+          }
+          data={
+            [
+              {
+                "addonBefore": "Name",
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 1,
+                "keyform": 1,
+                "label": "Your Name",
+                "meta": true,
+                "name": "your_name",
+                "order": 1,
+                "required": true,
+                "requiredSign": "*",
+                "translations": [
+                  {
+                    "language": "id",
+                    "name": "Nama Anda",
+                  },
+                ],
+                "type": "input",
+              },
+              {
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 2,
+                "keyform": 2,
+                "label": "Birth Date",
+                "name": "birth_date",
+                "order": 2,
+                "required": true,
+                "requiredSign": "*",
+                "translations": [
+                  {
+                    "language": "id",
+                    "name": "Tanggal Lahir",
+                  },
+                ],
+                "type": "date",
+              },
+              {
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 3,
+                "keyform": 3,
+                "label": "Age",
+                "name": "age",
+                "order": 3,
+                "required": true,
+                "requiredSign": "*",
+                "translations": [
+                  {
+                    "language": "id",
+                    "name": "Umur",
+                  },
+                ],
+                "type": "number",
+              },
+              {
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 4,
+                "keyform": 4,
+                "label": "Gender",
+                "meta": false,
+                "name": "gender",
+                "option": [
+                  {
+                    "id": 1,
+                    "label": "Male",
+                    "order": 1,
+                    "value": "male",
+                  },
+                  {
+                    "id": 2,
+                    "label": "Female",
+                    "order": 2,
+                    "value": "female",
+                  },
+                ],
+                "order": 4,
+                "required": true,
+                "requiredSign": "*",
+                "translations": [
+                  {
+                    "language": "id",
+                    "name": "Jenis Kelamin",
+                  },
+                ],
+                "type": "option",
+              },
+              {
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 6,
+                "keyform": 5,
+                "label": "Hobby",
+                "name": "hobby",
+                "option": [
+                  {
+                    "id": 21,
+                    "label": "Reading",
+                    "order": 1,
+                    "value": "reading",
+                  },
+                  {
+                    "id": 22,
+                    "label": "Traveling",
+                    "order": 2,
+                    "value": "traveling",
+                  },
+                  {
+                    "id": 23,
+                    "label": "Programming",
+                    "order": 3,
+                    "value": "programming",
+                  },
+                ],
+                "order": 2,
+                "required": false,
+                "requiredSign": null,
+                "type": "multiple_option",
+              },
+              {
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 7,
+                "keyform": 6,
+                "label": "Foods",
+                "name": "Foods",
+                "option": [
+                  {
+                    "id": 31,
+                    "label": "fried_rice",
+                    "order": 1,
+                    "value": "fried_rice",
+                  },
+                  {
+                    "id": 32,
+                    "label": "Rendang",
+                    "order": 2,
+                    "value": "rendang",
+                  },
+                  {
+                    "id": 33,
+                    "label": "Noodle",
+                    "order": 3,
+                    "value": "noodle",
+                  },
+                ],
+                "order": 3,
+                "required": false,
+                "requiredSign": null,
+                "type": "option",
+              },
+              {
+                "group_id": undefined,
+                "group_name": "registration",
+                "id": 8,
+                "keyform": 7,
+                "label": "Comment",
+                "name": "comment",
+                "order": 4,
+                "required": false,
+                "requiredSign": null,
+                "translations": [
+                  {
+                    "language": "id",
+                    "name": "Kommentar",
+                  },
+                ],
+                "type": "text",
+              },
+            ]
+          }
+          extraData={{}}
+          getItem={[Function]}
+          getItemCount={[Function]}
+          keyExtractor={[Function]}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={[Function]}
+          onLayout={[Function]}
+          onMomentumScrollBegin={[Function]}
+          onMomentumScrollEnd={[Function]}
+          onScroll={[Function]}
+          onScrollBeginDrag={[Function]}
+          onScrollEndDrag={[Function]}
+          onScrollToIndexFailed={[Function]}
+          removeClippedSubviews={false}
+          renderItem={[Function]}
+          scrollEventThrottle={16}
+          stickyHeaderIndices={[]}
+          viewabilityConfigCallbackPairs={[]}
+        >
+          <View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View>
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            1. Your Name
+                          </Text>
+                        </View>
+                      </View>
+                      <Text
+                        accessibilityRole="text"
+                        style={
+                          {
+                            "color": "#C8170D",
+                            "paddingRight": 10,
+                          }
+                        }
+                        testID="field-required-icon"
+                      >
+                        *
+                      </Text>
+                    </View>
+                    <View
+                      style={
+                        {
+                          "paddingHorizontal": 10,
+                          "width": "100%",
+                        }
+                      }
+                      testID="RNE__Input__view-wrapper"
+                    >
+                      <View
+                        collapsable={false}
+                        style={
+                          {
+                            "alignItems": "center",
+                            "backgroundColor": "#FFFFFF",
+                            "borderBottomWidth": 0,
+                            "borderColor": "transparent",
+                            "borderRadius": 12,
+                            "borderWidth": 0,
+                            "flexDirection": "row",
+                            "minHeight": 52,
+                            "paddingHorizontal": 16,
+                            "paddingVertical": 4,
+                            "transform": [
+                              {
+                                "translateX": 0,
+                              },
+                            ],
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "alignItems": "center",
+                              "backgroundColor": "#EAEAEA",
+                              "borderBottomLeftRadius": 12,
+                              "borderBottomRightRadius": 0,
+                              "borderTopLeftRadius": 12,
+                              "borderTopRightRadius": 0,
+                              "borderWidth": 0,
+                              "height": 40,
+                              "justifyContent": "center",
+                              "marginLeft": -16,
+                              "marginRight": 10,
+                              "marginVertical": 0,
+                              "paddingLeft": 12,
+                              "paddingRight": 12,
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#242424",
+                              }
+                            }
+                            testID="field-preffix"
+                          >
+                            Name
+                          </Text>
+                        </View>
+                        <TextInput
+                          editable={true}
+                          onChangeText={[Function]}
+                          onFocus={[Function]}
+                          placeholderTextColor="#475569"
+                          style={
+                            {
+                              "color": "#020617",
+                              "flex": 1,
+                              "fontSize": 18,
+                              "minHeight": 40,
+                            }
+                          }
+                          testID="type-input"
+                          underlineColorAndroid="transparent"
+                          value={null}
+                        />
+                      </View>
+                      <Text
+                        style={
+                          {
+                            "color": "#ff190c",
+                            "fontSize": 12,
+                            "height": 0,
+                            "margin": 0,
+                            "padding": 0,
+                          }
+                        }
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View>
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            2. Birth Date
+                          </Text>
+                        </View>
+                      </View>
+                      <Text
+                        accessibilityRole="text"
+                        style={
+                          {
+                            "color": "#C8170D",
+                            "paddingRight": 10,
+                          }
+                        }
+                        testID="field-required-icon"
+                      >
+                        *
+                      </Text>
+                    </View>
+                    <View
+                      style={
+                        {
+                          "paddingHorizontal": 10,
+                          "width": "100%",
+                        }
+                      }
+                      testID="RNE__Input__view-wrapper"
+                    >
+                      <View
+                        collapsable={false}
+                        style={
+                          {
+                            "alignItems": "center",
+                            "backgroundColor": "#FFFFFF",
+                            "borderBottomWidth": 0,
+                            "borderColor": "transparent",
+                            "borderRadius": 12,
+                            "borderWidth": 0,
+                            "flexDirection": "row",
+                            "minHeight": 52,
+                            "paddingHorizontal": 16,
+                            "paddingVertical": 4,
+                            "transform": [
+                              {
+                                "translateX": 0,
+                              },
+                            ],
+                          }
+                        }
+                      >
+                        <TextInput
+                          editable={true}
+                          onFocus={[Function]}
+                          onPressIn={[Function]}
+                          placeholderTextColor="#475569"
+                          showSoftInputOnFocus={false}
+                          style={
+                            {
+                              "color": "#020617",
+                              "flex": 1,
+                              "fontSize": 18,
+                              "minHeight": 40,
+                            }
+                          }
+                          testID="type-date"
+                          underlineColorAndroid="transparent"
+                          value={null}
+                        />
+                        <View
+                          style={
+                            {
+                              "alignItems": "center",
+                              "height": 40,
+                              "justifyContent": "center",
+                              "marginVertical": 4,
+                              "paddingRight": 4,
+                            }
+                          }
+                        >
+                          <Text />
+                        </View>
+                      </View>
+                      <Text
+                        style={
+                          {
+                            "color": "#ff190c",
+                            "fontSize": 12,
+                            "height": 0,
+                            "margin": 0,
+                            "padding": 0,
+                          }
+                        }
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View>
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            3. Age
+                          </Text>
+                        </View>
+                      </View>
+                      <Text
+                        accessibilityRole="text"
+                        style={
+                          {
+                            "color": "#C8170D",
+                            "paddingRight": 10,
+                          }
+                        }
+                        testID="field-required-icon"
+                      >
+                        *
+                      </Text>
+                    </View>
+                    <View
+                      style={
+                        {
+                          "paddingHorizontal": 10,
+                          "width": "100%",
+                        }
+                      }
+                      testID="RNE__Input__view-wrapper"
+                    >
+                      <View
+                        collapsable={false}
+                        style={
+                          {
+                            "alignItems": "center",
+                            "backgroundColor": "#FFFFFF",
+                            "borderBottomWidth": 0,
+                            "borderColor": "transparent",
+                            "borderRadius": 12,
+                            "borderWidth": 0,
+                            "flexDirection": "row",
+                            "minHeight": 52,
+                            "paddingHorizontal": 16,
+                            "paddingVertical": 4,
+                            "transform": [
+                              {
+                                "translateX": 0,
+                              },
+                            ],
+                          }
+                        }
+                      >
+                        <TextInput
+                          defaultValue=""
+                          editable={true}
+                          keyboardType="numeric"
+                          onChangeText={[Function]}
+                          onFocus={[Function]}
+                          placeholderTextColor="#475569"
+                          style={
+                            {
+                              "color": "#020617",
+                              "flex": 1,
+                              "fontSize": 18,
+                              "minHeight": 40,
+                            }
+                          }
+                          testID="type-number"
+                          underlineColorAndroid="transparent"
+                          value={null}
+                        />
+                      </View>
+                      <Text
+                        style={
+                          {
+                            "color": "#ff190c",
+                            "fontSize": 12,
+                            "height": 0,
+                            "margin": 0,
+                            "padding": 0,
+                          }
+                        }
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View
+                    style={
+                      {
+                        "marginBottom": 4,
+                      }
+                    }
+                  >
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            4. Gender
+                          </Text>
+                        </View>
+                      </View>
+                      <Text
+                        accessibilityRole="text"
+                        style={
+                          {
+                            "color": "#C8170D",
+                            "paddingRight": 10,
+                          }
+                        }
+                        testID="field-required-icon"
+                      >
+                        *
+                      </Text>
+                    </View>
+                    <View
+                      style={
+                        [
+                          {
+                            "borderRadius": 28,
+                            "flexDirection": "row",
+                            "marginHorizontal": 10,
+                            "padding": 4,
+                          },
+                          {
+                            "backgroundColor": "#FFFFFF",
+                          },
+                        ]
+                      }
+                    >
+                      <View
+                        accessibilityState={
+                          {
+                            "busy": undefined,
+                            "checked": undefined,
+                            "disabled": false,
+                            "expanded": undefined,
+                            "selected": undefined,
+                          }
+                        }
+                        accessibilityValue={
+                          {
+                            "max": undefined,
+                            "min": undefined,
+                            "now": undefined,
+                            "text": undefined,
+                          }
+                        }
+                        accessible={true}
+                        collapsable={false}
+                        focusable={true}
+                        onClick={[Function]}
+                        onResponderGrant={[Function]}
+                        onResponderMove={[Function]}
+                        onResponderRelease={[Function]}
+                        onResponderTerminate={[Function]}
+                        onResponderTerminationRequest={[Function]}
+                        onStartShouldSetResponder={[Function]}
+                        style={
+                          {
+                            "alignItems": "center",
+                            "borderRadius": 24,
+                            "flex": 1,
+                            "justifyContent": "center",
+                            "opacity": 1,
+                            "paddingVertical": 10,
+                          }
+                        }
+                        testID="type-option-pill-male"
+                      >
+                        <Text
+                          style={
+                            [
+                              {
+                                "fontSize": 14,
+                              },
+                              {
+                                "color": "#141414",
+                                "fontWeight": "500",
+                              },
+                            ]
+                          }
+                        >
+                          Male
+                        </Text>
+                      </View>
+                      <View
+                        accessibilityState={
+                          {
+                            "busy": undefined,
+                            "checked": undefined,
+                            "disabled": false,
+                            "expanded": undefined,
+                            "selected": undefined,
+                          }
+                        }
+                        accessibilityValue={
+                          {
+                            "max": undefined,
+                            "min": undefined,
+                            "now": undefined,
+                            "text": undefined,
+                          }
+                        }
+                        accessible={true}
+                        collapsable={false}
+                        focusable={true}
+                        onClick={[Function]}
+                        onResponderGrant={[Function]}
+                        onResponderMove={[Function]}
+                        onResponderRelease={[Function]}
+                        onResponderTerminate={[Function]}
+                        onResponderTerminationRequest={[Function]}
+                        onStartShouldSetResponder={[Function]}
+                        style={
+                          {
+                            "alignItems": "center",
+                            "borderRadius": 24,
+                            "flex": 1,
+                            "justifyContent": "center",
+                            "opacity": 1,
+                            "paddingVertical": 10,
+                          }
+                        }
+                        testID="type-option-pill-female"
+                      >
+                        <Text
+                          style={
+                            [
+                              {
+                                "fontSize": 14,
+                              },
+                              {
+                                "color": "#141414",
+                                "fontWeight": "500",
+                              },
+                            ]
+                          }
+                        >
+                          Female
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View
+                    style={
+                      {
+                        "marginBottom": 4,
+                      }
+                    }
+                  >
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            5. Hobby
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      collapsable={false}
+                    >
+                      <View
+                        onLayout={[Function]}
+                        style={
+                          {
+                            "backgroundColor": "#FFFFFF",
+                            "borderColor": "transparent",
+                            "borderRadius": 12,
+                            "borderWidth": 0,
+                            "justifyContent": "center",
+                            "marginHorizontal": 10,
+                            "minHeight": 52,
+                            "paddingHorizontal": 16,
+                            "paddingVertical": 14,
+                          }
+                        }
+                      >
+                        <View
+                          accessibilityState={
+                            {
+                              "busy": undefined,
+                              "checked": undefined,
+                              "disabled": undefined,
+                              "expanded": undefined,
+                              "selected": undefined,
+                            }
+                          }
+                          accessible={false}
+                          focusable={true}
+                          onClick={[Function]}
+                          onResponderGrant={[Function]}
+                          onResponderMove={[Function]}
+                          onResponderRelease={[Function]}
+                          onResponderTerminate={[Function]}
+                          onResponderTerminationRequest={[Function]}
+                          onStartShouldSetResponder={[Function]}
+                          style={
+                            {
+                              "alignItems": "center",
+                              "flexDirection": "row",
+                              "justifyContent": "space-between",
+                            }
+                          }
+                          testID="type-multiple-option-dropdown"
+                        >
+                          <Text
+                            style={
+                              {
+                                "color": "#475569",
+                                "flex": 1,
+                                "fontSize": 16,
+                                "writingDirection": "ltr",
+                              }
+                            }
+                          >
+                            Select multiple item(s)
+                          </Text>
+                          <Image
+                            source={
+                              {
+                                "testUri": "../../react-native-element-dropdown/lib/commonjs/assets/down.png",
+                              }
+                            }
+                            style={
+                              {
+                                "height": 20,
+                                "tintColor": "gray",
+                                "width": 20,
+                              }
+                            }
+                          />
+                        </View>
+                      </View>
+                      <View
+                        style={
+                          {
+                            "flexDirection": "row",
+                            "flexWrap": "wrap",
+                          }
+                        }
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View
+                    style={
+                      {
+                        "marginBottom": 4,
+                      }
+                    }
+                  >
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            6. Foods
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      collapsable={false}
+                    >
+                      <View
+                        onLayout={[Function]}
+                        style={
+                          {
+                            "backgroundColor": "#FFFFFF",
+                            "borderColor": "transparent",
+                            "borderRadius": 12,
+                            "borderWidth": 0,
+                            "justifyContent": "center",
+                            "marginHorizontal": 10,
+                            "minHeight": 52,
+                            "paddingHorizontal": 16,
+                            "paddingVertical": 14,
+                          }
+                        }
+                      >
+                        <View
+                          accessibilityState={
+                            {
+                              "busy": undefined,
+                              "checked": undefined,
+                              "disabled": undefined,
+                              "expanded": undefined,
+                              "selected": undefined,
+                            }
+                          }
+                          accessible={false}
+                          focusable={true}
+                          onClick={[Function]}
+                          onResponderGrant={[Function]}
+                          onResponderMove={[Function]}
+                          onResponderRelease={[Function]}
+                          onResponderTerminate={[Function]}
+                          onResponderTerminationRequest={[Function]}
+                          onStartShouldSetResponder={[Function]}
+                          style={
+                            {
+                              "alignItems": "center",
+                              "flexDirection": "row",
+                              "justifyContent": "space-between",
+                            }
+                          }
+                          testID="type-option-dropdown"
+                        >
+                          <Text
+                            style={
+                              [
+                                {
+                                  "flex": 1,
+                                  "fontSize": 16,
+                                  "writingDirection": "ltr",
+                                },
+                                {
+                                  "color": "#475569",
+                                },
+                                {},
+                              ]
+                            }
+                          >
+                            Select item
+                          </Text>
+                          <Image
+                            source={
+                              {
+                                "testUri": "../../react-native-element-dropdown/lib/commonjs/assets/down.png",
+                              }
+                            }
+                            style={
+                              {
+                                "height": 20,
+                                "tintColor": "gray",
+                                "width": 20,
+                              }
+                            }
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View
+              onFocusCapture={[Function]}
+              onLayout={[Function]}
+              style={null}
+            >
+              <View
+                style={
+                  {
+                    "paddingHorizontal": 10,
+                    "paddingVertical": 8,
+                  }
+                }
+              >
+                <View
+                  style={
+                    {
+                      "display": "flex",
+                    }
+                  }
+                  testID="question-view"
+                >
+                  <View>
+                    <View
+                      style={
+                        {
+                          "flex": 1,
+                          "flexDirection": "row",
+                        }
+                      }
+                    >
+                      <View
+                        style={
+                          {
+                            "color": "#141414",
+                            "display": "flex",
+                            "flexDirection": "column",
+                            "fontSize": 16,
+                            "fontWeight": "700",
+                            "marginBottom": 8,
+                            "paddingHorizontal": 10,
+                          }
+                        }
+                      >
+                        <View
+                          style={
+                            {
+                              "flexDirection": "row",
+                            }
+                          }
+                        >
+                          <Text
+                            accessibilityRole="text"
+                            style={
+                              {
+                                "color": "#141414",
+                              }
+                            }
+                            testID="field-label"
+                          >
+                            7. Comment
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      style={
+                        {
+                          "paddingHorizontal": 10,
+                          "width": "100%",
+                        }
+                      }
+                      testID="RNE__Input__view-wrapper"
+                    >
+                      <View
+                        collapsable={false}
+                        style={
+                          {
+                            "alignItems": "flex-start",
+                            "backgroundColor": "#FFFFFF",
+                            "borderBottomWidth": 0,
+                            "borderColor": "transparent",
+                            "borderRadius": 12,
+                            "borderWidth": 0,
+                            "flexDirection": "row",
+                            "minHeight": 120,
+                            "paddingHorizontal": 16,
+                            "paddingTop": 14,
+                            "transform": [
+                              {
+                                "translateX": 0,
+                              },
+                            ],
+                          }
+                        }
+                      >
+                        <TextInput
+                          editable={true}
+                          multiline={true}
+                          numberOfLines={4}
+                          onChangeText={[Function]}
+                          onFocus={[Function]}
+                          placeholderTextColor="#475569"
+                          style={
+                            {
+                              "color": "#020617",
+                              "flex": 1,
+                              "fontSize": 18,
+                              "minHeight": 40,
+                              "textAlignVertical": "top",
+                            }
+                          }
+                          testID="type-text"
+                          underlineColorAndroid="transparent"
+                          value={null}
+                        />
+                      </View>
+                      <Text
+                        style={
+                          {
+                            "color": "#ff190c",
+                            "fontSize": 12,
+                            "height": 0,
+                            "margin": 0,
+                            "padding": 0,
+                          }
+                        }
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        </RCTScrollView>
+      </View>
+    </View>
+  </View>
+  <View
+    style={
+      [
+        {
+          "alignItems": "center",
+          "borderTopLeftRadius": 24,
+          "borderTopRightRadius": 24,
+          "borderTopWidth": 0.5,
+          "flexDirection": "row",
+          "justifyContent": "space-between",
+          "paddingHorizontal": 16,
+          "paddingVertical": 16,
+        },
+        {
+          "backgroundColor": "#FFFFFF",
+          "borderTopColor": "#E2E2E2",
+        },
+      ]
     }
-    testID="exit-confirmation-dialog"
-    transparent={true}
-    visible={false}
-  />
-</View>
+  >
+    <View
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": false,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onClick={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "flex": 1,
+          "justifyContent": "center",
+          "opacity": 1,
+          "paddingVertical": 14,
+        }
+      }
+      testID="form-nav-btn-back"
+    >
+      <Text
+        style={
+          [
+            {
+              "fontSize": 18,
+              "fontWeight": "600",
+            },
+            {
+              "color": "#0434FF",
+            },
+          ]
+        }
+      >
+        Back
+      </Text>
+    </View>
+    <View
+      accessibilityState={
+        {
+          "busy": undefined,
+          "checked": undefined,
+          "disabled": false,
+          "expanded": undefined,
+          "selected": undefined,
+        }
+      }
+      accessibilityValue={
+        {
+          "max": undefined,
+          "min": undefined,
+          "now": undefined,
+          "text": undefined,
+        }
+      }
+      accessible={true}
+      collapsable={false}
+      focusable={true}
+      onClick={[Function]}
+      onResponderGrant={[Function]}
+      onResponderMove={[Function]}
+      onResponderRelease={[Function]}
+      onResponderTerminate={[Function]}
+      onResponderTerminationRequest={[Function]}
+      onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "#0434FF",
+          "borderRadius": 16,
+          "flex": 1,
+          "justifyContent": "center",
+          "opacity": 1,
+          "paddingVertical": 16,
+        }
+      }
+      testID="form-nav-btn-next"
+    >
+      <Text
+        style={
+          [
+            {
+              "fontSize": 18,
+              "fontWeight": "600",
+            },
+            {
+              "color": "#FFFFFF",
+            },
+          ]
+        }
+      >
+        Next
+      </Text>
+    </View>
+  </View>
+</RNCSafeAreaView>
 `;

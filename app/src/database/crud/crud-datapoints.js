@@ -49,14 +49,7 @@ const dataPointsQuery = () => ({
         FROM datapoints
         JOIN forms ON datapoints.form = forms.id
         WHERE datapoints.syncedAt IS NULL
-          AND (
-            datapoints.submitted = 1
-            -- A draft the server already knows about must keep syncing:
-            -- onSyncDraftDatapoint dedups downloads by draftId, so holding it back
-            -- locally would make the next download insert a duplicate.
-            OR datapoints.draftId IS NOT NULL
-            OR datapoints.sendToWeb = 1
-          )
+          AND datapoints.submitted = 1
         ORDER BY datapoints.createdAt ASC
         ${limit ? `LIMIT ${parseInt(limit, 10)}` : ''}`,
     );
@@ -183,18 +176,13 @@ const dataPointsQuery = () => ({
    * deliberately NOT touched: a device-created row stays locallyCreated = 1
    * after syncing, so "device data that reached the server" remains queryable.
    */
-  markSynced: async (db, id, draftId = null) => {
-    // draftId is the backend row id returned by /sync. Storing it right away
-    // makes the next save of this draft sync as ?id=<draftId> (an update)
-    // instead of creating a duplicate backend draft.
-    const draftIdVal = draftId ? { draftId } : {};
+  markSynced: async (db, id) => {
     const res = await sql.updateRow(
       db,
       'datapoints',
       { id },
       {
         syncedAt: new Date().toISOString(),
-        ...draftIdVal,
       },
     );
     return res;
@@ -210,43 +198,6 @@ const dataPointsQuery = () => ({
     );
     return res;
   },
-  getDraftPendingSync: async (db) => {
-    const rows = await sql.safeExecuteQuery(
-      db,
-      `SELECT * FROM datapoints WHERE submitted = ? AND draftId IS NULL AND syncedAt IS NOT NULL`,
-      [0],
-      'getDraftPendingSync',
-    );
-    return rows;
-  },
-  getByDraftId: async (db, { draftId }) => {
-    const res = await sql.getFirstRow(db, 'datapoints', { draftId });
-    if (!res) {
-      return false;
-    }
-    return {
-      ...res,
-      json: parseAnswers(res.json),
-    };
-  },
-  deleteDraftIdIsNull: async (db) => {
-    const res = await sql.safeExecuteQuery(
-      db,
-      'DELETE FROM datapoints WHERE submitted = ? AND draftId IS NULL AND syncedAt IS NOT NULL',
-      [0],
-      'deleteDraftIdIsNull',
-    );
-    return res;
-  },
-  deleteDraftSynced: async (db) => {
-    const res = await sql.safeExecuteQuery(
-      db,
-      'DELETE FROM datapoints WHERE submitted = ? AND draftId IS NOT NULL AND syncedAt IS NOT NULL',
-      [0],
-      'deleteDraftSynced',
-    );
-    return res;
-  },
   /**
    * Writes only the json column. Used to repair answers (e.g. retake a missing
    * photo) without touching syncedAt, so the row stays in the upload queue.
@@ -257,30 +208,6 @@ const dataPointsQuery = () => ({
       'datapoints',
       { id },
       { json: JSON.stringify(json).replace(/'/g, "''") },
-    );
-    return res;
-  },
-  /**
-   * Links a local draft to its backend row without stamping syncedAt, so the
-   * local answers stay queued and the next upload updates the backend draft
-   * in place instead of creating a duplicate.
-   */
-  linkDraftId: async (db, id, draftId) => {
-    const res = await sql.updateRow(db, 'datapoints', { id }, { draftId });
-    return res;
-  },
-  /**
-   * Finds a local pending draft matching a backend draft by uuid. Drafts
-   * uploaded by app versions before draftId bookkeeping existed can only be
-   * matched this way, otherwise the draft download inserts a duplicate.
-   */
-  getDraftByUUID: async (db, { uuid, form }) => {
-    const res = await sql.safeGetFirstRow(
-      db,
-      `SELECT * FROM datapoints
-        WHERE uuid = ? AND form = ? AND submitted = ? AND draftId IS NULL`,
-      [uuid, form, 0],
-      'getDraftByUUID',
     );
     return res;
   },
@@ -355,8 +282,7 @@ const dataPointsQuery = () => ({
     }
   },
   /**
-   * Local-only delete. The server copy, if any, is untouched — a draft with a
-   * draftId re-downloads on the next sync, which the confirmation dialog warns about.
+   * Local-only delete.
    *
    * The datapoint's geometry index rows go with it, in the same transaction.
    * GEO-006 D-6 makes `geometry_index` a subset of `datapoints`, and GEO-007 reads a
@@ -375,14 +301,6 @@ const dataPointsQuery = () => ({
       await sql.deleteRow(txDb, 'datapoints', id);
     });
     return true;
-  },
-  /**
-   * Opt a local-born draft into web upload. Set once: updateDataPoint never writes
-   * this column, so the flag survives every later edit of the draft.
-   */
-  setSendToWeb: async (db, id) => {
-    const res = await sql.updateRow(db, 'datapoints', { id }, { sendToWeb: 1 });
-    return res;
   },
   /**
    * Hand a rejected submission back to the enumerator as a draft.

@@ -13,7 +13,6 @@ import {
   ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 
@@ -24,7 +23,6 @@ import useTheme from '../lib/theme';
 
 const AuthForm = ({ navigation }) => {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { online: isNetworkAvailable, lang: activeLang } = UIState.useState((s) => s);
   const { appVersion, serverURL } = BuildParamsState.useState((s) => s);
   const [passcode, setPasscode] = useState(null);
@@ -158,10 +156,7 @@ const AuthForm = ({ navigation }) => {
         barStyle={theme.statusBar.style === 'light' ? 'light-content' : 'dark-content'}
         backgroundColor={theme.statusBar.bg}
       />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.headerBlock}>
           <Text style={[styles.headerTitle, { color: theme.text.primary }]}>
             {trans.authTitle1}
@@ -212,7 +207,10 @@ const AuthForm = ({ navigation }) => {
 
           {hasError && (
             <View>
-              <Text style={[styles.errorText, { color: theme.input.errorText }]} testID="auth-error-text">
+              <Text
+                style={[styles.errorText, { color: theme.input.errorText }]}
+                testID="auth-error-text"
+              >
                 {error}
               </Text>
               <View
@@ -229,16 +227,20 @@ const AuthForm = ({ navigation }) => {
                 </View>
                 <View style={styles.tipsList}>
                   <Text style={[styles.tipItem, { color: theme.text.secondary }]}>
-                    {'\u2022  '}{trans.authErrorTip1}
+                    {'\u2022  '}
+                    {trans.authErrorTip1}
                   </Text>
                   <Text style={[styles.tipItem, { color: theme.text.secondary }]}>
-                    {'\u2022  '}{trans.authErrorTip2}
+                    {'\u2022  '}
+                    {trans.authErrorTip2}
                   </Text>
                   <Text style={[styles.tipItem, { color: theme.text.secondary }]}>
-                    {'\u2022  '}{trans.authErrorTip3}
+                    {'\u2022  '}
+                    {trans.authErrorTip3}
                   </Text>
                   <Text style={[styles.tipItem, { color: theme.text.secondary }]}>
-                    {'\u2022  '}{trans.authErrorTip4}
+                    {'\u2022  '}
+                    {trans.authErrorTip4}
                   </Text>
                 </View>
               </View>
@@ -271,9 +273,10 @@ const AuthForm = ({ navigation }) => {
           style={[
             styles.loginButton,
             {
-              backgroundColor: disableLoginButton || loading
-                ? theme.buttonPrimary.bgDisabled
-                : theme.buttonPrimary.bg,
+              backgroundColor:
+                disableLoginButton || loading
+                  ? theme.buttonPrimary.bgDisabled
+                  : theme.buttonPrimary.bg,
             },
           ]}
           onPress={handleOnPressLogin}

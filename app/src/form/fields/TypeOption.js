@@ -50,7 +50,7 @@ const TypeOption = ({
       color: theme.buttonPrimary.text,
       backgroundColor,
     };
-  }, [value, color, option]);
+  }, [value, color, option, theme.buttonPrimary.text]);
   const style = {
     ...styles.dropdownField,
     ...(disabled ? styles.dropdownFieldDisabled : {}),

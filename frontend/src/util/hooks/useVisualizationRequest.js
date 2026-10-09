@@ -44,8 +44,28 @@ const cacheSet = (key, entry) => {
 
 const buildKey = (endpoint, params) => `${endpoint}?${JSON.stringify(params)}`;
 
+// Arrays repeat their key without brackets: `global_criteria=a&
+// global_criteria=b`, which Django's getlist() reads. Axios would send
+// `global_criteria[]=…`, which the backend ignores on purpose (VIZ-027
+// D-15). Scalars encode exactly as before; null and undefined are
+// skipped, as axios skips them.
+const toQuery = (params) => {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === null || typeof value === "undefined") {
+      return;
+    }
+    (Array.isArray(value) ? value : [value]).forEach((v) =>
+      query.append(key, v)
+    );
+  });
+  return query.toString();
+};
+
 const sendRequest = (endpoint, params) =>
-  api.get(endpoint, { params }).then((res) => res.data);
+  api
+    .get(endpoint, { params, paramsSerializer: toQuery })
+    .then((res) => res.data);
 
 /**
  * Generic visualization fetch hook. Endpoint-and-params generic, with a

@@ -4,16 +4,7 @@ const uiText = {
     swipeHintText: 'Swipe a draft right for more actions',
     deleteDraftTitle: 'Delete draft',
     deleteDraftMessage: 'This draft will be permanently deleted from this device.',
-    deleteDraftWebToo: 'The copy on the web dashboard will be deleted as well.',
     deleteDraftFailedText: 'Could not delete this draft. Nothing was removed — please try again.',
-    deleteNeedsConnectionText:
-      'This draft is on the web dashboard. Connect to the internet to delete it.',
-    sendToWebTitle: 'Send to web dashboard',
-    sendToWebMessage: 'This draft will be uploaded to the web dashboard on the next sync.',
-    sendToWebToast: 'Draft will be uploaded on the next sync',
-    onWebLabel: 'On web',
-    pendingWebLabel: 'Pending upload',
-    buttonSaveNSendToWeb: 'Save and send to web dashboard',
     formMissingText: 'This form is no longer available on the device',
     openFileFailedText: 'No app on this device can open this file',
     savedToDeviceText:
@@ -287,18 +278,8 @@ const uiText = {
     swipeHintText: 'Faites glisser un brouillon vers la droite pour plus d’actions',
     deleteDraftTitle: 'Supprimer le brouillon',
     deleteDraftMessage: 'Ce brouillon sera définitivement supprimé de cet appareil.',
-    deleteDraftWebToo: 'La copie sur le tableau de bord web sera également supprimée.',
     deleteDraftFailedText:
       'Impossible de supprimer ce brouillon. Rien n’a été retiré — veuillez réessayer.',
-    deleteNeedsConnectionText:
-      'Ce brouillon est sur le tableau de bord web. Connectez-vous à Internet pour le supprimer.',
-    sendToWebTitle: 'Envoyer au tableau de bord web',
-    sendToWebMessage:
-      'Ce brouillon sera téléversé vers le tableau de bord web lors de la prochaine synchronisation.',
-    sendToWebToast: 'Le brouillon sera téléversé lors de la prochaine synchronisation',
-    onWebLabel: 'Sur le web',
-    pendingWebLabel: 'Envoi en attente',
-    buttonSaveNSendToWeb: 'Enregistrer et envoyer au tableau de bord web',
     formMissingText: 'Ce formulaire n’est plus disponible sur cet appareil',
     openFileFailedText: 'Aucune application sur cet appareil ne peut ouvrir ce fichier',
     savedToDeviceText:

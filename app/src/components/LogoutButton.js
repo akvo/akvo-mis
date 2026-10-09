@@ -60,7 +60,6 @@ const LogoutButton = () => {
       s.inProgress = false;
       s.progress = 0;
       s.completed = false;
-      s.draftInProgress = false;
       s.syncingFormId = null;
       s.formProgress = {};
     });

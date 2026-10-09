@@ -4,17 +4,13 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import useTheme from '../lib/theme';
 
 /**
- * One status per row, by priority: file missing > draft > waiting to sync > synced (A7).
- * A draft bound for the web keeps today's two labels apart: pending upload vs on web.
+ * One status per row, by priority: file missing > draft > waiting to sync > synced.
  */
 const getStatus = (item) => {
   if (item.needsRetake) {
     return 'missing';
   }
   if (item.submitted === 0) {
-    if (item.draftId || item.sendToWeb) {
-      return item.isSynced ? 'onWeb' : 'pendingWeb';
-    }
     return 'draft';
   }
   return item.isSynced ? 'synced' : 'pending';
@@ -22,9 +18,6 @@ const getStatus = (item) => {
 
 const STATUS_ICONS = {
   missing: { name: 'alert-circle', color: (t) => t.status.error, label: 'photoMissingText' },
-  // Same colours as pending/synced below: the glyphs alone are too alike at 20px.
-  pendingWeb: { name: 'cloud-upload', color: (t) => t.status.warning, label: 'pendingWebLabel' },
-  onWeb: { name: 'cloud-done', color: (t) => t.status.success, label: 'onWebLabel' },
   draft: { name: 'pencil', color: (t) => t.status.draft, label: 'draftText' },
   pending: { name: 'time', color: (t) => t.status.warning, label: 'legendPending' },
   synced: { name: 'checkmark-circle', color: (t) => t.status.success, label: 'legendSynced' },

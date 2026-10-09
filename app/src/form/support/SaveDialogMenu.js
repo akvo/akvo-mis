@@ -18,7 +18,10 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
       onRequestClose={() => setVisible(false)}
       testID="save-dialog-menu"
     >
-      <Pressable style={[styles.overlay, { backgroundColor: theme.bg.scrim }]} onPress={() => setVisible(false)}>
+      <Pressable
+        style={[styles.overlay, { backgroundColor: theme.bg.scrim }]}
+        onPress={() => setVisible(false)}
+      >
         <Pressable
           style={[styles.sheet, { backgroundColor: theme.bg.surfaceElevated1 }]}
           onPress={() => {}}
@@ -49,31 +52,6 @@ const SaveDialogMenu = ({ visible, setVisible, handleOnSaveAndExit, handleOnExit
               </Text>
               <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
                 {trans.saveDraftDesc || 'Keeps your progress. Reopen it from the drafts list.'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.optionRow}
-            testID="save-and-send-to-web-button"
-            onPress={() => {
-              if (handleOnSaveAndExit) {
-                handleOnSaveAndExit({ sendToWeb: true });
-              }
-            }}
-          >
-            <Icon
-              name="cloud-upload-outline"
-              size={24}
-              color={theme.text.primary}
-              style={styles.optionIcon}
-            />
-            <View style={styles.optionContent}>
-              <Text style={[styles.optionTitle, { color: theme.text.primary }]}>
-                {trans.buttonSaveNSendToWeb}
-              </Text>
-              <Text style={[styles.optionDesc, { color: theme.text.secondary }]}>
-                {trans.sendToWebMessage}
               </Text>
             </View>
           </TouchableOpacity>
