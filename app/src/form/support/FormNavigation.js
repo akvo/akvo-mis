@@ -29,23 +29,23 @@ const FormNavigation = ({
     });
   };
 
-  const getFirstErrorMessage = (feedback) => {
+  // Extract all questions for recursive dependency checking
+  const allQuestions =
+    formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [];
+
+  const getFirstErrorMessage = (feedback, group = currentGroup) => {
     const [questionID, errorMessage] = Object.entries(feedback).find(([, value]) => value !== true);
-    const question = currentGroup.question.find((q) => q?.id === parseInt(questionID, 10));
+    const question = group?.question?.find((q) => `${q?.id}` === `${questionID}`);
     return errorMessage.replace('this', question?.label);
   };
 
-  const validateAllGroups = async () => {
-    if (!formDefinition?.question_group) {
-      return true;
-    }
-
-    const allGroups = formDefinition.question_group;
-    // Extract all questions for recursive dependency checking
-    const allQuestions = allGroups.flatMap((qg) => qg.question).filter((q) => q);
-
-    const validationPromises = allGroups.map(async (group) => {
-      const validateSync = group.question
+  /**
+   * Field-level feedback for one group's visible questions:
+   * { [questionId]: true | errorMessage }.
+   */
+  const validateGroup = async (group) => {
+    const validateSync =
+      group?.question
         ?.filter((q) => onFilterDependency(group, currentValues, q, 0, allQuestions))
         /**
          * Only ENTITY cascades are gated here. `extra.type` is a cascade sub-type, so
@@ -67,72 +67,60 @@ const FormNavigation = ({
           const fieldValue =
             currentValues?.[q?.id] === undefined ? defaultVal : currentValues[q.id];
           return generateValidationSchemaFieldLevel(fieldValue, q);
-        });
+        }) || [];
+    const validations = await Promise.allSettled(validateSync);
+    return validations
+      .filter(({ status }) => status === 'fulfilled')
+      .reduce((acc, { value }) => ({ ...acc, ...value }), {});
+  };
 
-      if (!validateSync || validateSync.length === 0) {
-        return true;
-      }
+  /**
+   * The first group (in form order) holding an unanswered or invalid answer, with
+   * its feedback, or null when the whole form is submittable.
+   */
+  const findFirstInvalidGroup = async () => {
+    const groups = formDefinition?.question_group || [];
+    const feedbacks = await Promise.all(groups.map((group) => validateGroup(group)));
+    const groupIndex = feedbacks.findIndex((feedback) =>
+      Object.values(feedback).some((val) => val !== true),
+    );
+    return groupIndex === -1 ? null : { groupIndex, feedback: feedbacks[groupIndex] };
+  };
 
-      const validations = await Promise.allSettled(validateSync);
-      const errors = validations
-        ?.filter(({ status }) => status === 'fulfilled')
-        .map(({ value }) => Object.values(value))
-        .flat()
-        .filter((val) => val !== true);
-
-      return errors.length === 0;
+  /**
+   * Blocks submission and takes the user to the problem: opens the first failing
+   * group with its field errors shown. "Complete all required fields" is only true
+   * when an answer is missing — a filled-in but invalid answer (e.g. 2.5 in a
+   * whole-number field) gets its own message instead.
+   */
+  const handleInvalidSubmit = ({ groupIndex, feedback }) => {
+    const group = formDefinition.question_group[groupIndex];
+    const isRequired = Object.values(feedback).some(
+      (val) => val !== true && val.includes('required'),
+    );
+    FormState.update((s) => {
+      s.feedback = feedback;
     });
-
-    const results = await Promise.all(validationPromises);
-    return results.every((valid) => valid);
+    // Submit stays pressable while the group list is open; close it so the field
+    // errors are actually on screen.
+    setShowQuestionGroupList(false);
+    if (groupIndex !== activeGroup) {
+      setActiveGroup(groupIndex);
+    }
+    ToastAndroid.show(
+      isRequired
+        ? trans.completeAllRequiredFields ||
+            'Please complete all required fields in all sections before submitting'
+        : `${group?.label}: ${getFirstErrorMessage(feedback, group)}`,
+      ToastAndroid.LONG,
+    );
   };
 
   const handleFormNavigation = async (index) => {
     // index 0 = prev group
     // index 1 = show question group list
     // index 2 = next group
-    // Extract all questions for recursive dependency checking
-    const allQuestions =
-      formDefinition?.question_group?.flatMap((qg) => qg.question).filter((q) => q) || [];
-
-    const validateSync =
-      currentGroup?.question
-        ?.filter((q) => onFilterDependency(currentGroup, currentValues, q, 0, allQuestions))
-        /**
-         * Only ENTITY cascades are gated, because they depend on options and
-         * prevAdmAnswer. `extra.type` is a cascade sub-type, so the old
-         * `|| !q?.extra?.type` clause also excluded administration cascades — a required
-         * one was never validated here, and the group passed without it.
-         */
-        ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
-        ?.map((q) => {
-          const defaultVal = [
-            'cascade',
-            'multiple_option',
-            'option',
-            'geo',
-            'geoshape',
-            'geotrace',
-          ].includes(q?.type)
-            ? null
-            : '';
-          /**
-           * Set default value when the answer is undefined
-           */
-          const fieldValue =
-            currentValues?.[q?.id] === undefined ? defaultVal : currentValues[q.id];
-          return generateValidationSchemaFieldLevel(fieldValue, q);
-        }) || [];
-    const validations = await Promise.allSettled(validateSync);
-    const feedbackList = validations
-      ?.filter(({ status }) => status === 'fulfilled')
-      .map(({ value }) => value);
-    const feedbackValues = feedbackList.reduce((acc, obj) => {
-      const key = Object.keys(obj)[0];
-      const value = obj[key];
-      acc[key] = value;
-      return acc;
-    }, {});
+    const feedbackValues = await validateGroup(currentGroup);
     const errors = Object.values(feedbackValues).filter((val) => val !== true);
     // Show warning but allow navigation to next group
     if (errors.length > 0 && index === 2 && activeGroup < totalGroup - 1) {
@@ -175,16 +163,12 @@ const FormNavigation = ({
     }
     if (index === 2 && activeGroup === totalGroup - 1) {
       // Validate all groups before submitting
-      const allGroupsValid = await validateAllGroups();
-      if (allGroupsValid) {
-        onSubmit();
-      } else {
-        ToastAndroid.show(
-          trans.completeAllRequiredFields ||
-            'Please complete all required fields in all sections before submitting',
-          ToastAndroid.LONG,
-        );
+      const invalidGroup = await findFirstInvalidGroup();
+      if (invalidGroup) {
+        handleInvalidSubmit(invalidGroup);
+        return;
       }
+      onSubmit();
     }
   };
 
