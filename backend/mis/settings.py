@@ -94,6 +94,21 @@ EMBED_HOST = environ.get("EMBED_HOST", "")
 
 
 ALLOWED_HOSTS = ["*"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://*.ngrok.io",
+    "https://*.ngrok-free.app",
+    "https://*.sslip.io",
+]
+if BASE_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f"https://*.{BASE_DOMAIN}",
+        f"https://{BASE_DOMAIN}",
+        f"http://*.{BASE_DOMAIN}",
+        f"http://{BASE_DOMAIN}",
+    ])
 
 # Application definition
 
@@ -415,3 +430,22 @@ LOGGING = {
         "level": environ.get("LOG_LEVEL", "INFO"),
     },
 }
+
+# Matomo Analytics
+MATOMO_URL = environ.get("MATOMO_URL", "").rstrip("/")
+MATOMO_SITE_ID = (
+    int(environ["MATOMO_SITE_ID"])
+    if environ.get("MATOMO_SITE_ID")
+    else None
+)
+MATOMO_AUTH_TOKEN = environ.get("MATOMO_AUTH_TOKEN", "")
+MATOMO_DIM_TENANT = (
+    int(environ["MATOMO_DIM_TENANT"])
+    if environ.get("MATOMO_DIM_TENANT")
+    else None
+)
+MATOMO_DIM_SUBDOMAIN = (
+    int(environ["MATOMO_DIM_SUBDOMAIN"])
+    if environ.get("MATOMO_DIM_SUBDOMAIN")
+    else None
+)

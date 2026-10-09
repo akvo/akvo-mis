@@ -25,6 +25,11 @@ services:
       - BASE_DOMAIN
       - ADMIN_SUBDOMAIN
       - EMBED_HOST
+      - MATOMO_URL
+      - MATOMO_SITE_ID
+      - MATOMO_AUTH_TOKEN
+      - MATOMO_DIM_TENANT
+      - MATOMO_DIM_SUBDOMAIN
     depends_on:
       - db
   worker:
@@ -50,6 +55,11 @@ services:
       - BASE_DOMAIN
       - ADMIN_SUBDOMAIN
       - EMBED_HOST
+      - MATOMO_URL
+      - MATOMO_SITE_ID
+      - MATOMO_AUTH_TOKEN
+      - MATOMO_DIM_TENANT
+      - MATOMO_DIM_SUBDOMAIN
     depends_on:
       - backend
   frontend:
@@ -59,6 +69,11 @@ services:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
       - REACT_APP_CARTO_API_KEY=$REACT_APP_CARTO_API_KEY
+      - REACT_APP_MATOMO_URL=$MATOMO_URL
+      - REACT_APP_MATOMO_SITE_ID=$MATOMO_SITE_ID
+      - REACT_APP_MATOMO_DIM_TENANT=$MATOMO_DIM_TENANT
+      - REACT_APP_MATOMO_DIM_SUBDOMAIN=$MATOMO_DIM_SUBDOMAIN
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
     volumes:
       - ./frontend:/app:delegated
     working_dir: /app

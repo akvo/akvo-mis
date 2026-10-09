@@ -19,6 +19,7 @@ from mis.settings import (
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Q, Prefetch
+from django_q.tasks import async_task
 
 from rest_framework import status, serializers
 from rest_framework.response import Response
@@ -310,6 +311,24 @@ def sync_pending_form_data(request, version):
         direct_to_data = user.is_superuser or not draft_exists.has_approval
         if direct_to_data and not draft_exists.parent:
             draft_exists.save_to_file
+
+    if not is_draft or is_published:
+        user_tenant = getattr(user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="mobile",
+            user_id=str(user.id) if user else None,
+            subdomain=subdomain,
+        )
 
     # The id lets the device store the backend identity of a draft right
     # after its first upload, so the next save syncs as ?id=<draft> instead

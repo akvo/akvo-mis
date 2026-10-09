@@ -398,6 +398,22 @@ class FormDataAddListView(APIView):
             )
 
         serializer.save()
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
         return Response({"message": "ok"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -674,6 +690,22 @@ class PendingFormDataView(APIView):
             )
 
         serializer.save()
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
         return Response({"message": "ok"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -1168,6 +1200,23 @@ class PublishDraftFormDataView(APIView):
         # Save to file if it's published and not pending
         if direct_to_data:
             async_task("api.v1.v1_data.tasks.seed_approved_data", draft_data)
+
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=draft_data.form.name,
+            form_id=draft_data.form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
 
         return Response(
             {"message": "Draft published successfully"},
