@@ -285,7 +285,7 @@ Standard Matomo widgets use fixed system titles (e.g. *Actions: Event Actions*).
   1. Dimension 1: `Visitors` $\rightarrow$ `Tenant Name`
   2. Dimension 2: `Events` $\rightarrow$ `Event Action` *(breaks down into `Mobile Sync` vs `Webform Submit`)*
 * **Metrics**:
-  - `Events` $\rightarrow$ `Total events` *(submission counts)*
+  - `Total Events` *(tracks count of submissions)*
   - `Visitors` $\rightarrow$ `Visits`
   - `Visitors` $\rightarrow$ `Unique Visitors`
 * **Filter**:
@@ -302,7 +302,7 @@ Standard Matomo widgets use fixed system titles (e.g. *Actions: Event Actions*).
   2. Dimension 2: `Events` $\rightarrow$ `Event Name` *(individual Form Title)*
   3. Dimension 3: `Events` $\rightarrow$ `Event Action` *(Mobile vs Web)*
 * **Metrics**:
-  - `Events` $\rightarrow$ `Total events`
+  - `Total Events`
 * **Filter**:
   - `Events` $\rightarrow$ `Event Category` **equals** `Data Submission`
 
@@ -314,24 +314,21 @@ Standard Matomo widgets use fixed system titles (e.g. *Actions: Event Actions*).
 * **Report Type**: `Table`
 * **Dimensions**:
   1. Dimension 1: `Visitors` $\rightarrow$ `Tenant Name`
-  2. Dimension 2: `Actions` $\rightarrow$ `Page URL` (or `Page Title`)
+  2. Dimension 2: `Behaviour` $\rightarrow$ `Page URL` (or `Page Title`)
 * **Metrics**:
-  - `Actions` $\rightarrow$ `Pageviews`
-  - `Actions` $\rightarrow$ `Unique Pageviews`
-  - `Actions` $\rightarrow$ `Avg. time on page`
+  - `Behaviour` $\rightarrow$ `Pageviews`
   - `Visitors` $\rightarrow$ `Visits`
+  - `Visitors` $\rightarrow$ `Unique Visitors`
 * **Filter**: *None (records all web browsing activity)*
 
 ---
 
 ##### Report 4: Submission Trends Over Time — *Historical Growth Chart*
-* **Purpose**: Visual timeline chart showing how submissions grow over weeks/months across channels.
+* **Purpose**: Visual timeline graph showing how submissions grow over time across days, weeks, and months.
 * **Report Name**: `Submission Trends Over Time`
-* **Report Type**: `Evolution` *(renders a time-series graph)*
-* **Dimensions**:
-  1. Dimension 1: `Events` $\rightarrow$ `Event Action` (or `Tenant Name`)
+* **Report Type**: `Evolution` *(renders a time-series graph directly without dimensions)*
 * **Metrics**:
-  - `Events` $\rightarrow$ `Total events`
+  - `Total Events`
 * **Filter**:
   - `Events` $\rightarrow$ `Event Category` **equals** `Data Submission`
 
