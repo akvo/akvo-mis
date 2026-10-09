@@ -77,6 +77,7 @@ import {
   onBaseDomainHost,
   workspaceUrl,
 } from "./util/tenant";
+import { initMatomo, setTenantDimensions, trackPageView } from "./util/matomo";
 import { ability, AbilityContext } from "./components/can";
 
 // Session validity is not decided here. Two authorities already settle it and
@@ -459,6 +460,21 @@ const App = () => {
       s.showAdvancedFilters = false;
     });
   }, [pageLocation]);
+
+  useEffect(() => {
+    initMatomo();
+  }, []);
+
+  useEffect(() => {
+    if (!tenantLoaded) {
+      return;
+    }
+    setTenantDimensions({
+      tenantName: tenant?.name || tenant?.subdomain || "",
+      subdomain: tenant?.subdomain || "",
+    });
+    trackPageView(pageLocation.pathname + pageLocation.search);
+  }, [pageLocation, tenant, tenantLoaded]);
 
   // Fetch published forms at bootstrap (replaces the window.forms global
   // baked into config.js). Gates render so dropdowns/dashboards never show an
