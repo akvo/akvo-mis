@@ -83,31 +83,10 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
         ).all():
             total_count = form.form_form_data.filter(
                 is_pending=True,
-                is_draft=False
             ).count()
             self.assertEqual(total_count, repeat // 2)
             expected_msg = (
                 f"Created {repeat // 2} pending data entries "
-                f"for form {form.name}"
-            )
-            self.assertIn(expected_msg, output)
-
-    def test_draft_form_data_half_of_repeat(self):
-        repeat = 4
-        output = self.call_command(
-            "--repeat=%d" % repeat,
-            "--draft=true",
-            "--approved=false",
-        )
-        for form in Forms.objects.filter(
-            parent__isnull=True
-        ).all():
-            total_count = FormData.objects.filter(
-                form=form, is_draft=True
-            ).count()
-            self.assertEqual(total_count, repeat // 2)
-            expected_msg = (
-                f"Created {repeat // 2} draft data entries "
                 f"for form {form.name}"
             )
             self.assertIn(expected_msg, output)
@@ -119,7 +98,6 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
         form_data_entries = FormData.objects.filter(
             form__children__gt=0,
             is_pending=False,
-            is_draft=False
         ).all()
         for form_data in form_data_entries:
             # Each FormData should have a monitoring data (children)
@@ -160,29 +138,10 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
         )
         form_data_entries = FormData.objects.filter(
             is_pending=True,
-            is_draft=False
         ).all()
         for form_data in form_data_entries:
             self.assertTrue(form_data.has_approval)
             self.assertTrue(form_data.is_pending)
-
-    def test_each_draft_data_should_not_have_monitoring_data(self):
-        # Create form data with repeat count
-        repeat = 2
-        self.call_command(
-            "--repeat=%d" % repeat,
-            "--draft=true",
-            "--approved=false",
-        )
-        # Verify each FormData entry
-        # Each FormData should have a draft status
-        # Each FormData should not have monitoring data
-        form_data_entries = FormData.objects.filter(
-            is_draft=True
-        ).all()
-        for form_data in form_data_entries:
-            self.assertTrue(form_data.is_draft)
-            self.assertFalse(form_data.children.exists())
 
     def test_each_user_has_valid_role_and_administration(self):
         # Create users with repeat count
@@ -229,6 +188,7 @@ class FakeCompleteDataSeederTestCase(TestCase, AssignmentTokenTestHelperMixin):
                 106: ["wife__husband__partner"],
                 107: "photo.jpeg",
                 108: "2024-04-29",
+                114: ["no"],
             },
         }
         response = self.client.post(

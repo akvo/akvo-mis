@@ -12,11 +12,10 @@ from api.v1.v1_profile.models import (
 from api.v1.v1_users.models import SystemUser
 from utils.soft_deletes_model import SoftDeletes
 from utils.tenant_scoped_model import TenantManager
-from utils.draft_model import Draft, DraftSoftDeletesManager
 from utils import storage
 
 
-class FormData(SoftDeletes, Draft):
+class FormData(SoftDeletes):
     TENANT_PATH = "form__tenant"
     parent = models.ForeignKey(
         "self",
@@ -69,11 +68,6 @@ class FormData(SoftDeletes, Draft):
         blank=True,
         default=None,
     )
-
-    # Custom managers
-    objects = DraftSoftDeletesManager()
-    objects_deleted = DraftSoftDeletesManager(only_deleted=True)
-    objects_draft = DraftSoftDeletesManager(only_draft=True)
 
     def __str__(self):
         return self.name

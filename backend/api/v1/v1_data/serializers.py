@@ -1,6 +1,5 @@
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.utils import timezone
 from django_q.tasks import async_task
 
 from drf_spectacular.types import OpenApiTypes
@@ -132,52 +131,8 @@ class SubmitFormDataAnswerSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        # Skip validation if this is a draft
-        is_draft = self.context.get("is_draft", False)
-        if is_draft:
-            # If the form is a draft, skip validation for value
-            # but ensure that the question is provided and
-            # value is correct type
-            if not attrs.get("question"):
-                raise ValidationError("Question is required for Answer")
-            if attrs.get("value") is None:
-                attrs["value"] = ""
-            question = attrs.get("question")
-            if question.type in [
-                QuestionTypes.geo,
-                QuestionTypes.option,
-                QuestionTypes.multiple_option,
-            ] and not isinstance(attrs.get("value"), list):
-                raise ValidationError(
-                    "Valid list value is required for Question:{0}".format(
-                        question.id
-                    )
-                )
-            if question.type in [
-                QuestionTypes.geoshape,
-                QuestionTypes.geotrace,
-            ] and not is_coordinate_ring(attrs.get("value")):
-                raise ValidationError(
-                    "Valid coordinate list is required for Question:{0}"
-                    .format(question.id)
-                )
-            if isinstance(attrs.get("value"), list) and question.type in [
-                QuestionTypes.input,
-                QuestionTypes.text,
-                QuestionTypes.image,
-                QuestionTypes.date,
-                QuestionTypes.attachment,
-                QuestionTypes.signature,
-                QuestionTypes.autofield,
-                QuestionTypes.number,
-                QuestionTypes.cascade,
-            ]:
-                raise ValidationError(
-                    "Valid string value is required for Question:{0}".format(
-                        question.id
-                    )
-                )
-            return attrs
+        if not attrs.get("question"):
+            raise ValidationError("Question is required for Answer")
 
         if attrs.get("value") == "":
             raise ValidationError(
@@ -665,6 +620,24 @@ class ListPendingFormDataSerializer(serializers.ModelSerializer):
         ]
 
 
+EMPTY = (None, "", [], {})
+
+
+def _dependency_met(dep, value):
+    if value in EMPTY:
+        return False
+    if "options" in dep:
+        values = value if isinstance(value, list) else [value]
+        return any(str(v) in dep["options"] for v in values)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return ("min" not in dep or number >= float(dep["min"])) and (
+        "max" not in dep or number <= float(dep["max"])
+    )
+
+
 class SubmitPendingFormSerializer(serializers.Serializer):
     data = SubmitFormDataSerializer()
     answer = SubmitFormDataAnswerSerializer(many=True)
@@ -672,11 +645,60 @@ class SubmitPendingFormSerializer(serializers.Serializer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def validate(self, attrs):
+        answers = {}  # {question_id: {index: value}}
+        for a in attrs.get("answer", []):
+            q_id = a["question"].id
+            idx = int(a.get("index") or 0)
+            answers.setdefault(q_id, {})[idx] = a["value"]
+
+        form = self.context.get("form")
+        if not form:
+            return attrs
+
+        questions = (
+            form.form_questions
+            .filter(required=True)
+            .exclude(display_only=True)
+            .exclude(disabled=True)
+        )
+        group_indexes = {}
+        for q in form.form_questions.all():
+            idx = {i for i in answers.get(q.id, {})}
+            group_indexes.setdefault(q.question_group_id, {0}).update(idx)
+
+        missing = []
+        for q in questions:
+            for index in group_indexes.get(q.question_group_id, {0}):
+                if q.dependency:
+                    results = [
+                        _dependency_met(
+                            d,
+                            answers.get(d["id"], {}).get(
+                                index, answers.get(d["id"], {}).get(0)
+                            ),
+                        )
+                        for d in q.dependency
+                    ]
+                    rule = (
+                        any if (q.dependency_rule or "AND").upper() == "OR"
+                        else all
+                    )
+                    if not rule(results):
+                        continue
+                if answers.get(q.id, {}).get(index) in EMPTY:
+                    missing.append(q.name or str(q.id))
+        if missing:
+            names = ", ".join(sorted(set(missing)))
+            raise ValidationError(
+                {"answer": [f"Required answers missing: {names}"]}
+            )
+        return attrs
+
     def create(self, validated_data):
         data = validated_data.get("data")
         data["form"] = self.context.get("form")
         data["created_by"] = self.context.get("user")
-        is_draft = self.context.get("is_draft", False)
 
         # Idempotency: a client that resends the same submission -- after a
         # killed process or a lost HTTP response -- must not create a second
@@ -732,11 +754,6 @@ class SubmitPendingFormSerializer(serializers.Serializer):
             obj_data.is_pending = True
             obj_data.save()
 
-        if is_draft:
-            # Mark as draft
-            obj_data.mark_as_draft()
-            direct_to_data = False
-
         answers = []
 
         for answer in validated_data.get("answer"):
@@ -759,7 +776,7 @@ class SubmitPendingFormSerializer(serializers.Serializer):
 
         Answers.objects.bulk_create(answers)
 
-        if not is_draft and not obj_data.is_pending:
+        if not obj_data.is_pending:
             # Refresh materialized view via async task
             async_task("api.v1.v1_data.tasks.seed_approved_data", obj_data)
 
@@ -778,7 +795,6 @@ class SubmitPendingFormSerializer(serializers.Serializer):
             "administration": instance.administration.id,
             "geo": instance.geo,
             "is_pending": instance.is_pending,
-            "is_draft": instance.is_draft,
         }
         if instance.parent:
             data["parent"] = {
@@ -790,105 +806,3 @@ class SubmitPendingFormSerializer(serializers.Serializer):
 
     class Meta:
         fields = ["data", "answer"]
-
-
-class SubmitUpdateDraftFormSerializer(SubmitPendingFormSerializer):
-    """
-    Serializer for updating existing draft form data.
-    """
-
-    def update(self, instance, validated_data):
-        data = validated_data.get("data")
-        if not instance.parent:
-            # If the instance is a parent form, update its fields
-            admin_id = data.get("administration", instance.administration_id)
-            instance.administration_id = admin_id
-            instance.geo = data.get("geo", instance.geo)
-        instance.name = data.get("name", instance.name)
-        instance.updated = timezone.now()
-        instance.updated_by = self.context.get("user")
-        instance.submitter = data.get("submitter", instance.submitter)
-        instance.duration = data.get("duration", instance.duration)
-        instance.save()
-
-        # Clear existing answers and create new ones
-        instance.data_answer.all().delete()
-
-        answers = []
-        for answer in validated_data.get("answer"):
-            question = answer.get("question")
-            name, value, option = answer_fields(
-                question, answer.get("value")
-            )
-
-            answers.append(
-                Answers(
-                    data=instance,
-                    question=question,
-                    name=name,
-                    value=value,
-                    options=option,
-                    created_by=self.context.get("user"),
-                    index=answer.get("index", 0),
-                )
-            )
-
-        Answers.objects.bulk_create(answers)
-        return instance
-
-
-class FilterDraftFormDataSerializer(serializers.Serializer):
-    administration = CustomPrimaryKeyRelatedField(
-        queryset=Administration.objects.none(), required=False
-    )
-    page = CustomIntegerField(
-        required=False,
-        allow_null=True,
-        default=1,
-        min_value=1,
-        help_text="Page number for pagination",
-    )
-    search = CustomCharField(
-        required=False,
-        allow_blank=True,
-        allow_null=True,
-        max_length=225,
-        help_text="Search by name",
-    )
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.fields.get("administration").queryset = (
-            Administration.objects.all()
-        )
-
-    class Meta:
-        fields = ["administration", "page", "search"]
-
-
-class DraftFormDataDetailSerializer(serializers.ModelSerializer):
-    answers = serializers.SerializerMethodField()
-    datapoint_name = CustomCharField(source="name")
-    geolocation = CustomListField(
-        source="geo", required=False, allow_null=True
-    )
-
-    @extend_schema_field(OpenApiTypes.ANY)
-    def get_answers(self, instance):
-        data_answers = instance.data_answer.all()
-        answers = {}
-        for a in data_answers:
-            answers.update(a.to_key)
-        return answers
-
-    class Meta:
-        model = FormData
-        fields = [
-            "id",
-            "uuid",
-            "form",
-            "administration",
-            "datapoint_name",
-            "geolocation",
-            "answers",
-        ]
