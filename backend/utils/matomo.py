@@ -48,7 +48,7 @@ def track_matomo_event(
     }
 
     if name:
-        params["e_k"] = str(name)[:255]
+        params["e_n"] = str(name)[:255]
     if value is not None:
         params["e_v"] = value
     if url:

@@ -66,7 +66,8 @@ class MatomoServiceTestCase(TestCase):
         self.assertEqual(params.get("send_image"), 0)
         self.assertEqual(params.get("e_c"), "Data Submission")
         self.assertEqual(params.get("e_a"), "Mobile Sync")
-        self.assertEqual(params.get("e_k"), "Water Point Survey")
+        self.assertEqual(params.get("e_k"), None)
+        self.assertEqual(params.get("e_n"), "Water Point Survey")
         self.assertEqual(params.get("token_auth"), "test-token-123")
         self.assertEqual(params.get("uid"), "101")
         self.assertEqual(params.get("dimension1"), "Kenya Water")
@@ -97,7 +98,7 @@ class MatomoServiceTestCase(TestCase):
         params = mock_post.call_args[1]["params"]
         self.assertEqual(params.get("e_c"), "Data Submission")
         self.assertEqual(params.get("e_a"), "Webform Submit")
-        self.assertEqual(params.get("e_k"), "Clinic Registration")
+        self.assertEqual(params.get("e_n"), "Clinic Registration")
         self.assertEqual(params.get("dimension1"), "Uganda Health")
         self.assertNotIn("dimension2", params)
 
