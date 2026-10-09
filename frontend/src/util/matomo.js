@@ -1,12 +1,21 @@
 const getMatomoConfig = () => {
-  const url = process.env.REACT_APP_MATOMO_URL || "";
-  const siteId = process.env.REACT_APP_MATOMO_SITE_ID || "";
+  const url =
+    process.env.REACT_APP_MATOMO_URL || window?.appConfig?.matomoUrl || "";
+  const siteId =
+    process.env.REACT_APP_MATOMO_SITE_ID ||
+    (window?.appConfig?.matomoSiteId
+      ? String(window.appConfig.matomoSiteId)
+      : "");
   const dimTenant = parseInt(
-    process.env.REACT_APP_MATOMO_DIM_TENANT || "1",
+    process.env.REACT_APP_MATOMO_DIM_TENANT ||
+      window?.appConfig?.matomoDimTenant ||
+      "1",
     10
   );
   const dimSubdomain = parseInt(
-    process.env.REACT_APP_MATOMO_DIM_SUBDOMAIN || "2",
+    process.env.REACT_APP_MATOMO_DIM_SUBDOMAIN ||
+      window?.appConfig?.matomoDimSubdomain ||
+      "2",
     10
   );
 
