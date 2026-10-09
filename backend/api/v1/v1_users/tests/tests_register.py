@@ -1,5 +1,6 @@
 from unittest import mock
 
+from django.conf import settings
 from django.db import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -279,3 +280,88 @@ class RegisterEndpointTestCase(TestCase):
         self.assertTrue(
             Tenant.objects.filter(subdomain="abc").exists()
         )
+
+
+@override_settings(USE_TZ=False)
+class RegisterGateTestCase(TestCase):
+    """Where self-service sign-up is answered at all.
+
+    The React router already hides the route off the base domain
+    (frontend/src/App.js), but that is a UI gate: without a check in
+    the view, a POST still creates a tenant and an is_superuser account
+    on a deployment whose operator never offered sign-up. mohhs-mis and
+    unicef-fsm run exactly that way, with BASE_DOMAIN unset.
+    """
+
+    payload = {
+        "email": "founder@acme.org",
+        "password": "Secret#Pass123",
+        "subdomain": "acme",
+    }
+
+    def register(self, host=None):
+        extra = {"HTTP_HOST": host} if host else {}
+        return self.client.post(
+            "/api/v1/register",
+            self.payload,
+            content_type="application/json",
+            **extra
+        )
+
+    @override_settings(SIGNUP_ENABLED=False)
+    def test_refused_when_signup_is_disabled(self):
+        response = self.register()
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json()["message"],
+            "Self-service sign-up is not available here",
+        )
+
+    @override_settings(SIGNUP_ENABLED=False)
+    def test_refusing_creates_nothing(self):
+        """The whole point: no tenant, no superuser, no email."""
+        self.register()
+        self.assertFalse(Tenant.objects.filter(subdomain="acme").exists())
+        self.assertFalse(
+            SystemUser.objects.filter(email="founder@acme.org").exists()
+        )
+
+    @override_settings(SIGNUP_ENABLED=True, BASE_DOMAIN="app.com")
+    def test_refused_on_an_existing_workspace_host(self):
+        """A workspace's own host is not where new ones are claimed.
+
+        The tenant has to exist for the request to reach the view at
+        all: TenantMiddleware answers an unresolvable workspace host
+        with a 404 before any view runs (see the test below). So this
+        creates one, which is the case that actually exercises the
+        gate.
+        """
+        Tenant.objects.create(subdomain="existing")
+        response = self.register(host="existing.app.com")
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(SIGNUP_ENABLED=True, BASE_DOMAIN="app.com")
+    def test_unknown_workspace_host_is_refused_by_the_middleware(self):
+        """Pinned so the two refusals are not confused for each other.
+
+        A 404 here is the middleware saying "no such workspace", not
+        the gate saying "no sign-up". If this ever starts returning
+        403, the gate has been moved somewhere it runs too early.
+        """
+        response = self.register(host="nosuchthing.app.com")
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(SIGNUP_ENABLED=True, BASE_DOMAIN="app.com")
+    def test_allowed_on_the_base_domain(self):
+        response = self.register(host="app.com")
+        self.assertEqual(response.status_code, 200)
+
+    def test_allowed_by_default_under_the_test_suite(self):
+        """BASE_DOMAIN is forced empty by `manage.py test`.
+
+        So a bare `bool(BASE_DOMAIN)` default would 403 every existing
+        registration test. This asserts the TESTING override that stops
+        that, and it is the reason this test has no override_settings.
+        """
+        self.assertTrue(settings.SIGNUP_ENABLED)
+        self.assertEqual(self.register().status_code, 200)

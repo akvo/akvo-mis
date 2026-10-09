@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
 
@@ -42,3 +43,19 @@ class ConfigJS(TestCase):
             content = f.read()
         os.remove(config_path)
         self.assertNotIn("var levels", content)
+
+    @override_settings(TURNSTILE_SITE_KEY="0xSITEKEY")
+    def test_config_carries_the_turnstile_site_key(self):
+        """The frontend cannot read a Django setting.
+
+        appConfig is how every other deployment-wide value reaches it,
+        and the site key is public by design -- it is meant to be in
+        the page.
+        """
+        if Path(config_path).exists():
+            os.remove(config_path)
+        call_command("generate_config")
+        with open(config_path) as f:
+            content = f.read()
+        os.remove(config_path)
+        self.assertIn("0xSITEKEY", content)
