@@ -90,6 +90,13 @@ if TESTING:
         "ignore", message=r"The django\.utils\.baseconv module",
         category=_deprecation.RemovedInDjango50Warning,
     )
+    # pandas (and others) announce removals as FutureWarning attributed
+    # to the calling frame. Gate only the ones our own code triggers.
+    warnings.filterwarnings(
+        "error",
+        category=FutureWarning,
+        module=r"^(api|utils|mis|middleware)(\.|$)",
+    )
     TEST_RUNNER = "mis.test_runner.DeprecationGateRunner"
 
 # Host-based tenant routing. Unset means single-host: every host is the

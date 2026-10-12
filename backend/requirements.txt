@@ -147,7 +147,7 @@ openai==2.2.0
     # via -r requirements.in
 openpyxl==3.0.9
     # via -r requirements.in
-pandas==1.4.0
+pandas==1.5.3
     # via -r requirements.in
 pillow==9.5.0
     # via -r requirements.in
