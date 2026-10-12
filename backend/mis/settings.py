@@ -69,27 +69,18 @@ TESTING = sys.argv[1:2] == ["test"]
 # every deprecation Django announces is an error. Django ships each
 # deprecation together with its replacement, so anything raised here is
 # fixable on the installed version -- and fixing it now is what keeps
-# the next upgrade from breaking. The categories are discovered rather
-# than named because their names change every release
-# (RemovedInDjango50Warning ... RemovedInDjango2028Warning).
+# the next upgrade from breaking. The two aliases name the current pair
+# of categories on every release since 4.2, so nothing here changes
+# between upgrade steps.
 if TESTING:
     import warnings
-    from django.utils import deprecation as _deprecation
-
-    for _name in dir(_deprecation):
-        _category = getattr(_deprecation, _name)
-        if (
-            _name.startswith("Removed")
-            and isinstance(_category, type)
-            and issubclass(_category, Warning)
-        ):
-            warnings.filterwarnings("error", category=_category)
-    # django-q 1.3.9 imports django.utils.baseconv; gone with django-q2.
-    # Matched by message: the warning is attributed to importlib.
-    warnings.filterwarnings(
-        "ignore", message=r"The django\.utils\.baseconv module",
-        category=_deprecation.RemovedInDjango50Warning,
+    from django.utils.deprecation import (
+        RemovedAfterNextVersionWarning,
+        RemovedInNextVersionWarning,
     )
+
+    warnings.filterwarnings("error", category=RemovedInNextVersionWarning)
+    warnings.filterwarnings("error", category=RemovedAfterNextVersionWarning)
     # pandas (and others) announce removals as FutureWarning attributed
     # to the calling frame. Gate only the ones our own code triggers.
     warnings.filterwarnings(
@@ -347,6 +338,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
     "NUM_PROXIES": NUM_PROXIES,
     "DEFAULT_THROTTLE_RATES": THROTTLE_RATES,
+    "EXCEPTION_HANDLER": "utils.exception_handler.exception_handler",
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": APP_NAME,
