@@ -362,7 +362,8 @@ class ValuesStackByQuestionTestCases(
             ["Feature X", "Feature Y", "Feature Z"],
         )
         self.assertEqual(
-            data["colors"], ["#1f77b4", "#ff7f0e", "#2ca02c"],
+            data["colors"],
+            ["#1f77b4", "#ff7f0e", "#2ca02c"],
         )
         rows = self.rows_by_label(data)
         self.assertEqual(
@@ -392,7 +393,8 @@ class ValuesStackByQuestionTestCases(
         )
         # Totals 4, 3, 2 — not the option order active/inactive/pending.
         self.assertEqual(
-            data["labels"], ["Active", "Pending", "Inactive"],
+            data["labels"],
+            ["Active", "Pending", "Inactive"],
         )
 
     def test_equal_totals_fall_back_to_option_order(self):
@@ -408,10 +410,12 @@ class ValuesStackByQuestionTestCases(
             monitoring="all",
         )
         self.assertEqual(
-            data["labels"], ["Feature X", "Feature Y", "Feature Z"],
+            data["labels"],
+            ["Feature X", "Feature Y", "Feature Z"],
         )
         self.assertEqual(
-            data["stack_labels"], ["Active", "Inactive", "Pending"],
+            data["stack_labels"],
+            ["Active", "Inactive", "Pending"],
         )
 
     def test_multi_select_percentage_divides_by_submissions(self):
@@ -441,7 +445,8 @@ class ValuesStackByQuestionTestCases(
         )
         # And the bar order still follows the counts, not the shares.
         self.assertEqual(
-            data["labels"], ["Active", "Pending", "Inactive"],
+            data["labels"],
+            ["Active", "Pending", "Inactive"],
         )
 
     def test_single_select_percentage_keeps_the_column_denominator(self):
@@ -478,9 +483,7 @@ class ValuesStackByQuestionTestCases(
                 f"&stack_question_id={self.Q_MULTI_ID}"
                 f"&group_by={group_by}&stack_by=option&monitoring=all"
             )
-            self.assertEqual(
-                response.status_code, 400, f"group_by={group_by}"
-            )
+            self.assertEqual(response.status_code, 400, f"group_by={group_by}")
 
     def test_group_by_parent_stacks_by_its_own_options(self):
         data = self.stacked(
@@ -494,7 +497,8 @@ class ValuesStackByQuestionTestCases(
         # order-insensitively or the test passes for the wrong reason.
         rows = self.rows_by_label(data)
         self.assertCountEqual(
-            data["labels"], ["Site Alpha", "Site Beta"],
+            data["labels"],
+            ["Site Alpha", "Site Beta"],
         )
         # Latest per site: mon1b (y, z) and mon2b (x, y, z).
         self.assertEqual(
@@ -555,7 +559,8 @@ class ValuesStackByQuestionTestCases(
             monitoring="all",
         )
         self.assertCountEqual(
-            data["stack_labels"], ["Active", "Inactive", "Pending"],
+            data["stack_labels"],
+            ["Active", "Inactive", "Pending"],
         )
 
     def test_naming_the_measured_question_is_the_self_stack(self):
@@ -610,22 +615,6 @@ class PendingParentExclusionTestCases(
             multi_vals=["feature_x"],
             date_val="2025-01-25T00:00:00.000Z",
         )
-        self.draft_reg = FormData.objects.create(
-            id=7301,
-            name="Site Draft",
-            form=self.registration,
-            administration=self.adm_parent,
-            created_by=self.user,
-            is_draft=True,
-        )
-        self._create_monitoring(
-            parent=self.draft_reg,
-            created_date=datetime(2025, 1, 26),
-            number_val=60.0,
-            option_val="active",
-            multi_vals=["feature_y"],
-            date_val="2025-01-26T00:00:00.000Z",
-        )
 
     def get(self, query):
         response = self.client.get(f"{self.BASE_URL}?{query}")
@@ -639,9 +628,9 @@ class PendingParentExclusionTestCases(
             "&group_by=parent_id&stack_by=option&monitoring=all"
         )
         self.assertNotIn("Site Pending", data["labels"])
-        self.assertNotIn("Site Draft", data["labels"])
         self.assertCountEqual(
-            data["labels"], ["Site Alpha", "Site Beta"],
+            data["labels"],
+            ["Site Alpha", "Site Beta"],
         )
 
     def test_both_measures_agree_on_which_sites_exist(self):
@@ -661,7 +650,6 @@ class PendingParentExclusionTestCases(
             "&group_by=month&stack_by=parent_id&monitoring=all"
         )
         self.assertNotIn("Site Pending", data["stack_labels"])
-        self.assertNotIn("Site Draft", data["stack_labels"])
 
     def test_approved_parents_are_untouched(self):
         data = self.get(
@@ -675,9 +663,7 @@ class PendingParentExclusionTestCases(
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)
-class ParentGroupContractTestCases(
-    VisualizationValuesTestMixin, APITestCase
-):
+class ParentGroupContractTestCases(VisualizationValuesTestMixin, APITestCase):
     """The response contract a cross-form chart joins on (VIZ-015.a).
 
     Nothing in the backend knows it is participating in a join, so a

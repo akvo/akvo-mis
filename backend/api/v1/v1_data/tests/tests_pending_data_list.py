@@ -148,26 +148,3 @@ class PendingDataListTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(response.status_code, 200)
         res = response.json()
         self.assertEqual(res["total"], 0)
-
-    def test_pending_data_list_exclude_draft(self):
-        # Create a draft data entry
-        draft_data = FormData.objects.create(
-            name="Draft Data",
-            form=self.parent_form,
-            created_by=self.submitter,
-            administration=self.administration,
-            geo=[7.2088, 126.8456],
-            is_pending=True,
-            is_draft=True,  # Mark as draft
-        )
-        add_fake_answers(draft_data)
-
-        response = self.client.get(
-            f"/api/v1/form-pending-data/{self.parent_form.id}/",
-            HTTP_AUTHORIZATION=f"Bearer {self.token}",
-        )
-        self.assertEqual(response.status_code, 200)
-        res = response.json()
-        self.assertGreater(res["total"], 0)
-        # Ensure draft data is not included in the response
-        self.assertNotIn(draft_data.id, [item['id'] for item in res['data']])

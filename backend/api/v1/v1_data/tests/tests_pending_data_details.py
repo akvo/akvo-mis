@@ -55,7 +55,6 @@ class PendingDataDetailsTestCase(TestCase, ProfileTestHelperMixin):
             administration=self.administration,
             geo=self.geo,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(registration_data)
 
@@ -70,7 +69,6 @@ class PendingDataDetailsTestCase(TestCase, ProfileTestHelperMixin):
             administration=self.administration,
             geo=self.geo,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(monitoring_data)
 
@@ -83,7 +81,6 @@ class PendingDataDetailsTestCase(TestCase, ProfileTestHelperMixin):
             administration=self.administration,
             geo=self.geo,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(monitoring_data_2)
 
@@ -112,7 +109,7 @@ class PendingDataDetailsTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(data, {"message": "ok"})
 
         last_pending_data = FormData.objects.filter(
-            form=self.form, is_pending=True, is_draft=False
+            form=self.form, is_pending=True
         ).last()
         self.assertIsNotNone(last_pending_data)
 
@@ -180,7 +177,7 @@ class PendingDataDetailsTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(data, {"message": "ok"})
 
         last_pending_data = FormData.objects.filter(
-            form=self.form, is_pending=True, is_draft=False
+            form=self.form, is_pending=True
         ).last()
         self.assertIsNotNone(last_pending_data)
 

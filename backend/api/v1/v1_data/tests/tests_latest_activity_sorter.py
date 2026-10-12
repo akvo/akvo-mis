@@ -47,7 +47,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         self.data_no_monitoring.created = self.base_time - timedelta(days=10)
         self.data_no_monitoring.updated = self.base_time - timedelta(days=10)
@@ -62,7 +61,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         self.data_old_monitoring.created = self.base_time - timedelta(days=8)
         self.data_old_monitoring.updated = self.base_time - timedelta(days=8)
@@ -79,7 +77,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         self.old_monitoring_child.created = self.base_time - timedelta(days=5)
         self.old_monitoring_child.updated = self.base_time - timedelta(days=5)
@@ -94,7 +91,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         nine_days_ago = self.base_time - timedelta(days=9)
         self.data_recent_monitoring.created = nine_days_ago
@@ -112,7 +108,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         one_day_ago = self.base_time - timedelta(days=1)
         self.recent_monitoring_child.created = one_day_ago
@@ -244,7 +239,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=True,  # Pending!
-            is_draft=False,
         )
         pending_child.updated = self.base_time  # Most recent
         pending_child.save()
@@ -270,44 +264,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertIsNone(no_monitoring_item["latest_activity_source"])
 
-    def test_draft_monitoring_excluded_from_latest_activity(self):
-        """Test that draft monitoring data is excluded from latest_activity."""
-        # Add a draft monitoring child (more recent than all others)
-        draft_child = self.child_form.form_form_data.create(
-            parent=self.data_no_monitoring,
-            name="Draft Monitoring Child",
-            uuid=self.data_no_monitoring.uuid,
-            administration=self.administration,
-            geo=[0.0, 0.0],
-            created_by=self.user,
-            updated_by=self.user,
-            is_pending=False,
-            is_draft=True,  # Draft!
-        )
-        draft_child.updated = self.base_time  # Most recent
-        draft_child.save()
-
-        response = self.client.get(
-            (
-                f"/api/v1/form-data/{self.form.id}"
-                "?sort_by=latest_activity&sort_type=descend"
-            ),
-            HTTP_AUTHORIZATION=f"Bearer {self.token}",
-        )
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-
-        # data_no_monitoring should still be last (draft child excluded)
-        ids = [item["id"] for item in data["data"]]
-        self.assertEqual(ids[-1], self.data_no_monitoring.id)
-
-        # And it should still have no source
-        no_monitoring_item = next(
-            item for item in data["data"]
-            if item["id"] == self.data_no_monitoring.id
-        )
-        self.assertIsNone(no_monitoring_item["latest_activity_source"])
-
     def test_null_updated_child_uses_created_for_latest_activity(self):
         """Children with updated=NULL (flow-imported) must use created.
 
@@ -322,7 +278,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         old_reg.created = self.base_time - timedelta(days=2000)
         old_reg.updated = None  # Simulates flow-imported record
@@ -339,7 +294,6 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         child.created = child_created
         child.updated = None  # Simulates flow-imported record
@@ -364,7 +318,8 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn(old_reg.id, ids)
 
     def test_date_filter_uses_latest_activity_when_sorting_by_it(self):
-        """Date filters should use latest_activity when sort_by=latest_activity.
+        """Date filters should use latest_activity when
+        sort_by=latest_activity.
 
         A registration created before date_from must appear if its most recent
         monitoring child falls within the requested date range.

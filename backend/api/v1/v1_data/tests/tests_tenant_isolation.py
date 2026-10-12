@@ -47,13 +47,6 @@ class DataTenantIsolationTestCase(TenantIsolationTestCase):
         )
         self.assertEqual(res.status_code, 404)
 
-    def test_draft_list_404_on_foreign_form(self):
-        res = self.client.get(
-            f"/api/v1/draft-submissions/{self.b['form'].id}",
-            **self.auth(self.a["user"]),
-        )
-        self.assertEqual(res.status_code, 404)
-
     def test_pending_list_404_on_foreign_form(self):
         res = self.client.get(
             f"/api/v1/form-pending-data/{self.b['form'].id}",

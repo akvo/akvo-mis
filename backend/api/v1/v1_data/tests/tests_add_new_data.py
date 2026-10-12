@@ -61,8 +61,17 @@ class AddNewDataTestCase(TestCase, ProfileTestHelperMixin):
                 "question": 106,
                 "value": ["Parent", "Children"]
             }, {
+                "question": 107,
+                "value": "photo.jpg"
+            }, {
+                "question": 108,
+                "value": "2024-04-29"
+            }, {
                 "question": 109,
                 "value": 0
+            }, {
+                "question": 114,
+                "value": ["no"]
             }]
         }
         data = self.client.post('/api/v1/form-pending-data/{0}'
@@ -152,8 +161,17 @@ class AddNewDataTestCase(TestCase, ProfileTestHelperMixin):
                 "question": 106,
                 "value": ["Parent", "Children"]
             }, {
+                "question": 107,
+                "value": "photo.jpg"
+            }, {
+                "question": 108,
+                "value": "2024-04-29"
+            }, {
                 "question": 109,
                 "value": 2.5
+            }, {
+                "question": 114,
+                "value": ["no"]
             }]
         }
         data = self.client.post(
@@ -286,6 +304,15 @@ class AddNewDataTestCase(TestCase, ProfileTestHelperMixin):
             }, {
                 "question": 106,
                 "value": ["Parent", "Children"]
+            }, {
+                "question": 107,
+                "value": "photo.jpg"
+            }, {
+                "question": 108,
+                "value": "2024-04-29"
+            }, {
+                "question": 114,
+                "value": ["no"]
             }]
         }
         data = self.client.post('/api/v1/form-pending-data/{0}'

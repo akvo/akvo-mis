@@ -108,7 +108,7 @@ class DownloadDateFilterTestCase(TestCase, ProfileTestHelperMixin):
         # Get parent form data and set different created dates
         parents = list(
             self.form.form_form_data.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).order_by("id").all()
         )
         self.assertTrue(
@@ -128,12 +128,12 @@ class DownloadDateFilterTestCase(TestCase, ProfileTestHelperMixin):
         # Set children dates
         old_children = list(
             self.parent_old.children.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).all()
         )
         recent_children = list(
             self.parent_recent.children.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).all()
         )
 
@@ -161,7 +161,7 @@ class DownloadDateFilterTestCase(TestCase, ProfileTestHelperMixin):
             child_form_ids=self.child_form_ids,
         )
         parents = self.form.form_form_data.filter(
-            is_pending=False, is_draft=False
+            is_pending=False
         )
         self.assertEqual(len(result), parents.count())
 
@@ -232,7 +232,7 @@ class DownloadDateFilterTestCase(TestCase, ProfileTestHelperMixin):
         # Get actual child form IDs from existing children
         actual_child_form_ids = list(
             self.parent_old.children.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).values_list("form_id", flat=True).distinct()
         )
         self.assertTrue(
@@ -241,7 +241,7 @@ class DownloadDateFilterTestCase(TestCase, ProfileTestHelperMixin):
         )
         # Verify children dates were set correctly
         children = self.parent_old.children.filter(
-            is_pending=False, is_draft=False
+            is_pending=False
         )
         for child in children:
             child.refresh_from_db()
@@ -270,12 +270,12 @@ class DownloadDateFilterTestCase(TestCase, ProfileTestHelperMixin):
         """Children created outside range not in output."""
         actual_child_form_ids = list(
             self.parent_old.children.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).values_list("form_id", flat=True).distinct()
         )
         # Set old parent's children to 5 days ago (out of range)
         for child in self.parent_old.children.filter(
-            is_pending=False, is_draft=False
+            is_pending=False
         ).all():
             FormData.objects.filter(pk=child.pk).update(
                 created=timezone.now() - timedelta(days=5)
