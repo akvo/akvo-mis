@@ -131,6 +131,15 @@ $view-gutter: 50px;
   padding: 20px 0;
 }
 
+/* The gap between the white header and the first card, when no filter
+   bar sits between them. With a bar, the header and the bar are one white
+   band, and the bar's own margin spaces the cards. Not a margin on the
+   header: it would open a grey strip inside that band. */
+.dashboard-view-header + .dashboard-view-grid,
+.dashboard-view-header + .dashboard-view-empty {
+  margin-top: 16px;
+}
+
 /* A row since Export joined the title (VIZ-023). The column width and
    the gutters are untouched — they come from the shared rule above — so
    the button's right edge lands on the cards' right edge rather than
