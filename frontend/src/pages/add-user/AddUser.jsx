@@ -20,6 +20,18 @@ import { useNotification } from "../../util/hooks";
 import { FormRoles } from "./components";
 const { Option } = Select;
 
+// A user's saved forms include the monitoring forms the backend adds under
+// each registration form (with_monitoring_children). They are not options
+// here, so the select would show their bare ids; and kept in the value,
+// they would outlive their registration form being removed. The backend
+// adds them back on save.
+export const withoutMonitoringForms = (ids, allForms) => {
+  const monitoring = new Set(
+    (allForms || []).filter((f) => f?.content?.parent).map((f) => f.id)
+  );
+  return (ids || []).filter((formId) => !monitoring.has(formId));
+};
+
 const AddUser = () => {
   const {
     user: authUser,
@@ -30,6 +42,10 @@ const AddUser = () => {
   } = store.useState((s) => s);
   const { active: activeLang } = language;
   const forms = allForms.filter((f) => !f?.content?.parent);
+  const withoutMonitoring = useCallback(
+    (ids) => withoutMonitoringForms(ids, allForms),
+    [allForms]
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -156,7 +172,7 @@ const AddUser = () => {
             first_name: res.data?.first_name,
             last_name: res.data?.last_name,
             phone_number: res.data?.phone_number,
-            forms: res.data?.forms?.map((f) => f.id) || [],
+            forms: withoutMonitoring(res.data?.forms?.map((f) => f.id)),
             organisation: res.data?.organisation?.id || [],
             trained: res?.data?.trained,
             is_superuser: res.data?.is_superuser || false,
@@ -188,7 +204,17 @@ const AddUser = () => {
     authUser?.email,
     isUserFetched,
     administration,
+    withoutMonitoring,
   ]);
+
+  // The forms list may arrive after the user: drop the monitoring ids then.
+  useEffect(() => {
+    const current = form.getFieldValue("forms") || [];
+    const kept = withoutMonitoring(current);
+    if (kept.length !== current.length) {
+      form.setFieldsValue({ forms: kept });
+    }
+  }, [form, withoutMonitoring]);
 
   const fetchRoles = useCallback(async () => {
     try {

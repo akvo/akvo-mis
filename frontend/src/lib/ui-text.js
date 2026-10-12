@@ -755,8 +755,6 @@ const uiText = {
     passwordRequired: "Please input your Password!",
     passwordCriteriaError: "False Password Criteria",
     passwordMatchError: "The two passwords that you entered do not match!",
-    accountDisclaimer:
-      "The user is accountable for his/her account and in case there are any changes (Transfers, retirement, any kind of leave, resignation etc) this should be communicated to the County Administrator or National Super Admin who might be able to assign the roles to the new officer.",
     // Log in
     loginTitle: "Welcome back",
     contactAdmin: "Please contact the administrator",
