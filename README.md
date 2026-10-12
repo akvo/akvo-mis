@@ -343,6 +343,11 @@ Then start the stack:
 > `docker-sync.yml` in the repo is only an optional file-sync accelerator for
 > macOS/Windows Docker Desktop and can be ignored.
 
+> **Already have a `pg-data` volume from before the PostgreSQL 18 bump?** It
+> holds a PostgreSQL 12 data directory, which 18 will not read, and the mount
+> point moved to `/var/lib/postgresql`. Dump it once before switching:
+> [doc/notes/postgres-18-upgrade.md](doc/notes/postgres-18-upgrade.md).
+
 ##### Adjusting volume permissions on Linux
 
 On a standard Docker Engine setup the frontend container runs as `root` and

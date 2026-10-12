@@ -11,7 +11,7 @@ SELECT
 FROM
   pending_data_approval pa
   LEFT JOIN batch b ON pa.batch_id = b.id
-  LEFT JOIN system_user u ON u.id = pa.user_id
+  LEFT JOIN "system_user" u ON u.id = pa.user_id
   LEFT JOIN access ac ON u.id = ac.user_id
   LEFT JOIN administrator a ON ac.administration_id = a.id
 ORDER BY
@@ -35,7 +35,7 @@ SELECT DISTINCT
   END ok
 FROM
   pending_data_approval pa
-  LEFT JOIN system_user u ON pa.user_id = u.id
+  LEFT JOIN "system_user" u ON pa.user_id = u.id
   LEFT JOIN levels l ON l.id = pa.level_id
   LEFT JOIN (
       SELECT * FROM pending_data_approval pda
