@@ -86,6 +86,95 @@ def _generate_unique_name(base, existing_names):
     return name
 
 
+# VIZ-027 D-15: characters a NEW option value may not contain. Dashboard
+# filters and widget criteria use them as delimiters.
+OPTION_VALUE_DELIMITERS = ":,|"
+
+
+def option_value_from_label(label):
+    """D-15: lower-case, remove `:` `,` `|`, whitespace runs -> `_`."""
+    cleaned = re.sub(r"[:,|]", "", str(label).lower())
+    return re.sub(r"\s+", "_", cleaned.strip())
+
+
+def option_values(options):
+    """The code of each of one question's options, in order.
+
+    A given code is kept. A missing one is generated from the label, never
+    empty (a label of only delimiters, which global_criteria could not
+    carry) and never equal to a sibling's (the (question, value) unique
+    constraint): `_1`, `_2`… is appended, as for question names.
+    """
+    given = [opt.get("value") for opt in options]
+    taken = {value for value in given if value}
+    values = []
+    for opt, value in zip(options, given):
+        if not value:
+            value = _unique_value(
+                option_value_from_label(opt.get("label", "")) or "option",
+                taken,
+            )
+        values.append(value)
+    return values
+
+
+def _unique_value(base, taken):
+    value, counter = base, 1
+    while value in taken:
+        value = f"{base}_{counter}"
+        counter += 1
+    taken.add(value)
+    return value
+
+
+def stored_option_pairs(groups):
+    """{(question id, value)} already stored for the questions in `groups`.
+
+    Those are accepted whatever they contain: answers and dependency rules
+    use them, so an older form must stay savable (D-15).
+    """
+    question_ids = [
+        q.get("id")
+        for g in groups or []
+        for q in g.get("question") or []
+        if isinstance(q.get("id"), int)
+    ]
+    if not question_ids:
+        return set()
+    return set(
+        QuestionOptions.objects.filter(
+            question_id__in=question_ids,
+        ).values_list("question_id", "value")
+    )
+
+
+def option_value_issues(groups, existing=frozenset()):
+    """[(path, message)] for new option values containing `:` `,` or `|`.
+
+    Shared by the builder, JSON-import and XLSForm-import validators. A
+    pair in `existing` is a stored option and is accepted (D-15). Values
+    are refused, never rewritten: dependency rules store them.
+    """
+    issues = []
+    for gi, group in enumerate(groups or []):
+        for qi, question in enumerate(group.get("question") or []):
+            for oi, option in enumerate(question.get("option") or []):
+                if not isinstance(option, dict):
+                    continue
+                value = str(option.get("value") or "")
+                if not set(value) & set(OPTION_VALUE_DELIMITERS):
+                    continue
+                if (question.get("id"), value) in existing:
+                    continue
+                issues.append((
+                    f"question_group[{gi}].question[{qi}].option[{oi}].value",
+                    f'Option "{option.get("label")}" in '
+                    f'"{question.get("label")}": code "{value}" may not '
+                    'contain ":", "," or "|"',
+                ))
+    return issues
+
+
 def _save_questions(
     group,
     questions_data,
@@ -193,15 +282,15 @@ def _save_questions(
         if not skip_option_delete:
             question.options.all().delete()
         last_opt_order = 0
-        for opt in q_data.get("option") or []:
+        options = q_data.get("option") or []
+        for opt, value in zip(options, option_values(options)):
             opt_label = opt.get("label", "")
             last_opt_order = opt.get("order") or (last_opt_order + 1)
             QuestionOptions.objects.create(
                 question=question,
                 order=last_opt_order,
                 label=opt_label,
-                value=opt.get("value")
-                or re.sub(r"\s+", "_", str(opt_label).lower()),
+                value=value,
                 other=opt.get("other", False),
                 color=opt.get("color"),
                 translations=opt.get("translations"),
@@ -577,14 +666,14 @@ def restore_from_snapshot(form, pv):
                 question_db[q_obj.id] = q_obj
                 live_q_id = q_obj.id
 
-            for opt in q_data.get("option", []):
+            options = q_data.get("option", [])
+            for opt, value in zip(options, option_values(options)):
                 new_options.append(
                     QuestionOptions(
                         question_id=live_q_id,
                         order=opt["order"],
                         label=opt["label"],
-                        value=opt.get("value")
-                        or re.sub(r"\s+", "_", str(opt["label"]).lower()),
+                        value=value,
                         other=opt.get("other", False),
                         color=opt.get("color"),
                         translations=opt.get("translations"),
@@ -673,9 +762,7 @@ def _geo_config_issues(geo_config) -> list:
     for key in _GEO_CONFIG_BOOLEANS:
         value = geo_config.get(key)
         if value is not None and not isinstance(value, bool):
-            issues.append(
-                (f"extra.geoConfig.{key}", "must be true or false")
-            )
+            issues.append((f"extra.geoConfig.{key}", "must be true or false"))
 
     for key, upper in _GEO_CONFIG_NUMBERS:
         value = geo_config.get(key)
@@ -713,6 +800,7 @@ def _overlap_clamp_issues(geo_config) -> list:
     containing `"20"` reports the type error alone instead of adding a
     comparison against a string.
     """
+
     def usable(key, default):
         value = geo_config.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -723,10 +811,12 @@ def _overlap_clamp_issues(geo_config) -> list:
     ceiling = usable("overlapThreshold", DEFAULT_OVERLAP_THRESHOLD)
     if floor is None or ceiling is None or floor <= ceiling:
         return []
-    return [(
-        "extra.geoConfig.overlapThresholdFloor",
-        "must be less than or equal to overlapThreshold",
-    )]
+    return [
+        (
+            "extra.geoConfig.overlapThresholdFloor",
+            "must be less than or equal to overlapThreshold",
+        )
+    ]
 
 
 def validate_form_payload(data, partial=False):
@@ -762,6 +852,14 @@ def validate_form_payload(data, partial=False):
                     f"question_group[{gi}].question[{qi}].{sub}: {msg}"
                     for sub, msg in _geo_config_issues(extra["geoConfig"])
                 )
+    # D-15: shown to the author as is, so the message names the option.
+    groups = data.get("question_group", [])
+    errors.extend(
+        message
+        for _, message in option_value_issues(
+            groups, stored_option_pairs(groups),
+        )
+    )
     return errors
 
 
@@ -862,11 +960,23 @@ def store_version_snapshot(form, data, user):
     Forms, QuestionGroup, Questions, or QuestionOptions rows. active_version
     and Forms.version remain unchanged.
 
+    If a pending snapshot exists (a version newer than active_version),
+    subsequent saves/autosaves update that snapshot in-place instead of
+    incrementing the version number. A new version number is only created if
+    no pending snapshot exists.
+
     Missing top-level fields inherit from the current active version's schema
     so the snapshot is always complete.
     """
+    # Lock the form row so concurrent saves/autosaves cannot create duplicates.
+    Forms.objects.select_for_update().get(pk=form.pk)
     last = form.published_versions.order_by("-version").first()
-    next_version = (last.version + 1) if last else 1
+    pending = last if last and last.id != form.active_version_id else None
+
+    if pending:
+        next_version = pending.version
+    else:
+        next_version = (last.version + 1) if last else 1
 
     active_schema = form.active_version.schema if form.active_version else {}
     schema = {
@@ -910,12 +1020,18 @@ def store_version_snapshot(form, data, user):
         ),
     }
 
-    pv = FormPublishedVersion.objects.create(
-        form=form,
-        version=next_version,
-        schema=schema,
-        published_by=user,
-    )
+    if pending:
+        pending.schema = schema
+        pending.published_by = user
+        pending.save(update_fields=["schema", "published_by"])
+        pv = pending
+    else:
+        pv = FormPublishedVersion.objects.create(
+            form=form,
+            version=next_version,
+            schema=schema,
+            published_by=user,
+        )
     form.updated_by = user
     form.updated = timezone.now()
     form.save(update_fields=["updated_by", "updated"])
@@ -1337,6 +1453,18 @@ def validate_form_definition(norm, check_entities=True):
                             }
                         )
 
+    groups = norm.get("question_group", [])
+    for path, message in option_value_issues(
+        groups, stored_option_pairs(groups),
+    ):
+        issues.append(
+            {
+                "code": "invalid_option_value",
+                "path": path,
+                "message": message,
+                "level": "error",
+            }
+        )
     return issues
 
 
@@ -1668,14 +1796,14 @@ def _apply_import_create_path(norm, user, parent_form, force_new_id):
             if q_id is not None:
                 final_q_id_map[q_id] = q_obj.id
 
-            for opt in q.get("option") or []:
+            options = q.get("option") or []
+            for opt, value in zip(options, option_values(options)):
                 new_options.append(
                     QuestionOptions(
                         question_id=q_obj.id,
                         order=opt.get("order", 1),
                         label=opt["label"],
-                        value=opt.get("value")
-                        or re.sub(r"\s+", "_", str(opt["label"]).lower()),
+                        value=value,
                         other=opt.get("other", False),
                         color=opt.get("color"),
                         translations=opt.get("translations"),
@@ -1900,14 +2028,14 @@ def _apply_import_update_path(
                     question_db[q_id] = q_obj
                 live_q_id = q_obj.id
 
-            for opt in q.get("option") or []:
+            options = q.get("option") or []
+            for opt, value in zip(options, option_values(options)):
                 new_options.append(
                     QuestionOptions(
                         question_id=live_q_id,
                         order=opt.get("order", 1),
                         label=opt["label"],
-                        value=opt.get("value")
-                        or re.sub(r"\s+", "_", str(opt["label"]).lower()),
+                        value=value,
                         other=opt.get("other", False),
                         color=opt.get("color"),
                         translations=opt.get("translations"),

@@ -13,7 +13,6 @@ services:
   frontend:
     network_mode: service:mainnetwork
     volumes:
-      - ${STORAGE_PATH}/images:/app/public/images:delegated
       - ${STORAGE_PATH}/attachments:/app/public/attachments:delegated
       - ${STORAGE_PATH}/batch_attachments:/app/public/batch_attachments:delegated
       - ${STORAGE_PATH}/datapoints:/app/public/datapoints:delegated
@@ -24,6 +23,11 @@ services:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
       - REACT_APP_CARTO_API_KEY=$REACT_APP_CARTO_API_KEY
+      - REACT_APP_MATOMO_URL=$MATOMO_URL
+      - REACT_APP_MATOMO_SITE_ID=$MATOMO_SITE_ID
+      - REACT_APP_MATOMO_DIM_TENANT=$MATOMO_DIM_TENANT
+      - REACT_APP_MATOMO_DIM_SUBDOMAIN=$MATOMO_DIM_SUBDOMAIN
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
   # Local mail sink. Deliberately NOT in mainnetwork's namespace: the worker
   # sends mail too and is on the default network, so a service with its own
   # name is reachable from both, the way db already is.
@@ -84,7 +88,7 @@ services:
     depends_on:
       - mailpit
   pgadmin:
-    image: dpage/pgadmin4:5.7
+    image: dpage/pgadmin4:9.18
     environment:
       - PGADMIN_LISTEN_PORT=5050
       - PGADMIN_DEFAULT_EMAIL=dev@akvo.org

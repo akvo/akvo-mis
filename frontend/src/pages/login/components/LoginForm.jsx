@@ -35,7 +35,15 @@ const LoginForm = () => {
         // The server's AUTH_TOKEN cookie carries the expiry the browser
         // enforces; nothing here records it a second time.
         api.setToken(res.data.token);
-        if (res.data.forms.length === 0 && !res.data?.is_superuser) {
+        // Form assignment is a workspace concept. An operator has no
+        // forms by construction and is not a superuser, so without the
+        // exemption every console sign-in ends with a warning to
+        // contact an administrator who does not exist above them.
+        if (
+          res.data.forms.length === 0 &&
+          !res.data?.is_superuser &&
+          !res.data?.is_platform_admin
+        ) {
           notification.open({
             message: text.contactAdmin,
             description: text.formAssignmentError,
@@ -146,11 +154,6 @@ const LoginForm = () => {
           </Link>
         </Form.Item>
       )}
-      <Form.Item>
-        <Link className="login-form-forgot" to="/register">
-          Create an account
-        </Link>
-      </Form.Item>
       <Form.Item>
         <Button
           type="primary"

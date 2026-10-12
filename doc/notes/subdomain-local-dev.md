@@ -11,6 +11,9 @@ base domain, nothing resolves to a workspace, and the app behaves exactly
 as it did before subdomain routing existed. Turn it on only when you are
 working on it.
 
+See also [`platform-console.md`](platform-console.md) for the console
+served at `admin.<BASE_DOMAIN>`, which needs a hosts entry of its own.
+
 ## One-time setup
 
 **1. Pick a base domain and use it everywhere.** In `.env`:

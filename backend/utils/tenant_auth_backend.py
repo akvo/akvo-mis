@@ -13,7 +13,13 @@ class TenantAwareBackend(ModelBackend):
     """Authenticate against a (email, password, tenant) triple."""
 
     def authenticate(
-        self, request, email=None, password=None, tenant=None, **kwargs
+        self,
+        request,
+        email=None,
+        password=None,
+        tenant=None,
+        tenant_less_only=False,
+        **kwargs
     ):
         if not email or not password:
             return None
@@ -36,6 +42,17 @@ class TenantAwareBackend(ModelBackend):
         # check all users matching this email and return the one whose password
         # matches.
         users = SystemUser.objects_with_deleted.filter(email=email)
+        # The platform console is the one caller for which a null tenant
+        # is a *requirement* rather than a missing context: an operator
+        # belongs to no workspace. Without this narrowing the loop below
+        # walks every workspace on the deployment, and an operator who
+        # also holds a workspace account under the same address and
+        # password is handed that account instead -- whichever row the
+        # database returns first -- and is then refused for not being an
+        # operator. It also keeps the console's login form from testing
+        # a password against every workspace in the install.
+        if tenant_less_only:
+            users = users.filter(tenant__isnull=True)
         matched_user = None
         for u in users:
             if u.check_password(password):

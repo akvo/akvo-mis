@@ -101,7 +101,14 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
         geometry = row["geometry"][0]
         self.assertEqual(geometry["question_id"], self.form.plot_question.id)
         self.assertEqual(geometry["index"], 0)
-        self.assertEqual(geometry["coordinates"], ADDIS_PLOT)
+        self.assertNotIn("coordinates", geometry)
+        self.assertEqual(geometry["bbox"], {
+            "min_lat": 9.03, "max_lat": 9.04,
+            "min_lon": 38.74, "max_lon": 38.75,
+        })
+        self.assertEqual(
+            geometry["accuracy"], {"max": None, "measured": False}
+        )
 
     def test_bbox_matches_the_polygon(self):
         response = self.get_list(f"?form_id={self.form.id}")
@@ -140,14 +147,15 @@ class MobileDatapointGeometryTestCase(TestCase, ProfileTestHelperMixin):
 
     def test_accuracy_is_passed_through_to_the_device(self):
         """The candidate polygon's accuracy is the half GEO-007 cannot
-        measure locally, so it has to survive this serializer intact."""
+        measure locally, so it has to survive this serializer intact.
+        GEO-006 dropped the duplicated coordinates; the summary stays."""
         walked = [[9.03, 38.74, 4.2], [9.04, 38.74], [9.04, 38.75, 5.1]]
         self.make_datapoint(self.form, "Plot Mixed", walked)
         response = self.get_list(f"?form_id={self.form.id}")
         rows = {r["name"]: r for r in response.json()["data"]}
-        self.assertEqual(
-            rows["Plot Mixed"]["geometry"][0]["coordinates"], walked
-        )
+        geometry = rows["Plot Mixed"]["geometry"][0]
+        self.assertNotIn("coordinates", geometry)
+        self.assertEqual(geometry["accuracy"], {"max": 5.1, "measured": True})
 
     def test_a_mixed_length_ring_still_yields_a_bbox(self):
         """A polygon may hold walked and tapped vertices at once, so the

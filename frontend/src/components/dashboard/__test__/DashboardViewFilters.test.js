@@ -86,15 +86,15 @@ describe("what each filter's toggle controls is unchanged", () => {
   });
 });
 
-describe("the white belongs to the controls, not to a strip", () => {
-  test("the controls sit in a card of their own", () => {
+describe("date and location sit together in the bar", () => {
+  test("the controls sit in a group of their own", () => {
     const { container } = draw();
     expect(
       container.querySelector(".dashboard-view-filters-card")
     ).not.toBeNull();
   });
 
-  test("the card holds both controls, so it is one card and not two", () => {
+  test("the group holds both controls, so it is one group and not two", () => {
     const { container } = draw();
     const cards = container.querySelectorAll(".dashboard-view-filters-card");
     expect(cards).toHaveLength(1);

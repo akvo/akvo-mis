@@ -53,3 +53,84 @@ class ImageUploadTest(TestCase):
             "File extension “txt” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
         )
         os.remove(filename)
+
+    def test_image_upload_rejects_svg(self):
+        filename = generate_image(filename="test_svg", extension="svg")
+        response = self.client.post(
+            "/api/v1/upload/images/",
+            {"file": open(filename, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            "File extension “svg” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
+        )
+        os.remove(filename)
+
+    def test_logo_upload_success(self):
+        # Test PNG logo upload
+        filename = generate_image(filename="test_logo", extension="png")
+        response = self.client.post(
+            "/api/v1/upload/logo/",
+            {"file": open(filename, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.json()), ["message", "file"])
+        uploaded_filename = response.json().get("file")
+        self.assertIn("/logo/", uploaded_filename)
+        uploaded_filename = uploaded_filename.split("/")[-1]
+        self.assertTrue(
+            storage.check(f"/logo/{uploaded_filename}"),
+            "Logo file exists",
+        )
+        os.remove(f"{STORAGE_PATH}/logo/{uploaded_filename}")
+        os.remove(filename)
+
+    def test_logo_upload_rejects_svg(self):
+        filename_svg = generate_image(
+            filename="test_logo_svg", extension="svg"
+        )
+        response_svg = self.client.post(
+            "/api/v1/upload/logo/",
+            {"file": open(filename_svg, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response_svg.status_code, 400)
+        self.assertEqual(
+            response_svg.json(),
+            "File extension “svg” is not allowed. Allowed extensions are: jpg, png, jpeg.",  # noqa
+        )
+        os.remove(filename_svg)
+
+    def test_logo_upload_forbidden_for_non_superadmin(self):
+        from api.v1.v1_users.models import SystemUser
+
+        SystemUser.objects.create_user(
+            email="regular@akvo.org",
+            password="password",
+            first_name="Regular",
+            last_name="User",
+            is_superuser=False,
+        )
+        login_res = self.client.post(
+            "/api/v1/login",
+            {"email": "regular@akvo.org", "password": "password"},
+            content_type="application/json",
+        )
+        token = login_res.json().get("token")
+        filename = generate_image(
+            filename="test_regular_logo", extension="png"
+        )
+        response = self.client.post(
+            "/api/v1/upload/logo/",
+            {"file": open(filename, "rb")},
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json().get("message"),
+            "Only Super Admin can upload logo.",
+        )
+        os.remove(filename)

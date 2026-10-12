@@ -476,7 +476,7 @@ makes even that moot on this endpoint.
 
 | Site | Note |
 |---|---|
-| GPS capture path (GEO-004) | not yet built, so no rework |
+| GPS capture path (GEO-004) | ~~not yet built, so no rework~~ — **built and device-verified 2026-09-21**; it writes the third element |
 | `app/assets/map-draw.html:844` | tap handler — keeps writing 2 elements, unchanged |
 | ARF `TypeGeoDrawing` | unchanged (D-2) |
 

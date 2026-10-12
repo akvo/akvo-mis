@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import { MemoryRouter } from "react-router-dom";
@@ -72,6 +72,26 @@ describe("CreateDashboardModal kind chooser", () => {
         name: "Regional Sales",
         kind: "embed",
         embed_snippet: snippet,
+      })
+    );
+  });
+
+  it("creates a widgets dashboard with date and location on", async () => {
+    // VIZ-027 D-19: the author can switch either off in the builder.
+    dashboardApi.create.mockResolvedValue({ data: { id: 2, slug: "water" } });
+    renderModal();
+    await userEvent.type(screen.getByLabelText("Dashboard name"), "Water");
+    fireEvent.mouseDown(screen.getByRole("combobox"));
+    fireEvent.click(await screen.findByText("Water Points"));
+    await userEvent.click(screen.getByText("Create dashboard"));
+    await waitFor(() =>
+      expect(dashboardApi.create).toHaveBeenCalledWith({
+        name: "Water",
+        root_form: 6001,
+        default_filters: {
+          date: { enabled: true },
+          administration: { enabled: true },
+        },
       })
     );
   });

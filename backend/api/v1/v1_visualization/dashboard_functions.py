@@ -322,6 +322,130 @@ def validate_dashboard_payload(data, user, dashboard=None):
         )
         if error:
             return error
+    return _validate_filter_questions(
+        data.get("default_filters"), root_form, forms, questions,
+    ) or _validate_date_question(
+        data.get("default_filters"), root_form, forms, questions,
+    )
+
+
+def _family_ids(root_form, forms):
+    """root_form and its child forms, as drawn by `forms` (D-6)."""
+    return {root_form.id} | set(
+        forms.filter(parent=root_form).values_list("id", flat=True)
+    )
+
+
+def _validate_date_question(default_filters, root_form, forms, questions):
+    """VIZ-027 D-18: `default_filters.date.date_question`.
+
+    Absent or null means the submission date. Otherwise a strict integer
+    id of a live date question on root_form or one of its child forms;
+    the endpoints match it by name on each widget's form.
+    """
+    if not isinstance(default_filters, dict):
+        return None
+    date = default_filters.get("date")
+    if not isinstance(date, dict) or date.get("date_question") is None:
+        return None
+    field = "default_filters.date.date_question"
+    question_id = date["date_question"]
+    if not isinstance(question_id, int) or isinstance(question_id, bool):
+        return _error("date question must be a question id", field=field)
+    family = _family_ids(root_form, forms)
+    question = questions.filter(pk=question_id).first()
+    if question is None:
+        # A form edit may have replaced the stored question with a live
+        # one of the same name; the endpoints follow the name, so the
+        # dashboard must stay savable (D-18).
+        question = questions.filter(
+            name__in=Questions.objects_with_deleted.filter(
+                pk=question_id,
+            ).values("name"),
+            type=QuestionTypes.date,
+            form_id__in=family,
+        ).first()
+    if question is None:
+        return _error("question not found", field=field)
+    if question.type != QuestionTypes.date:
+        return _error("only a date question can date the dashboard",
+                      field=field)
+    if question.form_id not in family:
+        return _error(
+            "question is not in this dashboard's form family", field=field,
+        )
+    return None
+
+
+def _validate_filter_questions(default_filters, root_form, forms, questions):
+    """VIZ-027 D-6, D-20: `default_filters.questions`, the filter bar.
+
+    Only this key is checked; the rest of default_filters is stored as it
+    always was. Each entry is `{form, name}`: `form` the registration form
+    (the whole family) or one of its child forms (that form only), `name`
+    a question name without `:` (the grammar's delimiter) that some live
+    option question in that scope carries. The family is drawn by the
+    same `forms` queryset the widget rules and serialize_sources use
+    ("two barriers, one rule").
+    """
+    if not isinstance(default_filters, dict):
+        return None
+    if "questions" not in default_filters:
+        return None
+    field = "default_filters.questions"
+    entries = default_filters["questions"]
+    if not isinstance(entries, list):
+        return _error("questions must be a list", field=field)
+
+    def strict_int(value):
+        # Not _as_int: "12" would pass here, be stored as a string, and
+        # then match nothing at Publish, silently dropping the filter.
+        return (
+            value
+            if isinstance(value, int) and not isinstance(value, bool)
+            else None
+        )
+
+    family = _family_ids(root_form, forms)
+    pairs = []
+    for index, entry in enumerate(entries):
+        where = f"{field}[{index}]"
+        form_id = name = None
+        if isinstance(entry, dict):
+            form_id = strict_int(entry.get("form"))
+            name = entry.get("name")
+        if form_id is None or not isinstance(name, str) or not name:
+            return _error(
+                "each filter needs a form id and a question name",
+                field=where,
+            )
+        if ":" in name:
+            return _error(
+                "a question name with ':' cannot be a filter; rename it",
+                field=f"{where}.name",
+            )
+        if form_id not in family:
+            return _error(
+                "form is not in this dashboard's form family",
+                field=f"{where}.form",
+            )
+        pairs.append((index, form_id, name))
+    found = set(
+        questions.filter(
+            form_id__in=family,
+            name__in={name for _, _, name in pairs},
+            type__in=(QuestionTypes.option, QuestionTypes.multiple_option),
+        ).values_list("form_id", "name")
+    )
+    for index, form_id, name in pairs:
+        # The scope rule of functions.global_filter_scope, restated: this
+        # module stays free of DRF (see its header).
+        scope = family if form_id == root_form.id else {form_id}
+        if not any((fid, name) in found for fid in scope):
+            return _error(
+                "no option question with this name in the form's scope",
+                field=f"{field}[{index}].name",
+            )
     return None
 
 

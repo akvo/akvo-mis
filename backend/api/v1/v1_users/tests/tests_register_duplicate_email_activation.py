@@ -55,7 +55,11 @@ class SecondWorkspaceActivationEmailTestCase(TestCase):
 
     def test_second_workspace_gets_its_own_activation_email(self):
         self.assertEqual(self.register("acme").status_code, 200)
-        self.assertEqual(self.register("beta").status_code, 200)
+        # Not "beta": that's a reserved environment name now (workspace-
+        # name blacklist, issue #511), and this test's concern is the
+        # second workspace getting its own email, not the name it
+        # happens to pick.
+        self.assertEqual(self.register("zeta").status_code, 200)
 
         # Two accounts, because email is unique per tenant rather than
         # globally -- which is what makes this scenario legal at all.
@@ -72,7 +76,7 @@ class SecondWorkspaceActivationEmailTestCase(TestCase):
 
         # The second link must point at the second workspace. Sending the
         # registrant back to acme would activate the wrong account and
-        # leave beta permanently unactivatable, which is the symptom that
+        # leave zeta permanently unactivatable, which is the symptom that
         # was reported.
         self.assertTrue(
             self.activation_link(mail.outbox[0]).startswith(
@@ -82,38 +86,39 @@ class SecondWorkspaceActivationEmailTestCase(TestCase):
         )
         self.assertTrue(
             self.activation_link(mail.outbox[1]).startswith(
-                "https://beta.app.com/activate/"
+                "https://zeta.app.com/activate/"
             ),
             self.activation_link(mail.outbox[1]),
         )
 
     def test_each_activation_link_activates_only_its_own_account(self):
         self.register("acme")
-        self.register("beta")
+        # Not "beta": see the comment in the test above.
+        self.register("zeta")
         acme_user = SystemUser.objects.get(
             email=self.email, tenant__subdomain="acme"
         )
-        beta_user = SystemUser.objects.get(
-            email=self.email, tenant__subdomain="beta"
+        zeta_user = SystemUser.objects.get(
+            email=self.email, tenant__subdomain="zeta"
         )
         self.assertFalse(acme_user.is_active)
-        self.assertFalse(beta_user.is_active)
+        self.assertFalse(zeta_user.is_active)
 
         token = self.activation_link(mail.outbox[1]).rsplit("/", 1)[1]
         response = self.client.post(
             "/api/v1/register/activate",
             {"token": token},
             content_type="application/json",
-            HTTP_HOST="beta.app.com",
+            HTTP_HOST="zeta.app.com",
         )
         self.assertEqual(response.status_code, 200)
 
         acme_user.refresh_from_db()
-        beta_user.refresh_from_db()
-        self.assertTrue(beta_user.is_active)
+        zeta_user.refresh_from_db()
+        self.assertTrue(zeta_user.is_active)
         # The two links carry different signed primary keys. If they did
         # not, following the second would activate the first workspace's
-        # account and the registrant would still be locked out of beta.
+        # account and the registrant would still be locked out of zeta.
         self.assertFalse(acme_user.is_active)
 
     @override_settings(EMAIL_BACKEND=EXPLODING_BACKEND)

@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, act } from '@testing-library/react-native';
-import QuestionGroupList, { checkCompleteQuestionGroup } from '../QuestionGroupList';
+import QuestionGroupList, { countValidRequiredQuestions } from '../QuestionGroupList';
 import QuestionGroupListItem from '../QuestionGroupListItem';
 import { FormState } from '../../../store';
 
@@ -217,60 +217,70 @@ const example = {
 };
 
 describe('QuestionGroup & QuestionGroupListItem without mock', () => {
-  describe('checkCompleteQuestionGroup function', () => {
-    it('Should return boolean if completed/not', () => {
-      const completed = checkCompleteQuestionGroup(example, { 1: 'Galih' });
-      expect(completed).toEqual([true, false, false, true]);
+  describe('countValidRequiredQuestions groupsValid', () => {
+    // Per-group completion, as the group list ticks it.
+    const groupsValid = async (values) =>
+      (await countValidRequiredQuestions(example, values)).groupsValid;
+
+    it('Should return boolean if completed/not', async () => {
+      expect(await groupsValid({ 1: 'Galih' })).toEqual([true, false, false, true]);
     });
 
     it.failing(
       'Should failing when only one question answered from two required questions in a question group',
-      () => {
+      async () => {
         const values = {
           2: new Date().toISOString(),
         };
-        const completed = checkCompleteQuestionGroup(example, values);
-        expect(completed).toEqual([false, true, false, true]);
+        expect(await groupsValid(values)).toEqual([false, true, false, true]);
       },
     );
 
-    it('Should check two required questions in a question group', () => {
+    it('Should check two required questions in a question group', async () => {
       const values = {
         2: new Date().toISOString(),
         3: '20',
       };
-      const completed = checkCompleteQuestionGroup(example, values);
-      expect(completed).toEqual([false, true, false, true]);
+      expect(await groupsValid(values)).toEqual([false, true, false, true]);
     });
 
-    it('Should ignore not required questions', () => {
-      const completed = checkCompleteQuestionGroup(example, { 4: ['Female'] });
-      expect(completed).toEqual([false, false, true, true]);
+    it('Should not complete a group whose answer is filled but invalid', async () => {
+      const values = {
+        2: new Date().toISOString(),
+        3: '20.5',
+      };
+      expect(await groupsValid(values)).toEqual([false, false, false, true]);
     });
 
-    it('Should ignore dependency question if not answered', () => {
-      const completed = checkCompleteQuestionGroup(example, {});
-      expect(completed).toEqual([false, false, false, true]);
+    it('Should ignore not required questions', async () => {
+      expect(await groupsValid({ 4: ['Female'] })).toEqual([false, false, true, true]);
     });
 
-    it('Should ignore dependency question if not required', () => {
-      const completed = checkCompleteQuestionGroup(example, { 4: ['Female'] });
-      expect(completed).toEqual([false, false, true, true]);
+    it('Should ignore dependency question if not answered', async () => {
+      expect(await groupsValid({})).toEqual([false, false, false, true]);
     });
 
-    it('Should check dependency question if  dependent question answered and dependency question required', () => {
-      const completed = checkCompleteQuestionGroup(example, { 4: ['Male'], 8: ['Programming'] });
-      expect(completed).toEqual([false, false, false, false]);
+    it('Should ignore dependency question if not required', async () => {
+      expect(await groupsValid({ 4: ['Female'] })).toEqual([false, false, true, true]);
     });
 
-    it('Should complete when dependent question answered and required dependency question answered', () => {
-      const completed = checkCompleteQuestionGroup(example, {
+    it('Should check dependency question if  dependent question answered and dependency question required', async () => {
+      expect(await groupsValid({ 4: ['Male'], 8: ['Programming'] })).toEqual([
+        false,
+        false,
+        false,
+        false,
+      ]);
+    });
+
+    it('Should complete when dependent question answered and required dependency question answered', async () => {
+      const values = {
         4: ['Male'],
         6: 'Lorem ipsum',
         8: ['Programming'],
         9: 'Python Language',
-      });
-      expect(completed).toEqual([false, false, true, true]);
+      };
+      expect(await groupsValid(values)).toEqual([false, false, true, true]);
     });
   });
 

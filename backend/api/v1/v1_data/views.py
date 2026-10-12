@@ -9,7 +9,7 @@ from wsgiref.util import FileWrapper
 from django.conf import settings
 from django.utils import timezone
 from django.http import HttpResponse
-from django.db.models import Q, Count, Max, OuterRef, Subquery
+from django.db.models import Q, Count, Exists, Max, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django_q.tasks import async_task
 from drf_spectacular.types import OpenApiTypes
@@ -398,6 +398,22 @@ class FormDataAddListView(APIView):
             )
 
         serializer.save()
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
         return Response({"message": "ok"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -674,6 +690,22 @@ class PendingFormDataView(APIView):
             )
 
         serializer.save()
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
         return Response({"message": "ok"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -776,7 +808,15 @@ class PendingFormDataView(APIView):
             if settings.USE_TZ:
                 end_datetime = timezone.make_aware(end_datetime)
             queryset = queryset.filter(created__lt=end_datetime)
-        queryset = queryset.order_by("-created")
+        # Load everything ListPendingFormDataSerializer reads in the same
+        # query; per-row lookups cost one DB round-trip each (N+1)
+        queryset = queryset.order_by("-created").select_related(
+            "created_by", "administration", "form", "parent"
+        ).annotate(
+            has_answer_history=Exists(
+                AnswerHistory.objects.filter(data=OuterRef("pk"))
+            )
+        )
         # if selection_ids is provided, filter the queryset
         selection_ids = request.GET.getlist("selection_ids")
         if selection_ids:
@@ -791,11 +831,13 @@ class PendingFormDataView(APIView):
 
         paginator = PageNumberPagination()
         instance = paginator.paginate_queryset(queryset, request)
+        # Reuse the count the paginator already ran
+        total = paginator.page.paginator.count
 
         data = {
             "current": int(request.GET.get("page", "1")),
-            "total": queryset.count(),
-            "total_page": ceil(queryset.count() / page_size),
+            "total": total,
+            "total_page": ceil(total / page_size),
             "data": ListPendingFormDataSerializer(
                 instance=instance, many=True
             ).data,
@@ -1158,6 +1200,23 @@ class PublishDraftFormDataView(APIView):
         # Save to file if it's published and not pending
         if direct_to_data:
             async_task("api.v1.v1_data.tasks.seed_approved_data", draft_data)
+
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=draft_data.form.name,
+            form_id=draft_data.form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
 
         return Response(
             {"message": "Draft published successfully"},

@@ -81,9 +81,7 @@ class MobileAssignmentFormsSerializer(serializers.Serializer):
     @extend_schema_field(MobileFormSerializer(many=True))
     def get_formsUrl(self, obj):
         # Return only explicitly assigned forms (no auto-include of children)
-        forms = obj.forms.filter(
-            status=FormStatus.published
-        ).order_by("id")
+        forms = obj.forms.filter(status=FormStatus.published).order_by("id")
         return MobileFormSerializer(instance=forms, many=True).data
 
     def get_syncToken(self, obj):
@@ -135,20 +133,22 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
                 parent__isnull=False
             ).select_related("parent")
             registration_ids = set(
-                selected_form_objs.filter(
-                    parent__isnull=True
-                ).values_list("id", flat=True)
+                selected_form_objs.filter(parent__isnull=True).values_list(
+                    "id", flat=True
+                )
             )
 
             missing_parents = []
             for mf in monitoring_forms:
                 if mf.parent_id not in registration_ids:
-                    missing_parents.append({
-                        "form": mf.id,
-                        "monitoring_form": mf.name,
-                        "required_registration": mf.parent.name,
-                        "required_registration_id": mf.parent_id,
-                    })
+                    missing_parents.append(
+                        {
+                            "form": mf.id,
+                            "monitoring_form": mf.name,
+                            "required_registration": mf.parent.name,
+                            "required_registration_id": mf.parent_id,
+                        }
+                    )
 
             if missing_parents:
                 raise serializers.ValidationError(missing_parents)
@@ -207,7 +207,7 @@ class FormsAndEntityValidation(serializers.PrimaryKeyRelatedField):
 class MobileAssignmentSerializer(serializers.ModelSerializer):
     forms = FormsAndEntityValidation(
         queryset=Forms.objects.filter(status=FormStatus.published).all(),
-        many=True
+        many=True,
     )
     administrations = IdAndNameRelatedField(
         queryset=Administration.objects.all(), many=True
@@ -251,13 +251,9 @@ class MobileApkSerializer(serializers.Serializer):
 
 
 class SyncDeviceFormDataSerializer(serializers.Serializer):
-    formId = CustomPrimaryKeyRelatedField(
-        queryset=Forms.objects.none()
-    )
+    formId = CustomPrimaryKeyRelatedField(queryset=Forms.objects.none())
     name = CustomCharField(max_length=255)
-    duration = CustomIntegerField(
-        min_value=0, max_value=86400000, default=0
-    )
+    duration = CustomIntegerField(min_value=0, max_value=86400000, default=0)
     submittedAt = CustomDateTimeField()
     geo = CustomListField(child=serializers.IntegerField())
     uuid = serializers.UUIDField(required=False, allow_null=True)
@@ -291,8 +287,7 @@ class SyncDeviceFormDataSerializer(serializers.Serializer):
 
 class SyncDeviceParamsSerializer(serializers.Serializer):
     id = CustomPrimaryKeyRelatedField(
-        queryset=FormData.objects_draft.none(),
-        required=False
+        queryset=FormData.objects_draft.none(), required=False
     )
     is_draft = serializers.BooleanField(default=False)
     is_published = serializers.BooleanField(default=False)
@@ -311,30 +306,24 @@ class SyncDeviceParamsSerializer(serializers.Serializer):
 
 class DraftFormDataSerializer(serializers.ModelSerializer):
     form = CustomPrimaryKeyRelatedField(
-        queryset=Forms.objects.all(),
-        source="form_id"
+        queryset=Forms.objects.all(), source="form_id"
     )
     administration = CustomPrimaryKeyRelatedField(
-        queryset=Administration.objects.all(),
-        source="administration_id"
+        queryset=Administration.objects.all(), source="administration_id"
     )
     datapoint_name = CustomCharField(source="name")
     geolocation = CustomListField(
-        source="geo",
-        required=False,
-        allow_null=True
+        source="geo", required=False, allow_null=True
     )
     submittedAt = CustomDateTimeField(
         source="created",
         read_only=True,
     )
     json = serializers.SerializerMethodField(
-        read_only=True,
-        help_text="JSON representation of the answers."
+        read_only=True, help_text="JSON representation of the answers."
     )
     repeats = serializers.SerializerMethodField(
-        read_only=True,
-        help_text="Number of times the form has been repeated."
+        read_only=True, help_text="Number of times the form has been repeated."
     )
 
     def get_json(self, obj):
@@ -342,7 +331,7 @@ class DraftFormDataSerializer(serializers.ModelSerializer):
         # question_id: answer_value pairs
         answers = {}
         for answer in obj.data_answer.order_by(
-            "question__question_group_id", "question__order"
+            "question__question_group__order", "question__order"
         ).all():
             answers.update(answer.to_key)
         return answers

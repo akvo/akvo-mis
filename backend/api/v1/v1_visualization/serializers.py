@@ -101,6 +101,8 @@ class GeoLocationFilterSerializer(serializers.Serializer):
         required=False, default=False
     )
     monitoring_form_id = serializers.IntegerField(required=False)
+    # VIZ-027 D-18: the dashboard's date question, matched by name.
+    date_question_id = serializers.IntegerField(required=False)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -148,6 +150,8 @@ class FormulaValuesSerializer(serializers.Serializer):
     criteria = serializers.CharField(required=False)
     from_date = serializers.DateField(required=False)
     to_date = serializers.DateField(required=False)
+    # VIZ-027 D-18: the dashboard's date question, matched by name.
+    date_question_id = serializers.IntegerField(required=False)
 
     def validate_formula(self, value):
         try:

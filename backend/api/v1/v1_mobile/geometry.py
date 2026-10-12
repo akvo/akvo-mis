@@ -72,6 +72,31 @@ def bounding_box(coordinates):
     }
 
 
+def accuracy_summary(coordinates):
+    """Per-polygon accuracy for the list payload (GEO-014 D-10).
+
+    Max of the measured vertex accuracies, plus whether any vertex was
+    measured. Per-vertex readings stay on `{uuid}.json`; the list only
+    needs the one number GEO-007's adaptive threshold reads.
+    """
+    measured = []
+    for point in coordinates:
+        if not isinstance(point, (list, tuple)) or len(point) < 3:
+            continue
+        value = point[2]
+        if value is None:
+            continue
+        try:
+            metres = float(value)
+        except (TypeError, ValueError):
+            continue
+        if metres > 0:
+            measured.append(metres)
+    if not measured:
+        return {"max": None, "measured": False}
+    return {"max": max(measured), "measured": True}
+
+
 def geometry_answers(data_ids, question_ids):
     """The one queryset both the payload and the count are built from.
 
@@ -101,6 +126,10 @@ def geometry_by_data_id(data_ids, question_ids):
     One follow-up query keyed on the page's ids, never a join onto the
     paginated queryset: a join multiplies rows and corrupts `total` and
     `total_page`.
+
+    Coordinates are deliberately absent (GEO-006 §4): they travel once
+    in `{uuid}.json`. Duplicating them here doubled the page payload and
+    risked an index row whose coordinates were not yet on the device.
     """
     result = {}
     rows = geometry_answers(data_ids, question_ids).values(
@@ -111,7 +140,7 @@ def geometry_by_data_id(data_ids, question_ids):
         result.setdefault(row["data_id"], []).append({
             "question_id": row["question_id"],
             "index": row["index"],
-            "coordinates": coordinates,
             "bbox": bounding_box(coordinates),
+            "accuracy": accuracy_summary(coordinates),
         })
     return result

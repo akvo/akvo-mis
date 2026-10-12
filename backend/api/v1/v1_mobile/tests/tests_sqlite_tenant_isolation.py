@@ -1,6 +1,7 @@
 import os
-import shutil
 import sqlite3
+import tempfile
+from unittest import mock
 
 import pandas as pd
 from django.core.management import call_command
@@ -11,7 +12,6 @@ from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.models import Administration, Entity, EntityData
 from api.v1.v1_profile.serializers import AdministrationSerializer
 from api.v1.v1_users.models import Organisation
-from mis.settings import MASTER_DATA
 from utils.custom_generator import generate_sqlite, sqlite_path
 from utils.tenant_test_case import TenantIsolationTestCase
 
@@ -49,9 +49,18 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
         token = MobileAssignmentToken.for_assignment(tenant["assignment"])
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
-    def tearDown(self):
-        for sub in ["acme", "beta"]:
-            shutil.rmtree(f"{MASTER_DATA}/{sub}", ignore_errors=True)
+    def setUp(self):
+        # The master-data root is a real directory shared by every test
+        # process (--parallel) and other test classes also write an "acme"
+        # tenant's files there, so "the file is absent" depended on what
+        # ran before. Each test gets its own root, as tests_admin_rename.
+        root = tempfile.TemporaryDirectory()
+        self.addCleanup(root.cleanup)
+        patch = mock.patch("utils.custom_generator.MASTER_DATA", root.name)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.master_data = root.name
+        super().setUp()
 
     def read_names(self, file_name):
         conn = sqlite3.connect(file_name)
@@ -71,14 +80,13 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
 
     def test_generate_writes_into_per_tenant_directory(self):
         file_name = generate_sqlite(Administration, tenant=self.a["tenant"])
-        self.assertTrue(file_name.startswith(f"{MASTER_DATA}/acme/"))
+        self.assertTrue(file_name.startswith(f"{self.master_data}/acme/"))
         self.assertTrue(os.path.exists(file_name))
 
     def test_generate_without_tenant_keeps_root_location(self):
         file_name = generate_sqlite(Administration)
-        self.addCleanup(os.remove, file_name)
         self.assertEqual(
-            file_name, f"{MASTER_DATA}/test_administrator.sqlite"
+            file_name, f"{self.master_data}/test_administrator.sqlite"
         )
 
     def test_generate_scopes_organisation_by_tenant(self):
@@ -90,18 +98,17 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
     def test_command_generates_a_file_per_tenant(self):
         call_command("generate_sqlite", "--test", True)
         for sub in ["acme", "beta"]:
-            path = f"{MASTER_DATA}/{sub}/test_administrator.sqlite"
+            path = f"{self.master_data}/{sub}/test_administrator.sqlite"
             self.assertTrue(os.path.exists(path), f"missing {path}")
         names = self.read_names(
-            f"{MASTER_DATA}/acme/test_administrator.sqlite"
+            f"{self.master_data}/acme/test_administrator.sqlite"
         )
         self.assertIn("acme", names)
         self.assertNotIn("beta", names)
 
     def test_command_still_writes_the_tenantless_artifacts(self):
         call_command("generate_sqlite", "--test", True)
-        root = f"{MASTER_DATA}/test_administrator.sqlite"
-        self.addCleanup(os.remove, root)
+        root = f"{self.master_data}/test_administrator.sqlite"
         self.assertTrue(os.path.exists(root))
 
     def test_administration_serializer_writes_into_its_tenants_file(self):
@@ -147,8 +154,7 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
             **self.device_auth(self.a),
         )
         self.assertEqual(res.status_code, 200)
-        served = f"{MASTER_DATA}/served.sqlite"
-        self.addCleanup(os.remove, served)
+        served = f"{self.master_data}/served.sqlite"
         with open(served, "wb") as f:
             f.write(res.content)
         names = self.read_names(served)
@@ -175,8 +181,7 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
             **self.device_auth(self.a),
         )
         self.assertEqual(res.status_code, 200)
-        served = f"{MASTER_DATA}/served_empty.sqlite"
-        self.addCleanup(os.remove, served)
+        served = f"{self.master_data}/served_empty.sqlite"
         with open(served, "wb") as f:
             f.write(res.content)
         self.assertEqual(self.read_names(served), [])

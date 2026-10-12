@@ -447,7 +447,8 @@ class ManageFormUpdateTestCase(TestCase):
         from api.v1.v1_forms.models import FormPublishedVersion
         form_id = self._create_form()
         self._publish_form(form_id)  # v1, active=v1
-        # PUT twice — creates v2, v3
+        # PUT twice — updates pending snapshot (v2) in place
+        # without creating extra versions
         for i in range(2):
             self.client.put(
                 f"/api/v1/manage/forms/{form_id}",
@@ -460,9 +461,9 @@ class ManageFormUpdateTestCase(TestCase):
         # active must still be v1
         self.assertEqual(form.active_version.version, 1)
         self.assertEqual(form.version, 1)
-        # but three snapshots exist
+        # 2 snapshots exist: v1 (active) and v2 (pending snapshot)
         self.assertEqual(
-            FormPublishedVersion.objects.filter(form_id=form_id).count(), 3
+            FormPublishedVersion.objects.filter(form_id=form_id).count(), 2
         )
 
     def test_update_draft_keeps_version(self):

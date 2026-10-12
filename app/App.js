@@ -31,7 +31,7 @@ import {
 import { tables, openDatabase } from './src/database';
 import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09, m10, m11 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10, m11, m12 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -311,6 +311,13 @@ const migrateDbIfNeeded = async (db) => {
     });
     currentDbVersion = 11;
   }
+  if (currentDbVersion === 11) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m12.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 12');
+    });
+    currentDbVersion = 12;
+  }
 
   // Every DATABASE_VERSION bump sends exactly one launch down this path. Without
   // this, the upgrade launch never sets the server URL, token or user id, and the
@@ -337,8 +344,10 @@ const App = () => {
   const handleOnRegisterTask = useCallback(async () => {
     try {
       const allTasks = await TaskManager.getRegisteredTasksAsync();
+      const registered = allTasks.map((a) => a.taskName);
 
-      allTasks.forEach(async (a) => {
+      await allTasks.reduce(async (prev, a) => {
+        await prev;
         if (
           [
             SYNC_FORM_SUBMISSION_TASK_NAME,
@@ -348,7 +357,21 @@ const App = () => {
         ) {
           await backgroundTask.registerBackgroundTask(a.taskName);
         }
-      });
+      }, Promise.resolve());
+
+      // The two sync tasks are re-registered even when absent, because
+      // a 403 unregisters them: the device stops polling once its
+      // person is deactivated. Without this, reopening the app after
+      // reactivation would find nothing to refresh and sync would stay
+      // dead. The datapoint task is left alone -- it is registered by
+      // choice, and forcing it on would re-enable something switched
+      // off deliberately.
+      await [SYNC_FORM_VERSION_TASK_NAME, SYNC_FORM_SUBMISSION_TASK_NAME]
+        .filter((name) => !registered.includes(name))
+        .reduce(async (prev, name) => {
+          await prev;
+          await backgroundTask.registerBackgroundTask(name);
+        }, Promise.resolve());
     } catch (error) {
       Sentry.captureMessage(`handleOnRegisterTask`);
       Sentry.captureException(error);

@@ -18,3 +18,16 @@ export const openDatabase = jest.fn(() => ({
   transaction: mockTransaction,
   close: jest.fn(),
 }));
+
+/**
+ * The connection provided by SQLiteProvider. Components that only pass it to a crud helper
+ * (which the test mocks separately) need nothing more than a stable object.
+ */
+export const useSQLiteContext = jest.fn(() => ({}));
+
+export const openDatabaseAsync = jest.fn(() =>
+  Promise.resolve({
+    execAsync: jest.fn(() => Promise.resolve()),
+    closeAsync: jest.fn(() => Promise.resolve()),
+  }),
+);

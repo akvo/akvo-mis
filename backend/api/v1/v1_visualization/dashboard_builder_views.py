@@ -11,6 +11,7 @@
 # DashboardBuilder resolves slug -> id by scanning the whole list, so
 # an envelope would break the builder silently. See the spec, D-1.
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -195,6 +196,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         "visibility": FeatureAccessTypes.dashboard_publish,
         "duplicate": FeatureAccessTypes.dashboard_create,
         "embed_preview": FeatureAccessTypes.dashboard_edit,
+        "ai_status": BUILDER_ACCESS,
         "suggest_dashboard": FeatureAccessTypes.dashboard_create,
         "suggest_widgets": BUILDER_ACCESS,
     }
@@ -233,11 +235,16 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # problem even though the derived-from-name path is what
             # usually trips this.
             field, message = (
-                ("slug", "slug may only contain lowercase letters, "
-                         "numbers and hyphens")
+                (
+                    "slug",
+                    "slug may only contain lowercase letters, "
+                    "numbers and hyphens",
+                )
                 if (requested_slug or "").strip()
-                else ("name", "name must contain at least one letter "
-                              "or digit")
+                else (
+                    "name",
+                    "name must contain at least one letter " "or digit",
+                )
             )
             return Response(
                 {"message": message, "field": field},
@@ -247,17 +254,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         if live.filter(slug=slug).exists():
             return Response(
                 {
-                    "message": (
-                        "a dashboard with this name already exists"
-                    ),
+                    "message": ("a dashboard with this name already exists"),
                     "suggested_slug": suggest_slug(slug, live),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
 
-        kind = KIND_IDS.get(
-            request.data.get("kind"), DashboardKind.widgets
-        )
+        kind = KIND_IDS.get(request.data.get("kind"), DashboardKind.widgets)
         is_embed = kind == DashboardKind.embed
         with transaction.atomic():
             dashboard = Dashboard.objects.create(
@@ -279,13 +282,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
                 # An embed has no data of ours to filter, so a stored filter
                 # would be a setting with no effect.
                 default_filters=(
-                    {} if is_embed
+                    {}
+                    if is_embed
                     else request.data.get("default_filters") or {}
                 ),
             )
-            if (
-                dashboard.kind == DashboardKind.widgets
-                and request.data.get("widgets")
+            if dashboard.kind == DashboardKind.widgets and request.data.get(
+                "widgets"
             ):
                 apply_widgets(dashboard, request.data.get("widgets"))
 
@@ -323,13 +326,9 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             dashboard.updated = timezone.now()
             dashboard.save()
             if dashboard.kind == DashboardKind.widgets:
-                apply_widgets(
-                    dashboard, request.data.get("widgets") or []
-                )
+                apply_widgets(dashboard, request.data.get("widgets") or [])
 
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -374,9 +373,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             # answers "how fresh is what I am looking at".
             dashboard.published_at = timezone.now()
             dashboard.save()
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -412,9 +409,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # back on the public web with nobody having decided to.
         dashboard.is_public = False
         dashboard.save(update_fields=["status", "is_public"])
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -448,9 +443,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             )
         dashboard.is_public = is_public
         dashboard.save(update_fields=["is_public"])
-        return Response(
-            DashboardDetailSerializer(instance=dashboard).data
-        )
+        return Response(DashboardDetailSerializer(instance=dashboard).data)
 
     @extend_schema(
         tags=[MANAGE],
@@ -537,13 +530,13 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         snippet = request.data.get("embed_snippet")
         if not isinstance(snippet, str) or not snippet.strip():
             return Response(
-                {"message": "embed_snippet is required",
-                 "field": "embed_snippet"},
+                {
+                    "message": "embed_snippet is required",
+                    "field": "embed_snippet",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        url = preview_url_for(
-            snippet, getattr(request.user, "tenant", None)
-        )
+        url = preview_url_for(snippet, getattr(request.user, "tenant", None))
         if url is None:
             return Response(
                 {"message": EMBED_UNAVAILABLE},
@@ -577,6 +570,21 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         # form is not here the builder cannot offer it, and if it
         # somehow does, validate_dashboard_payload rejects it on save.
         return Response(serialize_sources(dashboard, request.user))
+
+    @extend_schema(
+        tags=[MANAGE],
+        summary="Get AI suggestion service status",
+        description="Returns whether OpenAI API is configured and available.",
+    )
+    def ai_status(self, request, *args, **kwargs):
+        api_key = getattr(settings, "OPENAI_API_KEY", None)
+        return Response(
+            {
+                "ai_available": bool(api_key),
+                "provider": "openai" if bool(api_key) else "none",
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @extend_schema(
         tags=[MANAGE],
@@ -641,6 +649,9 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
         existing_types = serializer.validated_data.get(
             "existing_widget_types", []
         )
+        existing_widgets = serializer.validated_data.get(
+            "existing_widgets", []
+        )
         prompt_hint = serializer.validated_data.get("prompt_hint")
 
         result = AISuggestionService.suggest_widgets(
@@ -648,6 +659,7 @@ class DashboardBuilderViewSet(viewsets.ModelViewSet):
             user=request.user,
             existing_widget_types=existing_types,
             prompt_hint=prompt_hint,
+            existing_widgets=existing_widgets,
         )
         if result is None:
             return Response(

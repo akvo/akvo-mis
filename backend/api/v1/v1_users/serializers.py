@@ -38,11 +38,14 @@ from utils.custom_serializer_fields import (
     CustomMultipleChoiceField,
 )
 from api.v1.v1_profile.constants import FeatureAccessTypes
-from django.conf import settings
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
-from utils.tenant_host import embed_hostname
+from utils.tenant_host import is_admin_host
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
+from utils.workspace_name import (
+    host_collision_reason,
+    self_service_reason,
+)
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -161,15 +164,29 @@ class LoginSerializer(serializers.Serializer):
     password = CustomCharField()
 
 
+def accounts_for_email(request, email, **extra):
+    """The accounts an emailed link may be built for, scoped by host.
+
+    Scoping on "has no tenant" is not enough: that reads the same on
+    the console, on the base domain, and on every single-host
+    deployment, where accounts do have workspaces. Only the console
+    means tenant-less, and only an operator can use what it sends --
+    so only operators are looked up there. Unscoped, `.first()`
+    returned an arbitrary account from any workspace sharing the
+    address, and the link was then built for *that* workspace.
+    """
+    qs = SystemUser.objects.filter(email=email, deleted_at=None, **extra)
+    if is_admin_host(request.get_host()):
+        return qs.filter(is_platform_admin=True, tenant__isnull=True)
+    tenant = getattr(request, "tenant", None)
+    return qs.filter(tenant=tenant) if tenant is not None else qs
+
+
 class ForgotPasswordSerializer(serializers.Serializer):
     email = CustomEmailField()
 
     def validate_email(self, email):
-        tenant = self.context.get("tenant")
-        qs = SystemUser.objects.filter(email=email, deleted_at=None)
-        if tenant is not None:
-            qs = qs.filter(tenant=tenant)
-        user = qs.first()
+        user = accounts_for_email(self.context["request"], email).first()
         if not user:
             raise ValidationError("Invalid email, user not found")
         return user
@@ -846,6 +863,7 @@ class UserSerializer(serializers.ModelSerializer):
     forms = serializers.SerializerMethodField()
     last_login = serializers.SerializerMethodField()
     passcode = serializers.SerializerMethodField()
+    is_inspecting = serializers.SerializerMethodField()
 
     @extend_schema_field(UserAdministrationSerializer)
     def get_administration(self, instance: SystemUser):
@@ -939,6 +957,18 @@ class UserSerializer(serializers.ModelSerializer):
     def get_configured(self, instance: SystemUser):
         return tenant_is_configured(instance.tenant)
 
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_is_inspecting(self, instance: SystemUser):
+        """Is this a read-only cross-workspace session?
+
+        The frontend uses it for the banner and to strip write
+        abilities. It is presentation only -- the server refuses the
+        writes whether or not the browser tries them. Read with getattr
+        because only the inspection authentication class sets it, in
+        memory, on the instance it hands back.
+        """
+        return bool(getattr(instance, "is_inspecting", False))
+
     @extend_schema_field(OpenApiTypes.STR)
     def get_subdomain(self, instance: SystemUser):
         # The address this session belongs to. The frontend compares it
@@ -966,6 +996,12 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "configured",
             "subdomain",
+            # The console's route guard reads this and has nothing else
+            # to read: `is_superuser` is a workspace role (D-1), and a
+            # tenant-less account's `subdomain` is "" for reasons that
+            # have nothing to do with being an operator.
+            "is_platform_admin",
+            "is_inspecting",
         ]
 
 
@@ -1111,6 +1147,17 @@ class ConfigureSerializer(serializers.Serializer):
     # why the form carries examples.
     level_0_name = serializers.CharField(max_length=50)
     root_unit_name = serializers.CharField(max_length=255)
+    logo = serializers.CharField(
+        max_length=255, required=False, allow_null=True, allow_blank=True,
+        default=None
+    )
+
+
+class TenantBrandingSerializer(serializers.Serializer):
+    logo = serializers.CharField(
+        max_length=255, required=False, allow_null=True, allow_blank=True,
+        default=None
+    )
 
 
 class ResendActivationSerializer(serializers.Serializer):
@@ -1127,38 +1174,49 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     # A valid DNS label, because the subdomain will one day be one:
     # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
+    #
+    # The minimum is a reservation rule rather than a format rule:
+    # one- and two-character labels are the scarcest names in a global
+    # namespace, so they are granted deliberately, like country names.
+    # Expressed here rather than in `self_service_reason` because DRF
+    # already states it, and a hand-rolled length check would be
+    # re-implementing a built-in. DRF runs field constraints before
+    # `validate_subdomain`, so a short name reports its length and
+    # never reaches the name rules -- there is no point telling
+    # somebody a name is reserved when it is also too short to use.
     subdomain = serializers.RegexField(
         regex=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        min_length=3,
         max_length=63,
         error_messages={
             "invalid": (
                 "Subdomain may only contain lowercase letters, digits "
                 "and hyphens, and cannot start or end with a hyphen"
-            )
+            ),
+            "min_length": (
+                "Workspace name must be at least 3 characters"
+            ),
         },
+    )
+    language = serializers.ChoiceField(
+        choices=["en", "fr"],
+        default="en",
+        required=False,
     )
 
     def validate_subdomain(self, value):
-        """Refuse a subdomain that would collide with the embed host.
+        """Refuse a name sign-up may not claim.
 
-        `EMBED_HOST` serves author-pasted third-party markup, and the
-        only thing protecting this application from it is that the two
-        sit on different origins. A workspace registered at that exact
-        host would put them back on the same one: a snippet served there
-        could then read the `AUTH_TOKEN` cookie of anyone signed in to
-        that workspace, since it is not HttpOnly.
-
-        Compared as whole hosts rather than as labels, so it stays
-        correct whatever `EMBED_HOST` is set to, and inert when either
-        setting is empty.
+        Two families, both in `utils.workspace_name`: host collisions
+        apply everywhere and are shared with the console's rename,
+        while `self_service_reason` is sign-up's alone, because a
+        withheld name is one an operator can still grant.
         """
-        embed = embed_hostname()
-        if embed and settings.BASE_DOMAIN:
-            candidate = "{0}.{1}".format(value, settings.BASE_DOMAIN).lower()
-            if candidate == embed:
-                raise serializers.ValidationError(
-                    "This subdomain is reserved."
-                )
+        reason = host_collision_reason(value) or self_service_reason(
+            value
+        )
+        if reason:
+            raise serializers.ValidationError(reason)
         return value
 
     # Uniqueness of email and subdomain is left to the database

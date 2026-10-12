@@ -69,6 +69,12 @@ class LoginUserTestCase(TestCase):
                 # The address this session belongs to, so the app can
                 # send a user who landed on the wrong host to their own.
                 "subdomain",
+                # Whether this session may enter the platform console.
+                # The console's route guard has nothing else to read.
+                "is_platform_admin",
+                # Always false here: only a session opened with an
+                # inspection token reports true.
+                "is_inspecting",
                 "token",
                 "invite",
                 "expiration_time",

@@ -8,7 +8,7 @@
       margin-bottom: 20px;
     }
     .ant-layout {
-      min-height: calc(100vh - #{$header-height});
+      min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
       &.site-layout {
         margin-left: 200px;
         .description-container {
@@ -26,11 +26,11 @@
         top: 0;
         bottom: 0;
         box-shadow: 0px 2px 8px 0px rgba(0, 0, 0, 0.15);
-        margin-top: $header-height;
+        margin-top: calc(#{$header-height} + var(--inspection-offset));
         .ant-layout-sider-children {
           display: flex;
           flex-direction: column;
-          height: calc(100vh - #{$header-height});
+          height: calc(100vh - #{$header-height} - var(--inspection-offset));
           & > div {
             background-color: #fff !important;
           }

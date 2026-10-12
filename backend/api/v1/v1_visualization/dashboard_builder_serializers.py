@@ -135,6 +135,9 @@ def serialize_question(question):
     row = {
         "id": question.id,
         "label": question.label,
+        # VIZ-027 (A4): the builder matches same-named questions across
+        # the family's forms (D-8 warning, D-14 name groups).
+        "name": question.name,
         # "Multiple_Option" -> "multiple_option". BuilderInspector
         # compares against lowercase literals, so the map is lowercased
         # at the boundary rather than duplicated.
@@ -164,11 +167,21 @@ def serialize_source_form(form, is_root):
     }
     if not is_root:
         row["parent"] = form.parent_id
+    # VIZ-027: the builder's filter picker groups questions, since the
+    # same label can sit in two groups. Question order restarts in every
+    # group, so the group's order leads.
     row["questions"] = [
-        serialize_question(question)
+        {
+            **serialize_question(question),
+            "group": question.question_group.label
+            or question.question_group.name,
+        }
         for question in form.form_questions.filter(
             type__in=SUPPORTED_QUESTION_TYPES
-        ).order_by("order", "id").prefetch_related(
+        )
+        .select_related("question_group")
+        .order_by("question_group__order", "question_group_id", "order", "id")
+        .prefetch_related(
             Prefetch(
                 "options",
                 queryset=QuestionOptions.objects.order_by("order", "id"),
@@ -194,9 +207,7 @@ def serialize_sources(dashboard, user):
     """
     root = dashboard.root_form
     forms = [serialize_source_form(root, is_root=True)]
-    children = Forms.objects.for_user(user).filter(
-        parent=root
-    ).order_by("id")
+    children = Forms.objects.for_user(user).filter(parent=root).order_by("id")
     forms.extend(
         serialize_source_form(child, is_root=False) for child in children
     )
@@ -213,9 +224,21 @@ class SuggestDashboardRequestSerializer(serializers.Serializer):
     )
 
 
+class ExistingWidgetDescriptorSerializer(serializers.Serializer):
+    type = serializers.CharField(required=False, allow_null=True)
+    form = serializers.IntegerField(required=False, allow_null=True)
+    question = serializers.IntegerField(required=False, allow_null=True)
+    config = serializers.DictField(required=False, allow_null=True)
+
+
 class SuggestWidgetsRequestSerializer(serializers.Serializer):
     existing_widget_types = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
+    )
+    existing_widgets = serializers.ListField(
+        child=ExistingWidgetDescriptorSerializer(),
+        required=False,
+        default=list,
     )
     prompt_hint = serializers.CharField(
         required=False, allow_blank=True, max_length=250, default=""

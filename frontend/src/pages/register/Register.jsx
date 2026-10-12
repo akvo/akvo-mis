@@ -1,18 +1,29 @@
 import React, { useState } from "react";
 import "../login/style.scss";
-import { Row, Col, Form, Input, Button, Typography } from "antd";
+import { Row, Col, Form, Input, Select, Button, Typography } from "antd";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { baseDomainHost } from "../../util/tenant";
 
 const { Title, Text } = Typography;
+
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "fr", label: "Français" },
+];
+
+// Keys the API may return in `details` that correspond to inputs on
+// this form. Anything else has no field to land on and stays a toast.
+const FORM_FIELDS = ["email", "password", "subdomain", "language"];
+
 // Phase 1 of sign-up: just enough to claim a workspace. There is no login
 // here — the account is inactive until the emailed link is followed — so the
 // form ends on a confirmation state rather than a redirect.
 const Register = () => {
   const [loading, setLoading] = useState(false);
   const [sentTo, setSentTo] = useState(null);
+  const [form] = Form.useForm();
   const { notify } = useNotification();
   const { resend, resending } = useResendActivation();
   const [searchParams] = useSearchParams();
@@ -34,11 +45,27 @@ const Register = () => {
         email: values.email,
         password: values.password,
         subdomain: values.subdomain,
+        language: values.language,
       })
       .then(() => {
         setSentTo(values.email);
       })
       .catch((err) => {
+        // A field error belongs under the field. The API answers a 400
+        // with {message, details}; `details` is keyed by field name,
+        // so anything matching an input on this form is pushed onto
+        // it and the toast is kept for errors with nowhere to land.
+        const details = err.response?.data?.details || {};
+        const fields = Object.entries(details)
+          .filter(([name]) => FORM_FIELDS.includes(name))
+          .map(([name, errors]) => ({
+            name,
+            errors: Array.isArray(errors) ? errors : [errors],
+          }));
+        if (fields.length) {
+          form.setFields(fields);
+          return;
+        }
         notify({
           type: "error",
           message: err.response?.data?.message || "Registration failed",
@@ -123,10 +150,14 @@ const Register = () => {
             <h1>Create your workspace</h1>
             <p className="disclaimer">You&apos;ll verify your email next.</p>
             <Form
+              form={form}
               name="register-form"
               layout="vertical"
               onFinish={onFinish}
-              initialValues={{ subdomain: suggestedSubdomain }}
+              initialValues={{
+                subdomain: suggestedSubdomain,
+                language: "en",
+              }}
             >
               <Form.Item
                 name="email"
@@ -184,15 +215,35 @@ const Register = () => {
                 />
               </Form.Item>
               <Form.Item
+                name="language"
+                label="Workspace language"
+                rules={[
+                  {
+                    required: true,
+                    message: "Please select a workspace language.",
+                  },
+                ]}
+              >
+                <Select
+                  options={LANGUAGE_OPTIONS}
+                  disabled={loading}
+                  placeholder="Select language"
+                />
+              </Form.Item>
+              <Form.Item
                 name="subdomain"
                 label="Workspace address"
-                extra="Lowercase letters, numbers and hyphens. This becomes your web address and can't be changed later."
+                extra="At least 3 characters: lowercase letters, numbers and hyphens. This becomes your web address and can't be changed later."
                 rules={[
                   {
                     required: true,
                     pattern: /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
                     message:
                       "Use lowercase letters, numbers and hyphens — no spaces, no leading or trailing hyphen.",
+                  },
+                  {
+                    min: 3,
+                    message: "Workspace name must be at least 3 characters.",
                   },
                 ]}
               >

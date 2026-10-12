@@ -33,7 +33,7 @@
       }
     }
     .ant-layout {
-      min-height: calc(100vh - $header-height);
+      min-height: calc(100vh - #{$header-height} - var(--inspection-offset));
       &.site-layout {
         margin-left: 200px;
         .description-container {
@@ -51,7 +51,7 @@
         top: 0;
         bottom: 0;
         box-shadow: 0px 2px 8px 0px rgba(0, 0, 0, 0.15);
-        margin-top: $header-height;
+        margin-top: calc(#{$header-height} + var(--inspection-offset));
         .ant-menu-item {
           padding: 0px 16px !important;
           margin-bottom: 0px;

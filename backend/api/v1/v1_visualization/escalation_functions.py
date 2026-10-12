@@ -6,6 +6,7 @@ from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_visualization.functions import (
     apply_administration_filter,
     apply_criteria_to_monitoring_qs,
+    apply_global_filters,
     apply_parent_criteria_to_qs,
     build_date_filters,
     latest_monitoring_subquery,
@@ -259,6 +260,9 @@ def handle_escalation(
         parents = apply_parent_criteria_to_qs(
             parents, True, parent_criteria,
         )
+
+    # VIZ-027: rows are registrations (D-3).
+    parents = apply_global_filters(parents, "id", parent_form.id, params)
 
     latest_ids = list(
         parents.values_list("latest_id", flat=True)

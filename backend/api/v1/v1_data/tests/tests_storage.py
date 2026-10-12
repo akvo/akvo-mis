@@ -39,6 +39,19 @@ class StorageTestCase(TestCase):
         self.assertEqual(uploaded_file, f"{STORAGE_PATH}/test/{filename}")
         os.remove(filename)
 
+    def test_upload_is_world_readable_from_a_private_source(self):
+        # Temp files are created 0600; nginx must still be able to serve them
+        filename = generate_file("test", hex=True)
+        os.chmod(filename, 0o600)
+        target = f"{STORAGE_PATH}/test/{filename}"
+        # An existing 0600 file must not keep its mode on overwrite
+        storage.upload(file=filename, folder="test")
+        os.chmod(target, 0o600)
+        uploaded_file = storage.upload(file=filename, folder="test")
+        self.assertEqual(os.stat(uploaded_file).st_mode & 0o777, 0o644)
+        storage.delete(f"test/{filename}")
+        os.remove(filename)
+
     def test_upload_with_custom_filename(self):
         custom_filename = "custom-filename-test.txt"
         filename = generate_file("test")

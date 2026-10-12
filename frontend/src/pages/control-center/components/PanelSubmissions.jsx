@@ -47,24 +47,37 @@ const PanelSubmissions = () => {
       setModalButton(false);
     }
     if (
-      selectedTab === "pending-batch" ||
-      selectedTab === "approved-batch" ||
-      selectedForm
+      selectedTab !== "pending-batch" &&
+      selectedTab !== "approved-batch" &&
+      !selectedForm
     ) {
-      setLoading(true);
-      api
-        .get(url)
-        .then((res) => {
-          setDataset(res.data.data);
-          setTotalCount(res.data.total);
-          setLoading(false);
-        })
-        .catch(() => {
-          setDataset([]);
-          setTotalCount(0);
-          setLoading(false);
-        });
+      return () => {};
     }
+    // Ignore a slow response for a previous tab/page so pending rows
+    // never render as batches with no approvers
+    let active = true;
+    setLoading(true);
+    api
+      .get(url)
+      .then((res) => {
+        if (!active) {
+          return;
+        }
+        setDataset(res.data.data);
+        setTotalCount(res.data.total);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setDataset([]);
+        setTotalCount(0);
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [selectedTab, selectedForm, currentPage]);
 
   useEffect(() => {

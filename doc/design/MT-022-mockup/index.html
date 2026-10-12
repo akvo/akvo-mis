@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MT-022 mockups — Platform admin console</title>
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+
+  <header class="chrome">
+    <a class="home" href="index.html">MT-022 mockups</a>
+    <nav>
+      <a href="tenants.html">Tenants</a>
+      <a href="tenant-detail.html">Tenant detail</a>
+      <a href="rename.html">Rename dialog</a>
+      <a href="operators.html">Operators</a>
+      <a href="inspecting.html">Inspecting</a>
+    </nav>
+  </header>
+
+  <div class="intro">
+    <h1>Platform admin console</h1>
+    <p class="lede">
+      Static mockups for MT-022 (console UI) and MT-023 (inspection).
+      Open any file directly in a browser &mdash; no build step, no
+      server.
+    </p>
+    <p>
+      These use the tokens already in
+      <code>frontend/src/variables.scss</code>: Poppins,
+      <code>$blue #1651b6</code>, the white 86&nbsp;px header,
+      <code>$bg-page #f0f2f5</code>, 6&nbsp;px radius, round buttons.
+      Nothing here proposes a new design language, and the console is
+      built from the same antd components <code>control-center</code>
+      already uses.
+    </p>
+    <p>
+      Artboards are fixed at desktop width. They do not reflow, because
+      a responsive console is not something this design commits to yet.
+    </p>
+  </div>
+
+  <div class="cards">
+
+    <a class="card" href="tenants.html">
+      <h2>Tenants</h2>
+      <p>
+        The landing page. One row per workspace with the counts from the
+        single-query summary endpoint. Note that <em>Inspect</em> is
+        greyed out for the suspended and deleted rows &mdash; their hosts
+        no longer resolve, so the link would open a 404.
+      </p>
+      <span class="doc">MT-022 &sect;4</span>
+    </a>
+
+    <a class="card" href="tenant-detail.html">
+      <h2>Tenant detail</h2>
+      <p>
+        Counts, the people in the workspace, the entitlement switches and
+        the danger zone. A deactivated user's row says how many of their
+        devices are blocked, because that consequence is the point of the
+        action and is otherwise invisible.
+      </p>
+      <span class="doc">MT-022 &sect;5</span>
+    </a>
+
+    <a class="card" href="rename.html">
+      <h2>Rename dialog</h2>
+      <p>
+        The impact is stated as live counts fetched for this workspace,
+        not as a generic warning. Confirming needs both the typed
+        subdomain and a successfully loaded preflight.
+      </p>
+      <span class="doc">MT-022 &sect;6 &middot; MT-021 &sect;5</span>
+    </a>
+
+    <a class="card" href="operators.html">
+      <h2>Operators</h2>
+      <p>
+        List, invite and revoke. The page says where the first operator
+        comes from, because nobody can invite themselves and the empty
+        state on a fresh deployment otherwise reads as a bug.
+      </p>
+      <span class="doc">MT-022 &sect;7 &middot; MT-021 &sect;8</span>
+    </a>
+
+    <a class="card" href="inspecting.html">
+      <h2>Inspecting</h2>
+      <p>
+        A workspace's own app during a read-only inspection, with the
+        workspace switcher open. The banner is the only thing inspection
+        adds &mdash; everything below it is the workspace's own layout and
+        components, unchanged.
+      </p>
+      <span class="doc">MT-023 &sect;9</span>
+    </a>
+
+  </div>
+
+  <div class="note">
+    <strong>Two screens deliberately absent.</strong>
+    There is no sign-in mockup: the console reuses the app's existing
+    <code>/login</code> page unchanged, served on the admin host, so
+    drawing it would only invite someone to redesign it. There is no
+    switch-flow diagram either &mdash; it compared two options, and the
+    banner switcher shown on <a href="inspecting.html">Inspecting</a> is
+    the one that was chosen.
+  </div>
+
+</body>
+</html>

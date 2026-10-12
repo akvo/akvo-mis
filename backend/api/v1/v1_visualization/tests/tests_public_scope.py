@@ -155,6 +155,30 @@ class AllowlistTestCase(TestCase):
         ])
         self.assertEqual(allowed.forms, {6001, 6002})
 
+    def test_a_line_period_question_is_collected(self):
+        # A line's own X-axis date reaches /values as
+        # period_question_id; the dashboard's date filter stays apart.
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {"date_question_id": 600204},
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203, 600204})
+
+    def test_a_line_category_question_is_collected(self):
+        # A line grouped by category sends it as question_id instead of
+        # the widget's own question, so check_ids sees this id.
+        allowed = self.build([
+            {
+                "form": 6002,
+                "question": 600203,
+                "config": {"category_question_id": 600205},
+            },
+        ])
+        self.assertEqual(allowed.questions, {600203, 600205})
+
     def test_a_value_question_is_collected(self):
         allowed = self.build([
             {
@@ -333,7 +357,9 @@ class IdExtractionTestCase(TestCase):
 
 class CheckIdsTestCase(TestCase):
     def setUp(self):
-        self.allowed = Allowlist(forms={6001}, questions={600101})
+        self.allowed = Allowlist(
+            forms={6001}, questions={600101}, filter_questions=set()
+        )
 
     def test_permitted_ids_pass(self):
         check_ids(self.allowed, form_ids=[6001], question_ids=[600101])

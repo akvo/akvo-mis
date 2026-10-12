@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 import sys
 from datetime import timedelta
+from django.core.exceptions import ImproperlyConfigured
 from os import environ
 from pathlib import Path
 
@@ -75,6 +76,12 @@ TESTING = sys.argv[1:2] == ["test"]
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 
+# The label the platform console answers on, under BASE_DOMAIN -- see
+# env.example and doc/notes/platform-console.md. Normalised here and
+# nowhere else: "" would put the console at ".<BASE_DOMAIN>", which no
+# browser sends, so empty means the default rather than the apex.
+ADMIN_SUBDOMAIN = environ.get("ADMIN_SUBDOMAIN", "admin") or "admin"
+
 # Origin that serves embedded dashboards' author markup, e.g.
 # "https://embed.example.com". It MUST NOT be this application's origin:
 # the whole point is that a pasted snippet runs somewhere its scripts
@@ -85,18 +92,23 @@ BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
 # scripting hole the separate origin exists to prevent.
 EMBED_HOST = environ.get("EMBED_HOST", "")
 
-# Subdomains of the workspaces entitled to embedding, comma-separated,
-# e.g. "acme,globex". Empty entitles nobody. See `tenant_may_embed()`,
-# which is the only reader and explains why both this and EMBED_HOST
-# are required.
-EMBED_TENANTS = frozenset(
-    part.strip().lower()
-    for part in environ.get("EMBED_TENANTS", "").split(",")
-    if part.strip()
-)
-
 
 ALLOWED_HOSTS = ["*"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://*.ngrok.io",
+    "https://*.ngrok-free.app",
+    "https://*.sslip.io",
+]
+if BASE_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f"https://*.{BASE_DOMAIN}",
+        f"https://{BASE_DOMAIN}",
+        f"http://*.{BASE_DOMAIN}",
+        f"http://{BASE_DOMAIN}",
+    ])
 
 # Application definition
 
@@ -181,7 +193,11 @@ WSGI_APPLICATION = "mis.wsgi.application"
 # Rest Settings
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "api.v1.v1_mobile.authentication.AssignmentAwareJWTAuthentication",
+        # Subclasses the mobile one, which it replaces rather than joins:
+        # inspection has to be recognised everywhere, and a second entry
+        # would only mean whichever ran first decided.
+        "api.v1.v1_users.authentication."
+        "InspectionAwareJWTAuthentication",
     ),
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
     "DATE_FORMAT": "%d-%m-%Y",
@@ -206,6 +222,7 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": (
         "rest_framework_simplejwt.tokens.AccessToken",
         "api.v1.v1_mobile.authentication.MobileAssignmentToken",
+        "api.v1.v1_users.authentication.TenantInspectionToken",
     ),
 }
 # Database
@@ -309,6 +326,24 @@ FORM_IMPORT_MAX_FILE_SIZE = int(
     environ.get("FORM_IMPORT_MAX_FILE_SIZE", 5 * 1024 * 1024)
 )
 
+# How long a workspace has to finish /register/configure before it is
+# purged (see api/v1/v1_users/tasks.py). This is also the activation
+# link's lifetime: a link that outlived the workspace it activates
+# would verify an account whose tenant had already been deleted, so
+# the two numbers are one setting rather than two that can disagree.
+TENANT_PURGE_AFTER_HOURS = int(
+    environ.get("TENANT_PURGE_AFTER_HOURS") or 48
+)
+# Refused at boot rather than defended against at every read: zero or
+# less would purge a workspace registered a second ago and expire every
+# activation link as it was issued.
+if TENANT_PURGE_AFTER_HOURS < 1:
+    raise ImproperlyConfigured(
+        "TENANT_PURGE_AFTER_HOURS must be at least 1; got {0}.".format(
+            TENANT_PURGE_AFTER_HOURS
+        )
+    )
+
 BUCKET_NAME = "mis"
 FAKE_STORAGE = False
 
@@ -395,3 +430,22 @@ LOGGING = {
         "level": environ.get("LOG_LEVEL", "INFO"),
     },
 }
+
+# Matomo Analytics
+MATOMO_URL = environ.get("MATOMO_URL", "").rstrip("/")
+MATOMO_SITE_ID = (
+    int(environ["MATOMO_SITE_ID"])
+    if environ.get("MATOMO_SITE_ID")
+    else None
+)
+MATOMO_AUTH_TOKEN = environ.get("MATOMO_AUTH_TOKEN", "")
+MATOMO_DIM_TENANT = (
+    int(environ["MATOMO_DIM_TENANT"])
+    if environ.get("MATOMO_DIM_TENANT")
+    else None
+)
+MATOMO_DIM_SUBDOMAIN = (
+    int(environ["MATOMO_DIM_SUBDOMAIN"])
+    if environ.get("MATOMO_DIM_SUBDOMAIN")
+    else None
+)

@@ -13,7 +13,7 @@ const ControlCenter = () => {
 
   const { active: activeLang } = language;
   const text = useMemo(() => {
-    return uiText[activeLang];
+    return uiText[activeLang] || uiText.en;
   }, [activeLang]);
 
   return (
@@ -34,17 +34,19 @@ const ControlCenter = () => {
 
         <div className="profile-container">
           <h2>
-            {window.appConfig.name} {text.controlCenter}
+            {window?.appConfig?.name || "Akvo MIS"} {text.controlCenter}
           </h2>
           <div className="profle-wrapper">
             <div>
-              <h2>{`${text.helloText} ${authUser?.name}`}</h2>
+              <h2>{`${text.helloText} ${authUser?.name || ""}`}</h2>
               <p>
                 {`${text.lastLoginLabel}: `}
-                {new Date(authUser?.last_login * 1000)
-                  .toISOString()
-                  .replace("T", " ")
-                  .slice(0, 19)}
+                {authUser?.last_login
+                  ? new Date(authUser.last_login * 1000)
+                      .toISOString()
+                      .replace("T", " ")
+                      .slice(0, 19)
+                  : "-"}
               </p>
             </div>
           </div>

@@ -28,7 +28,10 @@ from api.v1.v1_visualization.constants import DashboardKind, DashboardStatus
 from api.v1.v1_visualization.dashboard_functions import (
     normalize_table_columns,
 )
-from api.v1.v1_visualization.dashboard_snapshot import annotate_broken
+from api.v1.v1_visualization.dashboard_snapshot import (
+    annotate_broken,
+    live_filter_questions,
+)
 from api.v1.v1_visualization.embed_views import embed_url_for
 from api.v1.v1_visualization.models import Dashboard
 from api.v1.v1_visualization.public_scope import has_any_dashboard_access
@@ -208,7 +211,11 @@ class DashboardReadViewSet(viewsets.GenericViewSet):
         dashboard = self.get_object()
         snapshot = read_snapshot(dashboard)
         row = serialize_identity(dashboard)
-        row["default_filters"] = snapshot["default_filters"]
+        # VIZ-027: a filter question deleted since Publish leaves the bar
+        # rather than turning every widget into a 400.
+        row["default_filters"] = live_filter_questions(
+            snapshot["default_filters"], dashboard.tenant
+        )
         # A URL on the embed host, not the markup itself: viewers
         # never run a snippet in this origin (VIZ-019 D-4a). None when
         # EMBED_HOST is unconfigured or this workspace is not entitled

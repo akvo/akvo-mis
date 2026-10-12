@@ -1,0 +1,518 @@
+from django.db import connection
+from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
+
+from api.v1.v1_data.models import FormData
+from api.v1.v1_forms.constants import FormStatus
+from api.v1.v1_forms.models import Forms
+from api.v1.v1_mobile.models import MobileAssignment
+from api.v1.v1_profile.models import Administration
+from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
+from api.v1.v1_users.admin_views import console_tenants, with_counts
+from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_visualization.constants import DashboardKind
+from api.v1.v1_visualization.models import Dashboard
+
+ADMIN_HOST = "admin.app.com"
+SUMMARY = "/api/v1/admin/tenants/summary"
+
+
+@override_settings(BASE_DOMAIN="app.com")
+class AdminSummaryTestCase(TestCase, TenantTestHelperMixin):
+    """Counts only. No workspace content crosses this boundary."""
+
+    def setUp(self):
+        self.acme = self.create_tenant("acme", ["Country", "D"], "Kenya")
+        self.beta = self.create_tenant("beta", ["Country", "D"], "Uganda")
+        self.operator = SystemUser.objects.create(
+            email="ops@akvo.org", is_platform_admin=True, tenant=None
+        )
+        self.auth = self.bearer(self.operator)
+        self.seed(self.acme, forms=2, datapoints=3)
+        self.seed(self.beta, forms=1, datapoints=1)
+
+    def seed(self, fixture, forms, datapoints):
+        child = Administration.objects.create(
+            parent=fixture.root, level=fixture.levels[1],
+            name=f"{fixture.tenant.subdomain}-d", tenant=fixture.tenant,
+        )
+        made = [
+            Forms.objects.create(
+                name=f"{fixture.tenant.subdomain}-{index}",
+                tenant=fixture.tenant, status=FormStatus.published,
+            )
+            for index in range(forms)
+        ]
+        for index in range(datapoints):
+            FormData.objects.create(
+                name=f"dp-{index}", form=made[0], administration=child,
+                created_by=fixture.admin,
+            )
+        MobileAssignment.objects.create_assignment(
+            user=fixture.admin, name="device-1"
+        )
+
+    def rows(self, query=""):
+        response = self.client.get(
+            SUMMARY + query, HTTP_HOST=ADMIN_HOST, **self.auth
+        )
+        self.assertEqual(response.status_code, 200)
+        return {row["subdomain"]: row for row in response.json()["data"]}
+
+    def test_the_response_is_the_house_envelope(self):
+        # The same four keys every other paginated table in the
+        # application reads. A console with a shape of its own would be
+        # a second thing to learn for no gain.
+        #
+        # Counted from the table rather than written as a literal.
+        # 0004_backfill_default_tenant puts a `default` workspace in
+        # every database, the test one included, so setUp's two are
+        # never the whole of it -- and an assertion against the table is
+        # the stronger one anyway: it fails if the endpoint drops a row
+        # as well as if it invents one.
+        expected = Tenant.objects.count()
+        body = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(body["current"], 1)
+        self.assertEqual(body["total"], expected)
+        self.assertEqual(body["total_page"], 1)
+        self.assertEqual(len(body["data"]), expected)
+
+    def test_a_second_page_holds_the_workspaces_the_first_did_not(self):
+        # Enough workspaces for one full page and a short one. The
+        # assertion that matters is not "there are two pages" but "the
+        # two pages partition the set" -- a paginator that silently
+        # repeats rows still reports two pages.
+        for index in range(26):
+            self.create_tenant(
+                "w{0:02d}".format(index), ["Country", "D"],
+                "Root {0}".format(index),
+            )
+        expected = Tenant.objects.count()
+        self.assertGreater(expected, 25)
+        first = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        second = self.client.get(
+            SUMMARY + "?page=2", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(first["total"], expected)
+        self.assertEqual(first["total_page"], 2)
+        self.assertEqual(len(first["data"]), 25)
+        self.assertEqual(len(second["data"]), expected - 25)
+        on_first = set(row["subdomain"] for row in first["data"])
+        on_second = set(row["subdomain"] for row in second["data"])
+        self.assertEqual(on_first & on_second, set())
+        self.assertEqual(len(on_first | on_second), expected)
+
+    def test_a_page_past_the_end_is_refused(self):
+        # DRF's own behaviour, pinned because the console has to cope
+        # with it: a workspace deleted between two requests can shrink
+        # the result out from under the page an operator is standing on.
+        response = self.client.get(
+            SUMMARY + "?page=99", HTTP_HOST=ADMIN_HOST, **self.auth
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_counts_are_per_workspace(self):
+        rows = self.rows()
+        self.assertEqual(rows["acme"]["forms"], 2)
+        self.assertEqual(rows["acme"]["datapoints"], 3)
+        self.assertEqual(rows["beta"]["forms"], 1)
+        self.assertEqual(rows["beta"]["datapoints"], 1)
+
+    def test_counts_users_and_devices(self):
+        rows = self.rows()
+        self.assertEqual(rows["acme"]["users"], 1)
+        self.assertEqual(rows["acme"]["devices"], 1)
+
+    def test_soft_deleted_rows_are_excluded(self):
+        FormData.objects.filter(
+            form__tenant=self.acme.tenant
+        ).first().delete()
+        self.assertEqual(self.rows()["acme"]["datapoints"], 2)
+
+    def test_search_matches_the_subdomain(self):
+        self.assertEqual(list(self.rows("?search=acm")), ["acme"])
+
+    def test_search_matches_the_workspace_name(self):
+        # The name is the root administration unit's, not a column on
+        # Tenant -- see TenantListSerializer.get_name. An operator
+        # looking for a workspace knows the organisation, not the
+        # address, and the console has always searched both. Moving the
+        # filter to the server must not quietly narrow it to subdomains.
+        self.assertEqual(list(self.rows("?search=keny")), ["acme"])
+
+    def test_a_whitespace_only_search_is_no_search(self):
+        # What a cleared search box can send. Treated as a filter it
+        # matches nothing, and the console tells an operator who just
+        # cleared a box that the deployment is empty.
+        self.assertEqual(
+            len(self.rows("?search=%20%20")), Tenant.objects.count()
+        )
+
+    def test_an_unconfigured_workspace_lists_and_is_still_searchable(self):
+        # A subdomain claimed by /register phase 1 and never configured
+        # owns no Administration at all, so its name is "" and the name
+        # half of the search can never match it. It must still appear --
+        # the console is the only place its state can be explained --
+        # and its address must still find it.
+        Tenant.objects.create(subdomain="claimed")
+        self.assertIn("claimed", self.rows())
+        found = self.rows("?search=claim")
+        self.assertEqual(list(found), ["claimed"])
+        self.assertEqual(found["claimed"]["name"], "")
+
+    def test_state_narrows_the_page_and_the_total(self):
+        self.beta.tenant.is_active = False
+        self.beta.tenant.save(update_fields=["is_active"])
+        body = self.client.get(
+            SUMMARY + "?state=suspended", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(
+            [row["subdomain"] for row in body["data"]], ["beta"]
+        )
+
+    def test_an_unknown_state_is_refused_rather_than_ignored(self):
+        # Returning everything for a typo would read to an operator as
+        # "this deployment has no suspended workspaces", which is a lie
+        # that looks like an answer.
+        response = self.client.get(
+            SUMMARY + "?state=suspdended", HTTP_HOST=ADMIN_HOST, **self.auth
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unknown state", response.json()["message"])
+
+    def test_the_default_order_is_by_subdomain(self):
+        # Asserted against the table rather than a fixed list, per the
+        # same reasoning as the envelope test: the migration's `default`
+        # workspace is in every database and is not this test's subject.
+        self.assertEqual(
+            list(self.rows()),
+            sorted(Tenant.objects.values_list("subdomain", flat=True)),
+        )
+
+    def test_ordering_by_a_count_descends(self):
+        # acme holds 3 datapoints, beta 1, and `default` none. Asserted
+        # as a monotonic sequence rather than a fixed list of
+        # subdomains, so the test says what it means -- the server
+        # ordered by the column it was asked for -- and does not have to
+        # be rewritten every time a fixture gains a workspace.
+        descending = self.rows("?ordering=-datapoints")
+        self.assertEqual(list(descending)[0], "acme")
+        counts = [row["datapoints"] for row in descending.values()]
+        self.assertEqual(counts, sorted(counts, reverse=True))
+
+        ascending = self.rows("?ordering=datapoints")
+        self.assertEqual(list(ascending)[-1], "acme")
+        counts = [row["datapoints"] for row in ascending.values()]
+        self.assertEqual(counts, sorted(counts))
+
+    def test_an_unknown_ordering_is_refused(self):
+        response = self.client.get(
+            SUMMARY + "?ordering=datapoint", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unknown ordering", response.json()["message"])
+
+    def test_tied_counts_still_page_deterministically(self):
+        # Every workspace here holds zero dashboards, so ordering by
+        # that column is not a total order and PostgreSQL may return
+        # tied rows in any order it likes -- differently for OFFSET 0
+        # than for OFFSET 25. Without the pk tiebreaker the symptom is a
+        # workspace appearing on both pages while another appears on
+        # neither, intermittently, which is about as unpleasant a bug as
+        # this feature can produce.
+        for index in range(30):
+            self.create_tenant(
+                "w{0:02d}".format(index), ["Country", "D"],
+                "Root {0}".format(index),
+            )
+        expected = Tenant.objects.count()
+        self.assertGreater(expected, 25)
+        seen = []
+        for page in (1, 2):
+            body = self.client.get(
+                "{0}?ordering=dashboards&page={1}".format(SUMMARY, page),
+                HTTP_HOST=ADMIN_HOST, **self.auth,
+            ).json()
+            seen.extend(row["subdomain"] for row in body["data"])
+        self.assertEqual(len(seen), expected)
+        self.assertEqual(len(set(seen)), expected)
+
+    def test_the_totals_describe_the_filter_and_not_the_page(self):
+        # The test this whole feature turns on. Seed more workspaces
+        # than fit on a page, then assert that both pages report the
+        # same totals and that those totals cover every workspace --
+        # not the 25 the page happens to hold. Summing the page would
+        # produce a number that changes when you click "next", which
+        # still looks like a total.
+        for index in range(26):
+            self.create_tenant(
+                "w{0:02d}".format(index), ["Country", "D"],
+                "Root {0}".format(index),
+            )
+        first = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        second = self.client.get(
+            SUMMARY + "?page=2", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(first["summary"], second["summary"])
+        # setUp: acme 2 forms + 3 datapoints, beta 1 form + 1 datapoint,
+        # one user and one device each. The 26 new ones have one user
+        # each and nothing else, and the migration's `default` workspace
+        # has nothing at all.
+        self.assertEqual(first["summary"]["forms"], 3)
+        self.assertEqual(first["summary"]["datapoints"], 4)
+        self.assertEqual(first["summary"]["users"], 28)
+        self.assertEqual(first["summary"]["devices"], 2)
+
+    def test_the_totals_ignore_the_ordering(self):
+        # Reordering a set does not change what it sums to. Worth
+        # pinning because the aggregate runs on the same queryset the
+        # rows come from, and it would be easy to compute it after the
+        # order_by and let an ORDER BY leak into the grouping.
+        plain = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()["summary"]
+        sorted_desc = self.client.get(
+            SUMMARY + "?ordering=-datapoints", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        ).json()["summary"]
+        self.assertEqual(plain, sorted_desc)
+
+    def test_the_totals_follow_the_state_filter(self):
+        self.beta.tenant.is_active = False
+        self.beta.tenant.save(update_fields=["is_active"])
+        body = self.client.get(
+            SUMMARY + "?state=suspended", HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        # beta alone: one form, one datapoint, one user, one device.
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(body["summary"]["forms"], 1)
+        self.assertEqual(body["summary"]["datapoints"], 1)
+
+    def test_the_totals_survive_a_search_and_an_ordering_together(self):
+        # The search adds an Exists subquery, the rows carry five
+        # DISTINCT-counting joins and the totals aggregate over those
+        # annotations. All three in one request is where row
+        # multiplication would show up, and it would show up as counts
+        # that are too high rather than as an error.
+        body = self.client.get(
+            SUMMARY + "?search=acme&ordering=-datapoints",
+            HTTP_HOST=ADMIN_HOST, **self.auth,
+        ).json()
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(body["data"][0]["datapoints"], 3)
+        self.assertEqual(body["summary"]["datapoints"], 3)
+        self.assertEqual(body["summary"]["forms"], 2)
+
+    def test_a_filter_that_matches_nothing_totals_to_zero_not_null(self):
+        # Sum over an empty set is NULL. A filter matching nothing is a
+        # normal outcome -- an operator searching for a workspace that
+        # does not exist -- and the console shows six zeroes, because
+        # "nothing matched" is a result. Six blanks would read as a
+        # failed request.
+        body = self.client.get(
+            SUMMARY + "?search=nosuchworkspace", HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        ).json()
+        self.assertEqual(body["total"], 0)
+        self.assertEqual(
+            body["summary"],
+            {"users": 0, "forms": 0, "dashboards": 0,
+             "datapoints": 0, "devices": 0},
+        )
+
+    def test_deleted_workspaces_are_listed_and_counted_under_no_filter(self):
+        # Specified, not accidental: the counts describe the filter, and
+        # the unfiltered list includes deleted workspaces. It is also
+        # why the Workspaces tile is not a count of live customers.
+        before = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.client.delete(
+            "/api/v1/admin/tenants/{0}".format(self.beta.tenant.pk),
+            HTTP_HOST=ADMIN_HOST, **self.auth,
+        )
+        after = self.client.get(
+            SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth
+        ).json()
+        self.assertEqual(after["total"], before["total"])
+        self.assertEqual(after["summary"], before["summary"])
+
+    def test_the_published_schema_matches_what_the_endpoint_returns(self):
+        """The API documentation is part of the response contract.
+
+        drf-spectacular reads a paginator off `view.pagination_class`,
+        which only `GenericAPIView` has -- `@api_view` wraps a plain
+        `APIView`. So a paginator's `get_paginated_response_schema` is
+        never consulted for a function-based view, and this endpoint
+        went from being documented accurately (a bare array, which is
+        what it returned) to being documented wrongly the moment it
+        started returning an envelope. Every paginated endpoint in this
+        codebase is a function-based view with the same problem, which
+        is why `v1_data.views` declares its envelope with
+        `inline_serializer` by hand.
+        """
+        from drf_spectacular.generators import SchemaGenerator
+
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        operation = schema["paths"][SUMMARY]["get"]
+
+        self.assertEqual(
+            sorted(p["name"] for p in operation.get("parameters", [])),
+            ["ordering", "page", "page_size", "search", "state"],
+        )
+
+        body = operation["responses"]["200"]["content"]["application/json"]
+        component = body["schema"]["$ref"].rsplit("/", 1)[-1]
+        self.assertEqual(
+            sorted(schema["components"]["schemas"][component]["properties"]),
+            ["current", "data", "summary", "total", "total_page"],
+        )
+
+    def test_the_counts_do_not_group_the_outer_query(self):
+        """Five counts, five relations, one row each -- not one join.
+
+        This pins the mechanism rather than the output, and it is the
+        one case where that is the right test: the defect is cost, not
+        answers. The join form returns correct numbers and computes them
+        by producing the Cartesian product of all five relations per
+        workspace before de-duplicating -- users x devices x forms x
+        datapoints x dashboards. On a workspace holding 128k datapoints,
+        47 users and 23 devices that is ~700 million intermediate rows
+        for five integers, and the console takes over a minute to draw a
+        page. The numbers it eventually shows are right, so no
+        assertion about output can catch it.
+
+        Five LEFT OUTER JOINs onto the tenant row is the signature of
+        the join form, and the multiplication is theirs: each one fans
+        every row out by the next one's row count. A correlated subquery
+        joins nothing to the outer row -- it groups internally, one row
+        in and one row out, which is why this asserts on the join rather
+        than on the grouping.
+        """
+        sql = str(with_counts(console_tenants()).query).upper()
+        self.assertNotIn("LEFT OUTER JOIN", sql)
+
+    def test_counts_are_right_when_every_relation_is_populated(self):
+        """The test that makes the rewrite safe rather than merely fast.
+
+        One count over one relation is easy to get right in any form.
+        Five counts over five relations in the same row is where a
+        rewrite goes wrong -- lose the isolation of one and it
+        multiplies by the others. Every expected number here is
+        different from every other, so a count that has multiplied
+        cannot land on the right answer by luck.
+        """
+        acme = self.acme.tenant
+        # setUp leaves acme with 1 user, 2 forms, 3 datapoints, 1 device
+        # and no dashboards. Take each to its own distinct value.
+        extra_users = [
+            SystemUser.objects.create(
+                email="person{0}@acme.org".format(index), tenant=acme
+            )
+            for index in range(2)
+        ]
+        for index, person in enumerate(extra_users):
+            MobileAssignment.objects.create_assignment(
+                user=person, name="extra-device-{0}".format(index)
+            )
+        MobileAssignment.objects.create_assignment(
+            user=self.acme.admin, name="second-device"
+        )
+        form = Forms.objects.filter(tenant=acme).first()
+        for index in range(4):
+            Dashboard.objects.create(
+                tenant=acme, kind=DashboardKind.widgets, root_form=form,
+                name="Dashboard {0}".format(index),
+                slug="acme-dashboard-{0}".format(index),
+                created_by=self.acme.admin,
+            )
+        child = Administration.objects.filter(
+            tenant=acme, parent__isnull=False
+        ).first()
+        for index in range(4):
+            FormData.objects.create(
+                name="extra-dp-{0}".format(index), form=form,
+                administration=child, created_by=self.acme.admin,
+            )
+
+        row = self.rows()["acme"]
+        self.assertEqual(
+            {key: row[key] for key in (
+                "users", "forms", "dashboards", "datapoints", "devices",
+            )},
+            {"users": 3, "forms": 2, "dashboards": 4,
+             "datapoints": 7, "devices": 4},
+        )
+
+    def query_count(self):
+        with CaptureQueriesContext(connection) as captured:
+            self.client.get(SUMMARY, HTTP_HOST=ADMIN_HOST, **self.auth)
+        return len(captured)
+
+    def test_the_cost_does_not_grow_with_the_number_of_workspaces(self):
+        # The invariant worth pinning, rather than an absolute count.
+        # A request to this endpoint pays for host resolution, JWT
+        # authentication and the last_login stamp before the view is
+        # even entered, so the absolute number says more about the
+        # middleware stack than about this query -- while "adding a
+        # workspace costs nothing" is exactly the property that a later
+        # "just one more count" would break.
+        before = self.query_count()
+        self.create_tenant("gamma", ["Country", "D"], "Tanzania")
+        self.assertEqual(self.query_count(), before)
+
+    def counted(self, response):
+        """The five numbers the console's stat tiles are made of."""
+        body = response.json()
+        self.assertEqual(response.status_code, 200)
+        return {key: body.get(key) for key in (
+            "users", "forms", "dashboards", "datapoints", "devices",
+        )}
+
+    def test_every_mutation_answers_with_the_counts_intact(self):
+        # The console assigns each of these responses straight over the
+        # workspace it is displaying, so a body without the counts does
+        # not merely omit them -- it blanks five stat tiles that were on
+        # screen a moment ago, next to a Delete button. One endpoint
+        # carrying them is not enough; every path that returns a
+        # workspace has to.
+        tenant_id = self.acme.tenant.id
+        base = f"/api/v1/admin/tenants/{tenant_id}"
+        # The GET is the baseline and is itself the assertion that the
+        # detail endpoint carries the counts at all: served from the
+        # plain list serializer it renders every tile as zero, and no
+        # frontend test catches that, because the frontend mocks the
+        # shape it expects rather than the shape the endpoint sends.
+        expected = self.counted(
+            self.client.get(base, HTTP_HOST=ADMIN_HOST, **self.auth)
+        )
+        self.assertEqual(
+            expected,
+            {"users": 1, "forms": 2, "dashboards": 0,
+             "datapoints": 3, "devices": 1},
+        )
+
+        mutations = [
+            ("put", f"{base}/features", {"embedded_dashboard": True}),
+            ("post", f"{base}/deactivate", None),
+            ("post", f"{base}/activate", None),
+            ("post", f"{base}/rename", {"subdomain": "acme-renamed"}),
+        ]
+        for method, url, payload in mutations:
+            with self.subTest(url=url):
+                call = getattr(self.client, method)
+                response = (
+                    call(url, payload, content_type="application/json",
+                         HTTP_HOST=ADMIN_HOST, **self.auth)
+                    if payload is not None
+                    else call(url, HTTP_HOST=ADMIN_HOST, **self.auth)
+                )
+                self.assertEqual(self.counted(response), expected)

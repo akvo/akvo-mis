@@ -59,4 +59,8 @@ class IsMobileAssignment(BasePermission):
         if not isinstance(request.auth, MobileAssignmentToken):
             return False
         user = cast(MobileAssignment, request.auth.assignment).user
-        return user.is_active
+        # Both, not just is_active. A soft-deleted account cannot sign
+        # in on the web and must not keep syncing on a device either --
+        # the deletion is the same decision, reached by a different
+        # door.
+        return user.is_active and user.deleted_at is None

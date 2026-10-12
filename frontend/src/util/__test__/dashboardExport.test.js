@@ -1,4 +1,4 @@
-import { freezeAnimations, paginate } from "../dashboardExport";
+import { freezeAnimations, paginate, showExportOnly } from "../dashboardExport";
 
 // =========================================================
 // Page-break arithmetic
@@ -110,6 +110,21 @@ describe("freezeAnimations", () => {
 
     expect(clone.head.querySelector("style").textContent).toContain(
       "*::before"
+    );
+  });
+});
+
+describe("showExportOnly", () => {
+  // The filter bar is controls, which mean nothing on paper; the export
+  // shows a one-line summary of the active filters in their place
+  // (VIZ-027). The summary is hidden on screen and shown only here.
+  test("reveals the export-only elements in the cloned document", () => {
+    const clone = document.implementation.createHTMLDocument("clone");
+
+    showExportOnly(clone);
+
+    expect(clone.head.querySelector("style").textContent).toContain(
+      ".dashboard-export-only { display: block !important; }"
     );
   });
 });

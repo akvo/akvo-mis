@@ -8,7 +8,10 @@ from api.v1.v1_forms.constants import (
     QuestionTypes,
 )
 from api.v1.v1_forms.models import Forms, Questions
-from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_profile.tests.mixins import (
+    ProfileTestHelperMixin,
+    set_embedding,
+)
 from api.v1.v1_users.models import Tenant
 from api.v1.v1_visualization.constants import (
     DashboardKind,
@@ -1071,9 +1074,7 @@ SNIPPET = (
 )
 
 
-@override_settings(
-    EMBED_HOST="http://embed.example.com", EMBED_TENANTS={"default"}
-)
+@override_settings(EMBED_HOST="http://embed.example.com")
 class EmbedValidationTestCase(TestCase, ProfileTestHelperMixin):
     """The embed arm of validate_dashboard_payload (spec D-3, D-4)."""
 
@@ -1086,6 +1087,7 @@ class EmbedValidationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         self.root = Forms.objects.get(pk=6001)
         # The user has a tenant now, so Forms.for_user() scopes to it:
         # the seeded form has to sit on the same row or the widgets arm

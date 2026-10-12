@@ -124,6 +124,30 @@ export const POLYGON_RULES = [
   },
 ];
 
+/**
+ * Keys that mean "this question is validated". `allowTapping` is deliberately absent: it
+ * governs how a boundary may be captured, not whether it is judged, so a question that only
+ * sets it must still look exactly like a plain geoshape (GEO-007 UAC - the Validate button is
+ * not shown when nothing is configured).
+ */
+const VALIDATION_CONFIG_KEYS = [
+  'validateShape',
+  'validateArea',
+  'validateOverlap',
+  'detectOverlaps',
+  'maxAreaHa',
+  'overlapThreshold',
+  'overlapThresholdFloor',
+];
+
+export const hasConfiguredRules = (question) => {
+  const geoConfig = question?.extra?.geoConfig;
+  if (!geoConfig) {
+    return false;
+  }
+  return VALIDATION_CONFIG_KEYS.some((key) => typeof geoConfig[key] !== 'undefined');
+};
+
 const isRealBoolean = (value) => value === true || value === false;
 
 /**
@@ -209,6 +233,22 @@ const I18N_KEYS = {
   selfIntersection: 'geoRuleSelfIntersection',
   minArea: 'geoRuleMinArea',
   maxArea: 'geoRuleMaxArea',
+  /**
+   * Overlap and its refusals (GEO-007). They are listed here rather than in `overlap-check.js`
+   * so every surface keeps formatting failures through one function, whichever rule produced
+   * them. Each refusal cause carries its own sentence because "retry sync" and "reset the app"
+   * are different instructions to the enumerator (D-10).
+   */
+  overlap: 'geoRuleOverlap',
+  overlapMany: 'geoRuleOverlapMany',
+  overlapNotValidated: 'geoRuleOverlapNotValidated',
+  overlapUnavailable_indexNotReady: 'geoRuleOverlapNotReady',
+  overlapUnavailable_syncRunning: 'geoRuleOverlapSyncRunning',
+  overlapUnavailable_syncIncomplete: 'geoRuleOverlapSyncing',
+  overlapUnavailable_indexGapped: 'geoRuleOverlapGapped',
+  overlapUnavailable_indexDrifted: 'geoRuleOverlapDrifted',
+  overlapUnavailable_localFailure: 'geoRuleOverlapDamaged',
+  overlapUnavailable_parentUnmapped: 'geoRuleOverlapNoParent',
 };
 
 /**

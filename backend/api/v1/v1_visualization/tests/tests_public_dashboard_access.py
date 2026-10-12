@@ -13,7 +13,10 @@ from api.v1.v1_profile.models import (
     RoleFeatureAccess,
     UserRole,
 )
-from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
+from api.v1.v1_profile.tests.mixins import (
+    ProfileTestHelperMixin,
+    set_embedding,
+)
 from api.v1.v1_users.models import SystemUser, Tenant
 from api.v1.v1_visualization.constants import (
     DashboardKind,
@@ -670,7 +673,7 @@ class CrossTenantIdEscalationTestCase(TenantIsolationTestCase):
         self.assertEqual(res.status_code, 404)
 
 
-@override_settings(USE_TZ=False, EMBED_TENANTS={"default"})
+@override_settings(USE_TZ=False)
 class PublicEmbedDashboardTestCase(TestCase, ProfileTestHelperMixin):
     """An embed's allowlist is empty — spec D-6.
 
@@ -691,6 +694,7 @@ class PublicEmbedDashboardTestCase(TestCase, ProfileTestHelperMixin):
         # the dashboard has to sit on that same row.
         self.user.tenant = Tenant.objects.get()
         self.user.save()
+        set_embedding(self.user.tenant)
         self.root = Forms.objects.get(pk=6001)
         self.root.tenant = self.user.tenant
         self.root.save()

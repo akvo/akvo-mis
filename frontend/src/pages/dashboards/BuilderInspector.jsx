@@ -16,6 +16,8 @@ import {
   InfoCircleOutlined,
 } from "@ant-design/icons";
 import DashboardVisibilityToggle from "./DashboardVisibilityToggle";
+import DashboardQuestionFilters from "./DashboardQuestionFilters";
+import DashboardDateQuestionPicker from "./DashboardDateQuestionPicker";
 import api from "../../lib/api";
 import { getLevels } from "../../util/level";
 import { mapValueParams } from "../../util/hooks/useWidgetData";
@@ -182,6 +184,7 @@ const QuestionLabel = ({ label, type }) => (
 const BuilderInspector = ({
   widget,
   sources,
+  widgets,
   dashboardName,
   dashboardDesc,
   defaultFilters,
@@ -412,6 +415,21 @@ const BuilderInspector = ({
                 }}
               />
             </label>
+            {defaultFilters?.date?.enabled && (
+              <DashboardDateQuestionPicker
+                forms={forms}
+                value={defaultFilters?.date?.date_question ?? null}
+                onChange={(dateQuestion) =>
+                  onDashboardChange("default_filters", {
+                    ...defaultFilters,
+                    date: {
+                      ...defaultFilters?.date,
+                      date_question: dateQuestion,
+                    },
+                  })
+                }
+              />
+            )}
             <label className="builder-inspector-filter-row">
               Location (administration)
               <Switch
@@ -428,6 +446,18 @@ const BuilderInspector = ({
                 }}
               />
             </label>
+            {/* VIZ-027: the questions the published filter bar offers. */}
+            <DashboardQuestionFilters
+              sources={sources}
+              widgets={widgets}
+              value={defaultFilters?.questions || []}
+              onChange={(questions) =>
+                onDashboardChange("default_filters", {
+                  ...defaultFilters,
+                  questions,
+                })
+              }
+            />
           </div>
 
           <div className="builder-inspector-field">
@@ -2339,6 +2369,9 @@ const BuilderInspector = ({
 BuilderInspector.propTypes = {
   widget: PropTypes.object,
   sources: PropTypes.object,
+  // The canvas's widgets: the filter-question picker suggests the
+  // questions they use first (VIZ-027 D-17).
+  widgets: PropTypes.array,
   dashboardName: PropTypes.string,
   dashboardDesc: PropTypes.string,
   defaultFilters: PropTypes.object,

@@ -1,4 +1,4 @@
-import { polygonArea, polygonAreaHectares } from '../geometry';
+import { fitBoundsFor, polygonArea, polygonAreaHectares } from '../geometry';
 
 describe('polygonArea', () => {
   it('returns 0 for fewer than three points', () => {
@@ -70,5 +70,53 @@ describe('polygonArea', () => {
     // Read correctly the mean latitude is ~9 (cos ~0.988); swapped it is ~38.7 (cos ~0.781).
     expect(polygonArea(addisAbabaPlot)).toBeGreaterThan(polygonArea(swapped) * 1.2);
     expect(polygonAreaHectares(addisAbabaPlot)).toBeCloseTo(122.4, 0);
+  });
+});
+
+describe('fitBoundsFor', () => {
+  const current = [
+    [0.001, 0.001],
+    [0.001, 0.002],
+    [0.002, 0.002],
+  ];
+  const worst = [
+    [0, 0],
+    [0, 0.002],
+    [0.002, 0.002],
+  ];
+  const furthest = [
+    [-0.004, 0.001],
+    [-0.004, 0.003],
+    [-0.001, 0.003],
+  ];
+
+  /**
+   * The overlap review screen's acceptance criterion: the viewport covers the current polygon
+   * AND every conflict. The extremes here belong to neither the current polygon nor the worst
+   * conflict, so a fit computed from the current polygon alone - or from the one the error
+   * sentence led with - would leave part of the picture off screen.
+   */
+  it('covers every polygon it is given', () => {
+    expect(fitBoundsFor([current, worst, furthest])).toEqual([
+      [-0.004, 0],
+      [0.002, 0.003],
+    ]);
+  });
+
+  it('fits a single polygon on its own', () => {
+    expect(fitBoundsFor([current])).toEqual([
+      [0.001, 0.001],
+      [0.002, 0.002],
+    ]);
+  });
+
+  it('ignores the accuracy element of a measured vertex', () => {
+    const walked = current.map(([lat, lng]) => [lat, lng, 12]);
+    expect(fitBoundsFor([walked])).toEqual(fitBoundsFor([current]));
+  });
+
+  it('is null when there is nothing to fit', () => {
+    expect(fitBoundsFor([])).toBe(null);
+    expect(fitBoundsFor([[]])).toBe(null);
   });
 });

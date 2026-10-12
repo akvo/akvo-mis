@@ -73,3 +73,27 @@ export const buildAdministrationCascade = (token, rootId) => [
 
 export const REGISTRATION_FORM = 1;
 export const MONITORING_FORM = 2;
+
+export const LOGO_ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg"];
+export const LOGO_ACCEPT_TYPES = ".png,.jpg,.jpeg,image/png,image/jpeg";
+export const LOGO_MAX_SIZE_MB = 2;
+
+export const validateLogoFile = (file, notify) => {
+  const isAllowed = LOGO_ALLOWED_MIME_TYPES.includes(file.type);
+  const isLt2M = file.size / (1024 * 1024) <= LOGO_MAX_SIZE_MB;
+  if (!isAllowed) {
+    notify({
+      type: "error",
+      message: "Only PNG, JPG, and JPEG files are allowed.",
+    });
+    return false;
+  }
+  if (!isLt2M) {
+    notify({
+      type: "error",
+      message: `Image must be smaller than ${LOGO_MAX_SIZE_MB}MB.`,
+    });
+    return false;
+  }
+  return true;
+};

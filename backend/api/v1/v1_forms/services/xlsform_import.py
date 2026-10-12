@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import openpyxl
 
 from api.v1.v1_forms.constants import FormTypes
+from api.v1.v1_forms.functions import option_value_issues
 from api.v1.v1_forms.services.xlsform_export import (
     _DEFAULT_LANG_CODE,
     _extract_iso,
@@ -1110,6 +1111,13 @@ def validate_preflight(
                 "level": "error",
             }
         )
+
+    # VIZ-027 D-15. Question ids here are temporary (1..n), so every
+    # option is new: nothing to accept as already stored.
+    for path, message in option_value_issues(
+        parsed.get("question_groups", []),
+    ):
+        errors.append({"path": path, "message": message, "level": "error"})
 
     return errors, warnings
 

@@ -1,8 +1,10 @@
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
-from django.test.utils import override_settings
-from api.v1.v1_data.models import FormData
-from api.v1.v1_forms.models import Forms
+from django.test.utils import CaptureQueriesContext, override_settings
+from api.v1.v1_data.models import AnswerHistory, FormData
+from api.v1.v1_data.serializers import ListPendingFormDataSerializer
+from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_data.functions import add_fake_answers
@@ -171,3 +173,58 @@ class PendingDataListTestCase(TestCase, ProfileTestHelperMixin):
         self.assertGreater(res["total"], 0)
         # Ensure draft data is not included in the response
         self.assertNotIn(draft_data.id, [item['id'] for item in res['data']])
+
+    def _list_with_query_count(self):
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(
+                f"/api/v1/form-pending-data/{self.form.id}/?page=1",
+                HTTP_AUTHORIZATION=f"Bearer {self.token}",
+            )
+        self.assertEqual(response.status_code, 200)
+        return response.json(), len(ctx)
+
+    def test_pending_data_list_query_count_does_not_grow_per_row(self):
+        AnswerHistory.objects.create(
+            data=self.data,
+            question=Questions.objects.filter(form=self.form).first(),
+            name="old value",
+            created_by=self.submitter,
+        )
+        res, queries_one_row = self._list_with_query_count()
+        self.assertTrue(res["data"][0]["answer_history"])
+
+        for i in range(4):
+            FormData.objects.create(
+                name=f"Extra Pending Monitoring {i}",
+                parent=self.data.parent,
+                form=self.form,
+                created_by=self.submitter,
+                administration=self.administration,
+                geo=[7.2088, 126.8456],
+                is_pending=True,
+            )
+        res, queries_five_rows = self._list_with_query_count()
+        self.assertEqual(res["total"], 5)
+        # More rows must not add queries (N+1); fewer is fine, e.g. when
+        # the first request warmed a cache
+        self.assertLessEqual(queries_five_rows, queries_one_row)
+        by_id = {item["id"]: item for item in res["data"]}
+        self.assertTrue(by_id[self.data.id]["answer_history"])
+        self.assertEqual(
+            sum(item["answer_history"] for item in res["data"]), 1
+        )
+
+    def test_serializer_answer_history_without_annotation(self):
+        data = FormData.objects.get(pk=self.data.id)
+        self.assertFalse(
+            ListPendingFormDataSerializer(data).data["answer_history"]
+        )
+        AnswerHistory.objects.create(
+            data=data,
+            question=Questions.objects.filter(form=self.form).first(),
+            name="old value",
+            created_by=self.submitter,
+        )
+        self.assertTrue(
+            ListPendingFormDataSerializer(data).data["answer_history"]
+        )

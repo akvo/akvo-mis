@@ -105,7 +105,7 @@ class FormData(SoftDeletes, Draft):
             ),
         }
         for a in self.data_answer.order_by(
-            "question__question_group_id", "question__order", "index"
+            "question__question_group__order", "question__order", "index"
         ).all():
             data.update(a.to_data_frame)
         return data
@@ -128,7 +128,7 @@ class FormData(SoftDeletes, Draft):
         answers = {}
 
         for a in self.data_answer.order_by(
-            "question__question_group_id", "question__order"
+            "question__question_group__order", "question__order"
         ).all():
             answers.update(a.to_key)
         data.update({"answers": answers})
@@ -153,7 +153,7 @@ class FormData(SoftDeletes, Draft):
         admin_id = self.administration_id
         if isinstance(admin_id, Administration):
             admin_id = admin_id.id
-        administration = Administration.objects.select_related('parent').get(
+        administration = Administration.objects.select_related("parent").get(
             id=admin_id
         )
         administrations = [administration]
@@ -166,13 +166,15 @@ class FormData(SoftDeletes, Draft):
         # if the form has a parent, add the parent form
         if self.form.parent:
             forms.append(self.form.parent)
-        approvers = UserRole.objects.filter(
-            administration__in=administrations,
-            user__user_form__form__in=forms,
-            role__role_role_access__data_access=DataAccessTypes.approve,
-        ).exclude(
-            user__password__exact=""
-        ).exists()
+        approvers = (
+            UserRole.objects.filter(
+                administration__in=administrations,
+                user__user_form__form__in=forms,
+                role__role_role_access__data_access=DataAccessTypes.approve,
+            )
+            .exclude(user__password__exact="")
+            .exists()
+        )
         return approvers
 
     class Meta:

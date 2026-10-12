@@ -4,11 +4,16 @@ from django.core.management import BaseCommand
 from jsmin import jsmin
 
 from mis.settings import (
+    ADMIN_SUBDOMAIN,
     APP_NAME,
     APP_SHORT_NAME,
     APK_NAME,
     BASE_DOMAIN,
     SHOW_LANDING_PAGE,
+    MATOMO_URL,
+    MATOMO_SITE_ID,
+    MATOMO_DIM_TENANT,
+    MATOMO_DIM_SUBDOMAIN,
 )
 from api.v1.v1_profile.constants import FeatureTypes, FeatureAccessTypes
 from api.v1.v1_visualization.functions import refresh_materialized_data
@@ -81,6 +86,26 @@ class Command(BaseCommand):
                         # tenant-info answers 204 in both cases, so the
                         # app cannot tell them apart without this.
                         "baseDomain": BASE_DOMAIN,
+                        # Which label the console answers on. The
+                        # frontend cannot read a Django setting, and it
+                        # has to know: every host-aware branch compares
+                        # against this. Stale config.js falls back to
+                        # "admin" on the frontend side.
+                        "adminSubdomain": ADMIN_SUBDOMAIN,
+                        "matomoUrl": MATOMO_URL,
+                        "matomoSiteId": (
+                            str(MATOMO_SITE_ID) if MATOMO_SITE_ID else ""
+                        ),
+                        "matomoDimTenant": (
+                            str(MATOMO_DIM_TENANT)
+                            if MATOMO_DIM_TENANT
+                            else "1"
+                        ),
+                        "matomoDimSubdomain": (
+                            str(MATOMO_DIM_SUBDOMAIN)
+                            if MATOMO_DIM_SUBDOMAIN
+                            else "2"
+                        ),
                     }),
                     ";",
                     "var roleFeatures=",

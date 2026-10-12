@@ -4,6 +4,10 @@ export const SYNC_FORM_VERSION_TASK_NAME = 'sync-form-version';
 
 export const SYNC_FORM_SUBMISSION_TASK_NAME = 'sync-form-submission';
 
+// Not a task: the notification type shown when the server refuses this
+// device because the person behind it was deactivated or deleted.
+export const ACCOUNT_DEACTIVATED_NOTIFICATION = 'account-deactivated';
+
 export const SYNC_STATUS = {
   on_progress: 1,
   re_sync: 2,
@@ -29,7 +33,7 @@ export const LOW_STORAGE_CLEAR_THRESHOLD = 250 * BYTES_PER_MB; // stand down
 
 // Must equal the highest `user_version` the ladder in App.js reaches. It is the early-return
 // gate in migrateDbIfNeeded, so a new migration that is not matched by a bump here never runs.
-export const DATABASE_VERSION = 11;
+export const DATABASE_VERSION = 12;
 
 // How long the automatic update dialog stays suppressed after "Later".
 export const SKIP_UPDATE_DURATION_MS = 24 * 60 * 60 * 1000;

@@ -2,6 +2,7 @@ import React from "react";
 import PropTypes from "prop-types";
 import Header from "./Header";
 import Banner from "./Banner";
+import InspectionBanner from "./InspectionBanner";
 import Body from "./Body";
 import { Row } from "antd";
 import "./style.scss";
@@ -25,6 +26,7 @@ Layout.propTypes = {
 
 Layout.Header = Header;
 Layout.Banner = Banner;
+Layout.InspectionBanner = InspectionBanner;
 Layout.Body = Body;
 
 export default Layout;
