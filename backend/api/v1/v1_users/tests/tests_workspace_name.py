@@ -391,6 +391,54 @@ class ProfanityTestCase(SimpleTestCase):
             self_service_reason("salopemis"), PROFANITY_MESSAGE
         )
 
+    def test_the_names_qa_claimed_are_refused(self):
+        """Claimed on the test deployment before this was fixed.
+
+        LDNOOBW carries none of the `douche` family, and `dildo` but
+        not `dildos`.
+        """
+        for name in (
+            "dildos",
+            "dink",
+            "dinks",
+            "doggin",
+            "dogging",
+            "dogstyle",
+            "dog-style",
+            "donkeyribber",
+            "doosh",
+            "douche",
+            "douchebag",
+            "douchebags",
+            "douchey",
+        ):
+            self.assertEqual(
+                self_service_reason(name), PROFANITY_MESSAGE, name
+            )
+
+    def test_a_phrase_is_refused_hyphenated_or_run_together(self):
+        """A subdomain has no spaces, so a phrase never reached the
+        library with the spaces it matches on, and every multi-word
+        entry in the vendored list was inert.
+        """
+        for name in (
+            "jerk-off",
+            "jerkoff-acme",
+            "acme-golden-shower",
+            "goldenshower",
+            "2-girls-1-cup",
+            "strip-clubs",
+        ):
+            self.assertEqual(
+                self_service_reason(name), PROFANITY_MESSAGE, name
+            )
+
+    def test_a_plural_is_refused_when_its_singular_is(self):
+        for name in ("sluts", "whores", "asses", "bitches", "pussies"):
+            self.assertEqual(
+                self_service_reason(name), PROFANITY_MESSAGE, name
+            )
+
     def test_accented_french_entries_match_their_stripped_form(self):
         """Review Focus 1, second half.
 
@@ -448,7 +496,7 @@ class ProfanityTestCase(SimpleTestCase):
                 encoding="utf-8",
             )
             with mock.patch.object(
-                module, "_WORDLIST_PATH", empty_wordlist
+                module, "_WORDLIST_PATHS", (empty_wordlist,)
             ):
                 with self.assertRaises(RuntimeError):
                     module._load_profanity_words()
@@ -562,6 +610,46 @@ class ProfanityFalsePositiveTestCase(SimpleTestCase):
             "tanche-aquaculture",
             "gerbe-cereales",
             "butt-foundation",
+        ):
+            self.assertIsNone(self_service_reason(name), name)
+
+    def test_plural_stripping_does_not_invent_words(self):
+        """`es` comes off only after a sibilant: `spices` minus `es`
+        is a slur, `spices` minus `s` is a spice.
+        """
+        for name in ("spices-trade", "glass-recycling", "analysis"):
+            self.assertIsNone(self_service_reason(name), name)
+
+    def test_ordinary_words_that_form_a_phrase_are_accepted(self):
+        """Whitelisted phrases, whose words are ordinary apart."""
+        for name in (
+            "girl-on-the-move",
+            "big-black-river",
+            "tied-up-livestock",
+            "hot-chick-hatchery",
+        ):
+            self.assertIsNone(self_service_reason(name), name)
+
+    def test_words_left_out_of_our_additions_are_accepted(self):
+        """better_profanity's bundled list refuses all of these.
+
+        Each is a word this product's customers use, or a name:
+        finger-prick blood tests, stroke surveillance, rice paddies,
+        voluntary medical male circumcision, Vietnamese surnames and
+        currency, Massa in Tuscany, the Aryan given name.
+        """
+        for name in (
+            "finger-prick-testing",
+            "stroke-registry",
+            "paddy-rice-monitoring",
+            "foreskin-vmmc",
+            "tampon-distribution",
+            "nguyen-van-dong",
+            "massa-carrara",
+            "aryan-foundation",
+            "teat-dip-dairy",
+            "potty-training",
+            "leper-colony-history",
         ):
             self.assertIsNone(self_service_reason(name), name)
 

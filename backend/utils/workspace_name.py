@@ -272,6 +272,18 @@ DOMAIN_SAFE_WORDS = frozenset(
         # the surname and place readings, and an operator can grant
         # the name with a console rename if a real Hooker Foundation
         # ever asks.
+        # Phrases whose words are ordinary on their own, so joined
+        # they turn up inside ordinary names: `girl-on-the-move`,
+        # `big-black-river`, `tied-up-livestock`.
+        "girl on",
+        "taste my",
+        "tied up",
+        "big black",
+        "tongue in a",
+        "tight white",
+        "huge fat",
+        "hot chick",
+        "ball kicking",  # football
     }
 )
 
@@ -305,13 +317,16 @@ HARD_BLOCKED = (
     "encule",
 )
 
-_WORDLIST_PATH = (
-    Path(__file__).resolve().parent / "wordlists" / "profanity.txt"
+_WORDLISTS_DIR = Path(__file__).resolve().parent / "wordlists"
+# The vendored LDNOOBW list, then our own hand-picked additions to it.
+_WORDLIST_PATHS = (
+    _WORDLISTS_DIR / "profanity.txt",
+    _WORDLISTS_DIR / "profanity_extra.txt",
 )
 
 
 def _load_profanity_words():
-    """The vendored list, normalised and whitelisted.
+    """Both wordlists, normalised and whitelisted.
 
     `encoding` is explicit and ours rather than inherited from the
     container locale: the file has accented French in it, and a
@@ -324,14 +339,15 @@ def _load_profanity_words():
     file's `péter`.
     """
     words = set()
-    with _WORDLIST_PATH.open(encoding="utf-8") as handle:
-        for line in handle:
-            entry = _strip_accents(line.strip().lower())
-            if not entry or entry.startswith("#"):
-                continue
-            if entry in DOMAIN_SAFE_WORDS:
-                continue
-            words.add(entry)
+    for path in _WORDLIST_PATHS:
+        with path.open(encoding="utf-8") as handle:
+            for line in handle:
+                entry = _strip_accents(line.strip().lower())
+                if not entry or entry.startswith("#"):
+                    continue
+                if entry in DOMAIN_SAFE_WORDS:
+                    continue
+                words.add(entry)
     # An empty result is caught here, not at the `_PROFANITY`
     # construction site, because `Profanity(words=[])` fails silently:
     # the library's `custom_words or read_wordlist(default)` treats a
@@ -343,7 +359,9 @@ def _load_profanity_words():
             "No profanity words loaded from {0}. An empty list "
             "would make better_profanity silently fall back to its "
             "bundled wordlist, which refuses `hiv`, `menstruation` "
-            "and `urine` as whole tokens.".format(_WORDLIST_PATH)
+            "and `urine` as whole tokens.".format(
+                ", ".join(str(path) for path in _WORDLIST_PATHS)
+            )
         )
     return sorted(words)
 
@@ -353,7 +371,35 @@ def _load_profanity_words():
 # `Profanity()` with no arguments -- or with an empty list, which the
 # library reads as "use the default" -- eagerly loads the bundled
 # 827-word list this design exists to avoid.
-_PROFANITY = Profanity(words=_load_profanity_words())
+_PROFANITY_WORDS = _load_profanity_words()
+_PROFANITY = Profanity(words=_PROFANITY_WORDS)
+
+# Multi-word entries, spaces removed. The library matches a phrase only
+# in text that still has its spaces, and a subdomain never does, so
+# without this set every phrase in the vendored list (`dog style`,
+# `jerk off`, 134 of them) could never match anything.
+_PHRASES = frozenset(
+    _normalize(word) for word in _PROFANITY_WORDS if " " in word
+)
+
+
+def _singular_forms(word):
+    """`word`, and the singular it may be the plural of.
+
+    Neither wordlist carries plurals consistently -- `dildo` but not
+    `dildos` -- and the library does no stemming of its own. `es`
+    comes off only after a sibilant, where it is the plural ending;
+    elsewhere stripping it invents words: `spices` -> `spic`.
+    """
+    if word.endswith("ies"):
+        return (word, word[:-3] + "y")
+    if word.endswith("es") and word[:-2].endswith(
+        ("s", "x", "z", "ch", "sh")
+    ):
+        return (word, word[:-2])
+    if word.endswith("s") and not word.endswith("ss"):
+        return (word, word[:-1])
+    return (word,)
 
 
 # What a digit stands in for when it is standing in for a letter.
@@ -414,19 +460,35 @@ def _profanity_reason(value):
       reach it. Widening the fold to the full wordlist is not the
       upgrade path; adding the word to `HARD_BLOCKED` is, and only
       if it is collision-free there.
+
+    Phrases are the one place tokens are joined, and only into an
+    exact match: `dog-style` and `dogstyle` both join to the phrase
+    `dog style`, but no run of `wash-items` joins to anything in
+    `_PHRASES`, so the boundary rule above still holds for words.
     """
     stripped = _strip_accents(value.lower())
-    tokens = _tokens(value) + [
+    letter_tokens = _tokens(value)
+    split_tokens = [
         token for token in re.split(r"[^a-z0-9]+", stripped) if token
     ]
-    for token in tokens:
+    for token in letter_tokens + split_tokens:
         for term in HARD_BLOCKED:
             if term in token or term in token.translate(_LEET_FOLD):
                 return PROFANITY_MESSAGE
         # The library sees only the unfolded token, so `sh1t` is
         # answered by its own variant generation, not our fold.
-        if _PROFANITY.contains_profanity(token):
-            return PROFANITY_MESSAGE
+        for form in _singular_forms(token):
+            if _PROFANITY.contains_profanity(form):
+                return PROFANITY_MESSAGE
+    # Every run of consecutive tokens, which a 63-character label keeps
+    # small. `split_tokens` keeps digits, for `2-girls-1-cup`.
+    for tokens in (letter_tokens, split_tokens):
+        for start in range(len(tokens)):
+            for end in range(start + 1, len(tokens) + 1):
+                joined = "".join(tokens[start:end])
+                for form in _singular_forms(joined):
+                    if form in _PHRASES:
+                        return PROFANITY_MESSAGE
     return None
 
 
