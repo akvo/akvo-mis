@@ -8,6 +8,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from rest_framework.throttling import BaseThrottle
 
 # from api.v1.v1_approval.constants import DataApprovalStatus
 from api.v1.v1_forms.models import (
@@ -41,6 +42,7 @@ from api.v1.v1_profile.constants import FeatureAccessTypes
 from utils.custom_helper import CustomPasscode
 from utils.custom_generator import update_sqlite
 from utils.tenant_host import is_admin_host
+from utils.turnstile import turnstile_failure_reason
 from utils.tenant_scoped_model import TenantStampedSerializerMixin, acting_user
 from utils.workspace_name import (
     host_collision_reason,
@@ -1203,6 +1205,21 @@ class RegisterSerializer(serializers.Serializer):
         default="en",
         required=False,
     )
+    # Optional in the schema because the check ships off, and because
+    # a client holding a cached config.js with no site key cannot send
+    # one. `validate` decides whether its absence is acceptable.
+    # Bounded because the value is forwarded to a third party.
+    # Unbounded, a caller can send a token large enough that Cloudflare
+    # answers with something that is not JSON; `.json()` then raises,
+    # the fail-open branch catches it, and the registration proceeds
+    # with the captcha bypassed -- repeatably, while looking like an
+    # outage. A real Turnstile token is far under this.
+    captcha_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        max_length=2048,
+    )
 
     def validate_subdomain(self, value):
         """Refuse a name sign-up may not claim.
@@ -1232,4 +1249,16 @@ class RegisterSerializer(serializers.Serializer):
             validate_password(attrs["password"], user=user)
         except django_exceptions.ValidationError as error:
             raise ValidationError({"password": list(error.messages)})
+        # BaseThrottle().get_ident is the same reading the throttles
+        # use -- it honours settings.NUM_PROXIES and counts from the
+        # right of X-Forwarded-For -- so the two cannot drift apart.
+        request = self.context.get("request")
+        reason = turnstile_failure_reason(
+            attrs.get("captcha_token"),
+            remote_ip=(
+                BaseThrottle().get_ident(request) if request else None
+            ),
+        )
+        if reason:
+            raise ValidationError({"captcha_token": [reason]})
         return attrs

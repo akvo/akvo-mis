@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.core.management import BaseCommand
 from jsmin import jsmin
 
@@ -106,6 +107,20 @@ class Command(BaseCommand):
                             if MATOMO_DIM_SUBDOMAIN
                             else "2"
                         ),
+                        # Public by design: Turnstile's site key is
+                        # meant to be in the page. Empty means no
+                        # captcha, and the widget is not rendered at
+                        # all. Note this file is cached by nginx for a
+                        # day, which is why the secret must be set only
+                        # after the key has had time to propagate.
+                        #
+                        # Read off `settings` at call time rather than
+                        # imported from mis.settings like its
+                        # neighbours above: a module-level import binds
+                        # the value when this module is first imported,
+                        # which no override_settings can reach, so the
+                        # test for this line could only ever see "".
+                        "turnstileSiteKey": settings.TURNSTILE_SITE_KEY,
                     }),
                     ";",
                     "var roleFeatures=",

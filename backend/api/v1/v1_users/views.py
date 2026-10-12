@@ -22,7 +22,11 @@ from drf_spectacular.utils import (
 )
 from jsmin import jsmin
 from rest_framework import status, serializers
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import (
+    api_view,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -71,10 +75,17 @@ from utils.custom_permissions import AddUserAccess, IsSuperAdmin
 from utils.custom_serializer_fields import validate_serializers_message
 from utils.default_serializers import DefaultResponseSerializer
 from utils.email_helper import send_email
+from utils.throttling import (
+    EmailDispatchEmailThrottle,
+    EmailDispatchIPThrottle,
+    LoginEmailThrottle,
+    LoginIPThrottle,
+)
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 from utils.tenant_host import (
     console_web_url,
     is_admin_host,
+    is_base_domain,
     tenant_may_embed,
     tenant_web_url,
 )
@@ -255,6 +266,7 @@ def signing_in_elsewhere(request, user):
     tags=["Auth"],
 )
 @api_view(["POST"])
+@throttle_classes([LoginIPThrottle, LoginEmailThrottle])
 def login(request, version):
     # On a SaaS deployment the main site signs people up; signing in
     # happens at the workspace's own address. The console is the single
@@ -332,6 +344,16 @@ def login(request, version):
                 {"message": "This account belongs to a different workspace"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        # Forget this address's earlier attempts. Any per-email login
+        # limit can be spent by anyone who knows the address, which is
+        # why the rate is generous; clearing it here removes the
+        # commoner case, where somebody mistypes their own password a
+        # few times, gets in, and would otherwise carry those attempts
+        # for the rest of the hour.
+        email_throttle = LoginEmailThrottle()
+        throttle_key = email_throttle.get_cache_key(request, None)
+        if throttle_key:
+            email_throttle.cache.delete(throttle_key)
         return authenticated_response(user)
     # authenticate() returns None for a wrong password AND for a correct
     # password on an unverified account. Telling those apart is what lets the
@@ -449,8 +471,23 @@ def tenant_info(request, version):
     tags=["Auth"],
 )
 @api_view(["POST"])
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def register(request, version):
-    serializer = RegisterSerializer(data=request.data)
+    # Self-service sign-up belongs to the SaaS deployment's base domain
+    # and nowhere else. 403 rather than 404: whether a deployment offers
+    # sign-up is observable from its front page, so there is no secret
+    # to keep, and a 404 on a route that exists sends the next debugger
+    # hunting for a routing bug.
+    if not settings.SIGNUP_ENABLED or not is_base_domain(
+        request.get_host()
+    ):
+        return Response(
+            {"message": "Self-service sign-up is not available here"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    serializer = RegisterSerializer(
+        data=request.data, context={"request": request}
+    )
     if not serializer.is_valid():
         return Response(
             {
@@ -559,6 +596,7 @@ def activate_account(request, version):
     summary="Resend an activation email",
 )
 @api_view(["POST"])
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def resend_activation(request, version):
     user = accounts_for_email(
         request, request.data.get("email"), is_active=False
@@ -1137,6 +1175,7 @@ class UserEditDeleteView(APIView):
     summary="To send reset password instructions",
 )
 @api_view(["POST"])
+@throttle_classes([EmailDispatchIPThrottle, EmailDispatchEmailThrottle])
 def forgot_password(request, version):
     serializer = ForgotPasswordSerializer(
         data=request.data,

@@ -28,10 +28,16 @@ const ResetForm = () => {
         navigate("/login");
       })
       .catch((err) => {
-        if (err?.response?.status === 401 || err?.response?.status === 400) {
+        if (
+          err?.response?.status === 401 ||
+          err?.response?.status === 400 ||
+          err?.response?.status === 429
+        ) {
           notify({
             type: "error",
-            message: err.response.data?.message,
+            // See LoginForm: a 429 carries `detail`, not `message`, so
+            // without the fallback this form silently did nothing.
+            message: err.response.data?.message || err.response.data?.detail,
           });
         }
       })
