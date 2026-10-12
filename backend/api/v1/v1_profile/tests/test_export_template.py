@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 from typing import cast
 from django.core.management import call_command
@@ -48,7 +49,7 @@ class AdministrationBulkUploadTemplateExportTestCase(
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], self.XLSX_MIME)
-        df = pd.read_excel(response.content, sheet_name="data")
+        df = pd.read_excel(io.BytesIO(response.content), sheet_name="data")
         expected = [
             col
             for lvl in Levels.objects.order_by('level').all()
@@ -71,7 +72,7 @@ class AdministrationBulkUploadTemplateExportTestCase(
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], self.XLSX_MIME)
-        df = pd.read_excel(response.content, sheet_name='data')
+        df = pd.read_excel(io.BytesIO(response.content), sheet_name='data')
         levels = [
             col
             for lvl in Levels.objects.order_by('level')

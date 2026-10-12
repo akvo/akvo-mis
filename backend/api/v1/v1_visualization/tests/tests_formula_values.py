@@ -235,7 +235,7 @@ class FormulaValuesViewTests(
 class FormulaValuesRegistrationFormTests(
     VisualizationValuesTestMixin, APITestCase
 ):
-    """Formula endpoint with a registration-form question (form.parent is None).
+    """Formula endpoint with a registration-form question (no form.parent).
 
     The endpoint must group by the datapoint's own id rather than parent_id,
     since registration data has parent__isnull=True.

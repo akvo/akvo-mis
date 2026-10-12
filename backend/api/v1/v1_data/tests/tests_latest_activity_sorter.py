@@ -364,7 +364,7 @@ class LatestActivitySortingTestCase(TestCase, ProfileTestHelperMixin):
         self.assertIn(old_reg.id, ids)
 
     def test_date_filter_uses_latest_activity_when_sorting_by_it(self):
-        """Date filters should use latest_activity when sort_by=latest_activity.
+        """Date filters use latest_activity when sort_by=latest_activity.
 
         A registration created before date_from must appear if its most recent
         monitoring child falls within the requested date range.

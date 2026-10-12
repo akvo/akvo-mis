@@ -1,4 +1,4 @@
-FROM python:3.8.5
+FROM python:3.12.15-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1
 
@@ -6,9 +6,12 @@ WORKDIR /app
 
 COPY requirements.txt /app/
 
-#Install Cron
-RUN apt-get update
-RUN apt-get -y install cron
+# cron runs job.sh; curl is how job.sh tells the SQL proxy sidecar to
+# exit, without which the CronJob pod never completes. The slim base
+# image ships neither.
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends cron curl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN set -e; \
     pip -q install --upgrade pip && \

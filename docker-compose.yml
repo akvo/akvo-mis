@@ -2,7 +2,7 @@
 version: "3.9"
 services:
   backend:
-    image: python:3.8.5
+    image: python:3.12.15-slim-bookworm
     working_dir: /app
     command: ["./run.sh"]
     volumes:
@@ -33,7 +33,7 @@ services:
     depends_on:
       - db
   worker:
-    image: python:3.8.5
+    image: python:3.12.15-slim-bookworm
     working_dir: /app
     command: ["./run_worker.sh"]
     volumes:

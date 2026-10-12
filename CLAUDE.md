@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Akvo MIS (Management Information System) is a Real Time Monitoring Information Systems platform with three main components:
-- **Backend**: Django REST Framework API (Python 3.8.5)
+- **Backend**: Django REST Framework API (Python 3.12)
 - **Frontend**: React web application (Create React App)
 - **Mobile App**: React Native mobile application (Expo)
 

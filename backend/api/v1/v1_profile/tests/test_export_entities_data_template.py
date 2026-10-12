@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 from typing import cast
 from django.core.management import call_command
@@ -45,7 +46,9 @@ class EntitiesDataBulkUploadTemplateExportTestCase(
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], self.XLSX_MIME)
 
-        df = pd.read_excel(response.content, sheet_name=entity_type.name)
+        df = pd.read_excel(
+            io.BytesIO(response.content), sheet_name=entity_type.name
+        )
         level_names = list(Levels.objects.order_by("level").values_list(
             "name", flat=True
         ))
@@ -71,7 +74,9 @@ class EntitiesDataBulkUploadTemplateExportTestCase(
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], self.XLSX_MIME)
 
-        df = pd.read_excel(response.content, sheet_name=entity_type.name)
+        df = pd.read_excel(
+            io.BytesIO(response.content), sheet_name=entity_type.name
+        )
         self.assertGreater(
             len(df.to_records("dict")),
             1  # Ensure that the template is prefilled with at least one record
@@ -101,7 +106,9 @@ class EntitiesDataBulkUploadTemplateExportTestCase(
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], self.XLSX_MIME)
 
-        df = pd.read_excel(response.content, sheet_name=entity_type.name)
+        df = pd.read_excel(
+            io.BytesIO(response.content), sheet_name=entity_type.name
+        )
         self.assertGreater(
             len(df), 0, "Filtered template must contain at least one row"
         )
