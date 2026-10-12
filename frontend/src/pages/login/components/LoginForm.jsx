@@ -176,7 +176,6 @@ const LoginForm = () => {
           Log in
         </Button>
       </Form.Item>
-      <p className="disclaimer">{text.accountDisclaimer}</p>
     </Form>
   );
 };
