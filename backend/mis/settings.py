@@ -65,6 +65,33 @@ PROD = True if "PROD" in environ else False
 # because BASE_DOMAIN below now depends on it.
 TESTING = sys.argv[1:2] == ["test"]
 
+# Deprecation gate for the framework upgrade. Under `manage.py test`
+# every deprecation Django announces is an error. Django ships each
+# deprecation together with its replacement, so anything raised here is
+# fixable on the installed version -- and fixing it now is what keeps
+# the next upgrade from breaking. The categories are discovered rather
+# than named because their names change every release
+# (RemovedInDjango50Warning ... RemovedInDjango2028Warning).
+if TESTING:
+    import warnings
+    from django.utils import deprecation as _deprecation
+
+    for _name in dir(_deprecation):
+        _category = getattr(_deprecation, _name)
+        if (
+            _name.startswith("Removed")
+            and isinstance(_category, type)
+            and issubclass(_category, Warning)
+        ):
+            warnings.filterwarnings("error", category=_category)
+    # django-q 1.3.9 imports django.utils.baseconv; gone with django-q2.
+    # Matched by message: the warning is attributed to importlib.
+    warnings.filterwarnings(
+        "ignore", message=r"The django\.utils\.baseconv module",
+        category=_deprecation.RemovedInDjango50Warning,
+    )
+    TEST_RUNNER = "mis.test_runner.DeprecationGateRunner"
+
 # Host-based tenant routing. Unset means single-host: every host is the
 # base domain, nothing resolves to a tenant, and the routing is inert —
 # which is how the test suite and any non-SaaS deployment run.
