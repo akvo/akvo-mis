@@ -215,6 +215,40 @@ class MobileAssignmentSerializer(serializers.ModelSerializer):
     passcode = serializers.SerializerMethodField()
     created_by = serializers.ReadOnlyField(source="user.email")
 
+    def validate_administrations(self, administrations):
+        # An assignment must stay within the creating user's own access: each
+        # administration has to be one of the user's role administrations or a
+        # descendant of one. Without this a province user could assign the
+        # national root and hand the device every province (the UI caps the
+        # level dropdown, but the API must not trust that).
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or user.is_superuser:
+            return administrations
+        role_admins = [
+            ur.administration for ur in user.user_user_role.all()
+        ]
+        if not role_admins:
+            raise serializers.ValidationError(
+                "You have no administration access to assign."
+            )
+
+        def in_scope(adm):
+            for role_adm in role_admins:
+                subtree = f"{role_adm.path or ''}{role_adm.id}."
+                if adm.id == role_adm.id or (adm.path or "").startswith(
+                    subtree
+                ):
+                    return True
+            return False
+
+        outside = [adm.name for adm in administrations if not in_scope(adm)]
+        if outside:
+            raise serializers.ValidationError(
+                "Administration outside your access: " + ", ".join(outside)
+            )
+        return administrations
+
     class Meta:
         model = MobileAssignment
         fields = [

@@ -80,6 +80,7 @@ from utils.default_serializers import DefaultResponseSerializer
 from utils.custom_serializer_fields import (
     validate_serializers_message,
 )
+from utils.data_access_scope import accessible_administration_q
 from utils import storage
 
 apk_path = os.path.join(BASE_DIR, MASTER_DATA)
@@ -845,8 +846,15 @@ def get_datapoint_download_list(request, version):
         path_query |= Q(
             administration__path__startswith=admin["path"]
         )
-    # Combine both queries with the form filter
+    # Combine both queries with the form filter. accessible_administration_q
+    # intersects the assignment's administrations with the device user's own
+    # role access, so an assignment configured with an administration broader
+    # than the user's roles (e.g. the national root) cannot hand the device
+    # data outside that user's access. Superusers get an empty Q (no extra
+    # restriction); the assignment's own scope still applies.
     queryset = FormData.objects.for_user(assignment.user).filter(
+        accessible_administration_q(assignment.user)
+    ).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
     )
 
