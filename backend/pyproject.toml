@@ -3,11 +3,11 @@ name = "akvo-mis-backend"
 version = "0"
 requires-python = "==3.12.*"
 dependencies = [
-    "Django==4.2.30",
-    "djangorestframework==3.15.2",
-    "djangorestframework-simplejwt==5.3.1",
-    "drf_spectacular==0.28.0",
-    "django-q2==1.10.0",
+    "django==5.2.18",
+    "djangorestframework==3.16.1",
+    "djangorestframework-simplejwt==5.5.1",
+    "drf-spectacular==0.30.0",
+    "django-q2==1.11.1",
     "psycopg2-binary==2.9.13",
     "numpy==2.3.5",
     "pandas==2.3.3",
@@ -39,7 +39,7 @@ dependencies = [
 [dependency-groups]
 # Test, lint and debug tools. Production images do not install them.
 dev = [
-    "django-extensions==3.2.3",
+    "django-extensions==4.1",
     "django-dbml==1.2.0",
     "flake8==7.4.1",
     # display tracebacks correctly in parallel test runner

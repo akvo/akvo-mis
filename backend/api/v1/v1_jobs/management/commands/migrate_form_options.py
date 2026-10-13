@@ -2,7 +2,8 @@ import os
 import pandas as pd
 
 from django.core.management import BaseCommand
-from django.db.models import Max, F
+from django.db.models import F
+from django.db.models.functions import Greatest
 
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_data.models import (
@@ -63,7 +64,7 @@ def update_json_file(datapoint_ids: list, model, form_id: int):
         )
         .values("uuid")
         .annotate(
-            latest_updated=Max(F("created"), F("updated")),
+            latest_updated=Greatest(F("created"), F("updated")),
         )
         .values("uuid", "latest_updated")
     ).values_list("id", flat=True)

@@ -29,6 +29,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='dashboard',
-            constraint=models.CheckConstraint(check=models.Q(models.Q(('embed_snippet__isnull', True), ('kind', 1), ('root_form__isnull', False)), models.Q(('embed_snippet__isnull', False), ('kind', 2), ('root_form__isnull', True), models.Q(('embed_snippet', ''), _negated=True)), _connector='OR'), name='dashboard_kind_matches_source'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('embed_snippet__isnull', True), ('kind', 1), ('root_form__isnull', False)), models.Q(('embed_snippet__isnull', False), ('kind', 2), ('root_form__isnull', True), models.Q(('embed_snippet', ''), _negated=True)), _connector='OR'), name='dashboard_kind_matches_source'),
         ),
     ]
