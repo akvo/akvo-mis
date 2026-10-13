@@ -18,6 +18,7 @@ from utils.custom_serializer_fields import (
 )
 from api.v1.v1_mobile.models import MobileAssignment, MobileApk
 from utils.custom_helper import CustomPasscode, generate_random_string
+from utils.data_access_scope import administration_in_user_scope
 
 
 class MobileDataPointDownloadListSerializer(serializers.Serializer):
@@ -223,26 +224,11 @@ class MobileAssignmentSerializer(serializers.ModelSerializer):
         # level dropdown, but the API must not trust that).
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        if not user or user.is_superuser:
-            return administrations
-        role_admins = [
-            ur.administration for ur in user.user_user_role.all()
+        outside = [
+            adm.name
+            for adm in administrations
+            if not administration_in_user_scope(user, adm)
         ]
-        if not role_admins:
-            raise serializers.ValidationError(
-                "You have no administration access to assign."
-            )
-
-        def in_scope(adm):
-            for role_adm in role_admins:
-                subtree = f"{role_adm.path or ''}{role_adm.id}."
-                if adm.id == role_adm.id or (adm.path or "").startswith(
-                    subtree
-                ):
-                    return True
-            return False
-
-        outside = [adm.name for adm in administrations if not in_scope(adm)]
         if outside:
             raise serializers.ValidationError(
                 "Administration outside your access: " + ", ".join(outside)

@@ -44,3 +44,31 @@ def accessible_administration_q(user, field="administration"):
         # match nothing explicitly.
         return Q(pk__in=[])
     return scope
+
+
+def administration_in_user_scope(user, administration):
+    """Whether a single administration is within the user's own access.
+
+    True when ``administration`` is one of the user's role administrations or
+    a descendant of one. Superusers (and absent user context) are always in
+    scope; a non-superuser with no roles never is. Used to reject a request
+    that names an administration outside the caller's access (e.g. a sibling)
+    before any work is queued, rather than only clamping the result.
+    """
+    if administration is None or user is None or getattr(
+        user, "is_superuser", False
+    ):
+        return True
+    roles = getattr(user, "user_user_role", None)
+    if roles is None:
+        return False
+    for user_role in roles.all():
+        role_adm = user_role.administration
+        if not role_adm:
+            continue
+        subtree = f"{role_adm.path or ''}{role_adm.id}."
+        if administration.id == role_adm.id or (
+            administration.path or ""
+        ).startswith(subtree):
+            return True
+    return False
