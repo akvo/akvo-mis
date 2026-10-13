@@ -159,7 +159,15 @@ class TenantMiddleware:
             # give. Only a session that is genuinely valid can be on the
             # wrong host, and only that deserves a 403.
             return None
-        return result[0] if result else None
+        user = result[0] if result else None
+        # A mobile-assignment token resolves to AnonymousUser (its account
+        # lives in request.auth, not request.user). AnonymousUser has no
+        # tenant_id, and the enforcement below has no account to compare,
+        # so treat it as anonymous. Device requests are tenant-scoped at
+        # the view layer via the assignment's user.
+        if user is None or not user.is_authenticated:
+            return None
+        return user
 
     def _inspection_token(self, request):
         """Is this request carrying an inspection token?

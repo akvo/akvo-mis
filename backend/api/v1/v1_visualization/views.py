@@ -46,6 +46,7 @@ from drf_spectacular.types import OpenApiTypes
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
 from utils.custom_serializer_fields import validate_serializers_message
+from utils.data_access_scope import accessible_administration_q
 
 
 @extend_schema(
@@ -456,6 +457,9 @@ class GeolocationListView(APIView):
             )
 
         if serializer.validated_data.get("administration"):
+            # A client-supplied administration only NARROWS the result; the
+            # user's own scope is AND-combined below, so an authenticated
+            # non-superuser cannot pass an out-of-scope id to widen access.
             adm = serializer.validated_data.get("administration")
             adm_path = f"{adm.id}."
             if adm.path:
@@ -464,26 +468,17 @@ class GeolocationListView(APIView):
                 Q(administration=adm) |
                 Q(administration__path__startswith=adm_path)
             )
+        # Authenticated non-superusers are always confined to their own
+        # administration subtree, whether or not an administration filter was
+        # supplied. Anonymous callers go through the published-public-dashboard
+        # path (resolve_view_scope) and are intentionally not role-scoped;
+        # superusers see the whole tenant.
         if (
             request.user.is_authenticated and
-            not request.user.is_superuser and
-            not serializer.validated_data.get("administration")
+            not request.user.is_superuser
         ):
-            user_role = request.user.user_user_role.order_by(
-                "administration__level__level"
-            ).first()
-            adm = user_role.administration if user_role else None
-            if not adm:
-                return Response(
-                    data=[],
-                    status=status.HTTP_200_OK,
-                )
-            adm_path = f"{adm.id}."
-            if adm.path:
-                adm_path = f"{adm.path}{adm.id}."
             queryset = queryset.filter(
-                Q(administration=adm) |
-                Q(administration__path__startswith=adm_path)
+                accessible_administration_q(request.user)
             )
         rows = list(
             queryset.values("id", "name", "geo", "administration_id")

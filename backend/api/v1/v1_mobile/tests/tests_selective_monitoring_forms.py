@@ -29,7 +29,9 @@ class SelectiveMonitoringFormsTestCase(
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
 
-        self.user = self.create_user("test@akvo.org", self.IS_ADMIN)
+        # Superuser: this suite exercises the registration/monitoring form
+        # rules, not the admin scope MobileAssignmentSerializer enforces.
+        self.user = self.create_user("test@akvo.org", self.IS_SUPER_ADMIN)
         self.token = self.get_auth_token(self.user.email)
 
         # Get registration form that has monitoring children
@@ -244,7 +246,7 @@ class FormsTreeEndpointTestCase(TestCase, ProfileTestHelperMixin):
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
 
-        self.user = self.create_user("test@akvo.org", self.IS_ADMIN)
+        self.user = self.create_user("test@akvo.org", self.IS_SUPER_ADMIN)
         self.token = self.get_auth_token(self.user.email)
 
     def test_forms_tree_requires_authentication(self):

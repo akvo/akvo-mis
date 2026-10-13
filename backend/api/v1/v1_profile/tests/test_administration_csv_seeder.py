@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 
 from django.core.management import call_command
@@ -21,6 +22,7 @@ from api.v1.v1_profile.models import (
     Levels,
 )
 from api.v1.v1_users.models import Tenant
+from utils.custom_generator import sqlite_path
 
 THREE_TIER = (
     "0_National,0_Code,1_Province,1_Code,2_District,2_Code\n"
@@ -678,3 +680,33 @@ class BundledExampleCsvTestCase(TestCase, CsvSeederMixin):
                 resolve_bbox(leaf, attribute, {}),
                 f"{leaf.name} has no usable bounding box",
             )
+
+
+class CsvSeederSqliteRegenTest(TestCase, CsvSeederMixin):
+    """The import must refresh the per-tenant device SQLite snapshot.
+
+    The download endpoint only builds that file when it is absent, so an
+    import that left it alone would keep serving the pre-import tree to the
+    app -- and the administration cascade, whose parent ids are then missing
+    from it, disappears from the form.
+    """
+
+    @override_settings(TEST_ENV=True)
+    def test_seed_regenerates_administrator_sqlite(self):
+        tenant = self.make_tenant("sqlitecsv")
+        self.configure(tenant, "National", "Indonesia")
+        path = sqlite_path(Administration, tenant=tenant, test=True)
+        if os.path.exists(path):
+            os.remove(path)
+
+        self.seed(THREE_TIER, tenant)
+
+        expected = Administration.objects.filter(tenant=tenant).count()
+        self.assertGreater(expected, 1)
+        self.assertTrue(os.path.exists(path))
+        conn = sqlite3.connect(path)
+        try:
+            rows = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+        finally:
+            conn.close()
+        self.assertEqual(rows, expected)

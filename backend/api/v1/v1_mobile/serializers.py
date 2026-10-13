@@ -18,6 +18,7 @@ from utils.custom_serializer_fields import (
 )
 from api.v1.v1_mobile.models import MobileAssignment, MobileApk
 from utils.custom_helper import CustomPasscode, generate_random_string
+from utils.data_access_scope import administration_in_user_scope
 
 
 class MobileDataPointDownloadListSerializer(serializers.Serializer):
@@ -214,6 +215,25 @@ class MobileAssignmentSerializer(serializers.ModelSerializer):
     )
     passcode = serializers.SerializerMethodField()
     created_by = serializers.ReadOnlyField(source="user.email")
+
+    def validate_administrations(self, administrations):
+        # An assignment must stay within the creating user's own access: each
+        # administration has to be one of the user's role administrations or a
+        # descendant of one. Without this a province user could assign the
+        # national root and hand the device every province (the UI caps the
+        # level dropdown, but the API must not trust that).
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        outside = [
+            adm.name
+            for adm in administrations
+            if not administration_in_user_scope(user, adm)
+        ]
+        if outside:
+            raise serializers.ValidationError(
+                "Administration outside your access: " + ", ".join(outside)
+            )
+        return administrations
 
     class Meta:
         model = MobileAssignment

@@ -43,6 +43,7 @@ from utils.export_form import (
     monitoring_meta_columns,
 )
 from utils.functions import update_date_time_format
+from utils.data_access_scope import accessible_administration_q
 from utils.storage import upload
 from utils.custom_generator import generate_sqlite
 from utils.report_generator import generate_datapoint_report
@@ -85,7 +86,12 @@ def download_data(
     # user's tenant, so a form id that slipped past request validation
     # (or a future caller of this task) can never surface another
     # tenant's rows, even though `form` itself is trusted by this point.
-    scoped_form_data = FormData.objects.for_user(user)
+    # accessible_administration_q then confines the export to the user's own
+    # administration subtree, so a client-supplied `administration_ids`
+    # (even an ancestor) only narrows it and cannot export out-of-scope rows.
+    scoped_form_data = FormData.objects.for_user(user).filter(
+        accessible_administration_q(user)
+    )
     if child_form_ids is None:
         child_form_ids = []
     # filter_child_form_ids controls which child forms are used when
@@ -373,8 +379,12 @@ def download_monitoring_data(
 
     # Belt-and-suspenders, matching download_data: floors the query to
     # the acting user's tenant regardless of what child_form/parent_form
-    # were resolved to upstream.
+    # were resolved to upstream, and confines it to the user's own
+    # administration subtree (monitoring rows are scoped by their parent's
+    # administration) so a client administration filter only narrows it.
     queryset = FormData.objects.for_user(user).filter(
+        accessible_administration_q(user, field="parent__administration")
+    ).filter(
         **filter_data
     ).select_related("parent", "parent__administration", "created_by")
 
@@ -734,8 +744,12 @@ def transform_form_data_for_report(
     This ensures all available answers for each selection_id are included.
     """
     # Belt-and-suspenders, matching download_data: floors every FormData
-    # lookup below to the acting user's tenant.
-    scoped_form_data = FormData.objects.for_user(user)
+    # lookup below to the acting user's tenant AND their own administration
+    # subtree, so client-supplied selection_ids from another administration
+    # cannot be exported.
+    scoped_form_data = FormData.objects.for_user(user).filter(
+        accessible_administration_q(user)
+    )
     try:
         forms = [form]
         child_forms = list(form.children.all())
@@ -1025,11 +1039,16 @@ def job_generate_data_report(job_id: int, **kwargs):
         selection_ids = kwargs.get("selection_ids", [])  # noqa: F841
         child_form_ids = kwargs.get("child_form_ids", [])
 
-        # Get the form
+        # Get the form. Scope the metadata query to the acting user's own
+        # administrations too (selection_ids is client-supplied), so the
+        # report's names/dates/submitters cannot leak out-of-scope rows and
+        # stay aligned with transform_form_data_for_report below.
         form = Forms.objects.get(pk=form_id)
         form_data = form.form_form_data.filter(
             is_pending=False,
-            pk__in=selection_ids
+            pk__in=selection_ids,
+        ).filter(
+            accessible_administration_q(job.user)
         ).order_by("id").all()
 
         display_names = [
