@@ -28,10 +28,13 @@ const AdministrationDropdown = ({
     .sort((a, b) => a.level - b.level)
     .slice(-1)?.[0];
   /**
-   * Get lowest level administrator from maxLevel.
-   * otherwise, sort asc by level and get the last item from levels global state
+   * Resolve the selectable level from maxLevel, which is a 1-indexed depth
+   * (level number + 1), NOT a Levels record id. Matching by id only worked
+   * on seeds where id === level + 1; match by level number instead.
+   * Falls back to the deepest level when maxLevel is not provided.
    */
-  const currLevel = levels?.find((l) => l?.id === maxLevel) || lowestLevel;
+  const currLevel =
+    levels?.find((l) => l?.level === maxLevel - 1) || lowestLevel;
 
   const { active: activeLang } = language;
   const text = useMemo(() => {
@@ -236,7 +239,7 @@ const AdministrationDropdown = ({
               );
             }
           })}
-        {showSelectAll && maxLevel === lowestLevel.id && (
+        {showSelectAll && maxLevel === lowestLevel.level + 1 && (
           <Row className="form-row">
             <Col span={24}>
               <Checkbox onChange={onSelectAll} checked={checked}>
