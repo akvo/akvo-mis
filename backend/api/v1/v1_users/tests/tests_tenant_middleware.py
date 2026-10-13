@@ -1,5 +1,6 @@
 from django.test import TestCase, override_settings
 
+from api.v1.v1_mobile.models import MobileAssignment
 from api.v1.v1_profile.tests.mixins import TenantTestHelperMixin
 
 PROFILE = "/api/v1/profile"
@@ -147,6 +148,45 @@ class HostExemptPathTestCase(TestCase, TenantTestHelperMixin):
         # still nothing this deployment serves.
         response = self.client.get(PROFILE, HTTP_HOST="10.4.2.15:8000")
         self.assertEqual(response.status_code, 404)
+
+
+@override_settings(BASE_DOMAIN="app.com")
+class DeviceTokenOnTenantHostTestCase(TestCase, TenantTestHelperMixin):
+    """A mobile-assignment token resolves request.user to AnonymousUser --
+    the device's account lives in request.auth, not request.user. The tenant
+    middleware must treat that as anonymous (nothing to enforce), not read
+    tenant_id off it. Reading it raised AttributeError and 500'd every device
+    endpoint hit on a real workspace host; on the base/IP host the enforcement
+    block is skipped, which is why it went unnoticed."""
+
+    def setUp(self):
+        self.acme = self.create_tenant(
+            "acme", ["Country", "Province"], "Kenya"
+        )
+        self.passcode = "devicepass123"
+        MobileAssignment.objects.create_assignment(
+            user=self.acme.admin, name="device", passcode=self.passcode
+        )
+
+    def _device_token(self):
+        response = self.client.post(
+            "/api/v1/device/auth",
+            {"code": self.passcode},
+            content_type="application/json",
+            HTTP_HOST="acme.app.com",
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.data["syncToken"]
+
+    def test_device_endpoint_on_tenant_host_is_not_500(self):
+        token = self._device_token()
+        response = self.client.get(
+            "/api/v1/device/datapoint-list/",
+            follow=True,
+            HTTP_HOST="acme.app.com",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 class SingleHostTestCase(TestCase, TenantTestHelperMixin):
