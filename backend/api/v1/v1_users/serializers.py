@@ -457,11 +457,6 @@ class AddEditUserSerializer(
         super().__init__(**kwargs)
         self.fields.get("organisation").queryset = Organisation.objects.all()
 
-    def validate_roles(self, roles):
-        return AddRolesSerializer(
-            data=roles, many=True, context=self.context
-        ).is_valid(raise_exception=True)
-
     def validate_email(self, value):
         acting = acting_user(self.context)
         acting_tenant_id = getattr(acting, "tenant_id", None)
@@ -642,8 +637,12 @@ class AddEditUserSerializer(
                 # Raise custom ValidationError with better error messages
                 if errors:
                     raise ValidationError(errors)
-                # Otherwise, re-raise the original errors
-                raise ValidationError(serializer.errors)
+                # Otherwise, re-raise the original errors. serializer.errors
+                # is a list (one entry per role), so nest it under "roles":
+                # a bare list as the serializer's _errors makes DRF's .errors
+                # ReturnDict fail to unpack ("need more than 1 value to
+                # unpack") and hides the real message.
+                raise ValidationError({"roles": serializer.errors})
             internal_value["roles"] = serializer.validated_data
 
         return internal_value

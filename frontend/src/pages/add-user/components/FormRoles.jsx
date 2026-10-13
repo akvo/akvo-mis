@@ -29,10 +29,20 @@ const FormRoles = ({ form, text, roles = [], disabled = false }) => {
       {(fields, { add, remove }) => (
         <>
           {fields.map((field) => {
-            const maxLevel = roles?.find(
+            // AdministrationInput treats maxLevel as a 1-indexed depth, so
+            // pass the role's level + 1 (e.g. a Province role, level 1, must
+            // allow selecting down to level 1 => depth 2). administration_level
+            // is a Levels record id, not a depth, and using it let the user
+            // pick an administration deeper than the role, which the backend
+            // then rejects as "Role and administration level mismatch".
+            const selectedRole = roles?.find(
               (r) =>
                 r.value === form.getFieldValue(["roles", field.name, "role"])
-            )?.administration_level;
+            );
+            const maxLevel =
+              typeof selectedRole?.level === "number"
+                ? selectedRole.level + 1
+                : null;
 
             return (
               <Row key={field.key} gutter={8}>
