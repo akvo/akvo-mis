@@ -460,7 +460,7 @@ def handle_option_question(form, question, params):
 
     options = QuestionOptions.objects.filter(
         question=question,
-    ).order_by("order")
+    ).order_by("order", "id")
 
     if option_value and group_by == "month":
         return _option_value_group_by_month(
@@ -520,7 +520,7 @@ def handle_option_question(form, question, params):
             if stack_question.id == question.id
             else QuestionOptions.objects.filter(
                 question=stack_question,
-            ).order_by("order")
+            ).order_by("order", "id")
         )
         return handle_stack_by_option(
             question, options, stack_question, stack_options,
