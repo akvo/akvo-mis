@@ -744,8 +744,12 @@ def transform_form_data_for_report(
     This ensures all available answers for each selection_id are included.
     """
     # Belt-and-suspenders, matching download_data: floors every FormData
-    # lookup below to the acting user's tenant.
-    scoped_form_data = FormData.objects.for_user(user)
+    # lookup below to the acting user's tenant AND their own administration
+    # subtree, so client-supplied selection_ids from another administration
+    # cannot be exported.
+    scoped_form_data = FormData.objects.for_user(user).filter(
+        accessible_administration_q(user)
+    )
     try:
         forms = [form]
         child_forms = list(form.children.all())
@@ -1035,11 +1039,16 @@ def job_generate_data_report(job_id: int, **kwargs):
         selection_ids = kwargs.get("selection_ids", [])  # noqa: F841
         child_form_ids = kwargs.get("child_form_ids", [])
 
-        # Get the form
+        # Get the form. Scope the metadata query to the acting user's own
+        # administrations too (selection_ids is client-supplied), so the
+        # report's names/dates/submitters cannot leak out-of-scope rows and
+        # stay aligned with transform_form_data_for_report below.
         form = Forms.objects.get(pk=form_id)
         form_data = form.form_form_data.filter(
             is_pending=False,
-            pk__in=selection_ids
+            pk__in=selection_ids,
+        ).filter(
+            accessible_administration_q(job.user)
         ).order_by("id").all()
 
         display_names = [

@@ -6,12 +6,14 @@ from django.test.utils import override_settings
 
 from api.v1.v1_forms.models import Forms, QuestionGroup
 from api.v1.v1_data.models import FormData, Answers
+from api.v1.v1_data.functions import add_fake_answers
 from api.v1.v1_jobs.constants import JobStatus, JobTypes
 from api.v1.v1_jobs.models import Jobs
 from api.v1.v1_jobs.job import (
     transform_form_data_for_report,
     job_generate_data_report,
 )
+from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 
 
@@ -960,3 +962,59 @@ class TransformFormDataForReportTestCase(TestCase, ProfileTestHelperMixin):
         # Clean up
         child_fd_1.delete(hard=True)
         child_fd_2.delete(hard=True)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class ReportAdministrationScopeTestCase(TestCase, ProfileTestHelperMixin):
+    """A datapoint report may not export another administration's data via
+    client-supplied selection_ids."""
+
+    def setUp(self):
+        call_command("administration_seeder", "--test")
+        call_command("default_roles_seeder", "--test", 1)
+        call_command("form_seeder", "--test")
+        self.form = Forms.objects.get(pk=1)
+        level1 = list(
+            Administration.objects.filter(level__level=1).order_by("id")
+        )
+        self.adm_in, self.adm_out = level1[0], level1[1]
+        self.author = self.create_user(
+            "report_author@akvo.org", self.IS_SUPER_ADMIN
+        )
+        self.scoped_user = self.create_user(
+            "report_scoped@akvo.org", self.IS_ADMIN,
+            administration=self.adm_in,
+        )
+        self.dp_in = self._make(self.adm_in, "InScope report")
+        self.dp_out = self._make(self.adm_out, "OutOfScope report")
+
+    def _make(self, administration, name):
+        dp = self.form.form_form_data.create(
+            name=name,
+            administration=administration,
+            geo=[0.0, 0.0],
+            created_by=self.author,
+            updated_by=self.author,
+            is_pending=False,
+            is_draft=False,
+        )
+        add_fake_answers(dp)
+        return dp
+
+    def test_out_of_scope_selection_yields_no_data(self):
+        result = transform_form_data_for_report(
+            self.form, selection_ids=[self.dp_out.id], user=self.scoped_user
+        )
+        self.assertEqual(result, [])
+
+    def test_in_scope_selection_yields_data(self):
+        result = transform_form_data_for_report(
+            self.form, selection_ids=[self.dp_in.id], user=self.scoped_user
+        )
+        self.assertTrue(result)
+
+    def test_superuser_can_export_any_selection(self):
+        result = transform_form_data_for_report(
+            self.form, selection_ids=[self.dp_out.id], user=self.author
+        )
+        self.assertTrue(result)
