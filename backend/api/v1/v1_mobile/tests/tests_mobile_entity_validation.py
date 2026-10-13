@@ -31,7 +31,11 @@ class MobileEntityValidationTestCase(TestCase, ProfileTestHelperMixin):
                     administration=adm,
                     name=f"{entity.name} - {adm.name}"
                 )
-        self.user = self.create_user('test@akvo.org', self.IS_ADMIN)
+        # Superuser: this suite exercises entity validation, not the admin
+        # scope rule MobileAssignmentSerializer enforces, and it assigns
+        # administrations at every level. (Scope is covered by
+        # MobileAssignmentAdminScopeTestCase.)
+        self.user = self.create_user('test@akvo.org', self.IS_SUPER_ADMIN)
         self.token = self.get_auth_token(self.user.email)
         self.form = Forms.objects.get(pk=2)
 
