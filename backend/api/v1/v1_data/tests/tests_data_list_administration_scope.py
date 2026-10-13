@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.management import call_command
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -101,3 +103,43 @@ class FormDataListAdministrationScopeTest(TestCase, ProfileTestHelperMixin):
         ids = [item["id"] for item in response.json()["data"]]
         self.assertIn(self.dp_in.id, ids)
         self.assertIn(self.dp_out.id, ids)
+
+    def _make_monitoring(self, administration, shared_uuid, name):
+        child_form = self.form.children.first()
+        self.assertIsNotNone(child_form)
+        dp = child_form.form_form_data.create(
+            name=name,
+            administration=administration,
+            geo=[0.0, 0.0],
+            uuid=shared_uuid,
+            created_by=self.author,
+            updated_by=self.author,
+            is_pending=False,
+            is_draft=False,
+        )
+        add_fake_answers(dp)
+        return child_form, dp
+
+    def _list_parent(self, child_form, shared_uuid):
+        response = self.client.get(
+            f"/api/v1/form-data/{child_form.id}?parent={shared_uuid}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, 200)
+        return [item["id"] for item in response.json()["data"]]
+
+    def test_parent_filter_excludes_out_of_scope_monitoring(self):
+        # A client-supplied parent uuid must not expose another
+        # administration's monitoring submissions.
+        shared_uuid = str(uuid.uuid4())
+        child_form, mon = self._make_monitoring(
+            self.adm_out, shared_uuid, "OutOfScope monitoring"
+        )
+        self.assertNotIn(mon.id, self._list_parent(child_form, shared_uuid))
+
+    def test_parent_filter_includes_in_scope_monitoring(self):
+        shared_uuid = str(uuid.uuid4())
+        child_form, mon = self._make_monitoring(
+            self.adm_in, shared_uuid, "InScope monitoring"
+        )
+        self.assertIn(mon.id, self._list_parent(child_form, shared_uuid))

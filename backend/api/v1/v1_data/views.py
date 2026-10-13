@@ -199,7 +199,10 @@ class FormDataAddListView(APIView):
         order_by = f"-{sort_by}" if sort_type == "descend" else sort_by
 
         if parent:
-            # Only get the children data
+            # Only get the children data. Scoped to the user's own
+            # administrations too: a parent uuid is client-supplied, so
+            # without this a form user could read another administration's
+            # monitoring submissions by naming an out-of-scope parent.
             queryset = (
                 form.form_form_data.select_related("parent__form")
                 .filter(
@@ -207,6 +210,7 @@ class FormDataAddListView(APIView):
                     is_pending=False,
                     is_draft=False,
                 )
+                .filter(accessible_administration_q(request.user))
                 .annotate(
                     total_children=Count(
                         "children",
