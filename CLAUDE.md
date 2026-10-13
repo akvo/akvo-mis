@@ -359,6 +359,14 @@ Common commands:
 
 Configuration in `backend/setup.cfg` and `backend/pylsp.toml`
 
+#### Backend dependencies
+Declared in `backend/pyproject.toml` (`[dependency-groups] dev` for test
+and debug tools, kept out of production images), locked in
+`backend/uv.lock`. Change them with uv, never by editing the lock:
+`./dc.sh exec backend uv add 'package==1.2.3'` (add `--dev` for a dev
+tool), `./dc.sh exec backend uv lock --upgrade-package package`.
+Commit both files.
+
 ### Frontend Development
 
 #### Running the Frontend

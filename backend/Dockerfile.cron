@@ -4,16 +4,17 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt /app/
-
 #Install Cron
 RUN apt-get update
 RUN apt-get -y install cron
 
-RUN set -e; \
-    pip -q install --upgrade pip && \
-    pip -q install --no-cache-dir -r requirements.txt && \
-    pip check
+COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /usr/local/bin/uv
+# Install into the image's Python, not a .venv. --inexact keeps pip
+# and anything else uv did not install; --no-dev keeps test and debug
+# tools out of production.
+ENV UV_PROJECT_ENVIRONMENT=/usr/local UV_LINK_MODE=copy
+COPY pyproject.toml uv.lock /app/
+RUN uv sync --frozen --no-dev --inexact --no-cache && pip check
 
 copy . /app/
 

@@ -19,6 +19,7 @@ services:
       - DB_HOST=db
       - DEBUG=True
       - DJANGO_SECRET=local-secret
+      - UV_PROJECT_ENVIRONMENT=/usr/local
       - APK_UPLOAD_SECRET
       - STORAGE_PATH
       - SENTRY_DSN
@@ -47,6 +48,7 @@ services:
       - DB_HOST=db
       - DEBUG=True
       - DJANGO_SECRET=local-secret
+      - UV_PROJECT_ENVIRONMENT=/usr/local
       - APK_UPLOAD_SECRET
       - STORAGE_PATH
       - SENTRY_DSN

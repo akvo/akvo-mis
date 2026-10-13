@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
+import importlib.util
 import sys
 from datetime import timedelta
 from django.core.exceptions import ImproperlyConfigured
@@ -188,9 +189,13 @@ EXTERNAL_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
-    "django_dbml",
-    "django_extensions",
     "django_q",
+]
+# Dev-only apps (the `dev` dependency group); absent in production
+# images. CI installs the group, so `manage.py dbml` still runs there.
+EXTERNAL_APPS += [
+    app for app in ("django_dbml", "django_extensions")
+    if importlib.util.find_spec(app)
 ]
 
 # Add API apps below

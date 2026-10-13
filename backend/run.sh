@@ -6,8 +6,8 @@
 rm -f /var/tmp/cache/*.djcache 2>/dev/null || true
 
 set -eu
-pip -q install --upgrade pip
-pip -q install --cache-dir=.pip -r requirements.txt
+pip -q install uv==0.13.0
+uv sync --frozen --inexact
 pip check
 
 python manage.py migrate
