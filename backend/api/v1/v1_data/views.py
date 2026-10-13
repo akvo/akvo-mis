@@ -59,6 +59,7 @@ from utils.custom_permissions import (
     PublicGet,
 )
 from utils.custom_serializer_fields import validate_serializers_message
+from utils.data_access_scope import accessible_administration_q
 from utils.default_serializers import DefaultResponseSerializer
 from utils.export_form import blank_data_template
 
@@ -256,6 +257,9 @@ class FormDataAddListView(APIView):
         }
 
         if serializer.validated_data.get("administration"):
+            # A client-supplied administration only NARROWS the result; it is
+            # AND-combined with the user's own access scope below, so passing
+            # an ancestor (or any out-of-scope id) cannot widen access.
             filter_administration = serializer.validated_data.get(
                 "administration"
             )
@@ -272,23 +276,6 @@ class FormDataAddListView(APIView):
             )
             filter_descendants.append(filter_administration.id)
             filter_data["administration_id__in"] = filter_descendants
-        else:
-            # Filter data by user administration path. The root is looked
-            # up within the tenant: an unscoped first() could pick another
-            # tenant's root and scope the whole list to it.
-            adm = (
-                Administration.objects.for_user(request.user)
-                .filter(
-                    parent__isnull=True,
-                )
-                .first()
-            )
-            if not request.user.is_superuser:
-                user_role = request.user.user_user_role.first()
-                if user_role:
-                    adm = user_role.administration
-            user_path = adm.path if adm.path else f"{adm.pk}."
-            filter_data["administration__path__startswith"] = user_path
 
         # Subquery to get the form name of the child with latest activity.
         # Order by Coalesce(updated, created) so NULL updated records are
@@ -305,6 +292,7 @@ class FormDataAddListView(APIView):
         queryset = (
             form.form_form_data.select_related("parent__form")
             .filter(**filter_data)
+            .filter(accessible_administration_q(request.user))
             .annotate(
                 total_children=Count(
                     "children",

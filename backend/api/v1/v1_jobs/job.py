@@ -43,6 +43,7 @@ from utils.export_form import (
     monitoring_meta_columns,
 )
 from utils.functions import update_date_time_format
+from utils.data_access_scope import accessible_administration_q
 from utils.storage import upload
 from utils.custom_generator import generate_sqlite
 from utils.report_generator import generate_datapoint_report
@@ -85,7 +86,12 @@ def download_data(
     # user's tenant, so a form id that slipped past request validation
     # (or a future caller of this task) can never surface another
     # tenant's rows, even though `form` itself is trusted by this point.
-    scoped_form_data = FormData.objects.for_user(user)
+    # accessible_administration_q then confines the export to the user's own
+    # administration subtree, so a client-supplied `administration_ids`
+    # (even an ancestor) only narrows it and cannot export out-of-scope rows.
+    scoped_form_data = FormData.objects.for_user(user).filter(
+        accessible_administration_q(user)
+    )
     if child_form_ids is None:
         child_form_ids = []
     # filter_child_form_ids controls which child forms are used when
@@ -373,8 +379,12 @@ def download_monitoring_data(
 
     # Belt-and-suspenders, matching download_data: floors the query to
     # the acting user's tenant regardless of what child_form/parent_form
-    # were resolved to upstream.
+    # were resolved to upstream, and confines it to the user's own
+    # administration subtree (monitoring rows are scoped by their parent's
+    # administration) so a client administration filter only narrows it.
     queryset = FormData.objects.for_user(user).filter(
+        accessible_administration_q(user, field="parent__administration")
+    ).filter(
         **filter_data
     ).select_related("parent", "parent__administration", "created_by")
 
