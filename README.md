@@ -451,6 +451,39 @@ during a maintenance window:
 ./dc.sh exec backend python manage.py generate_config --refresh-views
 ```
 
+#### Backend dependencies
+
+Backend packages are declared in
+[`backend/pyproject.toml`](backend/pyproject.toml) and pinned, with every
+transitive package, in [`backend/uv.lock`](backend/uv.lock). Both are
+managed with [uv](https://docs.astral.sh/uv/), which is already installed
+in the `backend` container. Never edit `uv.lock` by hand.
+
+```bash
+# Add a runtime dependency
+./dc.sh exec backend uv add 'package==1.2.3'
+
+# Add a test, lint or debug tool (the `dev` group, left out of production images)
+./dc.sh exec backend uv add --dev 'package==1.2.3'
+
+# Update one package to a new version
+./dc.sh exec backend uv add 'package==1.3.0'                  # direct dependency
+./dc.sh exec backend uv lock --upgrade-package package         # transitive one
+./dc.sh exec backend uv sync --frozen --inexact                # install the update
+
+# Remove a dependency
+./dc.sh exec backend uv remove package          # add --dev for a dev tool
+```
+
+`uv add` and `uv remove` update `pyproject.toml` and `uv.lock` together and
+install the result into the `backend` container. Commit both files.
+
+The `worker` container installs from the lock only when it starts, so run
+`./dc.sh restart worker` after a change. `uv remove` leaves the package
+installed in the running containers; run
+`./dc.sh up -d --force-recreate backend worker` to drop it. Other developers
+need the same restart after pulling a dependency change.
+
 #### Log
 
 ```bash

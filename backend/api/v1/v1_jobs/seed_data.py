@@ -237,7 +237,7 @@ def save_data(
     batch: DataBatch = None,
 ):
     is_super_admin = user.is_superuser
-    data_id = None if math.isnan(dp["data_id"]) else dp["data_id"]
+    data_id = None if pd.isnull(dp["data_id"]) else dp["data_id"]
     temp = collect_answers(user=user, dp=dp, qs=qs, data_id=data_id)
     administration = temp.get("administration")
     geo = temp.get("geo")

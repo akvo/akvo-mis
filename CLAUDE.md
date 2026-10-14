@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Akvo MIS (Management Information System) is a Real Time Monitoring Information Systems platform with three main components:
-- **Backend**: Django REST Framework API (Python 3.8.5)
+- **Backend**: Django REST Framework API (Python 3.12)
 - **Frontend**: React web application (Create React App)
 - **Mobile App**: React Native mobile application (Expo)
 
@@ -358,6 +358,14 @@ Common commands:
 ```
 
 Configuration in `backend/setup.cfg` and `backend/pylsp.toml`
+
+#### Backend dependencies
+Declared in `backend/pyproject.toml` (`[dependency-groups] dev` for test
+and debug tools, kept out of production images), locked in
+`backend/uv.lock`. Change them with uv, never by editing the lock:
+`./dc.sh exec backend uv add 'package==1.2.3'` (add `--dev` for a dev
+tool), `./dc.sh exec backend uv lock --upgrade-package package`.
+Commit both files.
 
 ### Frontend Development
 

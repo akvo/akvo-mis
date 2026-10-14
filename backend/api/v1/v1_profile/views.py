@@ -352,7 +352,12 @@ def export_administrations_template(request: Request, version):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def export_prefilled_administrations_template(request: Request, version):
-    serializer = DownloadAdministrationRequestSerializer(data=request.GET)
+    # Context carries the acting user: the administration field is
+    # tenant-scoped (RelatedAdministrationField), so without it the queryset
+    # is empty and every administration id fails as "does not exist".
+    serializer = DownloadAdministrationRequestSerializer(
+        data=request.GET, context={"user": request.user}
+    )
     if not serializer.is_valid():
         return Response(
             {"message": validate_serializers_message(serializer.errors)},

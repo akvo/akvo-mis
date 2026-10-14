@@ -124,9 +124,17 @@ const DownloadEntitiesData = () => {
     });
   };
 
+  // Enable once an administration AT the chosen level is selected. Compare by
+  // level number: `level` is a Levels record id (the Select value), not a
+  // depth, so `level - 1` only matched selectedAdm.level on tenants whose
+  // level ids happen to be their depth + 1.
   const disableDownload = useMemo(() => {
-    return level - 1 !== selectedAdm?.level && isPrefilled;
-  }, [level, selectedAdm, isPrefilled]);
+    if (!isPrefilled) {
+      return false;
+    }
+    const chosenLevel = levels?.find((l) => l?.id === level)?.level;
+    return selectedAdm?.level !== chosenLevel;
+  }, [levels, level, selectedAdm, isPrefilled]);
 
   return (
     <div id="uploadMasterData">

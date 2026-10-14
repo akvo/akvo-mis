@@ -1,7 +1,6 @@
 import datetime
 import enum
 import itertools
-import math
 import pandas as pd
 
 from django.conf import settings
@@ -332,7 +331,7 @@ def validate(form: int, administration: int, file: str):
                 data_ids = list(df[header])
                 for i, data_id in enumerate(data_ids):
                     ix = i + 2
-                    data_id = None if math.isnan(data_id) else data_id
+                    data_id = None if pd.isnull(data_id) else data_id
                     errors = validate_data_id(
                         f"{col}{ix}", data_id, collect_data_ids
                     )
