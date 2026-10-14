@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+import pandas as pd
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.db.models import Count
@@ -326,6 +329,79 @@ class BulkUploadDataTestCase(TestCase, ProfileTestHelperMixin):
             },
         )
         seed_excel_data(job=job, test=True)
+
+        updated_dp = FormData.objects.annotate(
+            history_count=Count("data_answer_history")
+        ).filter(
+            form=form,
+            history_count__gt=0
+        ).first()
+        self.assertTrue(updated_dp)
+
+    def test_object_dtype_data_id_column(self):
+        # Regression (pandas 1.5): when any non-numeric cell is present
+        # the whole id column is read as object dtype, so even the valid
+        # numeric ids arrive as strings. math.isnan() raised "must be a
+        # real number, not str" in both validate() (validate_upload.py)
+        # and save_data() (seed_data.py). pd.isnull() handles any dtype.
+        # Build a valid update sheet, then force its id column to object
+        # strings -- what read_excel returns in the broken case -- and
+        # stub read_excel/ExcelFile so that dtype reaches the real code.
+        form = Forms.objects.get(pk=1)
+        administration = Administration.objects.filter(
+            name="Cawang"
+        ).first()
+        name = "new - John Doe - 44 – wife__husband__partner"
+        FormData.objects.all().delete()
+        data = FormData.objects.create(
+            id=1,
+            name=name,
+            geo=["-8.6384108", "116.2469499"],
+            form=form,
+            administration=administration,
+            created_by=self.user,
+        )
+        data.save()
+        add_fake_answers(data)
+
+        src = "{0}/test-success-update-registration.xlsx".format(
+            self.test_folder
+        )
+        df = pd.read_excel(src, sheet_name="data")
+        df["id"] = df["id"].apply(
+            lambda v: str(int(v)) if pd.notnull(v) else v
+        ).astype(object)
+        self.assertEqual(df["id"].dtype, object)
+
+        # Patch after building df: pandas is shared, so one patch covers
+        # both validate_upload and seed_data.
+        def fake_read_excel(*args, **kwargs):
+            return df.copy()
+
+        with patch("pandas.read_excel", side_effect=fake_read_excel), \
+                patch("pandas.ExcelFile") as m_excelfile:
+            m_excelfile.return_value.sheet_names = ["data"]
+
+            # validate() must not raise on the string ids
+            validation = validate(
+                form=form,
+                administration=administration.id,
+                file="dummy.xlsx",
+            )
+            self.assertEqual(len(validation), 0)
+
+            # seed_excel_data() -> save_data() must not raise either
+            job = Jobs.objects.create(
+                type=JobTypes.seed_data,
+                status=JobStatus.done,
+                user=self.user,
+                info={
+                    "file": "dummy.xlsx",
+                    "form": form.id,
+                    "is_update": False,
+                },
+            )
+            seed_excel_data(job=job, test=True)
 
         updated_dp = FormData.objects.annotate(
             history_count=Count("data_answer_history")
