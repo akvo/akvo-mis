@@ -58,6 +58,24 @@ class AdministrationBulkUploadTemplateExportTestCase(
         actual = [val for val in list(df)]
         self.assertEqual(expected, actual)
 
+    def test_prefilled_template_queues_a_job(self):
+        # Regression: the view must pass user context so the tenant-scoped
+        # administration field resolves. Without it every administration id
+        # failed validation as "does not exist" and the request was a 400.
+        level = Levels.objects.filter(level=1).first()
+        adm = Administration.objects.filter(level__level=1).first()
+        response = cast(
+            Response,
+            self.client.get(
+                "/api/v1/export/prefilled-administrations-template"
+                f"?level={level.id}&administration={adm.id}",
+                content_type="application/json",
+                HTTP_AUTHORIZATION=f"Bearer {self.token}",
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("task_id", response.json())
+
     def test_with_attribute(self):
         response = cast(
             Response,
