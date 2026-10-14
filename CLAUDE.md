@@ -363,8 +363,10 @@ Configuration in `backend/setup.cfg` and `backend/pylsp.toml`
 Declared in `backend/pyproject.toml` (`[dependency-groups] dev` for test
 and debug tools, kept out of production images), locked in
 `backend/uv.lock`. Change them with uv, never by editing the lock:
-`./dc.sh exec backend uv add 'package==1.2.3'` (add `--dev` for a dev
-tool), `./dc.sh exec backend uv lock --upgrade-package package`.
+`./dc.sh exec backend uv add 'package>=1.2.3,<2'` (add `--dev` for a
+dev tool; `~=1.2.3` for patch-only, as Django, DRF, numpy, pandas and
+0.x packages use), `./dc.sh exec backend uv lock --upgrade-package
+package`. Ranges live in pyproject, exact versions only in the lock.
 Commit both files.
 
 ### Frontend Development

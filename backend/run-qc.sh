@@ -5,7 +5,7 @@ set -eu
 ./wait-for-it.sh -h "${DB_HOST}" -p 5432 -- echo "Database is up and running"
 
 # The image leaves out the dev group (flake8, coverage, ...); add it.
-uv sync --frozen --inexact
+uv sync --locked --inexact
 
 echo "Running lint"
 flake8

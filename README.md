@@ -454,22 +454,23 @@ during a maintenance window:
 #### Backend dependencies
 
 Backend packages are declared in
-[`backend/pyproject.toml`](backend/pyproject.toml) and pinned, with every
-transitive package, in [`backend/uv.lock`](backend/uv.lock). Both are
+[`backend/pyproject.toml`](backend/pyproject.toml) as version ranges
+and pinned, with every transitive package, in
+[`backend/uv.lock`](backend/uv.lock). Both are
 managed with [uv](https://docs.astral.sh/uv/), which is already installed
 in the `backend` container. Never edit `uv.lock` by hand.
 
 ```bash
-# Add a runtime dependency
-./dc.sh exec backend uv add 'package==1.2.3'
+# Add a runtime dependency (`~=1.2.3` instead takes patches only)
+./dc.sh exec backend uv add 'package>=1.2.3,<2'
 
 # Add a test, lint or debug tool (the `dev` group, left out of production images)
-./dc.sh exec backend uv add --dev 'package==1.2.3'
+./dc.sh exec backend uv add --dev 'package>=1.2.3,<2'
 
-# Update one package to a new version
-./dc.sh exec backend uv add 'package==1.3.0'                  # direct dependency
-./dc.sh exec backend uv lock --upgrade-package package         # transitive one
-./dc.sh exec backend uv sync --frozen --inexact                # install the update
+# Update one package
+./dc.sh exec backend uv lock --upgrade-package package         # within its range
+./dc.sh exec backend uv add 'package~=1.3.0'                   # past its range
+./dc.sh exec backend uv sync --locked --inexact                # install the update
 
 # Remove a dependency
 ./dc.sh exec backend uv remove package          # add --dev for a dev tool
