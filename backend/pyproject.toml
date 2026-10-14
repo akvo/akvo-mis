@@ -3,54 +3,54 @@ name = "akvo-mis-backend"
 version = "0"
 requires-python = "==3.12.*"
 dependencies = [
-    "django==6.1.2",
-    "djangorestframework==3.18.3",
-    "djangorestframework-simplejwt==5.5.1",
-    "drf-spectacular==0.30.0",
-    "django-q2==1.11.1",
-    "psycopg2-binary==2.9.13",
-    "numpy==2.3.5",
-    "pandas==2.3.3",
-    "PyJWT==2.15.1",
-    "python-dateutil==2.9.0.post0",
-    "gunicorn==23.0.0",
-    "Faker==40.41.0",
-    "google-cloud-storage==2.19.0",
-    "openpyxl==3.1.5",
-    "XlsxWriter==3.2.9",
-    "jsmin==3.0.1",
-    "sentry-sdk==2.71.0",
+    "django~=6.1.2",
+    "djangorestframework~=3.18.3",
+    "djangorestframework-simplejwt~=5.5.1",
+    "drf-spectacular~=0.30.0",
+    "django-q2>=1.11.1,<2",
+    "psycopg2-binary~=2.9.13",
+    "numpy~=2.3.5",
+    "pandas~=2.3.3",
+    "PyJWT>=2.15.1,<3",
+    "python-dateutil>=2.9.0.post0",
+    "gunicorn>=23.0.0,<24",
+    "Faker>=40.41.0",
+    "google-cloud-storage>=2.19.0,<3",
+    "openpyxl>=3.1.5,<4",
+    "XlsxWriter>=3.2.9,<4",
+    "jsmin>=3.0.1,<4",
+    "sentry-sdk>=2.71.0,<3",
     # Office doc rendering
-    "python-docx==1.2.0",
+    "python-docx>=1.2.0,<2",
     # QR code generation
-    "qrcode==8.2",
-    "Pillow==12.3.0",
+    "qrcode>=8.2,<9",
+    "Pillow>=12.3.0,<13",
     # AI Chatbot
-    "openai>=1.30.0",
+    "openai>=1.30.0,<3",
     # Workspace name rules (issue #511).
-    "better-profanity==0.7.0",
-    "pycountry==26.2.16",
+    "better-profanity~=0.7.0",
+    "pycountry>=26.2.16",
     # Turnstile verification (issue #525) posts to Cloudflare. `requests`
     # was already arriving transitively and two modules already imported
     # it; declaring it stops the third caller from relying on that.
-    "requests==2.34.2",
+    "requests>=2.34.2,<3",
 ]
 
 [dependency-groups]
 # Test, lint and debug tools. Production images do not install them.
 dev = [
-    "django-extensions==4.1",
-    "django-dbml==1.2.0",
-    "flake8==7.4.1",
+    "django-extensions>=4.1,<5",
+    "django-dbml>=1.2.0,<2",
+    "flake8>=7.4.1,<8",
     # display tracebacks correctly in parallel test runner
-    "tblib==3.2.2",
+    "tblib>=3.2.2,<4",
     # code coverage
-    "coverage==7.16.2",
-    "coveralls==4.1.0",
+    "coverage>=7.16.2,<8",
+    "coveralls>=4.1.0,<5",
     # debugger
-    "debugpy==1.8.22",
-    "msgpack==1.1.2",
-    "requests-mock==1.12.1",
+    "debugpy>=1.8.22,<2",
+    "msgpack>=1.1.2,<2",
+    "requests-mock>=1.12.1,<2",
 ]
 
 [tool.uv]
