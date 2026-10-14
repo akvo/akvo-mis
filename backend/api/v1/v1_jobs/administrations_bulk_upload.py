@@ -108,12 +108,21 @@ def seed_attributes(
     grouped = group_attributes(data)
     for attribute, val in grouped.items():
         value = {'value': val}
-        obj, created = administration.attributes.get_or_create(
-            attribute=attribute, defaults={'value': value}
-        )
-        if not created:
-            obj.value = value
-            obj.save(update_fields=['value'])
+        # There is no unique constraint on (administration, attribute), and
+        # other write paths create values blindly, so a pair can already have
+        # duplicates. get_or_create would raise MultipleObjectsReturned on
+        # those; filter + collapse instead: keep one, update it, drop the rest.
+        existing = list(administration.attributes.filter(attribute=attribute))
+        if existing:
+            keep = existing[0]
+            keep.value = value
+            keep.save(update_fields=['value'])
+            for extra in existing[1:]:
+                extra.delete()
+        else:
+            administration.attributes.create(
+                attribute=attribute, value=value
+            )
 
 
 def group_attributes(

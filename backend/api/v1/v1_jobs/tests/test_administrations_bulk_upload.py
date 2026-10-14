@@ -3,7 +3,8 @@ from django.core.management import call_command
 from django.test import TestCase
 import pandas as pd
 from api.v1.v1_jobs.administrations_bulk_upload import (
-        seed_administration_data, validate_administrations_bulk_upload)
+        seed_administration_data, seed_attributes,
+        validate_administrations_bulk_upload)
 from api.v1.v1_jobs.functions import ValidationText
 from api.v1.v1_jobs.validate_upload import ExcelError
 
@@ -118,6 +119,22 @@ class SeedDataTestCase(TestCase, ProfileTestHelperMixin):
         adm2 = Administration.objects.get(name='Jagakarsa')
         self.assertEqual(2, adm1.attributes.count())
         self.assertEqual(1, adm2.attributes.count())
+
+    def test_seed_attributes_collapses_duplicates(self):
+        # A pair can already have duplicate values (no unique constraint on
+        # administration+attribute), and get_or_create raised
+        # MultipleObjectsReturned on them. The seeder must collapse to one.
+        adm = Administration.objects.filter(parent__isnull=False).first()
+        adm.attributes.create(attribute=self.value_att, value={'value': 'a'})
+        adm.attributes.create(attribute=self.value_att, value={'value': 'b'})
+        self.assertEqual(
+                2, adm.attributes.filter(attribute=self.value_att).count())
+
+        seed_attributes(adm, [(self.value_att, 'c', 'col')])
+
+        values = adm.attributes.filter(attribute=self.value_att)
+        self.assertEqual(1, values.count())
+        self.assertEqual({'value': 'c'}, values.first().value)
 
     def test_seed_data_with_non_numeric_code(self):
         # Regression (Sentry): a Code column holding alphanumeric values
