@@ -532,7 +532,7 @@ def rename_impact(tenant):
     # breaks something it does not touch. See `tests_admin_rename`.
     published = Dashboard.objects.filter(
         tenant=tenant, deleted_at=None
-    ).exclude(published_config=None)
+    ).exclude(published_config__isnull=True)
     return {
         # The two dashboard counts partition the published set, and
         # that is deliberate. They used to overlap -- every published

@@ -121,7 +121,9 @@ class SecondWorkspaceActivationEmailTestCase(TestCase):
         # account and the registrant would still be locked out of zeta.
         self.assertFalse(acme_user.is_active)
 
-    @override_settings(EMAIL_BACKEND=EXPLODING_BACKEND)
+    @override_settings(
+        MAILERS={"default": {"BACKEND": EXPLODING_BACKEND}}
+    )
     def test_registration_reports_success_but_logs_when_the_email_fails(self):
         with self.assertLogs("utils.email_helper", level="ERROR") as logs:
             response = self.register("acme")
