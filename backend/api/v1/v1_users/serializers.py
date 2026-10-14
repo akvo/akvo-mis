@@ -593,9 +593,11 @@ class AddEditUserSerializer(
             if not serializer.is_valid():
                 errors = {}
                 # Process role validation errors
-                if any("role" in item for item in serializer.errors):
+                if any(
+                    "role" in item for item in serializer.errors.values()
+                ):
                     role_errors = []
-                    for i, error_item in enumerate(serializer.errors):
+                    for i, error_item in serializer.errors.items():
                         if "role" in error_item:
                             for err in error_item["role"]:
                                 if "does not exist" in str(err):
@@ -612,9 +614,12 @@ class AddEditUserSerializer(
                         errors["role"] = role_errors
 
                 # Process administration validation errors
-                if any("administration" in item for item in serializer.errors):
+                if any(
+                    "administration" in item
+                    for item in serializer.errors.values()
+                ):
                     admin_errors = []
-                    for i, error_item in enumerate(serializer.errors):
+                    for i, error_item in serializer.errors.items():
                         if "administration" in error_item:
                             for err in error_item["administration"]:
                                 if "does not exist" in str(err):
@@ -637,11 +642,10 @@ class AddEditUserSerializer(
                 # Raise custom ValidationError with better error messages
                 if errors:
                     raise ValidationError(errors)
-                # Otherwise, re-raise the original errors. serializer.errors
-                # is a list (one entry per role), so nest it under "roles":
-                # a bare list as the serializer's _errors makes DRF's .errors
-                # ReturnDict fail to unpack ("need more than 1 value to
-                # unpack") and hides the real message.
+                # Otherwise, re-raise the original errors, nested under
+                # "roles" so they read as this field's errors. Since DRF
+                # 3.18 serializer.errors maps the index of each invalid
+                # role to its errors.
                 raise ValidationError({"roles": serializer.errors})
             internal_value["roles"] = serializer.validated_data
 
