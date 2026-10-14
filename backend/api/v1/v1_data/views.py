@@ -644,7 +644,7 @@ def export_form_data(request, version, form_id):
         os.remove(filepath)
     writer = pd.ExcelWriter(filepath, engine="xlsxwriter")
     blank_data_template(form=form, writer=writer)
-    writer.save()
+    writer.close()
     filename = filepath.split("/")[-1].replace(" ", "-")
     zip_file = open(filepath, "rb")
     response = HttpResponse(

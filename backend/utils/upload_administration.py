@@ -45,7 +45,7 @@ def generate_template(
     )
     for col_num, value in enumerate(data.columns.values):
         worksheet.write(0, col_num, value, header_format)
-    writer.save()
+    writer.close()
 
 
 def generate_administration_excel(
@@ -144,7 +144,7 @@ def generate_administration_template(
                 )
                 if find_adm:
                     worksheet.write(adx + 1, parent_col, find_adm.name)
-    writer.save()
+    writer.close()
     url = upload(file=file_path, folder="download_administration")
     return url
 

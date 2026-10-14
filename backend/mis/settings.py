@@ -65,6 +65,31 @@ PROD = True if "PROD" in environ else False
 # because BASE_DOMAIN below now depends on it.
 TESTING = sys.argv[1:2] == ["test"]
 
+# Deprecation gate for the framework upgrade. Under `manage.py test`
+# every deprecation Django announces is an error. Django ships each
+# deprecation together with its replacement, so anything raised here is
+# fixable on the installed version -- and fixing it now is what keeps
+# the next upgrade from breaking. The two aliases name the current pair
+# of categories on every release since 4.2, so nothing here changes
+# between upgrade steps.
+if TESTING:
+    import warnings
+    from django.utils.deprecation import (
+        RemovedAfterNextVersionWarning,
+        RemovedInNextVersionWarning,
+    )
+
+    warnings.filterwarnings("error", category=RemovedInNextVersionWarning)
+    warnings.filterwarnings("error", category=RemovedAfterNextVersionWarning)
+    # pandas (and others) announce removals as FutureWarning attributed
+    # to the calling frame. Gate only the ones our own code triggers.
+    warnings.filterwarnings(
+        "error",
+        category=FutureWarning,
+        module=r"^(api|utils|mis|middleware)(\.|$)",
+    )
+    TEST_RUNNER = "mis.test_runner.DeprecationGateRunner"
+
 # Host-based tenant routing. Unset means single-host: every host is the
 # base domain, nothing resolves to a tenant, and the routing is inert —
 # which is how the test suite and any non-SaaS deployment run.
@@ -313,6 +338,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
     "NUM_PROXIES": NUM_PROXIES,
     "DEFAULT_THROTTLE_RATES": THROTTLE_RATES,
+    "EXCEPTION_HANDLER": "utils.exception_handler.exception_handler",
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": APP_NAME,

@@ -47,7 +47,7 @@ class Command(BaseCommand):
             download_type=download_type,
             child_form_ids=list(form.children.values_list("id", flat=True)),
         )
-        writer.save()
+        writer.close()
 
         out_file = f"{form_name}.xlsx"
         if latest:

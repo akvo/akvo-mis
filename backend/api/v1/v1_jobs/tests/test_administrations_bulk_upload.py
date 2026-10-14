@@ -23,7 +23,7 @@ def write_inmemory_excel_file(df: pd.DataFrame) -> BytesIO:
     iofile = BytesIO()
     writer = pd.ExcelWriter(iofile, engine='xlsxwriter')
     df.to_excel(writer, sheet_name='data', index=False)
-    writer.save()
+    writer.close()
     return iofile
 
 
@@ -47,7 +47,7 @@ def write_template_with_columns(columns) -> BytesIO:
     })
     for col_num, value in enumerate(df.columns.values):
         worksheet.write(0, col_num, value, header_format)
-    writer.save()
+    writer.close()
     return iofile
 
 
@@ -273,7 +273,7 @@ class ValidateBulkUploadTestCase(TestCase, ProfileTestHelperMixin):
         iofile = BytesIO()
         writer = pd.ExcelWriter(iofile, engine='xlsxwriter')
         data.to_excel(writer, sheet_name='test')
-        writer.save()
+        writer.close()
         result = validate_administrations_bulk_upload(iofile)
         self.assertEqual(1, len(result))
         self.assertEqual(ExcelError.sheet, result[0]['error'])
