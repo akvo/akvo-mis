@@ -119,6 +119,34 @@ class SeedDataTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(2, adm1.attributes.count())
         self.assertEqual(1, adm2.attributes.count())
 
+    def test_seed_data_with_non_numeric_code(self):
+        # Regression (Sentry): a Code column holding alphanumeric values
+        # is read by pandas as object dtype, and np.isnan() raised
+        # "ufunc 'isnan' not supported for the input types" on it. The
+        # numeric-looking codes used by the other fixtures were coerced
+        # to float and hid this. pd.notnull handles any dtype.
+        df = generate_inmemory_template([
+            self.value_att.id,
+            self.option_att.id])
+        df.loc[len(df)] = [
+                'Indonesia',
+                'A001',
+                'Jakarta',
+                'A101',
+                'South Jakarta',
+                'A201',
+                'Pasar Minggu',
+                'A301',
+                'Lenteng Agung',
+                'A401',
+                'y',
+                'opt #1'
+                ]
+        upload_file = write_inmemory_excel_file(df)
+        seed_administration_data(upload_file)
+        self.assertTrue(
+                Administration.objects.filter(name='Lenteng Agung').exists())
+
     def test_seed_attribute_type_variant(self):
         df = generate_inmemory_template([
             self.value_att.id,

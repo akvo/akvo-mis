@@ -3,7 +3,6 @@ import logging
 from django.db import transaction
 from django.db.models import Q
 import pandas as pd
-import numpy as np
 from typing import Any, Dict, List, Tuple, Type, Union
 from django.db.models import Model
 from pandas.core.frame import itertools
@@ -53,7 +52,7 @@ def seed_administration_data(io_file, tenant=None):
             administration_code = None
             if (
                 f"{col} Code" in row and
-                not np.isnan(row[f"{col} Code"])
+                pd.notnull(row[f"{col} Code"])
             ):
                 administration_code = row[f"{col} Code"]
             administration_data.append((
