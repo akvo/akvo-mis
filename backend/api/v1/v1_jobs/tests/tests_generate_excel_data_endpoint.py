@@ -53,6 +53,30 @@ class GenerateExcelDataAPITestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_generate_allows_own_administration(self):
+        response = self.client.get(
+            f"{self.url}?form_id={self.form.id}"
+            f"&administration_id={self.administration.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_generate_refuses_out_of_scope_administration(self):
+        # A sibling administration the user has no role in.
+        other = (
+            Administration.objects.filter(level__level=1)
+            .exclude(id=self.administration.id)
+            .order_by("?")
+            .first()
+        )
+        self.assertIsNotNone(other)
+        response = self.client.get(
+            f"{self.url}?form_id={self.form.id}"
+            f"&administration_id={other.id}",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_generate_export_data_with_invalid_form(self):
         response = self.client.get(
             f"{self.url}?form_id=9999",

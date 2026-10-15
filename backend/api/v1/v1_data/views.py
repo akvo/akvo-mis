@@ -9,7 +9,7 @@ from wsgiref.util import FileWrapper
 from django.conf import settings
 from django.utils import timezone
 from django.http import HttpResponse
-from django.db.models import Q, Count, Max, OuterRef, Subquery
+from django.db.models import Q, Count, Exists, Max, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from django_q.tasks import async_task
 from drf_spectacular.types import OpenApiTypes
@@ -56,6 +56,7 @@ from utils.custom_permissions import (
     PublicGet,
 )
 from utils.custom_serializer_fields import validate_serializers_message
+from utils.data_access_scope import accessible_administration_q
 from utils.default_serializers import DefaultResponseSerializer
 from utils.export_form import blank_data_template
 
@@ -195,13 +196,17 @@ class FormDataAddListView(APIView):
         order_by = f"-{sort_by}" if sort_type == "descend" else sort_by
 
         if parent:
-            # Only get the children data
+            # Only get the children data. Scoped to the user's own
+            # administrations too: a parent uuid is client-supplied, so
+            # without this a form user could read another administration's
+            # monitoring submissions by naming an out-of-scope parent.
             queryset = (
                 form.form_form_data.select_related("parent__form")
                 .filter(
                     uuid=parent,
                     is_pending=False,
                 )
+                .filter(accessible_administration_q(request.user))
                 .annotate(
                     total_children=Count(
                         "children",
@@ -250,6 +255,9 @@ class FormDataAddListView(APIView):
         }
 
         if serializer.validated_data.get("administration"):
+            # A client-supplied administration only NARROWS the result; it is
+            # AND-combined with the user's own access scope below, so passing
+            # an ancestor (or any out-of-scope id) cannot widen access.
             filter_administration = serializer.validated_data.get(
                 "administration"
             )
@@ -266,23 +274,6 @@ class FormDataAddListView(APIView):
             )
             filter_descendants.append(filter_administration.id)
             filter_data["administration_id__in"] = filter_descendants
-        else:
-            # Filter data by user administration path. The root is looked
-            # up within the tenant: an unscoped first() could pick another
-            # tenant's root and scope the whole list to it.
-            adm = (
-                Administration.objects.for_user(request.user)
-                .filter(
-                    parent__isnull=True,
-                )
-                .first()
-            )
-            if not request.user.is_superuser:
-                user_role = request.user.user_user_role.first()
-                if user_role:
-                    adm = user_role.administration
-            user_path = adm.path if adm.path else f"{adm.pk}."
-            filter_data["administration__path__startswith"] = user_path
 
         # Subquery to get the form name of the child with latest activity.
         # Order by Coalesce(updated, created) so NULL updated records are
@@ -299,6 +290,7 @@ class FormDataAddListView(APIView):
         queryset = (
             form.form_form_data.select_related("parent__form")
             .filter(**filter_data)
+            .filter(accessible_administration_q(request.user))
             .annotate(
                 total_children=Count(
                     "children",
@@ -392,6 +384,22 @@ class FormDataAddListView(APIView):
             )
 
         serializer.save()
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
         return Response({"message": "ok"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -630,7 +638,7 @@ def export_form_data(request, version, form_id):
         os.remove(filepath)
     writer = pd.ExcelWriter(filepath, engine="xlsxwriter")
     blank_data_template(form=form, writer=writer)
-    writer.save()
+    writer.close()
     filename = filepath.split("/")[-1].replace(" ", "-")
     zip_file = open(filepath, "rb")
     response = HttpResponse(
@@ -668,6 +676,22 @@ class PendingFormDataView(APIView):
             )
 
         serializer.save()
+        user_tenant = getattr(request.user, "tenant", None)
+        tenant_name = (
+            getattr(user_tenant, "name", None) or user_tenant.subdomain
+            if user_tenant
+            else None
+        )
+        subdomain = user_tenant.subdomain if user_tenant else None
+        async_task(
+            "utils.matomo.track_submission_task",
+            tenant_name=tenant_name,
+            form_name=form.name,
+            form_id=form.id,
+            source="web",
+            user_id=str(request.user.id),
+            subdomain=subdomain,
+        )
         return Response({"message": "ok"}, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -769,7 +793,15 @@ class PendingFormDataView(APIView):
             if settings.USE_TZ:
                 end_datetime = timezone.make_aware(end_datetime)
             queryset = queryset.filter(created__lt=end_datetime)
-        queryset = queryset.order_by("-created")
+        # Load everything ListPendingFormDataSerializer reads in the same
+        # query; per-row lookups cost one DB round-trip each (N+1)
+        queryset = queryset.order_by("-created").select_related(
+            "created_by", "administration", "form", "parent"
+        ).annotate(
+            has_answer_history=Exists(
+                AnswerHistory.objects.filter(data=OuterRef("pk"))
+            )
+        )
         # if selection_ids is provided, filter the queryset
         selection_ids = request.GET.getlist("selection_ids")
         if selection_ids:
@@ -784,11 +816,13 @@ class PendingFormDataView(APIView):
 
         paginator = PageNumberPagination()
         instance = paginator.paginate_queryset(queryset, request)
+        # Reuse the count the paginator already ran
+        total = paginator.page.paginator.count
 
         data = {
             "current": int(request.GET.get("page", "1")),
-            "total": queryset.count(),
-            "total_page": ceil(queryset.count() / page_size),
+            "total": total,
+            "total_page": ceil(total / page_size),
             "data": ListPendingFormDataSerializer(
                 instance=instance, many=True
             ).data,

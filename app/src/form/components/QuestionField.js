@@ -206,7 +206,8 @@ const QuestionField = ({
       {renderField()}
       {hasError && (
         <Text style={styles.validationErrorText} testID="err-validation-text">
-          {formFeedback[questionField.id]}
+          {/* Yup messages start with a placeholder "this"; the label sits right above. */}
+          {`${formFeedback[questionField.id]}`.replace(/^this /, 'This ')}
         </Text>
       )}
     </View>

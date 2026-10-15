@@ -14,6 +14,7 @@ from utils.custom_serializer_fields import (
     CustomListField,
     TenantScopedPrimaryKeyRelatedField,
 )
+from utils.data_access_scope import administration_in_user_scope
 
 
 class DownloadDataRequestSerializer(serializers.Serializer):
@@ -55,6 +56,18 @@ class DownloadDataRequestSerializer(serializers.Serializer):
         ).child.queryset = FormData.objects.filter(
             form__parent__isnull=True
         ).all()
+
+    def validate_administration_id(self, administration):
+        # The export is already clamped to the user's scope, but refuse an
+        # out-of-scope administration (e.g. a sibling) up front rather than
+        # queue a job that produces an empty file.
+        if not administration_in_user_scope(
+            self.context.get("user"), administration
+        ):
+            raise serializers.ValidationError(
+                "Administration outside your access."
+            )
+        return administration
 
     def validate(self, data):
         date_from = data.get("date_from")

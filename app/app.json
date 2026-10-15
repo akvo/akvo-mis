@@ -3,7 +3,7 @@
     "newArchEnabled": true,
     "name": "Akvo MIS",
     "slug": "akvo-mis-mobile",
-    "version": "4.3.1",
+    "version": "4.3.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.akvo.akvo_mis",
-      "versionCode": 4301
+      "versionCode": 4302
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -80,6 +80,7 @@
       "policy": "appVersion"
     },
     "updates": {
+      "enabled": false,
       "url": "https://u.expo.dev/0cf14548-42af-4de7-a9ec-79db98d747d7"
     }
   }

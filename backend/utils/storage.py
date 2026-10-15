@@ -13,7 +13,12 @@ def upload(file: str, folder: str = None, filename: str = None):
     if not filename:
         filename = file.split("/")[-1]
     location = f"{storage_location}/{filename}"
-    shutil.copy2(file, location)
+    # Content only, then a fixed mode: sources are often 0600 temp files
+    # (tempfile.NamedTemporaryFile), and copy2 carried that mode over, so
+    # nginx in the frontend container answered 403. chmod also covers an
+    # overwrite, which keeps the existing file's mode.
+    shutil.copyfile(file, location)
+    os.chmod(location, 0o644)
     return location
 
 

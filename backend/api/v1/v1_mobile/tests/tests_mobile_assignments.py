@@ -33,7 +33,18 @@ class MobileAssignmentTestCase(TestCase, ProfileTestHelperMixin):
                     administration=adm,
                     name=f"{entity.name} - {adm.name}"
                 )
-        self.user = self.create_user('test@akvo.org', self.IS_ADMIN)
+        # Root-level admin: every administration in the tree is a descendant
+        # of the single root, so this user may assign any of them. A deeper
+        # role would (correctly) be refused assigning an ancestor, which is
+        # the scope rule MobileAssignmentSerializer now enforces.
+        self.root_administration = Administration.objects.filter(
+            parent__isnull=True
+        ).first()
+        self.user = self.create_user(
+            'test@akvo.org',
+            self.IS_ADMIN,
+            administration=self.root_administration,
+        )
         self.token = self.get_auth_token(self.user.email)
 
     def test_list(self):
@@ -344,3 +355,52 @@ class MobileAssignmentTestCase(TestCase, ProfileTestHelperMixin):
             ],
             "Admin should see only assignments for their administration"
         )
+
+
+@override_settings(USE_TZ=False)
+class MobileAssignmentAdminScopeTestCase(TestCase, ProfileTestHelperMixin):
+    """A non-superuser may only assign administrations within their own role
+    scope: their role administration or a descendant, never an ancestor (the
+    national root) or a sibling."""
+
+    def setUp(self):
+        super().setUp()
+        call_command("administration_seeder", "--test")
+        call_command("form_seeder", "--test")
+        call_command("default_roles_seeder", "--test", 1)
+        self.root = Administration.objects.filter(parent__isnull=True).first()
+        provinces = list(
+            Administration.objects.filter(level__level=1).order_by("id")
+        )
+        self.prov_in, self.prov_out = provinces[0], provinces[1]
+        self.user = self.create_user(
+            "scoped@akvo.org", self.IS_ADMIN, administration=self.prov_in
+        )
+        self.token = self.get_auth_token(self.user.email)
+        self.form = Forms.objects.first()
+
+    def _post(self, administration_id):
+        return self.client.post(
+            "/api/v1/mobile-assignments",
+            {
+                "name": "scoped assignment",
+                "forms": [self.form.id],
+                "administrations": [administration_id],
+            },
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+    def test_own_administration_allowed(self):
+        self.assertEqual(self._post(self.prov_in.id).status_code, 201)
+
+    def test_descendant_allowed(self):
+        child = self.prov_in.parent_administration.first()
+        self.assertIsNotNone(child)
+        self.assertEqual(self._post(child.id).status_code, 201)
+
+    def test_ancestor_root_refused(self):
+        self.assertEqual(self._post(self.root.id).status_code, 400)
+
+    def test_sibling_administration_refused(self):
+        self.assertEqual(self._post(self.prov_out.id).status_code, 400)

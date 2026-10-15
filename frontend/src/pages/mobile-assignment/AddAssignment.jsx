@@ -39,8 +39,17 @@ const AddAssignment = () => {
     administration: selectedAdm,
   } = store.useState((s) => s);
   const [editAssignment, setEditAssignment] = useState(null);
+  // The shallowest administration level this user may assign at. A
+  // non-superuser is capped by their roles, never by profile.administration:
+  // that is the tenant root for every user, so using it let a province-scoped
+  // user pick National and hand a device every province's data.
+  const minAssignableLevel = authUser?.is_superuser
+    ? authUser?.administration?.level ?? 0
+    : authUser?.roles?.length
+    ? Math.min(...authUser.roles.map((r) => r?.administration?.level ?? 0))
+    : authUser?.administration?.level ?? 0;
   const userAdmLevel =
-    levels.find((l) => l?.level === authUser.administration.level)?.id || null;
+    levels.find((l) => l?.level === minAssignableLevel)?.id || null;
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [preload, setPreload] = useState(true);
@@ -54,9 +63,11 @@ const AddAssignment = () => {
     .sort((a, b) => a.level - b.level)
     .slice(-1)?.[0];
 
+  // Only levels at or below the user's own access. Compared by level number,
+  // not id: level ids are not ordered by depth on every tenant.
   const admLevels = levels
     .slice()
-    .filter((l) => l?.id >= userAdmLevel)
+    .filter((l) => l?.level >= minAssignableLevel)
     .sort((a, b) => a?.level - b?.level);
 
   const NATIONAL_LEVEL = levels?.find((l) => l.level === 0)?.id;
@@ -297,9 +308,12 @@ const AddAssignment = () => {
           })
       );
       if (adms) {
-        setLevel(adms[0].level + 1);
-        setAdmLevel(levels.find((l) => l?.level === adms[0].level));
-        form.setFieldsValue({ level_id: adms[0].level + 1 });
+        const admLevelObj = levels.find((l) => l?.level === adms[0].level);
+        if (admLevelObj) {
+          setLevel(admLevelObj.id);
+          setAdmLevel(admLevelObj);
+          form.setFieldsValue({ level_id: admLevelObj.id });
+        }
         setSelectedAdministrations(adms.map((adm) => adm.id));
       }
       const parentAdm = await Promise.all(
@@ -429,7 +443,7 @@ const AddAssignment = () => {
                       size="large"
                       width="100%"
                       direction="vertical"
-                      maxLevel={level}
+                      maxLevel={admLevel?.level + 1}
                       onChange={(values) => {
                         if (values) {
                           setSelectedAdministrations(values);

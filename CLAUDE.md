@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Akvo MIS (Management Information System) is a Real Time Monitoring Information Systems platform with three main components:
-- **Backend**: Django REST Framework API (Python 3.8.5)
+- **Backend**: Django REST Framework API (Python 3.12)
 - **Frontend**: React web application (Create React App)
 - **Mobile App**: React Native mobile application (Expo)
 
@@ -56,7 +56,7 @@ The application is containerized using Docker Compose with the following service
 - `backend`: Django backend API server (port 8000)
 - `worker`: Django-Q background worker for async tasks
 - `frontend`: React development server (port 3000) / Nginx production server
-- `db`: PostgreSQL 12 database (port 5432)
+- `db`: PostgreSQL 18 database (port 5432)
 - `pgadmin`: Database administration UI (port 5050)
 
 ### Backend Architecture (Django)
@@ -84,7 +84,7 @@ Located in `./backend/`
 - **Data Access Types**: Form data has approval workflows with different access levels (view, submit, approve)
 
 #### Database
-- PostgreSQL 12 with schema name `mis`
+- PostgreSQL 18 with schema name `mis`
 - DBML diagram auto-generated in `backend/db.dbml`
 - Administration hierarchy supports multi-level geographic/organizational structure
 - Form data supports parent-child relationships for complex forms
@@ -358,6 +358,14 @@ Common commands:
 ```
 
 Configuration in `backend/setup.cfg` and `backend/pylsp.toml`
+
+#### Backend dependencies
+Declared in `backend/pyproject.toml` (`[dependency-groups] dev` for test
+and debug tools, kept out of production images), locked in
+`backend/uv.lock`. Change them with uv, never by editing the lock:
+`./dc.sh exec backend uv add 'package==1.2.3'` (add `--dev` for a dev
+tool), `./dc.sh exec backend uv lock --upgrade-package package`.
+Commit both files.
 
 ### Frontend Development
 

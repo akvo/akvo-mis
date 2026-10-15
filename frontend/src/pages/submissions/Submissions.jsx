@@ -104,47 +104,61 @@ const Submissions = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedForm) {
-      setLoading(true);
-      let url;
-      setExpandedKeys([]);
-      if (dataTab === "pending-submission") {
-        url = `/form-pending-data/${selectedForm}/?page=${currentPage}`;
-        setModalButton(true);
-      } else if (dataTab === "pending-approval") {
-        url = `batch/?form=${selectedForm}&page=${currentPage}`;
-        setModalButton(false);
-      } else if (dataTab === "approved") {
-        url = `batch/?form=${selectedForm}&page=${currentPage}&approved=true`;
-        setModalButton(false);
-      }
-      // Add search filter if set
-      if (search) {
-        url += `&search=${encodeURIComponent(search)}`;
-      }
-      // Add date range filter if set
-      if (dateRange && dateRange.length === 2) {
-        const dateFrom = dateRange[0].format("YYYY-MM-DD");
-        const dateTo = dateRange[1].format("YYYY-MM-DD");
-        url += `&date_from=${dateFrom}&date_to=${dateTo}`;
-      }
-      api
-        .get(url)
-        .then((res) => {
-          setDataset(res.data.data);
-          setTotalCount(res.data.total);
-        })
-        .catch((e) => {
-          console.error(e);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+    if (!selectedForm) {
+      return () => {};
     }
+    // A slow response for a previous tab/page must not overwrite the
+    // current one (pending rows would render as batches with no approvers)
+    let active = true;
+    setLoading(true);
+    let url;
+    setExpandedKeys([]);
+    if (dataTab === "pending-submission") {
+      url = `/form-pending-data/${selectedForm}/?page=${currentPage}`;
+      setModalButton(true);
+    } else if (dataTab === "pending-approval") {
+      url = `batch/?form=${selectedForm}&page=${currentPage}`;
+      setModalButton(false);
+    } else if (dataTab === "approved") {
+      url = `batch/?form=${selectedForm}&page=${currentPage}&approved=true`;
+      setModalButton(false);
+    }
+    // Add search filter if set
+    if (search) {
+      url += `&search=${encodeURIComponent(search)}`;
+    }
+    // Add date range filter if set
+    if (dateRange && dateRange.length === 2) {
+      const dateFrom = dateRange[0].format("YYYY-MM-DD");
+      const dateTo = dateRange[1].format("YYYY-MM-DD");
+      url += `&date_from=${dateFrom}&date_to=${dateTo}`;
+    }
+    api
+      .get(url)
+      .then((res) => {
+        if (!active) {
+          return;
+        }
+        setDataset(res.data.data);
+        setTotalCount(res.data.total);
+      })
+      .catch((e) => {
+        console.error(e);
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [dataTab, currentPage, reload, selectedForm, dateRange, search]);
 
   useEffect(() => {
     if (selectedForm) {
+      setDataset([]);
+      setTotalCount(0);
       setExpandedKeys([]);
       setSelectedRowKeys([]);
     }

@@ -294,7 +294,7 @@ class BulkUnitTestCase(TestCase, ProfileTestHelperMixin):
             writer=writer,
             form=form
         )
-        writer.save()
+        writer.close()
         # test if excel has been created
         self.assertTrue(os.path.exists("test.xlsx"))
         os.remove("test.xlsx")
@@ -308,7 +308,7 @@ class BulkUnitTestCase(TestCase, ProfileTestHelperMixin):
             form=form,
             child_form_ids=list(child_forms.values_list("id", flat=True)),
         )
-        writer.save()
+        writer.close()
         # test if excel has been created
         self.assertTrue(os.path.exists("test.xlsx"))
         os.remove("test.xlsx")
@@ -320,7 +320,7 @@ class BulkUnitTestCase(TestCase, ProfileTestHelperMixin):
             writer=writer,
             form=form
         )
-        writer.save()
+        writer.close()
         # test if excel has been created
         self.assertTrue(os.path.exists("test.xlsx"))
         os.remove("test.xlsx")

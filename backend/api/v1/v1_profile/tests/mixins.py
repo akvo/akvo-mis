@@ -189,5 +189,5 @@ def write_administration_excel(levels, rows, path=None):
     pd.DataFrame(named, columns=columns).to_excel(
         writer, sheet_name="data", index=False
     )
-    writer.save()
+    writer.close()
     return target

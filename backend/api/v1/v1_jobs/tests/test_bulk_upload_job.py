@@ -145,7 +145,7 @@ class BulkUploadJobTestCase(TestCase, TenantTestHelperMixin):
         pd.DataFrame({"a": [1]}).to_excel(
             writer, sheet_name="other", index=False
         )
-        writer.save()
+        writer.close()
 
         job = self._run_handler("nosheet.xlsx", self._pending_job())
         self.assertEqual(job.status, JobStatus.failed)

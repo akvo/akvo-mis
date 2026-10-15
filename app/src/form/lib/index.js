@@ -382,7 +382,11 @@ export const generateValidationSchemaFieldLevel = async (currentValue, field) =>
   switch (type) {
     case 'number':
       // number rules
-      yupType = currentValue === '' ? Yup.string() : Yup.number();
+      // "this" is swapped for the question label by callers; Yup's default here
+      // ("must be a `number` type, but the final value was: `NaN`…") is unreadable
+      // for input like "2,5".
+      yupType =
+        currentValue === '' ? Yup.string() : Yup.number().typeError('this must be a number');
       if (currentValue !== '' && rule?.min) {
         yupType = yupType.min(rule.min);
       }

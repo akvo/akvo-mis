@@ -28,10 +28,22 @@ const AdministrationDropdown = ({
     .sort((a, b) => a.level - b.level)
     .slice(-1)?.[0];
   /**
-   * Get lowest level administrator from maxLevel.
-   * otherwise, sort asc by level and get the last item from levels global state
+   * `maxLevel` is a 1-indexed depth (level number + 1), but several callers
+   * still pass a Levels record id. Normalise once here: look the value up as
+   * an id first and take that level's depth, otherwise treat it as already a
+   * depth. Without this, a level id such as 28 is read as a depth and the
+   * dropdown exposes levels beyond the intended cap on tenants whose level
+   * ids are not their depth. All arithmetic below uses `maxDepth`.
    */
-  const currLevel = levels?.find((l) => l?.id === maxLevel) || lowestLevel;
+  const maxDepth = useMemo(() => {
+    const asRecord = levels?.find((l) => l?.id === maxLevel);
+    return asRecord ? asRecord.level + 1 : maxLevel;
+  }, [levels, maxLevel]);
+
+  // Resolve the selectable level from the normalised depth; fall back to the
+  // deepest level when maxLevel is not provided.
+  const currLevel =
+    levels?.find((l) => l?.level === maxDepth - 1) || lowestLevel;
 
   const { active: activeLang } = language;
   const text = useMemo(() => {
@@ -146,12 +158,12 @@ const AdministrationDropdown = ({
         {administration
           .filter(
             (x) =>
-              (x?.children?.length && !maxLevel) ||
-              (maxLevel && x?.level < maxLevel - 1 && x?.children?.length) // show children based on maxLevel
+              (x?.children?.length && !maxDepth) ||
+              (maxDepth && x?.level < maxDepth - 1 && x?.children?.length) // show children based on maxLevel
           )
           .filter((l) => !limitLevel || l?.level !== limitLevel)
           .map((region, regionIdx) => {
-            if (maxLevel === null || regionIdx + 1 < maxLevel) {
+            if (maxDepth === null || regionIdx + 1 < maxDepth) {
               /**
                * Find last item by checking:
                * - regionIdx + 1 = next index is equal with parent maxLevel
@@ -159,7 +171,7 @@ const AdministrationDropdown = ({
                * - region.level = current level is equal with parent lowest level
                */
               const isLastItem =
-                (maxLevel && maxLevel - 1 === regionIdx + 1) ||
+                (maxDepth && maxDepth - 1 === regionIdx + 1) ||
                 region.level === currLevel?.level - 1;
               const selectMode =
                 allowMultiple && isLastItem ? "multiple" : null;
@@ -236,7 +248,7 @@ const AdministrationDropdown = ({
               );
             }
           })}
-        {showSelectAll && maxLevel === lowestLevel.id && (
+        {showSelectAll && maxDepth === lowestLevel.level + 1 && (
           <Row className="form-row">
             <Col span={24}>
               <Checkbox onChange={onSelectAll} checked={checked}>

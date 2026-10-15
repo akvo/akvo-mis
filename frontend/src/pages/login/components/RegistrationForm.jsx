@@ -141,7 +141,6 @@ const RegistrationForm = (props) => {
             Set New Password
           </Button>
         </Form.Item>
-        <p className="disclaimer">{text.accountDisclaimer}</p>
       </Form>
     </>
   );

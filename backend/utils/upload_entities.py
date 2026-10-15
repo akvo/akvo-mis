@@ -60,7 +60,7 @@ def generate_list_of_entities(
             entities.append(entity_object)
         df = pd.DataFrame(entities)
         df.to_excel(writer, sheet_name=entity.name, index=False)
-    writer.save()
+    writer.close()
     url = upload(file=file_path, folder="download_entities")
     return url
 

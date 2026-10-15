@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text, Divider } from '@rneui/themed';
 import QuestionGroupListItem from './QuestionGroupListItem';
@@ -11,36 +11,16 @@ import getStyles from '../styles';
 import { FormState } from '../../store';
 import useTheme from '../../lib/theme';
 
-export const checkCompleteQuestionGroup = (form, values) => {
-  // Extract all questions for recursive dependency checking
-  const allQuestions = form.question_group.flatMap((qg) => qg.question).filter((q) => q);
-
-  return form.question_group.map((questionGroup) => {
-    const filteredQuestions = questionGroup.question.filter((q) => q.required);
-    return (
-      filteredQuestions
-        .map((question) => {
-          if (question?.dependency) {
-            // Use onFilterDependency with allQuestions for recursive ancestor checking
-            if (!onFilterDependency(questionGroup, values, question, 0, allQuestions)) {
-              return true; // Skip this question for completion check
-            }
-          }
-          if (values?.[question.id] || values?.[question.id] === 0) {
-            return true;
-          }
-          return false;
-        })
-        .filter((x) => x).length === filteredQuestions.length
-    );
-  });
-};
-
 /**
- * Schema-based counter that mirrors the Submit gate (validateAllGroups in
+ * Schema-based counter that mirrors the Submit gate (findFirstInvalidGroup in
  * FormNavigation). A required question counts as "filled" only if it passes the
  * same Yup field-level schema used at submit time, so reaching totalFilled ===
  * totalRequired guarantees the form is actually submittable.
+ *
+ * groupsValid drives the per-group check marks from the same results, so a group
+ * holding a present-but-invalid answer (e.g. a decimal in an integer field, or a
+ * non-numeric phone number) is never ticked while the header still reports it as
+ * missing.
  */
 export const countValidRequiredQuestions = async (form, values) => {
   // Extract all questions for recursive dependency checking
@@ -48,7 +28,8 @@ export const countValidRequiredQuestions = async (form, values) => {
 
   let totalRequired = 0;
   const validations = [];
-  form.question_group.forEach((questionGroup) => {
+  const groupIndexes = [];
+  form.question_group.forEach((questionGroup, groupIndex) => {
     const requiredQuestions = questionGroup.question.filter((q) => q.required);
     requiredQuestions.forEach((question) => {
       // Skip dependent questions whose dependency is not currently satisfied
@@ -58,7 +39,7 @@ export const countValidRequiredQuestions = async (form, values) => {
       ) {
         return;
       }
-      // Mirror validateAllGroups: entity questions without a value are skipped
+      // Mirror validateGroup: entity questions without a value are skipped
       // (their options depend on prevAdmAnswer and are not gated at submit).
       if (question?.extra?.type === 'entity' && values?.[question.id] === undefined) {
         return;
@@ -69,36 +50,22 @@ export const countValidRequiredQuestions = async (form, values) => {
         : '';
       const fieldValue = values?.[question.id] === undefined ? defaultVal : values[question.id];
       validations.push(generateValidationSchemaFieldLevel(fieldValue, question));
+      groupIndexes.push(groupIndex);
     });
   });
 
   const results = await Promise.allSettled(validations);
-  const totalFilled = results.filter(
-    ({ status, value }) => status === 'fulfilled' && Object.values(value || {})[0] === true,
-  ).length;
-
-  return { totalFilled, totalRequired };
-};
-
-export const checkGroupHasErrors = (form, values) => {
-  // Extract all questions for recursive dependency checking
-  const allQuestions = form.question_group.flatMap((qg) => qg.question).filter((q) => q);
-
-  return form.question_group.map((questionGroup) => {
-    const requiredQuestions = questionGroup.question.filter((q) => q.required);
-    const hasUnanswered = requiredQuestions.some((question) => {
-      if (question?.dependency) {
-        // Use onFilterDependency with allQuestions for recursive ancestor checking
-        if (!onFilterDependency(questionGroup, values, question, 0, allQuestions)) {
-          return false; // Skip dependent questions that don't match
-        }
-      }
-      // Check if the question is unanswered
-      const value = values?.[question.id];
-      return !value && value !== 0;
-    });
-    return hasUnanswered;
+  const groupsValid = form.question_group.map(() => true);
+  let totalFilled = 0;
+  results.forEach(({ status, value }, i) => {
+    if (status === 'fulfilled' && Object.values(value || {})[0] === true) {
+      totalFilled += 1;
+    } else {
+      groupsValid[groupIndexes[i]] = false;
+    }
   });
+
+  return { totalFilled, totalRequired, groupsValid };
 };
 
 const QuestionGroupList = ({
@@ -115,23 +82,19 @@ const QuestionGroupList = ({
   const cascades = FormState.useState((s) => s.cascades);
   const forms = selectedForm?.json ? JSON.parse(selectedForm.json) : {};
 
-  const completedQuestionGroup = useMemo(
-    () => checkCompleteQuestionGroup(form, currentValues),
-    [form, currentValues],
-  );
-
-  const groupHasErrors = useMemo(
-    () => checkGroupHasErrors(form, currentValues),
-    [form, currentValues],
-  );
-
   const handleOnPress = (questionGroupIndex) => {
     setActiveQuestionGroup(questionGroupIndex);
     setShowQuestionGroupList(false);
   };
 
   const dataPointNameText = generateDataPointName(forms, currentValues, cascades)?.dpName;
-  const [requiredCount, setRequiredCount] = useState({ totalFilled: 0, totalRequired: 0 });
+  // groupsValid stays null until the first validation run, so no group is marked
+  // complete or erroneous before its answers have actually been checked.
+  const [requiredCount, setRequiredCount] = useState({
+    totalFilled: 0,
+    totalRequired: 0,
+    groupsValid: null,
+  });
   useEffect(() => {
     let ignore = false;
     /**
@@ -152,7 +115,7 @@ const QuestionGroupList = ({
       clearTimeout(timer);
     };
   }, [form, currentValues]);
-  const { totalFilled, totalRequired } = requiredCount;
+  const { totalFilled, totalRequired, groupsValid } = requiredCount;
 
   return (
     <View style={styles.questionGroupListContainer}>
@@ -176,9 +139,9 @@ const QuestionGroupList = ({
             label={questionGroup.label}
             active={activeQuestionGroup === qx}
             completedQuestionGroup={
-              completedQuestionGroup[qx] && visitedQuestionGroup.includes(questionGroup.id)
+              !!groupsValid?.[qx] && visitedQuestionGroup.includes(questionGroup.id)
             }
-            hasErrors={groupHasErrors[qx]}
+            hasErrors={!!groupsValid && !groupsValid[qx]}
             visited={visitedQuestionGroup.includes(questionGroup.id)}
             onPress={() => handleOnPress(qx)}
           />

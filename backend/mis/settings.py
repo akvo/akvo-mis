@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
+import importlib.util
 import sys
 from datetime import timedelta
 from django.core.exceptions import ImproperlyConfigured
@@ -65,6 +66,31 @@ PROD = True if "PROD" in environ else False
 # because BASE_DOMAIN below now depends on it.
 TESTING = sys.argv[1:2] == ["test"]
 
+# Deprecation gate for the framework upgrade. Under `manage.py test`
+# every deprecation Django announces is an error. Django ships each
+# deprecation together with its replacement, so anything raised here is
+# fixable on the installed version -- and fixing it now is what keeps
+# the next upgrade from breaking. The two aliases name the current pair
+# of categories on every release since 4.2, so nothing here changes
+# between upgrade steps.
+if TESTING:
+    import warnings
+    from django.utils.deprecation import (
+        RemovedAfterNextVersionWarning,
+        RemovedInNextVersionWarning,
+    )
+
+    warnings.filterwarnings("error", category=RemovedInNextVersionWarning)
+    warnings.filterwarnings("error", category=RemovedAfterNextVersionWarning)
+    # pandas (and others) announce removals as FutureWarning attributed
+    # to the calling frame. Gate only the ones our own code triggers.
+    warnings.filterwarnings(
+        "error",
+        category=FutureWarning,
+        module=r"^(api|utils|mis|middleware)(\.|$)",
+    )
+    TEST_RUNNER = "mis.test_runner.DeprecationGateRunner"
+
 # Host-based tenant routing. Unset means single-host: every host is the
 # base domain, nothing resolves to a tenant, and the routing is inert —
 # which is how the test suite and any non-SaaS deployment run.
@@ -75,6 +101,42 @@ TESTING = sys.argv[1:2] == ["test"]
 # suite. The tests that exercise host routing opt back in with
 # override_settings, which is how they read anyway.
 BASE_DOMAIN = "" if TESTING else environ.get("BASE_DOMAIN", "")
+
+# Whether this deployment offers self-service sign-up. The default
+# follows BASE_DOMAIN, which is what distinguishes the multi-tenant
+# SaaS from a dedicated single-customer deployment: mohhs-mis and
+# unicef-fsm run with BASE_DOMAIN unset, have no sign-up page, and
+# should not quietly accept a POST to /register.
+#
+# Forced on under `manage.py test`, because BASE_DOMAIN is forced empty
+# there (above) and the default would otherwise turn every existing
+# registration test into a 403. The gate's own tests set it explicitly.
+#
+# Local development also runs with BASE_DOMAIN unset, so working on the
+# sign-up form means setting SIGNUP_ENABLED=true in .env. That is in
+# env.example, which is the file a developer already copies -- without
+# it, the form renders and the endpoint refuses it, which is a
+# confusing afternoon.
+_SIGNUP_ENABLED = environ.get("SIGNUP_ENABLED", "").strip().lower()
+if TESTING:
+    SIGNUP_ENABLED = True
+elif _SIGNUP_ENABLED in ("true", "false"):
+    SIGNUP_ENABLED = _SIGNUP_ENABLED == "true"
+else:
+    SIGNUP_ENABLED = bool(BASE_DOMAIN)
+
+# Cloudflare Turnstile. Empty TURNSTILE_SECRET means the check is off,
+# which is how this ships.
+#
+# Enabling is two steps, in this order. /config.js is proxy-cached by
+# nginx for a day, so a browser can hold a config with no site key for
+# up to 24 hours after one is set. Set TURNSTILE_SITE_KEY first and let
+# the cache turn over, which starts clients sending tokens; set
+# TURNSTILE_SECRET afterwards, which starts the backend requiring them.
+# Both at once rejects every registrant whose cached bootstrap script
+# cannot produce a token.
+TURNSTILE_SITE_KEY = environ.get("TURNSTILE_SITE_KEY", "")
+TURNSTILE_SECRET = environ.get("TURNSTILE_SECRET", "")
 
 # The label the platform console answers on, under BASE_DOMAIN -- see
 # env.example and doc/notes/platform-console.md. Normalised here and
@@ -94,6 +156,21 @@ EMBED_HOST = environ.get("EMBED_HOST", "")
 
 
 ALLOWED_HOSTS = ["*"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://*.ngrok.io",
+    "https://*.ngrok-free.app",
+    "https://*.sslip.io",
+]
+if BASE_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f"https://*.{BASE_DOMAIN}",
+        f"https://{BASE_DOMAIN}",
+        f"http://*.{BASE_DOMAIN}",
+        f"http://{BASE_DOMAIN}",
+    ])
 
 # Application definition
 
@@ -105,6 +182,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
 ]
 
 # Add third party apps below
@@ -112,9 +190,13 @@ EXTERNAL_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
-    "django_dbml",
-    "django_extensions",
     "django_q",
+]
+# Dev-only apps (the `dev` dependency group); absent in production
+# images. CI installs the group, so `manage.py dbml` still runs there.
+EXTERNAL_APPS += [
+    app for app in ("django_dbml", "django_extensions")
+    if importlib.util.find_spec(app)
 ]
 
 # Add API apps below
@@ -175,6 +257,74 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "mis.wsgi.application"
 
+# How many proxies sit between a client and this process. DRF's
+# throttles use it to find the client address in X-Forwarded-For, and
+# they count from the right-hand end -- `addrs[-NUM_PROXIES]` -- which
+# is the only safe reading. The GCLB preserves whatever the caller sent
+# and appends to it, so the leftmost entries are attacker-controlled
+# and the rightmost ones are not. Nothing in this codebase should parse
+# the header by hand; DRF's `BaseThrottle.get_ident` is the one reader,
+# and `RegisterSerializer` uses it too so the captcha and the throttles
+# cannot disagree about who the caller is.
+#
+# 0, the default, means "use REMOTE_ADDR", which is correct wherever
+# nothing trustworthy sets the header: local development, the test
+# suite, and every single-host deployment. Leaving the setting out
+# entirely is NOT equivalent -- DRF then keys on the whole header,
+# attacker-supplied prefix included. A non-zero default is worse:
+# DRF clamps the index with min(NUM_PROXIES, len(addrs)), so where
+# there is no proxy a one-entry header resolves to the entry the client
+# sent, which is the key rotation this is meant to deny.
+#
+# The deployed value is 2, from the k8s secret: the GCLB appends both
+# the client address and its own, giving
+# "[<client-supplied>, ]<client-ip>, <GFE-ip>", and nginx passes the
+# header through without appending, so the client sits second from the
+# right.
+NUM_PROXIES = int(environ.get("NUM_PROXIES") or 0)
+
+# Rates for the throttles in utils/throttling.py. Literals rather than
+# env overrides: retuning one is a one-line pull request, which is
+# reviewable, and a variable nobody sets would only hide where the real
+# value came from.
+#
+# `login_ip` is deliberately loose. A whole office arrives from one NAT
+# address, so a tight per-IP login limit locks out a customer; the
+# tight limit there is per-email. `email_dispatch_email` is
+# deliberately not lower than 3: a tight per-email limit on
+# forgot-password is itself an attack, because anyone who knows an
+# address could then deny its owner password recovery.
+# `or` rather than a default argument throughout: a present-but-empty
+# variable -- which is what an unset Vault key or a blank line in a
+# secret delivers -- would otherwise be "", and parse_rate("") raises
+# on every single request, forever.
+THROTTLE_RATES = {
+    "email_dispatch_ip": "10/hour",
+    "email_dispatch_email": "3/hour",
+    "login_ip": "60/hour",
+    # 30 rather than 10. Any per-email login limit is a lockout vector
+    # -- anyone who knows an address can spend its budget -- and the
+    # same argument is why `email_dispatch_email` is capped rather than
+    # tightened. 10/hour is inside the range a real person reaches with
+    # two devices and a typo; 30 is not, while staying useless as a
+    # credential-stuffing budget against one account. A successful
+    # sign-in also clears this counter, so a user's own earlier typos
+    # cannot accumulate toward a refusal. What remains is a deliberate
+    # attacker slowing one account down, which no per-account limit can
+    # prevent and which the alternative -- no per-email limit at all --
+    # trades for unmetered stuffing.
+    "login_email": "30/hour",
+}
+# Inert under `manage.py test`. Every Django test request arrives from
+# 127.0.0.1 and the cache is process-wide, so live rates would make
+# unrelated endpoint tests fail by call count and by shuffle order. A
+# rate of None makes SimpleRateThrottle.allow_request return True
+# before it touches the cache. The throttle tests patch `rate` on the
+# class instead -- see utils/throttling.py for why override_settings
+# cannot reach it.
+if TESTING:
+    THROTTLE_RATES = {scope: None for scope in THROTTLE_RATES}
+
 # Rest Settings
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -192,6 +342,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS":
     "rest_framework.pagination.LimitOffsetPagination",
     "PAGE_SIZE": 10,
+    "NUM_PROXIES": NUM_PROXIES,
+    "DEFAULT_THROTTLE_RATES": THROTTLE_RATES,
+    "EXCEPTION_HANDLER": "utils.exception_handler.exception_handler",
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": APP_NAME,
@@ -281,6 +434,45 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
         "LOCATION": "/var/tmp/cache-embed",
     },
+    # Throttle counters, in a third alias rather than a corner of
+    # `default`, because v1_forms.signals clears `default` wholesale on
+    # any form change: a budget that resets whenever somebody edits a
+    # form is not a budget. Same reasoning as `embed` above, which asks
+    # unrelated callers to do exactly this.
+    #
+    # LocMemCache under `manage.py test`. A file-based cache shared
+    # between `--parallel` workers is the cross-process race `embed`
+    # describes, and throttle counters are far more sensitive to it:
+    # one worker spending another's budget fails tests by shuffle
+    # order. LocMemCache is per-process, which is the isolation a
+    # throttle test wants anyway.
+    "throttle": {
+        "BACKEND": (
+            "django.core.cache.backends.locmem.LocMemCache"
+            if TESTING
+            else "django.core.cache.backends.filebased.FileBasedCache"
+        ),
+        "LOCATION": "/var/tmp/cache-throttle",
+        # A cache of counters needs a capacity, and Django's default is
+        # 300 entries with CULL_FREQUENCY 3 -- meaning every set() past
+        # 300 keys deletes a third of the cache at random. One key
+        # exists per client address and per submitted email across four
+        # endpoints, so a deployment passes 300 within hours and no
+        # counter would then survive long enough to reach its budget:
+        # the throttles would stop working under exactly the load they
+        # exist for, silently, with no error and no log line.
+        #
+        # 50000 is far above the key count this platform's traffic
+        # produces in one rate window, and entries are reaped as they
+        # expire because every request reads its own key. CULL_FREQUENCY
+        # 10 drops a tenth rather than a third if the ceiling is ever
+        # reached. The real ceiling is the `_list_cache_files()`
+        # os.listdir that FileBasedCache runs on every set(), so this
+        # number trades correctness against per-request cost; a shared
+        # atomic store is the upgrade path, and the one-pod assumption
+        # below is what defers it.
+        "OPTIONS": {"MAX_ENTRIES": 50000, "CULL_FREQUENCY": 10},
+    },
 }
 CACHE_FOLDER = "/tmp/cache/"
 
@@ -290,6 +482,11 @@ CACHE_FOLDER = "/tmp/cache/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "v1_users.SystemUser"
+
+# DRF 3.17.2+ reads JSON bodies through HttpRequest.body, which enforces
+# this limit; match nginx's client_max_body_size instead of Django's
+# 2.5 MiB default so large form saves keep working.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 
 AUTHENTICATION_BACKENDS = [
     "utils.tenant_auth_backend.TenantAwareBackend",
@@ -415,3 +612,22 @@ LOGGING = {
         "level": environ.get("LOG_LEVEL", "INFO"),
     },
 }
+
+# Matomo Analytics
+MATOMO_URL = environ.get("MATOMO_URL", "").rstrip("/")
+MATOMO_SITE_ID = (
+    int(environ["MATOMO_SITE_ID"])
+    if environ.get("MATOMO_SITE_ID")
+    else None
+)
+MATOMO_AUTH_TOKEN = environ.get("MATOMO_AUTH_TOKEN", "")
+MATOMO_DIM_TENANT = (
+    int(environ["MATOMO_DIM_TENANT"])
+    if environ.get("MATOMO_DIM_TENANT")
+    else None
+)
+MATOMO_DIM_SUBDOMAIN = (
+    int(environ["MATOMO_DIM_SUBDOMAIN"])
+    if environ.get("MATOMO_DIM_SUBDOMAIN")
+    else None
+)

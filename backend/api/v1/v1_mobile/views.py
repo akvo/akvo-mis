@@ -19,6 +19,7 @@ from mis.settings import (
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Q, Prefetch
+from django_q.tasks import async_task
 
 from rest_framework import status, serializers
 from rest_framework.response import Response
@@ -73,9 +74,14 @@ from utils.default_serializers import DefaultResponseSerializer
 from utils.custom_serializer_fields import (
     validate_serializers_message,
 )
+from utils.data_access_scope import accessible_administration_q
 from utils import storage
 
 apk_path = os.path.join(BASE_DIR, MASTER_DATA)
+
+# Python's built-in table has no .apk; the full Debian image supplied it
+# through /etc/mime.types, which the slim image does not ship.
+mimetypes.add_type("application/vnd.android.package-archive", ".apk")
 
 
 @extend_schema(
@@ -260,6 +266,23 @@ def sync_pending_form_data(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     instance = serializer.save()
+    # Drafts are rejected upstream, so every sync here is a real submission.
+    user_tenant = getattr(user, "tenant", None)
+    tenant_name = (
+        getattr(user_tenant, "name", None) or user_tenant.subdomain
+        if user_tenant
+        else None
+    )
+    subdomain = user_tenant.subdomain if user_tenant else None
+    async_task(
+        "utils.matomo.track_submission_task",
+        tenant_name=tenant_name,
+        form_name=form.name,
+        form_id=form.id,
+        source="mobile",
+        user_id=str(user.id) if user else None,
+        subdomain=subdomain,
+    )
     return Response(
         {"message": "ok", "id": instance.id},
         status=status.HTTP_200_OK,
@@ -795,9 +818,18 @@ def get_datapoint_download_list(request, version):
     # Build path query by combining conditions for all administration paths
     path_query = Q()
     for admin in administrations:
-        path_query |= Q(administration__path__startswith=admin["path"])
-    # Combine both queries with the form filter
+        path_query |= Q(
+            administration__path__startswith=admin["path"]
+        )
+    # Combine both queries with the form filter. accessible_administration_q
+    # intersects the assignment's administrations with the device user's own
+    # role access, so an assignment configured with an administration broader
+    # than the user's roles (e.g. the national root) cannot hand the device
+    # data outside that user's access. Superusers get an empty Q (no extra
+    # restriction); the assignment's own scope still applies.
     queryset = FormData.objects.for_user(assignment.user).filter(
+        accessible_administration_q(assignment.user)
+    ).filter(
         admin_id_query | (path_query & Q(form_id__in=forms))
     )
 

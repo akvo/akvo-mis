@@ -27,6 +27,7 @@ from api.v1.v1_profile.models import (
     AdministrationAttribute,
     Levels,
 )
+from utils.custom_generator import generate_sqlite
 from utils.tenant_command import resolve_tenant
 
 # `{level}_{Alias}` — level FIRST, so an alias containing an underscore or
@@ -377,6 +378,12 @@ class Command(BaseCommand):
                     self.style.WARNING("-- Dry run: rolled back")
                 )
                 return
+        # Devices read the hierarchy from a per-tenant SQLite snapshot, which
+        # the download endpoint only builds when absent. Regenerate it here so
+        # the rows this import added reach the app; otherwise the device keeps
+        # downloading the pre-import file and the administration cascade, whose
+        # parent ids are now missing from it, disappears from the form.
+        generate_sqlite(Administration, tenant=tenant)
         self.stdout.write(self.style.SUCCESS("-- Done"))
 
     def _ensure_attributes(self, attr_headers, tenant):
