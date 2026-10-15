@@ -108,7 +108,6 @@ def download_data(
             form=form,
             id__in=selection_ids,
             is_pending=False,
-            is_draft=False,
         ).order_by("id").all()
         data_items = []
         for d in data:
@@ -117,7 +116,6 @@ def download_data(
                 dl = d.children.filter(
                     form_id=child_form,
                     is_pending=False,
-                    is_draft=False,
                 ).order_by("-created").first()
                 if dl:
                     item = {**item, **dl.to_data_frame}
@@ -134,7 +132,6 @@ def download_data(
 
     filter_data = {
         "is_pending": False,
-        "is_draft": False,
     }
     if administration_ids:
         filter_data["administration_id__in"] = administration_ids
@@ -144,7 +141,6 @@ def download_data(
         # parents whose own created date is in range.
         child_filter = {
             "is_pending": False,
-            "is_draft": False,
             "form_id__in": effective_filter_children,
             **date_filter,
         }
@@ -185,7 +181,6 @@ def download_data(
                 dl = d.children.filter(
                     form_id=child_form,
                     is_pending=False,
-                    is_draft=False,
                     **date_filter,
                 ).order_by("-created").first()
                 if dl:
@@ -204,7 +199,6 @@ def download_data(
                 for dl in d.children.filter(
                     form_id=child_form,
                     is_pending=False,
-                    is_draft=False,
                     **date_filter,
                 ).order_by("created").all():
                     has_children = True
@@ -369,7 +363,6 @@ def download_monitoring_data(
         "parent__form": parent_form,
         "parent__isnull": False,
         "is_pending": False,
-        "is_draft": False,
     }
     if selection_ids:
         filter_data["parent_id__in"] = selection_ids

@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
@@ -10,7 +11,7 @@ import { SENTRY_DSN, SENTRY_ENV } from '@env';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import Navigation, { reactNavigationIntegration } from './src/navigation';
-import { UIState, AuthState, UserState, BuildParamsState } from './src/store';
+import { UIState, AuthState, UserState, BuildParamsState, FormState } from './src/store';
 import { crudUsers, crudConfig, crudDataPoints } from './src/database/crud';
 import { api } from './src/lib';
 import { StatusBanner, SyncService } from './src/components';
@@ -178,6 +179,16 @@ const handleInitConfig = async (db) => {
     UserState.update((s) => {
       s.syncWifiOnly = configExist?.syncWifiOnly;
     });
+
+    // Saved by Settings > Language (APP-487); drives the interface and translated questions.
+    if (configExist.lang) {
+      UIState.update((s) => {
+        s.lang = configExist.lang;
+      });
+      FormState.update((s) => {
+        s.lang = configExist.lang;
+      });
+    }
   }
 };
 
@@ -325,6 +336,18 @@ const migrateDbIfNeeded = async (db) => {
   await finishInit(db);
 };
 
+const BannerLayout = () => {
+  const bannerVisible = UIState.useState((s) => s.bannerVisible);
+  return (
+    <SafeAreaView style={{ flex: 1 }} edges={bannerVisible ? ['bottom'] : []}>
+      <View style={{ flex: 1 }}>
+        <Navigation />
+      </View>
+      <StatusBanner />
+    </SafeAreaView>
+  );
+};
+
 const App = () => {
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
 
@@ -402,8 +425,7 @@ const App = () => {
     <SafeAreaProvider>
       <Suspense fallback={null}>
         <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
-          <Navigation />
-          <StatusBanner />
+          <BannerLayout />
           <SyncService />
         </SQLiteProvider>
       </Suspense>

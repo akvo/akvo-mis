@@ -1,14 +1,21 @@
 /* eslint-disable no-console */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { BackHandler, Platform, Text, ToastAndroid, TouchableOpacity } from 'react-native';
-import { Dialog } from '@rneui/themed';
+import {
+  BackHandler,
+  Platform,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout, FAButton } from '../components';
+import { BaseLayout, ConfirmDialog, EmptyState } from '../components';
 import {
   FormState,
   UserState,
@@ -17,12 +24,12 @@ import {
   DatapointSyncState,
   AuthState,
 } from '../store';
+import useTheme from '../lib/theme';
 import { crudForms, crudUsers } from '../database/crud';
 import { api, cascades, i18n } from '../lib';
 import useVersionCheck from '../hooks/use-version-check';
 import crudJobs from '../database/crud/crud-jobs';
 import {
-  SYNC_STATUS,
   SYNC_DATAPOINT_JOB_NAME,
   SYNC_FORM_SUBMISSION_TASK_NAME,
   jobStatus,
@@ -40,18 +47,20 @@ const Home = ({ navigation, route }) => {
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
   const gpsAccuracyLevel = BuildParamsState.useState((s) => s.gpsAccuracyLevel);
   const gpsInterval = BuildParamsState.useState((s) => s.gpsInterval);
+  const authenticationType = BuildParamsState.useState((s) => s.authenticationType);
+  // Same rule as Settings' add-more-forms: assigned logins can't add forms themselves.
+  const canAddForms = !authenticationType?.includes('code_assignment');
   const userId = UserState.useState((s) => s.id);
   const passcode = AuthState.useState((s) => s.authenticationCode);
   const isOnline = UIState.useState((s) => s.online);
   const syncWifiOnly = UserState.useState((s) => s.syncWifiOnly);
-  const statusBar = UIState.useState((s) => s.statusBar);
   const refreshPage = UIState.useState((s) => s.refreshPage);
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
   const db = useSQLiteContext();
 
   const { id: currentUserId, name: currentUserName } = UserState.useState((s) => s);
-  const subTitleText = currentUserName ? `${trans.userLabel} ${currentUserName}` : null;
 
   const {
     visible: updateDialogVisible,
@@ -71,6 +80,10 @@ const Home = ({ navigation, route }) => {
       formId: findForm.formId,
       draft: findForm?.draft,
     });
+  };
+
+  const goToAddForm = () => {
+    navigation.navigate('AddNewForm', {});
   };
 
   const goToUsers = () => {
@@ -195,17 +208,7 @@ const Home = ({ navigation, route }) => {
 
       try {
         const results = await crudForms.selectLatestFormVersion(db, { user: currentUserId });
-        const forms = results
-          .map((r) => ({
-            ...r,
-            subtitles: [
-              `${trans.versionLabel}${r.version}`,
-              `${trans.submittedLabel}${r.submitted}`,
-              `${trans.draftLabel}${r.draft}`,
-              `${trans.syncLabel}${r.synced}`,
-            ],
-          }))
-          .filter((r) => r?.userId === currentUserId);
+        const forms = results.filter((r) => r?.userId === currentUserId);
         setData(forms);
         setloading(false);
       } catch (error) {
@@ -217,18 +220,7 @@ const Home = ({ navigation, route }) => {
         }
       }
     }
-  }, [
-    db,
-    params,
-    currentUserId,
-    activeLang,
-    appLang,
-    trans.versionLabel,
-    trans.submittedLabel,
-    trans.draftLabel,
-    trans.syncLabel,
-    refreshPage,
-  ]);
+  }, [db, params, currentUserId, activeLang, appLang, refreshPage]);
 
   useEffect(() => {
     getUserForms();
@@ -258,6 +250,19 @@ const Home = ({ navigation, route }) => {
         (d) => (search && d?.name?.toLowerCase().includes(search.toLowerCase())) || !search,
       ),
     [data, search],
+  );
+
+  // Split, each form once (A20): Latest = forms with data created in this app, newest
+  // first (A18); Earlier = the rest, in query order. ISO strings from toISOString, so
+  // string order is time order.
+  const [latestData, earlierData] = useMemo(
+    () => [
+      filteredData
+        .filter((d) => d?.lastActivityAt)
+        .sort((a, b) => (a.lastActivityAt < b.lastActivityAt ? 1 : -1)),
+      filteredData.filter((d) => !d?.lastActivityAt),
+    ],
+    [filteredData],
   );
 
   useEffect(() => {
@@ -306,12 +311,12 @@ const Home = ({ navigation, route }) => {
 
   useEffect(() => {
     const unsubsDataSync = DatapointSyncState.subscribe(
-      ({ inProgress, draftInProgress }) => ({ inProgress, draftInProgress }),
-      ({ inProgress, draftInProgress }) => {
-        if (!syncLoading && (inProgress || draftInProgress)) {
+      (s) => s.inProgress,
+      (inProgress) => {
+        if (!syncLoading && inProgress) {
           setSyncLoading(true);
         }
-        if (!inProgress && !draftInProgress) {
+        if (!inProgress) {
           setSyncLoading(false);
         }
       },
@@ -347,48 +352,141 @@ const Home = ({ navigation, route }) => {
     };
   }, [syncWifiOnly]);
 
+  useEffect(() => {
+    const unsub = UIState.subscribe(
+      (s) => s.triggerSync,
+      (triggered) => {
+        if (!triggered) {
+          return;
+        }
+        UIState.update((s) => {
+          s.triggerSync = false;
+        });
+        if (!syncLoading && !syncDisabled && isOnline) {
+          handleOnSync();
+        }
+      },
+    );
+    return () => {
+      unsub();
+    };
+  });
+
   return (
     <BaseLayout
       title={trans.homePageTitle}
-      subTitle={subTitleText}
       search={{
         show: true,
         placeholder: trans.homeSearch,
         value: search,
         action: setSearch,
       }}
-      leftComponent={
-        <TouchableOpacity style={{ paddingTop: 8, paddingLeft: 8 }} onPress={goToUsers}>
-          <Icon name="person" size={18} />
+      rightComponent={
+        <TouchableOpacity
+          style={[homeStyles.headerButton, { backgroundColor: theme.bg.surfaceTranslucent }]}
+          onPress={goToUsers}
+          testID="button-users"
+        >
+          <Icon name="people-outline" size={18} color={theme.topNav.icon} />
         </TouchableOpacity>
       }
+      leftComponent={
+        <View style={homeStyles.userInfo}>
+          <Icon name="person-circle-outline" size={22} color={theme.topNav.icon} />
+          <Text style={[homeStyles.userName, { color: theme.topNav.text }]} numberOfLines={1}>
+            {currentUserName || ''}
+          </Text>
+        </View>
+      }
     >
-      <BaseLayout.Content data={filteredData} action={goToSubmission} columns={1} />
-      <FAButton
-        label={syncLoading ? trans.syncingText : trans.syncDataPointBtn}
-        onPress={handleOnSync}
-        testID="sync-datapoint-button"
-        icon={{ name: 'sync', color: 'white' }}
-        customStyle={{ marginBottom: 16 }}
-        backgroundColor="#1651b6"
-        disabled={
-          !isOnline || syncLoading || syncDisabled || statusBar?.type === SYNC_STATUS.on_progress
+      <BaseLayout.Content
+        action={goToSubmission}
+        sections={[
+          { key: 'latest', title: trans.latestSubmissionsTitle, data: latestData },
+          { key: 'earlier', title: trans.earlierSubmissionsTitle, data: earlierData },
+        ]}
+        footer={
+          canAddForms && (
+            <TouchableOpacity
+              style={homeStyles.addFormRow}
+              onPress={goToAddForm}
+              testID="home-add-form"
+            >
+              <Icon name="add-circle-outline" size={20} color={theme.text.tertiary} />
+              <Text style={[homeStyles.addFormText, { color: theme.text.tertiary }]}>
+                {trans.settingAddFormTitle}
+              </Text>
+            </TouchableOpacity>
+          )
         }
+      >
+        {/* Only a truly empty list: a search with no match must not claim there are no forms */}
+        {!loading && !data.length && (
+          // The arrow ends on the centre line, over the Settings tab (A23); assigned
+          // logins can't add forms, so they get no arrow (A8).
+          <EmptyState
+            arrowTip="centre"
+            title={trans.emptyFormsTitle}
+            body={canAddForms ? trans.emptyFormsBody : trans.emptyFormsAssignedBody}
+            showArrow={canAddForms}
+            style={{ backgroundColor: theme.bg.surfaceTertiary }}
+            testID="home-empty-state"
+          />
+        )}
+      </BaseLayout.Content>
+      <ConfirmDialog
+        visible={updateDialogVisible}
+        title={trans.updateRequiredTitle}
+        message={updateInfo.text}
+        onClose={() => {}}
+        actions={[
+          {
+            label: trans.buttonLater,
+            type: 'secondary',
+            onPress: handleSkip,
+            testID: 'update-skip-button',
+          },
+          {
+            label: trans.buttonUpdate,
+            type: 'primary',
+            onPress: handleUpdate,
+            testID: 'update-confirm-button',
+          },
+        ]}
       />
-      <Dialog isVisible={updateDialogVisible} onBackdropPress={() => {}}>
-        <Dialog.Title title={trans.updateRequiredTitle} />
-        <Text>{updateInfo.text}</Text>
-        <Dialog.Actions>
-          <Dialog.Button testID="update-confirm-button" onPress={handleUpdate}>
-            {trans.buttonUpdate}
-          </Dialog.Button>
-          <Dialog.Button testID="update-skip-button" onPress={handleSkip}>
-            {trans.buttonLater}
-          </Dialog.Button>
-        </Dialog.Actions>
-      </Dialog>
     </BaseLayout>
   );
 };
+
+const homeStyles = StyleSheet.create({
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 4,
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addFormRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 24,
+  },
+  addFormText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});
 
 export default Home;

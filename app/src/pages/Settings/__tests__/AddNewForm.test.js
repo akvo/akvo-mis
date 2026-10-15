@@ -1,6 +1,5 @@
 /* eslint-disable prefer-promise-reject-errors */
 import React from 'react';
-import renderer from 'react-test-renderer';
 import { render, renderHook, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Platform } from 'react-native';
@@ -9,13 +8,16 @@ import api from '../../../lib/api';
 import AddNewForm from '../AddNewForm';
 import { UIState } from '../../../store';
 
+// background-task imports expo-task-manager, whose native module jest-expo can't load.
+jest.mock('../../../lib/background-task', () => ({}));
+
 jest.mock('../../../lib/api');
 jest.mock('../../../lib/cascades');
 jest.mock('../../../database/crud');
 
 describe('AddNewForm Page', () => {
   test('renders correctly', () => {
-    const tree = renderer.create(<AddNewForm />).toJSON();
+    const tree = render(<AddNewForm />).toJSON();
     expect(tree).toMatchSnapshot();
   });
 

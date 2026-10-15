@@ -357,15 +357,6 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
-            "--draft",
-            type=boolean,
-            default=False,
-            help=(
-                "Also create draft submissions. Contradicts "
-                "--approved true."
-            ),
-        )
-        parser.add_argument(
             "--test",
             type=boolean,
             default=False,
@@ -399,16 +390,8 @@ class Command(BaseCommand):
         repeat = options.get("repeat")
         monitoring = options.get("monitoring", 1)
         is_approved = options.get("approved", True)
-        is_draft = options.get("draft", False)
         is_test = options.get("test", False)
         clean = options.get("clean", False)
-
-        if is_approved and is_draft:
-            raise CommandError(
-                "--draft true contradicts --approved true: approved data "
-                "has no drafts. Pass --approved false to seed a mixed "
-                "workflow."
-            )
         # --test drives a closed fixture seeded with tenant=None, which
         # is how all 34 existing callers invoke this command.
         tenant = resolve_tenant(
@@ -469,7 +452,6 @@ class Command(BaseCommand):
         form_data_counts = {}
         form_monitoring_counts = {}
         form_pending_counts = {}
-        form_draft_counts = {}
 
         current_created = base_created
         total_points = len(targets)
@@ -477,7 +459,6 @@ class Command(BaseCommand):
 
         existing_data_count = FormData.objects.filter(
             is_pending=False,
-            is_draft=False,
             name__startswith=DUMMY_PREFIX,
         ).count()
         if existing_data_count > 0:
@@ -597,12 +578,8 @@ class Command(BaseCommand):
                             form_data_counts[f.name] = 0
                             form_monitoring_counts[f.name] = 0
                             form_pending_counts[f.name] = 0
-                            form_draft_counts[f.name] = 0
 
                         name = f"{adm.full_name} - {fake.sentence(nb_words=3)}"
-                        data_is_draft = is_draft and (
-                            form_data_counts[f.name] % 2 == 1
-                        )
                         data_is_pending = (
                             not is_approved and
                             (form_data_counts[f.name] % 2 == 1)
@@ -618,7 +595,6 @@ class Command(BaseCommand):
                             created_by=user,
                             geo=geo_value,
                             is_pending=data_is_pending,
-                            is_draft=False,
                         )
                         form_data.created = current_created
                         form_data.updated = current_created
@@ -633,74 +609,46 @@ class Command(BaseCommand):
                         form_data_counts[f.name] += 1
                         if data_is_pending:
                             form_pending_counts[f.name] += 1
-                        if data_is_draft:
-                            form_draft_counts[f.name] += 1
-                            draft_data = FormData.objects.create(
-                                uuid=fake.uuid4(),
-                                name=f"{fake.sentence(nb_words=3)} - Draft",
-                                form=f,
-                                administration=adm,
-                                created_by=user,
-                                geo=geo_value,
-                                is_pending=False,
-                                is_draft=True,
-                            )
-                            draft_data.created = current_created
-                            draft_data.updated = current_created
-                            draft_data.save()
-
-                            add_fake_answers(draft_data)
-                            mark_as_dummy(draft_data)
-
-                            if draft_data.has_approval:
-                                draft_data.is_pending = True
-                                draft_data.save()
-
-                            draft_data.data_answer.filter(
-                                question__required=True
-                            ).delete()
 
                         if (not is_test and not form_data.is_pending):
                             form_data.save_to_file
 
-                        if not form_data.is_draft:
-                            submitter = None
-                            if mobile_user.name and r % 2 == 0:
-                                submitter = mobile_user.name
-                            last_date = form_data.created
-                            if last_date.tzinfo is None:
-                                last_date = make_aware(last_date)
-                            for child_form in f.children.all():
-                                for m in range(monitoring):
-                                    last_date += timedelta(days=1)
-                                    ld_f1 = last_date.strftime('%Y-%m-%d')
-                                    ld_f2 = last_date.strftime(
-                                        '%a %b %d %Y %H:%M:%S'
-                                    )
-                                    curr_time = (
-                                        f"{ld_f1} - {ld_f2} GMT+0700"
-                                    )
-                                    s_name = submitter \
-                                        if m % 2 == 0 and submitter else None
-                                    child_data = form_data.children.create(
-                                        name=curr_time,
-                                        uuid=form_data.uuid,
-                                        administration=(
-                                            form_data.administration
-                                        ),
-                                        geo=form_data.geo,
-                                        form=child_form,
-                                        created_by=user,
-                                        is_pending=data_is_pending,
-                                        is_draft=False,
-                                        submitter=s_name,
-                                    )
-                                    child_data.created = last_date
-                                    child_data.updated = last_date
-                                    child_data.save()
-                                    add_fake_answers(child_data)
-                                    mark_as_dummy(child_data)
-                                    form_monitoring_counts[f.name] += 1
+                        submitter = None
+                        if mobile_user.name and r % 2 == 0:
+                            submitter = mobile_user.name
+                        last_date = form_data.created
+                        if last_date.tzinfo is None:
+                            last_date = make_aware(last_date)
+                        for child_form in f.children.all():
+                            for m in range(monitoring):
+                                last_date += timedelta(days=1)
+                                ld_f1 = last_date.strftime('%Y-%m-%d')
+                                ld_f2 = last_date.strftime(
+                                    '%a %b %d %Y %H:%M:%S'
+                                )
+                                curr_time = (
+                                    f"{ld_f1} - {ld_f2} GMT+0700"
+                                )
+                                s_name = submitter \
+                                    if m % 2 == 0 and submitter else None
+                                child_data = form_data.children.create(
+                                    name=curr_time,
+                                    uuid=form_data.uuid,
+                                    administration=(
+                                        form_data.administration
+                                    ),
+                                    geo=form_data.geo,
+                                    form=child_form,
+                                    created_by=user,
+                                    is_pending=data_is_pending,
+                                    submitter=s_name,
+                                )
+                                child_data.created = last_date
+                                child_data.updated = last_date
+                                child_data.save()
+                                add_fake_answers(child_data)
+                                mark_as_dummy(child_data)
+                                form_monitoring_counts[f.name] += 1
                     index += 1
                 for form_name, count in form_data_counts.items():
                     self.stdout.write(
@@ -716,12 +664,6 @@ class Command(BaseCommand):
                     if count > 0:
                         self.stdout.write(
                             f"Created {count} pending data entries "
-                            f"for form {form_name}"
-                        )
-                for form_name, count in form_draft_counts.items():
-                    if count > 0:
-                        self.stdout.write(
-                            f"Created {count} draft data entries "
                             f"for form {form_name}"
                         )
             refresh_materialized_data()

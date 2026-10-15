@@ -78,10 +78,9 @@ class GeoshapeValidationTestCase(TestCase):
             label="Plot boundary", order=1, type=QuestionTypes.geoshape,
         )
 
-    def validate(self, value, is_draft=False):
+    def validate(self, value):
         serializer = SubmitFormDataAnswerSerializer(
             data={"question": self.q.id, "value": value},
-            context={"is_draft": is_draft},
         )
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
@@ -96,10 +95,6 @@ class GeoshapeValidationTestCase(TestCase):
     def test_a_number_is_rejected(self):
         with self.assertRaises(ValidationError):
             self.validate(9.03)
-
-    def test_a_string_is_rejected_on_drafts_too(self):
-        with self.assertRaises(ValidationError):
-            self.validate("9.03,38.74", is_draft=True)
 
     def test_a_flat_point_pair_is_rejected(self):
         """The `geo` point shape. A list, so the type check passes, but
@@ -124,12 +119,6 @@ class GeoshapeValidationTestCase(TestCase):
         would let this through."""
         with self.assertRaises(ValidationError):
             self.validate([[True, False]])
-
-    def test_malformed_rows_are_rejected_on_drafts_too(self):
-        for bad in ([9.03, 38.74], [["a", "b"]], [[1.0]]):
-            with self.subTest(value=bad):
-                with self.assertRaises(ValidationError):
-                    self.validate(bad, is_draft=True)
 
     # --- GEO-014: the optional third element (GPS accuracy) ---
 
@@ -183,12 +172,6 @@ class GeoshapeValidationTestCase(TestCase):
         list check on each member, never by the length."""
         with self.assertRaises(ValidationError):
             self.validate([9.03, 38.74])
-
-    def test_accuracy_rings_are_accepted_on_drafts_too(self):
-        walked = [[9.03, 38.74, 4.2], [9.04, 38.74], [9.04, 38.75, None]]
-        self.assertEqual(
-            self.validate(walked, is_draft=True)["value"], walked
-        )
 
 
 @override_settings(USE_TZ=False, TEST_ENV=True)

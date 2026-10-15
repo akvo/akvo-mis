@@ -60,14 +60,25 @@ const formsQuery = () => ({
               AND mdp.locallyCreated = 1
               AND mdp.submitted = 1
               AND mdp.syncedAt IS NOT NULL
-          ), 0) AS synced
+          ), 0) AS synced,
+          -- Home's "Latest submissions": newest data created in this app, registration
+          -- or monitoring. Downloaded rows never count: their dates are the download
+          -- time, and nothing changes them on the device (APP-481 A18). NULL = none.
+          (
+            SELECT MAX(COALESCE(adp.submittedAt, adp.createdAt))
+            FROM datapoints adp
+            INNER JOIN forms af ON adp.form = af.id
+            WHERE (af.id = f.id OR af.parentId = f.formId)
+              AND adp.user = ?
+              AND adp.locallyCreated = 1
+          ) AS lastActivityAt
         FROM forms f
         LEFT JOIN datapoints dp ON f.id = dp.form AND dp.user = ?
         WHERE f.latest = ? AND f.parentId IS NULL
         GROUP BY f.id, f.formId, f.version, f.name, f.json;`;
-    // Five ? binds, left to right: submitted / draft / synced monitoring
+    // Six ? binds, left to right: submitted / draft / synced / lastActivityAt
     // subqueries (user), the LEFT JOIN dp.user, and f.latest.
-    const rows = await sql.executeQuery(db, selectJoin, [user, user, user, user, latest]);
+    const rows = await sql.executeQuery(db, selectJoin, [user, user, user, user, user, latest]);
     return rows;
   },
   selectFormById: async (db, { id }) => {

@@ -232,7 +232,6 @@ def handle_escalation(
         form=parent_form,
         parent__isnull=True,
         is_pending=False,
-        is_draft=False,
     ).annotate(
         latest_id=latest_monitoring_subquery(
             monitoring_form_id, date_filters or None
