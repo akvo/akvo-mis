@@ -100,9 +100,16 @@ const Users = ({ navigation, route }) => {
               testID={`list-item-user-${user.id}`}
               style={[styles.userItem, { borderBottomColor: theme.border.listDivider }]}
             >
-              <Text testID={`title-username-${user.id}`} style={{ color: theme.text.primary }}>{user.name}</Text>
+              <Text testID={`title-username-${user.id}`} style={{ color: theme.text.primary }}>
+                {user.name}
+              </Text>
               {user.active === 1 && (
-                <Icon name="checkmark" size={18} color={theme.status.success} testID={`icon-checkmark-${user.id}`} />
+                <Icon
+                  name="checkmark"
+                  size={18}
+                  color={theme.status.success}
+                  testID={`icon-checkmark-${user.id}`}
+                />
               )}
             </TouchableOpacity>
           )}

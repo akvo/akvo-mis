@@ -12,7 +12,10 @@ const Image = ({ src = '', style = {} }) => {
       testID="image-component"
     />
   ) : (
-    <View style={[styles.image, { backgroundColor: theme.bg.surfaceTertiary }]} testID="image-skeleton" />
+    <View
+      style={[styles.image, { backgroundColor: theme.bg.surfaceTertiary }]}
+      testID="image-skeleton"
+    />
   );
 };
 

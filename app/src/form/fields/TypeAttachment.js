@@ -89,7 +89,9 @@ const TypeAttachment = ({
             accessibilityLabel="remove-file-button"
           >
             <Icon name="trash" size={18} color={theme.buttonPrimary.text} />
-            <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>{trans.buttonRemove}</Text>
+            <Text style={[styles.pillButtonText, { color: theme.buttonPrimary.text }]}>
+              {trans.buttonRemove}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -118,7 +120,9 @@ const TypeAttachment = ({
               accessibilityLabel="remove-file-button"
             >
               <Icon name="trash" size={16} color={theme.buttonPrimary.text} />
-              <Text style={[styles.smallPillButtonText, { color: theme.buttonPrimary.text }]}>{trans.buttonRemove}</Text>
+              <Text style={[styles.smallPillButtonText, { color: theme.buttonPrimary.text }]}>
+                {trans.buttonRemove}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

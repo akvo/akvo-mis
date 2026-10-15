@@ -46,9 +46,7 @@ const FormDataNavigation = ({ totalPage, currentPage, setCurrentPage }) => {
         style={[
           styles.nextButton,
           {
-            backgroundColor: disabledNext
-              ? theme.bg.surfaceTertiary
-              : theme.buttonPrimary.bg,
+            backgroundColor: disabledNext ? theme.bg.surfaceTertiary : theme.buttonPrimary.bg,
           },
         ]}
         onPress={goNext}

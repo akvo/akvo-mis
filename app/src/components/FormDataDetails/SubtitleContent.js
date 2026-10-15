@@ -56,7 +56,11 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
       // Without this the array of pairs falls to `default:` and renders as a run of digits.
       return <GeometryView index={index} answer={answer} type={type} />;
     case QUESTION_TYPES.cascade:
-      return <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>{cascadeValue?.full_path_name || answer}</Text>;
+      return (
+        <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>
+          {cascadeValue?.full_path_name || answer}
+        </Text>
+      );
     case QUESTION_TYPES.date:
       return (
         <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>
@@ -77,7 +81,11 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
       );
     case QUESTION_TYPES.attachment:
       if (!answer) {
-        return <Text style={{ color: theme.text.secondary }} testID={`text-type-attachment-${index}`}>-</Text>;
+        return (
+          <Text style={{ color: theme.text.secondary }} testID={`text-type-attachment-${index}`}>
+            -
+          </Text>
+        );
       }
       return (
         <View testID={`text-type-attachment-${index}`} style={{ width: '100%' }}>
@@ -96,7 +104,11 @@ const SubtitleContent = ({ index, answer, type, source = null, option = [] }) =>
         </View>
       );
     default:
-      return <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>{answer || answer === 0 ? answer : '-'}</Text>;
+      return (
+        <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>
+          {answer || answer === 0 ? answer : '-'}
+        </Text>
+      );
   }
 };
 

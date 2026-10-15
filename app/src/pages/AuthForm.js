@@ -105,10 +105,6 @@ const AuthForm = ({ navigation }) => {
 
         await crudConfig.updateConfig(db, { authenticationCode: passcode });
         await cascades.createSqliteDir();
-        AuthState.update((s) => {
-          s.authenticationCode = passcode;
-          s.token = bearerToken;
-        });
 
         const userID = await handleActiveUser({
           ...data,
@@ -116,6 +112,15 @@ const AuthForm = ({ navigation }) => {
         });
 
         await handleGetAllForms(data.formsUrl, userID);
+
+        // Flip the session token only after the user and their forms are
+        // persisted. Setting it swaps the navigator to the authed stack and
+        // mounts Home at once; doing it before the forms were saved mounted
+        // Home against an empty DB, so the list stayed empty until a sync.
+        AuthState.update((s) => {
+          s.authenticationCode = passcode;
+          s.token = bearerToken;
+        });
 
         setTimeout(() => {
           navigation.navigate('Home', { newForms: true });

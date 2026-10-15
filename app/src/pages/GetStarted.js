@@ -73,21 +73,12 @@ const GetStarted = ({ navigation }) => {
       />
       <Image source={heroImage} style={styles.heroImage} resizeMode="cover" />
 
-      <View
-        style={[
-          styles.textCard,
-          { backgroundColor: theme.bg.surfaceElevated3 },
-        ]}
-      >
-        <Text style={[styles.title, { color: theme.text.primary }]}>
-          {trans.getStartedTitle1}
-        </Text>
+      <View style={[styles.textCard, { backgroundColor: theme.bg.surfaceElevated3 }]}>
+        <Text style={[styles.title, { color: theme.text.primary }]}>{trans.getStartedTitle1}</Text>
         <Text style={[styles.title, { color: theme.text.highlight }]}>
           {trans.getStartedTitle2}
         </Text>
-        <Text style={[styles.title, { color: theme.text.primary }]}>
-          {trans.getStartedTitle3}
-        </Text>
+        <Text style={[styles.title, { color: theme.text.primary }]}>{trans.getStartedTitle3}</Text>
         <Text style={[styles.subtitle, { color: theme.text.secondary }]}>
           {trans.getStartedSubTitle}
         </Text>

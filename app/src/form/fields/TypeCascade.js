@@ -312,6 +312,7 @@ const TypeCascade = ({
                 placeholder={trans.selectItem}
                 placeholderStyle={{ color: theme.input.text }}
                 selectedTextStyle={{ color: theme.input.textInput }}
+                itemTextStyle={{ color: theme.text.primary }}
                 inputSearchStyle={{
                   borderRadius: 12,
                   backgroundColor: theme.bg.surfaceTertiary,

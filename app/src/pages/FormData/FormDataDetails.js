@@ -305,7 +305,9 @@ const FormDataDetails = ({ navigation, route }) => {
           ]}
         >
           <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
-            {`${trans.stepLabel || 'Step'} ${currentPage + 1} ${trans.ofLabel || 'of'} ${totalPage}`}
+            {`${trans.stepLabel || 'Step'} ${currentPage + 1} ${
+              trans.ofLabel || 'of'
+            } ${totalPage}`}
             {currentGroup?.label || currentGroup?.name
               ? ` — ${currentGroup.label || currentGroup.name}`
               : ''}

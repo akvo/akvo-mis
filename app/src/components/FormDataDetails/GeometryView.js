@@ -68,7 +68,11 @@ const GeometryView = ({ index, answer, type = QUESTION_TYPES.geoshape }) => {
   }, [loadHtml]);
 
   if (!pointCount) {
-    return <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>-</Text>;
+    return (
+      <Text style={{ color: theme.text.secondary }} testID={`text-answer-${index}`}>
+        -
+      </Text>
+    );
   }
 
   return (

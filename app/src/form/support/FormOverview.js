@@ -183,7 +183,9 @@ const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
                 testID={`overview-edit-group-${group.groupIndex}`}
               >
                 <Icon name="pencil" size={14} color={theme.buttonPrimary.text} />
-                <Text style={[styles.editButtonText, { color: theme.buttonPrimary.text }]}>Edit</Text>
+                <Text style={[styles.editButtonText, { color: theme.buttonPrimary.text }]}>
+                  Edit
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -194,7 +196,14 @@ const FormOverview = ({ formDefinition, onEditGroup, onEditQuestion }) => {
               style={[
                 styles.questionRow,
                 { borderBottomColor: theme.border.listDivider },
-                q.isMissing && [styles.missingRow, { backgroundColor: theme.isDark ? 'rgba(255, 44, 32, 0.08)' : 'rgba(239, 68, 68, 0.08)' }],
+                q.isMissing && [
+                  styles.missingRow,
+                  {
+                    backgroundColor: theme.isDark
+                      ? 'rgba(255, 44, 32, 0.08)'
+                      : 'rgba(239, 68, 68, 0.08)',
+                  },
+                ],
               ]}
               onPress={() => onEditQuestion(group.groupIndex, q.id)}
               testID={`overview-edit-question-${q.id}`}

@@ -15,13 +15,23 @@ const CustomToggle = ({ value: isOn, onValueChange, theme, testID }) => {
   }, [isOn, pos]);
   const tx = pos.interpolate({ inputRange: [0, 1], outputRange: [3, TRACK_W - THUMB - 3] });
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={() => onValueChange(!isOn)}
-      testID={testID}
-    >
-      <View style={[toggleStyles.track, { backgroundColor: isOn ? theme.buttonPrimary.bg : theme.border.divider }]}>
-        <Animated.View style={[toggleStyles.thumb, { backgroundColor: theme.bg.surfaceElevated3, shadowColor: theme.bg.surfacePrimary, transform: [{ translateX: tx }] }]} />
+    <TouchableOpacity activeOpacity={0.8} onPress={() => onValueChange(!isOn)} testID={testID}>
+      <View
+        style={[
+          toggleStyles.track,
+          { backgroundColor: isOn ? theme.buttonPrimary.bg : theme.border.divider },
+        ]}
+      >
+        <Animated.View
+          style={[
+            toggleStyles.thumb,
+            {
+              backgroundColor: theme.bg.surfaceElevated3,
+              shadowColor: theme.bg.surfacePrimary,
+              transform: [{ translateX: tx }],
+            },
+          ]}
+        />
       </View>
     </TouchableOpacity>
   );
