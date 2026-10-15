@@ -182,6 +182,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
 ]
 
 # Add third party apps below
@@ -481,6 +482,11 @@ CACHE_FOLDER = "/tmp/cache/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "v1_users.SystemUser"
+
+# DRF 3.17.2+ reads JSON bodies through HttpRequest.body, which enforces
+# this limit; match nginx's client_max_body_size instead of Django's
+# 2.5 MiB default so large form saves keep working.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 
 AUTHENTICATION_BACKENDS = [
     "utils.tenant_auth_backend.TenantAwareBackend",

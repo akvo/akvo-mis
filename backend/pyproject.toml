@@ -3,8 +3,8 @@ name = "akvo-mis-backend"
 version = "0"
 requires-python = "==3.12.*"
 dependencies = [
-    "django==5.2.18",
-    "djangorestframework==3.16.1",
+    "django==6.0.9",
+    "djangorestframework==3.18.3",
     "djangorestframework-simplejwt==5.5.1",
     "drf-spectacular==0.30.0",
     "django-q2==1.11.1",

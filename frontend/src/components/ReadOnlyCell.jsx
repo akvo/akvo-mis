@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Row, Col, Image } from "antd";
+import { Row, Col, Image, Button } from "antd";
 import {
   config,
   IMAGE_EXTENSIONS,
@@ -9,6 +9,46 @@ import {
 } from "../lib";
 import moment from "moment";
 import PropTypes from "prop-types";
+
+// A single answer can be multiple MB (e.g. a long text field). Rendering the
+// whole string into the DOM freezes the tab, so we cap what we show.
+// Collapsed view shows MAX_DISPLAY_CHARS; "Read more" expands up to
+// EXPAND_LIMIT only — the cap is what keeps expand/collapse responsive, since
+// the freeze is proportional to characters laid out, not to the toggle itself.
+const MAX_DISPLAY_CHARS = 2000;
+const EXPAND_LIMIT = 50000;
+
+// Non-string (arrays/JSX/numbers) and short strings render as-is.
+const ExpandableText = ({ display }) => {
+  const [expanded, setExpanded] = useState(false);
+  if (typeof display !== "string" || display.length <= MAX_DISPLAY_CHARS) {
+    return display;
+  }
+  const overCap = display.length > EXPAND_LIMIT;
+  const shown = expanded
+    ? display.slice(0, EXPAND_LIMIT)
+    : display.slice(0, MAX_DISPLAY_CHARS);
+  return (
+    <>
+      {shown}
+      {expanded && overCap
+        ? `… (showing first ${EXPAND_LIMIT} of ${display.length} characters)`
+        : "… "}
+      <Button
+        type="link"
+        size="small"
+        style={{ padding: 0, height: "auto" }}
+        onClick={() => setExpanded((prev) => !prev)}
+      >
+        {expanded ? "Read less" : "Read more"}
+      </Button>
+    </>
+  );
+};
+
+ExpandableText.propTypes = {
+  display: PropTypes.any,
+};
 
 const ReadOnlyCell = ({ record, lastValue = false }) => {
   const [locationName, setLocationName] = useState(null);
@@ -112,6 +152,9 @@ const ReadOnlyCell = ({ record, lastValue = false }) => {
       <Col
         flex={1}
         style={{
+          minWidth: 0,
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
           cursor:
             record.type === QUESTION_TYPES.attachment && value && !isImageType
               ? "pointer"
@@ -127,9 +170,11 @@ const ReadOnlyCell = ({ record, lastValue = false }) => {
           ) : isImageType && lastValue && oldValue ? (
             <Image src={oldValue} width={100} />
           ) : lastValue ? (
-            getLastAnswerDisplayValue(record, oldValue)
+            <ExpandableText
+              display={getLastAnswerDisplayValue(record, oldValue)}
+            />
           ) : (
-            getAnswerDisplayValue(record, value)
+            <ExpandableText display={getAnswerDisplayValue(record, value)} />
           )}
         </span>
       </Col>
