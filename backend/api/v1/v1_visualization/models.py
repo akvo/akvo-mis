@@ -125,7 +125,7 @@ class Dashboard(SoftDeletes):
             # path, and duplicate(), a data migration and a shell
             # session all write rows without it.
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(
                         kind=DashboardKind.widgets,
                         root_form__isnull=False,
