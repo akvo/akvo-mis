@@ -65,9 +65,13 @@ class DataBatch(models.Model):
         if form.parent:
             form_filter.append(form.parent)
 
+        # A user assigned to both the form and its parent matches user_form
+        # twice, so this to-many join duplicates their UserRole. Without
+        # distinct() that yields duplicate approver entries and duplicate
+        # DataApproval rows (and duplicate approval emails) for one person.
         user_roles = user_roles.filter(
             user__user_form__form__in=form_filter
-        )
+        ).distinct()
 
         # Show user and their administration order by administration level
         user_roles = user_roles.order_by(
