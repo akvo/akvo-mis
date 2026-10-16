@@ -3,7 +3,7 @@
 
 set -e
 pip -q install uv==0.13.0
-uv sync --frozen --inexact
+uv sync --locked --inexact
 pip check
 
 if [[ -v FREEZE ]]; then

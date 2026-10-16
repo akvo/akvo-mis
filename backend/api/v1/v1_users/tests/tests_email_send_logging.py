@@ -13,6 +13,10 @@ class ExplodingBackend(BaseEmailBackend):
         raise RuntimeError("provider refused the message")
 
 
+LOCMEM = {
+    "default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}
+}
+
 # The activation email, because that is the one whose silent failure was
 # reported: a registrant saw "Check your email" and no email ever came.
 CONTEXT = {
@@ -29,9 +33,7 @@ class SendEmailReportingTestCase(SimpleTestCase):
     log record. Both are asserted here.
     """
 
-    @override_settings(
-        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
-    )
+    @override_settings(MAILERS=LOCMEM)
     def test_returns_true_and_logs_when_the_backend_accepts(self):
         with self.assertLogs("utils.email_helper", level="INFO") as logs:
             sent = send_email(
@@ -50,7 +52,9 @@ class SendEmailReportingTestCase(SimpleTestCase):
         message_id = mail.outbox[0].extra_headers["Message-ID"]
         self.assertIn(message_id, output)
 
-    @override_settings(EMAIL_BACKEND=f"{__name__}.ExplodingBackend")
+    @override_settings(
+        MAILERS={"default": {"BACKEND": f"{__name__}.ExplodingBackend"}}
+    )
     def test_returns_false_and_logs_traceback_when_the_backend_raises(self):
         with self.assertLogs("utils.email_helper", level="ERROR") as logs:
             sent = send_email(
@@ -66,9 +70,7 @@ class SendEmailReportingTestCase(SimpleTestCase):
         # ...and the traceback, which is what `print(ex)` threw away.
         self.assertIn("RuntimeError: provider refused the message", output)
 
-    @override_settings(
-        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
-    )
+    @override_settings(MAILERS=LOCMEM)
     def test_preview_mode_still_returns_the_rendered_html(self):
         # The email_template view renders without sending and returns the
         # body, so the new boolean return must not have displaced it.

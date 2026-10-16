@@ -133,7 +133,9 @@ class InviteEmailDeliveryTestCase(TenantIsolationTestCase):
         )
         self.assertNotEqual(invited.pk, existing.pk)
 
-    @override_settings(EMAIL_BACKEND=EXPLODING_BACKEND)
+    @override_settings(
+        MAILERS={"default": {"BACKEND": EXPLODING_BACKEND}}
+    )
     def test_invite_still_succeeds_but_logs_when_the_email_fails(self):
         with self.assertLogs("utils.email_helper", level="ERROR") as logs:
             response = self.invite(self.a)

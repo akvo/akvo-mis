@@ -749,9 +749,16 @@ class CreateBatchSerializer(serializers.Serializer):
                     })
         # try:
         with transaction.atomic():
+            # Anchor the batch at the data's own administration, not the
+            # submitter's role administration. A submitter who also holds a
+            # higher-level role would otherwise elevate the batch above the
+            # data, so approvers() (which walks up from the batch admin) would
+            # skip the mid-level approvers that has_approval (which walks up
+            # from the data admin) counts on -- leaving the batch with no
+            # approver. first_data is the shallowest data item in the batch.
             obj = DataBatch.objects.create(
                 form_id=form_id,
-                administration=user_role.administration,
+                administration=first_data.administration,
                 user=user,
                 name=validated_data.get("name"),
             )
@@ -763,44 +770,54 @@ class CreateBatchSerializer(serializers.Serializer):
                 raise ValidationError({
                     "detail": f"Failed to create batch data list: {str(e)}"
                 })
-            # Send email to approvers
-            try:
-                emails = [
-                    approver["user"].email for approver in obj.approvers()
-                ]
-                if len(emails):
-                    number_of_records = obj.batch_data_list.count()
-                    data = {
-                        "send_to": emails,
-                        "listing": [
-                            {"name": "Batch Name", "value": obj.name},
-                            {
-                                "name": "Questionnaire",
-                                "value": obj.form.name
-                            },
-                            {
-                                "name": "Number of Records",
-                                "value": number_of_records,
-                            },
-                            {
-                                "name": "Submitter",
-                                "value": f"""{obj.user.name}""",
-                            },
-                        ],
+            # Resolve the approvers once. validate_data already guarantees each
+            # data item has_approval, so an empty list here means a config gap;
+            # refuse rather than leave the data in an un-approvable pending
+            # batch (the transaction rolls back).
+            batch_approvers = obj.approvers()
+            if not batch_approvers:
+                raise ValidationError({
+                    "detail": {
+                        "data": [
+                            "No approver is configured for this "
+                            "administration and form."
+                        ]
                     }
-                    send_email(
-                        context=data,
-                        type=EmailTypes.pending_approval
-                    )
-                    # Create DataApproval for each approver
-                    for approver in obj.approvers():
-                        DataApproval.objects.create(
-                            batch=obj,
-                            administration=approver["administration"],
-                            role=approver["role"],
-                            user=approver["user"],
-                            status=DataApprovalStatus.pending,
-                        )
+                })
+            # Create DataApproval for each approver
+            for approver in batch_approvers:
+                DataApproval.objects.create(
+                    batch=obj,
+                    administration=approver["administration"],
+                    role=approver["role"],
+                    user=approver["user"],
+                    status=DataApprovalStatus.pending,
+                )
+            # Notify approvers by email
+            try:
+                number_of_records = obj.batch_data_list.count()
+                data = {
+                    "send_to": [a["user"].email for a in batch_approvers],
+                    "listing": [
+                        {"name": "Batch Name", "value": obj.name},
+                        {
+                            "name": "Questionnaire",
+                            "value": obj.form.name
+                        },
+                        {
+                            "name": "Number of Records",
+                            "value": number_of_records,
+                        },
+                        {
+                            "name": "Submitter",
+                            "value": f"""{obj.user.name}""",
+                        },
+                    ],
+                }
+                send_email(
+                    context=data,
+                    type=EmailTypes.pending_approval
+                )
             except Exception as e:
                 raise ValidationError({
                     "detail": (
