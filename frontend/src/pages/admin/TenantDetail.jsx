@@ -10,6 +10,8 @@ import {
   Tag,
   Modal,
   Upload,
+  Input,
+  Form,
 } from "antd";
 import {
   EyeOutlined,
@@ -47,6 +49,9 @@ const TenantDetail = () => {
   const [renaming, setRenaming] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const { inspect, inspecting } = useInspect();
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -104,6 +109,31 @@ const TenantDetail = () => {
       .catch(() =>
         notify({ type: "error", message: "Could not update the workspace" })
       );
+  };
+
+  const handleSaveName = () => {
+    setSavingName(true);
+    const trimmed = (newName || "").trim();
+    api
+      .put(`admin/tenants/${id}`, { name: trimmed || tenant.subdomain })
+      .then((res) => {
+        setTenant(res.data);
+        setEditingName(false);
+        notify({
+          type: "success",
+          message: text.consoleNameUpdated || "Workspace name updated",
+        });
+      })
+      .catch((err) => {
+        notify({
+          type: "error",
+          message:
+            err.response?.data?.message || "Failed to update workspace name",
+        });
+      })
+      .finally(() => {
+        setSavingName(false);
+      });
   };
 
   const confirmDelete = () => {
@@ -281,7 +311,25 @@ const TenantDetail = () => {
           <h1 style={{ margin: 0, lineHeight: 1.2 }}>
             {tenant.subdomain} <Tag>{tenant.state}</Tag>
           </h1>
-          <div className="admin-subtle">{tenant.name}</div>
+          <div
+            className="admin-subtle"
+            style={{ display: "flex", alignItems: "center", gap: 8 }}
+          >
+            <span>{tenant.name || tenant.subdomain}</span>
+            {tenant.state !== "deleted" && (
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, height: "auto" }}
+                onClick={() => {
+                  setNewName(tenant.name || tenant.subdomain);
+                  setEditingName(true);
+                }}
+              >
+                Edit name
+              </Button>
+            )}
+          </div>
           {tenant.state !== "deleted" && (
             <Space size="small" style={{ marginTop: 6 }}>
               <Upload
@@ -415,6 +463,28 @@ const TenantDetail = () => {
           </Card>
         </Col>
       </Row>
+      <Modal
+        title={`Edit name for ${tenant.subdomain}`}
+        visible={editingName}
+        onOk={handleSaveName}
+        onCancel={() => setEditingName(false)}
+        confirmLoading={savingName}
+        okText="Save"
+      >
+        <Form layout="vertical">
+          <Form.Item
+            label="Workspace name"
+            extra="The full human-friendly name of the organisation."
+          >
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              maxLength={255}
+              placeholder="e.g. Ministry of Health & Human Services"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

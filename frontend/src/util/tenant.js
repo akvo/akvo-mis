@@ -106,9 +106,12 @@ export const fetchTenant = () =>
           s.language.active = tenant.language;
         }
       });
-      const rawTitle = tenant?.subdomain || tenant?.name;
+      const rawTitle =
+        tenant?.name || (tenant?.subdomain ? startCase(tenant.subdomain) : "");
       if (rawTitle) {
-        document.title = `Akvo MIS - ${startCase(rawTitle)}`;
+        document.title = rawTitle.toUpperCase().endsWith("MIS")
+          ? rawTitle
+          : `${rawTitle} MIS`;
       } else {
         document.title = "Akvo MIS";
       }
