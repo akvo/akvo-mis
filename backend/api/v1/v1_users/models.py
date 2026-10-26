@@ -56,6 +56,9 @@ class Tenant(models.Model):
     # separate display field, which would be a synonym that drifts out
     # of step with the address people actually type.
     subdomain = models.CharField(max_length=63, unique=True)
+    # Full organizational or display name
+    # (e.g. "Ministry of Health & Human Services")
+    name = models.CharField(max_length=255, default="", blank=True)
     # Three states on two columns. Suspension is an operational lever
     # an operator uses and undoes; deletion is an ending. They differ
     # in reversibility and visibility, not in enforcement -- both stop
@@ -76,6 +79,15 @@ class Tenant(models.Model):
 
     def __str__(self):
         return self.subdomain
+
+    @property
+    def display_name(self):
+        return self.name if self.name else self.subdomain
+
+    @property
+    def mis_title(self):
+        base = self.display_name
+        return base if base.upper().endswith("MIS") else f"{base} MIS"
 
     class Meta:
         db_table = "tenant"
