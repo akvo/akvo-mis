@@ -391,15 +391,29 @@ class ApproveDataRequestSerializer(serializers.Serializer):
         )
         # If all levels have
         if all_levels_have_approval:
-            # Seed data via Async Task
             for dl in batch.batch_data_list.filter(
                 data__is_pending=True,
-            ).all():
+            ).select_related("data").all():
                 data = dl.data
-                async_task("api.v1.v1_data.tasks.seed_approved_data", data)
+                # Flip is_pending synchronously so it commits together
+                # with batch.approved. Previously is_pending was only set
+                # inside the async seed_approved_data task; when that task
+                # failed (e.g. DB connection exhaustion) the data was left
+                # batch.approved=True + is_pending=True, invisible in
+                # Submissions, Pending Approval and the data list.
+                data.is_pending = False
+                data.updated = timezone.now()
+                data.save(update_fields=["is_pending", "updated"])
             batch.approved = True
             batch.updated = timezone.now()
             batch.save()
+            # Heavy side-effects (file export + a single materialized view
+            # refresh) run off the request path, once per batch rather than
+            # once per datapoint, so bulk approvals no longer storm DB
+            # connections.
+            async_task(
+                "api.v1.v1_data.tasks.finalize_batch_approval", batch.id
+            )
         return approval
 
     def update(self, instance, validated_data):

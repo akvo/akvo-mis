@@ -21,3 +21,26 @@ def seed_approved_data(data: FormData):
     refresh_materialized_data()
 
     return data
+
+
+def finalize_batch_approval(batch_id: int):
+    """Run post-approval side-effects once per batch.
+
+    is_pending is flipped synchronously at approval time, so this only
+    handles the heavy work: export registration datapoints to file and
+    refresh the materialized views a single time. Doing it per batch
+    instead of per datapoint avoids the DB connection storm (one full
+    materialized view refresh per approved record) that previously
+    exhausted PostgreSQL connection slots and failed the approval seed.
+    """
+    # Imported here to avoid a circular import at module load.
+    from api.v1.v1_approval.models import DataBatchList
+
+    data_list = DataBatchList.objects.filter(
+        batch_id=batch_id
+    ).select_related("data__form")
+    if not settings.TEST_ENV:
+        for dl in data_list:
+            if not dl.data.form.parent:
+                dl.data.save_to_file
+    refresh_materialized_data()
