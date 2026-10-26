@@ -1,12 +1,13 @@
 import os
 from io import StringIO
+from unittest.mock import patch
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.core.management import call_command
 
 from api.v1.v1_approval.constants import DataApprovalStatus
 from api.v1.v1_data.models import FormData
-from api.v1.v1_data.tasks import seed_approved_data
+from api.v1.v1_data.tasks import seed_approved_data, finalize_batch_approval
 from api.v1.v1_users.models import SystemUser
 from api.v1.v1_profile.constants import DataAccessTypes
 from api.v1.v1_profile.models import Role
@@ -262,12 +263,38 @@ class DataBatchApprovedTestCase(TestCase, ProfileTestHelperMixin):
             self.batch.approved
         )
 
+        # is_pending must flip in the same request as batch.approved, so a
+        # down worker can no longer strand data as approved-but-pending.
+        # This holds without running the async seed_approved_data task.
+        self.data.refresh_from_db()
+        self.assertFalse(
+            self.data.is_pending
+        )
+
+        # Still invoke the task to exercise the idempotent side-effects
+        # (JSON export / materialized view refresh) used by the file test.
         seed_approved_data(self.data)
 
         self.data.refresh_from_db()
         self.assertFalse(
             self.data.is_pending
         )
+
+    def test_finalize_batch_approval_runs_side_effects_once(self):
+        # Post-approval side-effects run once per batch: a single
+        # materialized view refresh (not one per datapoint) and a file
+        # export for each registration datapoint in the batch.
+        uuid = self.data.uuid
+        with override_settings(TEST_ENV=False):
+            with patch(
+                "api.v1.v1_data.tasks.refresh_materialized_data"
+            ) as mock_refresh:
+                finalize_batch_approval(self.batch.id)
+
+        self.assertEqual(mock_refresh.call_count, 1)
+        path = f"{STORAGE_PATH}/datapoints/{uuid}.json"
+        self.assertTrue(os.path.exists(path), "File not exists")
+        os.remove(path)
 
 
 class DataBatchApprovedTestCaseWithFileSaving(DataBatchApprovedTestCase):
