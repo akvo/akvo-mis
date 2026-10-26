@@ -18,6 +18,7 @@ import {
   UploadOutlined,
   LoadingOutlined,
   DeleteOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -29,6 +30,7 @@ import {
   LOGO_ACCEPT_TYPES,
 } from "../../lib";
 import { useNotification } from "../../util/hooks";
+import { baseDomain } from "../../util/tenant";
 import RenameModal from "./RenameModal";
 import useInspect from "./useInspect";
 
@@ -307,20 +309,33 @@ const TenantDetail = () => {
             }}
           />
         </div>
-        <div>
-          <h1 style={{ margin: 0, lineHeight: 1.2 }}>
-            {tenant.subdomain} <Tag>{tenant.state}</Tag>
-          </h1>
+        <div style={{ flex: 1 }}>
           <div
-            className="admin-subtle"
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
           >
-            <span>{tenant.name || tenant.subdomain}</span>
+            <h1 style={{ margin: 0, lineHeight: 1.2 }}>
+              {tenant.name || tenant.subdomain}
+            </h1>
+            <Tag
+              color={
+                tenant.state === "active"
+                  ? "green"
+                  : tenant.state === "suspended"
+                  ? "orange"
+                  : "default"
+              }
+            >
+              {tenant.state}
+            </Tag>
             {tenant.state !== "deleted" && (
               <Button
-                type="link"
                 size="small"
-                style={{ padding: 0, height: "auto" }}
+                icon={<EditOutlined />}
                 onClick={() => {
                   setNewName(tenant.name || tenant.subdomain);
                   setEditingName(true);
@@ -328,6 +343,24 @@ const TenantDetail = () => {
               >
                 Edit name
               </Button>
+            )}
+          </div>
+          <div
+            className="admin-subtle"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 4,
+            }}
+          >
+            <span>
+              Subdomain: <strong>{tenant.subdomain}</strong>
+            </span>
+            {Boolean(baseDomain()) && (
+              <span>
+                ({tenant.subdomain}.{baseDomain()})
+              </span>
             )}
           </div>
           {tenant.state !== "deleted" && (
@@ -474,7 +507,7 @@ const TenantDetail = () => {
         <Form layout="vertical">
           <Form.Item
             label="Workspace name"
-            extra="The full human-friendly name of the organisation."
+            extra="The human-friendly name displayed across emails, headers, and browser titles."
           >
             <Input
               value={newName}
