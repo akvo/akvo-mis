@@ -628,7 +628,7 @@ class MobileAssignmentViewSet(ModelViewSet):
             adm = Administration.objects.for_user(user).filter(
                 parent__isnull=True
             ).first()
-            adm_q = Q(
+            adm_q = Q(administrations=adm) | Q(
                 administrations__path__startswith=f"{adm.id}."
             )
         for ur in user.user_user_role.filter(
