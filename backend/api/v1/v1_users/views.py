@@ -456,7 +456,7 @@ def tenant_info(request, version):
         return Response(status=status.HTTP_204_NO_CONTENT)
     body = {
         "subdomain": tenant.subdomain,
-        "name": tenant.subdomain,
+        "name": tenant.name or tenant.subdomain,
         "language": getattr(tenant, "language", "en") or "en",
         "logo": tenant.logo,
     }
@@ -504,8 +504,13 @@ def register(request, version):
     # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
+            tenant_name = (
+                (validated.get("name") or "").strip()
+                or validated["subdomain"]
+            )
             tenant = Tenant.objects.create(
                 subdomain=validated["subdomain"],
+                name=tenant_name,
                 language=validated.get("language", "en"),
             )
             user = SystemUser.objects.create_superuser(
@@ -1445,8 +1450,19 @@ def update_tenant_branding(request, version):
                 {"message": validate_serializers_message(serializer.errors)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        tenant.logo = serializer.validated_data.get("logo") or None
-        tenant.save(update_fields=["logo"])
+        update_fields = []
+        if (
+            "name" in serializer.validated_data
+            and serializer.validated_data.get("name") is not None
+        ):
+            raw_name = serializer.validated_data["name"].strip()
+            tenant.name = raw_name if raw_name else tenant.subdomain
+            update_fields.append("name")
+        if "logo" in serializer.validated_data:
+            tenant.logo = serializer.validated_data.get("logo") or None
+            update_fields.append("logo")
+        if update_fields:
+            tenant.save(update_fields=update_fields)
 
     root_name = (
         tenant.administrations.filter(parent=None)
@@ -1457,7 +1473,7 @@ def update_tenant_branding(request, version):
     return Response(
         {
             "subdomain": tenant.subdomain,
-            "name": root_name,
+            "name": tenant.name or root_name or tenant.subdomain,
             "language": getattr(tenant, "language", "en") or "en",
             "logo": tenant.logo,
         },
