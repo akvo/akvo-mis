@@ -1,67 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  ToastAndroid,
-  BackHandler,
-} from 'react-native';
-import { Button, Skeleton } from '@rneui/themed';
+import { View, Text, StyleSheet, BackHandler } from 'react-native';
+import { Button, Divider } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout } from '../components';
-import { UserState, UIState, AuthState } from '../store';
-import { api, i18n } from '../lib';
-import { crudConfig, crudUsers } from '../database/crud';
+import { BaseLayout, LogoutButton } from '../components';
+import { UserState, UIState, BuildParamsState } from '../store';
+import { i18n } from '../lib';
+import { crudUsers } from '../database/crud';
 
-const Users = ({ navigation, route }) => {
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState([]);
-  const currUserID = UserState.useState((s) => s.id);
+const Users = ({ navigation }) => {
+  const [activeUser, setActiveUser] = useState(null);
+  const { name, syncWifiOnly } = UserState.useState((s) => s);
   const activeLang = UIState.useState((s) => s.lang);
+  const serverURL = BuildParamsState.useState((s) => s.serverURL);
   const trans = i18n.text(activeLang);
   const db = useSQLiteContext();
 
-  const loadUsers = useCallback(async () => {
-    const rows = await crudUsers.getAllUsers(db);
-    setUsers(rows);
-    setLoading(false);
+  const loadActiveUser = useCallback(async () => {
+    const row = await crudUsers.getActiveUser(db);
+    setActiveUser(row || null);
   }, [db]);
 
-  const handleSelectUser = async ({ id, name, password, token }) => {
-    await crudUsers.toggleActive(db, { id: currUserID, active: 1 });
-    await crudUsers.toggleActive(db, { id, active: 0 });
-    await crudConfig.updateConfig(db, { authenticationCode: password });
-    api.setToken(token);
-
-    AuthState.update((s) => {
-      s.token = token;
-    });
-    UserState.update((s) => {
-      s.id = id;
-      s.name = name;
-    });
-    await loadUsers();
-
-    if (Platform.OS === 'android') {
-      ToastAndroid.show(`${trans.usersSwitchTo}${name}`, ToastAndroid.SHORT);
-    }
-  };
-
   useEffect(() => {
-    if (loading) {
-      loadUsers();
-    }
-    if (!loading && route?.params?.added) {
-      const newUser = route.params.added;
-      const findNew = users.find((u) => u.id === newUser?.id);
-      if (!findNew) {
-        setLoading(true);
-      }
-    }
-  }, [loading, route, loadUsers, users]);
+    loadActiveUser();
+  }, [loadActiveUser]);
 
   useEffect(() => {
     const handleBackPress = () => {
@@ -74,9 +36,21 @@ const Users = ({ navigation, route }) => {
     };
   }, [navigation]);
 
+  const lastSynced = activeUser?.lastSyncedAt
+    ? new Date(activeUser.lastSyncedAt).toLocaleString()
+    : trans.profileNeverSynced;
+  // Passcode is shown so the operator can tell apart accounts that share a name
+  const rows = [
+    { key: 'name', label: trans.userLabel, value: name || '-' },
+    { key: 'passcode', label: trans.passcodeLabel, value: activeUser?.password || '-' },
+    { key: 'synced', label: trans.syncLabel, value: lastSynced },
+    { key: 'wifi', label: trans.syncWifiOnlyLabel, value: syncWifiOnly ? trans.buttonYes : trans.buttonNo },
+    { key: 'server', label: trans.serverLabel, value: serverURL || '-' },
+  ];
+
   return (
     <BaseLayout
-      title={trans.usersPageTitle}
+      title={trans.profilePageTitle}
       leftComponent={
         <Button type="clear" onPress={() => navigation.navigate('Home')} testID="arrow-back-button">
           <Icon name="arrow-back" size={18} />
@@ -84,43 +58,62 @@ const Users = ({ navigation, route }) => {
       }
       rightComponent={false}
     >
-      {loading ? (
-        <Skeleton animation="wave" testID="loading-users" />
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(user) => user.id.toString()}
-          style={styles.listContainer}
-          testID="users-list"
-          renderItem={({ item: user }) => (
-            <TouchableOpacity
-              onPress={() => handleSelectUser(user)}
-              testID={`list-item-user-${user.id}`}
-              style={styles.userItem}
+      <BaseLayout.Content>
+        <View style={styles.profileHeader} testID="profile-header">
+          <Icon name="person-circle-outline" size={72} color="#9ca3af" />
+          <Text style={styles.profileName} testID="profile-name">
+            {name || '-'}
+          </Text>
+        </View>
+        <Divider width={8} color="#f9fafb" />
+        {rows.map((row) => (
+          <View key={row.key} style={styles.infoRow} testID={`profile-row-${row.key}`}>
+            <Text style={styles.infoLabel}>{row.label}</Text>
+            <Text
+              style={styles.infoValue}
+              selectable={row.key === 'passcode'}
+              testID={`profile-value-${row.key}`}
             >
-              <Text testID={`title-username-${user.id}`}>{user.name}</Text>
-              {user.active === 1 && (
-                <Icon name="checkmark" size={18} testID={`icon-checkmark-${user.id}`} />
-              )}
-            </TouchableOpacity>
-          )}
-        />
-      )}
+              {row.value}
+            </Text>
+          </View>
+        ))}
+        <Divider width={8} color="#f9fafb" />
+        <LogoutButton />
+      </BaseLayout.Content>
     </BaseLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  listContainer: {
-    width: '100%',
-    flex: 1,
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    backgroundColor: 'white',
   },
-  userItem: {
+  profileName: {
+    marginTop: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#eee',
+  },
+  infoLabel: {
+    color: '#666',
+  },
+  infoValue: {
+    fontWeight: '500',
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: 12,
   },
 });
 

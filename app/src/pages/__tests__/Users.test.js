@@ -1,318 +1,96 @@
-/* eslint-disable no-unused-vars */
-import React, { useState } from 'react';
-import { render, renderHook, fireEvent, act, waitFor } from '@testing-library/react-native';
+import React from 'react';
+import { BackHandler } from 'react-native';
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { useNavigation } from '@react-navigation/native';
-// eslint-disable-next-line import/extensions
-import mockBackHandler from 'react-native/Libraries/Utilities/__mocks__/BackHandler.js';
 
 import Users from '../Users';
 import { UserState, UIState } from '../../store';
+import { crudUsers } from '../../database/crud';
 
 jest.mock('expo-sqlite');
+jest.mock('../../database/crud');
+// LogoutButton pulls in the background-sync task chain; stub the native modules.
+jest.mock('expo-task-manager', () => ({ defineTask: jest.fn() }));
+jest.mock('expo-background-task', () => ({ BackgroundTaskResult: { Success: 1, Failed: 2 } }));
 
-jest.mock('react', () => ({
-  ...jest.requireActual('react'),
-}));
-
-jest.mock('react-native/Libraries/Utilities/BackHandler', () => mockBackHandler);
-
-// Create a mock db instead of calling a hook
-const db = {
-  transaction: jest.fn(),
-  closeAsync: jest.fn(),
-};
-
-describe('UsersPage', () => {
+describe('UsersPage (Profile)', () => {
   beforeAll(() => {
     UIState.update((s) => {
       s.lang = 'en';
     });
   });
+
   beforeEach(() => {
-    const usersData = [
-      {
-        id: 1,
-        name: 'John',
-        active: 1,
-      },
-    ];
-    const mockSelectSql = jest.fn((_query, _params, successCallback) => {
-      successCallback(null, { rows: { length: usersData.length, _array: usersData } });
+    crudUsers.getActiveUser.mockResolvedValue({
+      id: 1,
+      name: 'John Doe',
+      password: '123456',
+      active: 1,
+      lastSyncedAt: '2026-10-26T10:00:00.000Z',
     });
-
-    db.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockSelectSql,
-      });
+    UserState.update((s) => {
+      s.id = 1;
+      s.name = 'John Doe';
+      s.syncWifiOnly = 0;
     });
   });
 
-  it('should match with snapshot', async () => {
-    const mockNavigation = useNavigation();
-    const { toJSON } = render(<Users navigation={mockNavigation} />);
-    const { result } = renderHook(() => useState([]));
-    const { result: resLoading } = renderHook(() => useState(true));
-    const [users, setUsers] = result.current;
-    const [loading, setLoading] = resLoading.current;
-
-    await act(async () => {
-      // Mock direct result instead of using conn.tx and query
-      const rows = { _array: [{ id: 1, name: 'John', active: 1 }] };
-      setUsers(rows._array);
-      setLoading(false);
-    });
-
-    await waitFor(() => {
-      expect(toJSON()).toMatchSnapshot();
-    });
-  });
-
-  it('should show empty page when users table has no data', () => {
-    const mockNavigation = useNavigation();
-    const mockSelectSql = jest.fn((_query, _params, successCallback) => {
-      successCallback(null, { rows: { length: 0, _array: [] } });
-    });
-    db.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockSelectSql,
-      });
-    });
-
-    const { queryByTestId } = render(<Users navigation={mockNavigation} />);
-
-    const userItemEl = queryByTestId('list-item-user-1');
-    expect(userItemEl).toBeNull();
-  });
-
-  it('should render users list when the table has data', async () => {
-    const mockNavigation = useNavigation();
-    const usersData = [
-      {
-        id: 1,
-        name: 'John Doe',
-        active: 1,
-      },
-      {
-        id: 2,
-        name: 'Miles Morales',
-        active: 0,
-      },
-    ];
-    const mockSelectSql = jest.fn((_query, _params, successCallback) => {
-      successCallback(null, { rows: { length: usersData.length, _array: usersData } });
-    });
-
-    db.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockSelectSql,
-      });
-    });
-    const { getByText } = render(<Users navigation={mockNavigation} />);
-    const mockLoadUsers = jest.fn();
-    act(() => {
-      mockLoadUsers();
-    });
-
-    const { result } = renderHook(() => useState([]));
-    const { result: resLoading } = renderHook(() => useState(true));
-    const [users, setUsers] = result.current;
-    const [loading, setLoading] = resLoading.current;
-
-    await act(async () => {
-      // Mock direct result instead of using conn.tx and query
-      const rows = { _array: usersData };
-      setUsers(rows._array);
-      setLoading(false);
-    });
-
-    await waitFor(() => {
-      expect(mockLoadUsers).toHaveBeenCalledTimes(1);
-      expect(resLoading.current[0]).toBeFalsy();
-      expect(getByText('John Doe')).toBeDefined();
-      expect(getByText('Miles Morales')).toBeDefined();
-    });
-  });
-
-  it('should show check mark for active user', async () => {
+  it('should show the current user profile with name and passcode', async () => {
     const mockNavigation = useNavigation();
     const { getByTestId } = render(<Users navigation={mockNavigation} />);
-    const { result } = renderHook(() => useState([]));
-    const { result: resLoading } = renderHook(() => useState(true));
-    const [users, setUsers] = result.current;
-    const [loading, setLoading] = resLoading.current;
-
-    await act(async () => {
-      // Mock direct result instead of using conn.tx and query
-      const rows = { _array: [{ id: 1, name: 'John', active: 1 }] };
-      setUsers(rows._array);
-      setLoading(false);
-    });
 
     await waitFor(() => {
-      const iconCheckMark = getByTestId('icon-checkmark-1');
-      expect(iconCheckMark).toBeDefined();
+      expect(getByTestId('profile-name')).toBeDefined();
+      expect(getByTestId('profile-value-passcode').props.children).toBe('123456');
     });
   });
 
-  it('should be able to switch to another user', async () => {
+  it('should render the logout button instead of a user list', async () => {
     const mockNavigation = useNavigation();
-    const usersData = [
-      {
-        id: 1,
-        name: 'John Doe',
-        active: 1,
-      },
-      {
-        id: 2,
-        name: 'Miles Morales',
-        active: 0,
-      },
-    ];
-    const mockSelectSql = jest.fn((_query, _params, successCallback) => {
-      successCallback(null, { rows: { length: usersData.length, _array: usersData } });
-    });
-
-    db.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockSelectSql,
-      });
-    });
-
-    const { getByTestId, rerender } = render(<Users navigation={mockNavigation} />);
-
-    const { result } = renderHook(() => useState([]));
-    const { result: resLoading } = renderHook(() => useState(true));
-    const [users, setUsers] = result.current;
-    const [loading, setLoading] = resLoading.current;
-
-    await act(async () => {
-      // Mock direct result instead of using conn.tx and query
-      const rows = { _array: usersData };
-      setUsers(rows._array);
-      setLoading(false);
-    });
-
-    rerender(<Users navigation={mockNavigation} />);
-
-    const selectedUser = getByTestId('list-item-user-2');
-
-    expect(selectedUser).toBeDefined();
-    fireEvent.press(selectedUser);
-
-    const updatedUserData = [
-      {
-        id: 1,
-        name: 'John Doe',
-        active: 0,
-      },
-      {
-        id: 2,
-        name: 'Miles Morales',
-        active: 1,
-      },
-    ];
-    const mockUpdatedSql = jest.fn((_query, _params, successCallback) => {
-      successCallback(null, { rows: { length: updatedUserData.length, _array: updatedUserData } });
-    });
-
-    db.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockUpdatedSql,
-      });
-    });
-
-    act(() => {
-      UserState.update((s) => {
-        s.id = 2;
-        s.name = 'Miles Morales';
-      });
-    });
+    const { getByTestId, queryByTestId } = render(<Users navigation={mockNavigation} />);
 
     await waitFor(() => {
-      const { result: res } = renderHook(() => UserState.useState((s) => s.name));
-      const selectedUserChecked = getByTestId('icon-checkmark-2');
-      expect(selectedUserChecked).toBeDefined();
-      expect(res.current).toBe('Miles Morales');
+      expect(getByTestId('list-item-logout')).toBeDefined();
+      expect(queryByTestId('users-list')).toBeNull();
     });
   });
 
-  // it('should go to add user when plus icon clicked', () => {
-  //   const mockNavigation = useNavigation();
-  //   const { getByTestId, rerender } = render(<Users navigation={mockNavigation} />);
-  //   const addUserButton = getByTestId('button-add-user');
-  //   expect(addUserButton).toBeDefined();
-  //   fireEvent.press(addUserButton);
+  it('should open the logout confirmation dialog when logout pressed', async () => {
+    const mockNavigation = useNavigation();
+    const { getByTestId } = render(<Users navigation={mockNavigation} />);
 
-  //   expect(mockNavigation.navigate).toHaveBeenCalledWith('AddUser');
-  // });
+    fireEvent.press(getByTestId('list-item-logout'));
+
+    await waitFor(() => {
+      expect(getByTestId('dialog-confirm-logout')).toBeDefined();
+    });
+  });
 
   it('should redirect to Homepage when hardware back button pressed', async () => {
     const mockNavigation = useNavigation();
+    let backPressHandler;
+    const spy = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_event, handler) => {
+      backPressHandler = handler;
+      return { remove: jest.fn() };
+    });
+
     render(<Users navigation={mockNavigation} />);
 
     act(() => {
-      mockBackHandler.mockPressBack();
+      backPressHandler();
     });
 
     await waitFor(() => {
       expect(mockNavigation.navigate).toHaveBeenCalledWith('Home');
     });
-  });
-
-  it('should reload page after new user added', async () => {
-    const mockNavigation = useNavigation();
-    const mockRoute = {
-      params: {
-        added: {
-          id: 3,
-          name: 'Barry Allen',
-        },
-      },
-    };
-    const { getByText } = render(<Users navigation={mockNavigation} route={mockRoute} />);
-
-    const mockLoadUsers = jest.fn();
-    act(() => {
-      mockLoadUsers();
-    });
-    const updatedUserData = [
-      {
-        id: 1,
-        name: 'John',
-        active: 1,
-      },
-      {
-        id: 3,
-        name: 'Barry Allen',
-        active: 0,
-      },
-    ];
-    const mockUpdatedSql = jest.fn((_query, _params, successCallback) => {
-      successCallback(null, { rows: { length: updatedUserData.length, _array: updatedUserData } });
-    });
-
-    db.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockUpdatedSql,
-      });
-    });
-    act(() => {
-      mockLoadUsers();
-    });
-
-    await waitFor(() => {
-      expect(mockLoadUsers).toHaveBeenCalledTimes(2);
-      expect(getByText('John')).toBeDefined();
-      expect(getByText('Barry Allen')).toBeDefined();
-    });
+    spy.mockRestore();
   });
 
   it('should be translated when UIState.lang changed', async () => {
     const mockNavigation = useNavigation();
     const { getByText } = render(<Users navigation={mockNavigation} />);
 
-    const enTitle = getByText('Users');
-    expect(enTitle).toBeDefined();
+    expect(getByText('Profile')).toBeDefined();
 
     act(() => {
       UIState.update((s) => {
@@ -321,8 +99,7 @@ describe('UsersPage', () => {
     });
 
     await waitFor(() => {
-      const frTitle = getByText('Utilisateurs');
-      expect(frTitle).toBeDefined();
+      expect(getByText('Profil')).toBeDefined();
     });
   });
 });
