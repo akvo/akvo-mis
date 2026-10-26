@@ -117,6 +117,8 @@ def send_activation_email(user):
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
+            "user": user,
+            "tenant": user.tenant,
             "button_url": (
                 f"{user_web_url(user)}/activate/{signing.dumps(user.pk)}"
             ),
@@ -135,6 +137,8 @@ def send_invitation_email(user, invited_by):
         type=EmailTypes.user_invite,
         context={
             "send_to": [user.email],
+            "user": user,
+            "tenant": user.tenant,
             "admin": invited_by.name,
             "button_url": (
                 f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
@@ -169,6 +173,8 @@ def send_email_to_user(type, user, request):
         "send_to": [user.email],
         "listing": listing,
         "admin": f"""{user.name}""",
+        "user": user,
+        "tenant": user.tenant,
     }
     if type == EmailTypes.user_invite:
         data["button_url"] = url
@@ -1199,7 +1205,12 @@ def forgot_password(request, version):
     # /login there redirects to find-workspace, so a reset sent to it
     # can never be completed.
     url = f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
-    data = {"button_url": url, "send_to": [user.email]}
+    data = {
+        "button_url": url,
+        "send_to": [user.email],
+        "user": user,
+        "tenant": user.tenant,
+    }
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(
         {"message": "Reset password instructions sent to your email"},

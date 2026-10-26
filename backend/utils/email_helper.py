@@ -65,12 +65,77 @@ class ListEmailTypeRequestSerializer(serializers.Serializer):
     )
 
 
+def resolve_email_tenant_name(context: dict) -> str:
+    """Extract and sanitize tenant name from email context.
+
+    Precedence:
+    1. context['tenant_name'] or context['name']
+    2. context['tenant'].name or context['tenant'].subdomain
+    3. context['user'].tenant.name or context['user'].tenant.subdomain
+    4. Fallback to APP_NAME
+    """
+    raw_name = None
+    if context.get("tenant_name"):
+        raw_name = str(context["tenant_name"])
+    elif context.get("name"):
+        raw_name = str(context["name"])
+    elif context.get("tenant"):
+        tenant = context["tenant"]
+        raw_name = (
+            getattr(tenant, "name", None)
+            or getattr(tenant, "subdomain", None)
+        )
+    elif context.get("user") and getattr(context["user"], "tenant", None):
+        tenant = context["user"].tenant
+        raw_name = (
+            getattr(tenant, "name", None)
+            or getattr(tenant, "subdomain", None)
+        )
+
+    if not raw_name:
+        raw_name = APP_NAME
+
+    # CRLF injection sanitization: strip \r and \n
+    sanitized = str(raw_name).replace("\r", "").replace("\n", "").strip()
+    return sanitized or APP_NAME
+
+
+def format_mis_name(raw_name: str) -> str:
+    """Format raw name with MIS suffix unless already present."""
+    if not raw_name:
+        return APP_NAME
+    if raw_name.upper().endswith("MIS"):
+        return raw_name
+    return f"{raw_name} MIS"
+
+
 def email_context(context: dict, type: str):
+    raw_tenant_name = resolve_email_tenant_name(context)
+    mis_name = format_mis_name(raw_tenant_name)
+
+    # Determine logo URL: custom tenant logo if available, else default
+    tenant_logo = None
+    if context.get("tenant"):
+        tenant_logo = getattr(context["tenant"], "logo", None)
+    elif context.get("user") and getattr(context["user"], "tenant", None):
+        tenant_logo = getattr(context["user"].tenant, "logo", None)
+
+    if tenant_logo:
+        logo_url = (
+            tenant_logo
+            if str(tenant_logo).startswith("http")
+            else f"{WEBDOMAIN}{tenant_logo}"
+        )
+    else:
+        logo_url = f"{WEBDOMAIN}/logo.png"
+
     context.update(
         {
             "webdomain": WEBDOMAIN,
-            "logo": f"{WEBDOMAIN}/logo.png",
-            "site_name": APP_NAME,
+            "logo": logo_url,
+            "site_name": mis_name,
+            "mis_name": mis_name,
+            "tenant_name": raw_tenant_name,
         }
     )
     if type == EmailTypes.user_register:
@@ -79,7 +144,7 @@ def email_context(context: dict, type: str):
                 "subject": "Registration",
                 "body": f"""Welcome!,
                 You are receiving this email because you Signed up to
-                the {APP_NAME}.
+                the {mis_name}.
                 .""",
                 "image": f"{WEBDOMAIN}/email-icons/check-circle.png",
                 "success_text": "Successfully Registered",
@@ -130,7 +195,7 @@ def email_context(context: dict, type: str):
                 "subject": "Activate your account",
                 "body": (
                     "Welcome! Confirm your email address to finish "
-                    f"setting up your {APP_NAME} workspace. Confirm "
+                    f"setting up your {mis_name} workspace. Confirm "
                     f"within {TENANT_PURGE_AFTER_HOURS} hours — after "
                     "that the workspace name is released."
                 ),
@@ -172,7 +237,7 @@ def email_context(context: dict, type: str):
             {
                 "subject": "Profile Updated",
                 "body": (
-                    f"Your profile on the {APP_NAME} "
+                    f"Your profile on {mis_name} "
                     f"has been updated by {admin}"
                 ),
                 "align": "left",
@@ -270,7 +335,7 @@ def email_context(context: dict, type: str):
         context.update(
             {
                 "subject": "Upload Error",
-                "info_text": f"""Your data upload the {APP_NAME} failed
+                "info_text": f"""Your data upload to {mis_name} failed
             validation checks.""",
                 "image": f"{WEBDOMAIN}/email-icons/close-circle.png",
                 "failed_text": "Upload Error",
@@ -365,7 +430,7 @@ def send_email(
         email_html_message = render_to_string("email/main.html", context)
         msg = EmailMultiAlternatives(
             "{0} - {1}".format(
-                APP_NAME,
+                context.get("mis_name", APP_NAME),
                 context.get("subject")
             ),
             "Email plain text",
