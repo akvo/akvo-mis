@@ -1,9 +1,12 @@
+import html as html_lib
 from django.core import mail
 from django.test import TestCase, override_settings
 
 from api.v1.v1_users.models import Tenant, SystemUser
 from mis.settings import APP_NAME
 from utils.email_helper import EmailTypes, email_context, send_email
+from unittest import mock
+from api.v1.v1_users.views import send_email_to_user
 
 LOCMEM = {
     "default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}
@@ -148,3 +151,84 @@ class EmailTenantNamingTestCase(TestCase):
             "Ministry of Health & Human Services MIS",
             ctx_err["info_text"],
         )
+
+    def test_user_invite_email_content_and_structure(self):
+        ctx = email_context(
+            context={
+                "tenant": self.tenant,
+                "admin": "Dr. Alice",
+                "button_url": "https://mohhs.app.com/login/abc123token",
+            },
+            type=EmailTypes.user_invite,
+        )
+        self.assertEqual(ctx["button_text"], "Set Up Your Password")
+        self.assertEqual(
+            ctx["button_url"], "https://mohhs.app.com/login/abc123token"
+        )
+        self.assertEqual(ctx["post_button_heading"], "What happens next?")
+        self.assertEqual(len(ctx["post_button_steps"]), 3)
+        self.assertIn(
+            "Dr. Alice has invited you to join Ministry of Health & Human "
+            "Services MIS.",
+            ctx["body_paragraphs"],
+        )
+        self.assertIn(
+            "Set up a secure password for your account.",
+            ctx["post_button_steps"],
+        )
+        self.assertIn(
+            "Sign in to Ministry of Health & Human Services MIS using your "
+            "registered email address and password.",
+            ctx["post_button_steps"],
+        )
+        self.assertTrue(bool(ctx["warning_note"]))
+        self.assertIn(
+            "We look forward to welcoming you to Ministry of Health & Human "
+            "Services MIS.",
+            ctx["sign_off"],
+        )
+
+    def test_user_invite_email_html_rendering(self):
+        send_email(
+            context={
+                "send_to": ["doctor@mohhs.gov"],
+                "tenant": self.tenant,
+                "admin": "Dr. Alice",
+                "button_url": "https://mohhs.app.com/login/abc123token",
+            },
+            type=EmailTypes.user_invite,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        html = sent.alternatives[0][0]
+        decoded = html_lib.unescape(html)
+        self.assertEqual(
+            sent.subject,
+            "Ministry of Health & Human Services MIS - New Invitation",
+        )
+        self.assertIn("Set Up Your Password", decoded)
+        self.assertIn("What happens next?", decoded)
+        self.assertIn("Dr. Alice has invited you to join", decoded)
+        self.assertIn("Ministry of Health & Human Services MIS", decoded)
+        self.assertIn("Set up a secure password for your account.", decoded)
+        self.assertIn("If you weren't expecting this invitation", decoded)
+        self.assertIn("We look forward to welcoming you", decoded)
+
+    @mock.patch("api.v1.v1_users.views.send_email")
+    def test_send_email_to_user_uses_request_actor_as_admin(
+        self, mock_send_email
+    ):
+        mock_request = mock.Mock()
+        mock_actor = mock.Mock()
+        mock_actor.name = "Super Admin Bob"
+        mock_request.user = mock_actor
+
+        send_email_to_user(
+            type=EmailTypes.user_invite,
+            user=self.user,
+            request=mock_request,
+        )
+
+        mock_send_email.assert_called_once()
+        passed_context = mock_send_email.call_args.kwargs["context"]
+        self.assertEqual(passed_context["admin"], "Super Admin Bob")

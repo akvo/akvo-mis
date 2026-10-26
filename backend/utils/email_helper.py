@@ -208,25 +208,76 @@ def email_context(context: dict, type: str):
         )
     if type == EmailTypes.user_invite:
         button_url = "#"
-        admin = ""
+        admin = "Administrator"
         if context.get("button_url"):
             button_url = context.get("button_url")
         if context.get("admin"):
             admin = context.get("admin")
+
+        display_tenant = raw_tenant_name or APP_NAME
+
+        body_paragraphs = [
+            "Hello,",
+            f"{admin} has invited you to join {mis_name}.",
+            (
+                "Through the platform, you'll be able to access the "
+                "information and tools made available to you by your "
+                "organisation."
+            ),
+            (
+                "To get started, set up your password using the button below. "
+                f"Once your account is activated, you can sign in to "
+                f"{mis_name} and access the platform using your account "
+                "credentials."
+            ),
+        ]
+
+        post_button_heading = "What happens next?"
+        post_button_steps = [
+            "Set up a secure password for your account.",
+            (
+                f"Sign in to {mis_name} using your registered email address "
+                "and password."
+            ),
+            (
+                "Explore the features and information available to you based "
+                "on your organisation and assigned access permissions."
+            ),
+        ]
+
+        warning_note = (
+            "If you weren't expecting this invitation, or believe it was sent "
+            "to you by mistake, please contact your organisation's "
+            "administrator before proceeding."
+        )
+
+        sign_off = [
+            f"We look forward to welcoming you to {mis_name}.",
+            display_tenant,
+        ]
+
         context.update(
             {
                 "subject": "New Invitation",
+                "title": "Invitation",
                 "body": (
-                    "You have been invited to "
-                    f"the {APP_NAME} by {admin}"
+                    f"Hello,\n\n{admin} has invited you to join "
+                    f"{mis_name}.\n\n"
+                    "Through the platform, you'll be able to access the "
+                    "information and tools made available to you by your "
+                    "organisation.\n\nTo get started, set up your password "
+                    "using the button below."
                 ),
-                "extend_body": """Please click on the button below
-            to set your password and finalise your account setup.""",
+                "body_paragraphs": body_paragraphs,
+                "post_button_heading": post_button_heading,
+                "post_button_steps": post_button_steps,
+                "warning_note": warning_note,
+                "sign_off": sign_off,
                 "align": "left",
                 "explore_button": False,
                 "button": True,
                 "button_url": button_url,
-                "button_text": "Set Password",
+                "button_text": "Set Up Your Password",
             }
         )
     if type == EmailTypes.user_update:

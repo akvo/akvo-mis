@@ -169,10 +169,15 @@ def send_email_to_user(type, user, request):
         user_forms = ", ".join([form.name for form in user_forms])
         listing.append({"name": "Questionnaire", "value": user_forms})
     # TODO Add Administration
+    inviter = ""
+    if request and hasattr(request, "user") and request.user:
+        inviter = getattr(request.user, "name", "")
+    admin_name = inviter or "Administrator"
+
     data = {
         "send_to": [user.email],
         "listing": listing,
-        "admin": f"""{user.name}""",
+        "admin": admin_name,
         "user": user,
         "tenant": user.tenant,
     }
