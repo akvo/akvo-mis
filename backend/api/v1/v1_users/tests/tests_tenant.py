@@ -49,3 +49,64 @@ class TenantModelTestCase(TestCase):
         )
         tenant.refresh_from_db()
         self.assertEqual(tenant.logo, "/images/logo-branded-123.png")
+
+    def test_tenant_defaults_name_to_empty_string(self):
+        tenant = Tenant.objects.create(subdomain="default-name")
+        self.assertEqual(tenant.name, "")
+
+    def test_tenant_persists_custom_name(self):
+        tenant = Tenant.objects.create(
+            subdomain="mohhs",
+            name="Ministry of Health & Human Services",
+        )
+        tenant.refresh_from_db()
+        self.assertEqual(tenant.name, "Ministry of Health & Human Services")
+
+    def test_tenant_display_name_and_mis_title_properties(self):
+        named_tenant = Tenant.objects.create(
+            subdomain="mohhs",
+            name="Ministry of Health & Human Services",
+        )
+        self.assertEqual(
+            named_tenant.display_name, "Ministry of Health & Human Services"
+        )
+        self.assertEqual(
+            named_tenant.mis_title,
+            "Ministry of Health & Human Services MIS",
+        )
+
+        already_mis = Tenant.objects.create(
+            subdomain="kenya-mis",
+            name="Kenya MIS",
+        )
+        self.assertEqual(already_mis.display_name, "Kenya MIS")
+        self.assertEqual(already_mis.mis_title, "Kenya MIS")
+
+        unnamed = Tenant.objects.create(subdomain="legacy")
+        self.assertEqual(unnamed.display_name, "legacy")
+        self.assertEqual(unnamed.mis_title, "legacy MIS")
+
+    def test_backfill_tenant_name_from_subdomain(self):
+        import importlib
+
+        migration = importlib.import_module(
+            "api.v1.v1_users.migrations.0014_tenant_name"
+        )
+        backfill_tenant_name = migration.backfill_tenant_name
+
+        tenant = Tenant.objects.create(subdomain="backfill-me", name="")
+        tenant_with_name = Tenant.objects.create(
+            subdomain="leave-me", name="Already Named"
+        )
+
+        class DummyApps:
+            def get_model(self, app_label, model_name):
+                return Tenant
+
+        backfill_tenant_name(DummyApps(), None)
+
+        tenant.refresh_from_db()
+        tenant_with_name.refresh_from_db()
+
+        self.assertEqual(tenant.name, "backfill-me")
+        self.assertEqual(tenant_with_name.name, "Already Named")

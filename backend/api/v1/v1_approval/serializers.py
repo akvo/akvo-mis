@@ -288,6 +288,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
             "batch": batch,
             "user": user,
         }
+        mis_name = user.tenant.mis_title if user.tenant else APP_NAME
         listing = [
             {
                 "name": "Batch Name",
@@ -318,7 +319,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
                         "Further approvals may be required "
                         "before data is finalised."
                         "You can also track your data approval in the "
-                        f"{APP_NAME} platform "
+                        f"{mis_name} platform "
                         "[Data > Manage Submissions > Pending Approval]"
                     ),
                 }
@@ -339,7 +340,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
                     "listing": listing,
                     "extend_body": (
                         "You can also access the rejected data "
-                        f"in the {APP_NAME} platform "
+                        f"in the {mis_name} platform "
                         "[My Profile > Data uploads > Rejected]"
                     ),
                 }
@@ -363,6 +364,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
                 ]
                 inform_data = {
                     "send_to": lower_emails,
+                    "user": user,
                     "listing": listing,
                     "extend_body": """
                     The data submitter has also been notified.
@@ -812,6 +814,7 @@ class CreateBatchSerializer(serializers.Serializer):
                 number_of_records = obj.batch_data_list.count()
                 data = {
                     "send_to": [a["user"].email for a in batch_approvers],
+                    "user": obj.user,
                     "listing": [
                         {"name": "Batch Name", "value": obj.name},
                         {

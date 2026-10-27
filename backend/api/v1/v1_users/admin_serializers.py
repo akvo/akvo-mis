@@ -48,17 +48,12 @@ class TenantListSerializer(serializers.ModelSerializer):
     def get_name(self, instance):
         """The workspace's human label.
 
-        Taken from the root administration unit that
-        /register/configure creates, rather than a column of its own:
-        the subdomain is the name, and a second field would be a
-        synonym that drifts.
-
-        Filtered in Python rather than with `.filter(parent=None)` on
-        purpose. A queryset filter on a related manager ignores the
-        prefetch cache and issues its own query, which is one query per
-        workspace on a list -- exactly the N+1 the callers prefetch to
-        avoid. `.all()` is what reads the cache.
+        Taken from `Tenant.name` when populated, falling back to the root
+        administration unit that /register/configure creates, and finally
+        to empty string or subdomain.
         """
+        if instance.name:
+            return instance.name
         roots = [
             unit
             for unit in instance.administrations.all()

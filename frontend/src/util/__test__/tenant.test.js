@@ -174,7 +174,7 @@ describe("tenant util", () => {
     expect(store.getRawState().tenant.name).toBe("Acme Corp");
     expect(store.getRawState().tenant.logo).toBe("/images/logo.png");
     expect(store.getRawState().language.active).toBe("fr");
-    expect(document.title).toBe("Akvo MIS - Acme");
+    expect(document.title).toBe("Acme Corp MIS");
   });
 
   test("fetchTenant falls back to title-cased subdomain when tenant name is empty", async () => {
@@ -187,7 +187,20 @@ describe("tenant util", () => {
       },
     });
     await fetchTenant();
-    expect(document.title).toBe("Akvo MIS - Test Workspace");
+    expect(document.title).toBe("Test Workspace MIS");
+  });
+
+  test("fetchTenant deduplicates MIS suffix when name already ends with MIS", async () => {
+    axios.mockResolvedValue({
+      status: 200,
+      data: {
+        subdomain: "kenya",
+        name: "Kenya Health MIS",
+        logo: null,
+      },
+    });
+    await fetchTenant();
+    expect(document.title).toBe("Kenya Health MIS");
   });
 
   test("a 204 means there is no workspace here and resets title", async () => {

@@ -60,6 +60,32 @@ class RegisterEndpointTestCase(TestCase):
             Administration.objects.filter(tenant=user.tenant).exists()
         )
 
+    def test_register_persists_custom_tenant_name(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="mohhs",
+                name="Ministry of Health & Human Services",
+            )
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="mohhs")
+        self.assertEqual(tenant.name, "Ministry of Health & Human Services")
+
+    def test_register_without_name_defaults_to_subdomain(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="unnamed")
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="unnamed")
+        self.assertEqual(tenant.name, "unnamed")
+
+    def test_register_rejects_name_exceeding_max_length(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="toolong",
+                name="A" * 256,
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("name", response.json().get("details", {}))
+
     def test_register_sends_an_activation_link(self):
         with mock.patch("api.v1.v1_users.views.send_email") as send:
             self.register()

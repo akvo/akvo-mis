@@ -22,7 +22,7 @@ const TURNSTILE_SCRIPT =
 
 // Keys the API may return in `details` that correspond to inputs on
 // this form. Anything else has no field to land on and stays a toast.
-const FORM_FIELDS = ["email", "password", "subdomain", "language"];
+const FORM_FIELDS = ["email", "password", "subdomain", "language", "name"];
 
 // Phase 1 of sign-up: just enough to claim a workspace. There is no login
 // here — the account is inactive until the emailed link is followed — so the
@@ -110,14 +110,18 @@ const Register = () => {
   const onFinish = (values) => {
     setLoading(true);
     setCaptchaError("");
+    const payload = {
+      email: values.email,
+      password: values.password,
+      subdomain: values.subdomain,
+      language: values.language,
+      captcha_token: captchaToken,
+    };
+    if (values.name && values.name.trim()) {
+      payload.name = values.name.trim();
+    }
     api
-      .post("register", {
-        email: values.email,
-        password: values.password,
-        subdomain: values.subdomain,
-        language: values.language,
-        captcha_token: captchaToken,
-      })
+      .post("register", payload)
       .then(() => {
         setSentTo(values.email);
       })
@@ -320,6 +324,23 @@ const Register = () => {
                   options={LANGUAGE_OPTIONS}
                   disabled={loading}
                   placeholder="Select language"
+                />
+              </Form.Item>
+              <Form.Item
+                name="name"
+                label="Workspace name"
+                extra="The full name of your organisation (e.g. Ministry of Health & Human Services)."
+                rules={[
+                  { required: false },
+                  {
+                    max: 255,
+                    message: "Workspace name cannot exceed 255 characters.",
+                  },
+                ]}
+              >
+                <Input
+                  disabled={loading}
+                  placeholder="e.g. Ministry of Health & Human Services"
                 />
               </Form.Item>
               <Form.Item
