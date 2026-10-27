@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
-import { BaseLayout, LogoutButton, SettingRow, SettingSection } from '../components';
+import { BaseLayout, SettingRow, SettingSection } from '../components';
 import { config } from './Settings/config';
 import { UIState, BuildParamsState } from '../store';
 import { i18n } from '../lib';
@@ -70,9 +70,6 @@ const Settings = ({ navigation }) => {
               onPress={() => navigation.navigate('About')}
               testID="settings-about"
             />
-          </SettingSection>
-          <SettingSection title={trans.settingsDataReset} testID="settings-section-data-reset">
-            <LogoutButton />
           </SettingSection>
         </ScrollView>
       </BaseLayout.Content>

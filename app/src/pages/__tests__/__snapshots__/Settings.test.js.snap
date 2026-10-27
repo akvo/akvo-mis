@@ -12,7 +12,7 @@ exports[`SettingsPage renders correctly 1`] = `
   }
   style={
     {
-      "backgroundColor": "#EEEEEE",
+      "backgroundColor": "#EAEAEA",
       "flex": 1,
     }
   }
@@ -696,130 +696,6 @@ exports[`SettingsPage renders correctly 1`] = `
                 </Text>
               </View>
               <Text />
-            </View>
-          </View>
-        </View>
-        <View
-          style={
-            {
-              "paddingBottom": 8,
-            }
-          }
-          testID="settings-section-data-reset"
-        >
-          <Text
-            style={
-              [
-                {
-                  "fontSize": 18,
-                  "fontWeight": "500",
-                  "letterSpacing": -0.04,
-                  "lineHeight": 26,
-                  "paddingHorizontal": 16,
-                  "paddingVertical": 8,
-                },
-                {
-                  "color": "#020617",
-                },
-              ]
-            }
-          >
-            Data reset
-          </Text>
-          <View
-            style={
-              {
-                "paddingHorizontal": 16,
-              }
-            }
-          >
-            <View>
-              <View
-                accessibilityRole="button"
-                accessibilityState={
-                  {
-                    "busy": undefined,
-                    "checked": undefined,
-                    "disabled": undefined,
-                    "expanded": undefined,
-                    "selected": undefined,
-                  }
-                }
-                accessibilityValue={
-                  {
-                    "max": undefined,
-                    "min": undefined,
-                    "now": undefined,
-                    "text": undefined,
-                  }
-                }
-                accessible={true}
-                collapsable={false}
-                focusable={true}
-                onClick={[Function]}
-                onResponderGrant={[Function]}
-                onResponderMove={[Function]}
-                onResponderRelease={[Function]}
-                onResponderTerminate={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
-                style={
-                  {
-                    "alignItems": "flex-start",
-                    "backgroundColor": "#FFFFFF",
-                    "borderRadius": 16,
-                    "flexDirection": "row",
-                    "gap": 8,
-                    "opacity": 1,
-                    "padding": 12,
-                  }
-                }
-                testID="list-item-logout"
-              >
-                <Text />
-                <View
-                  style={
-                    {
-                      "flex": 1,
-                    }
-                  }
-                >
-                  <Text
-                    style={
-                      [
-                        {
-                          "fontSize": 12,
-                          "fontWeight": "500",
-                          "letterSpacing": 0.04,
-                          "lineHeight": 16,
-                        },
-                        {
-                          "color": "#C8170D",
-                        },
-                      ]
-                    }
-                  >
-                    Reset (clear all data)
-                  </Text>
-                  <Text
-                    style={
-                      [
-                        {
-                          "fontSize": 12,
-                          "fontWeight": "500",
-                          "letterSpacing": 0.04,
-                          "lineHeight": 16,
-                        },
-                        {
-                          "color": "#C8170D",
-                        },
-                      ]
-                    }
-                  >
-                    Erases every local user, form and datapoint — including unsynced work
-                  </Text>
-                </View>
-              </View>
             </View>
           </View>
         </View>

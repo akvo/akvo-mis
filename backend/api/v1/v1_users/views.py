@@ -117,6 +117,8 @@ def send_activation_email(user):
         type=EmailTypes.user_activation,
         context={
             "send_to": [user.email],
+            "user": user,
+            "tenant": user.tenant,
             "button_url": (
                 f"{user_web_url(user)}/activate/{signing.dumps(user.pk)}"
             ),
@@ -135,6 +137,8 @@ def send_invitation_email(user, invited_by):
         type=EmailTypes.user_invite,
         context={
             "send_to": [user.email],
+            "user": user,
+            "tenant": user.tenant,
             "admin": invited_by.name,
             "button_url": (
                 f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
@@ -165,10 +169,17 @@ def send_email_to_user(type, user, request):
         user_forms = ", ".join([form.name for form in user_forms])
         listing.append({"name": "Questionnaire", "value": user_forms})
     # TODO Add Administration
+    inviter = ""
+    if request and hasattr(request, "user") and request.user:
+        inviter = getattr(request.user, "name", "")
+    admin_name = inviter or "Administrator"
+
     data = {
         "send_to": [user.email],
         "listing": listing,
-        "admin": f"""{user.name}""",
+        "admin": admin_name,
+        "user": user,
+        "tenant": user.tenant,
     }
     if type == EmailTypes.user_invite:
         data["button_url"] = url
@@ -456,7 +467,7 @@ def tenant_info(request, version):
         return Response(status=status.HTTP_204_NO_CONTENT)
     body = {
         "subdomain": tenant.subdomain,
-        "name": tenant.subdomain,
+        "name": tenant.name or tenant.subdomain,
         "language": getattr(tenant, "language", "en") or "en",
         "logo": tenant.logo,
     }
@@ -504,8 +515,13 @@ def register(request, version):
     # the placeholder root the bulk-upload template had to reconcile with.
     try:
         with transaction.atomic():
+            tenant_name = (
+                (validated.get("name") or "").strip()
+                or validated["subdomain"]
+            )
             tenant = Tenant.objects.create(
                 subdomain=validated["subdomain"],
+                name=tenant_name,
                 language=validated.get("language", "en"),
             )
             user = SystemUser.objects.create_superuser(
@@ -1194,7 +1210,12 @@ def forgot_password(request, version):
     # /login there redirects to find-workspace, so a reset sent to it
     # can never be completed.
     url = f"{user_web_url(user)}/login/{signing.dumps(user.pk)}"
-    data = {"button_url": url, "send_to": [user.email]}
+    data = {
+        "button_url": url,
+        "send_to": [user.email],
+        "user": user,
+        "tenant": user.tenant,
+    }
     send_email(type=EmailTypes.user_forgot_password, context=data)
     return Response(
         {"message": "Reset password instructions sent to your email"},
@@ -1445,8 +1466,19 @@ def update_tenant_branding(request, version):
                 {"message": validate_serializers_message(serializer.errors)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        tenant.logo = serializer.validated_data.get("logo") or None
-        tenant.save(update_fields=["logo"])
+        update_fields = []
+        if (
+            "name" in serializer.validated_data
+            and serializer.validated_data.get("name") is not None
+        ):
+            raw_name = serializer.validated_data["name"].strip()
+            tenant.name = raw_name if raw_name else tenant.subdomain
+            update_fields.append("name")
+        if "logo" in serializer.validated_data:
+            tenant.logo = serializer.validated_data.get("logo") or None
+            update_fields.append("logo")
+        if update_fields:
+            tenant.save(update_fields=update_fields)
 
     root_name = (
         tenant.administrations.filter(parent=None)
@@ -1457,7 +1489,7 @@ def update_tenant_branding(request, version):
     return Response(
         {
             "subdomain": tenant.subdomain,
-            "name": root_name,
+            "name": tenant.name or root_name or tenant.subdomain,
             "language": getattr(tenant, "language", "en") or "en",
             "logo": tenant.logo,
         },

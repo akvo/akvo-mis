@@ -187,3 +187,48 @@ class AdminTenantsTestCase(TestCase, TenantTestHelperMixin):
             **self.auth,
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_updates_tenant_name(self):
+        pk = self.acme.tenant.pk
+        response = self.client.put(
+            f"{TENANTS}/{pk}",
+            json.dumps({"name": "Ministry of Health & Human Services"}),
+            content_type="application/json",
+            HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["name"], "Ministry of Health & Human Services"
+        )
+        self.acme.tenant.refresh_from_db()
+        self.assertEqual(
+            self.acme.tenant.name, "Ministry of Health & Human Services"
+        )
+
+    def test_updates_tenant_name_fallback_to_subdomain_when_blank(self):
+        pk = self.acme.tenant.pk
+        self.acme.tenant.name = "Custom Name"
+        self.acme.tenant.save()
+
+        response = self.client.put(
+            f"{TENANTS}/{pk}",
+            json.dumps({"name": "   "}),
+            content_type="application/json",
+            HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.acme.tenant.refresh_from_db()
+        self.assertEqual(self.acme.tenant.name, "acme")
+
+    def test_updates_tenant_name_rejects_overlength(self):
+        pk = self.acme.tenant.pk
+        response = self.client.put(
+            f"{TENANTS}/{pk}",
+            json.dumps({"name": "x" * 256}),
+            content_type="application/json",
+            HTTP_HOST=ADMIN_HOST,
+            **self.auth,
+        )
+        self.assertEqual(response.status_code, 400)

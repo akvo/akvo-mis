@@ -540,13 +540,12 @@ FAKE_STORAGE = False
 # no mail account could not otherwise exercise the flow at all. A deployment
 # that forgets to set EMAIL_HOST therefore fails to resolve "mailpit" and
 # logs the error rather than sending real mail somewhere unintended.
-EMAIL_BACKEND = environ.get(
-    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
-)
-EMAIL_HOST = environ.get("EMAIL_HOST", "mailpit")
-EMAIL_PORT = int(environ.get("EMAIL_PORT") or 1025)
-EMAIL_HOST_USER = environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = environ.get("EMAIL_HOST_PASSWORD", "")
+#
+# Configured through MAILERS (Django 6.1), which replaces the EMAIL_*
+# settings. The environment variables keep their EMAIL_* names, so
+# deployments need no change. The backend is SMTP, deliberately not
+# configurable: the options below are SMTP's, and any other backend
+# rejects them, which would fail every send.
 
 
 def _flag(name):
@@ -559,15 +558,26 @@ def _flag(name):
     return environ.get(name, "").strip().lower() in ("1", "true", "yes")
 
 
-# Mutually exclusive, and Django raises if both are set. Implicit SSL from
-# the first byte is port 465; STARTTLS on an initially plaintext connection
-# is 587. Mailpit wants neither, which is why both default to off.
-EMAIL_USE_SSL = _flag("EMAIL_USE_SSL")
-EMAIL_USE_TLS = _flag("EMAIL_USE_TLS")
-# Seconds. Without it a hung server holds the sending thread indefinitely,
-# and eight of the seventeen send sites run inside request handling against
-# six gunicorn workers.
-EMAIL_TIMEOUT = int(environ.get("EMAIL_TIMEOUT") or 10)
+MAILERS = {
+    "default": {
+        "OPTIONS": {
+            "host": environ.get("EMAIL_HOST", "mailpit"),
+            "port": int(environ.get("EMAIL_PORT") or 1025),
+            "username": environ.get("EMAIL_HOST_USER", ""),
+            "password": environ.get("EMAIL_HOST_PASSWORD", ""),
+            # Mutually exclusive, and Django raises if both are set.
+            # Implicit SSL from the first byte is port 465; STARTTLS on an
+            # initially plaintext connection is 587. Mailpit wants
+            # neither, which is why both default to off.
+            "use_ssl": _flag("EMAIL_USE_SSL"),
+            "use_tls": _flag("EMAIL_USE_TLS"),
+            # Seconds. Without it a hung server holds the sending thread
+            # indefinitely, and eight of the seventeen send sites run
+            # inside request handling against six gunicorn workers.
+            "timeout": int(environ.get("EMAIL_TIMEOUT") or 10),
+        },
+    },
+}
 EMAIL_FROM = environ.get("EMAIL_FROM", "noreply@akvo.org")
 
 COUNTRY_NAME = "fiji"

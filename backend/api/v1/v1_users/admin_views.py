@@ -198,9 +198,29 @@ def tenant_detail(request, version, tenant_id):
         tenant.deleted_at = timezone.now()
         tenant.save(update_fields=["deleted_at"])
     elif request.method == "PUT":
+        update_fields = []
+        if "name" in request.data:
+            raw_name = (request.data.get("name") or "").strip()
+            if len(raw_name) > 255:
+                return Response(
+                    {
+                        "message": "Name must be 255 characters or fewer",
+                        "details": {
+                            "name": [
+                                "Ensure this field has no more than 255 "
+                                "characters."
+                            ]
+                        },
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            tenant.name = raw_name if raw_name else tenant.subdomain
+            update_fields.append("name")
         if "logo" in request.data:
             tenant.logo = request.data.get("logo") or None
-            tenant.save(update_fields=["logo"])
+            update_fields.append("logo")
+        if update_fields:
+            tenant.save(update_fields=update_fields)
     return Response(
         TenantSummarySerializer(tenant).data, status=status.HTTP_200_OK
     )
@@ -532,7 +552,7 @@ def rename_impact(tenant):
     # breaks something it does not touch. See `tests_admin_rename`.
     published = Dashboard.objects.filter(
         tenant=tenant, deleted_at=None
-    ).exclude(published_config=None)
+    ).exclude(published_config__isnull=True)
     return {
         # The two dashboard counts partition the published set, and
         # that is deliberate. They used to overlap -- every published

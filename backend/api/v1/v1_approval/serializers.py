@@ -288,6 +288,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
             "batch": batch,
             "user": user,
         }
+        mis_name = user.tenant.mis_title if user.tenant else APP_NAME
         listing = [
             {
                 "name": "Batch Name",
@@ -318,7 +319,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
                         "Further approvals may be required "
                         "before data is finalised."
                         "You can also track your data approval in the "
-                        f"{APP_NAME} platform "
+                        f"{mis_name} platform "
                         "[Data > Manage Submissions > Pending Approval]"
                     ),
                 }
@@ -339,7 +340,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
                     "listing": listing,
                     "extend_body": (
                         "You can also access the rejected data "
-                        f"in the {APP_NAME} platform "
+                        f"in the {mis_name} platform "
                         "[My Profile > Data uploads > Rejected]"
                     ),
                 }
@@ -363,6 +364,7 @@ class ApproveDataRequestSerializer(serializers.Serializer):
                 ]
                 inform_data = {
                     "send_to": lower_emails,
+                    "user": user,
                     "listing": listing,
                     "extend_body": """
                     The data submitter has also been notified.
@@ -391,15 +393,29 @@ class ApproveDataRequestSerializer(serializers.Serializer):
         )
         # If all levels have
         if all_levels_have_approval:
-            # Seed data via Async Task
             for dl in batch.batch_data_list.filter(
                 data__is_pending=True,
-            ).all():
+            ).select_related("data").all():
                 data = dl.data
-                async_task("api.v1.v1_data.tasks.seed_approved_data", data)
+                # Flip is_pending synchronously so it commits together
+                # with batch.approved. Previously is_pending was only set
+                # inside the async seed_approved_data task; when that task
+                # failed (e.g. DB connection exhaustion) the data was left
+                # batch.approved=True + is_pending=True, invisible in
+                # Submissions, Pending Approval and the data list.
+                data.is_pending = False
+                data.updated = timezone.now()
+                data.save(update_fields=["is_pending", "updated"])
             batch.approved = True
             batch.updated = timezone.now()
             batch.save()
+            # Heavy side-effects (file export + a single materialized view
+            # refresh) run off the request path, once per batch rather than
+            # once per datapoint, so bulk approvals no longer storm DB
+            # connections.
+            async_task(
+                "api.v1.v1_data.tasks.finalize_batch_approval", batch.id
+            )
         return approval
 
     def update(self, instance, validated_data):
@@ -749,9 +765,16 @@ class CreateBatchSerializer(serializers.Serializer):
                     })
         # try:
         with transaction.atomic():
+            # Anchor the batch at the data's own administration, not the
+            # submitter's role administration. A submitter who also holds a
+            # higher-level role would otherwise elevate the batch above the
+            # data, so approvers() (which walks up from the batch admin) would
+            # skip the mid-level approvers that has_approval (which walks up
+            # from the data admin) counts on -- leaving the batch with no
+            # approver. first_data is the shallowest data item in the batch.
             obj = DataBatch.objects.create(
                 form_id=form_id,
-                administration=user_role.administration,
+                administration=first_data.administration,
                 user=user,
                 name=validated_data.get("name"),
             )
@@ -763,44 +786,55 @@ class CreateBatchSerializer(serializers.Serializer):
                 raise ValidationError({
                     "detail": f"Failed to create batch data list: {str(e)}"
                 })
-            # Send email to approvers
-            try:
-                emails = [
-                    approver["user"].email for approver in obj.approvers()
-                ]
-                if len(emails):
-                    number_of_records = obj.batch_data_list.count()
-                    data = {
-                        "send_to": emails,
-                        "listing": [
-                            {"name": "Batch Name", "value": obj.name},
-                            {
-                                "name": "Questionnaire",
-                                "value": obj.form.name
-                            },
-                            {
-                                "name": "Number of Records",
-                                "value": number_of_records,
-                            },
-                            {
-                                "name": "Submitter",
-                                "value": f"""{obj.user.name}""",
-                            },
-                        ],
+            # Resolve the approvers once. validate_data already guarantees each
+            # data item has_approval, so an empty list here means a config gap;
+            # refuse rather than leave the data in an un-approvable pending
+            # batch (the transaction rolls back).
+            batch_approvers = obj.approvers()
+            if not batch_approvers:
+                raise ValidationError({
+                    "detail": {
+                        "data": [
+                            "No approver is configured for this "
+                            "administration and form."
+                        ]
                     }
-                    send_email(
-                        context=data,
-                        type=EmailTypes.pending_approval
-                    )
-                    # Create DataApproval for each approver
-                    for approver in obj.approvers():
-                        DataApproval.objects.create(
-                            batch=obj,
-                            administration=approver["administration"],
-                            role=approver["role"],
-                            user=approver["user"],
-                            status=DataApprovalStatus.pending,
-                        )
+                })
+            # Create DataApproval for each approver
+            for approver in batch_approvers:
+                DataApproval.objects.create(
+                    batch=obj,
+                    administration=approver["administration"],
+                    role=approver["role"],
+                    user=approver["user"],
+                    status=DataApprovalStatus.pending,
+                )
+            # Notify approvers by email
+            try:
+                number_of_records = obj.batch_data_list.count()
+                data = {
+                    "send_to": [a["user"].email for a in batch_approvers],
+                    "user": obj.user,
+                    "listing": [
+                        {"name": "Batch Name", "value": obj.name},
+                        {
+                            "name": "Questionnaire",
+                            "value": obj.form.name
+                        },
+                        {
+                            "name": "Number of Records",
+                            "value": number_of_records,
+                        },
+                        {
+                            "name": "Submitter",
+                            "value": f"""{obj.user.name}""",
+                        },
+                    ],
+                }
+                send_email(
+                    context=data,
+                    type=EmailTypes.pending_approval
+                )
             except Exception as e:
                 raise ValidationError({
                     "detail": (

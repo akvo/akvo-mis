@@ -160,6 +160,13 @@ class TenantInfoTestCase(TestCase, TenantTestHelperMixin):
             },
         )
 
+    def test_workspace_host_returns_configured_name(self):
+        self.acme.tenant.name = "Acme Global"
+        self.acme.tenant.save(update_fields=["name"])
+        response = self.client.get(TENANT_INFO, HTTP_HOST="acme.app.com")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "Acme Global")
+
     def test_nothing_beyond_subdomain_name_language_logo_is_exposed(self):
         # Anonymous and cacheable, so the field list is the whole of the
         # security review — assert it exhaustively rather than by sample.

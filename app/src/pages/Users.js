@@ -1,69 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  ToastAndroid,
-  BackHandler,
-} from 'react-native';
-import { Button, Skeleton } from '@rneui/themed';
+import { View, Text, ScrollView, StyleSheet, BackHandler } from 'react-native';
+import { Button } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout } from '../components';
-import { UserState, UIState, AuthState } from '../store';
-import { api, i18n } from '../lib';
-import { crudConfig, crudUsers } from '../database/crud';
+import { BaseLayout, LogoutButton, SettingSection } from '../components';
+import { UserState, UIState, BuildParamsState } from '../store';
+import { i18n } from '../lib';
+import { crudUsers } from '../database/crud';
 import useTheme from '../lib/theme';
 
-const Users = ({ navigation, route }) => {
+const Users = ({ navigation }) => {
   const theme = useTheme();
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState([]);
-  const currUserID = UserState.useState((s) => s.id);
+  const [activeUser, setActiveUser] = useState(null);
+  const { name, syncWifiOnly } = UserState.useState((s) => s);
   const activeLang = UIState.useState((s) => s.lang);
+  const serverURL = BuildParamsState.useState((s) => s.serverURL);
   const trans = i18n.text(activeLang);
   const db = useSQLiteContext();
 
-  const loadUsers = useCallback(async () => {
-    const rows = await crudUsers.getAllUsers(db);
-    setUsers(rows);
-    setLoading(false);
+  const loadActiveUser = useCallback(async () => {
+    const row = await crudUsers.getActiveUser(db);
+    setActiveUser(row || null);
   }, [db]);
 
-  const handleSelectUser = async ({ id, name, password, token }) => {
-    await crudUsers.toggleActive(db, { id: currUserID, active: 1 });
-    await crudUsers.toggleActive(db, { id, active: 0 });
-    await crudConfig.updateConfig(db, { authenticationCode: password });
-    api.setToken(token);
-
-    AuthState.update((s) => {
-      s.token = token;
-    });
-    UserState.update((s) => {
-      s.id = id;
-      s.name = name;
-    });
-    await loadUsers();
-
-    if (Platform.OS === 'android') {
-      ToastAndroid.show(`${trans.usersSwitchTo}${name}`, ToastAndroid.SHORT);
-    }
-  };
-
   useEffect(() => {
-    if (loading) {
-      loadUsers();
-    }
-    if (!loading && route?.params?.added) {
-      const newUser = route.params.added;
-      const findNew = users.find((u) => u.id === newUser?.id);
-      if (!findNew) {
-        setLoading(true);
-      }
-    }
-  }, [loading, route, loadUsers, users]);
+    loadActiveUser();
+  }, [loadActiveUser]);
 
   useEffect(() => {
     const handleBackPress = () => {
@@ -76,60 +38,97 @@ const Users = ({ navigation, route }) => {
     };
   }, [navigation]);
 
+  const lastSynced = activeUser?.lastSyncedAt
+    ? new Date(activeUser.lastSyncedAt).toLocaleString()
+    : trans.profileNeverSynced;
+  // Passcode is shown so the operator can tell apart accounts that share a name
+  const rows = [
+    { key: 'name', label: trans.userLabel, value: name || '-' },
+    { key: 'passcode', label: trans.passcodeLabel, value: activeUser?.password || '-' },
+    { key: 'synced', label: trans.syncedLabel, value: lastSynced },
+    {
+      key: 'wifi',
+      label: trans.syncWifiOnlyLabel,
+      value: syncWifiOnly ? trans.buttonYes : trans.buttonNo,
+    },
+    { key: 'server', label: trans.serverLabel, value: serverURL || '-' },
+  ];
+
   return (
     <BaseLayout
-      title={trans.usersPageTitle}
+      title={trans.profilePageTitle}
       leftComponent={
         <Button type="clear" onPress={() => navigation.navigate('Home')} testID="arrow-back-button">
-          <Icon name="arrow-back" size={18} />
+          <Icon name="arrow-back" size={18} color={theme.topNav.icon} />
         </Button>
       }
       rightComponent={false}
     >
-      {loading ? (
-        <Skeleton animation="wave" testID="loading-users" />
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(user) => user.id.toString()}
-          style={styles.listContainer}
-          testID="users-list"
-          renderItem={({ item: user }) => (
-            <TouchableOpacity
-              onPress={() => handleSelectUser(user)}
-              testID={`list-item-user-${user.id}`}
-              style={[styles.userItem, { borderBottomColor: theme.border.listDivider }]}
-            >
-              <Text testID={`title-username-${user.id}`} style={{ color: theme.text.primary }}>
-                {user.name}
-              </Text>
-              {user.active === 1 && (
-                <Icon
-                  name="checkmark"
-                  size={18}
-                  color={theme.status.success}
-                  testID={`icon-checkmark-${user.id}`}
-                />
-              )}
-            </TouchableOpacity>
-          )}
-        />
-      )}
+      <BaseLayout.Content>
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.profileHeader} testID="profile-header">
+            <Icon name="person-circle-outline" size={72} color={theme.icon.secondary} />
+            <Text style={[styles.profileName, { color: theme.text.primary }]} testID="profile-name">
+              {name || '-'}
+            </Text>
+          </View>
+          <SettingSection testID="profile-info">
+            {rows.map((row) => (
+              <View
+                key={row.key}
+                style={[styles.infoRow, { borderBottomColor: theme.border.divider }]}
+                testID={`profile-row-${row.key}`}
+              >
+                <Text style={[styles.infoLabel, { color: theme.text.secondary }]}>{row.label}</Text>
+                <Text
+                  style={[styles.infoValue, { color: theme.text.primary }]}
+                  selectable={row.key === 'passcode'}
+                  testID={`profile-value-${row.key}`}
+                >
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+          </SettingSection>
+          <SettingSection testID="profile-logout">
+            <LogoutButton />
+          </SettingSection>
+        </ScrollView>
+      </BaseLayout.Content>
     </BaseLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  listContainer: {
-    width: '100%',
-    flex: 1,
+  content: {
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  userItem: {
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  profileName: {
+    marginTop: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
+    alignItems: 'center',
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: undefined,
+  },
+  infoLabel: {
+    fontSize: 14,
+  },
+  infoValue: {
+    fontWeight: '500',
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: 12,
+    fontSize: 14,
   },
 });
 

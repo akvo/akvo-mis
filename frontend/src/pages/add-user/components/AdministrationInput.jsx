@@ -70,6 +70,23 @@ const AdministrationInput = ({
     }
   }, [value, administration.length]);
 
+  // When a seeded/pre-filled administration is deeper than the role allows,
+  // the render below trims the visible cascade to maxLevel but the form value
+  // keeps the deeper id. That let the UI show e.g. the Province ancestor while
+  // the stored value stayed a District, which the backend rejects as "Role and
+  // administration level mismatch". Reconcile the form value to the deepest
+  // node the current maxLevel actually exposes.
+  useEffect(() => {
+    if (!maxLevelValue || administration.length === 0 || !onChange) {
+      return;
+    }
+    const effective = administration[maxLevelValue - 1]?.id;
+    const current = Array.isArray(value) ? value[value.length - 1] : value;
+    if (effective && effective !== current) {
+      onChange([effective]);
+    }
+  }, [administration, maxLevelValue, value, onChange]);
+
   const handleChange = async (e, index) => {
     if (!e) {
       return;

@@ -604,7 +604,9 @@ class MobileAssignmentViewSet(ModelViewSet):
                 .filter(parent__isnull=True)
                 .first()
             )
-            adm_q = Q(administrations__path__startswith=f"{adm.id}.")
+            adm_q = Q(administrations=adm) | Q(
+                administrations__path__startswith=f"{adm.id}."
+            )
         for ur in user.user_user_role.filter(
             role__role_role_access__data_access=DataAccessTypes.submit
         ).all():

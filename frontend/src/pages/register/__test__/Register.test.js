@@ -60,15 +60,46 @@ describe("Register", () => {
   test("asks only for what claims a workspace", () => {
     render(<TestApp entryPoint={"/register"} />);
     expect(screen.getByText(/Create your workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace name/i)).toBeInTheDocument();
     expect(screen.getByText(/Workspace address/i)).toBeInTheDocument();
     expect(screen.getByText(/Workspace language/i)).toBeInTheDocument();
     expect(
+      screen.getByPlaceholderText(/e\.g\. Ministry of Health & Human Services/i)
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", { name: /Create workspace/i })
     ).toBeInTheDocument();
-    // The registrant's name moved to the configuration form, which is the
+    // The registrant's personal name moved to the configuration form, which is the
     // first point at which the email is known to be real.
     expect(screen.queryByText(/First name/i)).toBeNull();
     expect(screen.queryByText(/Last name/i)).toBeNull();
+  });
+
+  test("submits optional workspace name with registration payload", async () => {
+    let postBody = null;
+    axios.mockImplementation((reqConfig) => {
+      if (reqConfig && reqConfig.url === "register") {
+        postBody = reqConfig.data;
+        return Promise.resolve({ status: 200, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
+
+    render(<TestApp entryPoint={"/register"} />);
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        /e\.g\. Ministry of Health & Human Services/i
+      ),
+      {
+        target: { value: "Ministry of Health & Human Services" },
+      }
+    );
+    fill({});
+    await waitFor(() => {
+      expect(screen.getByText(/Check your email/i)).toBeInTheDocument();
+    });
+    expect(postBody).not.toBeNull();
+    expect(postBody.name).toBe("Ministry of Health & Human Services");
   });
 
   test("submits selected language with registration payload", async () => {
