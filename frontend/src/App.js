@@ -65,7 +65,12 @@ import {
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
-import { Layout, PageLoader, ChatbotWidget } from "./components";
+import {
+  Layout,
+  PageLoader,
+  ChatbotWidget,
+  OnboardingTour,
+} from "./components";
 import { useNotification } from "./util/hooks";
 import { eraseCookieFromAllPaths } from "./util/date";
 import { reloadData, fetchPublishedForms } from "./util/form";
@@ -637,6 +642,35 @@ const App = () => {
     }
   }, [authUser, isLoggedIn, public_state]);
 
+  // First-login onboarding tour: automatically launch if user has not dismissed or completed it
+  useEffect(() => {
+    if (
+      !authUser ||
+      authUser.is_inspecting ||
+      onAdminHost() ||
+      public_state ||
+      !tenantLoaded
+    ) {
+      return;
+    }
+    const tenantSubdomain = tenant?.subdomain || "default";
+    const storageKey = `akvo_mis_tour_completed_${authUser.id}_${tenantSubdomain}`;
+    try {
+      const completed = localStorage.getItem(storageKey);
+      if (!completed) {
+        store.update((s) => {
+          if (!s.tourOpen) {
+            s.tourOpen = true;
+            s.tourStep = 0;
+            s.tourGoal = null;
+          }
+        });
+      }
+    } catch (err) {
+      // Ignore localStorage access failures
+    }
+  }, [authUser, tenant, tenantLoaded, public_state]);
+
   // Only treat "/" as a public home (bypassing the auth loader) when the
   // landing page is enabled. When it is disabled, "/" is an authenticated
   // redirect target, so we must keep the loader until the profile fetch
@@ -675,6 +709,7 @@ const App = () => {
             it offers an assistant that can only fail. Same reason the
             header above is suppressed. */}
         {!onAdminHost() && <ChatbotWidget />}
+        {!onAdminHost() && <OnboardingTour />}
       </Layout>
     </AbilityContext.Provider>
   );

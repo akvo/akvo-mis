@@ -1,0 +1,245 @@
+.onboarding-tour-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1050;
+  pointer-events: auto;
+
+  &.centered {
+    background-color: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+}
+
+.onboarding-tour-spotlight-hole {
+  position: fixed;
+  z-index: 1050;
+  border-radius: 6px;
+  border: 2px solid #1890ff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 15px rgba(24, 144, 255, 0.5);
+  pointer-events: none;
+  transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.onboarding-tour-card {
+  position: relative;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.15),
+    0 3px 6px -4px rgba(0, 0, 0, 0.2);
+  z-index: 1051;
+  box-sizing: border-box;
+  animation: tourCardFadeIn 0.2s ease-out;
+
+  &.modal-view {
+    width: 560px;
+    max-width: calc(100vw - 32px);
+    padding: 28px 32px;
+  }
+
+  &.popover-view {
+    position: fixed;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    padding: 20px 24px;
+    transition: top 0.2s ease, left 0.2s ease;
+
+    &.fallback-center {
+      position: relative;
+      top: auto !important;
+      left: auto !important;
+      margin: auto;
+    }
+  }
+
+  .tour-close-btn {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    cursor: pointer;
+    color: #8c8c8c;
+    font-size: 16px;
+    line-height: 1;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: #262626;
+    }
+  }
+
+  .tour-step-indicator {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #8c8c8c;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .tour-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #262626;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+    padding-right: 24px;
+  }
+
+  .tour-subtitle {
+    font-size: 13px;
+    color: #595959;
+    margin: 0 0 20px 0;
+    line-height: 1.5;
+  }
+
+  .tour-body-text {
+    font-size: 13px;
+    color: #595959;
+    margin: 0 0 16px 0;
+    line-height: 1.5;
+  }
+
+  .tour-goals-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .tour-goal-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: #fafafa;
+
+    &:hover {
+      border-color: #1890ff;
+      background-color: #f0f7ff;
+    }
+
+    &.selected {
+      border-color: #1890ff;
+      background-color: #e6f4ff;
+      box-shadow: 0 0 0 1px #1890ff;
+    }
+
+    &.single-mode {
+      cursor: default;
+      border-color: #d9d9d9;
+      background-color: #fafafa;
+
+      &:hover {
+        border-color: #d9d9d9;
+        background-color: #fafafa;
+      }
+    }
+
+    .tour-radio-indicator {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid #d9d9d9;
+      margin-top: 3px;
+      flex-shrink: 0;
+      position: relative;
+      transition: all 0.2s ease;
+
+      &.checked {
+        border-color: #1890ff;
+
+        &::after {
+          content: "";
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          background-color: #1890ff;
+          border-radius: 50%;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+        }
+      }
+    }
+
+    .tour-goal-content {
+      flex: 1;
+
+      .tour-goal-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        .tour-goal-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #262626;
+        }
+
+        .tour-badge-recommended {
+          background-color: #e6f7ff;
+          color: #096dd9;
+          border: 1px solid #91d5ff;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 500;
+          padding: 1px 8px;
+          line-height: 16px;
+        }
+      }
+
+      .tour-goal-desc {
+        font-size: 12px;
+        color: #595959;
+        margin-top: 2px;
+        line-height: 1.4;
+      }
+    }
+  }
+
+  .tour-step-action {
+    margin-bottom: 16px;
+  }
+
+  .tour-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    .tour-footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tour-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  }
+}
+
+@keyframes tourCardFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
