@@ -1162,6 +1162,7 @@ def seed_data_job_result(task):
             "subject": subject,
             "title": "New Data Submission",
             "send_to": [job.user.email],
+            "user": job.user,
             "listing": [
                 {
                     "name": "Upload Date",
@@ -1200,6 +1201,7 @@ def validate_excel(job_id):
         error_list.to_csv(error_file, index=False)
         data = {
             "send_to": [job.user.email],
+            "user": job.user,
             "listing": [
                 {
                     "name": "Upload Date",
@@ -1277,6 +1279,7 @@ def handle_administrations_bulk_upload(
         send_email(
             context={
                 "send_to": [user.email],
+                "user": user,
                 "listing": [
                     {
                         "name": "Upload Date",
@@ -1299,6 +1302,7 @@ def handle_administrations_bulk_upload(
     df = pd.read_excel(file_path, sheet_name="data")
     email_context = {
         "send_to": [user.email],
+        "user": user,
         "listing": [
             {
                 "name": "Upload Date",
@@ -1380,6 +1384,7 @@ def handle_entities_bulk_upload(filename, user_id, upload_time):
     errors = validate_entity_file(file_path, tenant=user.tenant)
     email_context = {
         "send_to": [user.email],
+        "user": user,
         "listing": [
             {
                 "name": "Upload Date",

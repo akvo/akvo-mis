@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Divider } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-import { BaseLayout, LogoutButton } from '../components';
+import { BaseLayout } from '../components';
 import DialogForm from './Settings/DialogForm';
 import { config, langConfig } from './Settings/config';
 import { UIState, FormState, BuildParamsState } from '../store';
@@ -83,8 +83,6 @@ const Settings = ({ navigation }) => {
             </View>
             <Icon name="chevron-right" size={24} color="#000" />
           </TouchableOpacity>
-          <Divider width={8} color="#f9fafb" />
-          <LogoutButton />
           <Divider width={8} color="#f9fafb" />
           <DialogForm
             onOk={handleSaveLang}

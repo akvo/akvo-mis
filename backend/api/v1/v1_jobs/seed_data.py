@@ -419,6 +419,7 @@ def seed_excel_data(job: Jobs, test: bool = False):
         number_of_records = batch.batch_data_list.count()
         data = {
             "send_to": emails,
+            "user": batch.user,
             "listing": [
                 {"name": "Batch Name", "value": batch.name},
                 {"name": "Questionnaire", "value": batch.form.name},

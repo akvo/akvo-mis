@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react-dom/test-utils";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -283,6 +283,57 @@ describe("Tenant detail", () => {
     });
     expect(
       await screen.findByText(/revert to displaying the default akvo mis logo/i)
+    ).toBeInTheDocument();
+  });
+
+  it("opens edit name dialog and updates tenant name", async () => {
+    await renderDetail();
+    expect(screen.getByText("Ministry of Health HSS")).toBeInTheDocument();
+    const editBtn = screen.getByRole("button", { name: /edit name/i });
+    expect(editBtn).toBeInTheDocument();
+
+    await act(async () => {
+      userEvent.click(editBtn);
+    });
+
+    expect(screen.getByText("Edit name for mohhs")).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(
+      /e\.g\. Ministry of Health & Human Services/i
+    );
+    expect(input).toHaveValue("Ministry of Health HSS");
+
+    axios.mockClear();
+    axios.mockImplementation(({ method, data }) => {
+      if (method && method.toUpperCase() === "PUT") {
+        return Promise.resolve({
+          status: 200,
+          data: { ...tenant, name: data.name },
+        });
+      }
+      return Promise.resolve({ status: 200, data: {} });
+    });
+
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { value: "Ministry of Health & Sanitation" },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    });
+
+    expect(
+      axios.mock.calls.some(
+        ([conf]) =>
+          conf.method === "PUT" &&
+          conf.url === "admin/tenants/42" &&
+          conf.data.name === "Ministry of Health & Sanitation"
+      )
+    ).toBe(true);
+
+    expect(
+      await screen.findByText("Ministry of Health & Sanitation")
     ).toBeInTheDocument();
   });
 });

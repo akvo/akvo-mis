@@ -87,8 +87,10 @@ There are two ways to get the app:
 **Method 1: From the Web Platform (Logged-in Users)**
 1. In the left navigation sidebar of the Akvo MIS web interface (at the bottom near Documentation), click **Download App** (Android icon).
 2. A popup modal will appear displaying:
+
    - A **QR Code** that you can scan directly using your phone's camera.
    - The direct download link to ``https://<your-server-url>/app``.
+
 3. Scan the QR code or click the link on your mobile device to download the installer (``.apk``).
 
 **Method 2: Directly on your Android Device**
@@ -198,10 +200,11 @@ Besides that, you can also do three things here:
     :alt: Mobile search forms
     :width: 100%
 
-2. Go to the users page to get more information about the current user.
+2. Open the **Profile** page (the person icon, top-right) to see the current user and to
+   log out. See :ref:`Profile<mobile_profile>`.
 
 .. image:: ../assets/mobile-home-users.png
-    :alt: Mobile go to users list
+    :alt: Mobile go to profile
     :width: 100%
 
 3. Go to the settings page to customize as needed.
@@ -228,6 +231,35 @@ At the very bottom, a coloured bar appears while the app is working:
      - Sync finished successfully. Disappears after a few seconds.
    * - Red — *"Unable to sync. Please try again."*
      - Something failed. See :ref:`Troubleshooting<mobile_troubleshooting>`.
+
+
+.. _mobile_profile:
+
+Profile and logging out
+-----------------------
+
+Tap the **person icon** in the top-right of the home screen to open **Profile**. It shows
+the account this device is signed in as:
+
+* **User** — your username.
+* **Passcode** — the passcode this device is logged in with. Long-press it to copy. This
+  is useful when several users share the same name and you need to tell them apart.
+* **Synced** — when this device last synced with the server.
+* **Sync on WiFi only** — whether background sync waits for Wi-Fi.
+* **Server** — the address of your MIS server.
+
+**Logging out.** Tap :bolditalic:`Logout` at the bottom of the page, then confirm with the
+**Yes** button.
+
+.. image:: ../assets/mobile-logout.png
+    :alt: Mobile logout confirmation
+    :width: 50%
+
+.. warning::
+    Logging out **erases all data on this device** — users, forms and datapoints,
+    including anything not yet synced — and cannot be undone. Always
+    :ref:`sync<mobile_sync>` your work first. Afterwards you return to the
+    :bolditalic:`Get started` screen and must sign in again with your passcode.
 
 
 .. _mobile_sync:
@@ -524,24 +556,13 @@ Language
 Switch the application interface language between English and French.
 
 
-======================
-Reset (Clear All Data)
-======================
+===========================
+Clearing all data (log out)
+===========================
 
-.. warning::
-    Please note that this process cannot be undone, and all locally stored data will be lost. Make sure to sync any important data with the server before performing a reset.
-
-
-This action will clear all data from the application, and you will need to sign in again to access your data.
-
-To reset the application, follow these steps:
-
-1. Click the :bolditalic:`Reset` button.
-2. Confirm the reset process by clicking the **Yes** button.
-
-.. image:: ../assets/mobile-logout.png
-    :alt: Mobile reset application
-    :width: 100%
+Clearing all local data is done by **logging out** from the
+:ref:`Profile<mobile_profile>` page (the person icon on the home screen), not from
+Settings. See :ref:`Profile and logging out<mobile_profile>`.
 
 
 ==============
@@ -614,5 +635,6 @@ Troubleshooting
        server.
 
 .. warning::
-    Never use **Reset** as a fix unless support tells you to. It erases all local users,
-    forms and datapoints, including anything not yet synced.
+    Never use **Logout** as a fix unless support tells you to. It erases all local users,
+    forms and datapoints, including anything not yet synced. See
+    :ref:`Profile<mobile_profile>`.

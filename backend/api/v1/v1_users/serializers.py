@@ -1159,6 +1159,9 @@ class ConfigureSerializer(serializers.Serializer):
 
 
 class TenantBrandingSerializer(serializers.Serializer):
+    name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=None
+    )
     logo = serializers.CharField(
         max_length=255, required=False, allow_null=True, allow_blank=True,
         default=None
@@ -1177,6 +1180,9 @@ class RegisterSerializer(serializers.Serializer):
     # which we know the email is real.
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+    name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
     # A valid DNS label, because the subdomain will one day be one:
     # lowercase alphanumerics and hyphens, no leading/trailing hyphen.
     #

@@ -483,6 +483,7 @@
                           -webkit-text-size-adjust: 100%;
                         "
                       >
+                        {% if title %}
                         <h2
                           style="
                             -ms-text-size-adjust: 100%;
@@ -498,6 +499,24 @@
                         >
                           {{ title }}
                         </h2>
+                        {% endif %}
+                        {% if body_paragraphs %}
+                          {% for p in body_paragraphs %}
+                            <p
+                              style="
+                                -ms-text-size-adjust: 100%;
+                                -webkit-text-size-adjust: 100%;
+                                color: #000000;
+                                margin-top: 0;
+                                margin-bottom: 1em;
+                                font-size: 15px;
+                                line-height: 1.6;
+                              "
+                            >
+                              {{ p }}
+                            </p>
+                          {% endfor %}
+                        {% else %}
                         <p
                           style="
                             -ms-text-size-adjust: 100%;
@@ -508,6 +527,7 @@
                         >
                           {{ body }}
                         </p>
+                        {% endif %}
                       </div>
                       {% if image or message or show_content %}
                       <table style="width: 90%; margin: auto; padding: 20px">
@@ -675,6 +695,82 @@
                       <a href="{{button_url}}" target="_blank" rel="noreferrer">
                         <button class="btn btn-link">{{ button_text }}</button>
                       </a>
+                    </td>
+                  </tr>
+                  {% endif %}
+                  {% if post_button_steps or warning_note or sign_off %}
+                  <tr
+                    style="
+                      -ms-text-size-adjust: 100%;
+                      -webkit-text-size-adjust: 100%;
+                    "
+                  >
+                    <td
+                      style="
+                        -ms-text-size-adjust: 100%;
+                        -webkit-text-size-adjust: 100%;
+                        background: #ffffff;
+                        padding: 0 1em 2em 1em;
+                        mso-table-lspace: 0pt !important;
+                        mso-table-rspace: 0pt !important;
+                        text-align: left;
+                      "
+                    >
+                      <div
+                        style="
+                          text-align: left;
+                          padding: 0 4.5em 0.75em;
+                          -ms-text-size-adjust: 100%;
+                          -webkit-text-size-adjust: 100%;
+                          color: #000000;
+                          font-size: 14px;
+                          line-height: 1.6;
+                        "
+                      >
+                        {% if post_button_heading %}
+                        <h3
+                          style="
+                            font-family: 'Poppins', sans-serif;
+                            font-size: 16px;
+                            font-weight: 600;
+                            color: #333333;
+                            margin-top: 1em;
+                            margin-bottom: 0.5em;
+                          "
+                        >
+                          {{ post_button_heading }}
+                        </h3>
+                        {% endif %}
+                        {% if post_button_steps %}
+                        <ol style="padding-left: 1.5em; margin-top: 0.5em; margin-bottom: 1.5em; color: #444444;">
+                          {% for step in post_button_steps %}
+                          <li style="margin-bottom: 0.5em;">{{ step }}</li>
+                          {% endfor %}
+                        </ol>
+                        {% endif %}
+                        {% if warning_note %}
+                        <p
+                          style="
+                            font-size: 13px;
+                            color: #666666;
+                            background: #f8f9fa;
+                            border-left: 3px solid #0058ff;
+                            padding: 0.75em 1em;
+                            margin-top: 1.5em;
+                            margin-bottom: 1.5em;
+                          "
+                        >
+                          {{ warning_note }}
+                        </p>
+                        {% endif %}
+                        {% if sign_off %}
+                        <div style="margin-top: 2em; color: #333333;">
+                          {% for line in sign_off %}
+                          <p style="margin: 0.25em 0; {% if forloop.first %}font-weight: 500;{% endif %}">{{ line }}</p>
+                          {% endfor %}
+                        </div>
+                        {% endif %}
+                      </div>
                     </td>
                   </tr>
                   {% endif %} {% if explore_button %}
