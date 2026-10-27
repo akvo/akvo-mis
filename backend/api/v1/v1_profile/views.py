@@ -95,6 +95,7 @@ def send_feedback(request, version):
     # TODO:: change email
     data = {
         "send_to": ["tech.consultancy@akvo.org"],
+        "tenant": getattr(request, "tenant", None),
         "subject": "Feedback from {0} <{1}>".format(name, email),
         "body": "This is feedback from {0} <{1}>. Message: {2}".format(
             name, email, message

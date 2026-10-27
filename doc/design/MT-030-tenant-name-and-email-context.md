@@ -233,8 +233,43 @@ Update context and template parameters for the exact user specification:
   `"Your profile on {mis_name} has been updated by {admin}"`
 - `EmailTypes.upload_error`:
   `"Your data upload to {mis_name} failed validation checks."`
-- All other notifications (`data_approval`, `batch_approval`, `pending_approval`, etc.):
-  Header and subject branded with `{mis_name}`.
+- All other notifications (`batch_approval`, `pending_approval`, etc.):
+  Header (`site_name`) and subject branded with `{mis_name}`.
+
+##### Call-site context propagation (implemented)
+
+`email_context` already derives `mis_name` from the resolver, so branding is
+correct **only when the caller passes tenant context**. The header rendered
+`Akvo MIS` (the `APP_NAME` fallback) on several notifications because their
+call sites built the context dict without a `user`/`tenant` key. The fix adds
+that key at each site that lacked it (the resolver reads `tenant` or
+`user.tenant`):
+
+| File | Email type | Key added |
+| :--- | :--- | :--- |
+| `v1_jobs/job.py` | `new_request` | `"user": job.user` |
+| `v1_jobs/job.py` | `upload_error` (validate_excel) | `"user": job.user` |
+| `v1_jobs/job.py` | `upload_error` (no `data` sheet) | `"user": user` |
+| `v1_jobs/job.py` | `administration_upload` + its `upload_error` | `"user": user` |
+| `v1_jobs/job.py` | `upload_error` (entities) | `"user": user` |
+| `v1_jobs/seed_data.py` | `pending_approval` | `"user": batch.user` |
+| `v1_approval/serializers.py` | `inform_batch_rejection_approver` | `"user": user` |
+| `v1_approval/serializers.py` | `pending_approval` | `"user": obj.user` |
+| `v1_profile/views.py` | `feedback` | `"tenant": request.tenant` |
+
+Additionally, the `batch_approval` / `batch_rejection` `extend_body` copy in
+`v1_approval/serializers.py` had hardcoded `{APP_NAME} platform`; it now uses
+`user.tenant.mis_title` (falling back to `APP_NAME` when the approver has no
+tenant).
+
+**Already branded (no change needed)** — these already passed `user`/`tenant`:
+`user_activation`, `user_invite`, `send_email_to_user` (`user_update`),
+`user_forgot_password`, `batch_approval`, `batch_rejection`, `unchanged_data`.
+
+**Intentionally not wired**: the `email_template` preview endpoint (dev-only,
+no tenant in scope) and the email types with no production send site
+(`user_register`, `user_approval`, `data_approval`, `data_rejection`,
+`administration_prefilled`).
 
 #### 4. Email HTML Template Support (`main.html`)
 - Enhance `backend/mis/templates/email/main.html` to support structured multi-paragraph blocks and post-button sections:
