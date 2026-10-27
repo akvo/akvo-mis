@@ -23,7 +23,7 @@ jest.mock('../../lib', () => ({
 describe('LogoutButton', () => {
   beforeAll(() => {
     i18n.text.mockReturnValue({
-      settingsResetTitle: 'Reset (clear all data)',
+      buttonReset: 'Logout',
       settingsResetDesc: 'Erases every local user, form and datapoint',
     });
   });
@@ -34,7 +34,7 @@ describe('LogoutButton', () => {
     const logoutItem = getByTestId('list-item-logout');
     expect(logoutItem).toBeDefined();
 
-    const logoutText = getByText('Reset (clear all data)');
+    const logoutText = getByText('Logout');
     expect(logoutText).toBeDefined();
   });
 

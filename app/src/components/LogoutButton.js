@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { Button } from '@rneui/themed';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { AuthState, UserState, FormState, UIState, DatapointSyncState } from '../store';
 import { api, cascades, i18n } from '../lib';
 import { openDatabase } from '../database';
 import sql from '../database/sql';
+import useTheme from '../lib/theme';
 import ConfirmDialog from './ConfirmDialog';
-import MessageNote from './MessageNote';
 
 const LogoutButton = () => {
   const [visible, setVisible] = useState(false);
@@ -14,6 +16,7 @@ const LogoutButton = () => {
   const navigation = useNavigation();
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
 
   const handleNoPress = () => {
     setVisible(false);
@@ -76,16 +79,28 @@ const LogoutButton = () => {
   };
 
   return (
-    <View>
-      <MessageNote
-        tone="danger"
-        lines={[trans.settingsResetTitle, trans.settingsResetDesc]}
+    <View style={styles.container}>
+      <Button
+        title={trans.buttonReset}
         onPress={() => setVisible(true)}
         testID="list-item-logout"
+        icon={
+          <Icon
+            name="log-out-outline"
+            size={18}
+            color={theme.buttonPrimary.text}
+            style={styles.icon}
+          />
+        }
+        buttonStyle={[styles.button, { backgroundColor: theme.status.error }]}
+        titleStyle={[styles.title, { color: theme.buttonPrimary.text }]}
       />
+      <Text style={[styles.caption, { color: theme.text.secondary }]}>
+        {trans.settingsResetDesc}
+      </Text>
       <ConfirmDialog
         visible={visible}
-        title={trans.confirmResetTitle || 'Reset application?'}
+        title={`${trans.buttonReset}?`}
         message={trans.confirmReset}
         testID="dialog-confirm-logout"
         danger
@@ -101,7 +116,7 @@ const LogoutButton = () => {
                   testID: 'dialog-button-no',
                 },
                 {
-                  label: `${trans.buttonYes}, reset`,
+                  label: trans.buttonReset,
                   type: 'primary',
                   onPress: handleYesPress,
                   testID: 'dialog-button-yes',
@@ -114,5 +129,28 @@ const LogoutButton = () => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    gap: 8,
+  },
+  button: {
+    borderRadius: 24,
+    paddingVertical: 14,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  icon: {
+    marginRight: 8,
+  },
+  caption: {
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+});
 
 export default LogoutButton;

@@ -58,32 +58,14 @@ exports[`Homepage renders correctly 1`] = `
           }
         }
       >
-        <View
+        <Text
+          accessibilityRole="text"
           style={
             {
-              "alignItems": "center",
-              "flexDirection": "row",
-              "gap": 6,
-              "paddingLeft": 4,
+              "color": "#242424",
             }
           }
-        >
-          <Text />
-          <Text
-            numberOfLines={1}
-            style={
-              [
-                {
-                  "fontSize": 14,
-                  "fontWeight": "600",
-                },
-                {
-                  "color": "#020617",
-                },
-              ]
-            }
-          />
-        </View>
+        />
       </View>
       <View
         style={

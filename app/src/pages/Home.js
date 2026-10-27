@@ -8,7 +8,6 @@ import {
   Text,
   ToastAndroid,
   TouchableOpacity,
-  View,
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
@@ -60,7 +59,7 @@ const Home = ({ navigation, route }) => {
   const theme = useTheme();
   const db = useSQLiteContext();
 
-  const { id: currentUserId, name: currentUserName } = UserState.useState((s) => s);
+  const { id: currentUserId } = UserState.useState((s) => s);
 
   const {
     visible: updateDialogVisible,
@@ -387,16 +386,8 @@ const Home = ({ navigation, route }) => {
           onPress={goToUsers}
           testID="button-users"
         >
-          <Icon name="people-outline" size={18} color={theme.topNav.icon} />
+          <Icon name="person-circle-outline" size={20} color={theme.topNav.icon} />
         </TouchableOpacity>
-      }
-      leftComponent={
-        <View style={homeStyles.userInfo}>
-          <Icon name="person-circle-outline" size={22} color={theme.topNav.icon} />
-          <Text style={[homeStyles.userName, { color: theme.topNav.text }]} numberOfLines={1}>
-            {currentUserName || ''}
-          </Text>
-        </View>
       }
     >
       <BaseLayout.Content
@@ -466,16 +457,6 @@ const homeStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingLeft: 4,
-  },
-  userName: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   addFormRow: {
     flexDirection: 'row',
