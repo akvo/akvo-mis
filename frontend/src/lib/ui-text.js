@@ -34,6 +34,7 @@ const uiText = {
     menuManageDraft: "Manage Drafts",
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
+    menuProductTour: "Take a tour",
     menuFormBuilder: "Form Builder",
     menuDashboards: "Dashboards",
     menuSettings: "Settings",
@@ -1422,9 +1423,110 @@ const uiText = {
     brandingUploadBtn: "Upload logo",
     brandingCurrentLogo: "Current logo",
     brandingNoLogo: "No custom logo set (using default Akvo logo)",
+
+    // Onboarding Tour
+    tourWelcomeTitle: "Welcome to Akvo MIS",
+    tourWelcomeSubtitle:
+      "What do you want to do first? We’ll show you around in under a minute.",
+    tourGoalRecommended: "Recommended",
+    tourGoalSetupTitle: "Set up a data collection",
+    tourGoalSetupDesc: "Build a form and get it to your field team",
+    tourGoalReviewTitle: "Review and approve data",
+    tourGoalReviewDesc: "Check submissions waiting for you",
+    tourGoalExploreTitle: "Explore data and dashboards",
+    tourGoalExploreDesc: "Browse, chart and download results",
+    tourBtnShowMeHow: "Show me how",
+    tourBtnSkip: "Skip",
+    tourBtnBack: "Back",
+    tourBtnNext: "Next",
+    tourStepOf: "STEP {current} OF {total}",
+    tourCopyAppLink: "Copy app link",
+    tourLinkCopied: "App download link copied to clipboard",
+    tourLinkCopyError: "Unable to copy link to clipboard",
+    tourSetupStep1Title: "Build a form",
+    tourSetupStep1Desc:
+      "Add sections and questions, then publish. Your field team can fill it in as soon as it is published.",
+    tourSetupStep2Title: "Get the app to your field team",
+    tourSetupStep2Desc:
+      "Your field team collects data offline in the mobile app. Share the download link with them.",
+    tourSetupStep3Title: "Watch submissions arrive",
+    tourSetupStep3Desc:
+      "New submissions from the field appear here. Filter by form, or add one yourself from the web.",
+    tourSetupFinalBtn: "Create your first form",
+    tourReviewStep1Title: "Your pending approvals",
+    tourReviewStep1Desc:
+      "Submissions waiting for your decision land here. You can also see what your subordinate approvers still have to review.",
+    tourReviewStep2Title: "Review submissions",
+    tourReviewStep2Desc:
+      "Open Manage Data to browse and filter submissions. Approvals and drafts also live under Data.",
+    tourReviewFinalBtn: "Review pending approvals",
+    tourExploreStep1Title: "Browse your data",
+    tourExploreStep1Desc:
+      "Open Manage Data to browse, filter and review submissions by form and location.",
+    tourExploreStep2Title: "Chart it in a dashboard",
+    tourExploreStep2Desc:
+      "Build a dashboard from your data, publish it, then keep it private or share it publicly.",
+    tourExploreStep3Title: "Download your data",
+    tourExploreStep3Desc:
+      "Export submissions from Manage Data. Large exports run in the background and wait for you here.",
+    tourExploreFinalBtn: "Create a dashboard",
+    tourGetHelpTitle: "Get help any time",
+    tourGetHelpDesc:
+      "Have questions? Use our AI assistant anytime at the bottom right, or browse our Documentation for in-depth guides.",
   },
 
-  de: {},
+  de: {
+    menuProductTour: "Tour starten",
+    tourWelcomeTitle: "Willkommen bei Akvo MIS",
+    tourWelcomeSubtitle:
+      "Was möchten Sie zuerst tun? Wir zeigen es Ihnen in weniger als einer Minute.",
+    tourGoalRecommended: "Empfohlen",
+    tourGoalSetupTitle: "Datenerfassung einrichten",
+    tourGoalSetupDesc: "Formular erstellen und an Ihr Außendienstteam senden",
+    tourGoalReviewTitle: "Daten prüfen und genehmigen",
+    tourGoalReviewDesc: "Ausstehende Übermittlungen prüfen",
+    tourGoalExploreTitle: "Daten und Dashboards erkunden",
+    tourGoalExploreDesc:
+      "Ergebnisse durchsuchen, visualisieren und herunterladen",
+    tourBtnShowMeHow: "Zeig mir wie",
+    tourBtnSkip: "Überspringen",
+    tourBtnBack: "Zurück",
+    tourBtnNext: "Weiter",
+    tourStepOf: "SCHRITT {current} VON {total}",
+    tourCopyAppLink: "App-Link kopieren",
+    tourLinkCopied: "App-Download-Link in die Zwischenablage kopiert",
+    tourLinkCopyError: "Link konnte nicht kopiert werden",
+    tourSetupStep1Title: "Formular erstellen",
+    tourSetupStep1Desc:
+      "Fügen Sie Abschnitte und Fragen hinzu und veröffentlichen Sie es. Ihr Außendienstteam kann es sofort ausfüllen.",
+    tourSetupStep2Title: "Bringen Sie die App zu Ihrem Außendienstteam",
+    tourSetupStep2Desc:
+      "Ihr Außendienstteam erfasst Daten offline in der mobilen App. Teilen Sie den Download-Link mit ihnen.",
+    tourSetupStep3Title: "Eingehende Übermittlungen beobachten",
+    tourSetupStep3Desc:
+      "Neue Übermittlungen aus dem Feld erscheinen hier. Filtern Sie nach Formular oder fügen Sie selbst über das Web eine hinzu.",
+    tourSetupFinalBtn: "Erstes Formular erstellen",
+    tourReviewStep1Title: "Ihre ausstehenden Genehmigungen",
+    tourReviewStep1Desc:
+      "Übermittlungen, die auf Ihre Entscheidung warten, landen hier. Sie können auch sehen, was Ihre untergeordneten Genehmiger noch prüfen müssen.",
+    tourReviewStep2Title: "Übermittlungen prüfen",
+    tourReviewStep2Desc:
+      "Öffnen Sie Daten verwalten, um Übermittlungen zu durchsuchen und zu filtern. Genehmigungen und Entwürfe befinden sich ebenfalls unter Daten.",
+    tourReviewFinalBtn: "Ausstehende Genehmigungen prüfen",
+    tourExploreStep1Title: "Ihre Daten durchsuchen",
+    tourExploreStep1Desc:
+      "Öffnen Sie Daten verwalten, um Übermittlungen nach Formular und Standort zu durchsuchen, zu filtern und zu prüfen.",
+    tourExploreStep2Title: "In einem Dashboard visualisieren",
+    tourExploreStep2Desc:
+      "Erstellen Sie ein Dashboard aus Ihren Daten, veröffentlichen Sie es und halten Sie es privat oder teilen Sie es öffentlich.",
+    tourExploreStep3Title: "Ihre Daten herunterladen",
+    tourExploreStep3Desc:
+      "Exportieren Sie Übermittlungen aus Daten verwalten. Große Exporte laufen im Hintergrund und warten hier auf Sie.",
+    tourExploreFinalBtn: "Dashboard erstellen",
+    tourGetHelpTitle: "Jederzeit Hilfe erhalten",
+    tourGetHelpDesc:
+      "Haben Sie Fragen? Nutzen Sie jederzeit unseren KI-Assistenten unten rechts oder durchsuchen Sie unsere Dokumentation.",
+  },
 };
 
 uiText.fr = {
@@ -1452,6 +1554,7 @@ uiText.fr = {
   menuManageDraft: "Gérer les brouillons",
   menuDownloadApps: "Télécharger l'application",
   menuDocumentation: "Documentation",
+  menuProductTour: "Faire une visite guidée",
   menuFormBuilder: "Générateur de formulaires",
   menuDashboards: "Tableaux de bord",
   menuSettings: "Paramètres",

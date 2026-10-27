@@ -14,6 +14,7 @@ import {
   AndroidOutlined,
   BarChartOutlined,
   SettingOutlined,
+  CompassOutlined,
 } from "@ant-design/icons";
 import { AbilityContext } from "../can";
 
@@ -204,6 +205,7 @@ const Sidebar = () => {
           {/* Data SubMenu */}
           <Menu.SubMenu
             key="manage-data"
+            data-tour="sidebar-data"
             icon={<TableOutlined />}
             title={text.menuData}
           >
@@ -286,6 +288,7 @@ const Sidebar = () => {
           {ability.can("read", "form-builder") && (
             <Menu.Item
               key="menu-form-builder"
+              data-tour="sidebar-form-builder"
               icon={<FormOutlined />}
               data-url="/control-center/form-builder"
             >
@@ -298,6 +301,7 @@ const Sidebar = () => {
             ability.can("read", "dashboard")) && (
             <Menu.Item
               key="menu-dashboards"
+              data-tour="sidebar-dashboards"
               icon={<BarChartOutlined />}
               data-url="/control-center/dashboard"
             >
@@ -309,6 +313,7 @@ const Sidebar = () => {
           {ability.can("read", "downloads") && (
             <Menu.Item
               key="menu-downloads"
+              data-tour="sidebar-downloads"
               icon={<DownloadOutlined />}
               data-url="/downloads"
             >
@@ -341,6 +346,7 @@ const Sidebar = () => {
         {ability.can("manage", "mobile") && (
           <Menu.Item
             key="menu-download-apps"
+            data-tour="sidebar-download-apps"
             icon={<AndroidOutlined />}
             onClick={() => setOpenDownloadAppsModal(true)}
           >
@@ -349,6 +355,7 @@ const Sidebar = () => {
         )}
         <Menu.Item
           key="menu-documentation"
+          data-tour="sidebar-documentation"
           icon={<BookOutlined />}
           onClick={(e) => {
             e.domEvent.preventDefault();
@@ -356,6 +363,20 @@ const Sidebar = () => {
           }}
         >
           {text.menuDocumentation}
+        </Menu.Item>
+        <Menu.Item
+          key="menu-product-tour"
+          data-tour="sidebar-product-tour"
+          icon={<CompassOutlined />}
+          onClick={() => {
+            store.update((s) => {
+              s.tourOpen = true;
+              s.tourStep = 0;
+              s.tourGoal = null;
+            });
+          }}
+        >
+          {text.menuProductTour}
         </Menu.Item>
       </Menu>
       <Modal
