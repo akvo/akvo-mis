@@ -1,91 +1,59 @@
-import React, { useState } from 'react';
-import { renderHook, fireEvent, act, render } from '@testing-library/react-native';
+import React from 'react';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { route } from '@react-navigation/native';
 import SettingsForm from '../SettingsForm';
 import { config } from '../config';
+import { BuildParamsState } from '../../../store';
+import { crudConfig } from '../../../database/crud';
+
+// background-task imports expo-task-manager, whose native module jest-expo can't load.
+jest.mock('../../../lib/background-task', () => ({}));
 
 jest.mock('@react-navigation/native');
-jest.mock('expo-sqlite');
-
-// Mock the hook instead of calling it directly
 jest.mock('expo-sqlite', () => ({
   ...jest.requireActual('expo-sqlite'),
-  useSQLiteContext: jest.fn().mockReturnValue({
-    transaction: jest.fn(),
-    closeAsync: jest.fn(),
-  }),
+  useSQLiteContext: jest.fn().mockReturnValue({}),
+}));
+jest.mock('../../../database/crud', () => ({
+  crudConfig: { updateConfig: jest.fn().mockResolvedValue(true) },
 }));
 
-const mockDb = {
-  transaction: jest.fn(),
-  closeAsync: jest.fn(),
-};
-
 describe('SettingsForm', () => {
-  it('renders correctly', () => {
-    const params = { id: 1, name: 'Advanced' };
-    route.params = params;
-    const findConfig = config.find((c) => c?.id === params.id);
+  it('renders every field of the page under its section, with the note', () => {
+    route.params = { id: 1, name: 'Advanced Settings' };
+    const findConfig = config.find((c) => c?.id === 1);
 
     const { getByText, getByTestId } = render(<SettingsForm route={route} />);
 
-    const switchEl = getByTestId('settings-form-switch-3');
-    expect(switchEl).toBeDefined();
-
-    findConfig?.fields?.forEach((f) => {
-      const labelEl = getByText(f.label);
-      expect(labelEl).toBeDefined();
+    expect(getByTestId('settings-form-switch-3')).toBeDefined();
+    expect(getByText('Server')).toBeDefined();
+    expect(getByText('Synchronization')).toBeDefined();
+    expect(getByTestId('settings-note')).toBeDefined();
+    findConfig.fields.forEach((f) => {
+      expect(getByText(f.label)).toBeDefined();
     });
   });
 
-  test('Storing data to state and database', async () => {
-    const params = { id: 1, name: 'Advanced' };
-    route.params = params;
+  it('shows no note on Geolocation', () => {
+    route.params = { id: 2, name: 'Geolocation Settings' };
+    const { queryByTestId, getByText } = render(<SettingsForm route={route} />);
+    expect(getByText('Location')).toBeDefined();
+    expect(queryByTestId('settings-note')).toBeNull();
+  });
 
-    const { unmount, getByTestId } = render(<SettingsForm route={route} />);
+  it('stores an edited value in the state and the database', async () => {
+    route.params = { id: 1, name: 'Advanced Settings' };
+    const { getByTestId } = render(<SettingsForm route={route} />);
 
-    const { result } = renderHook(() => useState(null));
-    const [, setEdit] = result.current;
+    fireEvent.press(getByTestId('settings-form-item-2'));
+    expect(getByTestId('settings-form-dialog')).toBeDefined();
 
-    const authCodeItem = getByTestId('settings-form-item-2');
-    fireEvent.press(authCodeItem);
-    const authCodeConfig = {
-      id: 31,
-      type: 'number',
-      name: 'syncInterval',
-      label: 'Sync interval',
-      description: 'Sync interval in minutes',
-      key: 'UserState.syncInterval',
-      editable: true,
-    };
-    act(() => {
-      setEdit(authCodeConfig);
+    fireEvent.changeText(getByTestId('settings-form-input'), '500');
+    fireEvent.press(getByTestId('settings-form-dialog-ok'));
+
+    await waitFor(() => {
+      expect(BuildParamsState.getRawState().dataSyncInterval).toBe('500');
+      expect(crudConfig.updateConfig).toHaveBeenCalledWith({}, { syncInterval: '500' });
     });
-    expect(result.current[0]).toEqual(authCodeConfig);
-
-    const dialogEl = getByTestId('settings-form-dialog');
-    expect(dialogEl).toBeDefined();
-    const inputEl = getByTestId('settings-form-input');
-    expect(inputEl).toBeDefined();
-
-    const authCodeValue = 500;
-    fireEvent(inputEl, 'onChangeText', { value: authCodeValue });
-
-    const okEl = getByTestId('settings-form-dialog-ok');
-    expect(okEl).toBeDefined();
-    // Mock the database update without using conn.tx or reassigning SQLite.useSQLiteContext
-    const mockUpdateResult = { rowsAffected: 1 };
-    const mockSelectSql = jest.fn((q, p, successCallback) => {
-      successCallback(null, mockUpdateResult);
-    });
-    mockDb.transaction.mockImplementation((transactionFunction) => {
-      transactionFunction({
-        executeSql: mockSelectSql,
-      });
-    });
-
-    expect(mockUpdateResult).toEqual({ rowsAffected: 1 });
-    expect(mockDb.transaction).toHaveBeenCalled();
-    unmount();
   });
 });

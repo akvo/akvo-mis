@@ -2,7 +2,18 @@ import React, { useState } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { Image, Button } from '@rneui/themed';
 import { api } from '../../lib';
-import styles from './styles';
+import useTheme from '../../lib/theme';
+import getStyles from './styles';
+
+/** Local, data: and absolute uris load as they are; a server path gets the API host. */
+export const toImageURL = (uri) => {
+  if (!uri || uri.includes('file://') || uri.startsWith('http') || uri.startsWith('data:image')) {
+    return uri;
+  }
+  // get base path from http://example.com/api/v2/any/ to http://example.com
+  const baseURL = api.getConfig().baseURL?.replace(/\/api\/v\d+\/.*$/, '');
+  return `${baseURL}${uri}`;
+};
 
 const ImageView = ({
   label,
@@ -26,15 +37,12 @@ const ImageView = ({
   // photo changes `uri`, so the comparison below goes false on its own — the
   // preview appears without this component having to be remounted and without
   // an effect to reset the flag.
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [failedUri, setFailedUri] = useState(null);
   // Bumping this remounts the Image, which is what makes "Try again" re-request it
   const [reloadKey, setReloadKey] = useState(0);
-  // get base path from http://example.com/api/v2/any/ to http://example.com
-  const baseURL = api.getConfig().baseURL?.replace(/\/api\/v\d+\/.*$/, '');
-  const imageURL =
-    !uri?.includes('file://') && !uri?.startsWith('http') && !uri.startsWith('data:image')
-      ? `${baseURL}${uri}`
-      : uri;
+  const imageURL = toImageURL(uri);
   // Repair only makes sense for local files pending upload, not remote images
   const isLocalFile = !!uri?.startsWith('file://');
   const showRetake = !!onRetake && isLocalFile;

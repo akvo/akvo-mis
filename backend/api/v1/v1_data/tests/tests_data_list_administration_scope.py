@@ -60,7 +60,6 @@ class FormDataListAdministrationScopeTest(TestCase, ProfileTestHelperMixin):
             created_by=self.author,
             updated_by=self.author,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(dp)
         return dp
@@ -115,7 +114,6 @@ class FormDataListAdministrationScopeTest(TestCase, ProfileTestHelperMixin):
             created_by=self.author,
             updated_by=self.author,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(dp)
         return child_form, dp

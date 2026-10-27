@@ -104,7 +104,7 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
         self.assertTrue(len(result) > 0)
         parent_ids = set(
             self.form.form_form_data.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).values_list("id", flat=True)
         )
         for row in result:
@@ -135,7 +135,7 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
     def test_with_administration_filter(self):
         parents = list(
             self.form.form_form_data.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).all()
         )
         adm = parents[0].administration
@@ -155,7 +155,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
             FormData.objects.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         self.assertTrue(len(children) >= 2)
@@ -181,7 +180,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
             FormData.objects.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         self.assertTrue(len(children) >= 2)
@@ -205,7 +203,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
             FormData.objects.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         self.assertTrue(len(children) >= 2)
@@ -230,7 +227,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
             FormData.objects.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         self.assertTrue(len(children) >= 1)
@@ -260,7 +256,7 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
     def test_with_date_and_administration(self):
         parents = list(
             self.form.form_form_data.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).all()
         )
         adm = parents[0].administration
@@ -269,7 +265,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
                 form=self.child_form,
                 parent=parents[0],
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         if children:
@@ -291,7 +286,7 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
         """Parent created outside range, monitoring in range."""
         parents = list(
             self.form.form_form_data.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).order_by("id").all()
         )
         parent = parents[0]
@@ -304,7 +299,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
             parent.children.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         if children:
@@ -326,7 +320,7 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
         """Parent in range, monitoring out of range."""
         parents = list(
             self.form.form_form_data.filter(
-                is_pending=False, is_draft=False
+                is_pending=False
             ).order_by("id").all()
         )
         parent = parents[0]
@@ -339,7 +333,6 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
             parent.children.filter(
                 form=self.child_form,
                 is_pending=False,
-                is_draft=False,
             ).all()
         )
         for child in children:

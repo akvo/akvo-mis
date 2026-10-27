@@ -7,17 +7,19 @@ import {
   ActivityIndicator,
   StyleSheet,
   View,
+  Text,
 } from 'react-native';
-import { Button, Dialog, Text } from '@rneui/themed';
+import { Button } from '@rneui/themed';
 import Icon from 'react-native-vector-icons/Ionicons';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
 import * as Crypto from 'expo-crypto';
 import FormContainer from '../form/FormContainer';
 import { SaveDialogMenu, SaveDropdownMenu } from '../form/support';
-import { BaseLayout } from '../components';
+import { BaseLayout, ConfirmDialog } from '../components';
 import { crudDataPoints, crudForms } from '../database/crud';
 import { persistSubmission, refreshStorageWarning } from '../lib/submission-fallback';
+import useTheme from '../lib/theme';
 
 import { UserState, UIState, FormState } from '../store';
 import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
@@ -47,8 +49,12 @@ const FormPage = ({ navigation, route }) => {
   const [showDialogMenu, setShowDialogMenu] = useState(false);
   const [showDropdownMenu, setShowDropdownMenu] = useState(false);
   const [showExitConfirmationDialog, setShowExitConfirmationDialog] = useState(false);
+  const activeGroupIndex = FormState.useState((s) => s.activeGroup);
+  const totalGroupCount = FormState.useState((s) => s.totalGroup);
+  const activeGroupLabel = FormState.useState((s) => s.activeGroupLabel);
   const activeLang = UIState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
+  const theme = useTheme();
 
   const currentFormId = route?.params?.id;
   // continue saved submission
@@ -57,9 +63,7 @@ const FormPage = ({ navigation, route }) => {
   const [currentDataPoint, setCurrentDataPoint] = useState({});
   const [loading, setLoading] = useState(false);
   const db = SQLite.useSQLiteContext();
-  // Stable for the life of this screen, so a retry after a failed save overwrites its
-  // own fallback file instead of accumulating one per attempt.
-  const submissionUuidRef = useRef(route.params?.uuid || Crypto.randomUUID());
+  const submissionUuidRef = useRef(route?.params?.uuid || Crypto.randomUUID());
   // Writes made by the app itself — loading a draft, clearing the form — are not
   // changes by the user. Pullstate dispatches subscriptions synchronously inside
   // update() (_updateState iterates clientSubscriptions in a plain loop), so raising
@@ -108,6 +112,7 @@ const FormPage = ({ navigation, route }) => {
         s.surveyDuration = 0;
         s.repeats = {};
         s.hasUnsavedChanges = false;
+        s.feedback = {};
       });
     });
   }, [formJSON]);
@@ -260,8 +265,7 @@ const FormPage = ({ navigation, route }) => {
     leaveForm();
   };
 
-  const handleOnSaveAndExit = async ({ sendToWeb = false } = {}) => {
-    await queueSyncJob();
+  const handleOnSaveAndExit = async () => {
     const { dpName, dpGeo } = generateDataPointName(formJSON, currentValues, cascades);
     const jsonAnswers = transformAnswers(currentValues, formJSON);
     try {
@@ -287,7 +291,6 @@ const FormPage = ({ navigation, route }) => {
         repeats: Object.keys(repeats).length ? JSON.stringify(repeats) : null,
         syncedAt: null,
         ...(isNewSubmission ? { locallyCreated: 1 } : {}),
-        ...(sendToWeb ? { sendToWeb: 1 } : {}),
       };
       /**
        * GEO-006 D-6: the index rows land inside the same transaction as the datapoint, so a
@@ -444,11 +447,11 @@ const FormPage = ({ navigation, route }) => {
 
   return (
     <BaseLayout
-      title={route?.params?.name}
-      subTitle="formPage"
+      title={trans.newSubmissionText}
+      headerBg={theme.bg.surfaceElevated3}
       leftComponent={
         <Button type="clear" onPress={handleOnPressArrowBackButton} testID="arrow-back-button">
-          <Icon name="arrow-back" size={18} />
+          <Icon name="arrow-back" size={18} color={theme.topNav.icon} />
         </Button>
       }
       rightComponent={
@@ -461,7 +464,7 @@ const FormPage = ({ navigation, route }) => {
               testID="form-page-kebab-menu"
               onPress={() => setShowDropdownMenu(true)}
             >
-              <Icon name="ellipsis-vertical" size={18} />
+              <Icon name="ellipsis-vertical" size={18} color={theme.topNav.icon} />
             </Button>
           }
           handleOnExit={handleShowExitConfirmationDialog}
@@ -469,6 +472,26 @@ const FormPage = ({ navigation, route }) => {
         />
       }
     >
+      <View
+        style={[
+          styles.formHeader,
+          {
+            backgroundColor: theme.bg.surfaceElevated3,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme.border.listDivider,
+          },
+        ]}
+      >
+        <Text style={[styles.formName, { color: theme.topNav.text }]}>{route?.params?.name}</Text>
+        {totalGroupCount > 0 && (
+          <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
+            {`${trans.stepLabel || 'Step'} ${activeGroupIndex + 1} ${
+              trans.ofLabel || 'of'
+            } ${totalGroupCount}`}
+            {activeGroupLabel ? ` — ${activeGroupLabel}` : ''}
+          </Text>
+        )}
+      </View>
       {!loading ? (
         <FormContainer
           forms={formJSON}
@@ -488,26 +511,49 @@ const FormPage = ({ navigation, route }) => {
         handleOnExit={handleShowExitConfirmationDialog}
         handleOnSaveAndExit={handleOnSaveAndExit}
       />
-      <Dialog visible={showExitConfirmationDialog} testID="exit-confirmation-dialog">
-        <Text testID="exit-confirmation-text">{trans.confirmExit}</Text>
-        <Dialog.Actions>
-          <Dialog.Button
-            title={trans.buttonExit}
-            onPress={handleOnExit}
-            testID="exit-confirmation-ok"
-          />
-          <Dialog.Button
-            title={trans.buttonCancel}
-            onPress={() => setShowExitConfirmationDialog(false)}
-            testID="exit-confirmation-cancel"
-          />
-        </Dialog.Actions>
-      </Dialog>
+      <ConfirmDialog
+        visible={showExitConfirmationDialog}
+        danger
+        title={trans.confirmExitTitle || 'Exit without saving?'}
+        message={trans.confirmExit}
+        testID="exit-confirmation-dialog"
+        onClose={() => setShowExitConfirmationDialog(false)}
+        actions={[
+          {
+            label: trans.buttonCancel,
+            type: 'secondary',
+            onPress: () => setShowExitConfirmationDialog(false),
+            testID: 'exit-confirmation-cancel',
+          },
+          {
+            label: trans.buttonExit,
+            type: 'danger',
+            onPress: handleOnExit,
+            testID: 'exit-confirmation-ok',
+          },
+        ]}
+      />
     </BaseLayout>
   );
 };
 
 const styles = StyleSheet.create({
+  formHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  formName: {
+    fontSize: 24,
+    fontWeight: '400',
+  },
+  stepIndicator: {
+    fontSize: 14,
+    fontWeight: '400',
+    marginTop: 4,
+  },
   loadingContainer: {
     flex: 1,
     flexDirection: 'column',

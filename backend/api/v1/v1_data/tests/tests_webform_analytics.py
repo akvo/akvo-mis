@@ -7,8 +7,8 @@ from rest_framework.test import APIClient
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_forms.models import Forms
+from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_users.models import Tenant
-from api.v1.v1_data.models import FormData
 
 
 class WebformAnalyticsTest(TestCase, ProfileTestHelperMixin):
@@ -39,6 +39,31 @@ class WebformAnalyticsTest(TestCase, ProfileTestHelperMixin):
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
+
+    def _full_answer_payload(self):
+        # Answer every question so the pending submit passes the
+        # required-answers validation (HEAD tightened this gate).
+        answers = []
+        for q in self.form.form_questions.all().order_by("id"):
+            if q.type == QuestionTypes.autofield:
+                continue
+            if q.type in (QuestionTypes.option, QuestionTypes.multiple_option):
+                opt = q.options.first()
+                value = [opt.value] if opt else []
+            elif q.type == QuestionTypes.number:
+                value = 12
+            elif q.type == QuestionTypes.geo:
+                value = [0.0, 0.0]
+            elif q.type in (QuestionTypes.geoshape, QuestionTypes.geotrace):
+                value = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
+            elif q.type == QuestionTypes.cascade:
+                value = self.administration.id
+            elif q.type == QuestionTypes.date:
+                value = "2021-01-01"
+            else:
+                value = "testing"
+            answers.append({"question": q.id, "value": value})
+        return answers
 
     @mock.patch("api.v1.v1_data.views.async_task")
     def test_direct_form_data_submit_triggers_matomo(self, mock_async_task):
@@ -73,47 +98,17 @@ class WebformAnalyticsTest(TestCase, ProfileTestHelperMixin):
 
     @mock.patch("api.v1.v1_data.views.async_task")
     def test_pending_form_data_submit_triggers_matomo(self, mock_async_task):
-        first_q = self.form.form_questions.first()
         payload = {
             "data": {
                 "name": "Pending Web Datapoint",
                 "administration": self.administration.id,
             },
-            "answer": [
-                {
-                    "question": first_q.id,
-                    "value": "Pending Answer",
-                }
-            ],
+            "answer": self._full_answer_payload(),
         }
         res = self.client.post(
             f"/api/v1/form-pending-data/{self.form.id}",
             data=payload,
             format="json",
-        )
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        mock_async_task.assert_any_call(
-            "utils.matomo.track_submission_task",
-            tenant_name="web-analytics-ws",
-            form_name=self.form.name,
-            form_id=self.form.id,
-            source="web",
-            user_id=str(self.user.id),
-            subdomain="web-analytics-ws",
-        )
-
-    @mock.patch("api.v1.v1_data.views.async_task")
-    def test_publish_draft_form_data_triggers_matomo(self, mock_async_task):
-        draft = FormData.objects.create(
-            name="Draft Datapoint",
-            form=self.form,
-            administration=self.administration,
-            created_by=self.user,
-            updated_by=self.user,
-            is_draft=True,
-        )
-        res = self.client.post(
-            f"/api/v1/publish-draft-submission/{draft.id}",
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         mock_async_task.assert_any_call(

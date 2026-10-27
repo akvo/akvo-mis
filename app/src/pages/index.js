@@ -12,6 +12,7 @@ export { default as OverlapMapViewPage } from './OverlapMapView';
 export { default as UsersPage } from './Users';
 export { default as FormDataDetailsPage } from './FormData/FormDataDetails';
 export { default as AddNewForm } from './Settings/AddNewForm';
+export { default as LanguagePage } from './Settings/Language';
 export { default as AboutPage } from './About/About';
 export { default as SubmissionPage } from './Submission';
 export { default as FormOptionsPage } from './FormOptions';

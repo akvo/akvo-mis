@@ -7,6 +7,8 @@ import { render, fireEvent, act } from '@testing-library/react-native';
 import { View } from 'react-native';
 import SaveDropdownMenu from '../SaveDropdownMenu';
 
+jest.mock('../../../lib/background-task', () => ({}));
+
 // According to the issue on @testing-library/react-native (for dropdown)
 jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((cb) => {
   cb(18, 113, 357, 50);
@@ -75,7 +77,7 @@ describe('SaveDropdownMenu component', () => {
         .children.props.children;
 
     expect(menuItemElements[0].props.testID).toEqual('save-and-exit-menu-item');
-    expect(menuItemElements[0].props.children).toEqual('Save and Exit');
+    expect(menuItemElements[0].props.children).toEqual('Save as Draft');
   });
 
   it('should have Exit without Saving button as dropdown menu item', () => {

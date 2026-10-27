@@ -60,7 +60,6 @@ class MobileDatapointUserScopeTest(TestCase, ProfileTestHelperMixin):
             administration=administration,
             created_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
 
     def _device_token(self):

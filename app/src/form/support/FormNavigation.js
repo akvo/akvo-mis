@@ -1,10 +1,16 @@
-import React from 'react';
-import { ToastAndroid } from 'react-native';
-import { Tab } from '@rneui/themed';
-import styles from '../styles';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ToastAndroid,
+  ActivityIndicator,
+} from 'react-native';
 import { UIState, FormState } from '../../store';
 import i18n from '../../lib/i18n';
 import { generateValidationSchemaFieldLevel, onFilterDependency } from '../lib';
+import useTheme from '../../lib/theme';
 
 const FormNavigation = ({
   currentGroup,
@@ -14,9 +20,10 @@ const FormNavigation = ({
   setActiveGroup,
   totalGroup,
   showQuestionGroupList,
-  setShowQuestionGroupList,
   setShowDialogMenu,
 }) => {
+  const theme = useTheme();
+  const [submitting, setSubmitting] = useState(false);
   const visitedQuestionGroup = FormState.useState((s) => s.visitedQuestionGroup);
   const currentValues = FormState.useState((s) => s.currentValues);
   const activeLang = UIState.useState((s) => s.lang);
@@ -47,11 +54,6 @@ const FormNavigation = ({
     const validateSync =
       group?.question
         ?.filter((q) => onFilterDependency(group, currentValues, q, 0, allQuestions))
-        /**
-         * Only ENTITY cascades are gated here. `extra.type` is a cascade sub-type, so
-         * the old `|| !q?.extra?.type` clause also excluded administration cascades —
-         * a required one was never validated, and the form submitted without it.
-         */
         ?.filter((q) => q?.extra?.type !== 'entity' || currentValues?.[q?.id] !== undefined)
         ?.map((q) => {
           const defaultVal = [
@@ -101,9 +103,6 @@ const FormNavigation = ({
     FormState.update((s) => {
       s.feedback = feedback;
     });
-    // Submit stays pressable while the group list is open; close it so the field
-    // errors are actually on screen.
-    setShowQuestionGroupList(false);
     if (groupIndex !== activeGroup) {
       setActiveGroup(groupIndex);
     }
@@ -116,14 +115,28 @@ const FormNavigation = ({
     );
   };
 
-  const handleFormNavigation = async (index) => {
-    // index 0 = prev group
-    // index 1 = show question group list
-    // index 2 = next group
+  const handleBack = async () => {
+    if (showQuestionGroupList) {
+      return;
+    }
+    if (!activeGroup) {
+      setShowDialogMenu(true);
+      return;
+    }
+    const activeValue = activeGroup - 1;
+    setActiveGroup(activeValue);
+    handleOnUpdateState(activeValue);
+  };
+
+  const handleNext = async () => {
+    if (showQuestionGroupList) {
+      return;
+    }
+
     const feedbackValues = await validateGroup(currentGroup);
     const errors = Object.values(feedbackValues).filter((val) => val !== true);
-    // Show warning but allow navigation to next group
-    if (errors.length > 0 && index === 2 && activeGroup < totalGroup - 1) {
+
+    if (errors.length > 0 && activeGroup < totalGroup - 1) {
       const isRequired = errors.find((e) => e.includes('required'));
       const errorMessage = isRequired
         ? trans.mandatoryQuestionsWarning || trans.mandatoryQuestions
@@ -134,93 +147,117 @@ const FormNavigation = ({
       s.feedback = feedbackValues;
     });
 
-    // No longer block navigation - allow moving to next group even with errors
     if (currentGroup?.id && !visitedQuestionGroup.includes(currentGroup.id)) {
       FormState.update((s) => {
         s.visitedQuestionGroup = [...visitedQuestionGroup, currentGroup.id];
       });
     }
 
-    if (index === 0) {
-      if (activeGroup > 0) {
-        setActiveGroup(activeGroup - 1);
-      }
-      if (!activeGroup) {
-        setShowDialogMenu(true);
-      } else {
-        const activeValue = activeGroup - 1;
-        setActiveGroup(activeValue);
-        handleOnUpdateState(activeValue);
-      }
-      return;
-    }
-    if (index === 1) {
-      setShowQuestionGroupList(!showQuestionGroupList);
-      return;
-    }
-    if (index === 2 && activeGroup < totalGroup - 1) {
+    if (activeGroup < totalGroup - 1) {
       setActiveGroup(activeGroup + 1);
     }
-    if (index === 2 && activeGroup === totalGroup - 1) {
-      // Validate all groups before submitting
+  };
+
+  const handleSubmit = async () => {
+    if (submitting) {
+      return;
+    }
+    setSubmitting(true);
+    try {
       const invalidGroup = await findFirstInvalidGroup();
       if (invalidGroup) {
         handleInvalidSubmit(invalidGroup);
         return;
       }
-      onSubmit();
+      await onSubmit();
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const isOverviewStep = activeGroup === totalGroup - 1;
+
   return (
-    <Tab
-      buttonStyle={styles.formNavigationButton}
-      onChange={handleFormNavigation}
-      disableIndicator
-      value={activeGroup}
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: theme.bg.surfaceElevated3, borderTopColor: theme.border.listDivider },
+      ]}
     >
-      <Tab.Item
-        title={trans.buttonBack}
-        icon={{ name: 'chevron-back-outline', type: 'ionicon', color: 'grey', size: 20 }}
-        iconPosition="left"
-        iconContainerStyle={styles.formNavigationIcon}
-        titleStyle={styles.formNavigationTitle}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={handleBack}
+        disabled={showQuestionGroupList || submitting}
         testID="form-nav-btn-back"
-        disabled={showQuestionGroupList}
-        disabledStyle={{ backgroundColor: 'transparent' }}
-        containerStyle={styles.formNavigationBgLight}
-      />
-      <Tab.Item
-        title={`${activeGroup + 1}/${totalGroup}`}
-        titleStyle={styles.formNavigationGroupCount}
-        testID="form-nav-group-count"
-        containerStyle={styles.formNavigationBgLight}
-      />
-      {activeGroup < totalGroup - 1 ? (
-        <Tab.Item
-          title={trans.buttonNext}
-          icon={{ name: 'chevron-forward-outline', type: 'ionicon', color: 'grey', size: 20 }}
-          iconPosition="right"
-          iconContainerStyle={styles.formNavigationIcon}
-          titleStyle={styles.formNavigationTitle}
-          testID="form-nav-btn-next"
-          disabled={showQuestionGroupList}
-          disabledStyle={{ backgroundColor: 'transparent' }}
-          containerStyle={styles.formNavigationBgLight}
-        />
-      ) : (
-        <Tab.Item
-          title={trans.buttonSubmit}
-          icon={{ name: 'paper-plane-outline', type: 'ionicon', color: 'white', size: 20 }}
-          iconPosition="right"
-          iconContainerStyle={styles.formNavigationIconSubmit}
-          titleStyle={styles.formNavigationSubmit}
-          containerStyle={styles.formNavigationBgPrimary}
+      >
+        <Text style={[styles.backText, { color: theme.buttonGhost.color }]}>
+          {trans.buttonBack}
+        </Text>
+      </TouchableOpacity>
+
+      {isOverviewStep ? (
+        <TouchableOpacity
+          style={[styles.nextButton, { backgroundColor: theme.buttonPrimary.bg }]}
+          onPress={handleSubmit}
+          disabled={submitting}
           testID="form-btn-submit"
-        />
+        >
+          {submitting ? (
+            <ActivityIndicator color={theme.buttonPrimary.text} testID="form-btn-submit-loading" />
+          ) : (
+            <Text style={[styles.nextText, { color: theme.buttonPrimary.text }]}>
+              {trans.buttonSubmit}
+            </Text>
+          )}
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.nextButton, { backgroundColor: theme.buttonPrimary.bg }]}
+          onPress={handleNext}
+          disabled={showQuestionGroupList}
+          testID="form-nav-btn-next"
+        >
+          <Text style={[styles.nextText, { color: theme.buttonPrimary.text }]}>
+            {trans.buttonNext}
+          </Text>
+        </TouchableOpacity>
       )}
-    </Tab>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  backButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  backText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  nextButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  nextText: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});
 
 export default FormNavigation;

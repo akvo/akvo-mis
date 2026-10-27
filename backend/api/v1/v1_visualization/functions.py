@@ -153,7 +153,6 @@ def latest_monitoring_subquery(form_id, date_filters=None):
         parent=OuterRef("pk"),
         form_id=form_id,
         is_pending=False,
-        is_draft=False,
     )
     if date_filters:
         date_qid = date_filters.get("date_question_id")
@@ -600,7 +599,7 @@ def registration_in_date_range(date_filters, root_form_id, date_name):
     """Q over registration FormData: activity inside the range (D-23).
 
     Kept when the registration's own date, or the date of one of its
-    non-pending, non-draft monitoring submissions, is in the range. Each
+    non-pending monitoring submissions, is in the range. Each
     is dated as in_date_range dates it: the date question by name, else
     `created`. A monitoring family's activity is mostly monitoring, so
     the registration's `created` alone emptied every registration widget.
@@ -616,7 +615,6 @@ def registration_in_date_range(date_filters, root_form_id, date_name):
         form_id__in=child_forms,
         parent__isnull=False,
         is_pending=False,
-        is_draft=False,
     )
     return own | Q(pk__in=monitored.values("parent_id"))
 
@@ -670,7 +668,6 @@ def matching_registrations_subqueries(
             form_id__in=form_ids,
             parent__isnull=False,
             is_pending=False,
-            is_draft=False,
             pk__in=Answers.objects.filter(
                 question_id__in=monitoring_qids,
             ).values("data_id"),
@@ -690,7 +687,7 @@ def matching_registrations_subqueries(
         ).values("parent_id"))
     if registration_qids:
         own = matching(registration_qids).filter(
-            data__is_pending=False, data__is_draft=False,
+            data__is_pending=False,
         )
         if answered is not None:
             own = own.exclude(data_id__in=answered.values("parent_id"))
@@ -828,7 +825,6 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
             form=parent_form,
             parent__isnull=True,
             is_pending=False,
-            is_draft=False,
         ).annotate(
             latest_id=latest_monitoring_subquery(
                 monitoring_form_id,
@@ -853,7 +849,6 @@ def get_base_monitoring_qs(form, monitoring_form_id, params):
     qs = FormData.objects.filter(
         form_id=monitoring_form_id,
         is_pending=False,
-        is_draft=False,
     )
     if administration_id:
         qs = apply_administration_filter(

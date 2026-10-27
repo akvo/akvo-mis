@@ -1,24 +1,21 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { Switch } from '@rneui/themed';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout } from '../../components';
+import { BaseLayout, MessageNote, SettingRow, SettingSection } from '../../components';
 import { config } from './config';
 import { BuildParamsState, UIState, AuthState, UserState } from '../../store';
 import DialogForm from './DialogForm';
 import { i18n } from '../../lib';
-import { accuracyLevels } from '../../lib/loc';
 import { crudConfig } from '../../database/crud';
 
-// Define quality options inline to avoid importing expo-image-manipulator at module load time
-const imageQualityOptions = [
-  { label: 'Low', value: 'low' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'High', value: 'high' },
-  { label: 'Original', value: 'original' },
-];
+const getControl = (field) => {
+  if (field.type === 'switch') {
+    return 'toggle';
+  }
+  return field.levelKind ? 'level' : 'value';
+};
 
 const SettingsForm = ({ route }) => {
   const [edit, setEdit] = useState(null);
@@ -64,6 +61,7 @@ const SettingsForm = ({ route }) => {
   });
 
   const nonEnglish = lang !== 'en';
+  const trans = i18n.text(lang);
   const curConfig = config.find((c) => c.id === route?.params?.id);
   const pageTitle = nonEnglish ? i18n.transform(lang, curConfig)?.name : route?.params?.name;
   const db = useSQLiteContext();
@@ -154,20 +152,21 @@ const SettingsForm = ({ route }) => {
     }
   };
 
-  const renderSubtitle = ({ type: inputType, name: fieldName, description }) => {
-    const itemDesc = nonEnglish ? i18n.transform(lang, description)?.name : description?.name;
-    if (inputType === 'switch' || inputType === 'password') {
-      return itemDesc;
+  const describe = (description) =>
+    nonEnglish ? i18n.transform(lang, description)?.name : description?.name;
+
+  const renderValue = ({ type: fieldType, name: fieldName, unit, options }) => {
+    const current = settingsState?.[fieldName];
+    if (fieldType === 'switch') {
+      return current === 1;
     }
-    if (fieldName === 'gpsAccuracyLevel' && settingsState?.[fieldName]) {
-      const findLevel = accuracyLevels.find((l) => l.value === settingsState[fieldName]);
-      return findLevel?.label || itemDesc;
+    if (options) {
+      return options.find((o) => o.value === current)?.label || '';
     }
-    if (fieldName === 'imageQuality' && settingsState?.[fieldName]) {
-      const findQuality = imageQualityOptions.find((q) => q.value === settingsState[fieldName]);
-      return findQuality?.label || itemDesc;
+    if (current === null || current === undefined || current === '') {
+      return '';
     }
-    return settingsState?.[fieldName];
+    return unit ? `${current} ${unit}` : `${current}`;
   };
 
   const list = useMemo(() => {
@@ -178,38 +177,57 @@ const SettingsForm = ({ route }) => {
     return [];
   }, [route.params?.id]);
 
+  // Consecutive fields sharing a `group` render under one section title; `index` keeps the
+  // row testIDs numbered across the whole page.
+  const sections = useMemo(
+    () =>
+      list.reduce((acc, field, index) => {
+        const last = acc[acc.length - 1];
+        if (last && last.group === field.group) {
+          last.fields.push({ field, index });
+          return acc;
+        }
+        return [...acc, { group: field.group, fields: [{ field, index }] }];
+      }, []),
+    [list],
+  );
+
   return (
     <BaseLayout title={pageTitle} rightComponent={false}>
       <BaseLayout.Content>
-        <View>
-          {list.map((l, i) => {
-            const itemTitle = nonEnglish ? i18n.transform(lang, l)?.label : l.label;
-            return (
-              <TouchableOpacity
-                key={l.id}
-                testID={`settings-form-item-${i}`}
-                onPress={() => {
-                  if (l.editable && l.type !== 'switch') {
-                    handleEditPress(l.id);
-                  }
-                }}
-                style={styles.listItem}
-              >
-                <View style={styles.itemContent}>
-                  <Text style={styles.itemTitle}>{itemTitle}</Text>
-                  <Text style={styles.itemSubtitle}>{renderSubtitle(l)}</Text>
-                </View>
-                {l.type === 'switch' && (
-                  <Switch
+        <ScrollView contentContainerStyle={styles.content}>
+          {sections.map((section) => (
+            <SettingSection
+              key={section.group}
+              title={trans[section.group]}
+              testID={`settings-section-${section.group}`}
+            >
+              {section.fields.map(({ field: l, index: i }) => {
+                const itemTitle = nonEnglish ? i18n.transform(lang, l)?.label : l.label;
+                const editable = l.editable && l.type !== 'switch';
+                return (
+                  <SettingRow
+                    key={l.id}
+                    label={itemTitle}
+                    description={describe(l.description)}
+                    control={getControl(l)}
+                    value={renderValue(l)}
+                    level={{ kind: l.levelKind, value: settingsState?.[l.name] }}
+                    onPress={editable ? () => handleEditPress(l.id) : null}
                     onValueChange={(value) => handleOnSwitch(value, l.key)}
-                    value={settingsState?.[l.name] === 1}
-                    testID={`settings-form-switch-${i}`}
+                    testID={`settings-form-item-${i}`}
+                    switchTestID={`settings-form-switch-${i}`}
                   />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                );
+              })}
+            </SettingSection>
+          ))}
+          {curConfig?.note && (
+            <View style={styles.note}>
+              <MessageNote lines={[trans[curConfig.note]]} testID="settings-note" />
+            </View>
+          )}
+        </ScrollView>
         <DialogForm
           onOk={handleOKPress}
           onCancel={handleCancelPress}
@@ -223,25 +241,13 @@ const SettingsForm = ({ route }) => {
 };
 
 const styles = StyleSheet.create({
-  listItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+  content: {
+    paddingTop: 8,
+    paddingBottom: 16,
   },
-  itemContent: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  itemSubtitle: {
-    fontSize: 14,
-    color: '#666',
+  note: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
 });
 
