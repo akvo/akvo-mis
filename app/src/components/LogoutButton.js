@@ -90,7 +90,7 @@ const LogoutButton = () => {
         <View style={styles.contentContainer}>
           <Text style={styles.buttonText}>{trans.buttonReset}</Text>
         </View>
-        <Icon name="refresh" type="ionicon" color="grey" size={24} />
+        <Icon name="log-out-outline" type="ionicon" color="grey" size={24} />
       </TouchableOpacity>
       <Dialog testID="dialog-confirm-logout" isVisible={visible}>
         {loading ? <Dialog.Loading /> : <Text>{trans.confirmReset}</Text>}
