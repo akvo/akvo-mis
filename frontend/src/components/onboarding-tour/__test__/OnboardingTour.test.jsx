@@ -151,7 +151,7 @@ describe("OnboardingTour Component", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("advances from Step 1 to Step 2 when clicking 'Show me how'", () => {
+  test("advances from Step 1 to Step 2 when clicking 'Show me how' and navigates to /control-center if on another page", () => {
     store.update((s) => {
       s.tourOpen = true;
     });
@@ -167,6 +167,7 @@ describe("OnboardingTour Component", () => {
       fireEvent.click(showMeBtn);
     });
 
+    expect(mockNavigate).toHaveBeenCalledWith("/control-center");
     // Step 2 in Path A (Setup): "Build a form"
     expect(screen.getByText(/STEP 2 OF 5/i)).toBeInTheDocument();
     expect(screen.getByText("Build a form")).toBeInTheDocument();
@@ -398,5 +399,48 @@ describe("OnboardingTour Component", () => {
     expect(getStorageKey(null, null)).toBe(
       "akvo_mis_tour_completed_guest_default"
     );
+  });
+
+  test("smoothly scrolls down to #panel-submission when entering Step 4 of Setup", () => {
+    const mockScrollTo = jest.fn();
+    window.scrollTo = mockScrollTo;
+
+    const panel = document.createElement("div");
+    panel.id = "panel-submission";
+    const mockScrollIntoView = jest.fn();
+    panel.scrollIntoView = mockScrollIntoView;
+    panel.getBoundingClientRect = () => ({
+      top: 500,
+      left: 200,
+      width: 600,
+      height: 300,
+      right: 800,
+      bottom: 800,
+    });
+    document.body.appendChild(panel);
+
+    store.update((s) => {
+      s.tourOpen = true;
+      s.tourGoal = "setup";
+      s.tourStep = 3; // Step 4 of 5 ("Watch submissions arrive")
+    });
+
+    render(
+      <BrowserRouter>
+        <OnboardingTour />
+      </BrowserRouter>
+    );
+
+    expect(screen.getByText("Watch submissions arrive")).toBeInTheDocument();
+    expect(mockScrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    });
+    expect(mockScrollTo).toHaveBeenCalledWith({
+      top: 400, // 500 - 100 header offset
+      behavior: "smooth",
+    });
+
+    panel.remove();
   });
 });

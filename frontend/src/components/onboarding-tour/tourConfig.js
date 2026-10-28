@@ -137,6 +137,7 @@ export const TOUR_PATHS = Object.freeze({
       fallbackSelector: "#menu-form-builder",
       titleKey: "tourSetupStep1Title",
       descKey: "tourSetupStep1Desc",
+      illustration: "form",
     },
     {
       targetSelector: '[data-tour="sidebar-download-apps"]',
