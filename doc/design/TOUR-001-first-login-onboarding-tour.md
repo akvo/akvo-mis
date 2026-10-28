@@ -198,14 +198,22 @@ sequenceDiagram
 
 ---
 
-### Path C: `explore` — Explore Data and Dashboards (4 steps + Step 1 = 5 steps)
+### Path C: `explore` — Explore Data and Dashboards (4 steps + Step 1 = 5 steps, or 4 steps for Data Viewers)
 
 | Step | Indicator | Title | Body Text | Target Element Selector | Actions / Buttons |
 | :---: | :---: | :--- | :--- | :--- | :--- |
 | **2** | `STEP 2 OF 5` | **Browse your data** | Open Manage Data to browse, filter and review submissions by form and location. | `[data-tour="sidebar-data"]` (Sidebar Data / Manage Data) | `[Back]` `[Next]` |
-| **3** | `STEP 3 OF 5` | **Chart it in a dashboard** | Build a dashboard from your data, publish it, then keep it private or share it publicly. | `[data-tour="sidebar-dashboards"]` (Sidebar Dashboards) | `[Back]` `[Next]` |
+| **3** | `STEP 3 OF 5` | **Chart it in a dashboard** | Build a dashboard from your data, publish it, then keep it private or share it publicly. *(Omitted if user lacks `read dashboard` permission)* | `[data-tour="sidebar-dashboards"]` (Sidebar Dashboards) | `[Back]` `[Next]` |
 | **4** | `STEP 4 OF 5` | **Download your data** | Export submissions from Manage Data. Large exports run in the background and wait for you here. | `[data-tour="sidebar-downloads"]` (Sidebar Downloads) | `[Back]` `[Next]` |
-| **5** | `STEP 5 OF 5` | **Get help any time** | Have questions? Use our AI assistant anytime at the bottom right, or browse our Documentation for in-depth guides. | `[data-tour="chatbot-launcher"]` & `[data-tour="sidebar-documentation"]` | `[Back]`<br/>**Primary CTA**: `Create a dashboard` -> `/control-center/dashboard` (with create modal open) |
+| **5** | `STEP 5 OF 5` | **Get help any time** | Have questions? Use our AI assistant anytime at the bottom right, or browse our Documentation for in-depth guides. | `[data-tour="chatbot-launcher"]` & `[data-tour="sidebar-documentation"]` | `[Back]`<br/>**Primary CTA**: `Create a dashboard` -> `/control-center/dashboard` (or `Browse data` -> `/control-center/data` if user lacks dashboard create rights) |
+
+> [!NOTE]
+> **Dynamic Permission Adaptation (CASL Ability)**:
+> In Akvo MIS, `read dashboard` gates the dashboard builder and requires `can_dashboard_create/edit/publish/delete`. Users with only viewer access do not have the Dashboards sidebar menu item.
+> The tour dynamically evaluates `getTourPath(goal, ability)`:
+> 1. Restricts path steps strictly to features visible to the user's role (e.g. omitting Step 3 for Viewers so no spotlight is broken).
+> 2. Dynamically updates total steps count (`getTotalStepsForGoal(goal, ability)` -> `STEP X OF 4`).
+> 3. Resolves the final CTA dynamically (`dynamicCta`): providing "Browse data" (`/control-center/data`) instead of "Create a dashboard" to prevent 403 Forbidden navigation.
 
 ---
 

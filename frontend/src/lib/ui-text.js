@@ -1470,6 +1470,7 @@ const uiText = {
     tourExploreStep3Desc:
       "Export submissions from Manage Data. Large exports run in the background and wait for you here.",
     tourExploreFinalBtn: "Create a dashboard",
+    tourExploreViewDataBtn: "Browse data",
     tourGetHelpTitle: "Get help any time",
     tourGetHelpDesc:
       "Have questions? Use our AI assistant anytime at the bottom right, or browse our Documentation for in-depth guides.",
@@ -1523,6 +1524,7 @@ const uiText = {
     tourExploreStep3Desc:
       "Exportieren Sie Übermittlungen aus Daten verwalten. Große Exporte laufen im Hintergrund und warten hier auf Sie.",
     tourExploreFinalBtn: "Dashboard erstellen",
+    tourExploreViewDataBtn: "Daten durchsuchen",
     tourGetHelpTitle: "Jederzeit Hilfe erhalten",
     tourGetHelpDesc:
       "Haben Sie Fragen? Nutzen Sie jederzeit unseren KI-Assistenten unten rechts oder durchsuchen Sie unsere Dokumentation.",

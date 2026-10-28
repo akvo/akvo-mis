@@ -4,17 +4,19 @@ import React, {
   useMemo,
   useCallback,
   useRef,
+  useContext,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button, message } from "antd";
 import { CloseOutlined } from "@ant-design/icons";
 import { store } from "../../lib";
 import uiText from "../../lib/ui-text";
+import { ability as defineAbility, AbilityContext } from "../can";
 import {
   GOAL_DEFINITIONS,
-  TOUR_PATHS,
   getAvailableGoals,
   getRecommendedGoal,
+  getTourPath,
   getTotalStepsForGoal,
 } from "./tourConfig";
 import "./style.scss";
@@ -71,14 +73,19 @@ const OnboardingTour = () => {
     }
   }, [tourGoal, recommendedGoal, availableGoals]);
 
+  const contextAbility = useContext(AbilityContext);
+  const userAbility = useMemo(() => {
+    return contextAbility || defineAbility(authUser);
+  }, [contextAbility, authUser]);
+
   const currentGoal = selectedGoal || recommendedGoal;
-  const totalSteps = useMemo(
-    () => getTotalStepsForGoal(currentGoal),
-    [currentGoal]
-  );
   const currentPath = useMemo(
-    () => TOUR_PATHS[currentGoal] || [],
-    [currentGoal]
+    () => getTourPath(currentGoal, userAbility),
+    [currentGoal, userAbility]
+  );
+  const totalSteps = useMemo(
+    () => getTotalStepsForGoal(currentGoal, userAbility),
+    [currentGoal, userAbility]
   );
   const currentStepConfig = useMemo(() => {
     if (tourStep <= 0 || !currentPath) {

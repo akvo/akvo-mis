@@ -19,6 +19,7 @@ describe("OnboardingTour Component", () => {
       s.user = {
         id: 42,
         email: "admin@akvo.org",
+        is_superuser: true,
         roles: [{ role: "Admin", can_form_builder: true }],
       };
       s.tenant = { subdomain: "test-workspace" };
@@ -390,6 +391,78 @@ describe("OnboardingTour Component", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/control-center/dashboard", {
       state: { openCreate: true },
     });
+  });
+
+  test("adapts Explore tour for Data Viewer lacking dashboard permission (skips dashboard step and provides Browse data CTA)", () => {
+    // Setup DOM targets
+    const dataTarget = document.createElement("div");
+    dataTarget.setAttribute("data-tour", "sidebar-data");
+    const downloadsTarget = document.createElement("div");
+    downloadsTarget.setAttribute("data-tour", "sidebar-downloads");
+    const helpTarget = document.createElement("div");
+    helpTarget.className = "chatbot-fab-btn";
+
+    document.body.appendChild(dataTarget);
+    document.body.appendChild(downloadsTarget);
+    document.body.appendChild(helpTarget);
+
+    store.update((s) => {
+      s.user = {
+        id: 99,
+        email: "viewer@akvo.org",
+        roles: [{ role: "Data Viewer", can_dashboard_view: true }],
+      };
+      s.tourOpen = true;
+      s.tourGoal = "explore";
+      s.tourStep = 0; // Step 1 Welcome modal
+    });
+
+    const { unmount } = render(
+      <BrowserRouter>
+        <OnboardingTour />
+      </BrowserRouter>
+    );
+
+    // Total steps for Data Viewer should be 4 (not 5)
+    expect(screen.getByText(/STEP 1 OF 4/i)).toBeInTheDocument();
+
+    // Advance to Step 2 (Manage Data)
+    act(() => {
+      fireEvent.click(screen.getByText("Show me how"));
+    });
+    expect(screen.getByText(/STEP 2 OF 4/i)).toBeInTheDocument();
+    expect(screen.getByText("Browse your data")).toBeInTheDocument();
+
+    // Advance to Step 3 (Downloads - skips sidebar-dashboards!)
+    act(() => {
+      fireEvent.click(screen.getByText("Next"));
+    });
+    expect(screen.getByText(/STEP 3 OF 4/i)).toBeInTheDocument();
+    expect(screen.getByText("Download your data")).toBeInTheDocument();
+
+    // Advance to Step 4 (Get help)
+    act(() => {
+      fireEvent.click(screen.getByText("Next"));
+    });
+    expect(screen.getByText(/STEP 4 OF 4/i)).toBeInTheDocument();
+    expect(screen.getByText("Get help any time")).toBeInTheDocument();
+
+    // CTA should say "Browse data" instead of "Create a dashboard"
+    const ctaBtn = screen.getByText("Browse data");
+    expect(ctaBtn).toBeInTheDocument();
+    expect(screen.queryByText("Create a dashboard")).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(ctaBtn);
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith("/control-center/data", {});
+    expect(store.getRawState().tourOpen).toBe(false);
+
+    unmount();
+    dataTarget.remove();
+    downloadsTarget.remove();
+    helpTarget.remove();
   });
 
   test("getStorageKey generates correct scoped localStorage key", () => {

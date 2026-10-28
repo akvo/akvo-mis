@@ -92,22 +92,19 @@ export const getRecommendedGoal = (user) => {
 };
 
 /**
- * Returns total steps count for a given goal (including Step 1 Goal Picker).
+ * Returns total steps count for a given goal (including Step 1 Goal Picker),
+ * optionally adapting to user ability permissions.
  * - setup: 5 (Step 1 + 4 path steps)
  * - review: 4 (Step 1 + 3 path steps)
- * - explore: 5 (Step 1 + 4 path steps)
+ * - explore: 5 (Step 1 + 4 path steps, or fewer if permissions are restricted)
  * @param {string} goal
+ * @param {object|null} ability
  * @returns {number}
  */
-export const getTotalStepsForGoal = (goal) => {
-  if (goal === GOALS.SETUP) {
-    return 5;
-  }
-  if (goal === GOALS.REVIEW) {
-    return 4;
-  }
-  if (goal === GOALS.EXPLORE) {
-    return 5;
+export const getTotalStepsForGoal = (goal, ability = null) => {
+  const path = getTourPath(goal, ability);
+  if (path && path.length > 0) {
+    return path.length + 1;
   }
   return 5;
 };
@@ -138,6 +135,7 @@ export const TOUR_PATHS = Object.freeze({
       titleKey: "tourSetupStep1Title",
       descKey: "tourSetupStep1Desc",
       illustration: "form",
+      permission: (ability) => ability.can("read", "form-builder"),
     },
     {
       targetSelector: '[data-tour="sidebar-download-apps"]',
@@ -146,12 +144,15 @@ export const TOUR_PATHS = Object.freeze({
       descKey: "tourSetupStep2Desc",
       action: "copy_app_link",
       actionLabelKey: "tourCopyAppLink",
+      permission: (ability) => ability.can("manage", "mobile"),
     },
     {
       targetSelector: "#panel-submission",
       fallbackSelector: '[data-tour="sidebar-data"]',
       titleKey: "tourSetupStep3Title",
       descKey: "tourSetupStep3Desc",
+      permission: (ability) =>
+        ability.can("manage", "submissions") || ability.can("read", "data"),
     },
     {
       targetSelector: ".chatbot-fab-btn",
@@ -160,6 +161,18 @@ export const TOUR_PATHS = Object.freeze({
       descKey: "tourGetHelpDesc",
       ctaLabelKey: "tourSetupFinalBtn",
       ctaRoute: "/control-center/form-builder/create",
+      dynamicCta: (ability) => {
+        if (ability.can("create", "form-builder")) {
+          return {
+            ctaLabelKey: "tourSetupFinalBtn",
+            ctaRoute: "/control-center/form-builder/create",
+          };
+        }
+        return {
+          ctaLabelKey: "tourExploreViewDataBtn",
+          ctaRoute: "/control-center/data",
+        };
+      },
     },
   ],
   [GOALS.REVIEW]: [
@@ -168,12 +181,15 @@ export const TOUR_PATHS = Object.freeze({
       fallbackSelector: '[data-tour="sidebar-data"]',
       titleKey: "tourReviewStep1Title",
       descKey: "tourReviewStep1Desc",
+      permission: (ability) =>
+        ability.can("manage", "approvals") || ability.can("read", "approvals"),
     },
     {
       targetSelector: '[data-tour="sidebar-data"]',
       fallbackSelector: "#menu-data",
       titleKey: "tourReviewStep2Title",
       descKey: "tourReviewStep2Desc",
+      permission: (ability) => ability.can("read", "data"),
     },
     {
       targetSelector: ".chatbot-fab-btn",
@@ -182,6 +198,18 @@ export const TOUR_PATHS = Object.freeze({
       descKey: "tourGetHelpDesc",
       ctaLabelKey: "tourReviewFinalBtn",
       ctaRoute: "/control-center/approvals",
+      dynamicCta: (ability) => {
+        if (ability.can("manage", "approvals")) {
+          return {
+            ctaLabelKey: "tourReviewFinalBtn",
+            ctaRoute: "/control-center/approvals",
+          };
+        }
+        return {
+          ctaLabelKey: "tourExploreViewDataBtn",
+          ctaRoute: "/control-center/data",
+        };
+      },
     },
   ],
   [GOALS.EXPLORE]: [
@@ -190,18 +218,22 @@ export const TOUR_PATHS = Object.freeze({
       fallbackSelector: "#menu-data",
       titleKey: "tourExploreStep1Title",
       descKey: "tourExploreStep1Desc",
+      permission: (ability) => ability.can("read", "data"),
     },
     {
       targetSelector: '[data-tour="sidebar-dashboards"]',
       fallbackSelector: "#menu-dashboards",
       titleKey: "tourExploreStep2Title",
       descKey: "tourExploreStep2Desc",
+      permission: (ability) =>
+        ability.can("read", "dashboard") || ability.can("manage", "dashboard"),
     },
     {
       targetSelector: '[data-tour="sidebar-downloads"]',
       fallbackSelector: "#menu-downloads",
       titleKey: "tourExploreStep3Title",
       descKey: "tourExploreStep3Desc",
+      permission: (ability) => ability.can("read", "downloads"),
     },
     {
       targetSelector: ".chatbot-fab-btn",
@@ -211,6 +243,54 @@ export const TOUR_PATHS = Object.freeze({
       ctaLabelKey: "tourExploreFinalBtn",
       ctaRoute: "/control-center/dashboard",
       ctaState: { openCreate: true },
+      dynamicCta: (ability) => {
+        if (
+          ability.can("create", "dashboard") ||
+          ability.can("manage", "dashboard")
+        ) {
+          return {
+            ctaLabelKey: "tourExploreFinalBtn",
+            ctaRoute: "/control-center/dashboard",
+            ctaState: { openCreate: true },
+          };
+        }
+        return {
+          ctaLabelKey: "tourExploreViewDataBtn",
+          ctaRoute: "/control-center/data",
+          ctaState: null,
+        };
+      },
     },
   ],
 });
+
+/**
+ * Resolves the active tour path for a given goal, dynamically filtering steps
+ * and tailoring final CTAs based on CASL ability permissions.
+ * @param {string} goal
+ * @param {object|null} ability
+ * @returns {Array<object>}
+ */
+export const getTourPath = (goal, ability = null) => {
+  const basePath = TOUR_PATHS[goal] || [];
+  if (!ability || typeof ability.can !== "function") {
+    return basePath;
+  }
+
+  const filtered = basePath.filter((step) => {
+    if (!step.permission) {
+      return true;
+    }
+    return step.permission(ability);
+  });
+
+  return filtered.map((step) => {
+    if (step.dynamicCta) {
+      return {
+        ...step,
+        ...step.dynamicCta(ability),
+      };
+    }
+    return step;
+  });
+};

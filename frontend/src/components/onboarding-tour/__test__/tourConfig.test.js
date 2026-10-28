@@ -4,6 +4,7 @@ import {
   TOUR_PATHS,
   getAvailableGoals,
   getRecommendedGoal,
+  getTourPath,
   getTotalStepsForGoal,
 } from "../tourConfig";
 
@@ -92,6 +93,108 @@ describe("tourConfig - Role Engine & Goal Routing", () => {
 
     test("defaults to 5 steps for unknown goal", () => {
       expect(getTotalStepsForGoal("unknown")).toBe(5);
+    });
+
+    test("adapts total steps dynamically when user lacks dashboard permission in explore goal", () => {
+      const viewerAbility = {
+        can: (action, subject) => {
+          if (subject === "dashboard") {
+            return false;
+          }
+          if (subject === "data" || subject === "downloads") {
+            return true;
+          }
+          return false;
+        },
+      };
+      // Explore has 3 valid path steps for viewer + 1 Welcome modal = 4 total steps
+      expect(getTotalStepsForGoal(GOALS.EXPLORE, viewerAbility)).toBe(4);
+    });
+  });
+
+  describe("getTourPath - Role-Adaptive Permissions & Dynamic CTA", () => {
+    test("returns raw basePath when ability is null or not provided", () => {
+      expect(getTourPath(GOALS.EXPLORE, null)).toEqual(
+        TOUR_PATHS[GOALS.EXPLORE]
+      );
+      expect(getTourPath(GOALS.EXPLORE)).toEqual(TOUR_PATHS[GOALS.EXPLORE]);
+    });
+
+    test("returns empty array for unknown goal", () => {
+      expect(getTourPath("unknown", null)).toEqual([]);
+    });
+
+    test("includes all steps and create dashboard CTA for admin/superuser ability", () => {
+      const adminAbility = {
+        can: () => true,
+      };
+      const path = getTourPath(GOALS.EXPLORE, adminAbility);
+      expect(path).toHaveLength(4);
+      expect(path.map((s) => s.targetSelector)).toEqual([
+        '[data-tour="sidebar-data"]',
+        '[data-tour="sidebar-dashboards"]',
+        '[data-tour="sidebar-downloads"]',
+        ".chatbot-fab-btn",
+      ]);
+      const lastStep = path[3];
+      expect(lastStep.ctaLabelKey).toBe("tourExploreFinalBtn");
+      expect(lastStep.ctaRoute).toBe("/control-center/dashboard");
+      expect(lastStep.ctaState).toEqual({ openCreate: true });
+    });
+
+    test("filters out sidebar-dashboards and provides Browse Data CTA for Data Viewer", () => {
+      const viewerAbility = {
+        can: (action, subject) => {
+          if (subject === "dashboard") {
+            return false;
+          }
+          if (subject === "data" || subject === "downloads") {
+            return true;
+          }
+          return false;
+        },
+      };
+      const path = getTourPath(GOALS.EXPLORE, viewerAbility);
+      expect(path).toHaveLength(3);
+      expect(path.map((s) => s.targetSelector)).toEqual([
+        '[data-tour="sidebar-data"]',
+        '[data-tour="sidebar-downloads"]',
+        ".chatbot-fab-btn",
+      ]);
+      const lastStep = path[2];
+      expect(lastStep.ctaLabelKey).toBe("tourExploreViewDataBtn");
+      expect(lastStep.ctaRoute).toBe("/control-center/data");
+      expect(lastStep.ctaState).toBeNull();
+    });
+
+    test("falls back to Browse Data CTA on setup path if user cannot create forms", () => {
+      const restrictedAbility = {
+        can: (action, subject) => {
+          if (subject === "form-builder" && action === "create") {
+            return false;
+          }
+          return true;
+        },
+      };
+      const path = getTourPath(GOALS.SETUP, restrictedAbility);
+      const lastStep = path[path.length - 1];
+      expect(lastStep.ctaLabelKey).toBe("tourExploreViewDataBtn");
+      expect(lastStep.ctaRoute).toBe("/control-center/data");
+    });
+
+    test("falls back to Browse Data CTA on review path if user cannot manage approvals", () => {
+      const restrictedAbility = {
+        can: (action, subject) => {
+          if (subject === "approvals" && action === "manage") {
+            return false;
+          }
+          return true;
+        },
+      };
+      const path = getTourPath(GOALS.REVIEW, restrictedAbility);
+      const lastStep = path[path.length - 1];
+      expect(lastStep.ctaLabelKey).toBe("tourExploreViewDataBtn");
+      expect(lastStep.ctaRoute).toBe("/control-center/data");
     });
   });
 
