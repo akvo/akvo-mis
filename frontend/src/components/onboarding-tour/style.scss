@@ -48,7 +48,7 @@
 
   &.popover-view {
     position: fixed;
-    width: 390px;
+    width: 440px;
     max-width: calc(100vw - 32px);
     padding: 20px 24px;
     transition: top 0.2s ease, left 0.2s ease;
@@ -354,6 +354,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    // Long CTA labels (e.g. French "Créer votre premier formulaire") need room:
+    // let the footer drop onto a second row rather than overflow the card.
+    flex-wrap: wrap;
 
     .tour-footer-left {
       display: flex;
@@ -368,6 +371,7 @@
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
+      justify-content: flex-end;
 
       .ant-btn {
         white-space: nowrap;

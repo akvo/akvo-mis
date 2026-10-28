@@ -1476,59 +1476,7 @@ const uiText = {
       "Have questions? Use our AI assistant anytime at the bottom right, or browse our Documentation for in-depth guides.",
   },
 
-  de: {
-    menuProductTour: "Tour starten",
-    tourWelcomeTitle: "Willkommen bei Akvo MIS",
-    tourWelcomeSubtitle:
-      "Was möchten Sie zuerst tun? Wir zeigen es Ihnen in weniger als einer Minute.",
-    tourGoalRecommended: "Empfohlen",
-    tourGoalSetupTitle: "Datenerfassung einrichten",
-    tourGoalSetupDesc: "Formular erstellen und an Ihr Außendienstteam senden",
-    tourGoalReviewTitle: "Daten prüfen und genehmigen",
-    tourGoalReviewDesc: "Ausstehende Übermittlungen prüfen",
-    tourGoalExploreTitle: "Daten und Dashboards erkunden",
-    tourGoalExploreDesc:
-      "Ergebnisse durchsuchen, visualisieren und herunterladen",
-    tourBtnShowMeHow: "Zeig mir wie",
-    tourBtnSkip: "Überspringen",
-    tourBtnBack: "Zurück",
-    tourBtnNext: "Weiter",
-    tourStepOf: "SCHRITT {current} VON {total}",
-    tourCopyAppLink: "App-Link kopieren",
-    tourLinkCopied: "App-Download-Link in die Zwischenablage kopiert",
-    tourLinkCopyError: "Link konnte nicht kopiert werden",
-    tourSetupStep1Title: "Formular erstellen",
-    tourSetupStep1Desc:
-      "Fügen Sie Abschnitte und Fragen hinzu und veröffentlichen Sie es. Ihr Außendienstteam kann es sofort ausfüllen.",
-    tourSetupStep2Title: "Bringen Sie die App zu Ihrem Außendienstteam",
-    tourSetupStep2Desc:
-      "Ihr Außendienstteam erfasst Daten offline in der mobilen App. Teilen Sie den Download-Link mit ihnen.",
-    tourSetupStep3Title: "Eingehende Übermittlungen beobachten",
-    tourSetupStep3Desc:
-      "Neue Übermittlungen aus dem Feld erscheinen hier. Filtern Sie nach Formular oder fügen Sie selbst über das Web eine hinzu.",
-    tourSetupFinalBtn: "Erstes Formular erstellen",
-    tourReviewStep1Title: "Ihre ausstehenden Genehmigungen",
-    tourReviewStep1Desc:
-      "Übermittlungen, die auf Ihre Entscheidung warten, landen hier. Sie können auch sehen, was Ihre untergeordneten Genehmiger noch prüfen müssen.",
-    tourReviewStep2Title: "Übermittlungen prüfen",
-    tourReviewStep2Desc:
-      "Öffnen Sie Daten verwalten, um Übermittlungen zu durchsuchen und zu filtern. Genehmigungen und Entwürfe befinden sich ebenfalls unter Daten.",
-    tourReviewFinalBtn: "Ausstehende Genehmigungen prüfen",
-    tourExploreStep1Title: "Ihre Daten durchsuchen",
-    tourExploreStep1Desc:
-      "Öffnen Sie Daten verwalten, um Übermittlungen nach Formular und Standort zu durchsuchen, zu filtern und zu prüfen.",
-    tourExploreStep2Title: "In einem Dashboard visualisieren",
-    tourExploreStep2Desc:
-      "Erstellen Sie ein Dashboard aus Ihren Daten, veröffentlichen Sie es und halten Sie es privat oder teilen Sie es öffentlich.",
-    tourExploreStep3Title: "Ihre Daten herunterladen",
-    tourExploreStep3Desc:
-      "Exportieren Sie Übermittlungen aus Daten verwalten. Große Exporte laufen im Hintergrund und warten hier auf Sie.",
-    tourExploreFinalBtn: "Dashboard erstellen",
-    tourExploreViewDataBtn: "Daten durchsuchen",
-    tourGetHelpTitle: "Jederzeit Hilfe erhalten",
-    tourGetHelpDesc:
-      "Haben Sie Fragen? Nutzen Sie jederzeit unseren KI-Assistenten unten rechts oder durchsuchen Sie unsere Dokumentation.",
-  },
+  de: {},
 };
 
 uiText.fr = {
@@ -1916,6 +1864,59 @@ uiText.fr = {
   brandingUploadBtn: "Téléverser le logo",
   brandingCurrentLogo: "Logo actuel",
   brandingNoLogo: "Aucun logo personnalisé (logo Akvo par défaut)",
+
+  // Onboarding Tour
+  tourWelcomeTitle: "Bienvenue sur Akvo MIS",
+  tourWelcomeSubtitle:
+    "Que souhaitez-vous faire en premier ? Nous vous guidons en moins d'une minute.",
+  tourGoalRecommended: "Recommandé",
+  tourGoalSetupTitle: "Mettre en place une collecte de données",
+  tourGoalSetupDesc:
+    "Créez un formulaire et transmettez-le à votre équipe de terrain",
+  tourGoalReviewTitle: "Examiner et approuver les données",
+  tourGoalReviewDesc: "Vérifiez les soumissions en attente",
+  tourGoalExploreTitle: "Explorer les données et les tableaux de bord",
+  tourGoalExploreDesc: "Parcourez, visualisez et téléchargez les résultats",
+  tourBtnShowMeHow: "Montrez-moi comment",
+  tourBtnSkip: "Passer",
+  tourBtnBack: "Retour",
+  tourBtnNext: "Suivant",
+  tourStepOf: "ÉTAPE {current} SUR {total}",
+  tourCopyAppLink: "Copier le lien de l'application",
+  tourLinkCopied:
+    "Lien de téléchargement de l'application copié dans le presse-papiers",
+  tourLinkCopyError: "Impossible de copier le lien",
+  tourSetupStep1Title: "Créer un formulaire",
+  tourSetupStep1Desc:
+    "Ajoutez des sections et des questions, puis publiez. Votre équipe de terrain pourra le remplir dès sa publication.",
+  tourSetupStep2Title: "Transmettre l'application à votre équipe de terrain",
+  tourSetupStep2Desc:
+    "Votre équipe de terrain collecte les données hors ligne dans l'application mobile. Partagez le lien de téléchargement avec elle.",
+  tourSetupStep3Title: "Suivre l'arrivée des soumissions",
+  tourSetupStep3Desc:
+    "Les nouvelles soumissions du terrain apparaissent ici. Filtrez par formulaire ou ajoutez-en une vous-même depuis le web.",
+  tourSetupFinalBtn: "Créer votre premier formulaire",
+  tourReviewStep1Title: "Vos approbations en attente",
+  tourReviewStep1Desc:
+    "Les soumissions en attente de votre décision arrivent ici. Vous pouvez aussi voir ce que vos approbateurs subordonnés doivent encore examiner.",
+  tourReviewStep2Title: "Examiner les soumissions",
+  tourReviewStep2Desc:
+    "Ouvrez Gérer les données pour parcourir et filtrer les soumissions. Les approbations et les brouillons se trouvent également sous Données.",
+  tourReviewFinalBtn: "Examiner les approbations en attente",
+  tourExploreStep1Title: "Parcourir vos données",
+  tourExploreStep1Desc:
+    "Ouvrez Gérer les données pour parcourir, filtrer et examiner les soumissions par formulaire et par lieu.",
+  tourExploreStep2Title: "Visualiser dans un tableau de bord",
+  tourExploreStep2Desc:
+    "Créez un tableau de bord à partir de vos données, publiez-le, puis gardez-le privé ou partagez-le publiquement.",
+  tourExploreStep3Title: "Télécharger vos données",
+  tourExploreStep3Desc:
+    "Exportez les soumissions depuis Gérer les données. Les exports volumineux s'exécutent en arrière-plan et vous attendent ici.",
+  tourExploreFinalBtn: "Créer un tableau de bord",
+  tourExploreViewDataBtn: "Parcourir les données",
+  tourGetHelpTitle: "Obtenir de l'aide à tout moment",
+  tourGetHelpDesc:
+    "Des questions ? Utilisez notre assistant IA à tout moment en bas à droite, ou consultez notre documentation.",
 };
 
 export default uiText;

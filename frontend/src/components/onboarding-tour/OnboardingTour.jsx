@@ -144,7 +144,7 @@ const OnboardingTour = () => {
     const PADDING = 6;
     const POPOVER_OFFSET = 12;
     const cardEl = cardRef.current;
-    const cardWidth = cardEl?.offsetWidth || 390;
+    const cardWidth = cardEl?.offsetWidth || 440;
     const cardHeight = cardEl?.offsetHeight || 250;
 
     const isCircular =

@@ -80,7 +80,7 @@ Goal:
 ### 2.3 Technical Acceptance Criteria
 - [ ] Ant Design 4 compatible (does not rely on antd v5 Tour component).
 - [ ] Zero external dependencies added to `frontend/package.json`.
-- [ ] Multi-language support in `frontend/src/lib/ui-text.js` (English and German).
+- [ ] Multi-language support in `frontend/src/lib/ui-text.js` (English and French — the two languages offered at registration; `de` is an unused legacy stub).
 - [ ] Unit and component test coverage ≥80% for all new and modified frontend files.
 - [ ] ESLint strict compliance (`curly: error`, `no-undefined: warn`, `prefer-arrow-callback: error`).
 
@@ -385,5 +385,5 @@ sequenceDiagram
 | **TOUR-02** | **Core OnboardingTour Component & Styling**<br/>`OnboardingTour.jsx` & `style.scss` with backdrop overlay, spotlight calculation, Step 1 Goal Picker, and step navigation. | 35m | 25m | 15m | **75m (1.25h)** | P1 |
 | **TOUR-03** | **Interactive Actions & Final CTAs**<br/>"Copy app link" button with clipboard write, final step navigation buttons (Form Builder, Approvals, Dashboard Create modal trigger). | 20m | 15m | 10m | **45m (0.75h)** | P1 |
 | **TOUR-04** | **Sidebar Menu & First-Login Persistence**<br/>Add "Take a Tour" below Documentation in `sidebar/index.jsx`, auto-trigger in `App.js` with `localStorage` scoping, and Pullstate store hooks. | 20m | 15m | 10m | **45m (0.75h)** | P1 |
-| **TOUR-05** | **Localization (i18n) & Regression Suite**<br/>Add English and German keys to `ui-text.js`, update snapshots, and run full frontend test & lint suites. | 15m | 15m | 10m | **40m (0.65h)** | P2 |
+| **TOUR-05** | **Localization (i18n) & Regression Suite**<br/>Add English and French keys to `ui-text.js`, update snapshots, and run full frontend test & lint suites. | 15m | 15m | 10m | **40m (0.65h)** | P2 |
 | **TOTAL** | **Full Feature Implementation** | **110m** | **85m** | **55m** | **250m (~4.1h)** | - |
