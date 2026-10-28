@@ -34,6 +34,7 @@ const uiText = {
     menuManageDraft: "Manage Drafts",
     menuDownloadApps: "Download App",
     menuDocumentation: "Documentation",
+    menuProductTour: "Take a tour",
     menuFormBuilder: "Form Builder",
     menuDashboards: "Dashboards",
     menuSettings: "Settings",
@@ -1422,6 +1423,57 @@ const uiText = {
     brandingUploadBtn: "Upload logo",
     brandingCurrentLogo: "Current logo",
     brandingNoLogo: "No custom logo set (using default Akvo logo)",
+
+    // Onboarding Tour
+    tourWelcomeTitle: "Welcome to Akvo MIS",
+    tourWelcomeSubtitle:
+      "What do you want to do first? We’ll show you around in under a minute.",
+    tourGoalRecommended: "Recommended",
+    tourGoalSetupTitle: "Set up a data collection",
+    tourGoalSetupDesc: "Build a form and get it to your field team",
+    tourGoalReviewTitle: "Review and approve data",
+    tourGoalReviewDesc: "Check submissions waiting for you",
+    tourGoalExploreTitle: "Explore data and dashboards",
+    tourGoalExploreDesc: "Browse, chart and download results",
+    tourBtnShowMeHow: "Show me how",
+    tourBtnSkip: "Skip",
+    tourBtnBack: "Back",
+    tourBtnNext: "Next",
+    tourStepOf: "STEP {current} OF {total}",
+    tourCopyAppLink: "Copy app link",
+    tourLinkCopied: "App download link copied to clipboard",
+    tourLinkCopyError: "Unable to copy link to clipboard",
+    tourSetupStep1Title: "Build a form",
+    tourSetupStep1Desc:
+      "Add sections and questions, then publish. Your field team can fill it in as soon as it is published.",
+    tourSetupStep2Title: "Get the app to your field team",
+    tourSetupStep2Desc:
+      "Your field team collects data offline in the mobile app. Share the download link with them.",
+    tourSetupStep3Title: "Watch submissions arrive",
+    tourSetupStep3Desc:
+      "New submissions from the field appear here. Filter by form, or add one yourself from the web.",
+    tourSetupFinalBtn: "Create your first form",
+    tourReviewStep1Title: "Your pending approvals",
+    tourReviewStep1Desc:
+      "Submissions waiting for your decision land here. You can also see what your subordinate approvers still have to review.",
+    tourReviewStep2Title: "Review submissions",
+    tourReviewStep2Desc:
+      "Open Manage Data to browse and filter submissions. Approvals and drafts also live under Data.",
+    tourReviewFinalBtn: "Review pending approvals",
+    tourExploreStep1Title: "Browse your data",
+    tourExploreStep1Desc:
+      "Open Manage Data to browse, filter and review submissions by form and location.",
+    tourExploreStep2Title: "Chart it in a dashboard",
+    tourExploreStep2Desc:
+      "Build a dashboard from your data, publish it, then keep it private or share it publicly.",
+    tourExploreStep3Title: "Download your data",
+    tourExploreStep3Desc:
+      "Export submissions from Manage Data. Large exports run in the background and wait for you here.",
+    tourExploreFinalBtn: "Create a dashboard",
+    tourExploreViewDataBtn: "Browse data",
+    tourGetHelpTitle: "Get help any time",
+    tourGetHelpDesc:
+      "Have questions? Use our AI assistant anytime at the bottom right, or browse our Documentation for in-depth guides.",
   },
 
   de: {},
@@ -1452,6 +1504,7 @@ uiText.fr = {
   menuManageDraft: "Gérer les brouillons",
   menuDownloadApps: "Télécharger l'application",
   menuDocumentation: "Documentation",
+  menuProductTour: "Faire une visite guidée",
   menuFormBuilder: "Générateur de formulaires",
   menuDashboards: "Tableaux de bord",
   menuSettings: "Paramètres",
@@ -1811,6 +1864,59 @@ uiText.fr = {
   brandingUploadBtn: "Téléverser le logo",
   brandingCurrentLogo: "Logo actuel",
   brandingNoLogo: "Aucun logo personnalisé (logo Akvo par défaut)",
+
+  // Onboarding Tour
+  tourWelcomeTitle: "Bienvenue sur Akvo MIS",
+  tourWelcomeSubtitle:
+    "Que souhaitez-vous faire en premier ? Nous vous guidons en moins d'une minute.",
+  tourGoalRecommended: "Recommandé",
+  tourGoalSetupTitle: "Mettre en place une collecte de données",
+  tourGoalSetupDesc:
+    "Créez un formulaire et transmettez-le à votre équipe de terrain",
+  tourGoalReviewTitle: "Examiner et approuver les données",
+  tourGoalReviewDesc: "Vérifiez les soumissions en attente",
+  tourGoalExploreTitle: "Explorer les données et les tableaux de bord",
+  tourGoalExploreDesc: "Parcourez, visualisez et téléchargez les résultats",
+  tourBtnShowMeHow: "Montrez-moi comment",
+  tourBtnSkip: "Passer",
+  tourBtnBack: "Retour",
+  tourBtnNext: "Suivant",
+  tourStepOf: "ÉTAPE {current} SUR {total}",
+  tourCopyAppLink: "Copier le lien de l'application",
+  tourLinkCopied:
+    "Lien de téléchargement de l'application copié dans le presse-papiers",
+  tourLinkCopyError: "Impossible de copier le lien",
+  tourSetupStep1Title: "Créer un formulaire",
+  tourSetupStep1Desc:
+    "Ajoutez des sections et des questions, puis publiez. Votre équipe de terrain pourra le remplir dès sa publication.",
+  tourSetupStep2Title: "Transmettre l'application à votre équipe de terrain",
+  tourSetupStep2Desc:
+    "Votre équipe de terrain collecte les données hors ligne dans l'application mobile. Partagez le lien de téléchargement avec elle.",
+  tourSetupStep3Title: "Suivre l'arrivée des soumissions",
+  tourSetupStep3Desc:
+    "Les nouvelles soumissions du terrain apparaissent ici. Filtrez par formulaire ou ajoutez-en une vous-même depuis le web.",
+  tourSetupFinalBtn: "Créer votre premier formulaire",
+  tourReviewStep1Title: "Vos approbations en attente",
+  tourReviewStep1Desc:
+    "Les soumissions en attente de votre décision arrivent ici. Vous pouvez aussi voir ce que vos approbateurs subordonnés doivent encore examiner.",
+  tourReviewStep2Title: "Examiner les soumissions",
+  tourReviewStep2Desc:
+    "Ouvrez Gérer les données pour parcourir et filtrer les soumissions. Les approbations et les brouillons se trouvent également sous Données.",
+  tourReviewFinalBtn: "Examiner les approbations en attente",
+  tourExploreStep1Title: "Parcourir vos données",
+  tourExploreStep1Desc:
+    "Ouvrez Gérer les données pour parcourir, filtrer et examiner les soumissions par formulaire et par lieu.",
+  tourExploreStep2Title: "Visualiser dans un tableau de bord",
+  tourExploreStep2Desc:
+    "Créez un tableau de bord à partir de vos données, publiez-le, puis gardez-le privé ou partagez-le publiquement.",
+  tourExploreStep3Title: "Télécharger vos données",
+  tourExploreStep3Desc:
+    "Exportez les soumissions depuis Gérer les données. Les exports volumineux s'exécutent en arrière-plan et vous attendent ici.",
+  tourExploreFinalBtn: "Créer un tableau de bord",
+  tourExploreViewDataBtn: "Parcourir les données",
+  tourGetHelpTitle: "Obtenir de l'aide à tout moment",
+  tourGetHelpDesc:
+    "Des questions ? Utilisez notre assistant IA à tout moment en bas à droite, ou consultez notre documentation.",
 };
 
 export default uiText;

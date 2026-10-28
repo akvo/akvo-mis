@@ -13,7 +13,7 @@ import {
   DeleteOutlined,
   ExclamationCircleOutlined,
 } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { store, uiText } from "../../lib";
 import { AbilityContext } from "../../components/can";
 import dashboardApi from "../../util/dashboardApi";
@@ -37,6 +37,7 @@ const DashboardList = () => {
   const [forbidden, setForbidden] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const ability = useContext(AbilityContext);
   const { language } = store.useState((s) => s);
   const { active: activeLang } = language;
@@ -71,6 +72,16 @@ const DashboardList = () => {
   useEffect(() => {
     fetchDashboards();
   }, [fetchDashboards]);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (
+      (location.state?.openCreate || searchParams.get("create") === "true") &&
+      canCreate
+    ) {
+      setCreateVisible(true);
+    }
+  }, [location.state, location.search, canCreate]);
 
   const handleCreate = useCallback(
     (created) => {

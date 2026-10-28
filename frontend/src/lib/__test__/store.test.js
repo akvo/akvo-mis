@@ -35,6 +35,9 @@ describe("Store", () => {
 
     // Example of property in the store
     expect(store.initialState.user).toBeNull();
+    expect(store.initialState.tourOpen).toBe(false);
+    expect(store.initialState.tourGoal).toBeNull();
+    expect(store.initialState.tourStep).toBe(0);
 
     // Snapshot
     expect(store.currentState).toMatchSnapshot();
