@@ -646,11 +646,15 @@ const App = () => {
   useEffect(() => {
     if (
       !authUser ||
+      !authUser.configured ||
       authUser.is_inspecting ||
       onAdminHost() ||
       public_state ||
       !tenantLoaded
     ) {
+      // An unconfigured workspace is locked to /configure and has no
+      // Control Center or sidebar for the tour to spotlight, so launching
+      // it there just covers the mandatory setup form.
       return;
     }
     const tenantSubdomain = tenant?.subdomain || "default";
