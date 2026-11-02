@@ -1,3 +1,6 @@
+import contextvars
+from contextlib import contextmanager
+from functools import wraps
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
 from django.db.models.signals import pre_save
@@ -10,6 +13,49 @@ from api.v1.v1_profile.constants import (
 from api.v1.v1_users.models import SystemUser
 from utils.tenant_model import tenant_fk
 from utils.tenant_scoped_model import TenantManager
+
+# Opt-in, scope-local cache of administration_column by pk. Resolving a
+# column walks the administration's ancestors (a query), and bulk exports
+# render the same handful of administrations across thousands of rows.
+# When this is set (see administration_column_cache) those lookups are
+# computed once per pk; outside that scope it stays None and nothing caches,
+# so ordinary reads keep their live behaviour.
+_admin_column_cache = contextvars.ContextVar(
+    "admin_column_cache", default=None
+)
+
+
+@contextmanager
+def administration_column_cache():
+    """Within this block, Administration.administration_column results are
+    memoised by pk. Used to wrap bulk data exports."""
+    token = _admin_column_cache.set({})
+    try:
+        yield
+    finally:
+        _admin_column_cache.reset(token)
+
+
+def with_administration_column_cache(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        with administration_column_cache():
+            return fn(*args, **kwargs)
+    return wrapper
+
+
+def administration_column_for_pk(pk):
+    """administration_column for an administration referenced by pk, e.g. a
+    cascade answer. Uses the export cache when active so a repeated pk is not
+    re-fetched."""
+    if pk is None:
+        return None
+    cache = _admin_column_cache.get()
+    if cache is not None and pk in cache:
+        return cache[pk]
+    adm = Administration.objects.filter(pk=pk).first()
+    # administration_column fills the cache for its own pk when active.
+    return adm.administration_column if adm else None
 
 
 class Levels(models.Model):
@@ -80,10 +126,17 @@ class Administration(models.Model):
 
     @property
     def administration_column(self):
+        cache = _admin_column_cache.get()
+        if cache is not None and self.pk in cache:
+            return cache[self.pk]
         if self.path:
             names = "|".join([a.name for a in self.ancestors])
-            return "{}|{}".format(names, self.name)
-        return self.name
+            value = "{}|{}".format(names, self.name)
+        else:
+            value = self.name
+        if cache is not None:
+            cache[self.pk] = value
+        return value
 
     class Meta:
         db_table = "administrator"
