@@ -411,15 +411,16 @@ def download_monitoring_data(
     )
 
     if download_type == DataDownloadTypes.recent:
-        # Get latest monitoring submission per parent
-        seen_parents = {}
-        for fd in queryset.order_by("parent_id", "-created"):
-            if fd.parent_id not in seen_parents:
-                seen_parents[fd.parent_id] = fd
-        monitoring_records = list(seen_parents.values())
+        # Latest monitoring submission per parent. DISTINCT ON picks the
+        # newest row per parent in the DB, so the answer prefetch only
+        # loads answers for the rows actually exported — not all history,
+        # which a Python-side dedup would pull over the wire first.
+        monitoring_records = list(
+            queryset.order_by("parent_id", "-created").distinct("parent_id")
+        )
     else:
         monitoring_records = list(
-            queryset.order_by("parent_id", "created").all()
+            queryset.order_by("parent_id", "created")
         )
 
     data_items = []
