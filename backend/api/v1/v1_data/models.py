@@ -6,6 +6,7 @@ from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_profile.models import (
     Administration,
+    administration_column_for_pk,
     UserRole,
     DataAccessTypes,
 )
@@ -104,9 +105,20 @@ class FormData(SoftDeletes, Draft):
                 else None
             ),
         }
-        for a in self.data_answer.order_by(
-            "question__question_group__order", "question__order", "index"
-        ).all():
+        # Avoid an N+1 in data exports: Answers.to_data_frame reads
+        # question and question.question_group per answer. When the caller
+        # prefetched data_answer (with those relations, ordered) reuse that
+        # cache; otherwise fetch the answers joined and ordered in a single
+        # query. Either way question/question_group are already loaded.
+        if "data_answer" in getattr(self, "_prefetched_objects_cache", {}):
+            answers = self.data_answer.all()
+        else:
+            answers = self.data_answer.select_related(
+                "question", "question__question_group"
+            ).order_by(
+                "question__question_group__order", "question__order", "index"
+            )
+        for a in answers:
             data.update(a.to_data_frame)
         return data
 
@@ -235,9 +247,7 @@ class Answers(models.Model):
         ]:
             answer = self.name
         elif q.type == QuestionTypes.cascade:
-            answer = Administration.objects.filter(pk=self.value).first()
-            if answer:
-                answer = answer.administration_column
+            answer = administration_column_for_pk(self.value)
         else:
             answer = self.value
         if self.index:
