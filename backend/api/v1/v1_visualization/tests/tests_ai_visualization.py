@@ -2122,3 +2122,125 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(len(sanitized), 1)
         self.assertEqual(sanitized[0]["title"], "Active Line")
+
+    def test_section_titles_generated_for_multi_monitoring_starter_heuristics(
+        self,
+    ):
+        """Starter heuristics creates section titles for forms."""
+        monitoring_date_q = self.monitoring.form_questions.filter(
+            type=QuestionTypes.date
+        ).first()
+
+        meta = {
+            "root_form": {
+                "id": self.root.id,
+                "name": "Water Point Inventory",
+                "submission_count": 10,
+                "questions": [],
+            },
+            "monitoring_forms": [
+                {
+                    "id": self.monitoring.id,
+                    "name": "Routine Inspection",
+                    "submission_count": 5,
+                    "questions": [
+                        {
+                            "id": monitoring_date_q.id,
+                            "type": QuestionTypes.date,
+                            "label": "Date",
+                            "answer_count": 5,
+                        }
+                    ],
+                }
+            ],
+            "has_monitoring": True,
+            "total_submissions": 15,
+        }
+        res = generate_starter_heuristics(meta)
+        section_titles = [
+            w for w in res["widgets"] if w.get("type") == "section_title"
+        ]
+        self.assertGreaterEqual(len(section_titles), 2)
+        # Root overview section
+        self.assertEqual(
+            section_titles[0]["title"], "Water Point Inventory Overview"
+        )
+        self.assertEqual(section_titles[0]["col_span"], 24)
+        # Monitoring section
+        self.assertEqual(
+            section_titles[1]["title"], "Routine Inspection"
+        )
+        self.assertEqual(section_titles[1]["col_span"], 24)
+
+    def test_section_title_sanitizer_and_grid_balance(self):
+        """Sanitizer keeps section_title and balances grid col_span 24."""
+        sources_map = {
+            self.root.id: {},
+            self.monitoring.id: {},
+            "_form_submissions": {self.root.id: 5, self.monitoring.id: 5},
+            "_total_submissions": 10,
+        }
+        raw_widgets = [
+            {
+                "type": "section_title",
+                "title": "Facility Status Overview",
+                "form": self.root.id,
+                "col_span": 12,  # Should be normalized to 24
+            },
+            {
+                "type": "section_title",
+                "title": "Water Quality Details",
+                "form": self.monitoring.id,
+                "col_span": 24,
+            },
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 2)
+        self.assertEqual(sanitized[0]["type"], "section_title")
+        self.assertEqual(sanitized[0]["col_span"], 24)
+        self.assertEqual(sanitized[0]["title"], "Facility Status Overview")
+        self.assertEqual(
+            sanitized[0]["config"].get("text"), "Facility Status Overview"
+        )
+        self.assertEqual(sanitized[1]["col_span"], 24)
+
+    def test_orphan_section_title_pruned_for_zero_submission_monitoring_form(
+        self,
+    ):
+        """Section title is pruned if its monitoring form has 0 submissions."""
+        sources_map = {
+            self.root.id: {},
+            self.monitoring.id: {},
+            999999: {},
+            "_form_submissions": {
+                self.root.id: 5,
+                self.monitoring.id: 5,
+                999999: 0,
+            },
+            "_total_submissions": 10,
+        }
+        raw_widgets = [
+            {
+                "type": "section_title",
+                "title": "Active Monitoring Section",
+                "form": self.monitoring.id,
+            },
+            {
+                "type": "section_title",
+                "title": "Empty Monitoring Section",
+                "form": 999999,
+            },
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["title"], "Active Monitoring Section")

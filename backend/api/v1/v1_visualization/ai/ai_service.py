@@ -261,7 +261,7 @@ def normalize_grid_layout(widgets: List[Dict]) -> List[Dict]:
         return []
 
     for w in widgets:
-        if w.get("type") in ("table", "map"):
+        if w.get("type") in ("table", "map", "section_title"):
             w["col_span"] = 24
         elif w.get("col_span") not in (6, 8, 12, 24):
             w["col_span"] = 12
@@ -409,6 +409,9 @@ def validate_and_sanitize_widgets(
         WidgetTypes.scatter: "scatter",
         "scatter": "scatter",
         "scatter_plot": "scatter",
+        WidgetTypes.section_title: "section_title",
+        "section_title": "section_title",
+        "section_header": "section_title",
     }
 
     for item in raw_widgets:
@@ -678,7 +681,7 @@ def validate_and_sanitize_widgets(
                 config["y_axis_label"] = qy_label
 
         # Ensure measure integrity across monitoring and registration forms
-        if w_type == "table":
+        if w_type in ("table", "section_title"):
             config.pop("measure", None)
         elif root_form_id and form_id and form_id != root_form_id:
             if not config.get("measure"):
@@ -689,14 +692,21 @@ def validate_and_sanitize_widgets(
             config.pop("measure", None)
 
         col_span = item.get("col_span", 12)
-        if w_type in ("table", "map"):
+        if w_type in ("table", "map", "section_title"):
             col_span = 24
         elif col_span not in (6, 8, 12, 24):
             col_span = 12
 
-        default_title = f"{w_type.capitalize()} Widget"
+        default_title = (
+            "Section Title" if w_type == "section_title"
+            else f"{w_type.capitalize()} Widget"
+        )
         title = str(item.get("title") or default_title).strip()[:255]
         rationale = str(item.get("rationale") or "Recommended metric.").strip()
+
+        if w_type == "section_title":
+            if "text" not in config or not config["text"]:
+                config["text"] = title
 
         valid_widgets.append(
             {

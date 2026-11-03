@@ -283,6 +283,25 @@ def _create_table_widget(
     }
 
 
+def _create_section_title_widget(
+    title: str,
+    form_id: Optional[int] = None,
+    col_span: int = 24,
+) -> Dict:
+    return {
+        "type": "section_title",
+        "title": title,
+        "col_span": col_span,
+        "color": None,
+        "form": form_id,
+        "question": None,
+        "config": {
+            "text": title,
+        },
+        "rationale": f"Visual section separator for {title}.",
+    }
+
+
 def generate_starter_heuristics(
     metadata: Dict, user_intent: Optional[str] = None
 ) -> Dict:
@@ -297,16 +316,27 @@ def generate_starter_heuristics(
 
     widgets: List[Dict] = []
 
-    # 1. Headline Site Count KPI
-    widgets.append(
-        _create_kpi_widget(
-            form_id=root_id,
-            question_id=None,
-            title=f"Total {root_name}",
-            rationale=f"High-level count of records in {root_name}.",
-            col_span=6,
+    def _content_count() -> int:
+        return len([w for w in widgets if w.get("type") != "section_title"])
+
+    # Insert Root section title if monitoring forms exist to group Overview
+    if has_monitoring and monitoring_forms:
+        widgets.append(
+            _create_section_title_widget(
+                title=f"{root_name} Overview",
+                form_id=root_id,
+            )
         )
+
+    # 1. Headline Site Count KPI
+    headline_kpi = _create_kpi_widget(
+        form_id=root_id,
+        question_id=None,
+        title=f"Total {root_name}",
+        rationale=f"High-level count of records in {root_name}.",
+        col_span=6,
     )
+    widgets.append(headline_kpi)
 
     # 2. Metric KPI or Secondary count
     numeric_qs = _find_questions_by_type(
@@ -327,7 +357,7 @@ def generate_starter_heuristics(
         )
     else:
         # Default second KPI span adjustment or second count
-        widgets[0]["col_span"] = 12
+        headline_kpi["col_span"] = 12
 
     # 3. Categorical Distribution (Pie / Bar)
     # Autofield questions lack QuestionOptions and must not group by options
@@ -352,7 +382,7 @@ def generate_starter_heuristics(
                     question_id=cat_q["id"],
                     title=f"{cat_q['label']} Breakdown",
                     rationale=f"Breakdown of sites by {cat_q['label']}.",
-                    col_span=12 if len(widgets) == 1 else 12,
+                    col_span=12 if _content_count() == 1 else 12,
                     x_axis_label=cat_q.get("label"),
                 )
             )
@@ -363,13 +393,13 @@ def generate_starter_heuristics(
                     question_id=cat_q["id"],
                     title=f"{cat_q['label']} Distribution",
                     rationale=f"Distribution across {cat_q['label']}.",
-                    col_span=12 if len(widgets) == 1 else 12,
+                    col_span=12 if _content_count() == 1 else 12,
                     x_axis_label=cat_q.get("label"),
                 )
             )
 
     # Secondary Categorical if available
-    if len(all_cats) > 1 and len(widgets) < 4:
+    if len(all_cats) > 1 and _content_count() < 4:
         cat_q2 = all_cats[1]
         widgets.append(
             _create_bar_widget(
@@ -396,7 +426,7 @@ def generate_starter_heuristics(
         )
 
     # 5. Scatter Plot if 2+ numeric questions exist
-    if len(numeric_qs) >= 2 and len(widgets) < 5:
+    if len(numeric_qs) >= 2 and _content_count() < 5:
         widgets.append(
             _create_scatter_widget(
                 form_id=root_id,
@@ -432,12 +462,14 @@ def generate_starter_heuristics(
             m_name = m_form.get("name", "Monitoring")
             m_questions = m_form.get("questions", [])
 
+            m_widgets: List[Dict] = []
+
             date_qs = _find_questions_by_type(
                 m_questions, [QuestionTypes.date], require_data=True
             )
             if date_qs:
                 date_q = date_qs[0]
-                widgets.append(
+                m_widgets.append(
                     _create_line_widget(
                         form_id=m_id,
                         date_q_id=date_q["id"],
@@ -461,7 +493,7 @@ def generate_starter_heuristics(
             ]
             if m_opt_qs:
                 m_cat_q = m_opt_qs[0]
-                widgets.append(
+                m_widgets.append(
                     _create_bar_widget(
                         form_id=m_id,
                         question_id=m_cat_q["id"],
@@ -477,7 +509,7 @@ def generate_starter_heuristics(
                 )
 
             # Table Overview for this monitoring form
-            widgets.append(
+            m_widgets.append(
                 _create_table_widget(
                     form_id=m_id,
                     title=f"Recent {m_name} Log",
@@ -487,6 +519,15 @@ def generate_starter_heuristics(
                     root_questions=root_questions,
                 )
             )
+
+            if m_widgets:
+                widgets.append(
+                    _create_section_title_widget(
+                        title=m_name,
+                        form_id=m_id,
+                    )
+                )
+                widgets.extend(m_widgets)
 
     suggested_name = f"{root_name} Overview Dashboard"
     if user_intent:

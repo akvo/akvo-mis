@@ -90,6 +90,10 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     "generate independent widgets for EACH monitoring form. NEVER mix "
     "questions or IDs from different forms within the same widget. Zero "
     "cross-form charts or tables are permitted.\n"
+    "   - When multiple forms are present, visually group widgets by adding "
+    "a `section_title` widget before each form's widgets (e.g. type: "
+    "'section_title', col_span: 24, question: null, config: {'text': "
+    "'<Form Name>'}).\n"
     "   - In table widgets, columns with source: 'answer' MUST belong to "
     "that table's form; columns with source: 'parent_answer' MUST belong "
     "to the root form.\n"
@@ -115,8 +119,8 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
     '       "description": "string",\n'
     '       "widgets": [\n'
     "         {\n"
-    '           "type": "kpi" | "pie" | "bar" |\n'
-    '                   "line" | "table" | "map" | "scatter",\n'
+    '           "type": "kpi" | "pie" | "bar" | "line" |\n'
+    '                   "table" | "map" | "scatter" | "section_title",\n'
     '           "title": "string",\n'
     '           "col_span": 6 | 8 | 12 | 24,\n'
     '           "form": integer,\n'
