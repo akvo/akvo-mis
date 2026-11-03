@@ -681,10 +681,7 @@ const BuilderInspector = ({
   const showForm = NEEDS_FORM.has(wType);
   const showQuestion = NEEDS_QUESTION.has(wType);
   const isMonitoring = showForm && isMonitoringForm(widget.form);
-  const allQuestions = useMemo(
-    () => (showQuestion ? questionsForForm(widget.form) : []),
-    [showQuestion, questionsForForm, widget.form]
-  );
+  const allQuestions = showQuestion ? questionsForForm(widget.form) : [];
   const questions =
     wType === "scatter" || wType === "line"
       ? allQuestions.filter((q) => NUMERIC_QUESTION_TYPES.has(q.type))
@@ -703,70 +700,41 @@ const BuilderInspector = ({
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
 
-  const findQuestionInFamily = useCallback(
-    (questionId) => {
-      if (!questionId) {
-        return null;
+  const findQuestionInFamily = (questionId) => {
+    if (!questionId) {
+      return null;
+    }
+    for (let i = 0; i < forms.length; i += 1) {
+      const f = forms[i];
+      const found = (f.questions || []).find((q) => q.id === questionId);
+      if (found) {
+        return { question: found, form: f };
       }
-      for (let i = 0; i < forms.length; i += 1) {
-        const f = forms[i];
-        const found = (f.questions || []).find((q) => q.id === questionId);
-        if (found) {
-          return { question: found, form: f };
-        }
-      }
-      return null;
-    },
-    [forms]
-  );
+    }
+    return null;
+  };
 
-  const misplacedQuestionInfo = useMemo(() => {
-    if (!widget?.question) {
-      return null;
-    }
-    const isListed = questions.some((q) => q.id === widget.question);
-    if (isListed) {
-      return null;
-    }
-    return findQuestionInFamily(widget.question);
-  }, [widget?.question, questions, findQuestionInFamily]);
+  const misplacedQuestionInfo =
+    !widget?.question || questions.some((q) => q.id === widget.question)
+      ? null
+      : findQuestionInFamily(widget.question);
 
-  const misplacedDateQuestionInfo = useMemo(() => {
-    if (!wConfig.date_question_id) {
-      return null;
-    }
-    const isListed = dateQuestions.some(
-      (q) => q.id === wConfig.date_question_id
-    );
-    if (isListed) {
-      return null;
-    }
-    return findQuestionInFamily(wConfig.date_question_id);
-  }, [wConfig.date_question_id, dateQuestions, findQuestionInFamily]);
+  const misplacedDateQuestionInfo =
+    !wConfig.date_question_id ||
+    dateQuestions.some((q) => q.id === wConfig.date_question_id)
+      ? null
+      : findQuestionInFamily(wConfig.date_question_id);
 
-  const misplacedQuestionYInfo = useMemo(() => {
-    if (!wConfig.question_y) {
-      return null;
-    }
-    const isListed = questions.some((q) => q.id === wConfig.question_y);
-    if (isListed) {
-      return null;
-    }
-    return findQuestionInFamily(wConfig.question_y);
-  }, [wConfig.question_y, questions, findQuestionInFamily]);
+  const misplacedQuestionYInfo =
+    !wConfig.question_y || questions.some((q) => q.id === wConfig.question_y)
+      ? null
+      : findQuestionInFamily(wConfig.question_y);
 
-  const misplacedCategoryQuestionInfo = useMemo(() => {
-    if (!wConfig.category_question_id) {
-      return null;
-    }
-    const isListed = optionQuestions.some(
-      (q) => q.id === wConfig.category_question_id
-    );
-    if (isListed) {
-      return null;
-    }
-    return findQuestionInFamily(wConfig.category_question_id);
-  }, [wConfig.category_question_id, optionQuestions, findQuestionInFamily]);
+  const misplacedCategoryQuestionInfo =
+    !wConfig.category_question_id ||
+    optionQuestions.some((q) => q.id === wConfig.category_question_id)
+      ? null
+      : findQuestionInFamily(wConfig.category_question_id);
   // A map bound to a NUMBER or AUTOFIELD question sizes its circles by the answer
   // rather than colouring them by a status (#382). Derived from the
   // question's type rather than read back from `config.map_mode`, so the
@@ -810,18 +778,11 @@ const BuilderInspector = ({
   // The number questions this bar could be measured by, and the
   // aggregations that stay honest for the split it carries.
   const valueChoices = valueQuestionOptions(allQuestions, selectedQuestion);
-  const misplacedValueQuestionInfo = useMemo(() => {
-    if (!wConfig.value_question) {
-      return null;
-    }
-    const isListed = valueChoices.some(
-      (q) => q.value === wConfig.value_question
-    );
-    if (isListed) {
-      return null;
-    }
-    return findQuestionInFamily(wConfig.value_question);
-  }, [wConfig.value_question, valueChoices, findQuestionInFamily]);
+  const misplacedValueQuestionInfo =
+    !wConfig.value_question ||
+    valueChoices.some((q) => q.value === wConfig.value_question)
+      ? null
+      : findQuestionInFamily(wConfig.value_question);
   const splitQuestion = wConfig.stack_question
     ? allQuestions.find((q) => q.id === wConfig.stack_question)
     : selectedQuestion;
