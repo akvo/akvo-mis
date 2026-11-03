@@ -1986,4 +1986,64 @@ describe("VIZ-026: Autofield builderConstants and BuilderInspector integration",
     expect(next.stack_question).toBeNull();
     expect(next.columns).toEqual([{ key: "c2", question: 101 }]);
   });
+
+  test("renders cross-form question warning and auto-heals with switch form button", () => {
+    const onWidgetChange = jest.fn();
+    render(
+      <BuilderInspector
+        widget={{
+          id: 8,
+          type: "bar",
+          title: "Misplaced Question Bar",
+          col_span: 12,
+          form: 6001, // form 6001 has no questions
+          question: 600203, // belongs to form 6002 ("Monitoring")
+          config: {
+            group_by: "option",
+          },
+        }}
+        sources={SOURCES}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={onWidgetChange}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Question belongs to/i)).toBeInTheDocument();
+    expect(screen.getByText("Monitoring")).toBeInTheDocument();
+    const switchBtn = screen.getByRole("button", { name: /Switch form/i });
+    expect(switchBtn).toBeInTheDocument();
+    fireEvent.click(switchBtn);
+    expect(onWidgetChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 8,
+        form: 6002,
+      })
+    );
+  });
+
+  test("resolves X axis date question from another form to its label instead of raw ID", () => {
+    render(
+      <BuilderInspector
+        widget={{
+          id: 9,
+          type: "line",
+          title: "Line with Cross Form Date",
+          col_span: 12,
+          form: 6001,
+          question: 600202,
+          config: {
+            group_by: "month",
+            date_question_id: 600201,
+          },
+        }}
+        sources={SOURCES}
+        dashboardName="Test"
+        defaultFilters={{}}
+        onWidgetChange={jest.fn()}
+        onDashboardChange={jest.fn()}
+      />
+    );
+    expect(screen.getByText(/Inspected on/i)).toBeInTheDocument();
+  });
 });

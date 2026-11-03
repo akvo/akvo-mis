@@ -116,6 +116,15 @@ const CreateDashboardModal = ({ visible, onCancel, onCreate }) => {
   const doCreate = useCallback(
     (payload) =>
       dashboardApi.create(payload).catch((err) => {
+        if (err?.response?.status === 400 && payload.widgets) {
+          message.warning(
+            text.dashboardAiApplyWarning ||
+              "Dashboard created, but some AI widgets could not be applied."
+          );
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.widgets;
+          return dashboardApi.create(fallbackPayload);
+        }
         if (err?.response?.status === 409) {
           const suggested = err.response.data?.suggested_slug;
           if (suggested) {

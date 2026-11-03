@@ -184,6 +184,62 @@ describe("CreateDashboardModal AI Starter Generation", () => {
     });
   });
 
+  it("falls back to creating dashboard without widgets when dashboardApi.create fails with HTTP 400 on widgets payload", async () => {
+    const suggestedWidgets = [
+      { type: "bar", title: "Broken Bar", col_span: 12 },
+    ];
+    dashboardAi.suggestDashboard.mockResolvedValue({
+      data: {
+        name: "AI Water Overview",
+        widgets: suggestedWidgets,
+      },
+    });
+    const err400 = new Error("Bad Request");
+    err400.response = { status: 400, data: { widgets: "Invalid widget" } };
+    dashboardApi.create.mockRejectedValueOnce(err400).mockResolvedValueOnce({
+      data: { id: 12, slug: "water-resilient", widgets: [] },
+    });
+
+    const onCreate = jest.fn();
+    renderModal(onCreate);
+
+    await userEvent.type(
+      screen.getByLabelText("Dashboard name"),
+      "Water Resilient"
+    );
+
+    const select = screen.getByRole("combobox");
+    fireEvent.mouseDown(select);
+    const option = await screen.findByText("Water Points");
+    fireEvent.click(option);
+
+    const aiSwitch = screen.getByRole("switch");
+    await userEvent.click(aiSwitch);
+
+    await userEvent.click(screen.getByText("Create dashboard"));
+
+    await waitFor(() => {
+      expect(dashboardApi.create).toHaveBeenCalledTimes(2);
+      expect(dashboardApi.create).toHaveBeenNthCalledWith(1, {
+        name: "Water Resilient",
+        root_form: 6001,
+        widgets: suggestedWidgets,
+        default_filters: DEFAULT_FILTERS,
+      });
+      expect(dashboardApi.create).toHaveBeenNthCalledWith(2, {
+        name: "Water Resilient",
+        root_form: 6001,
+        default_filters: DEFAULT_FILTERS,
+      });
+    });
+
+    expect(onCreate).toHaveBeenCalledWith({
+      id: 12,
+      slug: "water-resilient",
+      widgets: [],
+    });
+  });
+
   it("populates and appends user intent when clicking quick preset chips", async () => {
     renderModal();
     const aiSwitch = screen.getByRole("switch");
