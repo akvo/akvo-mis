@@ -35,8 +35,28 @@ const EMPTY_FILTERS = {
 const DashboardViewer = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { language } = store.useState((s) => s);
+  const { language, isLoggedIn } = store.useState((s) => s);
   const text = useMemo(() => uiText[language.active], [language.active]);
+
+  // Back navigates within the app's own history, which an anonymous
+  // visitor who landed on a public dashboard link has none of — so the
+  // button is shown only to signed-in users (VIZ-028).
+  const backButton = isLoggedIn ? (
+    <button
+      className="dashboard-view-back"
+      title={text.backBtn}
+      aria-label={text.backBtn}
+      onClick={() => navigate(-1)}
+    >
+      <ArrowLeftOutlined />
+    </button>
+  ) : null;
+
+  // Marks the shell when the back button is present, so the phone layout
+  // only indents the title to clear it for signed-in users.
+  const shellClass = `dashboard-view-shell${
+    isLoggedIn ? " dashboard-view-shell--has-back" : ""
+  }`;
 
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
@@ -127,15 +147,8 @@ const DashboardViewer = () => {
 
   if (notFound || !dashboard) {
     return (
-      <div className="dashboard-view-shell">
-        <button
-          className="dashboard-view-back"
-          title={text.backBtn}
-          aria-label={text.backBtn}
-          onClick={() => navigate(-1)}
-        >
-          <ArrowLeftOutlined />
-        </button>
+      <div className={shellClass}>
+        {backButton}
         <div className="dashboard-view-empty">
           <h2>{text.dashboardNotFound}</h2>
           <p>{text.dashboardNotFoundHint}</p>
@@ -186,15 +199,8 @@ const DashboardViewer = () => {
   );
 
   return (
-    <div className="dashboard-view-shell">
-      <button
-        className="dashboard-view-back"
-        title={text.backBtn}
-        aria-label={text.backBtn}
-        onClick={() => navigate(-1)}
-      >
-        <ArrowLeftOutlined />
-      </button>
+    <div className={shellClass}>
+      {backButton}
 
       {/* The embed branch needs a flex column to hand the frame the
           height it fills; the modifier keeps that off the widget grid,

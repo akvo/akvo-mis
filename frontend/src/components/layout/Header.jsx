@@ -106,7 +106,10 @@ const Header = ({ className = "header", ...props }) => {
                     e.preventDefault();
                   }}
                 >
-                  {user?.name || ""}
+                  {/* VIZ-028: wrapped so the phone header can hide the
+                      name (CSS) without losing the avatar that opens the
+                      menu. */}
+                  <span className="username">{user?.name || ""}</span>
                   <span className="icon">
                     <UserOutlined />
                   </span>

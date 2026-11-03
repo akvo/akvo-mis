@@ -433,3 +433,43 @@
 #root .layout.inspecting {
   --inspection-offset: #{$inspection-banner-height};
 }
+
+// VIZ-028: phone header. The 65px logo dominates the 86px bar and the
+// signed-in user's full name crowds the controls next to it -- the
+// "ugly header" on a phone. Below $screen-phone the logo shrinks and the
+// name is hidden; the avatar still opens the user menu, which holds the
+// name's destinations (Control Center, Profile, Sign out).
+//
+// A shorter logo leaves the header shorter than the 86px the layout
+// reserves for it ($header-height, via .body's padding-top), so the page
+// background showed as a grey band between the header and the content.
+// min-height holds the bar at its reserved height with the small logo
+// centred, closing that gap without moving anything pinned below.
+@media screen and (max-width: $screen-phone) {
+  #root .layout .header {
+    min-height: $header-height;
+
+    // The header still carried the 40px small-screen gutter while the
+    // dashboard viewer below dropped to a 16px phone gutter, so the logo
+    // and account controls sat inboard of the page content. Match the
+    // 16px gutter so they line up.
+    padding-left: 16px;
+    padding-right: 16px;
+
+    .logo .small-logo {
+      height: 44px;
+    }
+
+    .account {
+      gap: 8px;
+
+      .username {
+        display: none;
+      }
+
+      .ant-dropdown-link {
+        padding: 8px;
+      }
+    }
+  }
+}
