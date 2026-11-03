@@ -359,3 +359,19 @@ The council convened to establish a 4-tier defense-in-depth architecture to ensu
 | **TASK-03** | **Frontend Creation Resilience & Inspector Healing**: Add creation retry fallback in `CreateDashboardModal.jsx`, heal question labels and avoid raw IDs in `BuilderInspector.jsx`. | 35m | 25m | 20m | **80m (1.3h)** | P1 |
 | **TASK-04** | **End-to-End Regression & Verification**: Run backend test suite (`tests_ai_visualization.py`) and frontend tests (`npm test`), verify with multi-form fixtures. | 20m | 15m | 10m | **45m (0.8h)** | P1 |
 | **TOTAL** | **Full Feature Delivery** | **2.5h (150m)** | **1.85h (110m)** | **1.25h (75m)** | **5.6h (335m)** | - |
+
+---
+
+## 8. Data Availability Guard & Empty Chart Prevention 🛡️
+
+To prevent the AI from creating charts or tables that display "No data available" when users select newly added monitoring forms that have no submission data:
+1. **Indexed Aggregation in `extract_family_metadata`**:
+   - Computes `submission_count` per form via `FormData.objects.filter(...)`.
+   - Computes `answer_count` per question via `Answers.objects.filter(...)`.
+   - Evaluates `total_submissions` across the active form family.
+2. **Heuristic & Prompt Guard**:
+   - When active submissions exist in the family (`total_submissions > 0`), skips generating line, bar, pie, and table widgets for any monitoring form with `submission_count == 0`.
+   - Only selects questions with `answer_count > 0` for primary chart visualizations.
+   - Prompt instructs OpenAI to never generate chart widgets for forms or questions with 0 data points.
+3. **Sanitization Gate**:
+   - `validate_and_sanitize_widgets` prunes any candidate chart targeting a form with 0 submissions or a question with 0 answers when active submissions exist in the family.

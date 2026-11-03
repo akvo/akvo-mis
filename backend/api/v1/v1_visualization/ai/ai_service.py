@@ -10,8 +10,9 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 
+from api.v1.v1_data.models import Answers, FormData
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
 from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_visualization.ai.ai_heuristics import (
@@ -135,7 +136,29 @@ def extract_family_metadata(
         ).order_by("id")
     )
 
-    sources_map: Dict[int, Dict[int, Dict]] = {}
+    sources_map: Dict[Any, Any] = {}
+
+    all_family_forms = [root_form] + monitoring_forms
+
+    # Fast indexed aggregates to check actual data presence
+    form_submission_counts = dict(
+        FormData.objects.filter(
+            form__in=all_family_forms, deleted_at__isnull=True
+        )
+        .values("form_id")
+        .annotate(c=Count("id"))
+        .values_list("form_id", "c")
+    )
+
+    question_answer_counts = dict(
+        Answers.objects.filter(
+            question__form__in=all_family_forms,
+            data__deleted_at__isnull=True,
+        )
+        .values("question_id")
+        .annotate(c=Count("id"))
+        .values_list("question_id", "c")
+    )
 
     def _extract_questions(form_obj) -> List[Dict]:
         q_map: Dict[int, Dict] = {}
@@ -163,6 +186,7 @@ def extract_family_metadata(
 
             type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
             group_name = q.question_group.name if q.question_group else None
+            ans_count = question_answer_counts.get(q.id, 0)
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
@@ -170,6 +194,8 @@ def extract_family_metadata(
                 "type_name": type_name,
                 "group_name": group_name,
                 "option_count": opt_count,
+                "answer_count": ans_count,
+                "has_data": ans_count > 0,
             }
             if opts:
                 q_info["options_sample"] = opts
@@ -184,6 +210,8 @@ def extract_family_metadata(
                 "group_id": q.question_group_id,
                 "group_name": group_name,
                 "option_count": opt_count,
+                "answer_count": ans_count,
+                "has_data": ans_count > 0,
             }
 
         sources_map[form_obj.id] = q_map
@@ -194,23 +222,35 @@ def extract_family_metadata(
     mon_list = []
     for m_form in monitoring_forms:
         m_qs = _extract_questions(m_form)
+        sub_count = form_submission_counts.get(m_form.id, 0)
         mon_list.append(
             {
                 "id": m_form.id,
                 "name": m_form.name,
+                "submission_count": sub_count,
+                "has_data": sub_count > 0,
                 "questions": m_qs,
             }
         )
 
+    root_sub_count = form_submission_counts.get(root_form.id, 0)
+    total_family_submissions = sum(form_submission_counts.values())
     metadata = {
         "root_form": {
             "id": root_form.id,
             "name": root_form.name,
+            "submission_count": root_sub_count,
+            "has_data": root_sub_count > 0,
             "questions": root_questions,
         },
         "monitoring_forms": mon_list,
         "has_monitoring": bool(mon_list),
+        "total_submissions": total_family_submissions,
     }
+
+    sources_map["_form_submissions"] = form_submission_counts
+    sources_map["_question_answers"] = question_answer_counts
+    sources_map["_total_submissions"] = total_family_submissions
 
     return metadata, sources_map
 
@@ -409,6 +449,29 @@ def validate_and_sanitize_widgets(
             if q_type not in valid_types:
                 continue
 
+        # Data availability guard: Drop chart/table widgets targeting forms
+        # with 0 submissions or questions with 0 answers (prevents empty
+        # "No data available" widgets) when the family has active submissions
+        total_family_sub = sources_map.get("_total_submissions", 0)
+        if total_family_sub > 0:
+            form_sub_counts = sources_map.get("_form_submissions")
+            if form_sub_counts is not None and form_id in form_sub_counts:
+                if form_sub_counts[form_id] == 0:
+                    is_headline = (
+                        w_type == "kpi"
+                        and q_id is None
+                        and form_id == root_form_id
+                    )
+                    if not is_headline:
+                        continue
+
+            question_ans_counts = sources_map.get("_question_answers")
+            if question_ans_counts is not None:
+                if q_id and question_ans_counts.get(q_id, 0) == 0:
+                    continue
+        else:
+            question_ans_counts = None
+
         config = item.get("config") or {}
         if not isinstance(config, dict):
             config = {}
@@ -445,6 +508,11 @@ def validate_and_sanitize_widgets(
                     qy_type = target_form_qs[qy].get("type")
                     if qy_type not in NUMERIC_QUESTION_TYPES:
                         config["question_y"] = None
+                    elif (
+                        question_ans_counts is not None
+                        and question_ans_counts.get(qy, 0) == 0
+                    ):
+                        config["question_y"] = None
 
         # Line widget date_question_id sanitization
         if w_type == "line":
@@ -469,6 +537,11 @@ def validate_and_sanitize_widgets(
                             date_qid = cand_qid
                             break
             if not date_qid:
+                continue
+            if (
+                question_ans_counts is not None
+                and question_ans_counts.get(date_qid, 0) == 0
+            ):
                 continue
             config["date_question_id"] = date_qid
 

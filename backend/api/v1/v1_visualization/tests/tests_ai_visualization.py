@@ -2028,3 +2028,97 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
             sanitized[0]["config"].get("x_axis_label"),
             "Water Quality Status",
         )
+
+    def test_data_availability_guard_excludes_zero_submission_monitoring_form(
+        self,
+    ):
+        """Sanitizer and heuristics exclude monitoring forms with 0 data."""
+        monitoring_date_q = self.monitoring.form_questions.filter(
+            type=QuestionTypes.date
+        ).first()
+
+        # 1. Test in heuristics
+        meta = {
+            "root_form": {
+                "id": self.root.id,
+                "name": "Root",
+                "submission_count": 10,
+                "questions": [],
+            },
+            "monitoring_forms": [
+                {
+                    "id": self.monitoring.id,
+                    "name": "Active Monitoring",
+                    "submission_count": 5,
+                    "questions": [
+                        {
+                            "id": monitoring_date_q.id,
+                            "type": QuestionTypes.date,
+                            "label": "Date",
+                            "answer_count": 5,
+                        }
+                    ],
+                },
+                {
+                    "id": 999999,
+                    "name": "Empty Monitoring",
+                    "submission_count": 0,
+                    "questions": [
+                        {
+                            "id": 888888,
+                            "type": QuestionTypes.date,
+                            "label": "Date",
+                            "answer_count": 0,
+                        }
+                    ],
+                },
+            ],
+            "has_monitoring": True,
+            "total_submissions": 15,
+        }
+        res = generate_starter_heuristics(meta)
+        forms_in_widgets = {w.get("form") for w in res["widgets"]}
+        self.assertIn(self.monitoring.id, forms_in_widgets)
+        self.assertNotIn(999999, forms_in_widgets)
+
+        # 2. Test in sanitizer
+        sources_map = {
+            self.monitoring.id: {
+                monitoring_date_q.id: {
+                    "id": monitoring_date_q.id,
+                    "type": QuestionTypes.date,
+                    "label": "Date",
+                }
+            },
+            999999: {
+                888888: {
+                    "id": 888888,
+                    "type": QuestionTypes.date,
+                    "label": "Date",
+                }
+            },
+            "_form_submissions": {self.monitoring.id: 5, 999999: 0},
+            "_total_submissions": 5,
+        }
+        raw_widgets = [
+            {
+                "type": "line",
+                "title": "Active Line",
+                "form": self.monitoring.id,
+                "config": {"date_question_id": monitoring_date_q.id},
+            },
+            {
+                "type": "line",
+                "title": "Empty Line",
+                "form": 999999,
+                "config": {"date_question_id": 888888},
+            },
+        ]
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(sanitized[0]["title"], "Active Line")

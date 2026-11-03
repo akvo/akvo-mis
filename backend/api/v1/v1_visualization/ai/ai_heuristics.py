@@ -11,9 +11,14 @@ from api.v1.v1_visualization.constants import WidgetTypes
 
 
 def _find_questions_by_type(
-    questions: List[Dict], types: List[int]
+    questions: List[Dict], types: List[int], require_data: bool = False
 ) -> List[Dict]:
-    return [q for q in questions if q.get("type") in types]
+    res = [q for q in questions if q.get("type") in types]
+    if require_data:
+        data_res = [q for q in res if q.get("answer_count", 0) > 0]
+        if data_res:
+            return data_res
+    return res
 
 
 def _create_kpi_widget(
@@ -305,7 +310,9 @@ def generate_starter_heuristics(
 
     # 2. Metric KPI or Secondary count
     numeric_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.number, QuestionTypes.autofield]
+        root_questions,
+        [QuestionTypes.number, QuestionTypes.autofield],
+        require_data=True,
     )
     if numeric_qs:
         num_q = numeric_qs[0]
@@ -329,6 +336,7 @@ def generate_starter_heuristics(
         for q in _find_questions_by_type(
             root_questions,
             [QuestionTypes.option, QuestionTypes.multiple_option],
+            require_data=True,
         )
         if q.get("option_count", len(q.get("options", []))) > 0
     ]
@@ -410,12 +418,22 @@ def generate_starter_heuristics(
         for m_form in monitoring_forms:
             if not isinstance(m_form, dict):
                 continue
+            # Data availability guard: skip monitoring forms with 0 submissions
+            # when other forms in the family have active submission data
+            total_subs = metadata.get("total_submissions", 0)
+            if (
+                total_subs > 0
+                and "submission_count" in m_form
+                and m_form.get("submission_count", 0) == 0
+            ):
+                continue
+
             m_id = m_form.get("id")
             m_name = m_form.get("name", "Monitoring")
             m_questions = m_form.get("questions", [])
 
             date_qs = _find_questions_by_type(
-                m_questions, [QuestionTypes.date]
+                m_questions, [QuestionTypes.date], require_data=True
             )
             if date_qs:
                 date_q = date_qs[0]
@@ -437,6 +455,7 @@ def generate_starter_heuristics(
                 for q in _find_questions_by_type(
                     m_questions,
                     [QuestionTypes.option, QuestionTypes.multiple_option],
+                    require_data=True,
                 )
                 if q.get("option_count", len(q.get("options", []))) > 0
             ]
@@ -542,7 +561,9 @@ def generate_widget_heuristics(
 
     # 2. Check if Scatter missing & 2+ unvisualized numeric questions exist
     numeric_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.number, QuestionTypes.autofield]
+        root_questions,
+        [QuestionTypes.number, QuestionTypes.autofield],
+        require_data=True,
     )
     unvis_numeric = [
         q for q in numeric_qs if q["id"] not in existing_question_ids
@@ -580,6 +601,7 @@ def generate_widget_heuristics(
                 QuestionTypes.option,
                 QuestionTypes.multiple_option,
             ],
+            require_data=True,
         )
         if q.get("option_count", len(q.get("options", []))) > 0
     ]
@@ -607,11 +629,21 @@ def generate_widget_heuristics(
         for m_form in monitoring_forms:
             if not isinstance(m_form, dict):
                 continue
+            # Data availability guard: skip monitoring forms with 0 submissions
+            # when other forms in the family have active submission data
+            total_subs = metadata.get("total_submissions", 0)
+            if (
+                total_subs > 0
+                and "submission_count" in m_form
+                and m_form.get("submission_count", 0) == 0
+            ):
+                continue
+
             m_id = m_form.get("id")
             m_name = m_form.get("name", "Monitoring")
             m_questions = m_form.get("questions", [])
             date_qs = _find_questions_by_type(
-                m_questions, [QuestionTypes.date]
+                m_questions, [QuestionTypes.date], require_data=True
             )
             unvis_date = [
                 q for q in date_qs if q["id"] not in existing_question_ids
