@@ -1747,3 +1747,284 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
         t_massive = calculate_ai_timeout(meta_massive)
         self.assertEqual(t_massive.connect, 3.0)
         self.assertEqual(t_massive.read, 15.0)
+
+    # =========================================================
+    # 9. Multi-Monitoring Isolation & Axis Label Tests (VIZ-AI-004)
+    # =========================================================
+
+    def test_starter_heuristics_multiple_monitoring_forms(self):
+        """Heuristics engine generates widgets for each monitoring form."""
+        m2 = Forms.objects.create(
+            name="Maintenance Log",
+            type=FormTypes.monitoring,
+            parent=self.root,
+            status=FormStatus.published,
+        )
+        group2 = QuestionGroup.objects.create(
+            form=m2, name="Log Data", order=1
+        )
+        date_q2 = Questions.objects.create(
+            name="Maintenance Date",
+            label="Maintenance Date",
+            form=m2,
+            question_group=group2,
+            type=QuestionTypes.date,
+            order=1,
+        )
+        opt_q2 = Questions.objects.create(
+            name="Severity",
+            label="Issue Severity",
+            form=m2,
+            question_group=group2,
+            type=QuestionTypes.option,
+            order=2,
+        )
+        QuestionOptions.objects.create(
+            question=opt_q2, label="High", value="high", order=1
+        )
+        QuestionOptions.objects.create(
+            question=opt_q2, label="Low", value="low", order=2
+        )
+
+        res = AISuggestionService.suggest_dashboard(
+            self.root.id,
+            self.user,
+            monitoring_form_ids=[self.monitoring.id, m2.id],
+        )
+        self.assertIsNotNone(res)
+        widgets = res.get("widgets", [])
+        self.assertTrue(len(widgets) >= 4)
+
+        forms_in_widgets = {w.get("form") for w in widgets if w.get("form")}
+        self.assertIn(self.monitoring.id, forms_in_widgets)
+        self.assertIn(m2.id, forms_in_widgets)
+
+        # Ensure all widgets for m2 only reference m2 questions
+        for w in widgets:
+            if w.get("form") == m2.id:
+                if w.get("question"):
+                    self.assertIn(w["question"], (date_q2.id, opt_q2.id))
+                cfg = w.get("config") or {}
+                if cfg.get("date_question_id"):
+                    self.assertEqual(cfg["date_question_id"], date_q2.id)
+
+    def test_multi_monitoring_starter_widgets_pass_validation(self):
+        """AI starter widgets with multiple forms pass payload validation."""
+        m2 = Forms.objects.create(
+            name="Inspection Checklist",
+            type=FormTypes.monitoring,
+            parent=self.root,
+            status=FormStatus.published,
+        )
+        group2 = QuestionGroup.objects.create(
+            form=m2, name="Inspection", order=1
+        )
+        Questions.objects.create(
+            name="Inspection Date",
+            label="Inspection Date",
+            form=m2,
+            question_group=group2,
+            type=QuestionTypes.date,
+            order=1,
+        )
+        opt_q2 = Questions.objects.create(
+            name="Condition",
+            label="Pump Condition",
+            form=m2,
+            question_group=group2,
+            type=QuestionTypes.option,
+            order=2,
+        )
+        QuestionOptions.objects.create(
+            question=opt_q2, label="Good", value="good", order=1
+        )
+        QuestionOptions.objects.create(
+            question=opt_q2, label="Broken", value="broken", order=2
+        )
+
+        res = AISuggestionService.suggest_dashboard(
+            self.root.id,
+            self.user,
+            monitoring_form_ids=[self.monitoring.id, m2.id],
+        )
+        self.assertIsNotNone(res)
+        widgets = res["widgets"]
+
+        payload = {
+            "name": "Multi Monitoring Dashboard",
+            "root_form": self.root.id,
+            "widgets": widgets,
+        }
+        err = validate_dashboard_payload(payload, self.user, dashboard=None)
+        self.assertIsNone(err, f"validate failed: {err}")
+
+    def test_cross_monitoring_table_columns_strictly_pruned(self):
+        """Cross-monitoring form columns are stripped from table widgets."""
+        m2 = Forms.objects.create(
+            name="Facility Audit",
+            type=FormTypes.monitoring,
+            parent=self.root,
+            status=FormStatus.published,
+        )
+        group2 = QuestionGroup.objects.create(
+            form=m2, name="Audit", order=1
+        )
+        q_m2 = Questions.objects.create(
+            name="Audit Score",
+            label="Audit Score",
+            form=m2,
+            question_group=group2,
+            type=QuestionTypes.number,
+            order=1,
+        )
+
+        _, sources_map = extract_family_metadata(
+            self.root.id,
+            self.user,
+            monitoring_form_ids=[self.monitoring.id, m2.id],
+        )
+
+        raw_widgets = [
+            {
+                "type": "table",
+                "title": "Monitoring 1 Table",
+                "form": self.monitoring.id,
+                "config": {
+                    "columns": [
+                        {
+                            "key": "parent_name",
+                            "source": "parent_name",
+                            "label": "Site",
+                        },
+                        {
+                            "key": "m2_col",
+                            "source": "answer",
+                            "question": q_m2.id,
+                            "label": "Leaked Col",
+                        },
+                    ]
+                },
+                "rationale": "Table with cross-form column",
+            }
+        ]
+
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 1)
+        cols = sanitized[0]["config"]["columns"]
+        col_qids = [c.get("question") for c in cols if c.get("question")]
+        self.assertNotIn(q_m2.id, col_qids)
+
+    def test_zero_option_question_not_selected_for_categorical_chart(self):
+        """Zero option questions are pruned to prevent raw IDs/empty charts."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        zero_opt_q = Questions.objects.create(
+            name="Empty Choice",
+            label="Empty Choice",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.option,
+            order=99,
+        )
+        # Intentionally create 0 QuestionOptions
+
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        opt_count = sources_map[self.root.id][zero_opt_q.id]["option_count"]
+        self.assertEqual(opt_count, 0)
+
+        raw_widgets = [
+            {
+                "type": "bar",
+                "title": "Empty Option Bar",
+                "form": self.root.id,
+                "question": zero_opt_q.id,
+                "config": {"group_by": "option"},
+                "rationale": "Should be pruned",
+            }
+        ]
+
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 0)
+
+    def test_autofield_question_not_selected_for_option_grouping(self):
+        """Autofield questions cannot be grouped by option."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        auto_q = Questions.objects.create(
+            name="Auto ID Code",
+            label="Auto ID Code",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.autofield,
+            order=100,
+        )
+
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        raw_widgets = [
+            {
+                "type": "bar",
+                "title": "Autofield Option Bar",
+                "form": self.root.id,
+                "question": auto_q.id,
+                "config": {"group_by": "option"},
+                "rationale": "Should be pruned",
+            }
+        ]
+
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 0)
+
+    def test_x_axis_label_populated_on_ai_widgets(self):
+        """AI sanitization populates x_axis_label from question label."""
+        group = QuestionGroup.objects.filter(form=self.root).first()
+        opt_q = Questions.objects.create(
+            name="Water Quality",
+            label="Water Quality Status",
+            form=self.root,
+            question_group=group,
+            type=QuestionTypes.option,
+            order=101,
+        )
+        QuestionOptions.objects.create(
+            question=opt_q, label="Potable", value="potable", order=1
+        )
+        QuestionOptions.objects.create(
+            question=opt_q, label="Contaminated", value="contaminated", order=2
+        )
+
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        raw_widgets = [
+            {
+                "type": "bar",
+                "title": "Water Quality Breakdown",
+                "form": self.root.id,
+                "question": opt_q.id,
+                "config": {"group_by": "option"},
+                "rationale": "Categorical test",
+            }
+        ]
+
+        sanitized = validate_and_sanitize_widgets(
+            raw_widgets,
+            sources_map,
+            has_monitoring=True,
+            root_form_id=self.root.id,
+        )
+        self.assertEqual(len(sanitized), 1)
+        self.assertEqual(
+            sanitized[0]["config"].get("x_axis_label"),
+            "Water Quality Status",
+        )
