@@ -60,6 +60,8 @@ const uiText = {
     dashboardGoFormBuilder: "Go to Form Builder to create and publish a form.",
     dashboardForbidden: "You no longer have permission to perform this action.",
     dashboardCreated: "Dashboard created",
+    dashboardAiApplyWarning:
+      "Dashboard created, but some AI widgets could not be applied.",
     dashboardDeleted: "Dashboard deleted",
     dashboardDuplicated: "Dashboard duplicated",
     dashboardDeleteConfirm: "Delete this dashboard?",
@@ -1534,6 +1536,8 @@ uiText.fr = {
   dashboardForbidden:
     "Vous n'avez plus l'autorisation d'effectuer cette action.",
   dashboardCreated: "Tableau de bord créé",
+  dashboardAiApplyWarning:
+    "Tableau de bord créé, mais certains widgets d'IA n'ont pas pu être appliqués.",
   dashboardDeleted: "Tableau de bord supprimé",
   dashboardDuplicated: "Tableau de bord dupliqué",
   dashboardDeleteConfirm: "Supprimer ce tableau de bord ?",

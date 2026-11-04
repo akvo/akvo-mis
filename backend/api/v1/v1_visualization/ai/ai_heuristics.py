@@ -11,9 +11,14 @@ from api.v1.v1_visualization.constants import WidgetTypes
 
 
 def _find_questions_by_type(
-    questions: List[Dict], types: List[int]
+    questions: List[Dict], types: List[int], require_data: bool = False
 ) -> List[Dict]:
-    return [q for q in questions if q.get("type") in types]
+    res = [q for q in questions if q.get("type") in types]
+    if require_data:
+        data_res = [q for q in res if q.get("answer_count", 0) > 0]
+        if data_res:
+            return data_res
+    return res
 
 
 def _create_kpi_widget(
@@ -49,6 +54,8 @@ def _create_pie_widget(
     rationale: str,
     col_span: int = 8,
     measure: Optional[str] = None,
+    x_axis_label: Optional[str] = None,
+    y_axis_label: Optional[str] = None,
 ) -> Dict:
     config: Dict = {
         "group_by": "option",
@@ -57,6 +64,10 @@ def _create_pie_widget(
     }
     if measure:
         config["measure"] = measure
+    if x_axis_label:
+        config["x_axis_label"] = x_axis_label
+    if y_axis_label:
+        config["y_axis_label"] = y_axis_label
     return {
         "type": "pie",
         "title": title,
@@ -76,6 +87,8 @@ def _create_bar_widget(
     rationale: str,
     col_span: int = 8,
     measure: Optional[str] = None,
+    x_axis_label: Optional[str] = None,
+    y_axis_label: Optional[str] = None,
 ) -> Dict:
     config: Dict = {
         "group_by": "option",
@@ -84,6 +97,10 @@ def _create_bar_widget(
     }
     if measure:
         config["measure"] = measure
+    if x_axis_label:
+        config["x_axis_label"] = x_axis_label
+    if y_axis_label:
+        config["y_axis_label"] = y_axis_label
     return {
         "type": "bar",
         "title": title,
@@ -103,6 +120,8 @@ def _create_line_widget(
     rationale: str,
     col_span: int = 12,
     measure: Optional[str] = None,
+    x_axis_label: Optional[str] = None,
+    y_axis_label: Optional[str] = None,
 ) -> Dict:
     config: Dict = {
         "group_by": "month",
@@ -111,13 +130,20 @@ def _create_line_widget(
     }
     if measure:
         config["measure"] = measure
+    if x_axis_label:
+        config["x_axis_label"] = x_axis_label
+    if y_axis_label:
+        config["y_axis_label"] = y_axis_label
     return {
         "type": "line",
         "title": title,
         "col_span": col_span,
         "color": None,
         "form": form_id,
-        "question": date_q_id,
+        # Y axis is a submission count (measure), not the date: the date
+        # is the X axis (config.date_question_id). A date here renders the
+        # same count line but makes the editor flag a non-numeric Y axis.
+        "question": None,
         "config": config,
         "rationale": rationale,
     }
@@ -152,7 +178,17 @@ def _create_scatter_widget(
     title: str,
     rationale: str,
     col_span: int = 12,
+    x_axis_label: Optional[str] = None,
+    y_axis_label: Optional[str] = None,
 ) -> Dict:
+    config: Dict = {
+        "question_y": y_question_id,
+        "color_scheme": "categorical",
+    }
+    if x_axis_label:
+        config["x_axis_label"] = x_axis_label
+    if y_axis_label:
+        config["y_axis_label"] = y_axis_label
     return {
         "type": "scatter",
         "title": title,
@@ -160,10 +196,7 @@ def _create_scatter_widget(
         "color": None,
         "form": form_id,
         "question": x_question_id,
-        "config": {
-            "question_y": y_question_id,
-            "color_scheme": "categorical",
-        },
+        "config": config,
         "rationale": rationale,
     }
 
@@ -253,6 +286,25 @@ def _create_table_widget(
     }
 
 
+def _create_section_title_widget(
+    title: str,
+    form_id: Optional[int] = None,
+    col_span: int = 24,
+) -> Dict:
+    return {
+        "type": "section_title",
+        "title": title,
+        "col_span": col_span,
+        "color": None,
+        "form": form_id,
+        "question": None,
+        "config": {
+            "text": title,
+        },
+        "rationale": f"Visual section separator for {title}.",
+    }
+
+
 def generate_starter_heuristics(
     metadata: Dict, user_intent: Optional[str] = None
 ) -> Dict:
@@ -267,20 +319,33 @@ def generate_starter_heuristics(
 
     widgets: List[Dict] = []
 
-    # 1. Headline Site Count KPI
-    widgets.append(
-        _create_kpi_widget(
-            form_id=root_id,
-            question_id=None,
-            title=f"Total {root_name}",
-            rationale=f"High-level count of records in {root_name}.",
-            col_span=6,
+    def _content_count() -> int:
+        return len([w for w in widgets if w.get("type") != "section_title"])
+
+    # Insert Root section title if monitoring forms exist to group Overview
+    if has_monitoring and monitoring_forms:
+        widgets.append(
+            _create_section_title_widget(
+                title=f"{root_name} Overview",
+                form_id=root_id,
+            )
         )
+
+    # 1. Headline Site Count KPI
+    headline_kpi = _create_kpi_widget(
+        form_id=root_id,
+        question_id=None,
+        title=f"Total {root_name}",
+        rationale=f"High-level count of records in {root_name}.",
+        col_span=6,
     )
+    widgets.append(headline_kpi)
 
     # 2. Metric KPI or Secondary count
     numeric_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.number, QuestionTypes.autofield]
+        root_questions,
+        [QuestionTypes.number, QuestionTypes.autofield],
+        require_data=True,
     )
     if numeric_qs:
         num_q = numeric_qs[0]
@@ -295,16 +360,20 @@ def generate_starter_heuristics(
         )
     else:
         # Default second KPI span adjustment or second count
-        widgets[0]["col_span"] = 12
+        headline_kpi["col_span"] = 12
 
     # 3. Categorical Distribution (Pie / Bar)
-    option_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.option, QuestionTypes.autofield]
-    )
-    multi_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.multiple_option]
-    )
-    all_cats = option_qs + multi_qs
+    # Autofield questions lack QuestionOptions and must not group by options
+    option_qs = [
+        q
+        for q in _find_questions_by_type(
+            root_questions,
+            [QuestionTypes.option, QuestionTypes.multiple_option],
+            require_data=True,
+        )
+        if q.get("option_count", len(q.get("options", []))) > 0
+    ]
+    all_cats = option_qs
 
     if all_cats:
         cat_q = all_cats[0]
@@ -316,7 +385,8 @@ def generate_starter_heuristics(
                     question_id=cat_q["id"],
                     title=f"{cat_q['label']} Breakdown",
                     rationale=f"Breakdown of sites by {cat_q['label']}.",
-                    col_span=12 if len(widgets) == 1 else 12,
+                    col_span=12 if _content_count() == 1 else 12,
+                    x_axis_label=cat_q.get("label"),
                 )
             )
         else:
@@ -326,12 +396,13 @@ def generate_starter_heuristics(
                     question_id=cat_q["id"],
                     title=f"{cat_q['label']} Distribution",
                     rationale=f"Distribution across {cat_q['label']}.",
-                    col_span=12 if len(widgets) == 1 else 12,
+                    col_span=12 if _content_count() == 1 else 12,
+                    x_axis_label=cat_q.get("label"),
                 )
             )
 
     # Secondary Categorical if available
-    if len(all_cats) > 1 and len(widgets) < 4:
+    if len(all_cats) > 1 and _content_count() < 4:
         cat_q2 = all_cats[1]
         widgets.append(
             _create_bar_widget(
@@ -340,6 +411,7 @@ def generate_starter_heuristics(
                 title=f"{cat_q2['label']} Overview",
                 rationale=f"Categorical comparison of {cat_q2['label']}.",
                 col_span=12,
+                x_axis_label=cat_q2.get("label"),
             )
         )
 
@@ -357,7 +429,7 @@ def generate_starter_heuristics(
         )
 
     # 5. Scatter Plot if 2+ numeric questions exist
-    if len(numeric_qs) >= 2 and len(widgets) < 5:
+    if len(numeric_qs) >= 2 and _content_count() < 5:
         widgets.append(
             _create_scatter_widget(
                 form_id=root_id,
@@ -369,41 +441,96 @@ def generate_starter_heuristics(
                     f"{numeric_qs[1]['label']}."
                 ),
                 col_span=12,
+                x_axis_label=numeric_qs[0].get("label"),
+                y_axis_label=numeric_qs[1].get("label"),
             )
         )
 
-    # 6. Monitoring Form Trends / Tables (if monitoring exists)
+    # 6. Monitoring Form Trends / Tables for ALL selected monitoring forms
     if has_monitoring and monitoring_forms:
-        m_form = monitoring_forms[0]
-        m_id = m_form.get("id")
-        m_name = m_form.get("name", "Monitoring")
-        m_questions = m_form.get("questions", [])
+        for m_form in monitoring_forms:
+            if not isinstance(m_form, dict):
+                continue
+            # Data availability guard: skip monitoring forms with 0 submissions
+            # when other forms in the family have active submission data
+            total_subs = metadata.get("total_submissions", 0)
+            if (
+                total_subs > 0
+                and "submission_count" in m_form
+                and m_form.get("submission_count", 0) == 0
+            ):
+                continue
 
-        date_qs = _find_questions_by_type(m_questions, [QuestionTypes.date])
-        if date_qs:
-            date_q = date_qs[0]
-            widgets.append(
-                _create_line_widget(
+            m_id = m_form.get("id")
+            m_name = m_form.get("name", "Monitoring")
+            m_questions = m_form.get("questions", [])
+
+            m_widgets: List[Dict] = []
+
+            date_qs = _find_questions_by_type(
+                m_questions, [QuestionTypes.date], require_data=True
+            )
+            if date_qs:
+                date_q = date_qs[0]
+                m_widgets.append(
+                    _create_line_widget(
+                        form_id=m_id,
+                        date_q_id=date_q["id"],
+                        title=f"{m_name} Activity Over Time",
+                        rationale=f"Trend tracking by {date_q['label']}.",
+                        col_span=12,
+                        measure="all_submissions",
+                        x_axis_label=date_q.get("label"),
+                    )
+                )
+
+            # Categorical breakdown on monitoring form
+            m_opt_qs = [
+                q
+                for q in _find_questions_by_type(
+                    m_questions,
+                    [QuestionTypes.option, QuestionTypes.multiple_option],
+                    require_data=True,
+                )
+                if q.get("option_count", len(q.get("options", []))) > 0
+            ]
+            if m_opt_qs:
+                m_cat_q = m_opt_qs[0]
+                m_widgets.append(
+                    _create_bar_widget(
+                        form_id=m_id,
+                        question_id=m_cat_q["id"],
+                        title=f"{m_name} {m_cat_q['label']} Distribution",
+                        rationale=(
+                            f"Breakdown of {m_name} records by "
+                            f"{m_cat_q['label']}."
+                        ),
+                        col_span=12,
+                        measure="current_state",
+                        x_axis_label=m_cat_q.get("label"),
+                    )
+                )
+
+            # Table Overview for this monitoring form
+            m_widgets.append(
+                _create_table_widget(
                     form_id=m_id,
-                    date_q_id=date_q["id"],
-                    title=f"{m_name} Activity Over Time",
-                    rationale=f"Trend tracking by {date_q['label']}.",
-                    col_span=12,
-                    measure="all_submissions",
+                    title=f"Recent {m_name} Log",
+                    rationale=f"Detailed log of submissions for {m_name}.",
+                    col_span=24,
+                    questions=m_questions,
+                    root_questions=root_questions,
                 )
             )
 
-        # Table Overview for monitoring form
-        widgets.append(
-            _create_table_widget(
-                form_id=m_id,
-                title=f"Recent {m_name} Log",
-                rationale=f"Detailed log of submissions for {m_name}.",
-                col_span=24,
-                questions=m_questions,
-                root_questions=root_questions,
-            )
-        )
+            if m_widgets:
+                widgets.append(
+                    _create_section_title_widget(
+                        title=m_name,
+                        form_id=m_id,
+                    )
+                )
+                widgets.extend(m_widgets)
 
     suggested_name = f"{root_name} Overview Dashboard"
     if user_intent:
@@ -478,7 +605,9 @@ def generate_widget_heuristics(
 
     # 2. Check if Scatter missing & 2+ unvisualized numeric questions exist
     numeric_qs = _find_questions_by_type(
-        root_questions, [QuestionTypes.number, QuestionTypes.autofield]
+        root_questions,
+        [QuestionTypes.number, QuestionTypes.autofield],
+        require_data=True,
     )
     unvis_numeric = [
         q for q in numeric_qs if q["id"] not in existing_question_ids
@@ -500,20 +629,26 @@ def generate_widget_heuristics(
                     f"Scatter plot comparing {label_x} against {label_y}."
                 ),
                 col_span=12,
+                x_axis_label=label_x,
+                y_axis_label=label_y,
             )
         )
         used_suggestion_questions.add(unvis_numeric[0]["id"])
         used_suggestion_questions.add(unvis_numeric[1]["id"])
 
     # 3. Check for unvisualized Bar / Pie option questions
-    option_qs = _find_questions_by_type(
-        root_questions,
-        [
-            QuestionTypes.option,
-            QuestionTypes.multiple_option,
-            QuestionTypes.autofield,
-        ],
-    )
+    option_qs = [
+        q
+        for q in _find_questions_by_type(
+            root_questions,
+            [
+                QuestionTypes.option,
+                QuestionTypes.multiple_option,
+            ],
+            require_data=True,
+        )
+        if q.get("option_count", len(q.get("options", []))) > 0
+    ]
     unvis_options = [
         q
         for q in option_qs
@@ -528,47 +663,66 @@ def generate_widget_heuristics(
                 title=f"{opt_q['label']} Comparison",
                 rationale=f"Visualizes {opt_q['label']}.",
                 col_span=12,
+                x_axis_label=opt_q.get("label"),
             )
         )
         used_suggestion_questions.add(opt_q["id"])
 
-    # 4. Check if Line chart is available on monitoring form
+    # 4. Check if Line chart or Table is available across monitoring forms
     if has_monitoring and monitoring_forms:
-        m_form = monitoring_forms[0]
-        m_id = m_form.get("id")
-        m_questions = m_form.get("questions", [])
-        date_qs = _find_questions_by_type(m_questions, [QuestionTypes.date])
-        unvis_date = [
-            q for q in date_qs if q["id"] not in existing_question_ids
-        ]
-        if unvis_date and WidgetTypes.line not in existing_types:
-            suggestions.append(
-                _create_line_widget(
-                    form_id=m_id,
-                    date_q_id=unvis_date[0]["id"],
-                    title="Submission Trends",
-                    rationale="Tracks chronological activity over time.",
-                    col_span=12,
-                    measure="all_submissions",
-                )
-            )
-            used_suggestion_questions.add(unvis_date[0]["id"])
+        for m_form in monitoring_forms:
+            if not isinstance(m_form, dict):
+                continue
+            # Data availability guard: skip monitoring forms with 0 submissions
+            # when other forms in the family have active submission data
+            total_subs = metadata.get("total_submissions", 0)
+            if (
+                total_subs > 0
+                and "submission_count" in m_form
+                and m_form.get("submission_count", 0) == 0
+            ):
+                continue
 
-        # Table suggestion
-        if (
-            WidgetTypes.table not in existing_types
-            and "table" not in existing_types
-        ):
-            suggestions.append(
-                _create_table_widget(
-                    form_id=m_id,
-                    title="Escalation Status Table",
-                    rationale="Tabular review for status verification.",
-                    col_span=24,
-                    questions=m_questions,
-                    root_questions=root_questions,
-                )
+            m_id = m_form.get("id")
+            m_name = m_form.get("name", "Monitoring")
+            m_questions = m_form.get("questions", [])
+            date_qs = _find_questions_by_type(
+                m_questions, [QuestionTypes.date], require_data=True
             )
+            unvis_date = [
+                q for q in date_qs if q["id"] not in existing_question_ids
+            ]
+            if unvis_date and WidgetTypes.line not in existing_types:
+                suggestions.append(
+                    _create_line_widget(
+                        form_id=m_id,
+                        date_q_id=unvis_date[0]["id"],
+                        title=f"{m_name} Submission Trends",
+                        rationale="Tracks chronological activity over time.",
+                        col_span=12,
+                        measure="all_submissions",
+                        x_axis_label=unvis_date[0].get("label"),
+                    )
+                )
+                used_suggestion_questions.add(unvis_date[0]["id"])
+
+            # Table suggestion
+            if (
+                WidgetTypes.table not in existing_types
+                and "table" not in existing_types
+            ):
+                suggestions.append(
+                    _create_table_widget(
+                        form_id=m_id,
+                        title=f"{m_name} Status Table",
+                        rationale=(
+                            f"Tabular review for {m_name} status verification."
+                        ),
+                        col_span=24,
+                        questions=m_questions,
+                        root_questions=root_questions,
+                    )
+                )
 
     # 5. Numeric KPI for unvisualized numeric questions
     unvis_kpi_numeric = [
