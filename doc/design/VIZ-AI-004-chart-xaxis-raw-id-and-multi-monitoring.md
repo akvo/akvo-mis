@@ -59,6 +59,7 @@ When a user selects a chart in the Dashboard Builder, the right-hand inspector p
 2. **Autofield & Zero-Option Question Ingestion**: In `ai_heuristics.py`, `_find_questions_by_type` bundled `QuestionTypes.autofield` with `QuestionTypes.option`. Because autofield and option questions with no options (`option_count == 0`) have no `QuestionOptions` rows, grouping by them produced either empty chart data ("No data available") or auto-increment integer IDs as category labels.
 3. **Inspector Fail-Safe Resolution**: In `BuilderInspector.jsx`, `findQuestionInFamily` was implemented to look up any unlisted question across all forms in the family, injecting a `<Select.Option>` with the question label (and source form badge) for `widget.question`, `date_question_id`, `question_y`, `category_question_id`, and `value_question`, alongside inline form-switch auto-healing.
 4. **Missing Axis Labels**: AI generation omitted `config.x_axis_label` and `config.y_axis_label`, now auto-populated from natural language question names.
+5. **Date Question on the Line Y-Axis (`widget.question`)**: `_create_line_widget` in `ai_heuristics.py` seeded `widget.question` with the `date_q_id` itself. For a line chart the inspector treats `widget.question` as the **Y axis (number or autofield)**, so a `date` question landed there and `BuilderInspector.jsx` flagged *"This question is type date, but the axis expects a number or autofield."* The render path is unaffected — a `None` and a `date` `question` both route to `handle_count_mode` — but the config was semantically wrong. A line that trends by `measure` has no numeric Y binding, so `widget.question` must be `None` (the X axis lives on `config.date_question_id`).
 
 ### 1.3 Root Cause of Multi-Monitoring Form Disregard
 In `ai_heuristics.py`, `generate_starter_heuristics` exclusively inspected `monitoring_forms[0]`, entirely ignoring subsequent monitoring forms selected in the modal.
@@ -232,6 +233,17 @@ The council convened to establish a 4-tier defense-in-depth architecture to ensu
       config["stack_form"] = None
       config["stack_question"] = None
   ```
+- **Line Primary Question (Y-Axis) Guard**: A line's `widget.question` is the Y axis, which must be a count (`None`) or a numeric/autofield question — never the date. After resolving `date_question_id`, a non-numeric `q_id` (e.g. the date itself) is dropped to `None` so the editor never flags the Y axis. This mirrors the heuristic fix (`_create_line_widget` now returns `question: None`) and also catches the OpenAI path:
+  ```python
+  if w_type == "line":
+      ...  # resolve config["date_question_id"] first
+      if (
+          q_id
+          and target_form_qs.get(q_id, {}).get("type")
+          not in NUMERIC_QUESTION_TYPES
+      ):
+          q_id = None
+  ```
 - **Axis Label Auto-Population**:
   ```python
   q_info = sources_map.get(form_id, {}).get(q_id, {})
@@ -340,6 +352,7 @@ The council convened to establish a 4-tier defense-in-depth architecture to ensu
 - `test_zero_option_question_not_selected_for_categorical_chart`: Verify that an option question with 0 options is not selected for bar/pie charts.
 - `test_autofield_question_not_selected_for_option_grouping`: Verify that autofield questions are not assigned `group_by: "option"`.
 - `test_x_axis_label_populated_on_ai_widgets`: Verify that `x_axis_label` is automatically populated with the question label for bar, line, and scatter widgets.
+- `test_line_widget_date_question_not_left_on_y_axis`: Verify that a line widget carrying a `date` question in `widget.question` has it reset to `None` by `validate_and_sanitize_widgets`, while `config.date_question_id` (the X axis) is preserved.
 
 ### 6.2 Frontend Automated Tests
 - `CreateDashboardModalAI.test.js`: Verify modal creates dashboard successfully when multiple monitoring forms are selected with AI enabled.

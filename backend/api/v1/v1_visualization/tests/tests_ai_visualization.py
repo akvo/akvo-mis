@@ -1619,6 +1619,41 @@ class AIVisualizationTestCase(TestCase, ProfileTestHelperMixin):
                 f"Query '{query_hint}' did not yield '{expected_type}'",
             )
 
+    def test_line_widget_date_question_not_left_on_y_axis(self):
+        """A line's Y axis (question) is a count, never the date.
+
+        The date belongs on config.date_question_id (X axis). A date left
+        in `question` renders the same count line but makes the builder
+        flag a non-numeric Y axis, so the sanitizer drops it to None.
+        """
+        _, sources_map = extract_family_metadata(self.root.id, self.user)
+        date_qid = next(
+            qid
+            for qid, info in sources_map[self.monitoring.id].items()
+            if info.get("type") == QuestionTypes.date
+        )
+        raw = [
+            {
+                "type": "line",
+                "title": "Activity Over Time",
+                "form": self.monitoring.id,
+                "question": date_qid,
+                "col_span": 12,
+                "config": {
+                    "group_by": "month",
+                    "date_question_id": date_qid,
+                    "measure": "all_submissions",
+                },
+                "rationale": "Trend",
+            }
+        ]
+        out = validate_and_sanitize_widgets(
+            raw, sources_map, has_monitoring=True, root_form_id=self.root.id
+        )
+        line = next(w for w in out if w["type"] == "line")
+        self.assertIsNone(line["question"])
+        self.assertEqual(line["config"]["date_question_id"], date_qid)
+
     @override_settings(OPENAI_API_KEY="sk-test-mock-key")
     def test_suggest_widgets_excludes_already_visualized_questions(self):
         """Questions already visualized are excluded from suggestions."""

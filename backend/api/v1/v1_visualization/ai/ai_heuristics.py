@@ -140,7 +140,10 @@ def _create_line_widget(
         "col_span": col_span,
         "color": None,
         "form": form_id,
-        "question": date_q_id,
+        # Y axis is a submission count (measure), not the date: the date
+        # is the X axis (config.date_question_id). A date here renders the
+        # same count line but makes the editor flag a non-numeric Y axis.
+        "question": None,
         "config": config,
         "rationale": rationale,
     }

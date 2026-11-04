@@ -547,6 +547,16 @@ def validate_and_sanitize_widgets(
             ):
                 continue
             config["date_question_id"] = date_qid
+            # Y axis is a count (measure) or a numeric question — never the
+            # date. A non-numeric q_id (e.g. the date itself) renders the
+            # same count line but makes the editor flag the Y axis, so drop
+            # it to the count-mode default.
+            if (
+                q_id
+                and target_form_qs.get(q_id, {}).get("type")
+                not in NUMERIC_QUESTION_TYPES
+            ):
+                q_id = None
 
         # Disallow cross-monitoring stack configurations
         if config.get("stack_form") and config.get("stack_form") != form_id:
