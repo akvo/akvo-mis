@@ -38,10 +38,15 @@ const SyncService = () => {
   const db = useSQLiteContext();
   const syncLockRef = useRef(false);
   const onSyncLockRef = useRef(false);
+  const onSyncDirtyRef = useRef(false);
   const syncFailureCount = useRef(0);
 
   const onSync = useCallback(async () => {
     if (onSyncLockRef.current) {
+      // A trigger (instant submit / interval tick) arrived mid-run. Record it so
+      // this run re-raises once it finishes, instead of the new row waiting for
+      // the next interval.
+      onSyncDirtyRef.current = true;
       return;
     }
     onSyncLockRef.current = true;
@@ -127,6 +132,15 @@ const SyncService = () => {
       }
     } finally {
       onSyncLockRef.current = false;
+      if (onSyncDirtyRef.current) {
+        // A submit landed while this run held the lock. Re-raise through the same
+        // instant path (lock is free now) so it uploads without waiting. Runs in a
+        // microtask after the await, so this bump is top-level, not reentrant.
+        onSyncDirtyRef.current = false;
+        UIState.update((s) => {
+          s.instantSync += 1;
+        });
+      }
     }
   }, [db, userId]);
 
@@ -157,6 +171,30 @@ const SyncService = () => {
     // eslint-disable-next-line consistent-return
     return () => clearInterval(syncTimer);
   }, [syncInSecond, isOnline, onSync]);
+
+  // Instant sync: FormPage bumps UIState.instantSync after a successful submit.
+  // Reuses onSync() (lock, WiFi-only gate, retries, status bar). Offline is left
+  // to the interval fallback, which resumes when connectivity returns.
+  useEffect(() => {
+    const unsub = UIState.subscribe(
+      (s) => s.instantSync,
+      () => {
+        if (!isOnline) {
+          return;
+        }
+        onSync().catch((err) => {
+          Sentry.withScope((scope) => {
+            scope.setTag('component', 'SyncService');
+            scope.setTag('trigger', 'instant');
+            Sentry.captureException(err);
+          });
+        });
+      },
+    );
+    return () => {
+      unsub();
+    };
+  }, [isOnline, onSync]);
 
   const onSyncDataPoint = useCallback(async () => {
     const SYNC_PAGE_SIZE = 100;
