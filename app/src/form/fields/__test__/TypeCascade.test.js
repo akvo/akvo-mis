@@ -322,6 +322,42 @@ describe('TypeCascade', () => {
     });
   });
 
+  it('caps administration cascade descent at max_level depth', async () => {
+    // nodes.level is the hierarchy depth (0 = National). With max_level=1 the
+    // deepest selectable is Province (depth 1); Regency (depth 2) must not show.
+    const leveled = [
+      { id: 1, name: 'National', parent: 0, level: 0 },
+      { id: 2, name: 'Province A', parent: 1, level: 1 },
+      { id: 3, name: 'Regency A', parent: 2, level: 2 },
+    ];
+    cascades.loadDataSource.mockResolvedValue(leveled);
+
+    const { getByTestId, getByText, queryByTestId } = render(
+      <TypeCascade
+        onChange={jest.fn()}
+        id={1}
+        label="Location"
+        value={null}
+        source={{ file: 'administrator.sqlite', parent_id: [0] }}
+        api={{ query_params: '?max_level=1' }}
+        keyform={1}
+      />,
+    );
+
+    const dropdown0 = await waitFor(() => getByTestId('dropdown-cascade-0'));
+    fireEvent.press(dropdown0);
+    fireEvent.press(getByText('National'));
+
+    // Province (depth 1) is revealed
+    const dropdown1 = await waitFor(() => getByTestId('dropdown-cascade-1'));
+    fireEvent.press(dropdown1);
+    fireEvent.press(getByText('Province A'));
+
+    // Regency (depth 2) is NOT revealed because max_level=1
+    await waitFor(() => expect(queryByTestId('dropdown-cascade-1')).not.toBeNull());
+    expect(queryByTestId('dropdown-cascade-2')).toBeNull();
+  });
+
   it('should sorted items correctly', async () => {
     const fieldID = 1;
     const fieldName = 'Location';

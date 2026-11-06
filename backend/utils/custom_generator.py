@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 from django.conf import settings
 from mis.settings import MASTER_DATA, STORAGE_PATH, COUNTRY_NAME
-from api.v1.v1_profile.models import Administration
+from api.v1.v1_profile.models import Administration, Levels
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,15 @@ def generate_sqlite(model, tenant=None, test: bool = False):
         # Add the full_path_name column to the DataFrame
         data["full_path_name"] = data["id"].apply(
             lambda id_: full_path_names.get(id_, "")
+        )
+        # Store the hierarchy DEPTH (0..n) in `level`, not the Levels PK.
+        # The mobile cascade caps descent with `level - 1 < max_level`, which
+        # only holds when `level` is the ordered depth. Levels PKs are
+        # arbitrary: a National level can outrank its children (e.g. PK 10
+        # above PK 8), which pinned the administration cascade at National.
+        level_depths = {lvl.id: lvl.level for lvl in Levels.objects.all()}
+        data["level"] = data["level"].apply(
+            lambda lid: level_depths.get(lid)
         )
 
     # pd.notna, not `x == x`. The latter is a NaN check and nothing else:
