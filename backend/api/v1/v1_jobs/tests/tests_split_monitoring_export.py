@@ -140,7 +140,7 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
         # now prefetches them, so the whole export is a small, constant number
         # of queries. Assert a bound the old per-answer behaviour blew past.
         children = FormData.objects.filter(
-            form=self.child_form, is_pending=False, is_draft=False
+            form=self.child_form, is_pending=False
         )
         total_answers = sum(c.data_answer.count() for c in children)
         self.assertGreater(total_answers, 10)  # enough to expose an N+1
