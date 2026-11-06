@@ -1,15 +1,18 @@
 import React from 'react';
 import { View } from 'react-native';
 import styles from './styles';
+import useTheme from '../../lib/theme';
 
 const Stack = ({
   children = null,
   columns = 1,
   row = false,
   reverse = false,
-  background = '#f9fafb',
-  gap = 8, // Add gap prop with default value
+  background = null,
+  gap = 8,
 }) => {
+  const theme = useTheme();
+  const bgColor = background || theme.bg.surfacePrimary;
   let flexDir = row ? 'row' : 'column';
   flexDir += reverse ? '-reverse' : '';
 
@@ -22,7 +25,7 @@ const Stack = ({
       style={{
         ...styles.container,
         flexDirection: flexDir,
-        backgroundColor: background,
+        backgroundColor: bgColor,
       }}
       testID="stack-container"
     >

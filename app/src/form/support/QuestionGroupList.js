@@ -7,11 +7,12 @@ import {
   generateDataPointName,
   generateValidationSchemaFieldLevel,
 } from '../lib';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
+import useTheme from '../../lib/theme';
 
 /**
- * Schema-based counter that mirrors the Submit gate (validateAllGroups in
+ * Schema-based counter that mirrors the Submit gate (findFirstInvalidGroup in
  * FormNavigation). A required question counts as "filled" only if it passes the
  * same Yup field-level schema used at submit time, so reaching totalFilled ===
  * totalRequired guarantees the form is actually submittable.
@@ -38,7 +39,7 @@ export const countValidRequiredQuestions = async (form, values) => {
       ) {
         return;
       }
-      // Mirror validateAllGroups: entity questions without a value are skipped
+      // Mirror validateGroup: entity questions without a value are skipped
       // (their options depend on prevAdmAnswer and are not gated at submit).
       if (question?.extra?.type === 'entity' && values?.[question.id] === undefined) {
         return;
@@ -73,6 +74,8 @@ const QuestionGroupList = ({
   setActiveQuestionGroup,
   setShowQuestionGroupList,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const selectedForm = FormState.useState((s) => s.form);
   const currentValues = FormState.useState((s) => s.currentValues);
   const visitedQuestionGroup = FormState.useState((s) => s.visitedQuestionGroup);

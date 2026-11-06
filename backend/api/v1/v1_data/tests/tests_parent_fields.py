@@ -45,7 +45,6 @@ class ParentFieldsTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(self.parent_data)
         self.parent_data.name = "Test Parent Registration Data"
@@ -60,7 +59,6 @@ class ParentFieldsTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(self.child_data)
 

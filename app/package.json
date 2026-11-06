@@ -20,6 +20,7 @@
     "@react-native-community/datetimepicker": "8.4.1",
     "@react-native-community/netinfo": "11.4.1",
     "@react-native-vector-icons/lucide": "^12.1.0",
+    "@react-navigation/bottom-tabs": "^6.5.0",
     "@react-navigation/native": "^6.1.6",
     "@react-navigation/native-stack": "^6.9.12",
     "@rneui/base": "^4.0.0-rc.8",

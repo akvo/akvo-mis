@@ -1,0 +1,105 @@
+import React from 'react';
+import { View, Modal, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
+import { Text } from '@rneui/themed';
+import useTheme from '../lib/theme';
+
+const ConfirmDialog = ({
+  visible = false,
+  title,
+  message,
+  actions = [],
+  onClose,
+  children,
+  testID,
+  danger = false,
+}) => {
+  const theme = useTheme();
+  const titleColor = danger ? theme.status.error : theme.text.primary;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      testID={testID}
+    >
+      <Pressable style={[styles.overlay, { backgroundColor: theme.bg.scrim }]} onPress={onClose}>
+        <Pressable
+          style={[styles.card, { backgroundColor: theme.bg.surfaceElevated1 }]}
+          onPress={() => {}}
+        >
+          {title && <Text style={[styles.title, { color: titleColor }]}>{title}</Text>}
+          {message && (
+            <Text style={[styles.message, { color: theme.text.primary }]}>{message}</Text>
+          )}
+          {children}
+          {actions.length > 0 && (
+            <View style={styles.buttonRow}>
+              {actions.map((action) => {
+                const isPrimary = action.type === 'primary';
+                const isDanger = action.type === 'danger';
+                const solidBg = isDanger ? theme.status.error : theme.buttonPrimary.bg;
+                const buttonBg = isPrimary || isDanger ? solidBg : theme.buttonSecondary.bg;
+                const buttonText =
+                  isPrimary || isDanger ? theme.buttonPrimary.text : theme.buttonSecondary.text;
+                return (
+                  <TouchableOpacity
+                    key={action.label}
+                    style={[styles.button, { backgroundColor: buttonBg, flex: 1 }]}
+                    onPress={action.onPress}
+                    testID={action.testID}
+                  >
+                    <Text style={[styles.buttonText, { color: buttonText }]}>{action.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: '100%',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  message: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  button: {
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
+
+export default ConfirmDialog;

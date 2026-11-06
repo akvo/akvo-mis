@@ -5,7 +5,6 @@ const DatapointSyncState = new Store({
   progress: 0,
   added: false,
   completed: false,
-  draftInProgress: false,
   syncingFormId: null,
   formProgress: {},
 });

@@ -5,7 +5,6 @@ from django.test import TestCase
 from django.test.utils import override_settings
 
 from api.v1.v1_forms.models import Forms
-from api.v1.v1_data.functions import add_fake_answers
 from api.v1.v1_profile.models import Administration
 from api.v1.v1_profile.tests.mixins import ProfileTestHelperMixin
 from faker import Faker
@@ -33,12 +32,11 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
-        self.call_command(repeat=2, test=True, approved=True, draft=False)
+        self.call_command(repeat=2, test=True, approved=True)
         self.form = Forms.objects.get(pk=1)
         self.data = (
             self.form.form_form_data.filter(
                 is_pending=False,
-                is_draft=False,
             )
             .order_by("?")
             .first()
@@ -54,21 +52,7 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
 
         self.token = self.get_auth_token(self.user.email, "test")
 
-        # Create a draft data entry
-        draft_data = self.form.form_form_data.create(
-            name="Draft Data",
-            administration=self.data.administration,
-            geo=self.data.geo,
-            created_by=self.user,
-            updated_by=self.user,
-            is_pending=False,
-            is_draft=True,
-        )
-        add_fake_answers(draft_data)
-        self.draft_data = draft_data
-
-    def test_geolocation_list_exclude_draft(self):
-        """Test that the geolocation list excludes draft data."""
+    def test_geolocation_list(self):
         response = self.client.get(
             f"/api/v1/maps/geolocation/{self.form.id}",
             HTTP_AUTHORIZATION=f"Bearer {self.token}",
@@ -76,13 +60,6 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertGreater(len(data), 0)
-        self.assertEqual(
-            list(data[0]),
-            ["id", "name", "geo", "administration_id"]
-        )
-        # Ensure draft data is not included in the response
-        self.assertNotIn(self.draft_data.id, [d["id"] for d in data])
-
         # Ensure the geolocation is correctly formatted
         self.assertIsInstance(data[0]["geo"], list)
         # The list response carries coordinates and a label, nothing
@@ -176,7 +153,6 @@ class GeolocationListTestCases(TestCase, ProfileTestHelperMixin):
                 created_by=self.user,
                 updated_by=self.user,
                 is_pending=False,
-                is_draft=False,
             )
             # add_fake_answers(new_data)
         # Calculate the time taken for the response

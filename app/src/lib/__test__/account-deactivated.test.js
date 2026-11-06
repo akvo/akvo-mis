@@ -36,12 +36,8 @@ describe('a device whose person has been deactivated', () => {
     expect(notification.sendPushNotification).toHaveBeenCalledWith(
       ACCOUNT_DEACTIVATED_NOTIFICATION,
     );
-    expect(BackgroundTask.unregisterTaskAsync).toHaveBeenCalledWith(
-      SYNC_FORM_VERSION_TASK_NAME,
-    );
-    expect(BackgroundTask.unregisterTaskAsync).toHaveBeenCalledWith(
-      SYNC_FORM_SUBMISSION_TASK_NAME,
-    );
+    expect(BackgroundTask.unregisterTaskAsync).toHaveBeenCalledWith(SYNC_FORM_VERSION_TASK_NAME);
+    expect(BackgroundTask.unregisterTaskAsync).toHaveBeenCalledWith(SYNC_FORM_SUBMISSION_TASK_NAME);
   });
 
   it('tells them once, not on every background interval', async () => {

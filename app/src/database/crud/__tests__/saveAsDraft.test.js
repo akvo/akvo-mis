@@ -32,8 +32,8 @@ describe('crudDataPoints.saveAsDraft', () => {
   });
 
   /**
-   * selectSubmissionToSync takes rows where submitted = 1 OR draftId IS NOT NULL OR
-   * sendToWeb = 1. Clearing `submitted` is what drops a locally-born submission out of
+   * selectSubmissionToSync takes rows where submitted = 1.
+   * Clearing `submitted` is what drops a locally-born submission out of
    * that queue, which is what stops the retry loop.
    */
   it('leaves the row out of the sync queue by clearing submitted', async () => {

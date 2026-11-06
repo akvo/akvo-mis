@@ -5,3 +5,5 @@ export { default as backgroundTask } from './background-task';
 export { default as i18n } from './i18n';
 export { default as cascades } from './cascades';
 export { default as helpers } from './helpers';
+export { default as useTheme } from './theme';
+export { getTheme, dark, light, typography, spacing, radius } from './theme';

@@ -157,7 +157,6 @@ def _total_parents_in_scope(form, params):
         form=scope_form,
         parent__isnull=True,
         is_pending=False,
-        is_draft=False,
     )
     administration_id = params.get("administration_id")
     if administration_id:
@@ -1291,16 +1290,15 @@ def _stack_option_by_parent(
             parent__isnull=False,
         ).values_list("parent_id", flat=True).distinct())
         if parent_ids:
-            # is_pending / is_draft are re-checked on the parent here,
-            # not inherited: data_ids bound the *children*, and a
-            # pending or draft registration with an approved monitoring
-            # submission would otherwise be drawn under
-            # measure=all_submissions while current_state excludes it
-            # -- the same site answering differently per measure (D-3).
+            # is_pending is re-checked on the parent here, not inherited:
+            # data_ids bound the *children*, and a pending registration
+            # with an approved monitoring submission would otherwise be
+            # drawn under measure=all_submissions while current_state
+            # excludes it -- the same site answering differently per
+            # measure (D-3).
             parents = FormData.objects.filter(
                 id__in=parent_ids,
                 is_pending=False,
-                is_draft=False,
             )
         else:
             # Registration-form path: qs IS the list of registrations.
@@ -1680,12 +1678,11 @@ def handle_stack_by_parent(
             "parent_id", flat=True
         ).distinct()
         # Same re-check as _stack_option_by_parent: data_ids bound the
-        # children, so a pending or draft parent would otherwise appear
+        # children, so a pending parent would otherwise appear
         # here and nowhere else (D-3).
         parent_data = FormData.objects.filter(
             id__in=parent_ids,
             is_pending=False,
-            is_draft=False,
         ).values("id", "name")
         parents = [
             {
