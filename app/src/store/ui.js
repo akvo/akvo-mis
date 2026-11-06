@@ -13,6 +13,10 @@ const UIState = new Store({
   refreshPage: false,
   lowStorage: false,
   triggerSync: false,
+  // Monotonic counter — bump to request an immediate onSync(). Counter not boolean
+  // so repeated bumps always register without a reset inside the subscribe listener
+  // (reentrant Pullstate updates there get swallowed).
+  instantSync: 0,
   bannerVisible: false,
 });
 
