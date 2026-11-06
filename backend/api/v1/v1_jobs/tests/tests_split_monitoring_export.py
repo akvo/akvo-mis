@@ -1,8 +1,9 @@
 from datetime import timedelta
 from io import StringIO
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
-from django.test.utils import override_settings
+from django.test.utils import override_settings, CaptureQueriesContext
 from django.utils import timezone
 from api.v1.v1_data.models import FormData
 from api.v1.v1_forms.models import Forms
@@ -131,6 +132,32 @@ class DownloadMonitoringDataTestCase(TestCase, ProfileTestHelperMixin):
         parent_ids = [row["parent_id"] for row in result]
         unique_parents = set(parent_ids)
         self.assertGreaterEqual(len(result), len(unique_parents))
+
+    def test_query_count_does_not_grow_per_answer(self):
+        # Regression for the download timeout: to_data_frame used to read
+        # each answer's question and question group lazily (an N+1), so the
+        # query count grew with datapoints x answers. download_monitoring_data
+        # now prefetches them, so the whole export is a small, constant number
+        # of queries. Assert a bound the old per-answer behaviour blew past.
+        children = FormData.objects.filter(
+            form=self.child_form, is_pending=False, is_draft=False
+        )
+        total_answers = sum(c.data_answer.count() for c in children)
+        self.assertGreater(total_answers, 10)  # enough to expose an N+1
+
+        with CaptureQueriesContext(connection) as ctx:
+            result = download_monitoring_data(
+                parent_form=self.form,
+                child_form=self.child_form,
+                download_type=DataDownloadTypes.all,
+            )
+        self.assertTrue(len(result) > 0)
+        self.assertLessEqual(
+            len(ctx.captured_queries),
+            15,
+            f"{len(ctx.captured_queries)} queries for {len(result)} rows / "
+            f"{total_answers} answers — download is N+1 again",
+        )
 
     def test_with_administration_filter(self):
         parents = list(

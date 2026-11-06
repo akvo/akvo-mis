@@ -1,5 +1,9 @@
 $screen-small: 768px;
 $screen-regular: 769px;
+// VIZ-028: phone-only breakpoint, below tablets. Used for the dashboard
+// viewer's full-bleed embed and the mobile header tidy-up; deliberately
+// narrower than $screen-small (768px), where the 1120px column still reads.
+$screen-phone: 480px;
 $screen-large: 1200px;
 
 $bg-light: #f5faff;

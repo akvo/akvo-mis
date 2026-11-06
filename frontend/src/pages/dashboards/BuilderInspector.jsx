@@ -699,6 +699,42 @@ const BuilderInspector = ({
     STACK_QUESTION_TYPES.has(q.type)
   );
   const selectedQuestion = allQuestions.find((q) => q.id === widget.question);
+
+  const findQuestionInFamily = (questionId) => {
+    if (!questionId) {
+      return null;
+    }
+    for (let i = 0; i < forms.length; i += 1) {
+      const f = forms[i];
+      const found = (f.questions || []).find((q) => q.id === questionId);
+      if (found) {
+        return { question: found, form: f };
+      }
+    }
+    return null;
+  };
+
+  const misplacedQuestionInfo =
+    !widget?.question || questions.some((q) => q.id === widget.question)
+      ? null
+      : findQuestionInFamily(widget.question);
+
+  const misplacedDateQuestionInfo =
+    !wConfig.date_question_id ||
+    dateQuestions.some((q) => q.id === wConfig.date_question_id)
+      ? null
+      : findQuestionInFamily(wConfig.date_question_id);
+
+  const misplacedQuestionYInfo =
+    !wConfig.question_y || questions.some((q) => q.id === wConfig.question_y)
+      ? null
+      : findQuestionInFamily(wConfig.question_y);
+
+  const misplacedCategoryQuestionInfo =
+    !wConfig.category_question_id ||
+    optionQuestions.some((q) => q.id === wConfig.category_question_id)
+      ? null
+      : findQuestionInFamily(wConfig.category_question_id);
   // A map bound to a NUMBER or AUTOFIELD question sizes its circles by the answer
   // rather than colouring them by a status (#382). Derived from the
   // question's type rather than read back from `config.map_mode`, so the
@@ -742,6 +778,11 @@ const BuilderInspector = ({
   // The number questions this bar could be measured by, and the
   // aggregations that stay honest for the split it carries.
   const valueChoices = valueQuestionOptions(allQuestions, selectedQuestion);
+  const misplacedValueQuestionInfo =
+    !wConfig.value_question ||
+    valueChoices.some((q) => q.value === wConfig.value_question)
+      ? null
+      : findQuestionInFamily(wConfig.value_question);
   const splitQuestion = wConfig.stack_question
     ? allQuestions.find((q) => q.id === wConfig.stack_question)
     : selectedQuestion;
@@ -1155,6 +1196,31 @@ const BuilderInspector = ({
               allowClear
               optionLabelProp="label"
             >
+              {misplacedQuestionInfo && (
+                <Select.Option
+                  key={misplacedQuestionInfo.question.id}
+                  value={misplacedQuestionInfo.question.id}
+                  label={
+                    <QuestionLabel
+                      label={
+                        misplacedQuestionInfo.form.id === widget.form
+                          ? misplacedQuestionInfo.question.label
+                          : `${misplacedQuestionInfo.question.label} (${misplacedQuestionInfo.form.name})`
+                      }
+                      type={misplacedQuestionInfo.question.type}
+                    />
+                  }
+                >
+                  <QuestionLabel
+                    label={
+                      misplacedQuestionInfo.form.id === widget.form
+                        ? misplacedQuestionInfo.question.label
+                        : `${misplacedQuestionInfo.question.label} (${misplacedQuestionInfo.form.name})`
+                    }
+                    type={misplacedQuestionInfo.question.type}
+                  />
+                </Select.Option>
+              )}
               {questions.map((q) => (
                 <Select.Option
                   key={q.id}
@@ -1165,6 +1231,46 @@ const BuilderInspector = ({
                 </Select.Option>
               ))}
             </Select>
+            {misplacedQuestionInfo &&
+              misplacedQuestionInfo.form.id !== widget.form && (
+                <div
+                  className="builder-inspector-hint"
+                  style={{ color: "#d48806", marginTop: 4 }}
+                >
+                  Question belongs to{" "}
+                  <strong>{misplacedQuestionInfo.form.name}</strong>.{" "}
+                  <button
+                    type="button"
+                    style={{
+                      border: "none",
+                      background: "none",
+                      color: "#1651b6",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      padding: 0,
+                    }}
+                    onClick={() => {
+                      onWidgetChange({
+                        ...widget,
+                        form: misplacedQuestionInfo.form.id,
+                      });
+                    }}
+                  >
+                    Switch form
+                  </button>
+                </div>
+              )}
+            {misplacedQuestionInfo &&
+              misplacedQuestionInfo.form.id === widget.form && (
+                <div
+                  className="builder-inspector-hint"
+                  style={{ color: "#d48806", marginTop: 4 }}
+                >
+                  This question is type{" "}
+                  <strong>{misplacedQuestionInfo.question.type}</strong>, but
+                  the axis expects a number or autofield.
+                </div>
+              )}
             {wType === "scatter" && !widget.question && (
               <div className="builder-inspector-hint">
                 Default: each datapoint counts as 1
@@ -1249,6 +1355,31 @@ const BuilderInspector = ({
               allowClear
               optionLabelProp="label"
             >
+              {misplacedQuestionYInfo && (
+                <Select.Option
+                  key={misplacedQuestionYInfo.question.id}
+                  value={misplacedQuestionYInfo.question.id}
+                  label={
+                    <QuestionLabel
+                      label={
+                        misplacedQuestionYInfo.form.id === widget.form
+                          ? misplacedQuestionYInfo.question.label
+                          : `${misplacedQuestionYInfo.question.label} (${misplacedQuestionYInfo.form.name})`
+                      }
+                      type={misplacedQuestionYInfo.question.type}
+                    />
+                  }
+                >
+                  <QuestionLabel
+                    label={
+                      misplacedQuestionYInfo.form.id === widget.form
+                        ? misplacedQuestionYInfo.question.label
+                        : `${misplacedQuestionYInfo.question.label} (${misplacedQuestionYInfo.form.name})`
+                    }
+                    type={misplacedQuestionYInfo.question.type}
+                  />
+                </Select.Option>
+              )}
               {questions.map((q) => (
                 <Select.Option
                   key={q.id}
@@ -1311,6 +1442,31 @@ const BuilderInspector = ({
               allowClear
               optionLabelProp="label"
             >
+              {misplacedValueQuestionInfo && (
+                <Select.Option
+                  key={misplacedValueQuestionInfo.question.id}
+                  value={misplacedValueQuestionInfo.question.id}
+                  label={
+                    <QuestionLabel
+                      label={
+                        misplacedValueQuestionInfo.form.id === widget.form
+                          ? misplacedValueQuestionInfo.question.label
+                          : `${misplacedValueQuestionInfo.question.label} (${misplacedValueQuestionInfo.form.name})`
+                      }
+                      type={misplacedValueQuestionInfo.question.type}
+                    />
+                  }
+                >
+                  <QuestionLabel
+                    label={
+                      misplacedValueQuestionInfo.form.id === widget.form
+                        ? misplacedValueQuestionInfo.question.label
+                        : `${misplacedValueQuestionInfo.question.label} (${misplacedValueQuestionInfo.form.name})`
+                    }
+                    type={misplacedValueQuestionInfo.question.type}
+                  />
+                </Select.Option>
+              )}
               {valueChoices.map((q) => (
                 <Select.Option
                   key={q.value}
@@ -1353,6 +1509,31 @@ const BuilderInspector = ({
               allowClear
               optionLabelProp="label"
             >
+              {misplacedDateQuestionInfo && (
+                <Select.Option
+                  key={misplacedDateQuestionInfo.question.id}
+                  value={misplacedDateQuestionInfo.question.id}
+                  label={
+                    <QuestionLabel
+                      label={
+                        misplacedDateQuestionInfo.form.id === widget.form
+                          ? misplacedDateQuestionInfo.question.label
+                          : `${misplacedDateQuestionInfo.question.label} (${misplacedDateQuestionInfo.form.name})`
+                      }
+                      type={misplacedDateQuestionInfo.question.type}
+                    />
+                  }
+                >
+                  <QuestionLabel
+                    label={
+                      misplacedDateQuestionInfo.form.id === widget.form
+                        ? misplacedDateQuestionInfo.question.label
+                        : `${misplacedDateQuestionInfo.question.label} (${misplacedDateQuestionInfo.form.name})`
+                    }
+                    type={misplacedDateQuestionInfo.question.type}
+                  />
+                </Select.Option>
+              )}
               {dateQuestions.map((q) => (
                 <Select.Option
                   key={q.id}
@@ -1416,6 +1597,31 @@ const BuilderInspector = ({
                 allowClear
                 optionLabelProp="label"
               >
+                {misplacedCategoryQuestionInfo && (
+                  <Select.Option
+                    key={misplacedCategoryQuestionInfo.question.id}
+                    value={misplacedCategoryQuestionInfo.question.id}
+                    label={
+                      <QuestionLabel
+                        label={
+                          misplacedCategoryQuestionInfo.form.id === widget.form
+                            ? misplacedCategoryQuestionInfo.question.label
+                            : `${misplacedCategoryQuestionInfo.question.label} (${misplacedCategoryQuestionInfo.form.name})`
+                        }
+                        type={misplacedCategoryQuestionInfo.question.type}
+                      />
+                    }
+                  >
+                    <QuestionLabel
+                      label={
+                        misplacedCategoryQuestionInfo.form.id === widget.form
+                          ? misplacedCategoryQuestionInfo.question.label
+                          : `${misplacedCategoryQuestionInfo.question.label} (${misplacedCategoryQuestionInfo.form.name})`
+                      }
+                      type={misplacedCategoryQuestionInfo.question.type}
+                    />
+                  </Select.Option>
+                )}
                 {optionQuestions.map((q) => (
                   <Select.Option
                     key={q.id}

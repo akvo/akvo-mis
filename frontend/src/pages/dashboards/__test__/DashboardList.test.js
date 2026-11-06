@@ -177,4 +177,25 @@ describe("DashboardList with an embedded dashboard", () => {
     // "0 widgets" would be true and useless.
     expect(screen.queryByText(/0 widgets/)).not.toBeInTheDocument();
   });
+
+  it("auto-opens create modal when location.state has openCreate: true", async () => {
+    dashboardApi.list.mockResolvedValue({ data: [] });
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/control-center/dashboard",
+            state: { openCreate: true },
+          },
+        ]}
+      >
+        <AbilityContext.Provider value={ability}>
+          <DashboardList />
+        </AbilityContext.Provider>
+      </MemoryRouter>
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Create a dashboard")).toBeInTheDocument();
+    });
+  });
 });

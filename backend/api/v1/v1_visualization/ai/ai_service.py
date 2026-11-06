@@ -10,9 +10,11 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
+from django.db.models import Count, Q
 
+from api.v1.v1_data.models import Answers, FormData
 from api.v1.v1_forms.constants import FormTypes, QuestionTypes
-from api.v1.v1_forms.models import Forms
+from api.v1.v1_forms.models import Forms, Questions
 from api.v1.v1_visualization.ai.ai_heuristics import (
     generate_starter_heuristics,
     generate_widget_heuristics,
@@ -134,7 +136,29 @@ def extract_family_metadata(
         ).order_by("id")
     )
 
-    sources_map: Dict[int, Dict[int, Dict]] = {}
+    sources_map: Dict[Any, Any] = {}
+
+    all_family_forms = [root_form] + monitoring_forms
+
+    # Fast indexed aggregates to check actual data presence
+    form_submission_counts = dict(
+        FormData.objects.filter(
+            form__in=all_family_forms, deleted_at__isnull=True
+        )
+        .values("form_id")
+        .annotate(c=Count("id"))
+        .values_list("form_id", "c")
+    )
+
+    question_answer_counts = dict(
+        Answers.objects.filter(
+            question__form__in=all_family_forms,
+            data__deleted_at__isnull=True,
+        )
+        .values("question_id")
+        .annotate(c=Count("id"))
+        .values_list("question_id", "c")
+    )
 
     def _extract_questions(form_obj) -> List[Dict]:
         q_map: Dict[int, Dict] = {}
@@ -162,6 +186,7 @@ def extract_family_metadata(
 
             type_name = QuestionTypes.FieldStr.get(q.type, "unknown").lower()
             group_name = q.question_group.name if q.question_group else None
+            ans_count = question_answer_counts.get(q.id, 0)
             q_info = {
                 "id": q.id,
                 "label": q.label or q.name,
@@ -169,6 +194,8 @@ def extract_family_metadata(
                 "type_name": type_name,
                 "group_name": group_name,
                 "option_count": opt_count,
+                "answer_count": ans_count,
+                "has_data": ans_count > 0,
             }
             if opts:
                 q_info["options_sample"] = opts
@@ -182,6 +209,9 @@ def extract_family_metadata(
                 "label": q.label or q.name,
                 "group_id": q.question_group_id,
                 "group_name": group_name,
+                "option_count": opt_count,
+                "answer_count": ans_count,
+                "has_data": ans_count > 0,
             }
 
         sources_map[form_obj.id] = q_map
@@ -192,23 +222,35 @@ def extract_family_metadata(
     mon_list = []
     for m_form in monitoring_forms:
         m_qs = _extract_questions(m_form)
+        sub_count = form_submission_counts.get(m_form.id, 0)
         mon_list.append(
             {
                 "id": m_form.id,
                 "name": m_form.name,
+                "submission_count": sub_count,
+                "has_data": sub_count > 0,
                 "questions": m_qs,
             }
         )
 
+    root_sub_count = form_submission_counts.get(root_form.id, 0)
+    total_family_submissions = sum(form_submission_counts.values())
     metadata = {
         "root_form": {
             "id": root_form.id,
             "name": root_form.name,
+            "submission_count": root_sub_count,
+            "has_data": root_sub_count > 0,
             "questions": root_questions,
         },
         "monitoring_forms": mon_list,
         "has_monitoring": bool(mon_list),
+        "total_submissions": total_family_submissions,
     }
+
+    sources_map["_form_submissions"] = form_submission_counts
+    sources_map["_question_answers"] = question_answer_counts
+    sources_map["_total_submissions"] = total_family_submissions
 
     return metadata, sources_map
 
@@ -219,7 +261,7 @@ def normalize_grid_layout(widgets: List[Dict]) -> List[Dict]:
         return []
 
     for w in widgets:
-        if w.get("type") in ("table", "map"):
+        if w.get("type") in ("table", "map", "section_title"):
             w["col_span"] = 24
         elif w.get("col_span") not in (6, 8, 12, 24):
             w["col_span"] = 12
@@ -367,6 +409,9 @@ def validate_and_sanitize_widgets(
         WidgetTypes.scatter: "scatter",
         "scatter": "scatter",
         "scatter_plot": "scatter",
+        WidgetTypes.section_title: "section_title",
+        "section_title": "section_title",
+        "section_header": "section_title",
     }
 
     for item in raw_widgets:
@@ -407,6 +452,29 @@ def validate_and_sanitize_widgets(
             if q_type not in valid_types:
                 continue
 
+        # Data availability guard: Drop chart/table widgets targeting forms
+        # with 0 submissions or questions with 0 answers (prevents empty
+        # "No data available" widgets) when the family has active submissions
+        total_family_sub = sources_map.get("_total_submissions", 0)
+        if total_family_sub > 0:
+            form_sub_counts = sources_map.get("_form_submissions")
+            if form_sub_counts is not None and form_id in form_sub_counts:
+                if form_sub_counts[form_id] == 0:
+                    is_headline = (
+                        w_type == "kpi"
+                        and q_id is None
+                        and form_id == root_form_id
+                    )
+                    if not is_headline:
+                        continue
+
+            question_ans_counts = sources_map.get("_question_answers")
+            if question_ans_counts is not None:
+                if q_id and question_ans_counts.get(q_id, 0) == 0:
+                    continue
+        else:
+            question_ans_counts = None
+
         config = item.get("config") or {}
         if not isinstance(config, dict):
             config = {}
@@ -416,11 +484,26 @@ def validate_and_sanitize_widgets(
         if repeat_agg and repeat_agg not in VALID_REPEAT_AGG:
             config["repeat_agg"] = "sum"
 
+        # Categorical option guard: requires option_count > 0
+        if q_id and (
+            w_type == "pie"
+            or (w_type == "bar" and config.get("group_by") == "option")
+        ):
+            q_info = sources_map.get(form_id or 0, {}).get(q_id or 0, {})
+            if q_info.get("type") in (
+                QuestionTypes.option,
+                QuestionTypes.multiple_option,
+            ):
+                if q_info.get("option_count") == 0:
+                    continue
+            elif config.get("group_by") == "option":
+                # A non-option question cannot be grouped by option
+                continue
+
         # Scatter widget question_y sanitization
         if w_type == "scatter":
             qy = config.get("question_y")
             if qy:
-                # Validate question_y against sources_map
                 target_form_qs = sources_map.get(form_id or 0, {})
                 if qy not in target_form_qs:
                     config["question_y"] = None
@@ -428,6 +511,62 @@ def validate_and_sanitize_widgets(
                     qy_type = target_form_qs[qy].get("type")
                     if qy_type not in NUMERIC_QUESTION_TYPES:
                         config["question_y"] = None
+                    elif (
+                        question_ans_counts is not None
+                        and question_ans_counts.get(qy, 0) == 0
+                    ):
+                        config["question_y"] = None
+
+        # Line widget date_question_id sanitization
+        if w_type == "line":
+            target_form_qs = sources_map.get(form_id or 0, {})
+            date_qid = config.get("date_question_id")
+            if date_qid and (
+                date_qid not in target_form_qs
+                or target_form_qs[date_qid].get("type") != QuestionTypes.date
+            ):
+                date_qid = None
+            if not date_qid:
+                is_date = (
+                    target_form_qs.get(q_id, {}).get("type")
+                    == QuestionTypes.date
+                )
+                if q_id and is_date:
+                    date_qid = q_id
+                    q_id = None
+                else:
+                    for cand_qid, cand_info in target_form_qs.items():
+                        if cand_info.get("type") == QuestionTypes.date:
+                            date_qid = cand_qid
+                            break
+            if not date_qid:
+                continue
+            if (
+                question_ans_counts is not None
+                and question_ans_counts.get(date_qid, 0) == 0
+            ):
+                continue
+            config["date_question_id"] = date_qid
+            # Y axis is a count (measure) or a numeric question — never the
+            # date. A non-numeric q_id (e.g. the date itself) renders the
+            # same count line but makes the editor flag the Y axis, so drop
+            # it to the count-mode default.
+            if (
+                q_id
+                and target_form_qs.get(q_id, {}).get("type")
+                not in NUMERIC_QUESTION_TYPES
+            ):
+                q_id = None
+
+        # Disallow cross-monitoring stack configurations
+        if config.get("stack_form") and config.get("stack_form") != form_id:
+            config["stack_form"] = None
+            config["stack_question"] = None
+            config.pop("stack_by", None)
+        stack_q = config.get("stack_question")
+        if stack_q and stack_q not in sources_map.get(form_id or 0, {}):
+            config["stack_question"] = None
+            config.pop("stack_by", None)
 
         # Map widget question sanitization:
         # In Akvo MIS, registration forms provide coordinates automatically.
@@ -446,8 +585,11 @@ def validate_and_sanitize_widgets(
 
         # Table widget columns sanitization & auto-generation
         if w_type == "table":
+            if root_form_id and form_id == root_form_id:
+                continue
             cols = config.get("columns")
             valid_cols = []
+            seen_keys = set()
             if isinstance(cols, list):
                 for col in cols:
                     if not isinstance(col, dict):
@@ -462,29 +604,48 @@ def validate_and_sanitize_widgets(
                     ):
                         continue
                     col_qid = col.get("question") or col.get("question_id")
-                    if src in ("answer", "parent_answer", "latest_date"):
-                        target_form = (
-                            root_form_id if src == "parent_answer" else form_id
-                        )
-                        if not col_qid or col_qid not in sources_map.get(
-                            target_form or form_id or 0, {}
-                        ):
-                            # Try other form in sources_map if misplaced
-                            found_fid = None
-                            for fid, qmap in sources_map.items():
-                                if col_qid in qmap:
-                                    found_fid = fid
-                                    break
-                            if not found_fid:
-                                continue
+                    if col_qid is not None:
+                        try:
                             col_qid = int(col_qid)
+                        except (TypeError, ValueError):
+                            col_qid = None
+
+                    if src == "answer":
+                        # Strictly must belong to widget's form
+                        if not col_qid or col_qid not in sources_map.get(
+                            form_id or 0, {}
+                        ):
+                            continue
+                    elif src == "parent_answer":
+                        # Strictly must belong to root_form
+                        if not col_qid or col_qid not in sources_map.get(
+                            root_form_id or 0, {}
+                        ):
+                            continue
+                    elif src == "latest_date":
+                        # If question specified, must belong to widget's form
+                        if col_qid and col_qid not in sources_map.get(
+                            form_id or 0, {}
+                        ):
+                            continue
+                    elif src in ("parent_name", "administration"):
+                        col_qid = None
+
+                    raw_key = col.get("key") or f"col_{len(valid_cols)}"
+                    col_key = str(raw_key).strip()
+                    if not col_key:
+                        col_key = f"col_{len(valid_cols)}"
+                    if col_key in seen_keys:
+                        col_key = f"{col_key}_{len(valid_cols)}"
+                    seen_keys.add(col_key)
+
                     valid_cols.append(
                         {
-                            "key": col.get("key") or f"col_{len(valid_cols)}",
+                            "key": col_key,
                             "source": src,
                             "question": col_qid,
                             "label": (
-                                col.get("label") or col.get("key") or "Column"
+                                col.get("label") or col_key or "Column"
                             ),
                         }
                     )
@@ -498,9 +659,41 @@ def validate_and_sanitize_widgets(
             config["columns"] = valid_cols
             if not isinstance(config.get("criteria"), list):
                 config["criteria"] = []
+            config.pop("measure", None)
+
+        # Auto-populate axis labels from question labels for chart readability
+        target_qs = sources_map.get(form_id or 0, {})
+        q_info = target_qs.get(q_id or 0, {})
+        q_label = q_info.get("label") or q_info.get("name")
+        if w_type == "bar":
+            is_horiz = config.get("orientation") == "horizontal"
+            if is_horiz:
+                if not config.get("y_axis_label") and q_label:
+                    config["y_axis_label"] = q_label
+            else:
+                if not config.get("x_axis_label") and q_label:
+                    config["x_axis_label"] = q_label
+        elif w_type == "line":
+            date_qid = config.get("date_question_id")
+            date_label = (
+                target_qs.get(date_qid, {}).get("label") if date_qid else None
+            )
+            if not config.get("x_axis_label") and date_label:
+                config["x_axis_label"] = date_label
+            if not config.get("y_axis_label") and q_label:
+                config["y_axis_label"] = q_label
+        elif w_type == "scatter":
+            if not config.get("x_axis_label") and q_label:
+                config["x_axis_label"] = q_label
+            qy = config.get("question_y")
+            qy_label = target_qs.get(qy, {}).get("label") if qy else None
+            if not config.get("y_axis_label") and qy_label:
+                config["y_axis_label"] = qy_label
 
         # Ensure measure integrity across monitoring and registration forms
-        if root_form_id and form_id and form_id != root_form_id:
+        if w_type in ("table", "section_title"):
+            config.pop("measure", None)
+        elif root_form_id and form_id and form_id != root_form_id:
             if not config.get("measure"):
                 config["measure"] = (
                     "all_submissions" if w_type == "line" else "current_state"
@@ -509,14 +702,21 @@ def validate_and_sanitize_widgets(
             config.pop("measure", None)
 
         col_span = item.get("col_span", 12)
-        if w_type in ("table", "map"):
+        if w_type in ("table", "map", "section_title"):
             col_span = 24
         elif col_span not in (6, 8, 12, 24):
             col_span = 12
 
-        default_title = f"{w_type.capitalize()} Widget"
+        default_title = (
+            "Section Title" if w_type == "section_title"
+            else f"{w_type.capitalize()} Widget"
+        )
         title = str(item.get("title") or default_title).strip()[:255]
         rationale = str(item.get("rationale") or "Recommended metric.").strip()
+
+        if w_type == "section_title":
+            if "text" not in config or not config["text"]:
+                config["text"] = title
 
         valid_widgets.append(
             {
@@ -532,6 +732,57 @@ def validate_and_sanitize_widgets(
         )
 
     return normalize_grid_layout(valid_widgets)
+
+
+def _verify_widgets_with_engine(
+    widgets: List[Dict],
+    root_form_id: Optional[int],
+    user,
+) -> List[Dict]:
+    """Defense-in-depth gate validating widgets against _validate_widget.
+
+    Ensures 100% parity with POST /manage/dashboards payload validation.
+    """
+    if not widgets or not root_form_id or not user:
+        return widgets
+
+    try:
+        from api.v1.v1_visualization.dashboard_functions import (
+            _validate_widget,
+        )
+
+        user_forms = Forms.objects.for_user(user)
+        root_form = user_forms.filter(pk=root_form_id).first()
+        if not root_form:
+            return widgets
+
+        family_forms = user_forms.filter(
+            Q(pk=root_form_id) | Q(parent_id=root_form_id)
+        )
+        user_questions = Questions.objects.for_user(user).filter(
+            form__in=family_forms
+        )
+
+        verified = []
+        for idx, w in enumerate(widgets):
+            err = _validate_widget(
+                w, idx, root_form, family_forms, user_questions, set()
+            )
+            if not err:
+                verified.append(w)
+            else:
+                logger.warning(
+                    "AI candidate widget dropped by _validate_widget: %s (%s)",
+                    w.get("title"),
+                    err,
+                )
+        return normalize_grid_layout(verified)
+    except Exception as exc:
+        logger.warning(
+            "Could not run _validate_widget parity gate: %s",
+            exc,
+        )
+        return widgets
 
 
 def calculate_ai_timeout(
@@ -647,6 +898,9 @@ class AISuggestionService:
             valid_widgets = validate_and_sanitize_widgets(
                 raw_widgets, sources_map, has_monitoring, root_form_id
             )
+            valid_widgets = _verify_widgets_with_engine(
+                valid_widgets, root_form_id, user
+            )
             if len(valid_widgets) >= 3:
                 r_name = metadata["root_form"]["name"]
                 s_name = str(
@@ -668,6 +922,9 @@ class AISuggestionService:
         heuristic_res = generate_starter_heuristics(metadata, user_intent)
         valid_widgets = validate_and_sanitize_widgets(
             heuristic_res["widgets"], sources_map, has_monitoring, root_form_id
+        )
+        valid_widgets = _verify_widgets_with_engine(
+            valid_widgets, root_form_id, user
         )
         heuristic_res["widgets"] = valid_widgets
         heuristic_res["ai_available"] = False
@@ -810,6 +1067,9 @@ class AISuggestionService:
                 valid_suggestions = validate_and_sanitize_widgets(
                     raw_suggestions, sources_map, has_monitoring, root_form_id
                 )
+                valid_suggestions = _verify_widgets_with_engine(
+                    valid_suggestions, root_form_id, user
+                )
                 deduped = cls._deduplicate_suggestions(
                     valid_suggestions, all_existing
                 )
@@ -831,6 +1091,9 @@ class AISuggestionService:
             sources_map,
             has_monitoring,
             root_form_id,
+        )
+        valid_suggestions = _verify_widgets_with_engine(
+            valid_suggestions, root_form_id, user
         )
         deduped = cls._deduplicate_suggestions(valid_suggestions, all_existing)
         return {

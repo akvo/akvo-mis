@@ -39,3 +39,4 @@ export { default as MapView } from "./map-view/MapView";
 export { default as MarkerLegend } from "./map-view/MarkerLegend";
 export { default as GradationLegend } from "./map-view/GradationLegend";
 export { default as ChatbotWidget } from "./chatbot/ChatbotWidget";
+export { default as OnboardingTour } from "./onboarding-tour/OnboardingTour";

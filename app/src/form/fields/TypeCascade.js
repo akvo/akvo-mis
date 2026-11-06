@@ -72,7 +72,11 @@ const TypeCascade = ({
 
     const options = dataSource?.filter((d) => d?.parent === val);
 
-    if (options.length && (maxLevel ? admLevel - 1 < maxLevel : true)) {
+    // admLevel is the selected node's depth (0 = National). With max_level=N the
+    // deepest selectable depth is N, so only reveal the next level while the
+    // selected depth is still above it. (nodes.level carries depth, not the
+    // Levels PK — see generate_sqlite.)
+    if (options.length && (maxLevel ? admLevel < maxLevel : true)) {
       updatedItems.push({
         options,
         value: null,

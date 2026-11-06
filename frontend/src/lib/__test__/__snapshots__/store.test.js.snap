@@ -99,6 +99,9 @@ Object {
   "tenant": null,
   "tenantLoaded": false,
   "tenantMissing": false,
+  "tourGoal": null,
+  "tourOpen": false,
+  "tourStep": 0,
   "user": null,
 }
 `;

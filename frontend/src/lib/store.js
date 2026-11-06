@@ -67,6 +67,9 @@ const defaultUIState = {
   },
   initialValue: [],
   monitoring: null,
+  tourOpen: false,
+  tourGoal: null,
+  tourStep: 0,
 };
 
 const store = new Store(defaultUIState);

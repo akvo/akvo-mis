@@ -48,6 +48,21 @@ class SQLiteGenerationTest(TestCase):
         conn.close()
         os.remove(file_name)
 
+    def test_administration_sqlite_level_is_depth(self):
+        # nodes.level must carry the hierarchy depth (0..n), not the Levels
+        # PK, so the mobile cascade's `level - 1 < max_level` descent holds.
+        file_name = generate_sqlite(Administration)
+        conn = sqlite3.connect(file_name)
+        df = pd.read_sql_query("SELECT id, level FROM nodes", conn)
+        conn.close()
+        os.remove(file_name)
+        depth_by_id = {a.id: a.level.level for a in self.administration}
+        for _, row in df.iterrows():
+            self.assertEqual(row["level"], depth_by_id[row["id"]])
+        # Root is depth 0 and depths form a contiguous 0..n range.
+        depths = sorted(set(df["level"]))
+        self.assertEqual(depths, list(range(len(depths))))
+
     def test_sqlite_generation_command(self):
         call_command("generate_sqlite", "--test", True)
         output_1 = f"{MASTER_DATA}/test_administrator.sqlite"

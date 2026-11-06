@@ -527,6 +527,68 @@ $view-gutter: 50px;
   }
 }
 
+/* VIZ-028: on a small screen the widget grid stops honouring each
+   widget's col_span and stacks every card full width. A col_span of 8
+   (a third) is ~130px on a phone -- a pie with its legend cut off, the
+   "ugly mobile grid". Width is viewport-driven, not an author setting:
+   contained (the col_span grid) at $screen-regular and up, full width
+   below $screen-small. The single `1fr` column plus `grid-column: 1 / -1`
+   overrides the inline `grid-column: span N` DashboardGrid sets per cell,
+   which is why !important is needed here and nowhere else. */
+@media screen and (max-width: $screen-small) {
+  .dashboard-view-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-view-cell {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* VIZ-028: phone layout. The 1120px column and its 50px gutters make no
+   sense below $screen-phone — there is no width to centre within and the
+   gutters are pure loss (the mobile complaint). Every member of the page
+   column drops to a 16px gutter, and the embed goes full-bleed with no
+   card regardless of the author's contained/full choice, since that
+   choice is a desktop/tablet affordance (VIZ-028 D-2). */
+@media screen and (max-width: $screen-phone) {
+  .dashboard-view-header-inner,
+  .dashboard-view-filters-inner,
+  .dashboard-view-grid,
+  .dashboard-view-filters-chips {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* The title clears the fixed back button instead of starting under it:
+     the button is at left:8px and 34px wide (right edge 42px), so the
+     text begins at 50px with an 8px gap. Only when the button is present
+     (signed-in): a public view has no button, so no gap to leave. */
+  .dashboard-view-shell--has-back .dashboard-view-header-inner {
+    padding-left: 50px;
+  }
+
+  .dashboard-embed-frame {
+    /* Full-bleed, but never wider than the viewport, so a fixed-width
+       vendor report scrolls inside the frame instead of scrolling the
+       whole page sideways. */
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+    overflow-x: auto;
+
+    iframe {
+      background: none;
+      box-shadow: none;
+    }
+  }
+
+  /* The back button now sits in the 16px gutter, not the old 50px one. */
+  .dashboard-view-back {
+    left: 8px;
+  }
+}
+
 // VIZ-027: the question filters panel (QuestionFilters.jsx).
 .dashboard-question-filters-panel {
   display: flex;

@@ -201,17 +201,18 @@ describe("the top bar is a back button and nothing else", () => {
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 
-  test("an anonymous visitor sees the back control too", async () => {
-    // It used to be hidden from them because it led to
-    // /control-center/dashboard, a Private route — a login wall rather
-    // than a way back. Going back through history has no such problem,
-    // so hiding it now would strand an anonymous visitor on the page.
+  test("an anonymous visitor sees no back control", async () => {
+    // VIZ-028: back navigates the app's own history, which a visitor who
+    // landed on a public dashboard link has none of — so it is shown only
+    // to signed-in users, not on a public/anonymous view.
     setUser(null);
     dashboardApi.getPublished.mockResolvedValue({ data: PAYLOAD });
     renderViewer();
 
     await waitFor(() => expect(screen.getByTestId("grid")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /back/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /back/i })
+    ).not.toBeInTheDocument();
   });
 
   test("a signed-in visitor sees the back control", async () => {

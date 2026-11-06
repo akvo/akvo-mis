@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Button, Col, Divider, Row, Table } from "antd";
 import { DownCircleOutlined, LeftCircleOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +23,10 @@ const MasterData = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
+  // Changing the administration fires two fetches (parent changes with the old
+  // page still set, then the page resets to 1); keep only the latest response so
+  // a stale page-2 result can't overwrite the table.
+  const fetchSeq = useRef(0);
   const { language, administration, filters, levels } = store.useState(
     (s) => s
   );
@@ -97,6 +107,7 @@ const MasterData = () => {
 
   const fetchData = useCallback(
     async (currentPage = 1, parent = null, search = null) => {
+      const seq = (fetchSeq.current += 1);
       try {
         let url = `/administrations?page=${currentPage}`;
         if (parent) {
@@ -106,12 +117,19 @@ const MasterData = () => {
           url = url + `&search=${search}`;
         }
         const { data: apiData } = await api.get(url);
+        // A later request was started while this one was in flight — drop it.
+        if (seq !== fetchSeq.current) {
+          return;
+        }
         const { total, current, data } = apiData;
         setDataset(data);
         setTotalCount(total);
         setCurrentPage(current);
         setLoading(false);
       } catch {
+        if (seq !== fetchSeq.current) {
+          return;
+        }
         setLoading(false);
       }
     },
