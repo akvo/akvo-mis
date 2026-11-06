@@ -1,6 +1,7 @@
 import numpy as np
 from collections import OrderedDict
 
+from django.utils.text import slugify
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
@@ -8,6 +9,7 @@ from rest_framework import serializers
 from api.v1.v1_data.models import Answers
 from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes, FormStatus
 from api.v1.v1_forms.models import (
+    FormCategory,
     FormPublishedVersion,
     Forms,
     QuestionGroup,
@@ -821,3 +823,45 @@ class XLSFormImportSerializer(serializers.Serializer):
         default="registration",
     )
     parent_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class FormCategorySerializer(serializers.ModelSerializer):
+    """FB-018: a managed library category. slug is derived from name on
+    create and kept stable afterwards (it is a URL key), so clients never
+    send a slug that could drift from the name.
+    """
+
+    slug = serializers.SlugField(read_only=True)
+
+    class Meta:
+        model = FormCategory
+        fields = ["id", "name", "slug"]
+
+    def create(self, validated_data):
+        validated_data["slug"] = slugify(validated_data["name"])
+        return super().create(validated_data)
+
+
+class LibraryFormSerializer(serializers.ModelSerializer):
+    """FB-018: a registration template (family root) for the browse list."""
+
+    categories = FormCategorySerializer(many=True, read_only=True)
+    monitoring_count = serializers.SerializerMethodField()
+
+    def get_monitoring_count(self, obj):
+        return obj.children.filter(
+            status=FormStatus.published, deleted_at__isnull=True
+        ).count()
+
+    class Meta:
+        model = Forms
+        fields = [
+            "id",
+            "name",
+            "description",
+            "version",
+            "import_count",
+            "monitoring_count",
+            "categories",
+            "updated",
+        ]

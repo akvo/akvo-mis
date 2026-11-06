@@ -9,7 +9,7 @@
 **Task ID**: FB-018
 **Author**: Iwan Firmawan (with Claude)
 **Date**: 2026-11-05
-**Status**: Draft
+**Status**: Review
 
 ---
 
@@ -31,17 +31,19 @@ Currently:
   (verified): a platform admin fails FormBuilderAccess (which passes only for a
   workspace super admin or a role holding form_builder access) and has NO form
   builder — the platform console today only does user/tenant management.
-- Tenant-less (tenant=None) rows are editable by nobody: no super admin owns
-  them and the platform admin has no builder. So tenant=None is a dead end for
-  anything that must be EDITED, like a template.
+- Tenant-less (tenant=None) rows are, by default, editable by nobody: no super
+  admin owns them and the platform admin has no builder. FB-018 resolves this
+  with a narrow, `for_user`-bounded curator bypass (see D-1), so tenant-less
+  rows become exactly the Library templates and only a curator can edit them.
 
 Goal:
 - Give Akvo a curated catalog ("Form Library") of reusable form templates that
   EVERY workspace can browse and import as a fresh draft.
-- Templates live in ONE dedicated internal "Library" tenant and are authored /
-  edited with the EXISTING Form Builder by that tenant's curator (a super admin
-  of the Library tenant) — no new editor, no console builder. (D-1, D-7)
-- Curated, not free-for-all (v1): only the curator / platform admin promotes
+- Templates are tenant-less `Forms` tagged `meta.template`, authored / edited
+  with the EXISTING Form Builder by a curator (a tenant-less platform admin,
+  reaching them via a `for_user`-bounded builder bypass) — no new editor, no
+  console builder. (D-1)
+- Curated, not free-for-all (v1): only a curator (platform admin) promotes
   forms into the library. Workspace users consume only. A user-submit →
   admin-approve flow is deferred to Phase 2. (D-2)
 - Users reach it during onboarding AND later (a "Form Library" entry in the
@@ -53,27 +55,29 @@ Goal:
 **Explicit non-goal / anti-duplication note.** This feature is a thin *scope +
 browse* layer on top of machinery that already exists. It MUST NOT re-implement
 form copying, importing, editing, versioning, or lifecycle — template editing is
-just the ordinary Form Builder operating inside the Library tenant. The only new
-backend pieces are: a flag marking the Library tenant, a `FormCategory` table, an
-`import_count`, and three read/use endpoints. See §5 and the Reuse Map in §4.
+just the ordinary Form Builder operating on tenant-less template rows. The only new
+backend pieces are: a `meta.template` tag, a `FormCategory` table, an `import_count`,
+a `for_user`-bounded curator bypass, and the browse/use/promote/category endpoints.
+See §5 and the Reuse Map in §4.
 
 ---
 
 ## 2. Requirements
 
 ### User Acceptance Criteria
-- [ ] A curator (Library-tenant super admin / platform admin) authors templates in the **existing Form Builder** inside the Library tenant, and promotes an existing workspace form into the library via one action.
+- [ ] A curator (tenant-less platform admin) authors templates in the **existing Form Builder** (reaching tenant-less template rows via the curator bypass), and promotes an existing workspace form into the library via one action.
 - [ ] Editing a template uses the normal Form Builder edit/publish/version flow — no separate template editor.
-- [ ] Any authenticated workspace user can open a **Form Library** page listing all **published** templates, paginated, filterable by category.
-- [ ] Clicking **Use this form** creates a **new draft in the user's own tenant** with fresh IDs; the source template is unchanged and unreferenced.
+- [ ] A user **with Form Builder access** (`form_view`) can open a **Form Library** page listing all **published** templates, paginated, filterable by category. Users without form-builder access do not see the library at all.
+- [ ] Clicking **Use this form** (requires `form_create`) creates a **new draft in the user's own tenant** with fresh IDs; the source template is unchanged and unreferenced.
 - [ ] The library is reachable both during onboarding and from the form builder.
-- [ ] Workspace users (including instance super admins) cannot add, edit, or delete templates — they only browse and use.
+- [ ] Workspace users (including instance super admins) cannot add, edit, or delete templates — they only browse and use within their own tenant.
 
 ### Technical Acceptance Criteria
-- [ ] Templates are ordinary `Forms` rows owned by the single tenant flagged `Tenant.is_form_library=True`; "available" = `status=published`.
-- [ ] `Forms.objects.for_user()` semantics are **unchanged**; the Library tenant's rows stay out of other tenants' lists by normal tenant scoping. One deliberate cross-tenant read (the `/library` browse query, `tenant__is_form_library=True`) serves published templates to everyone.
+- [ ] Templates are tenant-less `Forms` rows tagged `meta.template=true`; "available" = `status=published`.
+- [ ] `Forms.objects.for_user()` semantics are **unchanged**; tenant-less templates stay out of workspace lists by normal tenant scoping (and the main form list also excludes `meta.template`). One deliberate cross-tenant read (the `/library` browse query, `meta__template=True`) serves published templates to everyone.
 - [ ] "Use this form" reuses `duplicate_form()` — no new copy logic; template editing reuses the existing `FormBuilderViewSet`.
-- [ ] Promote + category-management actions are gated on curator/platform-admin.
+- [ ] **Access is gated on Form Builder feature grants** (`FeatureTypes.form_builder`): browse/preview require `FormBuilderAccess(form_view)`, use requires `form_create`, and template editing requires `form_edit` (a tenant-less curator passes via the bypass). Not merely `IsAuthenticated`.
+- [ ] Promote + category-write actions are additionally gated on curator (`is_platform_admin`, tenant-less).
 - [ ] No mobile sync or SQLite changes.
 
 ---
@@ -99,42 +103,46 @@ class FormCategory(SoftDeletes):
 
 | Model | Change | Reason |
 |-------|--------|--------|
-| `Tenant` | Add `is_form_library = BooleanField(default=False)` | Marks the single internal tenant that owns library templates. The library lives in a real tenant so templates are editable with the existing Form Builder (D-1, D-7). |
 | `Forms` | Add `categories = ManyToManyField(FormCategory, blank=True, related_name="forms")` | Browse/filter dimension as proper related rows (Q4); a form can carry several categories. |
 | `Forms` | Add `import_count = PositiveIntegerField(default=0)` | Lightweight curation metric (Q3); incremented on each `use`. |
-| `Forms` | Add `meta = JSONField(default=None, null=True)` | Extensible bag for descriptive/provenance data (e.g. `promoted_from`, and `copied_from` once origin-tracking scope is confirmed) so future additions need no migration. Never holds filtered/joined fields. |
+| `Forms` | Add `meta = JSONField(default=None, null=True)` | Extensible bag that both **flags a catalog template** (`meta.template = true`) and carries provenance: `source` (Path 1 source workspace) and `copied_from` (template a workspace copy came from — provenance only, no propagation). Future additions need no migration. |
 
 ```python
-# api/v1/v1_users/models.py (Tenant)
-is_form_library = models.BooleanField(default=False)
-
-# api/v1/v1_forms/models.py (Forms)
+# api/v1/v1_forms/models.py (Forms) — no Tenant change
 categories = models.ManyToManyField("FormCategory", blank=True, related_name="forms")
 import_count = models.PositiveIntegerField(default=0)
 meta = models.JSONField(default=None, null=True)
 ```
 
-> **What stays real schema vs `meta`.** The handful of things the library query
-> filters or joins on stay as columns: the Library-tenant flag
-> (`Tenant.is_form_library`), `status`, the `categories` M2M, `import_count`
-> (atomic `F()+1`). Everything descriptive/future goes in `meta` so it needs no
-> migration. **No `is_library` flag on `Forms`, no `tenant=None`, no FK for
-> provenance** — a template is just a **published form owned by the Library
-> tenant**; the browse query is
-> `Forms.objects.filter(tenant__is_form_library=True, status=published, parent__isnull=True)`.
+> **What a template IS.** A template is an **ordinary form with no owning
+> tenant** (`tenant = NULL`) tagged `meta.template = true`. Curators are
+> platform admins (no tenant), so a form they author is stamped tenant-less by
+> the existing `TenantStampedSerializerMixin` automatically. Isolation is free:
+> `for_user()` filters a workspace user to their own tenant, so tenant-null
+> templates never appear for them — `for_user()` is untouched.
+>
+> **What stays real schema vs `meta`.** `status`, the `categories` M2M and
+> `import_count` (atomic `F()+1`) are columns because the browse query
+> filters/joins/orders on them. Template-ness lives in `meta.template` — one
+> bit, no new column. The browse query is
+> `Forms.objects.filter(meta__template=True, status=published, parent__isnull=True)`.
+>
+> `# ponytail:` template-ness in the `meta` JSON means no DB index on it;
+> promote it to a real column only if the catalog ever needs heavy filtering.
+> At dozens–hundreds of templates a JSON lookup is a non-issue.
 
 ### Migration Strategy
 
 ```python
 # - Additive migration: FormCategory table + M2M join table + Forms.import_count
-#   + Forms.meta + Tenant.is_form_library. No changes to existing columns.
-# - Existing rows: import_count=0, meta=None, no categories; every existing
-#   tenant is_form_library=False. No backfill, no data loss.
-# - Rollback = drop FormCategory, the join table, and the added columns/flag.
-# - One-time provisioning (data migration or seeder): create the internal
-#   "Library" tenant with is_form_library=True and a curator super admin, then
-#   seed starter categories WASH + Agriculture (named in the planning call). This is
-#   data, not schema; the curator/platform admin adds more categories at runtime.
+#   + Forms.meta. No changes to existing columns, no Tenant change.
+# - Existing rows: import_count=0, meta=None, no categories. meta.template is
+#   absent on every existing form, so none is mistaken for a template. No
+#   backfill, no data loss.
+# - Rollback = drop FormCategory, the join table, and the added columns.
+# - One-time provisioning (seeder): seed starter categories WASH + Agriculture
+#   (named in the planning call). No dedicated tenant to create. The curator
+#   (platform admin) adds more categories and authors templates at runtime.
 ```
 
 ### Form family behaviour (parent → children)
@@ -150,7 +158,8 @@ and it pre-fills from the parent's submissions. So the library's unit is the who
   2. for each published child in `registration.children`: `duplicate_form(child)`,
      then re-point `clone.parent_id = new_registration.id` (the one step
      `duplicate_form` can't do — it copies `parent_id` verbatim).
-  3. record provenance in `meta`.
+  3. stamp the new registration's `meta.copied_from = {form_id, name, at}`
+     (provenance only; no link back to the template at runtime).
 - **Family discovery = the `parent`/`children` FK**, not `meta`. `meta` only carries
   provenance, so child ids are never duplicated into it where they could drift.
 - **Browse lists registration family-roots only** (`parent__isnull=True`). Monitoring
@@ -168,32 +177,47 @@ All routes live on the existing `FormBuilderViewSet`
 
 | Method | URL | Purpose | Auth |
 |--------|-----|---------|------|
-| GET | `/api/v1/manage/forms/library` | List published **registration** templates (family roots), paginated, `?category={id}`, `?search=` | `IsAuthenticated` |
-| GET | `/api/v1/manage/forms/library/{id}/preview` | Read-only preview of a template **family** (registration + its monitoring forms) before use | `IsAuthenticated` |
-| POST | `/api/v1/manage/forms/library/{id}/use` | Clone the template **family** into the caller's tenant as new drafts; `import_count += 1` | `IsAuthenticated` + `FormBuilderAccess(form_create)` |
-| POST | `/api/v1/manage/forms/{id}/promote-to-library` | Snapshot an existing form **family** into the Library tenant (published) + set `categories` | curator / `IsCurator` |
-| GET/POST/PATCH/DELETE | `/api/v1/manage/form-categories[/{id}]` | Manage categories (list open to all; writes curator-only) | list `IsAuthenticated`; writes `IsCurator` |
+| GET | `/api/v1/manage/forms/library` | List published **registration** templates (family roots), paginated, `?category={id}`, `?search=` | `FormBuilderAccess(form_view)` |
+| GET | `/api/v1/manage/forms/library/{id}/preview` | Read-only preview of a template **family** (registration + its monitoring forms) before use | `FormBuilderAccess(form_view)` |
+| POST | `/api/v1/manage/forms/library/{id}/use` | Clone the template **family** into the caller's tenant as new drafts; `import_count += 1` | `FormBuilderAccess(form_create)` |
+| GET | `/api/v1/manage/library/source-forms?tenant={id}&search=` | **Curator-only** source picker (Path 1): list a chosen workspace's published registration families to promote. Bypasses `for_user` by design; excludes existing templates | `IsCurator` |
+| POST | `/api/v1/manage/library/promote` | **Curator-only** (Path 1): snapshot a selected source family (from any workspace) into the Library (tenant-less, published, `meta.template=true`), record `meta.source`, set `categories` | `IsCurator` |
+| GET/POST/PATCH/DELETE | `/api/v1/manage/form-categories[/{id}]` | Manage categories (list for the browse filter; writes curator-only) | list `FormBuilderAccess(form_view)`; writes `IsCurator` |
 
-> **Template editing has no new endpoints.** Templates are ordinary forms owned by
-> the Library tenant, so curators create / edit / publish / delete them with the
-> **existing `FormBuilderViewSet`** while working in that tenant (D-1, D-4). Only
-> *browse*, *preview*, *use*, *promote* and *category* management are new actions.
+> **Template authoring/editing has no new endpoints.** Templates are ordinary
+> tenant-less forms, so curators create / edit / publish / delete them with the
+> **existing `FormBuilderViewSet`** (D-4). Two mechanisms make that work:
+> (1) `FormBuilderAccess` grants a tenant-less platform admin builder access —
+> bounded by `for_user`, which scopes a tenant-less caller to tenant-null rows,
+> i.e. templates only; (2) `create` stamps `meta.template=true` on a
+> registration root authored by such a curator (Path 2 "from scratch"). Only
+> *browse*, *preview*, *use*, *promote* and *category* management are new endpoints.
 
-> `IsCurator` gates write access to the library: a super admin **of the Library
-> tenant** (or a platform admin). The *browse / preview / use* endpoints stay open
-> to any authenticated workspace user, since published templates are shared. The
-> category list is open; category writes are curator-only, and deleting a category
-> only unlinks it from forms (M2M) — it never deletes a form.
+> **Why promote is NOT plain `FormBuilderViewSet` CRUD.** That viewset's
+> `get_object()`/`list` are `for_user`-scoped, so a curator only sees tenant-null
+> templates through them. Path 1 (select from *any* workspace) must read
+> cross-tenant, so `source-forms` and `promote` are curator-only actions that
+> deliberately bypass `for_user`, gated by `IsCurator` (platform admin) — never
+> exposed to workspace users.
+
+> **Access requires Form Builder grants, not just a login.** The *browse / preview*
+> endpoints require `FormBuilderAccess(form_view)` and *use* requires `form_create`
+> (`FeatureTypes.form_builder`, i.e. `is_superuser` **or** a role holding that grant —
+> see `v1_profile/constants.py`). A user without form-builder access never sees the
+> library. `IsCurator` (a tenant-less `is_platform_admin`) gates the library writes
+> (promote, category writes) and, via the `FormBuilderAccess` bypass, template
+> authoring/editing. Deleting a category only unlinks it from forms (M2M) — never
+> deletes a form.
 
 ### Reuse Map (the point of this feature)
 
 | New action | Delegates to (existing) | Location |
 |---|---|---|
-| `library` list | `Forms.objects.filter(tenant__is_form_library=True, status=published, parent__isnull=True)` — NOT `for_user()` | models.py |
+| `library` list | `Forms.objects.filter(meta__template=True, status=published, parent__isnull=True)` — NOT `for_user()` | services/form_library.py |
 | `library/{id}/preview` | `_to_editor_format(FormDetailSerializer(...))` over the registration **and its `children`** | views.py (`duplicate` / `version_detail` pattern) |
-| `library/{id}/use` | **family clone**: `duplicate_form` per form + re-point child `parent_id`, then `F("import_count") + 1` | functions.py:471 + §3 "Form family" |
-| `promote-to-library` | family deep-copy into the Library tenant via `duplicate_form`, set `status=published` + `categories` | functions.py:471 |
-| template edit / publish / delete | **existing** `FormBuilderViewSet` CRUD, run in the Library tenant | views.py |
+| `library/{id}/use` | **family clone**: `duplicate_form` per form + re-point child `parent_id`, stamp `meta.copied_from`, then `F("import_count") + 1` | functions.py:471 + §3 "Form family" |
+| `library/promote` | family deep-copy of the chosen source via `duplicate_form`, leave tenant-less, set `status=published` + `meta.template` + `meta.source` + `categories` | services/form_library.py |
+| template edit / publish / delete | **existing** `FormBuilderViewSet` CRUD (curator passes via the `FormBuilderAccess` bypass; `for_user` scopes them to tenant-null templates) | views.py |
 
 ### Request/Response Examples
 
@@ -231,6 +255,21 @@ sit in a single **⋯ menu** per row:
 A monitoring template is never standalone — it is always added from its
 registration's *+ Add monitoring form*. Both types open the **same Form Builder**.
 
+**Creating a new template — two paths** (a `+ New template` menu on the console):
+1. **Select from an existing workspace** — the curator picks a workspace, browses its
+   published registration families (via the curator-only `source-forms` endpoint), and
+   promotes one. It is **snapshotted** into the Library (tenant-less, published, tagged
+   `meta.template`; source untouched), and the source is recorded in `meta.source` for
+   the curator's reference:
+   ```json
+   "meta": { "template": true, "source": { "tenant_id": 12, "tenant_name": "Bantul", "form_id": 884, "promoted_at": "2026-11-06" } }
+   ```
+   (Curator-only cross-tenant read; `source` is descriptive provenance, not shown to
+   consumers, and never used to join or filter — see §3 `meta` guardrail.)
+2. **From scratch** — the curator creates a new registration with the existing Form
+   Builder; because the curator is tenant-less, `create` stamps it `meta.template=true`
+   and leaves it tenant-less, then they add monitoring forms under it.
+
 **Workspace (consumer).** One card per registration family-root (monitoring hidden),
 each with **Preview** and **Use this form**. Preview opens a read-only modal showing
 the registration and its monitoring form(s) before the user commits; *Use* is also
@@ -245,38 +284,48 @@ available from inside the preview. Draft templates never appear here.
 **Options Considered**:
 1. New `LibraryForm` model duplicating the form schema.
 2. Weaken `Forms.objects.for_user()` to also return `tenant IS NULL` rows.
-3. Tenant-less library forms (`tenant=None`) read via a separate manager.
-4. A **dedicated internal "Library" tenant** (`Tenant.is_form_library=True`) that owns the templates as ordinary forms; browse is one explicit cross-tenant read; `for_user()` untouched.
+3. A **dedicated internal "Library" tenant** (`Tenant.is_form_library=True`) that owns templates as ordinary forms; its super admin edits them.
+4. **Tenant-less templates tagged `meta.template`**, with a narrow curator bypass so a tenant-less platform admin can author/edit them via the existing builder; browse is one explicit cross-tenant read; `for_user()` untouched.
 
 **Decision**: Option 4.
 
 **Rationale**: Option 1 forks the whole question/group/option tree and every
 serializer. Option 2 edits the exact boundary FB-015 just hardened — any slip
-re-leaks *all* forms across tenants. Option 3 looked clean until the editing
-question: `tenant=None` forms are **editable by nobody** — no super admin owns them
-and a platform admin has no Form Builder — so templates could never be maintained.
-A real Library tenant fixes that: its super admin edits templates with the
-**existing Form Builder**, versioning and lifecycle all reused, and `for_user()`
-stays the single strict tenant gate (the Library tenant's rows simply belong to
-another tenant). Browse is the one deliberate cross-tenant read.
+re-leaks *all* forms across tenants. Option 3 works, but a "Library tenant" is a
+singleton-disguised-as-data: a mystery row every new developer must learn, plus a
+provisioning step and a flag on `Tenant`. Its whole job was to give templates an
+owner that could edit them — but **curators are platform admins, not per-workspace
+super admins**, so there is no per-tenant admin we actually want to empower. Once
+the curator is a platform admin, the owning tenant is dead weight.
 
-**Impact**: `Tenant.is_form_library` flag + `Forms.categories`/`import_count`/`meta`;
-one provisioning step (create the Library tenant + curator); no change to tenant
-isolation or to `duplicate_form`.
+Option 4 drops it: a template is a tenant-less form tagged `meta.template`.
+Isolation is unchanged — `for_user()` scopes a workspace user to their tenant, so
+tenant-null templates never appear for them. Editing is solved by the same
+`for_user` gate working *for* the curator: a tenant-less platform admin's
+`for_user` returns exactly the tenant-null rows (templates), and a narrow
+`FormBuilderAccess` bypass lets them wield the existing builder on those rows only
+— never any workspace's forms. This is the "`tenant=None` editable by nobody"
+dead-end resolved by a scoped permission, which is where the problem always lived.
+
+**Impact**: `Forms.categories`/`import_count`/`meta` only (no `Tenant` change, no
+dedicated tenant to provision); a `for_user`-bounded curator bypass in
+`FormBuilderAccess`; `create` stamps `meta.template` for curator-authored roots;
+no change to tenant isolation or to `duplicate_form`.
 
 ### D-2: Who curates the library?
 
 **Options Considered**:
 1. Any instance admin (`is_superuser`) — Kobo's free-for-all model.
-2. Only the **Library tenant's curator(s)** (its super admin, designated by a platform admin).
+2. Only **platform admins** (`is_platform_admin`, tenant-less), i.e. the MIS operators above all workspaces.
 
 **Decision**: Option 2 (matches the meeting: "MIS admins, not instance admins").
 
 **Rationale**: `is_superuser` means "owns this workspace", so option 1 lets every
 tenant owner write to the shared catalog — the quality-control problem joy flagged.
-Scoping curation to the Library tenant keeps it to a small, designated group while
-reusing the ordinary Form Builder permissions inside that tenant. A workspace admin
-has no access to the Library tenant, so cannot add or edit templates.
+Platform admins already exist as the above-tenant operator role and are the natural
+curators. `IsCurator` is simply a tenant-less `is_platform_admin`; a workspace admin
+(who has a tenant and is not a platform admin) can neither promote, manage categories,
+nor author/edit templates.
 
 ### D-3: Import semantics — copy vs link.
 
@@ -287,10 +336,13 @@ behaviour Deden described, 26:09–27:09 of the planning call.)
 
 ### D-4: Where templates are authored and edited.
 
-**Decision**: Inside the **Library tenant, with the existing Form Builder** — no new
-editor and no console form-builder. A new management/browse page lists templates and
-routes "Edit in Form Builder" into that tenant; authoring, publishing, versioning and
-family (parent/child) handling all reuse the current builder unchanged.
+**Decision**: With the **existing Form Builder**, by a curator — no new editor and no
+console form-builder. Templates are tenant-less forms tagged `meta.template`; a
+curator (tenant-less platform admin) reaches exactly those rows via `for_user` and
+wields the builder through the `FormBuilderAccess` curator bypass. A new
+management/browse page lists templates and routes "Edit in Form Builder"; authoring,
+publishing, versioning and family (parent/child) handling all reuse the current
+builder unchanged.
 
 ### D-5: Sector as a managed category table, not a hardcoded enum.
 
@@ -308,11 +360,27 @@ Kobo's category-based library browsing.
 
 **Impact**: one small new model + a join table; browse filter keys on `category` id.
 
-### D-6: Publish-to-library keeps the source form.
+### D-6: Promote keeps the source form.
 
 **Decision**: Promoting a form to the library **snapshots** it (deep copy via
 `duplicate_form`); the originating workspace form stays intact and independent
 (per product — Q1). Later edits to either side do not affect the other.
+
+### D-7: Two creation paths; cross-tenant promote is curator-only.
+
+**Decision**: An MIS admin creates a template two ways — **(1) Select from an existing
+workspace** (promote a family from *any* workspace), or **(2) From scratch** in the
+existing Form Builder (which stamps `meta.template` on a curator-authored root).
+
+**Rationale**: Path 1 is the high-value case (reuse a proven real form) and resolves the
+earlier "promote from any workspace?" question: it is allowed **because the curator is
+the MIS / platform admin above tenants**, not a per-workspace admin — so a deliberate,
+audited cross-tenant read does not violate isolation. The source workspace is stored in
+`meta.source` so curators can trace where a template came from. Path 2 covers net-new
+templates and reuses the builder unchanged.
+
+**Impact**: a curator-only `source-forms` list + `promote` action that bypass `for_user`
+(gated by `IsCurator`); one `meta` key. Workspace users get neither endpoint.
 
 ---
 
@@ -338,8 +406,8 @@ and displays `name`.
 
 ### Backward Compatibility
 - [x] Existing API consumers unaffected (additive columns, new actions only).
-- [x] Existing data preserved (`import_count=0`, `meta=None`, no categories; every existing tenant `is_form_library=False`).
-- [x] `for_user()` and all tenant-scoped lists behave identically — the Library tenant's forms belong to a different tenant, so they already fall outside any real tenant's `for_user()` result.
+- [x] Existing data preserved (`import_count=0`, `meta=None`, no categories; no existing form carries `meta.template`).
+- [x] `for_user()` and all tenant-scoped lists behave identically — templates are tenant-less, so they already fall outside any workspace tenant's `for_user()` result; the main form list also excludes `meta.template` so a tenant-less operator never sees them mixed with workspace forms.
 - [x] CLI tools / seeders unaffected.
 
 ### Mobile App Impact
@@ -355,11 +423,12 @@ and displays `name`.
 
 ## 8. Security Considerations
 
-- [x] **Permission model**: browse/preview/use = any authenticated user; author/edit/promote = `IsCurator` (Library-tenant super admin / platform admin). Never a foreign tenant's `is_superuser`.
-- [x] **Tenant isolation preserved**: library reads are one explicit query scoped to `tenant__is_form_library=True`; `for_user()` is unchanged, so no regression of FB-015.
+- [x] **Permission model**: browse/preview = `FormBuilderAccess(form_view)`, use = `FormBuilderAccess(form_create)`, template edit = `form_edit` — i.e. only users with Form Builder feature grants (`is_superuser` or the role grant), never merely authenticated. Author/promote/category-write add `IsCurator` (tenant-less `is_platform_admin`). Never a foreign tenant's `is_superuser`.
+- [x] **Tenant isolation preserved**: library reads are one explicit query scoped to `meta__template=True`; `for_user()` is unchanged, so no regression of FB-015. The curator builder bypass is bounded by `for_user` (a tenant-less admin only ever reaches tenant-null template rows).
 - [x] **Copy-on-use**: the family clone (`duplicate_form`) stamps each new form with the *caller's* tenant (never trusts a tenant from the payload), so a user can only create forms in their own workspace.
-- [x] **No cross-tenant write by workspace users**: promote/edit run only inside the Library tenant by its curator; workspace users have no endpoint that writes into the Library tenant.
-- [x] **Input validation**: `categories` validated as existing `FormCategory` ids; `use`/`preview` resolve the target via the library query (`tenant__is_form_library=True, status=published`) so any non-template id 404s.
+- [x] **No cross-tenant write by workspace users**: a workspace user (who has a tenant, is not a platform admin) can neither reach template rows via `for_user` nor pass `IsCurator`.
+- [x] **Curator cross-tenant read is deliberate and narrow**: only the `source-forms` list and `promote` action bypass `for_user`, both gated by `IsCurator`. They are read-only on the source (snapshot copy; the source form is never modified) and are the *only* paths that cross tenants — the rest of the feature keeps `for_user` intact.
+- [x] **Input validation**: `categories` validated as existing `FormCategory` ids; `use`/`preview` resolve the target via the library query (`meta__template=True, status=published`) so any non-template id 404s.
 
 ---
 
@@ -367,14 +436,16 @@ and displays `name`.
 
 | Test Type | Coverage |
 |-----------|----------|
-| Unit | The library query returns only `tenant__is_form_library=True, status=published, parent__isnull=True`; excludes other tenants' forms, drafts, and monitoring children. |
-| Unit | `promote-to-library` deep-copies the family into the Library tenant (published), attaches `categories`; source family untouched. |
+| Unit | The library query returns only `meta__template=True, status=published, parent__isnull=True`; excludes workspace forms, drafts, and monitoring children. |
+| Unit | `promote-to-library` deep-copies the family as tenant-less + `meta.template` (published), attaches `categories`; source family untouched. |
 | Unit | Family clone: `use` creates the registration + each published child, re-points child `parent_id` to the new registration, all in the caller's tenant. |
 | Integration | `GET /library` 200 for a normal tenant user; `?category=` + search work; pagination shape matches existing list; monitoring forms absent from the list. |
 | Integration | `POST /library/{id}/use` → 201 with the family, each new form `tenant = caller.tenant`, new IDs, `status=draft`, `import_count` incremented; template untouched. |
-| Integration (authz) | A workspace `is_superuser` (not a Library-tenant curator) → 403 on promote / category writes. |
-| Integration (authz) | Unauthenticated → 401 on `/library`. |
-| Integration (isolation) | A Library-tenant template never appears in `GET /manage/forms` for any other tenant's user. |
+| Integration (authz) | A workspace `is_superuser` (not a curator) → 403 on promote / category writes. |
+| Integration (Path 1) | `source-forms` / `promote` → 403 for a workspace user, 201 for a curator; promote snapshots the chosen family as a tenant-less template, writes `meta.source`, and leaves the source form untouched. |
+| Integration (Path 2) | A curator POST to `/manage/forms` yields a tenant-less `meta.template` registration; a workspace user's POST does not. |
+| Integration (authz) | Unauthenticated → 401/403 on `/library`. |
+| Integration (isolation) | A template never appears in `GET /manage/forms` (excluded by `meta.template`, and by tenant scoping for workspace users). |
 | E2E | Browse → filter by category → Preview → Use → redirected to the new registration draft (with its monitoring form) in the form builder. |
 
 Run: `./dc.sh exec backend python manage.py test api.v1.v1_forms.tests.tests_form_library --verbosity=2`
@@ -394,6 +465,11 @@ All four resolved with product; kept as the rationale record.
 
 - [x] **Starter category set → seed `WASH` and `Agriculture`.** The two sectors named in the planning call (JMP/WASH and agriculture/living-income). Shipped as seed data (§3); platform admins add more at runtime.
 - [x] **Template version history for consumers → latest published snapshot only (v1).** The library exposes only the current published version of a template; full version history is not surfaced to consumers.
+
+- [x] **Origin-tracking scope → provenance only, no propagation.** A copied form keeps a
+  "where it came from" reference in `meta.copied_from` (template id + name + date); edits
+  to a template never notify or update its copies — copies are fully independent (D-3/D-6).
+  So `use` writes `meta.copied_from` and nothing else links the two.
 
 ---
 
@@ -428,7 +504,29 @@ form builder/onboarding area, independent of whether the tour step is shown.
 
 ---
 
-## 12. References
+## 12. Implementation Process (before merge)
+
+All design questions are resolved (§10); the doc is in **Review**. Once reviewers sign
+off, implementation follows these rules:
+
+- [ ] **Match the approved prototype.** The built UI must align with the HTML prototype
+  (both surfaces, ⋯ action menus, Preview-before-Use, the `+ New template` two-path
+  flow): <https://claude.ai/artifact/8U4pQBQh6QGZFyVPa8jSGX>.
+- [ ] **Enforce the access gate** from §2/§4: `FormBuilderAccess(form_view)` to see the
+  library, `form_create` to use, `form_edit`/`IsCurator` to author — surfaced both in
+  the API permission map and in the frontend (hide the library entry when the user
+  lacks `form_view`, exactly as the onboarding-tour step already gates on
+  `ability.can("read", "form-builder")`).
+- [ ] **Code review by subagent.** After each cohesive change set, run a reviewer pass
+  for quality and readability — `/ponytail:ponytail-review` (or the `code-reviewer`
+  agent) — and resolve findings before merge. This is quality review, not a substitute
+  for tests.
+- [ ] **Lint + tests green** per `CLAUDE.md`: backend `./dc.sh exec backend flake8` and
+  the §9 test module; frontend `./dc.sh exec frontend npm run lint`.
+
+---
+
+## 13. References
 
 - Planning call (2026-11-05): "library of questionnaires" discussion (16:23–17:35, 24:39–27:30).
 - Prior art — reuse, do not rebuild:
@@ -436,6 +534,8 @@ form builder/onboarding area, independent of whether the tour step is shown.
   - `import_form_definition(mode="create_copy")`, `normalize_form_definition()`
   - Tenant scoping: [tenant_scoped_model.py](../../backend/utils/tenant_scoped_model.py), [tenant_model.py](../../backend/utils/tenant_model.py)
   - Platform-admin role: `User.is_platform_admin` ([v1_users/models.py](../../backend/api/v1/v1_users/models.py))
+- Interactive prototype (the UI the implementation must match): <https://claude.ai/artifact/8U4pQBQh6QGZFyVPa8jSGX> (`#console` curator view, `#workspace` consumer view).
+- Permission model: `FeatureAccessTypes` / `FeatureTypes.form_builder` + `FormBuilderAccess` ([v1_profile/constants.py](../../backend/api/v1/v1_profile/constants.py), [utils/custom_permissions.py](../../backend/utils/custom_permissions.py)).
 - Related design docs:
   - [FB-007-form-import-export.md](FB-007-form-import-export.md) — JSON import/export
   - [FB-014-xlsform-export.md](FB-014-xlsform-export.md) / [FB-016-xlsform-import.md](FB-016-xlsform-import.md) — XLSForm round-trip (the portability mechanism)
@@ -450,6 +550,6 @@ form builder/onboarding area, independent of whether the tour step is shown.
 
 | Role | Name | Date | Status |
 |------|------|------|--------|
-| Developer | | | |
+| Developer | Iwan Firmawan | 2026-11-06 | Approved |
 | Tech Lead | | | |
 | Product | | | |

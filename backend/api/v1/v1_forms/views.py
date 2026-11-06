@@ -16,7 +16,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from utils.custom_permissions import FormBuilderAccess
+from utils.custom_permissions import FormBuilderAccess, IsCurator
 from rest_framework.response import Response
 
 from django.conf import settings
@@ -48,8 +48,16 @@ from api.v1.v1_forms.services.xlsform_export import (
     generate_xlsform,
     generate_administration_csv,
 )
-from api.v1.v1_forms.models import Forms
+from api.v1.v1_forms.models import FormCategory, Forms
+from api.v1.v1_forms.services.form_library import (
+    clone_family,
+    get_library_form,
+    library_registration_qs,
+    promote_family,
+)
 from api.v1.v1_forms.serializers import (
+    FormCategorySerializer,
+    LibraryFormSerializer,
     FormPublishedVersionSerializer,
     ListFormSerializer,
     WebFormDetailSerializer,
@@ -572,7 +580,10 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         status_param = params.get("status")
 
         base = Forms.objects_deleted if archived else Forms.objects
-        qs = base.for_user(request.user)
+        # Library templates (meta.template) are never ordinary workspace forms.
+        # Tenant isolation already hides them from workspace users, but a
+        # tenant-less operator shares their NULL tenant, so exclude explicitly.
+        qs = base.for_user(request.user).exclude(meta__template=True)
         if status_param in self._STATUS_MAP:
             qs = qs.filter(status=self._STATUS_MAP[status_param])
 
@@ -703,8 +714,188 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 IsAuthenticated,
                 FormBuilderAccess(FeatureAccessTypes.form_create),
             ],
+            # FB-018 Form Library
+            "library_list": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_view),
+            ],
+            "library_preview": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_view),
+            ],
+            "library_use": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_create),
+            ],
+            "category_list": [
+                IsAuthenticated,
+                FormBuilderAccess(FeatureAccessTypes.form_view),
+            ],
+            "library_source_forms": [IsAuthenticated, IsCurator],
+            "library_promote": [IsAuthenticated, IsCurator],
+            "category_create": [IsAuthenticated, IsCurator],
+            "category_update": [IsAuthenticated, IsCurator],
+            "category_delete": [IsAuthenticated, IsCurator],
         }
         return [p() for p in perm_map.get(self.action, [IsAuthenticated])]
+
+    # -----------------------------------------------------------------------
+    # FB-018: Form Library
+    # -----------------------------------------------------------------------
+    def library_list(self, request, *args, **kwargs):
+        """Browse published registration templates (family roots)."""
+        qs = library_registration_qs()
+        category = request.query_params.get("category")
+        search = (request.query_params.get("search") or "").strip()
+        if category:
+            qs = qs.filter(categories__id=category)
+        if search:
+            qs = qs.filter(name__icontains=search)
+        qs = (
+            qs.order_by("-import_count", "name")
+            .distinct()
+            .prefetch_related("categories")
+        )
+        page = self.paginate_queryset(qs)
+        data = LibraryFormSerializer(page, many=True).data
+        return self.get_paginated_response(data)
+
+    def library_preview(self, request, *args, **kwargs):
+        """Read-only preview of a template family (registration + children)."""
+        form = get_library_form(kwargs.get("pk"))
+        if form is None:
+            return Response(
+                {"message": "Template not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        children = form.children.filter(
+            status=FormStatus.published, deleted_at__isnull=True
+        ).order_by("id")
+        return Response(
+            {
+                "registration": _to_editor_format(
+                    FormDetailSerializer(instance=form).data
+                ),
+                "monitoring": [
+                    _to_editor_format(FormDetailSerializer(instance=c).data)
+                    for c in children
+                ],
+            }
+        )
+
+    def library_use(self, request, *args, **kwargs):
+        """Clone the template family into the caller's tenant as new drafts."""
+        form = get_library_form(kwargs.get("pk"))
+        if form is None:
+            return Response(
+                {"message": "Template not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        new_reg, new_children = clone_family(form, request.user)
+
+        def _row(f):
+            return {
+                "id": f.id,
+                "name": f.name,
+                "status": FormStatus.FieldStr.get(f.status, "draft"),
+            }
+
+        return Response(
+            {
+                "registration": _row(new_reg),
+                "monitoring": [_row(c) for c in new_children],
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def library_source_forms(self, request, *args, **kwargs):
+        """Curator-only (Path 1): list a workspace's published registration
+        families to promote. Deliberately cross-tenant — not for_user scoped.
+        """
+        tenant_id = request.query_params.get("tenant")
+        search = (request.query_params.get("search") or "").strip()
+        qs = Forms.objects.filter(
+            type=FormTypes.registration,
+            status=FormStatus.published,
+            parent__isnull=True,
+        )
+        if tenant_id:
+            qs = qs.filter(tenant_id=tenant_id)
+        qs = qs.exclude(meta__template=True)
+        if search:
+            qs = qs.filter(name__icontains=search)
+        qs = qs.order_by("tenant_id", "-id").prefetch_related("categories")
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(
+            LibraryFormSerializer(page, many=True).data
+        )
+
+    def library_promote(self, request, *args, **kwargs):
+        """Curator-only (Path 1): snapshot a source family into the Library,
+        published, with provenance in meta.source.
+        """
+        source_id = request.data.get("source_form_id")
+        category_ids = request.data.get("category_ids") or []
+        source = (
+            Forms.objects.filter(
+                pk=source_id,
+                type=FormTypes.registration,
+                status=FormStatus.published,
+                parent__isnull=True,
+            )
+            .exclude(meta__template=True)
+            .first()
+        )
+        if source is None:
+            return Response(
+                {"message": "Source form not found or not a published form"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        new_reg = promote_family(
+            source, request.user, category_ids=category_ids
+        )
+        return Response(
+            LibraryFormSerializer(instance=new_reg).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def category_list(self, request, *args, **kwargs):
+        qs = FormCategory.objects.all().order_by("name")
+        return Response(FormCategorySerializer(qs, many=True).data)
+
+    def category_create(self, request, *args, **kwargs):
+        serializer = FormCategorySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def category_update(self, request, *args, **kwargs):
+        category = FormCategory.objects.filter(pk=kwargs.get("pk")).first()
+        if category is None:
+            return Response(
+                {"message": "Category not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        serializer = FormCategorySerializer(
+            category, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def category_delete(self, request, *args, **kwargs):
+        category = FormCategory.objects.filter(pk=kwargs.get("pk")).first()
+        if category is None:
+            return Response(
+                {"message": "Category not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        # Unlink from forms (M2M) — never deletes a form — then hard-delete.
+        # Categories are plain lookups; a soft delete would keep the unique
+        # name/slug row and block re-creating a category with that name.
+        category.forms.clear()
+        category.hard_delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         data = _normalize_editor_payload(request.data)
@@ -742,6 +933,17 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 {"message": parts[0], "details": detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # FB-018 Path 2: a curator (tenant-less platform admin) authoring a
+        # registration root from scratch is building a Library template; tag
+        # it so it surfaces in the catalog. Monitoring children are reached
+        # via the parent and need no tag.
+        if (
+            getattr(request.user, "is_platform_admin", False)
+            and request.user.tenant_id is None
+            and not is_monitoring
+        ):
+            form.meta = {"template": True}
+            form.save(update_fields=["meta"])
         return Response(
             _to_editor_format(FormDetailSerializer(instance=form).data),
             status=status.HTTP_201_CREATED,

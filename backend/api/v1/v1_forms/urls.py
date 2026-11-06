@@ -24,6 +24,39 @@ urlpatterns = [
         r"^(?P<version>(v1))/form/check-approver/(?P<form_id>[0-9]+)",
         check_form_approver,
     ),
+    # FB-018: Form Library (specific paths before generic /manage/forms)
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/library$",
+        FormBuilderViewSet.as_view({"get": "library_list"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/library/(?P<pk>[0-9]+)/preview$",
+        FormBuilderViewSet.as_view({"get": "library_preview"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/forms/library/(?P<pk>[0-9]+)/use$",
+        FormBuilderViewSet.as_view({"post": "library_use"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/library/source-forms$",
+        FormBuilderViewSet.as_view({"get": "library_source_forms"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/library/promote$",
+        FormBuilderViewSet.as_view({"post": "library_promote"}),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/form-categories/(?P<pk>[0-9]+)$",
+        FormBuilderViewSet.as_view(
+            {"patch": "category_update", "delete": "category_delete"}
+        ),
+    ),
+    re_path(
+        r"^(?P<version>(v1))/manage/form-categories$",
+        FormBuilderViewSet.as_view(
+            {"get": "category_list", "post": "category_create"}
+        ),
+    ),
     # Form Builder CRUD (sub-resource routes before generic)
     re_path(
         r"^(?P<version>(v1))/manage/forms/(?P<pk>[0-9]+)/publish$",
