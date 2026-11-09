@@ -265,18 +265,27 @@ promoted template, a provenance line *"Promoted from {workspace} · {date}"* fro
   "meta": { "template": true, "source": { "tenant_id": 12, "tenant_name": "Bantul", "form_id": 884, "promoted_at": "2026-11-06" } }
   ```
   (`source` is descriptive provenance — not shown to consumers, never joined/filtered.)
-- **Manage categories**: a modal to add/delete categories (the browse filter).
-- **Delete** (*Remove from library*) per registration — soft-deletes the template;
-  existing copies are unaffected.
+- **+ New template** (dropdown): *Select from existing workspace* → the promote page;
+  *From scratch* → the Form Builder, mounted on the `/admin` host (see below).
+- Per-row **⋯ menu**: *Edit in Form Builder*, *Preview*, *+ Add monitoring form*
+  (published registrations), *Delete* (*Remove from library* — soft-delete; existing
+  copies unaffected).
+- **Inline category editing**: the Categories cell is a borderless multi-select that
+  saves on change (`POST /manage/forms/library/{id}/categories`, curator-only), so a
+  from-scratch template (which starts with none) gets categories without re-promoting.
+- **Manage categories**: a modal to add/delete the category vocabulary (the filter).
 
-> **Deferred (v1 scope, chosen with the team).** Per-row *Edit in Form Builder*,
-> *Publish/Unpublish*, *+ Add monitoring form*, and **Path 2 "from scratch"** authoring
-> are not surfaced on the console yet. The **backend supports them** — `create` stamps
-> `meta.template=true` on a curator-authored registration, and the `FormBuilderAccess`
-> curator bypass (D-4) lets a tenant-less curator wield the builder on tenant-null
-> template rows — but wiring the builder from the `/admin` host to the workspace-host
-> `/control-center/form-builder` is a follow-up. For v1, **Promote is the template
-> creation path.**
+**Authoring/editing templates — the Form Builder on the `/admin` host.** The existing
+`FormBuilderCreate`/`FormBuilderEdit` are reused, made host-aware (`onAdminHost()`): on
+the console host they edit a Library template, keep their nav on `/admin/form-library`,
+and **hide the version-history UI**. Routes: `/admin/form-library/create`
+(`?parent_id=` for a monitoring child) and `/admin/form-library/:formId/edit`.
+
+> **No version history for templates.** A template has no submissions and no
+> runtime link to the copies made from it, so there is nothing a published-version
+> snapshot would protect. `update()` therefore edits a template's live rows in place
+> **even when published** (skipping `store_version_snapshot`), and the editor hides the
+> version drawer/snapshot banner. A template is simply always live-editable.
 
 **Preview (shared).** `FormLibraryPreview` renders a read-only, **paper-like** outline:
 section header per question group, each question a label beside a faux underline/box
@@ -327,7 +336,21 @@ console's single-form Preview above.)
 
 **`LibraryFormSerializer`** carries `status`, the `monitoring` children (id/name/type/
 status, for the console sub-rows), and `source` (`meta.source`, or null) so the console
-can show provenance. `library_list` accepts a comma-separated `category` (match any).
+can show provenance. `library_list` accepts a comma-separated `category` (match any),
+and shows **drafts to a curator** (tenant-less platform admin) so a from-scratch
+template is visible before it is published — consumers still see published only.
+
+**Curator builder access (frontend).** The CASL ability grants a tenant-less
+`is_platform_admin` the `form-builder` verbs (read/create/edit/publish/delete) so the
+reused Form Builder shows Edit/Publish/Unpublish for a template. This is presentation
+only — the server still enforces the `FormBuilderAccess` bypass bounded by `for_user`
+(tenant-null template rows).
+
+**Adjacent fix — `addonBefore`/`addonAfter` on the webform.** `ListQuestionSerializer`
+(the `/form/web/{id}` renderer payload) omitted the question add-ons, so a form with an
+input prefix/suffix (e.g. `github.com/`) never rendered it. Added both (camelCase, the
+keys akvo-react-form reads). Pre-existing gap for all forms, surfaced by a template
+carrying an add-on; the clone always kept it in the DB (`duplicate_form` copies it).
 
 ---
 
@@ -573,23 +596,23 @@ Implemented on `feature/fb-018-form-library`. State vs. the original plan:
   category filter, search, Preview modal, Use → Form Builder list).
 - [x] **Frontend console** — `/admin/form-library`: template table with **nested
   monitoring sub-rows**, search + **multi-category filter**, **per-form Preview**
-  (paper-like), **description + `meta.source` provenance** per template, **Promote from
-  workspace** as a dedicated **page with live preview** (`/admin/form-library/promote`,
-  via `source-forms?preview=<id>`), **Manage categories**, Delete.
+  (paper-like), **inline category editing**, **provenance** per template, **+ New
+  template** (promote page / from-scratch builder), per-row **⋯** (*Edit in Form
+  Builder* / *Preview* / *+ Add monitoring form* / *Delete*), **Manage categories**.
+- [x] **Template authoring/editing** — Form Builder reused host-aware on `/admin`
+  (`create` / `:formId/edit`); templates are **live-edited with no version history**
+  (`update()` skips the snapshot for `meta.template`; version UI hidden); CASL grants a
+  tenant-less platform admin the `form-builder` verbs so Edit/Publish/Unpublish show.
 - [x] **Access gate** — `FormBuilderAccess(form_view)` to browse, `form_create` to
   use, `IsCurator` for promote/category writes; the library entry and the tour step
   both gate on `ability.can("read", "form-builder")`.
 - [x] **Onboarding tour** — enriched `setup` step-1 copy (§11), EN + FR.
-- [x] **Lint + tests green** — backend `flake8` clean, `tests_form_library` (12 tests)
+- [x] **Lint + tests green** — backend `flake8` clean, `tests_form_library` (14 tests)
   green; frontend `eslint` clean per changed file.
-- [ ] **Deferred to a follow-up** (agreed scope, §4): console per-row *Edit in Form
-  Builder* / *Publish* / *+ Add monitoring form*, and **Path 2 "from scratch"**
-  authoring from the console host (backend already supports it).
 
-> **Divergences from the original prototype**, by decision: the console omits the
-> per-row ⋯ builder menu and the `+ New template` from-scratch path (backend-ready,
-> deferred); "Use" lands on the Form Builder list rather than the editor; the tour
-> reuses the existing step instead of adding one. Prototype for reference:
+> **Divergences from the original prototype**, by decision: "Use" lands on the Form
+> Builder list rather than the editor; the tour reuses the existing step instead of
+> adding one. Prototype for reference:
 > <https://claude.ai/artifact/8U4pQBQh6QGZFyVPa8jSGX>.
 
 ---
