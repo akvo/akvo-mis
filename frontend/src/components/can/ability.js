@@ -41,6 +41,16 @@ const defineAbilityFor = (user) => {
   }
   if (user?.is_superuser) {
     can("manage", "all");
+  } else if (user?.is_platform_admin) {
+    // Platform admins curate the Form Library. The backend bounds them to
+    // tenant-less template rows (FB-018 FormBuilderAccess bypass + for_user),
+    // so grant the form-builder verbs here only to surface the template
+    // editor's Edit / Publish / Unpublish controls.
+    can("read", "form-builder");
+    can("create", "form-builder");
+    can("edit", "form-builder");
+    can("publish", "form-builder");
+    can("delete", "form-builder");
   } else if (user) {
     const roles = user?.roles || [];
     const is_approver = roles.filter((r) => r?.is_approver).length > 0;

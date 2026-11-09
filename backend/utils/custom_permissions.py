@@ -103,7 +103,27 @@ def FeatureAccess(feature_type, required_access):
 
 
 def FormBuilderAccess(required_access):
-    return FeatureAccess(FeatureTypes.form_builder, required_access)
+    """Form Builder access, plus a curator bypass.
+
+    A tenant-less platform admin (a Form Library curator) is granted builder
+    access so they can author and edit templates with the existing builder
+    (FB-018 D-4). This is safe because `for_user()` scopes a tenant-less
+    caller to tenant-NULL rows, i.e. templates only — never any workspace's
+    forms. Workspace users are unaffected and still need the real grant.
+    """
+    base = FeatureAccess(FeatureTypes.form_builder, required_access)
+
+    class _Permission(base):
+        def has_permission(self, request, view):
+            user = request.user
+            if (
+                getattr(user, "is_platform_admin", False)
+                and user.tenant_id is None
+            ):
+                return True
+            return super().has_permission(request, view)
+
+    return _Permission
 
 
 def DashboardAccess(required_access):
@@ -140,3 +160,10 @@ class IsPlatformAdmin(BasePermission):
             and user.is_platform_admin
             and user.tenant_id is None
         )
+
+
+class IsCurator(IsPlatformAdmin):
+    """FB-018: write access to the Form Library (promote, category writes,
+    template edit). Templates have no owning tenant, so a curator is simply
+    a platform admin (above every workspace); workspace users are rejected.
+    """

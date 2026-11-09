@@ -30,6 +30,7 @@ import {
   MinusSquareOutlined,
   UploadOutlined,
   MoreOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import { Breadcrumbs, DescriptionPanel } from "../../components";
 import { FormStatusTag, ImportFormModal } from "./components";
@@ -571,14 +572,25 @@ const FormBuilderList = () => {
             </Col>
             {!isArchivedTab && (
               <Col>
-                <Can I="create" a="form-builder">
-                  <Space>
+                <Space>
+                  <Button
+                    shape="round"
+                    icon={<AppstoreOutlined />}
+                    data-tour="form-library-entry"
+                    onClick={() => {
+                      navigate("/control-center/form-builder/library");
+                    }}
+                  >
+                    {text.formLibraryTitle}
+                  </Button>
+                  <Can I="create" a="form-builder">
                     <Button
                       shape="round"
                       icon={<UploadOutlined />}
                       onClick={() => {
                         setImportModalOpen(true);
                       }}
+                      className="form-builder-import-button"
                     >
                       {text.formBuilderImportButton}
                     </Button>
@@ -592,8 +604,8 @@ const FormBuilderList = () => {
                     >
                       {text.formBuilderCreateButton}
                     </Button>
-                  </Space>
-                </Can>
+                  </Can>
+                </Space>
               </Col>
             )}
           </Row>

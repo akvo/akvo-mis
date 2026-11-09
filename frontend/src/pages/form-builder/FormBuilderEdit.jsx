@@ -14,6 +14,7 @@ import {
 } from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { fetchPublishedForms } from "../../util/form";
+import { onAdminHost } from "../../util/tenant";
 import { FormEditorBanners, VersionHistoryDrawer } from "./components";
 import "./style.scss";
 import { Can } from "../../components/can";
@@ -51,14 +52,21 @@ const FormBuilderEdit = () => {
   const { active: activeLang } = language;
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
-  const pagePath = [
-    { title: text.controlCenter, link: "/control-center" },
-    {
-      title: text.menuFormBuilder,
-      link: "/control-center/form-builder",
-    },
-    { title: text.formBuilderEditTitle },
-  ];
+  // On the platform-console host this editor is only ever a Library template:
+  // templates carry no submissions and no link to their copies, so they are
+  // edited live with no version history (FB-018).
+  const isTemplate = onAdminHost();
+
+  const pagePath = isTemplate
+    ? [
+        { title: text.consoleFormLibrary, link: "/admin/form-library" },
+        { title: text.formBuilderEditTitle },
+      ]
+    : [
+        { title: text.controlCenter, link: "/control-center" },
+        { title: text.menuFormBuilder, link: "/control-center/form-builder" },
+        { title: text.formBuilderEditTitle },
+      ];
 
   const loadForm = useCallback(async () => {
     const res = await api.get(`/manage/forms/${formId}`);
@@ -335,19 +343,22 @@ const FormBuilderEdit = () => {
   };
 
   const infoBannerText = useMemo(() => {
-    if (formStatus !== "published") {
+    // Templates are live-edited, so the snapshot/pending-version messaging
+    // does not apply.
+    if (isTemplate || formStatus !== "published") {
       return null;
     }
     if (formLatestVersion > formVersion) {
       return text.formBuilderSnapshotPending(formLatestVersion);
     }
     return text.formBuilderPublishedInfo;
-  }, [formStatus, formVersion, formLatestVersion, text]);
+  }, [isTemplate, formStatus, formVersion, formLatestVersion, text]);
 
-  const hasPendingSnapshot = formLatestVersion > formVersion;
+  const hasPendingSnapshot = !isTemplate && formLatestVersion > formVersion;
   const showPublish = formStatus === "draft" || hasPendingSnapshot;
   const showUnpublish = formStatus === "published";
-  const hasVersionHistory = formStatus === "published" || versions.length > 0;
+  const hasVersionHistory =
+    !isTemplate && (formStatus === "published" || versions.length > 0);
 
   return (
     <div id="form-builder-edit">

@@ -76,12 +76,39 @@ class Forms(SoftDeletes):
         related_name="forms_updated",
         null=True,
     )
+    # FB-018 Form Library. categories drive the library browse filter;
+    # import_count tracks how often a template has been copied (curation
+    # metric); meta flags a catalog template (meta.template) and is an
+    # extensible provenance bag (source / copied_from). None of these
+    # affect ordinary workspace forms, whose meta stays NULL.
+    categories = models.ManyToManyField(
+        "FormCategory", blank=True, related_name="forms"
+    )
+    import_count = models.PositiveIntegerField(default=0)
+    meta = models.JSONField(default=None, null=True)
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "form"
+
+
+class FormCategory(SoftDeletes):
+    """FB-018: managed lookup so library sectors/domains are rows with stable
+    IDs rather than a hardcoded enum. Platform-wide (no tenant); curators add
+    and rename them at runtime without a migration.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    created = models.DateTimeField(auto_now_add=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        db_table = "form_category"
+        verbose_name_plural = "form categories"
 
 
 class QuestionGroup(SoftDeletes):

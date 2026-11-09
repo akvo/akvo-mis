@@ -52,6 +52,7 @@ import {
   FormBuilderList,
   FormBuilderCreate,
   FormBuilderEdit,
+  FormLibrary,
   FindWorkspace,
   WorkspaceNotFound,
   DashboardList,
@@ -62,6 +63,8 @@ import {
   Tenants,
   TenantDetail,
   Operators,
+  FormLibraryConsole,
+  PromoteTemplatePage,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -161,6 +164,16 @@ const RouteList = () => {
           <Route path="tenants" element={<Tenants />} />
           <Route path="tenants/:id" element={<TenantDetail />} />
           <Route path="operators" element={<Operators />} />
+          <Route path="form-library" element={<FormLibraryConsole />} />
+          <Route
+            path="form-library/promote"
+            element={<PromoteTemplatePage />}
+          />
+          <Route path="form-library/create" element={<FormBuilderCreate />} />
+          <Route
+            path="form-library/:formId/edit"
+            element={<FormBuilderEdit />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>
@@ -257,6 +270,10 @@ const RouteList = () => {
         <Route
           path="form-builder/create"
           element={<Private element={FormBuilderCreate} alias="form-builder" />}
+        />
+        <Route
+          path="form-builder/library"
+          element={<Private element={FormLibrary} alias="form-builder" />}
         />
         <Route
           path="form-builder/:formId/edit"
