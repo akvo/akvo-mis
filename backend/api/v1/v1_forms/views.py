@@ -861,6 +861,18 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         if tenant_id:
             qs = qs.filter(tenant_id=tenant_id)
         qs = qs.filter(NOT_A_TEMPLATE)
+        # Hide source forms already promoted into the library (a template
+        # records its origin in meta.source.form_id), so the same form is not
+        # promoted twice.
+        promoted_ids = {
+            (m or {}).get("source", {}).get("form_id")
+            for m in Forms.objects.filter(meta__template=True).values_list(
+                "meta", flat=True
+            )
+        }
+        promoted_ids.discard(None)
+        if promoted_ids:
+            qs = qs.exclude(pk__in=promoted_ids)
         if search:
             qs = qs.filter(name__icontains=search)
         qs = qs.order_by("tenant_id", "-id").prefetch_related("categories")

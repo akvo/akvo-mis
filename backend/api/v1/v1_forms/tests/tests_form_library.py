@@ -230,6 +230,29 @@ class FormLibraryTestCase(TestCase):
         self.assertEqual(src_reg.tenant_id, source_tenant.id)
         self.assertEqual(src_child.parent_id, src_reg.id)
 
+    def test_promoted_source_hidden_from_source_forms(self):
+        t = Tenant.objects.create(subdomain="wsx")
+        src_reg, _ = self._make_family(t, "To Promote")
+        other_reg, _ = self._make_family(t, "Keep Me")
+        url = f"/api/v1/manage/library/source-forms?tenant={t.id}"
+
+        res = self.client.get(url, **self.curator_header)
+        ids = [r["id"] for r in res.json()["data"]]
+        self.assertIn(src_reg.id, ids)
+        self.assertIn(other_reg.id, ids)
+
+        self.client.post(
+            "/api/v1/manage/library/promote",
+            {"source_form_id": src_reg.id},
+            content_type="application/json",
+            **self.curator_header,
+        )
+
+        res = self.client.get(url, **self.curator_header)
+        ids = [r["id"] for r in res.json()["data"]]
+        self.assertNotIn(src_reg.id, ids)
+        self.assertIn(other_reg.id, ids)
+
     def test_promote_forbidden_for_workspace_user(self):
         src_reg, _ = self._make_family(self.admin.tenant, "No Promote")
         res = self.client.post(
