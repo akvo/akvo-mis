@@ -64,6 +64,7 @@ import {
   TenantDetail,
   Operators,
   FormLibraryConsole,
+  PromoteTemplatePage,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -164,6 +165,10 @@ const RouteList = () => {
           <Route path="tenants/:id" element={<TenantDetail />} />
           <Route path="operators" element={<Operators />} />
           <Route path="form-library" element={<FormLibraryConsole />} />
+          <Route
+            path="form-library/promote"
+            element={<PromoteTemplatePage />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>

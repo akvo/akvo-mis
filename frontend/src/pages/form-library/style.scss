@@ -30,26 +30,129 @@
       color: rgba(0, 0, 0, 0.35);
     }
   }
+}
 
-  .form-library-outline {
-    max-height: 60vh;
-    overflow-y: auto;
+// Paper-like form preview. Kept at top level (not nested under #form-library)
+// because the preview Modal portals to <body>, outside that container, and the
+// promote page reuses the same markup.
+.form-library-outline {
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 4px 2px;
 
-    .form-library-outline-group {
+  .paper-group {
+    margin-bottom: 24px;
+
+    .paper-group-title {
+      background: #eef1f6;
+      border: 1px solid #d9d9d9;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 13px;
+      padding: 7px 12px;
       margin-bottom: 16px;
+      // Question group label is centered; field labels stay left-aligned.
+      text-align: center;
+    }
+  }
 
-      ul {
-        padding-left: 18px;
-        margin-bottom: 0;
+  // Each field is a row: label on the left, the faux input on the right.
+  .paper-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 14px;
+
+    .paper-field-label {
+      flex: 0 0 38%;
+      font-weight: 600;
+      font-size: 14px;
+      padding-top: 6px;
+      text-align: left;
+    }
+
+    .paper-field-body {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .paper-field-required {
+      color: #ff4d4f;
+      margin-left: 4px;
+    }
+
+    // A faux, read-only input: a soft box with an emphasised bottom line,
+    // like a field to be written on.
+    .paper-field-input {
+      height: 34px;
+      background: #f7fbff;
+      border: 1px solid #e4ecf5;
+      border-bottom: 2px solid #b7c6da;
+      border-radius: 3px 3px 0 0;
+    }
+
+    .paper-input-text {
+      height: 72px;
+    }
+
+    .paper-input-geo,
+    .paper-input-photo,
+    .paper-input-attachment,
+    .paper-input-signature {
+      height: 52px;
+      background: #f3f6fb;
+    }
+
+    .paper-field-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+
+      .paper-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
       }
 
-      li {
-        margin-bottom: 4px;
+      .paper-option-radio,
+      .paper-option-box {
+        display: inline-block;
+        width: 15px;
+        height: 15px;
+        border: 1.5px solid #b7c6da;
+        background: #f7fbff;
+      }
+
+      .paper-option-radio {
+        border-radius: 50%;
+      }
+
+      .paper-option-box {
+        border-radius: 3px;
       }
     }
 
-    .form-library-outline-type {
+    .paper-field-type {
+      font-size: 11px;
+      color: rgba(0, 0, 0, 0.38);
       text-transform: lowercase;
+      text-align: left;
+      margin-top: 3px;
+    }
+  }
+}
+
+// Narrow screens: stack the field label above its input again.
+@media (max-width: 575px) {
+  .form-library-outline .paper-field {
+    flex-direction: column;
+    gap: 4px;
+
+    .paper-field-label {
+      flex-basis: auto;
+      padding-top: 0;
     }
   }
 }

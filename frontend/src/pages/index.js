@@ -61,5 +61,6 @@ export {
   TenantDetail,
   Operators,
   FormLibraryConsole,
+  PromoteTemplatePage,
 } from "./admin";
 export { default as Inspect } from "./inspect/Inspect";

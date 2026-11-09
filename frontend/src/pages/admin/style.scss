@@ -82,3 +82,9 @@
     background: $color-disabled;
   }
 }
+
+// FB-018: cap the promote page's width so the live form preview stays
+// readable on very wide (2xl) screens instead of stretching edge to edge.
+#promote-template-page {
+  margin: 0 auto;
+}

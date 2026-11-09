@@ -48,7 +48,7 @@ const FormLibrary = () => {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [category, setCategory] = useState("");
+  const [categoryIds, setCategoryIds] = useState([]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [usingId, setUsingId] = useState(null);
@@ -80,8 +80,8 @@ const FormLibrary = () => {
   const loadTemplates = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ page, page_size: PAGE_SIZE });
-    if (category) {
-      params.set("category", category);
+    if (categoryIds.length > 0) {
+      params.set("category", categoryIds.join(","));
     }
     if (search) {
       params.set("search", search);
@@ -97,7 +97,7 @@ const FormLibrary = () => {
         setTemplates([]);
       })
       .finally(() => setLoading(false));
-  }, [page, category, search]);
+  }, [page, categoryIds, search]);
 
   useEffect(() => {
     loadTemplates();
@@ -211,19 +211,20 @@ const FormLibrary = () => {
             </Col>
             <Col>
               <Select
-                value={category}
-                style={{ width: 220 }}
-                onChange={(val) => {
-                  setCategory(val);
+                mode="multiple"
+                allowClear
+                value={categoryIds}
+                style={{ minWidth: 220 }}
+                placeholder={text.formLibraryAllCategories}
+                optionFilterProp="label"
+                onChange={(vals) => {
+                  setCategoryIds(vals);
                   setPage(1);
                 }}
-                options={[
-                  { value: "", label: text.formLibraryAllCategories },
-                  ...categories.map((c) => ({
-                    value: String(c.id),
-                    label: c.name,
-                  })),
-                ]}
+                options={categories.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                }))}
               />
             </Col>
           </Row>

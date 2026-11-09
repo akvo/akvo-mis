@@ -1,13 +1,49 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Button, Tabs, Spin, Empty, Tag, Typography } from "antd";
+import { Modal, Button, Tabs, Spin, Empty } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import { api } from "../../lib";
 
-const { Title, Text } = Typography;
+// One question rendered like a paper form field: a label over a faux,
+// read-only input whose shape hints at the answer type.
+const PaperField = ({ q }) => {
+  const options = q.option || q.options || [];
+  const isChoice = q.type === "option" || q.type === "multiple_option";
+  return (
+    <div className="paper-field">
+      <div className="paper-field-label">
+        {q.label || q.name}
+        {q.required && <span className="paper-field-required">*</span>}
+      </div>
+      <div className="paper-field-body">
+        {isChoice && options.length > 0 ? (
+          <div className="paper-field-options">
+            {options.map((o, oi) => (
+              <span key={o.id || o.value || oi} className="paper-option">
+                <span
+                  className={
+                    q.type === "multiple_option"
+                      ? "paper-option-box"
+                      : "paper-option-radio"
+                  }
+                />
+                {o.label || o.name || o.value}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div
+            className={`paper-field-input paper-input-${q.type || "input"}`}
+          />
+        )}
+        <div className="paper-field-type">{q.type}</div>
+      </div>
+    </div>
+  );
+};
 
-// Read-only structural outline of one form (groups → questions). The template
-// is never editable from here; "Use this form" clones it into the workspace.
-const FormOutline = ({ form, emptyText }) => {
+// Read-only, paper-like preview of one form (groups → fields). Exported so the
+// promote page can reuse it to preview a source family inline.
+export const FormOutline = ({ form, emptyText }) => {
   const groups = form?.question_group || [];
   if (groups.length === 0) {
     return <Empty description={emptyText} />;
@@ -15,46 +51,60 @@ const FormOutline = ({ form, emptyText }) => {
   return (
     <div className="form-library-outline">
       {groups.map((group, gi) => (
-        <div key={group.id || gi} className="form-library-outline-group">
-          <Title level={5}>{group.label || group.name}</Title>
-          <ul>
-            {(group.question || []).map((q, qi) => (
-              <li key={q.id || qi}>
-                <Text>{q.label || q.name}</Text>{" "}
-                <Tag className="form-library-outline-type">{q.type}</Tag>
-                {q.required && <Tag color="red">required</Tag>}
-              </li>
-            ))}
-          </ul>
+        <div key={group.id || gi} className="paper-group">
+          <div className="paper-group-title">{group.label || group.name}</div>
+          {(group.question || []).map((q, qi) => (
+            <PaperField key={q.id || qi} q={q} />
+          ))}
         </div>
       ))}
     </div>
   );
 };
 
-const FormLibraryPreview = ({ templateId, text, canUse, onClose, onUse }) => {
+// Preview a template family (`templateId`, tabs) OR a single form
+// (`formId`, no tabs). The single mode is for the console, where each form —
+// registration and every monitoring child — gets its own Preview so a family
+// with many monitoring forms never produces an overflowing tab bar.
+const FormLibraryPreview = ({
+  templateId,
+  formId,
+  text,
+  canUse,
+  onClose,
+  onUse,
+}) => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    if (!templateId) {
+    const id = templateId || formId;
+    if (!id) {
       setData(null);
       return;
     }
     setLoading(true);
-    api
-      .get(`/manage/forms/library/${templateId}/preview`)
-      .then((res) => setData(res.data))
+    // A template form is tenant-less, so a tenant-less curator can read a
+    // single one via the normal for_user-scoped detail endpoint.
+    const request = templateId
+      ? api
+          .get(`/manage/forms/library/${templateId}/preview`)
+          .then((res) => res.data)
+      : api
+          .get(`/manage/forms/${formId}`)
+          .then((res) => ({ registration: res.data, monitoring: [] }));
+    request
+      .then(setData)
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [templateId]);
+  }, [templateId, formId]);
 
   const registration = data?.registration;
   const monitoring = data?.monitoring || [];
 
   return (
     <Modal
-      open={Boolean(templateId)}
+      open={Boolean(templateId || formId)}
       title={registration?.name || text.formLibraryPreviewTitle}
       width={720}
       onCancel={onClose}
@@ -62,7 +112,7 @@ const FormLibraryPreview = ({ templateId, text, canUse, onClose, onUse }) => {
         <Button key="close" onClick={onClose}>
           {text.closeButton || "Close"}
         </Button>,
-        canUse && (
+        canUse && templateId && (
           <Button
             key="use"
             type="primary"
@@ -75,32 +125,33 @@ const FormLibraryPreview = ({ templateId, text, canUse, onClose, onUse }) => {
       ]}
     >
       <Spin spinning={loading}>
-        {!loading && !registration ? (
-          <Empty description={text.formLibraryEmptyText} />
+        {!registration ? (
+          !loading && <Empty description={text.formLibraryEmptyText} />
+        ) : monitoring.length === 0 ? (
+          <FormOutline
+            form={registration}
+            emptyText={text.formLibraryEmptyText}
+          />
         ) : (
-          registration && (
-            <Tabs>
+          <Tabs>
+            <Tabs.TabPane
+              tab={text.formLibraryRegistrationTab}
+              key="registration"
+            >
+              <FormOutline
+                form={registration}
+                emptyText={text.formLibraryEmptyText}
+              />
+            </Tabs.TabPane>
+            {monitoring.map((m, i) => (
               <Tabs.TabPane
-                tab={text.formLibraryRegistrationTab}
-                key="registration"
+                tab={m.name || `${text.formLibraryMonitoringTab} ${i + 1}`}
+                key={`monitoring-${i}`}
               >
-                <FormOutline
-                  form={registration}
-                  emptyText={text.formLibraryEmptyText}
-                />
+                <FormOutline form={m} emptyText={text.formLibraryEmptyText} />
               </Tabs.TabPane>
-              {monitoring.map((m, i) => (
-                <Tabs.TabPane
-                  tab={`${text.formLibraryMonitoringTab} ${
-                    monitoring.length > 1 ? i + 1 : ""
-                  }`.trim()}
-                  key={`monitoring-${i}`}
-                >
-                  <FormOutline form={m} emptyText={text.formLibraryEmptyText} />
-                </Tabs.TabPane>
-              ))}
-            </Tabs>
-          )
+            ))}
+          </Tabs>
         )}
       </Spin>
     </Modal>
