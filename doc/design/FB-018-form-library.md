@@ -8,8 +8,8 @@
 
 **Task ID**: FB-018
 **Author**: Iwan Firmawan (with Claude)
-**Date**: 2026-11-05
-**Status**: Review
+**Date**: 2026-11-05 (implementation aligned 2026-11-09)
+**Status**: Implemented (v1; see §12 for deferred items)
 
 ---
 
@@ -243,37 +243,61 @@ All routes live on the existing `FormBuilderViewSet`
 }
 ```
 
-### UI & per-type actions
+### UI & per-type actions (as built)
 
-**Console (curator).** The library management page lists each family as a
-**Registration** row with its **Monitoring** form(s) as indented sub-rows. Actions
-sit in a single **⋯ menu** per row:
-- Registration: *Edit in Form Builder*, *Preview*, *Publish/Unpublish*, *+ Add
-  monitoring form* (creates a child under this registration), *Remove from library*.
-- Monitoring: *Edit in Form Builder*, *Publish/Unpublish*, *Delete*.
+**Console (curator)** — `/admin/form-library`, a tab on the platform console
+(`AdminLayout`, gated on `is_platform_admin`). It is a flat table of the published
+**registration** templates (name, category tags, *Used* count, *Monitoring forms*
+count) with:
+- **Promote from workspace** (Path 1): a modal — pick a workspace → pick one of its
+  published registration families (curator-only `source-forms`) → assign categories →
+  promote. The family is **snapshotted** into the Library (tenant-less, published,
+  tagged `meta.template`; source untouched), source recorded in `meta.source`:
+  ```json
+  "meta": { "template": true, "source": { "tenant_id": 12, "tenant_name": "Bantul", "form_id": 884, "promoted_at": "2026-11-06" } }
+  ```
+  (`source` is descriptive provenance — not shown to consumers, never joined/filtered.)
+- **Manage categories**: a modal to add/delete categories (the browse filter).
+- **Delete** (*Remove from library*) per row — soft-deletes the template; existing
+  copies are unaffected.
 
-A monitoring template is never standalone — it is always added from its
-registration's *+ Add monitoring form*. Both types open the **same Form Builder**.
+> **Deferred (v1 scope, chosen with the team).** Per-row *Edit in Form Builder*,
+> *Publish/Unpublish*, *+ Add monitoring form*, and **Path 2 "from scratch"** authoring
+> are not surfaced on the console yet. The **backend supports them** — `create` stamps
+> `meta.template=true` on a curator-authored registration, and the `FormBuilderAccess`
+> curator bypass (D-4) lets a tenant-less curator wield the builder on tenant-null
+> template rows — but wiring the builder from the `/admin` host to the workspace-host
+> `/control-center/form-builder` is a follow-up. For v1, **Promote is the template
+> creation path.**
 
-**Creating a new template — two paths** (a `+ New template` menu on the console):
-1. **Select from an existing workspace** — the curator picks a workspace, browses its
-   published registration families (via the curator-only `source-forms` endpoint), and
-   promotes one. It is **snapshotted** into the Library (tenant-less, published, tagged
-   `meta.template`; source untouched), and the source is recorded in `meta.source` for
-   the curator's reference:
-   ```json
-   "meta": { "template": true, "source": { "tenant_id": 12, "tenant_name": "Bantul", "form_id": 884, "promoted_at": "2026-11-06" } }
-   ```
-   (Curator-only cross-tenant read; `source` is descriptive provenance, not shown to
-   consumers, and never used to join or filter — see §3 `meta` guardrail.)
-2. **From scratch** — the curator creates a new registration with the existing Form
-   Builder; because the curator is tenant-less, `create` stamps it `meta.template=true`
-   and leaves it tenant-less, then they add monitoring forms under it.
+**Workspace (consumer)** — `/control-center/form-builder/library`, reached from a
+**Form Library** button on the Form Builder list (and the onboarding tour, §11). A
+responsive **card grid** (1 / 2 / 3 / 4 columns by breakpoint), category filter and
+search. Each card shows categories, *Used* count and monitoring-form count with
+**Preview** and **Use this form** (gated on `form_create`; others see *View only*).
+Preview opens a read-only outline modal (Registration + Monitoring tabs); *Use* is also
+available from inside it. Draft templates never appear here.
 
-**Workspace (consumer).** One card per registration family-root (monitoring hidden),
-each with **Preview** and **Use this form**. Preview opens a read-only modal showing
-the registration and its monitoring form(s) before the user commits; *Use* is also
-available from inside the preview. Draft templates never appear here.
+> **"Use this form" redirects to the Form Builder list** (`/control-center/form-builder`),
+> not the new registration's edit page: the clone is a whole **family** (registration +
+> monitoring forms), each published separately, so the list is where the user works
+> through them one by one — landing on just the registration's editor hid the children
+> and implied publishing the parent published the family.
+
+### Implementation note — NULL-safe template exclusion
+
+Every place that must keep templates out of a list filters with
+`NOT_A_TEMPLATE = Q(meta__template__isnull=True) | Q(meta__template=False)`
+(main form list, promote `source-forms`, promote source lookup), **not**
+`.exclude(meta__template=True)`. A plain `exclude` drops rows whose `meta` is a
+non-null JSON object lacking the key — e.g. a form cloned from a template
+(`meta.copied_from`) — because SQL evaluates `NOT(NULL = true)` as NULL. The positive
+filter keeps every non-template form (null meta, missing key, or `false`).
+
+Promote also sets `tenant = None` **explicitly** on each copied form: `duplicate_form`
+tenants a copy to `user.tenant or source.tenant`, and the curator is tenant-less, so
+without the reset the template would inherit the *source workspace's* tenant and be
+unreachable by any curator (whose `for_user` is tenant-NULL).
 
 ---
 
@@ -488,41 +512,52 @@ targeting, role/permission filtering, `localStorage` completion, and the sidebar
   for users with form-create ability (`ability.can("read"/"create", "form-builder")`)
   — exactly the audience that would start from a template.
 
-**What this feature adds to the existing tour (frontend only):**
+**What this feature added to the existing tour (as built, frontend only):**
 
-| Touchpoint | Change | Where |
-|---|---|---|
-| Tour step | Add **one step** to the `setup` path: *"Start from a template"* spotlighting the Form Library entry, before/after "Build a form". `permission: (ability) => ability.can("read", "form-builder")`. | `components/onboarding-tour/tourConfig.js` → `TOUR_PATHS[GOALS.SETUP]` |
-| Anchor | Add `data-tour="form-library"` to the Form Library entry point (sidebar/form-builder button). | the Form Library UI element |
-| i18n | Add EN + FR keys for the new step title/body/CTA (CTA route → the library page). | `lib/ui-text.js` |
-| Step count | Automatic — `getTotalStepsForGoal()` already derives the count from the (permission-filtered) path length. | no change |
+The `setup` path's first step already spotlights the Form Builder
+(`[data-tour="sidebar-form-builder"]`, gated on `read form-builder` — the same
+audience as the library). Rather than inserting a **new** step targeting the Form
+Library button (which lives on the form-builder *page*, not the always-present
+sidebar, so a spotlight would miss it off-page), the step's **description was
+enriched** (EN + FR in `lib/ui-text.js`, key `tourSetupStep1Desc`) to tell the user
+they can *"skip the blank page and start from a ready-made template in the Form
+Library."* No new step, no step-count change, no `tourConfig.js` change.
 
-**Explicit non-goals:** no change to `OnboardingTour.jsx` engine, no new goal/path,
-no change to the `localStorage` completion key, no backend. The standalone
-**"Form Library" entry link** (joy's "like Take a Tour" link) is ordinary nav in the
-form builder/onboarding area, independent of whether the tour step is shown.
+A `data-tour="form-library-entry"` anchor is present on the Form Builder list's
+**Form Library** button for any future dedicated step.
+
+**Explicit non-goals (held):** no change to `OnboardingTour.jsx` engine, no new
+goal/path, no change to the `localStorage` completion key, no backend.
 
 ---
 
-## 12. Implementation Process (before merge)
+## 12. Implementation Status
 
-All design questions are resolved (§10); the doc is in **Review**. Once reviewers sign
-off, implementation follows these rules:
+Implemented on `feature/fb-018-form-library`. State vs. the original plan:
 
-- [ ] **Match the approved prototype.** The built UI must align with the HTML prototype
-  (both surfaces, ⋯ action menus, Preview-before-Use, the `+ New template` two-path
-  flow): <https://claude.ai/artifact/8U4pQBQh6QGZFyVPa8jSGX>.
-- [ ] **Enforce the access gate** from §2/§4: `FormBuilderAccess(form_view)` to see the
-  library, `form_create` to use, `form_edit`/`IsCurator` to author — surfaced both in
-  the API permission map and in the frontend (hide the library entry when the user
-  lacks `form_view`, exactly as the onboarding-tour step already gates on
-  `ability.can("read", "form-builder")`).
-- [ ] **Code review by subagent.** After each cohesive change set, run a reviewer pass
-  for quality and readability — `/ponytail:ponytail-review` (or the `code-reviewer`
-  agent) — and resolve findings before merge. This is quality review, not a substitute
-  for tests.
-- [ ] **Lint + tests green** per `CLAUDE.md`: backend `./dc.sh exec backend flake8` and
-  the §9 test module; frontend `./dc.sh exec frontend npm run lint`.
+- [x] **Backend** — `Forms.categories`/`import_count`/`meta` (migration 0010);
+  `services/form_library.py` (browse, family clone, promote); `IsCurator` =
+  tenant-less `is_platform_admin`; `FormBuilderAccess` curator bypass; `create`
+  stamps `meta.template`; NULL-safe `NOT_A_TEMPLATE` filter (§4); seeder (categories).
+- [x] **Frontend consumer** — `/control-center/form-builder/library` (card grid,
+  category filter, search, Preview modal, Use → Form Builder list).
+- [x] **Frontend console** — `/admin/form-library`: template list, **Promote from
+  workspace** (Path 1), **Manage categories**, Delete.
+- [x] **Access gate** — `FormBuilderAccess(form_view)` to browse, `form_create` to
+  use, `IsCurator` for promote/category writes; the library entry and the tour step
+  both gate on `ability.can("read", "form-builder")`.
+- [x] **Onboarding tour** — enriched `setup` step-1 copy (§11), EN + FR.
+- [x] **Lint + tests green** — backend `flake8` clean, `tests_form_library` (12 tests)
+  green; frontend `eslint` clean per changed file.
+- [ ] **Deferred to a follow-up** (agreed scope, §4): console per-row *Edit in Form
+  Builder* / *Publish* / *+ Add monitoring form*, and **Path 2 "from scratch"**
+  authoring from the console host (backend already supports it).
+
+> **Divergences from the original prototype**, by decision: the console is a flat
+> list with Promote + categories (not the per-row ⋯ builder menu / `+ New template`
+> two-path flow yet); "Use" lands on the Form Builder list rather than the editor;
+> the tour reuses the existing step instead of adding one. Prototype for reference:
+> <https://claude.ai/artifact/8U4pQBQh6QGZFyVPa8jSGX>.
 
 ---
 
