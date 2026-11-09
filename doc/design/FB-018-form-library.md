@@ -246,20 +246,28 @@ All routes live on the existing `FormBuilderViewSet`
 ### UI & per-type actions (as built)
 
 **Console (curator)** — `/admin/form-library`, a tab on the platform console
-(`AdminLayout`, gated on `is_platform_admin`). It is a flat table of the published
-**registration** templates (name, category tags, *Used* count, *Monitoring forms*
-count) with:
-- **Promote from workspace** (Path 1): a modal — pick a workspace → pick one of its
-  published registration families (curator-only `source-forms`) → assign categories →
-  promote. The family is **snapshotted** into the Library (tenant-less, published,
-  tagged `meta.template`; source untouched), source recorded in `meta.source`:
+(`AdminLayout`, gated on `is_platform_admin`). A table of the published **registration**
+templates with monitoring forms as **nested, indented sub-rows** (antd
+`childrenColumnName`, expanded by default): columns Template, Categories, Status, *Used*,
+*Monitoring forms*, Actions. Each registration row shows its **description** and, for a
+promoted template, a provenance line *"Promoted from {workspace} · {date}"* from
+`meta.source`. Features:
+- **Search** + **multi-category filter** (any-of; `?category=1,2`).
+- **Preview** per form — registration *and* each monitoring sub-row have their own
+  Preview (single-form, no tab bar; see §Preview below).
+- **Promote from workspace** (Path 1) — a dedicated **page** (`/admin/form-library/promote`),
+  not a modal: pick a workspace → pick one of its published registration families
+  (curator-only `source-forms`) → the chosen family **previews live** in the page body as
+  the dropdown changes → assign categories → promote. The family is **snapshotted** into
+  the Library (tenant-less, published, tagged `meta.template`; source untouched), source
+  recorded in `meta.source`:
   ```json
   "meta": { "template": true, "source": { "tenant_id": 12, "tenant_name": "Bantul", "form_id": 884, "promoted_at": "2026-11-06" } }
   ```
   (`source` is descriptive provenance — not shown to consumers, never joined/filtered.)
 - **Manage categories**: a modal to add/delete categories (the browse filter).
-- **Delete** (*Remove from library*) per row — soft-deletes the template; existing
-  copies are unaffected.
+- **Delete** (*Remove from library*) per registration — soft-deletes the template;
+  existing copies are unaffected.
 
 > **Deferred (v1 scope, chosen with the team).** Per-row *Edit in Form Builder*,
 > *Publish/Unpublish*, *+ Add monitoring form*, and **Path 2 "from scratch"** authoring
@@ -270,13 +278,22 @@ count) with:
 > `/control-center/form-builder` is a follow-up. For v1, **Promote is the template
 > creation path.**
 
+**Preview (shared).** `FormLibraryPreview` renders a read-only, **paper-like** outline:
+section header per question group, each question a label beside a faux underline/box
+input whose shape hints at the answer type (radio/checkbox placeholders for option
+types, taller box for long text, distinct boxes for geo/photo/attachment/signature). It
+has two modes: **family** (`templateId` → registration + monitoring tabs, used by the
+consumer) and **single form** (`formId` → one form, no tabs, used by the console per-row
+Preview). The single-form read uses the ordinary `/manage/forms/{id}` detail — a template
+form is tenant-less, so the tenant-less curator's `for_user` matches it, no new endpoint.
+
 **Workspace (consumer)** — `/control-center/form-builder/library`, reached from a
 **Form Library** button on the Form Builder list (and the onboarding tour, §11). A
-responsive **card grid** (1 / 2 / 3 / 4 columns by breakpoint), category filter and
-search. Each card shows categories, *Used* count and monitoring-form count with
+responsive **card grid** (1 / 2 / 3 / 4 columns by breakpoint), **multi-category filter**
+and search. Each card shows categories, *Used* count and monitoring-form count with
 **Preview** and **Use this form** (gated on `form_create`; others see *View only*).
-Preview opens a read-only outline modal (Registration + Monitoring tabs); *Use* is also
-available from inside it. Draft templates never appear here.
+Preview opens the paper-like family modal; *Use* is also available from inside it. Draft
+templates never appear here.
 
 > **"Use this form" redirects to the Form Builder list** (`/control-center/form-builder`),
 > not the new registration's edit page: the clone is a whole **family** (registration +
@@ -298,6 +315,19 @@ Promote also sets `tenant = None` **explicitly** on each copied form: `duplicate
 tenants a copy to `user.tenant or source.tenant`, and the curator is tenant-less, so
 without the reset the template would inherit the *source workspace's* tenant and be
 unreachable by any curator (whose `for_user` is tenant-NULL).
+
+**Source-family preview reuses `source-forms`.** The promote page previews a candidate
+via `GET /manage/library/source-forms?preview=<id>` — the same `IsCurator`-gated,
+deliberately cross-tenant endpoint, parameterised to return one family's editor-format
+definition. No new route: `/manage/forms/{id}` is `for_user` scoped (FB-015) and 404s
+for a tenant-less curator reading a *workspace* form, so reusing the curator endpoint is
+the one sanctioned cross-tenant read rather than weakening that isolation. (A *template*
+form, being tenant-less, is still read via the plain detail endpoint — that's the
+console's single-form Preview above.)
+
+**`LibraryFormSerializer`** carries `status`, the `monitoring` children (id/name/type/
+status, for the console sub-rows), and `source` (`meta.source`, or null) so the console
+can show provenance. `library_list` accepts a comma-separated `category` (match any).
 
 ---
 
@@ -541,8 +571,11 @@ Implemented on `feature/fb-018-form-library`. State vs. the original plan:
   stamps `meta.template`; NULL-safe `NOT_A_TEMPLATE` filter (§4); seeder (categories).
 - [x] **Frontend consumer** — `/control-center/form-builder/library` (card grid,
   category filter, search, Preview modal, Use → Form Builder list).
-- [x] **Frontend console** — `/admin/form-library`: template list, **Promote from
-  workspace** (Path 1), **Manage categories**, Delete.
+- [x] **Frontend console** — `/admin/form-library`: template table with **nested
+  monitoring sub-rows**, search + **multi-category filter**, **per-form Preview**
+  (paper-like), **description + `meta.source` provenance** per template, **Promote from
+  workspace** as a dedicated **page with live preview** (`/admin/form-library/promote`,
+  via `source-forms?preview=<id>`), **Manage categories**, Delete.
 - [x] **Access gate** — `FormBuilderAccess(form_view)` to browse, `form_create` to
   use, `IsCurator` for promote/category writes; the library entry and the tour step
   both gate on `ability.can("read", "form-builder")`.
@@ -553,10 +586,10 @@ Implemented on `feature/fb-018-form-library`. State vs. the original plan:
   Builder* / *Publish* / *+ Add monitoring form*, and **Path 2 "from scratch"**
   authoring from the console host (backend already supports it).
 
-> **Divergences from the original prototype**, by decision: the console is a flat
-> list with Promote + categories (not the per-row ⋯ builder menu / `+ New template`
-> two-path flow yet); "Use" lands on the Form Builder list rather than the editor;
-> the tour reuses the existing step instead of adding one. Prototype for reference:
+> **Divergences from the original prototype**, by decision: the console omits the
+> per-row ⋯ builder menu and the `+ New template` from-scratch path (backend-ready,
+> deferred); "Use" lands on the Form Builder list rather than the editor; the tour
+> reuses the existing step instead of adding one. Prototype for reference:
 > <https://claude.ai/artifact/8U4pQBQh6QGZFyVPa8jSGX>.
 
 ---
