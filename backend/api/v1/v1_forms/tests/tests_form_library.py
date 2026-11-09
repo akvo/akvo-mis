@@ -377,3 +377,53 @@ class FormLibraryTestCase(TestCase):
         self.assertEqual(res.status_code, 201)
         form = Forms.objects.get(name="Ordinary Workspace Form")
         self.assertIsNone(form.meta)
+
+    def test_edit_published_template_is_live_no_snapshot(self):
+        # A published template has no submissions and no runtime link to its
+        # copies, so editing it updates the live rows in place (no version
+        # snapshot) — unlike an ordinary published form.
+        reg, _ = self._make_family(None, "Live Edit", template=True)
+        res = self.client.put(
+            f"/api/v1/manage/forms/{reg.id}",
+            self._registration_payload("Live Edit v2"),
+            content_type="application/json",
+            **self.curator_header,
+        )
+        self.assertEqual(res.status_code, 200)
+        reg.refresh_from_db()
+        self.assertEqual(reg.name, "Live Edit v2")
+        self.assertEqual(reg.status, FormStatus.published)
+        self.assertEqual(reg.published_versions.count(), 0)
+
+    def test_set_categories_on_template(self):
+        reg, _ = self._make_family(None, "Cat Edit", template=True)
+        cat = FormCategory.objects.create(name="Health", slug="health")
+        url = f"/api/v1/manage/forms/library/{reg.id}/categories"
+        # workspace user cannot
+        res = self.client.post(
+            url,
+            {"category_ids": [cat.id]},
+            content_type="application/json",
+            **self.header,
+        )
+        self.assertEqual(res.status_code, 403)
+        # curator can
+        res = self.client.post(
+            url,
+            {"category_ids": [cat.id]},
+            content_type="application/json",
+            **self.curator_header,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            list(reg.categories.values_list("id", flat=True)), [cat.id]
+        )
+        # and can clear them
+        res = self.client.post(
+            url,
+            {"category_ids": []},
+            content_type="application/json",
+            **self.curator_header,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(reg.categories.count(), 0)

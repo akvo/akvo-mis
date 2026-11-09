@@ -38,6 +38,10 @@ urlpatterns = [
         FormBuilderViewSet.as_view({"post": "library_use"}),
     ),
     re_path(
+        r"^(?P<version>(v1))/manage/forms/library/(?P<pk>[0-9]+)/categories$",
+        FormBuilderViewSet.as_view({"post": "library_set_categories"}),
+    ),
+    re_path(
         r"^(?P<version>(v1))/manage/library/source-forms$",
         FormBuilderViewSet.as_view({"get": "library_source_forms"}),
     ),

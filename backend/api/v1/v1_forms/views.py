@@ -52,7 +52,6 @@ from api.v1.v1_forms.models import FormCategory, Forms
 from api.v1.v1_forms.services.form_library import (
     clone_family,
     get_library_form,
-    library_registration_qs,
     promote_family,
 )
 from api.v1.v1_forms.serializers import (
@@ -741,6 +740,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 FormBuilderAccess(FeatureAccessTypes.form_view),
             ],
             "library_source_forms": [IsAuthenticated, IsCurator],
+            "library_set_categories": [IsAuthenticated, IsCurator],
             "library_promote": [IsAuthenticated, IsCurator],
             "category_create": [IsAuthenticated, IsCurator],
             "category_update": [IsAuthenticated, IsCurator],
@@ -752,12 +752,26 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     # FB-018: Form Library
     # -----------------------------------------------------------------------
     def library_list(self, request, *args, **kwargs):
-        """Browse published registration templates (family roots).
+        """Browse registration templates (family roots).
 
-        ``category`` may be a single id or a comma-separated list; a template
-        matches if it carries ANY of them.
+        Consumers see published templates only; a curator (tenant-less
+        platform admin) also sees drafts, so a template authored from scratch
+        is visible in the console before it is published. ``category`` may be a
+        single id or a comma-separated list; a template matches if it carries
+        ANY of them.
         """
-        qs = library_registration_qs()
+        user = request.user
+        is_curator = (
+            getattr(user, "is_platform_admin", False)
+            and user.tenant_id is None
+        )
+        qs = Forms.objects.filter(
+            meta__template=True,
+            type=FormTypes.registration,
+            parent__isnull=True,
+        )
+        if not is_curator:
+            qs = qs.filter(status=FormStatus.published)
         category = request.query_params.get("category")
         search = (request.query_params.get("search") or "").strip()
         if category:
@@ -923,6 +937,32 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
             }
         )
 
+    def library_set_categories(self, request, *args, **kwargs):
+        """Curator-only: set the categories on a registration template.
+
+        Categories are assigned at promote time; this lets a curator add or
+        change them later (e.g. a template authored from scratch starts with
+        none).
+        """
+        template = (
+            Forms.objects.filter(
+                pk=kwargs.get("pk"),
+                meta__template=True,
+                type=FormTypes.registration,
+                parent__isnull=True,
+            )
+            .prefetch_related("categories")
+            .first()
+        )
+        if template is None:
+            return Response(
+                {"message": "Template not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        ids = request.data.get("category_ids") or []
+        template.categories.set(FormCategory.objects.filter(id__in=ids))
+        return Response(LibraryFormSerializer(instance=template).data)
+
     def library_promote(self, request, *args, **kwargs):
         """Curator-only (Path 1): snapshot a source family into the Library,
         published, with provenance in meta.source.
@@ -1066,16 +1106,20 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 {"message": errors[0]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if form.status == FormStatus.published:
-            # Snapshot-only PUT: store payload as snapshot, no live row
-            # changes (FR-4, D-6).
+        # Library templates carry no submissions and no runtime link to the
+        # copies made from them, so there is nothing a published-version
+        # snapshot would protect: they are always edited live in place (FB-018
+        # — no version history for templates). Ordinary published forms keep
+        # the snapshot-only PUT (FR-4, D-6).
+        is_template = bool(form.meta) and form.meta.get("template") is True
+        if form.status == FormStatus.published and not is_template:
             pv = store_version_snapshot(form, data, request.user)
             form.refresh_from_db()
             return Response(
                 _to_editor_format(_form_detail_from_snapshot(form, pv))
             )
 
-        # Draft PUT: update live rows in-place.
+        # Draft (or template) PUT: update live rows in-place.
         allow_delete_param = request.query_params.get("allow_delete")
         if allow_delete_param is not None:
             data = {

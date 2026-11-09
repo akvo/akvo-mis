@@ -62,6 +62,12 @@ class ListQuestionSerializer(serializers.ModelSerializer):
     fn = serializers.SerializerMethodField()
     pre = serializers.SerializerMethodField()
     displayOnly = serializers.BooleanField(source="display_only")
+    addonBefore = serializers.CharField(
+        source="addon_before", allow_null=True, required=False
+    )
+    addonAfter = serializers.CharField(
+        source="addon_after", allow_null=True, required=False
+    )
 
     @extend_schema_field(ListOptionSerializer(many=True))
     def get_option(self, instance: Questions):
@@ -293,6 +299,8 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             "fn",
             "pre",
             "displayOnly",
+            "addonBefore",
+            "addonAfter",
             "translations",
             "columns",
             "limit",
