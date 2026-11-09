@@ -25,7 +25,7 @@ class DataBatchDetailsTestCase(TestCase, ProfileTestHelperMixin):
         call_command("administration_seeder", "--test", 1)
         call_command("default_roles_seeder", "--test", 1)
         call_command("form_seeder", "--test", 1)
-        self.call_command(repeat=2, approved=False, draft=False)
+        self.call_command(repeat=2, approved=False)
 
         self.data = FormData.objects.filter(
             is_pending=True,

@@ -43,12 +43,11 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
         call_command("administration_seeder", "--test")
         call_command("form_seeder", "--test")
         call_command("default_roles_seeder", "--test", 1)
-        self.call_command(repeat=2, approved=True, draft=False)
+        self.call_command(repeat=2, approved=True)
         self.form = Forms.objects.get(pk=1)
         self.data = (
             self.form.form_form_data.filter(
                 is_pending=False,
-                is_draft=False,
             )
             .order_by("?")
             .first()
@@ -63,30 +62,6 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
         self.user.save()
 
         self.token = self.get_auth_token(self.user.email, "test")
-
-        # Create a draft data entry
-        draft_data = self.form.form_form_data.create(
-            name="Draft Data",
-            administration=self.data.administration,
-            geo=self.data.geo,
-            created_by=self.user,
-            updated_by=self.user,
-            is_pending=False,
-            is_draft=True,
-        )
-        add_fake_answers(draft_data)
-        self.draft_data = draft_data
-
-    def test_form_data_list_exclude_draft(self):
-        """Test that the form data list excludes draft data."""
-        response = self.client.get(
-            f"/api/v1/form-data/{self.form.id}",
-            HTTP_AUTHORIZATION=f"Bearer {self.token}",
-        )
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertGreater(data["total"], 0)
-        self.assertNotIn(self.draft_data.id, [d["id"] for d in data["data"]])
 
     def test_form_data_list_filter_by_administration(self):
         """Test that the form data list can be filtered by administration."""
@@ -126,7 +101,6 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(search_data)
         search_data.name = "UniqueSearchable"
@@ -161,7 +135,6 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(search_data)
         search_data.name = "CaseSensitiveTest"
@@ -207,7 +180,6 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(search_data)
         search_data.name = "CombinedFilter"
@@ -300,7 +272,6 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(boundary_data)
 
@@ -344,7 +315,6 @@ class FormDataListTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(search_data)
         # Explicitly set name after add_fake_answers (follows pattern from

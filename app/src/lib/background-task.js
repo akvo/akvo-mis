@@ -57,13 +57,10 @@ export const handleAccountDeactivated = async () => {
   // and polling an endpoint that will keep refusing costs the person
   // battery and us load. App.js registers both tasks on launch, so
   // reactivating the account and reopening the app resumes syncing.
-  await [SYNC_FORM_VERSION_TASK_NAME, SYNC_FORM_SUBMISSION_TASK_NAME].reduce(
-    async (prev, task) => {
-      await prev;
-      await BackgroundTask.unregisterTaskAsync(task).catch(() => null);
-    },
-    Promise.resolve(),
-  );
+  await [SYNC_FORM_VERSION_TASK_NAME, SYNC_FORM_SUBMISSION_TASK_NAME].reduce(async (prev, task) => {
+    await prev;
+    await BackgroundTask.unregisterTaskAsync(task).catch(() => null);
+  }, Promise.resolve());
 };
 
 // Registered here rather than in each sync function: all three route
@@ -392,22 +389,13 @@ const processBatch = async (
       };
 
       // sync data point
-      let syncURL = '/sync';
-      if (d?.submitted && d?.draftId) {
-        syncURL = `/sync?id=${d.draftId}&is_published=true`;
-      }
-      if (!d?.submitted) {
-        syncURL = d?.draftId ? `/sync?id=${d.draftId}&is_draft=true` : '/sync?is_draft=true';
-      }
+      const syncURL = '/sync';
       const res = await api.post(syncURL, syncData);
       if (res.status === 200) {
-        // Only drafts keep the backend id: a draftId on a submitted row would
-        // flip its sync URL to the is_published variant.
-        const backendId = !d.submitted ? res?.data?.id : null;
         // Persist the server file paths locally so previews keep working
         // after the uploaded local copies are removed below
         await crudDataPoints.updateJson(db, d.id, answerValues);
-        await crudDataPoints.markSynced(db, d.id, backendId);
+        await crudDataPoints.markSynced(db, d.id);
         // Uploaded local copies are no longer needed — free the storage
         const uploadedForThis = [...photos, ...attachments].filter((f) => f?.dataID === d.id);
         await Promise.all(

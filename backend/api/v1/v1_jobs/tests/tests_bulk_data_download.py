@@ -125,6 +125,7 @@ class BulkUnitTestCase(TestCase, ProfileTestHelperMixin):
 
     def seed_repeatable_form_data(self):
         form = Forms.objects.get(pk=4)
+        adm = self.mobile_user.administrations.first()
         payload = {
             "formId": form.id,
             "name": "Repeatable Test",
@@ -137,6 +138,7 @@ class BulkUnitTestCase(TestCase, ProfileTestHelperMixin):
                 443: "/attachment/screenshot_likes_123.jpeg",
                 444: "/attachments/my_works_123.pdf",
                 445: "/attachment/application_letter_2025-09-01.pdf",
+                446: adm.id if adm else 1,
                 551: "data:base64,examplesignature123",
                 661: "Good Job!",
                 "661-1": "Awesome work!",
@@ -227,6 +229,7 @@ class BulkUnitTestCase(TestCase, ProfileTestHelperMixin):
                 'upload_screenshot_proof',
                 'upload_work',
                 'letter_of_application',
+                'subdistrict',
                 'signature',
                 'testimonial_1',
                 'testimonial_2',

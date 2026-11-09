@@ -153,10 +153,9 @@ if [[ "${fake_data}" == 'y' || "${fake_data}" == 'Y' ]]; then
         monitoring_data_count=2
     fi
 
-    # Both extras default to "no". Pending and draft submissions are
-    # invisible in Manage Data, so a run that accepts the defaults
-    # must produce data the operator can actually see — otherwise a
-    # seeded environment looks broken.
+    # Pending submissions are invisible in Manage Data, so a run that
+    # accepts the default must produce data the operator can actually
+    # see — otherwise a seeded environment looks broken.
     echo "Also create pending (unapproved) data? [y/N]"
     echo "  Needed only to exercise the approval workflow."
     read -r pending_data
@@ -167,20 +166,6 @@ if [[ "${fake_data}" == 'y' || "${fake_data}" == 'Y' ]]; then
         approved=true
     fi
 
-    echo "Also create draft data? [y/N]"
-    echo "  Drafts appear only under Manage Drafts, for their creator."
-    echo "  Requires pending data: approved submissions have no drafts."
-    read -r draft_data_input
-    if [[ "${draft_data_input}" == 'y' \
-          || "${draft_data_input}" == 'Y' ]]; then
-        draft_data=true
-        # --approved=true and --draft=true contradict each other and
-        # the seeder rejects the pair outright.
-        approved=false
-    else
-        draft_data=false
-    fi
-
     # Map coordinates come from the hierarchy: each unit carries a
     # "Bounding Box" attribute, imported alongside it by
     # administration_csv_seeder. Nothing to ask for here.
@@ -188,8 +173,7 @@ if [[ "${fake_data}" == 'y' || "${fake_data}" == 'Y' ]]; then
         --tenant="${tenant}" \
         --repeat="${fake_data_count}" \
         --monitoring="${monitoring_data_count}" \
-        --approved="${approved}" \
-        --draft="${draft_data}"
+        --approved="${approved}"
 fi
 
 # generate_sqlite without --tenant rewrites every workspace's master-data

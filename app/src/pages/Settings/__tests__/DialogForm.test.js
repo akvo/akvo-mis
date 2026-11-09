@@ -2,6 +2,9 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import DialogForm from '../DialogForm';
 
+// background-task imports expo-task-manager, whose native module jest-expo can't load.
+jest.mock('../../../lib/background-task', () => ({}));
+
 describe('DialogForm', () => {
   test('render slider correctly', () => {
     const mockOk = jest.fn();

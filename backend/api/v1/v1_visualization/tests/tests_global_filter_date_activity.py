@@ -98,13 +98,10 @@ class RegistrationActiveInRangeTestCase(GlobalFilterTestMixin, APITestCase):
             {4},
         )
 
-    def test_pending_and_draft_monitoring_do_not_count(self):
+    def test_pending_monitoring_does_not_count(self):
         check = self._check(5, MARCH_20, [OPERATIONAL])
         check.is_pending = True
         check.save()
-        draft = self._check(10, MARCH_20, [OPERATIONAL])
-        draft.is_draft = True
-        draft.save()
         self.assertEqual(
             self.sites_on_registration(**self.MARCH),
             self.MONITORED_IN_MARCH,

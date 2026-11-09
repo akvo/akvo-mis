@@ -47,8 +47,6 @@ import {
   DownloadEntitiesData,
   Roles,
   AddRole,
-  ManageDraft,
-  ManageDraftForm,
   FormBuilderList,
   FormBuilderCreate,
   FormBuilderEdit,
@@ -353,14 +351,6 @@ const RouteList = () => {
         <Route
           path="data/submissions"
           element={<Private element={Submissions} alias="data" />}
-        />
-        <Route
-          path="data/draft"
-          element={<Private element={ManageDraft} alias="data" />}
-        />
-        <Route
-          path="data/draft/:formId"
-          element={<Private element={ManageDraftForm} alias="data" />}
         />
         <Route
           path="approvals"

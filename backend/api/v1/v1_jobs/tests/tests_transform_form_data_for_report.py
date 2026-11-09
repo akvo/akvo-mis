@@ -36,7 +36,7 @@ class TransformFormDataForReportTestCase(TestCase, ProfileTestHelperMixin):
         call_command("default_roles_seeder", "--test", 1)
         call_command("form_seeder", "--test", 1)
 
-        self.call_command(repeat=2, test=True, approved=True, draft=False)
+        self.call_command(repeat=2, test=True, approved=True)
 
         self.form = Forms.objects.get(pk=1)
         self.repeatable_form = Forms.objects.get(pk=4)
@@ -996,7 +996,6 @@ class ReportAdministrationScopeTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.author,
             updated_by=self.author,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(dp)
         return dp
