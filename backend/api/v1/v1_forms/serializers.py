@@ -847,11 +847,36 @@ class LibraryFormSerializer(serializers.ModelSerializer):
 
     categories = FormCategorySerializer(many=True, read_only=True)
     monitoring_count = serializers.SerializerMethodField()
+    monitoring = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    source = serializers.SerializerMethodField()
+
+    def get_source(self, obj):
+        # Provenance of a promoted template (origin workspace + date); None
+        # for a template authored from scratch.
+        return (obj.meta or {}).get("source")
 
     def get_monitoring_count(self, obj):
         return obj.children.filter(
             status=FormStatus.published, deleted_at__isnull=True
         ).count()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
+    def get_monitoring(self, obj):
+        # Every non-deleted monitoring child, for the console's collapsible
+        # sub-rows (the consumer card ignores this and uses monitoring_count).
+        children = obj.children.filter(deleted_at__isnull=True).order_by("id")
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "type": c.type,
+                "status": FormStatus.FieldStr.get(c.status, "draft"),
+            }
+            for c in children
+        ]
 
     class Meta:
         model = Forms
@@ -860,8 +885,11 @@ class LibraryFormSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "version",
+            "status",
             "import_count",
             "monitoring_count",
+            "monitoring",
             "categories",
+            "source",
             "updated",
         ]

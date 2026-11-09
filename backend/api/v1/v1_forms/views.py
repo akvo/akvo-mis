@@ -752,18 +752,24 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     # FB-018: Form Library
     # -----------------------------------------------------------------------
     def library_list(self, request, *args, **kwargs):
-        """Browse published registration templates (family roots)."""
+        """Browse published registration templates (family roots).
+
+        ``category`` may be a single id or a comma-separated list; a template
+        matches if it carries ANY of them.
+        """
         qs = library_registration_qs()
         category = request.query_params.get("category")
         search = (request.query_params.get("search") or "").strip()
         if category:
-            qs = qs.filter(categories__id=category)
+            ids = [c for c in category.split(",") if c.strip().isdigit()]
+            if ids:
+                qs = qs.filter(categories__id__in=ids)
         if search:
             qs = qs.filter(name__icontains=search)
         qs = (
             qs.order_by("-import_count", "name")
             .distinct()
-            .prefetch_related("categories")
+            .prefetch_related("categories", "children")
         )
         page = self.paginate_queryset(qs)
         data = LibraryFormSerializer(page, many=True).data
@@ -820,7 +826,17 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
     def library_source_forms(self, request, *args, **kwargs):
         """Curator-only (Path 1): list a workspace's published registration
         families to promote. Deliberately cross-tenant — not for_user scoped.
+
+        With ``?preview=<id>`` returns that one family's definition
+        (registration + published children, editor format) instead of the
+        list, so the promote page can preview a candidate before promoting.
+        The /manage/forms/{id} detail is for_user scoped (FB-015) and 404s for
+        a tenant-less curator, so this same curator-gated cross-tenant read
+        serves the preview rather than weakening that isolation.
         """
+        preview_id = request.query_params.get("preview")
+        if preview_id:
+            return self._source_family_preview(preview_id)
         tenant_id = request.query_params.get("tenant")
         search = (request.query_params.get("search") or "").strip()
         qs = Forms.objects.filter(
@@ -837,6 +853,74 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(
             LibraryFormSerializer(page, many=True).data
+        )
+
+    def _source_family_preview(self, source_id):
+        source = (
+            Forms.objects.filter(
+                pk=source_id,
+                type=FormTypes.registration,
+                status=FormStatus.published,
+                parent__isnull=True,
+            )
+            .filter(NOT_A_TEMPLATE)
+            .first()
+        )
+        if source is None:
+            return Response(
+                {"message": "Source form not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        children = source.children.filter(
+            status=FormStatus.published, deleted_at__isnull=True
+        ).order_by("id")
+        return Response(
+            {
+                "registration": _to_editor_format(
+                    FormDetailSerializer(instance=source).data
+                ),
+                "monitoring": [
+                    _to_editor_format(FormDetailSerializer(instance=c).data)
+                    for c in children
+                ],
+            }
+        )
+
+    def library_source_preview(self, request, *args, **kwargs):
+        """Curator-only: preview a workspace source family before promoting.
+
+        Same shape as library_preview, but the source is any published
+        workspace registration (not a template) — a deliberate cross-tenant
+        read, so NOT for_user scoped.
+        """
+        source = (
+            Forms.objects.filter(
+                pk=kwargs.get("pk"),
+                type=FormTypes.registration,
+                status=FormStatus.published,
+                parent__isnull=True,
+            )
+            .filter(NOT_A_TEMPLATE)
+            .first()
+        )
+        if source is None:
+            return Response(
+                {"message": "Source form not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        children = source.children.filter(
+            status=FormStatus.published, deleted_at__isnull=True
+        ).order_by("id")
+        return Response(
+            {
+                "registration": _to_editor_format(
+                    FormDetailSerializer(instance=source).data
+                ),
+                "monitoring": [
+                    _to_editor_format(FormDetailSerializer(instance=c).data)
+                    for c in children
+                ],
+            }
         )
 
     def library_promote(self, request, *args, **kwargs):
