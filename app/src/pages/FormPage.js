@@ -363,6 +363,12 @@ const FormPage = ({ navigation, route }) => {
          * Create a new job for syncing form submissions.
          */
         await queueSyncJob(route.params?.uuid);
+        // Kick the upload immediately instead of waiting for the interval tick.
+        // SyncService.onSync owns the lock, WiFi-only gate and status bar; offline
+        // submits fall back to the interval once connectivity returns.
+        UIState.update((s) => {
+          s.instantSync += 1;
+        });
       }
       await finishSave(result, trans.successSubmitted);
     } catch (error) {
