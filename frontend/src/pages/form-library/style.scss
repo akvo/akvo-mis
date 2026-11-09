@@ -1,0 +1,55 @@
+#form-library {
+  .form-library-card {
+    height: 100%;
+    // Flex column so the body absorbs height differences (a 1- vs 2-line
+    // title) and the actions footer always sits at the bottom, keeping
+    // footers aligned across a row of varying-height cards.
+    display: flex;
+    flex-direction: column;
+
+    .ant-card-body {
+      flex: 1 1 auto;
+    }
+
+    .ant-card-head-title {
+      white-space: normal;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+
+    .form-library-card-tags {
+      min-height: 24px;
+    }
+
+    .form-library-card-meta {
+      color: rgba(0, 0, 0, 0.45);
+      font-size: 13px;
+    }
+
+    .form-library-card-muted {
+      color: rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  .form-library-outline {
+    max-height: 60vh;
+    overflow-y: auto;
+
+    .form-library-outline-group {
+      margin-bottom: 16px;
+
+      ul {
+        padding-left: 18px;
+        margin-bottom: 0;
+      }
+
+      li {
+        margin-bottom: 4px;
+      }
+    }
+
+    .form-library-outline-type {
+      text-transform: lowercase;
+    }
+  }
+}

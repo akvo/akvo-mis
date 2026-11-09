@@ -51,8 +51,15 @@ export { default as ManageDraftForm } from "./manage-draft/ManageDraftForm";
 export { default as FormBuilderList } from "./form-builder/FormBuilderList";
 export { default as FormBuilderCreate } from "./form-builder/FormBuilderCreate";
 export { default as FormBuilderEdit } from "./form-builder/FormBuilderEdit";
+export { default as FormLibrary } from "./form-library/FormLibrary";
 export { default as DashboardList } from "./dashboards/DashboardList";
 export { default as DashboardBuilder } from "./dashboards/DashboardBuilder";
 export { default as DashboardViewer } from "./dashboards/DashboardViewer";
-export { AdminLayout, Tenants, TenantDetail, Operators } from "./admin";
+export {
+  AdminLayout,
+  Tenants,
+  TenantDetail,
+  Operators,
+  FormLibraryConsole,
+} from "./admin";
 export { default as Inspect } from "./inspect/Inspect";

@@ -20,4 +20,10 @@
   .ant-tabs-nav-operations {
     display: none !important;
   }
+
+  // Extra breathing room between the Import and Create buttons, beyond the
+  // default antd Space gap.
+  .form-builder-import-button {
+    margin-right: 12px;
+  }
 }
