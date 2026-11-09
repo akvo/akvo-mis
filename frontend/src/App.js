@@ -169,6 +169,11 @@ const RouteList = () => {
             path="form-library/promote"
             element={<PromoteTemplatePage />}
           />
+          <Route path="form-library/create" element={<FormBuilderCreate />} />
+          <Route
+            path="form-library/:formId/edit"
+            element={<FormBuilderEdit />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>

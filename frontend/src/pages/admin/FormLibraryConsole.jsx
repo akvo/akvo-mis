@@ -10,13 +10,15 @@ import {
   Input,
   Select,
   Empty,
-  Popconfirm,
+  Dropdown,
+  Modal,
 } from "antd";
 import {
   PlusOutlined,
   SearchOutlined,
   TagsOutlined,
-  EyeOutlined,
+  MoreOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
 import { api, store, uiText, MONITORING_FORM } from "../../lib";
 import { useNotification } from "../../util/hooks";
@@ -45,6 +47,7 @@ const FormLibraryConsole = () => {
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [previewFormId, setPreviewFormId] = useState(null);
   const [expandedKeys, setExpandedKeys] = useState([]);
+  const [savingCatId, setSavingCatId] = useState(null);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -124,15 +127,84 @@ const FormLibraryConsole = () => {
       });
   };
 
-  const previewButton = (id) => (
-    <Button
-      size="small"
-      icon={<EyeOutlined />}
-      onClick={() => setPreviewFormId(id)}
-    >
-      {text.formLibraryPreviewButton}
-    </Button>
-  );
+  const confirmDelete = (r) =>
+    Modal.confirm({
+      title: text.consoleFLDeleteConfirm,
+      okText: text.consoleFLDeleteButton,
+      okButtonProps: { danger: true },
+      onOk: () => onDelete(r.id),
+    });
+
+  // Inline-edit a template's categories straight from the Categories cell.
+  const saveRowCategories = (row, ids) => {
+    setSavingCatId(row.id);
+    api
+      .post(`/manage/forms/library/${row.id}/categories`, {
+        category_ids: ids,
+      })
+      .then((res) => {
+        const updated = res.data?.categories || [];
+        setTemplates((prev) =>
+          prev.map((t) => {
+            if (t.id === row.id) {
+              return { ...t, categories: updated };
+            }
+            return t;
+          })
+        );
+      })
+      .catch((err) => {
+        notify({
+          type: "error",
+          message: err?.response?.data?.message || text.consoleFLCategoryError,
+        });
+      })
+      .finally(() => setSavingCatId(null));
+  };
+
+  const rowMenuItems = (r) => {
+    const items = [
+      { key: "edit", label: text.consoleFLEditButton },
+      { key: "preview", label: text.formLibraryPreviewButton },
+    ];
+    if (!r._isChild && r.status === "published") {
+      items.push({ key: "add-monitoring", label: text.consoleFLAddMonitoring });
+    }
+    if (!r._isChild) {
+      items.push({ type: "divider" });
+      items.push({
+        key: "delete",
+        label: text.consoleFLDeleteButton,
+        danger: true,
+      });
+    }
+    return items;
+  };
+
+  const onRowMenuClick = (r) => (info) => {
+    if (info.key === "edit") {
+      navigate(`/admin/form-library/${r.id}/edit`);
+    } else if (info.key === "preview") {
+      setPreviewFormId(r.id);
+    } else if (info.key === "add-monitoring") {
+      navigate(`/admin/form-library/create?parent_id=${r.id}`);
+    } else if (info.key === "delete") {
+      confirmDelete(r);
+    }
+  };
+
+  const newTemplateItems = [
+    { key: "promote", label: text.consoleFLFromWorkspace },
+    { key: "scratch", label: text.consoleFLFromScratch },
+  ];
+
+  const onNewTemplateClick = (info) => {
+    navigate(
+      info.key === "promote"
+        ? "/admin/form-library/promote"
+        : "/admin/form-library/create"
+    );
+  };
 
   const columns = [
     {
@@ -164,10 +236,29 @@ const FormLibraryConsole = () => {
     {
       title: text.consoleFLCategoriesCol,
       key: "categories",
+      width: 280,
       render: (_, r) =>
-        (r.categories || []).length === 0
-          ? "—"
-          : r.categories.map((c) => <Tag key={c.id}>{c.name}</Tag>),
+        r._isChild ? (
+          (r.categories || []).length === 0 ? (
+            "—"
+          ) : (
+            r.categories.map((c) => <Tag key={c.id}>{c.name}</Tag>)
+          )
+        ) : (
+          <Select
+            mode="multiple"
+            size="small"
+            bordered={false}
+            style={{ width: "100%", minWidth: 200 }}
+            placeholder={text.consoleFLCategoriesPlaceholder}
+            value={(r.categories || []).map((c) => c.id)}
+            loading={savingCatId === r.id}
+            maxTagCount="responsive"
+            optionFilterProp="label"
+            onChange={(ids) => saveRowCategories(r, ids)}
+            options={categories.map((c) => ({ value: c.id, label: c.name }))}
+          />
+        ),
     },
     {
       title: text.formBuilderStatusCol,
@@ -187,24 +278,15 @@ const FormLibraryConsole = () => {
     {
       title: text.consoleFLActionsCol,
       key: "actions",
-      render: (_, r) =>
-        r._isChild ? (
-          previewButton(r.id)
-        ) : (
-          <Space size="small">
-            {previewButton(r.id)}
-            <Popconfirm
-              title={text.consoleFLDeleteConfirm}
-              okText={text.consoleFLDeleteButton}
-              okButtonProps={{ danger: true }}
-              onConfirm={() => onDelete(r.id)}
-            >
-              <Button danger size="small">
-                {text.consoleFLDeleteButton}
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
+      width: 80,
+      render: (_, r) => (
+        <Dropdown
+          trigger={["click"]}
+          menu={{ items: rowMenuItems(r), onClick: onRowMenuClick(r) }}
+        >
+          <Button size="small" icon={<MoreOutlined />} />
+        </Dropdown>
+      ),
     },
   ];
 
@@ -225,13 +307,14 @@ const FormLibraryConsole = () => {
             >
               {text.consoleFLManageCategories}
             </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate("/admin/form-library/promote")}
+            <Dropdown
+              trigger={["click"]}
+              menu={{ items: newTemplateItems, onClick: onNewTemplateClick }}
             >
-              {text.consoleFLPromoteButton}
-            </Button>
+              <Button type="primary" icon={<PlusOutlined />}>
+                {text.consoleFLNewTemplate} <DownOutlined />
+              </Button>
+            </Dropdown>
           </Space>
         </Col>
       </Row>

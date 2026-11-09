@@ -13,6 +13,7 @@ import {
   MONITORING_FORM,
 } from "../../lib";
 import { useNotification } from "../../util/hooks";
+import { onAdminHost } from "../../util/tenant";
 import { FormEditorBanners } from "./components";
 import "./style.scss";
 
@@ -58,14 +59,22 @@ const FormBuilderCreate = () => {
     loadParentForm();
   }, [loadParentForm]);
 
-  const pagePath = [
-    { title: text.controlCenter, link: "/control-center" },
-    {
-      title: text.menuFormBuilder,
-      link: "/control-center/form-builder",
-    },
-    { title: text.formBuilderCreateTitle },
-  ];
+  // On the platform-console host, a new form is a Library template.
+  const isTemplate = onAdminHost();
+  const fbBase = isTemplate
+    ? "/admin/form-library"
+    : "/control-center/form-builder";
+
+  const pagePath = isTemplate
+    ? [
+        { title: text.consoleFormLibrary, link: "/admin/form-library" },
+        { title: text.formBuilderCreateTitle },
+      ]
+    : [
+        { title: text.controlCenter, link: "/control-center" },
+        { title: text.menuFormBuilder, link: "/control-center/form-builder" },
+        { title: text.formBuilderCreateTitle },
+      ];
 
   const onSave = (editorOutput) => {
     setSaving(true);
@@ -76,7 +85,7 @@ const FormBuilderCreate = () => {
       .post("/manage/forms", payload)
       .then((res) => {
         notify({ type: "success", message: text.formBuilderCreateSuccess });
-        navigate(`/control-center/form-builder/${res.data.id}/edit`);
+        navigate(`${fbBase}/${res.data.id}/edit`);
       })
       .catch((err) => {
         const msg = err.response?.data?.message || text.formBuilderCreateError;
