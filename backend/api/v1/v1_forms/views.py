@@ -466,6 +466,14 @@ def form_approver(request, version):
     )
 
 
+# NULL-safe "this form is not a Library template". A plain
+# .exclude(meta__template=True) drops rows whose meta is a non-null JSON
+# object lacking the key (e.g. a form cloned from a template, meta.copied_from)
+# because SQL evaluates NOT(NULL = true) as NULL -> row excluded. Filtering
+# positively for null/absent/false keeps every non-template form.
+NOT_A_TEMPLATE = Q(meta__template__isnull=True) | Q(meta__template=False)
+
+
 @extend_schema(
     responses={
         (200, "application/json"): inline_serializer(
@@ -582,8 +590,9 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         base = Forms.objects_deleted if archived else Forms.objects
         # Library templates (meta.template) are never ordinary workspace forms.
         # Tenant isolation already hides them from workspace users, but a
-        # tenant-less operator shares their NULL tenant, so exclude explicitly.
-        qs = base.for_user(request.user).exclude(meta__template=True)
+        # tenant-less operator shares their NULL tenant, so exclude explicitly
+        # (NULL-safe, so cloned forms with meta.copied_from are not dropped).
+        qs = base.for_user(request.user).filter(NOT_A_TEMPLATE)
         if status_param in self._STATUS_MAP:
             qs = qs.filter(status=self._STATUS_MAP[status_param])
 
@@ -821,7 +830,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
         )
         if tenant_id:
             qs = qs.filter(tenant_id=tenant_id)
-        qs = qs.exclude(meta__template=True)
+        qs = qs.filter(NOT_A_TEMPLATE)
         if search:
             qs = qs.filter(name__icontains=search)
         qs = qs.order_by("tenant_id", "-id").prefetch_related("categories")
@@ -843,7 +852,7 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 status=FormStatus.published,
                 parent__isnull=True,
             )
-            .exclude(meta__template=True)
+            .filter(NOT_A_TEMPLATE)
             .first()
         )
         if source is None:

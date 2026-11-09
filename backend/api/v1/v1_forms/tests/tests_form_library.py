@@ -20,7 +20,7 @@ from api.v1.v1_profile.models import (
     Role,
     UserRole,
 )
-from api.v1.v1_users.models import SystemUser
+from api.v1.v1_users.models import SystemUser, Tenant
 
 
 def _login(client, email="admin@akvo.org", password="Test105*"):
@@ -175,6 +175,13 @@ class FormLibraryTestCase(TestCase):
         self.assertEqual(tpl_reg.meta["template"], True)
         self.assertEqual(tpl_child.parent_id, tpl_reg.id)
 
+        # the clone (meta.copied_from, a non-null JSON object without the
+        # template key) must appear in Manage Forms -- a naive
+        # exclude(meta__template=True) would drop it via SQL NULL semantics.
+        res = self.client.get("/api/v1/manage/forms", **self.header)
+        ids = [row["id"] for row in res.json()["data"]]
+        self.assertIn(new_reg.id, ids)
+
     def test_use_requires_form_create(self):
         tpl_reg, _ = self._make_family(None, "Gated", template=True)
         viewer = self._user_with_access(
@@ -188,9 +195,11 @@ class FormLibraryTestCase(TestCase):
     # ── promote (Path 1) ──────────────────────────
 
     def test_promote_creates_family_in_library(self):
-        src_reg, src_child = self._make_family(
-            self.admin.tenant, "Promote Src"
-        )
+        # Source lives in a REAL workspace tenant (not the tenant-less test
+        # admin): promote must still land the template tenant-less, or no
+        # curator could ever edit/delete it (for_user is tenant-NULL).
+        source_tenant = Tenant.objects.create(subdomain="django42")
+        src_reg, src_child = self._make_family(source_tenant, "Promote Src")
         cat = FormCategory.objects.create(name="WASH", slug="wash")
 
         res = self.client.post(
@@ -210,14 +219,15 @@ class FormLibraryTestCase(TestCase):
         self.assertEqual(
             list(new_reg.categories.values_list("id", flat=True)), [cat.id]
         )
-        # the monitoring child came along, re-pointed to the new registration
+        # the monitoring child came along, re-pointed AND tenant-less too
         child = new_reg.children.first()
         self.assertIsNotNone(child)
         self.assertEqual(child.type, FormTypes.monitoring)
+        self.assertIsNone(child.tenant_id)
 
-        # source family untouched
+        # source family untouched (still owned by its workspace)
         src_reg.refresh_from_db()
-        self.assertEqual(src_reg.tenant_id, self.admin.tenant_id)
+        self.assertEqual(src_reg.tenant_id, source_tenant.id)
         self.assertEqual(src_child.parent_id, src_reg.id)
 
     def test_promote_forbidden_for_workspace_user(self):

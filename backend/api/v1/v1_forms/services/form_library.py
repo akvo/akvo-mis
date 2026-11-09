@@ -92,10 +92,14 @@ def promote_family(source_registration, user, category_ids=None):
     now = timezone.now()
 
     def _to_template(new_form, source_name, meta):
-        # duplicate_form appends " (Copy)", sets draft + the caller's tenant
-        # (None, as the curator is a platform admin). For a template we keep
-        # the real name, publish it, and tag it in meta. tenant stays NULL.
+        # duplicate_form appends " (Copy)", sets draft, and tenants the copy to
+        # `user.tenant or source.tenant`. The curator is tenant-less, so that
+        # falls back to the SOURCE workspace's tenant -- we must null it here,
+        # or the template is owned by that workspace and no curator (whose
+        # for_user is tenant-NULL) can ever edit or delete it. For a template
+        # we keep the real name, make it tenant-less, publish it, and tag it.
         new_form.name = source_name
+        new_form.tenant = None
         new_form.status = FormStatus.published
         new_form.published_at = now
         new_form.meta = meta
@@ -118,7 +122,7 @@ def promote_family(source_registration, user, category_ids=None):
         },
     )
     new_registration.save(
-        update_fields=["name", "status", "published_at", "meta"]
+        update_fields=["name", "tenant", "status", "published_at", "meta"]
     )
     if category_ids:
         new_registration.categories.set(
@@ -132,7 +136,9 @@ def promote_family(source_registration, user, category_ids=None):
         _to_template(new_child, child.name, None)
         new_child.parent_id = new_registration.id
         new_child.save(
-            update_fields=["name", "status", "published_at", "meta", "parent"]
+            update_fields=[
+                "name", "tenant", "status", "published_at", "meta", "parent"
+            ]
         )
 
     return new_registration
