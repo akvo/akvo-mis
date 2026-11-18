@@ -59,6 +59,7 @@ services:
       # Data Onboarding drafts its Proposal in a worker job.
       - OPENAI_API_KEY=$OPENAI_API_KEY
       - DATA_ONBOARDING_OPENAI_MODEL=$DATA_ONBOARDING_OPENAI_MODEL
+      - DATA_ONBOARDING_LOG_OPENAI=${DATA_ONBOARDING_LOG_OPENAI:-false}
     depends_on:
       - mailpit
   backend:

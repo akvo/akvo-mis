@@ -100,11 +100,17 @@ def _ask_openai(instructions, content):
     import httpx
 
     client = OpenAI(api_key=api_key, timeout=httpx.Timeout(300.0))
+    sent = json.dumps(content)
+    log = settings.DATA_ONBOARDING_LOG_OPENAI
+    if log:
+        # The system prompt is the INSTRUCTIONS constant: not logged.
+        logger.info("OpenAI request (%s): %s",
+                    settings.DATA_ONBOARDING_OPENAI_MODEL, sent)
     response = client.chat.completions.create(
         model=settings.DATA_ONBOARDING_OPENAI_MODEL,
         messages=[
             {"role": "system", "content": instructions},
-            {"role": "user", "content": json.dumps(content)},
+            {"role": "user", "content": sent},
         ],
         response_format={
             "type": "json_schema",
@@ -115,8 +121,12 @@ def _ask_openai(instructions, content):
         temperature=0.2,
         max_tokens=16000,
     )
+    received = response.choices[0].message.content or ""
+    if log:
+        logger.info("OpenAI response (%s tokens): %s",
+                    getattr(response.usage, "total_tokens", None), received)
     try:
-        return json.loads(response.choices[0].message.content or "")
+        return json.loads(received)
     except ValueError:
         raise OnboardingError("OpenAI did not return a Proposal.")
 

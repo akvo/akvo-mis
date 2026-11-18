@@ -510,6 +510,11 @@ DATA_ONBOARDING_OPENAI_MODEL = (
 DATA_ONBOARDING_DAILY_CAP = int(
     environ.get("DATA_ONBOARDING_DAILY_CAP") or 20
 )
+# Log what Data Onboarding sends to and gets from OpenAI. Off by default:
+# category values can be sensitive, and replies are large.
+DATA_ONBOARDING_LOG_OPENAI = (
+    environ.get("DATA_ONBOARDING_LOG_OPENAI", "false").lower() == "true"
+)
 
 FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(
