@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { DataOnboardingCreate, DataOnboardingDetail } from "..";
@@ -125,7 +125,60 @@ describe("Data Onboarding", () => {
     expect(
       screen.getByText("site_id identifies each site.")
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /apply/i })).toBeNull();
+  });
+
+  it("applies the Proposal, then shows the Onboarding Report", async () => {
+    api.get
+      .mockResolvedValueOnce({
+        data: { id: 7, status: "proposed", file_name: "s.csv", proposal },
+      })
+      .mockResolvedValue({
+        data: {
+          id: 7,
+          status: "applied",
+          file_name: "s.csv",
+          proposal,
+          report: {
+            forms: [{ key: "sites", name: "Water sites", form: 3, loaded: 41 }],
+            issues: [
+              {
+                sheet: "csv",
+                row: 5,
+                question: "water_source",
+                kind: "warning",
+                reason: "Not one of the options.",
+              },
+            ],
+          },
+        },
+      });
+    api.post.mockResolvedValue({
+      data: { id: 7, status: "applying", file_name: "s.csv", proposal },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    const apply = await screen.findByRole("button", {
+      name: text.dataOnboardingApply,
+    });
+    jest.useFakeTimers();
+    fireEvent.click(apply);
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/apply");
+    expect(
+      await screen.findByText(text.dataOnboardingApplying)
+    ).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(
+      await screen.findByText(text.dataOnboardingReport)
+    ).toBeInTheDocument();
+    jest.useRealTimers();
+    expect(screen.getByText("41")).toBeInTheDocument();
+    expect(screen.getByText("Not one of the options.")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: text.dataOnboardingApply })
+    ).toBeNull();
   });
 
   it("shows a failed draft", async () => {
