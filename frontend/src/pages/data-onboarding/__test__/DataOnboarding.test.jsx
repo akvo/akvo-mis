@@ -318,6 +318,37 @@ describe("Data Onboarding", () => {
     });
   });
 
+  it("maps location columns onto the tenant's levels", async () => {
+    const levelMapping = [
+      {
+        form: "sites",
+        name: "Water sites",
+        causes: [{ kind: "level_mapping", reason: "Wrong level." }],
+      },
+    ];
+    const data = { id: 7, status: "proposed", proposal, blocked: levelMapping };
+    api.get.mockResolvedValue({ data });
+    api.post.mockResolvedValue({ data });
+    renderAt("/control-center/data-onboarding/7");
+    expect(
+      await screen.findByText(text.dataOnboardingFirstLevel)
+    ).toBeVisible();
+
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: text.dataOnboardingFirstLevel })
+    );
+    // The setupTests store levels, not the Proposal's "Country, District".
+    fireEvent.click(await screen.findByText("Ward"));
+    fireEvent.click(screen.getByRole("button", { name: text.saveButton }));
+
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/edits", {
+      op: "map_level",
+      form: "sites",
+      columns: ["district"],
+      level: 3,
+    });
+  });
+
   it("marks a blocked form with its causes and won't apply it", async () => {
     api.get.mockResolvedValue({
       data: { id: 7, status: "proposed", proposal, blocked },

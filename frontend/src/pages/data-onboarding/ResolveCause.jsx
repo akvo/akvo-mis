@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Button, Select, Space, Typography } from "antd";
+import { store } from "../../lib";
 
 const { Text } = Typography;
 
@@ -13,11 +14,15 @@ const sheetColumns = (spec) => [
   ]),
 ];
 
-const LevelMapping = ({ form, spec, levels, onEdit, text }) => {
+// Levels are the tenant's, below the root: the Proposal's are the model's
+// guess and may leave the root out.
+const LevelMapping = ({ form, spec, onEdit, text }) => {
+  const levels = store.useState((s) => s.levels);
   const [columns, setColumns] = useState(spec.administration_columns);
   const [level, setLevel] = useState(1);
   return (
     <Space wrap>
+      <Text>{text.dataOnboardingLocationColumns}</Text>
       <Select
         mode="multiple"
         style={{ minWidth: 240 }}
@@ -26,15 +31,16 @@ const LevelMapping = ({ form, spec, levels, onEdit, text }) => {
         onChange={setColumns}
         options={sheetColumns(spec).map((c) => ({ label: c, value: c }))}
       />
+      <Text>{text.dataOnboardingFirstLevel}</Text>
       <Select
         style={{ minWidth: 160 }}
         aria-label={text.dataOnboardingFirstLevel}
         value={level}
         onChange={setLevel}
-        options={levels.slice(1).map((name, i) => ({
-          label: name,
-          value: i + 1,
-        }))}
+        options={levels
+          .filter((l) => l.level > 0)
+          .sort((a, b) => a.level - b.level)
+          .map((l) => ({ label: l.name, value: l.level }))}
       />
       <Button
         size="small"
@@ -50,7 +56,7 @@ const LevelMapping = ({ form, spec, levels, onEdit, text }) => {
 };
 
 // The control that settles one blocked cause, by its kind.
-const ResolveCause = ({ cause, form, spec, levels, onEdit, text }) => {
+const ResolveCause = ({ cause, form, spec, onEdit, text }) => {
   if (cause.kind === "near_match") {
     return cause.units.map((u) => (
       <Space key={u.name} wrap style={{ display: "flex" }}>
@@ -90,15 +96,7 @@ const ResolveCause = ({ cause, form, spec, levels, onEdit, text }) => {
     ));
   }
   if (cause.kind === "level_mapping" && spec) {
-    return (
-      <LevelMapping
-        form={form}
-        spec={spec}
-        levels={levels}
-        onEdit={onEdit}
-        text={text}
-      />
-    );
+    return <LevelMapping form={form} spec={spec} onEdit={onEdit} text={text} />;
   }
   if (cause.kind === "no_location") {
     return (

@@ -171,7 +171,6 @@ const ProposalReview = ({ proposal, blocked = [], units, text, onEdit }) => {
                         cause={c}
                         form={form}
                         spec={spec}
-                        levels={administration.levels}
                         onEdit={onEdit}
                         text={text}
                       />
