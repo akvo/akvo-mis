@@ -84,7 +84,6 @@ SCHEMA = _obj(
     administration=_obj(
         levels=_arr(STR),
         source=_obj(sheet=_null(STR), columns=_arr(STR)),
-        units=_arr(_arr(STR)),  # each a path of names below the root
         aliases=_arr(_obj(**{"from": STR, "to": STR})),
     ),
     forms=_arr(FORM),
@@ -127,11 +126,13 @@ def _shape_errors(schema, value, path):
 def validate_proposal(proposal, profile):
     """Return a list of error messages; empty means valid.
 
-    Messages name columns and questions, never cell values.
+    A well-shaped Proposal is normalized in place first. Messages name
+    columns and questions, never cell values.
     """
     errors = _shape_errors(SCHEMA, proposal, "proposal")
     if errors:
         return errors
+    normalize(proposal)
 
     sheets = {
         s["name"]: {c["name"]: c for c in s["columns"]}
@@ -226,3 +227,38 @@ def validate_proposal(proposal, profile):
                     " a category-like column"
                 )
     return errors
+
+
+def _is_location(question):
+    return question["type"] == "cascade" and \
+        (question["extra"] or {}).get("type") == "administration"
+
+
+def normalize(proposal):
+    """Move location columns to where the checks and Apply read them.
+
+    Models often map the location columns to the administration
+    question in `columns` and leave `administration_columns` empty: the
+    columns move, top level first. On a valid shape.
+    """
+    forms = {f["key"]: f for f in proposal["forms"]}
+    source = proposal["administration"]["source"]
+    for spec in proposal["data"]:
+        form = forms.get(spec["form"])
+        if not form:
+            continue  # validation reports it
+        location = {
+            q["name"] for g in form["question_group"]
+            for q in g["question"] if _is_location(q)
+        }
+        moved = [c["column"] for c in spec["columns"]
+                 if c["question"] in location]
+        spec["columns"] = [c for c in spec["columns"]
+                           if c["question"] not in location]
+        if form["type"] != "registration" or \
+                spec["administration_columns"]:
+            continue
+        spec["administration_columns"] = list(dict.fromkeys(moved))
+        if spec["administration_columns"] and not source["columns"]:
+            source.update(sheet=spec["sheet"],
+                          columns=spec["administration_columns"])

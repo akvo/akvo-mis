@@ -175,7 +175,7 @@ class ResolveAmbiguityTestCase(TenantIsolationTestCase):
     def located_proposal(self, columns):
         p = proposal()
         p["administration"].update(
-            levels=["Country", "District", "Village"], units=[],
+            levels=["Country", "District", "Village"],
             source={"sheet": "csv", "columns": columns},
         )
         p["data"][0]["administration_columns"] = columns
@@ -247,7 +247,7 @@ class ResolveAmbiguityTestCase(TenantIsolationTestCase):
     def no_location(self):
         p = proposal()
         p["administration"].update(
-            units=[], source={"sheet": None, "columns": []}
+            source={"sheet": None, "columns": []}
         )
         p["data"][0]["administration_columns"] = []
         return p

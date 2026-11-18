@@ -26,7 +26,6 @@ def proposal(**overrides):
         "administration": {
             "levels": ["Country", "District"],
             "source": {"sheet": "csv", "columns": ["district"]},
-            "units": [["North"], ["South"]],
             "aliases": [],
         },
         "forms": [
@@ -220,6 +219,38 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         # The delimiter was detected: columns reach the profile split.
         for column in ("site_id", "site_name", "district", "water_source"):
             self.assertIn(f'\\"{column}\\"', sent)
+
+    def test_location_columns_mapped_to_the_location_question_are_moved(self):
+        # A shape gpt-4o-mini drafts: the location column feeds the
+        # administration question and administration_columns is empty.
+        drafted = proposal()
+        spec = drafted["data"][0]
+        spec["administration_columns"] = []
+        spec["columns"].append({"question": "location", "column": "district"})
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+
+        self.draft(pk, json.dumps(drafted))
+
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "proposed")
+        self.assertEqual(body["blocked"], [])
+        self.assertEqual(body["proposal"], proposal())
+
+    def test_aliases_that_rename_a_known_unit_or_invent_one_are_dropped(self):
+        drafted = proposal()
+        drafted["administration"]["aliases"] = [
+            {"from": "acme-d", "to": "Acme District"},  # renames a unit
+            {"from": "North", "to": "Northern"},  # a name from nowhere
+            {"from": "Acme-dd", "to": "acme-d"},  # a misspelling: kept
+        ]
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+
+        self.draft(pk, json.dumps(drafted))
+
+        self.assertEqual(
+            self.get(pk).json()["proposal"]["administration"]["aliases"],
+            [{"from": "Acme-dd", "to": "acme-d"}],
+        )
 
     @override_settings(DATA_ONBOARDING_OPENAI_MODEL="gpt-test-model")
     def test_uses_the_configured_model(self):

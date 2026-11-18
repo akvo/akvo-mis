@@ -21,7 +21,6 @@ const proposal = {
   administration: {
     levels: ["Country", "District"],
     source: { sheet: "csv", columns: ["district"] },
-    units: [["North"], ["North", "Hilltop"]],
     aliases: [],
   },
   forms: [
@@ -115,7 +114,13 @@ describe("Data Onboarding", () => {
     api.get
       .mockResolvedValueOnce({ data: { id: 7, status: "drafting" } })
       .mockResolvedValue({
-        data: { id: 7, status: "proposed", file_name: "s.csv", proposal },
+        data: {
+          id: 7,
+          status: "proposed",
+          file_name: "s.csv",
+          proposal,
+          units: { new: [["North"], ["North", "Hilltop"]], outside: [] },
+        },
       });
     jest.useFakeTimers();
     renderAt("/control-center/data-onboarding/7");
@@ -367,8 +372,6 @@ describe("Data Onboarding", () => {
     });
     renderAt("/control-center/data-onboarding/7");
     expect(await screen.findByText("Vale")).toBeInTheDocument();
-    // The file's units replace the Proposal's suggestions.
-    expect(screen.queryByText("Hilltop")).toBeNull();
     expect(screen.getByText(text.dataOnboardingUnitsOutside)).toBeVisible();
     expect(screen.getByText("South, South › Dale")).toBeInTheDocument();
   });

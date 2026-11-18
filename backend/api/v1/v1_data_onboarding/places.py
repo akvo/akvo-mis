@@ -60,10 +60,33 @@ def in_scope(unit, scope):
     return scope is None or not scope.isdisjoint(ids)
 
 
+def drop_invented_aliases(proposal, profile, tenant):
+    """Keep only aliases from an unknown spelling to a known name.
+
+    The model sees neither the tree nor most cell values, so it can
+    rename an existing unit ("Jakarta" to "DKI Jakarta") and Apply
+    would add a duplicate. Known: a unit of the tenant or a listed value
+    of a location column.
+    """
+    units = {fold(n) for n in Administration.objects.filter(
+        tenant=tenant).values_list("name", flat=True)}
+    admin = proposal["administration"]
+    source = admin["source"]
+    listed = {
+        fold(v) for s in profile["sheets"] if s["name"] == source["sheet"]
+        for c in s["columns"] if c["name"] in source["columns"]
+        for v in c.get("values", [])
+    }
+    admin["aliases"] = [
+        a for a in admin["aliases"]
+        if fold(a["from"]) not in units and fold(a["to"]) in units | listed
+    ]
+
+
 def cut_forms(proposal, keys):
     """The Proposal with only the forms in keys and their data specs.
 
-    The units go too when no kept form loads the sheet they come from.
+    The location source goes too when no kept form loads its sheet.
     """
     admin = proposal["administration"]
     loaders = {
@@ -71,8 +94,7 @@ def cut_forms(proposal, keys):
         if d["sheet"] == admin["source"]["sheet"]
     }
     if loaders and not loaders & keys:
-        admin = {**admin, "units": [],
-                 "source": {"sheet": None, "columns": []}}
+        admin = {**admin, "source": {"sheet": None, "columns": []}}
     return {
         **proposal, "administration": admin,
         "forms": [f for f in proposal["forms"] if f["key"] in keys],
@@ -133,10 +155,9 @@ class Places:
         return list(found[0][0]) + names[1:]
 
     def unit_paths(self, proposal, sheets):
-        """Name paths of the units Apply adds: proposed, then the file's."""
-        admin = proposal["administration"]
-        paths = [self.cells(u) for u in admin["units"]]
-        source = admin["source"]
+        """Name paths of the units Apply adds, read from the file."""
+        paths = []
+        source = proposal["administration"]["source"]
         if not source["columns"]:
             return paths
         spec = next((d for d in proposal["data"]

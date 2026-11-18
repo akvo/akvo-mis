@@ -4,7 +4,7 @@ blocked_forms runs on every draft and again at Apply, against the file
 and the tenant's tree as they are then. A check takes (form, data spec
 or None, context) and returns causes {kind, reason, ...}; add a check
 to CHECKS to block forms for a new reason. Proposal suggestions (column
-order, aliases, units) are the checks' input, never their result.
+order, aliases) are the checks' input, never their result.
 
 Findings hold names from the file, so they are stored beside the
 Proposal, never in it: the Proposal goes back to OpenAI.
@@ -174,10 +174,6 @@ def _near_match(form, spec, ctx):
     if not spec or not spec["administration_columns"]:
         return []
     paths = ctx.full_paths(spec)
-    admin = ctx.proposal["administration"]
-    if spec["sheet"] == admin["source"]["sheet"]:
-        # Apply adds the proposed units with this sheet's units.
-        paths |= {tuple(ctx.places.cells(u)) for u in admin["units"]}
     matches = set()
     for path in paths:
         key = tuple(fold(n) for n in path)

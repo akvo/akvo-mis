@@ -61,7 +61,6 @@ PROPOSAL = {
     "administration": {
         "levels": ["Country", "District"],
         "source": {"sheet": "sites", "columns": ["district"]},
-        "units": [],
         "aliases": [],
     },
     "forms": [

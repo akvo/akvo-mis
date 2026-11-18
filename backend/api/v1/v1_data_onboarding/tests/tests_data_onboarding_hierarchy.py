@@ -38,7 +38,6 @@ def three_levels():
     p["administration"].update(
         levels=["Country", "District", "Village"],
         source={"sheet": "csv", "columns": ["district", "village"]},
-        units=[["South", "Vale"]],
     )
     p["data"][0].update(
         administration_columns=["district", "village"],

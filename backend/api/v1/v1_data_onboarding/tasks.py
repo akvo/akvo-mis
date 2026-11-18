@@ -10,6 +10,7 @@ from api.v1.v1_data_onboarding.ambiguity import blocked_forms
 from api.v1.v1_data_onboarding.apply import apply_proposal, check_hierarchy
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
 from api.v1.v1_data_onboarding.models import DataOnboarding
+from api.v1.v1_data_onboarding.places import drop_invented_aliases
 from api.v1.v1_data_onboarding.profile import (
     OnboardingError,
     profile_sheets,
@@ -35,9 +36,11 @@ values; you never see other cell values.
 
 Draft a Proposal:
 - administration: level names from the root down, the sheet and columns
-  that hold the location (one column per level below the root), units
-  to add as paths of names below the root, and spelling aliases. Use
-  only names that appear in the listed values.
+  that hold the location (one column per level below the root, top
+  level first), and aliases from a misspelt unit name to the correct
+  one, both among the listed values (not column names; you do not see
+  the tenant's units, so never rename a place). MIS reads the units to
+  add from the location columns.
 - forms: one registration form per entity sheet, monitoring forms for
   repeated visits (parent = the registration form key). A registration
   form has exactly one administration question (type cascade, extra
@@ -47,9 +50,11 @@ Draft a Proposal:
 - data: per sheet, the form it loads, key columns that identify a
   record (for a visit sheet, these include the visit date), for a visit
   sheet the parent key columns that hold its registration record's key
-  (empty otherwise), administration columns (empty for visit sheets:
-  visits take the location from their parent), geo columns, the column
-  feeding each question, value maps from raw values to option labels (only for
+  (empty otherwise), administration columns (the location columns, top
+  level first; empty for visit sheets: visits take the location from
+  their parent), geo columns, the column feeding each other question
+  (never the administration question: it is fed by the administration
+  columns), value maps from raw values to option labels (only for
   columns whose values are listed), the date format (strptime) when
   dates are not ISO, the characters that separate choices in a
   multi-select cell (each character splits on its own, e.g. ";,"), and
@@ -111,6 +116,7 @@ def store_proposal(onboarding, proposal, sheets, what, user,
             f"The {what} did not match the Proposal format: "
             + "; ".join(errors[:10])
         )
+    drop_invented_aliases(proposal, onboarding.profile, onboarding.tenant)
     refusal = check_hierarchy(proposal, onboarding.tenant, user)
     if refusal:
         raise OnboardingError(refusal)

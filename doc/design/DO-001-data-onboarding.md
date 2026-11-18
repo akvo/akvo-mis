@@ -57,7 +57,7 @@ PR #462 solved this with an external Claude skill that registered a new workspac
 | Monitoring forms | Parent must be a registration form in the **same** Proposal |
 | Re-run | One-shot. No top-up of forms after Apply. To redo, archive the created forms and onboard again: forms with data can't be deleted, only archived. Archiving needs the existing `form_publish` access, which the Data Onboarding permission does not include. An importer without it needs a super admin to archive |
 | New levels | Only on a tenant whose tree is just the root, and only by super admin |
-| New units | Proposed under a matched parent, listed in the Proposal, created on approval |
+| New units | Read from the file's location columns under a matched parent, listed in the review, created on approval |
 | Non-super-admin importer | Confined to the subtree of their role's administration. Rows outside it are skipped and reported, and do not count as ambiguous |
 | New forms' approval | No approvers. Data visibility follows the normal role rules. Approvers are set later in the form builder |
 | Data state | Loaded as approved records, bypassing pending and approval |
@@ -76,7 +76,7 @@ The LLM may suggest aliases and mappings. The deterministic checks decide.
 ## 4. Proposal Format
 
 - **Forms** use the canonical form definition format accepted by `manage/forms/import` (`import_definition`). Apply creates forms through that existing path, so there is no second form-creation code.
-- **Administration and data mapping** follow #462's `plan.json` sections: `administration` (levels, source columns, units, aliases) and `data[]` (key columns, administration columns, geo, column map, value maps, date format, multi-separator, unmapped columns).
+- **Administration and data mapping** follow #462's `plan.json` sections: `administration` (levels, source columns, aliases) and `data[]` (key columns, administration columns, geo, column map, value maps, date format, multi-separator, unmapped columns).
 - The loading rules carry over from #462's `reference/plan-format.md`:
   - a required answer that is blank or invalid skips the row,
   - an optional answer that is invalid is dropped with a warning,
@@ -164,3 +164,4 @@ All under `/api/v1/data-onboarding`, behind `DataOnboardingAccess` and scoped to
 - **D-8 New levels only on a bare tree.** Adding levels is refused when the tenant has any level below the root, and for anyone but a super admin.
 - **D-9 Multi-select separator is a set of characters.** Each character of `multi_separator` splits a cell; parts are trimmed. It is not a pattern.
 - **D-10 Rows load in savepoints.** Any error in a row skips only that row ("This row could not be loaded."); the rest load.
+- **D-11 Code places the location, not the model.** The Proposal has no unit list: the units to add are read from the file's location columns. Models drafted bare names (a village as a province) and mapped the location columns to the administration question instead of `administration_columns`; such columns are moved there before the checks run. Models also "corrected" known names to ones they guessed ("Jakarta" to "DKI Jakarta"), which would add duplicates: an alias is kept only from an unknown spelling to an existing unit or a listed value of a location column.

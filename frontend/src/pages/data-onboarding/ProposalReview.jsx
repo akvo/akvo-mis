@@ -63,10 +63,10 @@ const unitTree = (units) => {
 
 // onEdit(body) sends a structured edit; without it the review is read-only.
 // units: {new, outside} the server read from the file for this viewer;
-// without it (the upload is gone) the Proposal's suggestions show.
+// absent once the upload is gone.
 const ProposalReview = ({ proposal, blocked = [], units, text, onEdit }) => {
   const { administration, forms, data, notes } = proposal;
-  const newUnits = units ? units.new : administration.units;
+  const newUnits = units?.new || [];
 
   const questionColumns = [
     { title: text.dataOnboardingQuestion, dataIndex: "label" },

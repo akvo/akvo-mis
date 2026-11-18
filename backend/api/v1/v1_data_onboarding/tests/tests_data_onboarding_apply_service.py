@@ -41,7 +41,6 @@ PROPOSAL = {
     "administration": {
         "levels": ["Country", "District", "Village"],
         "source": {"sheet": "csv", "columns": ["district", "village"]},
-        "units": [],
         "aliases": [],
     },
     "forms": [{
