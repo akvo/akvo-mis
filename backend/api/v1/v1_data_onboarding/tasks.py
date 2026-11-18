@@ -71,6 +71,27 @@ rest of the Proposal as it is, and return the whole revised Proposal.
 """
 
 
+FIX = """
+Your last Proposal broke these rules. You get it back with the errors.
+Return the whole Proposal with each error fixed and the rest unchanged.
+"""
+
+
+def _ask_valid(instructions, content, profile):
+    """One OpenAI round, and one more to fix a Proposal that fails checks.
+
+    The errors name columns and questions only, never cell values.
+    store_proposal validates again and fails the draft if errors remain.
+    """
+    proposal = _ask_openai(instructions, content)
+    errors = validate_proposal(proposal, profile)
+    if not errors:
+        return proposal
+    return _ask_openai(instructions + FIX, {
+        **content, "proposal": proposal, "errors": errors[:20],
+    })
+
+
 def _ask_openai(instructions, content):
     api_key = getattr(settings, "OPENAI_API_KEY", None)
     if not api_key:
@@ -142,7 +163,8 @@ def draft_proposal(onboarding_id):
         sheets = read_upload(onboarding)
         onboarding.profile = profile_sheets(sheets)
         store_proposal(
-            onboarding, _ask_openai(INSTRUCTIONS, onboarding.profile),
+            onboarding,
+            _ask_valid(INSTRUCTIONS, onboarding.profile, onboarding.profile),
             sheets, "draft", onboarding.created_by,
         )
         onboarding.status = DataOnboardingStatus.proposed
@@ -164,11 +186,11 @@ def revise_proposal(onboarding_id, instruction, user_id):
         sheets = read_upload(onboarding)
         # Only the profile and the Proposal: resolutions and the blocked
         # findings hold file values and never go to OpenAI.
-        store_proposal(onboarding, _ask_openai(INSTRUCTIONS + REVISE, {
+        store_proposal(onboarding, _ask_valid(INSTRUCTIONS + REVISE, {
             "profile": onboarding.profile,
             "proposal": onboarding.proposal,
             "instruction": instruction,
-        }), sheets, "revision", user)
+        }, onboarding.profile), sheets, "revision", user)
     except OnboardingError as exc:
         onboarding.error = str(exc)
     except Exception:

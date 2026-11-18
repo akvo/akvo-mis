@@ -236,6 +236,42 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertEqual(body["blocked"], [])
         self.assertEqual(body["proposal"], proposal())
 
+    def test_a_column_fed_to_a_missing_question_is_listed_not_loaded(self):
+        drafted = proposal()
+        spec = drafted["data"][0]
+        spec["columns"][1]["question"] = "source_kind"
+        spec["unmapped_columns"] = [
+            {"column": "site_id", "reason": "Not needed."}  # a key column
+        ]
+        drafted["data"].append({**spec, "form": "visits"})
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+
+        self.draft(pk, json.dumps(drafted))
+
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "proposed")
+        expected = proposal()
+        expected["data"][0].update(
+            columns=expected["data"][0]["columns"][:1],
+            value_maps=[],
+            unmapped_columns=[{
+                "column": "water_source",
+                "reason": "The form has no question for this column.",
+            }],
+        )
+        self.assertEqual(body["proposal"], expected)
+
+    def test_an_option_question_on_a_column_never_listed_takes_text(self):
+        drafted = proposal()
+        drafted["forms"][0]["question_group"][0]["question"][1].update(
+            type="option", option=[{"label": "Site name", "value": "name"}],
+        )
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+
+        self.draft(pk, json.dumps(drafted))
+
+        self.assertEqual(self.get(pk).json()["proposal"], proposal())
+
     def test_aliases_that_rename_a_known_unit_or_invent_one_are_dropped(self):
         drafted = proposal()
         drafted["administration"]["aliases"] = [
@@ -284,7 +320,7 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         for status in ("open", "closed", "pending"):
             self.assertIn(status, sent)
 
-    def test_value_maps_only_for_columns_whose_values_repeat(self):
+    def test_value_maps_for_columns_whose_values_do_not_repeat_go(self):
         p = proposal()
         p["administration"]["source"]["sheet"] = "Sheet"
         p["data"][0]["sheet"] = "Sheet"
@@ -296,8 +332,8 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         pk = self.upload("sites.xlsx", xlsx(rows)).json()["id"]
         self.draft(pk, json.dumps(p))
         body = self.get(pk).json()
-        self.assertEqual(body["status"], "failed")
-        self.assertIn("site_name", body["error"])
+        self.assertEqual(body["status"], "proposed")
+        self.assertEqual(body["proposal"]["data"][0]["value_maps"], [])
 
     def test_invalid_output_fails_the_draft(self):
         pk = self.upload("sites.csv", CSV.encode()).json()["id"]
@@ -306,6 +342,31 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertEqual(body["status"], "failed")
         self.assertIsNone(body["proposal"])
         self.assertTrue(body["error"])
+
+    def test_a_proposal_that_breaks_the_rules_is_sent_back_once(self):
+        broken = proposal()
+        broken["data"][0]["key_columns"] = ["no_such_column"]
+        client = openai_client(None)
+        client.chat.completions.create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content=c))])
+            for c in (json.dumps(broken), json.dumps(proposal()))
+        ]
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        from api.v1.v1_data_onboarding.tasks import draft_proposal
+        with patch("openai.OpenAI", return_value=client):
+            draft_proposal(pk)
+
+        self.assertEqual(self.get(pk).json()["status"], "proposed")
+        fix = client.chat.completions.create.call_args.kwargs["messages"]
+        self.assertIn("no_such_column", fix[1]["content"])
+
+    def test_a_form_no_data_spec_loads_fails(self):
+        p = proposal(data=[])
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        self.draft(pk, json.dumps(p))
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "failed")
+        self.assertIn("no data spec loads 'sites'", body["error"])
 
     def test_a_proposal_naming_a_column_not_in_the_file_fails(self):
         p = proposal()
@@ -323,7 +384,7 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.draft(pk, json.dumps(p))
         self.assertEqual(self.get(pk).json()["status"], "failed")
 
-    def test_value_maps_only_for_category_like_columns(self):
+    def test_value_maps_for_columns_with_many_values_go(self):
         p = proposal()
         p["administration"]["source"]["sheet"] = "Sheet"
         p["data"][0]["sheet"] = "Sheet"
@@ -335,8 +396,8 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         pk = self.upload("sites.xlsx", xlsx(rows)).json()["id"]
         self.draft(pk, json.dumps(p))
         body = self.get(pk).json()
-        self.assertEqual(body["status"], "failed")
-        self.assertIn("site_name", body["error"])
+        self.assertEqual(body["status"], "proposed")
+        self.assertEqual(body["proposal"]["data"][0]["value_maps"], [])
 
     def test_an_openai_error_fails_the_draft(self):
         from api.v1.v1_data_onboarding.tasks import draft_proposal

@@ -132,7 +132,7 @@ def validate_proposal(proposal, profile):
     errors = _shape_errors(SCHEMA, proposal, "proposal")
     if errors:
         return errors
-    normalize(proposal)
+    normalize(proposal, profile)
 
     sheets = {
         s["name"]: {c["name"]: c for c in s["columns"]}
@@ -180,19 +180,16 @@ def validate_proposal(proposal, profile):
             errors.append(f"forms[{i}].parent: must be null on registration")
 
     specs = {s["form"]: s for s in proposal["data"]}
+    for i, form in enumerate(proposal["forms"]):
+        if form["key"] not in specs:
+            errors.append(f"forms[{i}]: no data spec loads '{form['key']}'")
     for i, spec in enumerate(proposal["data"]):
         path = f"data[{i}]"
-        form = forms.get(spec["form"])
+        form = forms[spec["form"]]  # normalize dropped unknown forms
         sheet = sheets.get(spec["sheet"])
-        if not form:
-            errors.append(f"{path}: unknown form '{spec['form']}'")
         if sheet is None:
             errors.append(f"{path}: unknown sheet '{spec['sheet']}'")
-        if not form or sheet is None:
             continue
-        questions = {
-            q["name"] for g in form["question_group"] for q in g["question"]
-        }
         parent = specs.get(form["parent"])
         if form["type"] == "monitoring" and (
             not parent
@@ -211,21 +208,6 @@ def validate_proposal(proposal, profile):
             + [c["column"] for c in spec["columns"]]
             + [c["column"] for c in spec["unmapped_columns"]],
         )
-        mapped = {}
-        for c in spec["columns"]:
-            if c["question"] not in questions:
-                errors.append(
-                    f"{path}.columns: unknown question '{c['question']}'"
-                )
-            mapped[c["question"]] = c["column"]
-        for vm in spec["value_maps"]:
-            # Only category-like columns had their values sent to OpenAI.
-            column = sheet.get(mapped.get(vm["question"]), {})
-            if "values" not in column:
-                errors.append(
-                    f"{path}.value_maps: '{vm['question']}' is not fed by"
-                    " a category-like column"
-                )
     return errors
 
 
@@ -234,27 +216,53 @@ def _is_location(question):
         (question["extra"] or {}).get("type") == "administration"
 
 
-def normalize(proposal):
-    """Move location columns to where the checks and Apply read them.
+def normalize(proposal, profile):
+    """Fix what models draft wrong but code can settle. On a valid shape.
 
-    Models often map the location columns to the administration
-    question in `columns` and leave `administration_columns` empty: the
-    columns move, top level first. On a valid shape.
+    Models drop or mangle parts of a Proposal at random:
+    - a data spec for a form that is not there loads nothing: it goes;
+    - a column fed to a question the form lacks is not loaded, and is
+      listed so with a reason the review shows;
+    - location columns fed to the administration question move to
+      `administration_columns`, top level first;
+    - value maps and options for columns whose values were never sent
+      are made up: the maps go, and the question takes text;
+    - a column in use is not listed as not loaded.
     """
+    sheets = {
+        s["name"]: {c["name"]: c for c in s["columns"]}
+        for s in profile["sheets"]
+    }
     forms = {f["key"]: f for f in proposal["forms"]}
+    proposal["data"] = [d for d in proposal["data"] if d["form"] in forms]
     source = proposal["administration"]["source"]
     for spec in proposal["data"]:
-        form = forms.get(spec["form"])
-        if not form:
-            continue  # validation reports it
-        location = {
-            q["name"] for g in form["question_group"]
-            for q in g["question"] if _is_location(q)
-        }
+        form = forms[spec["form"]]
+        questions = {q["name"]: q for g in form["question_group"]
+                     for q in g["question"]}
+        for c in spec["columns"]:
+            if c["question"] not in questions:
+                spec["unmapped_columns"].append({
+                    "column": c["column"],
+                    "reason": "The form has no question for this column.",
+                })
+        location = {n for n, q in questions.items() if _is_location(q)}
         moved = [c["column"] for c in spec["columns"]
                  if c["question"] in location]
         spec["columns"] = [c for c in spec["columns"]
-                           if c["question"] not in location]
+                           if c["question"] in questions
+                           and c["question"] not in location]
+        sheet = sheets.get(spec["sheet"], {})
+        fed = {c["question"]: c["column"] for c in spec["columns"]}
+        spec["value_maps"] = [
+            vm for vm in spec["value_maps"]
+            if "values" in sheet.get(fed.get(vm["question"]), {})
+        ]
+        for name, column in fed.items():
+            q = questions[name]
+            if q["type"] in ("option", "multiple_option") and \
+                    "values" not in sheet.get(column, {}):
+                q.update(type="input", option=[])
         if form["type"] != "registration" or \
                 spec["administration_columns"]:
             continue
@@ -262,3 +270,13 @@ def normalize(proposal):
         if spec["administration_columns"] and not source["columns"]:
             source.update(sheet=spec["sheet"],
                           columns=spec["administration_columns"])
+    for spec in proposal["data"]:
+        used = set(
+            spec["key_columns"] + spec["parent_key_columns"]
+            + spec["administration_columns"]
+            + [c for c in (spec["geo"] or {}).values() if c]
+            + [c["column"] for c in spec["columns"]]
+        )
+        spec["unmapped_columns"] = [
+            c for c in spec["unmapped_columns"] if c["column"] not in used
+        ]
