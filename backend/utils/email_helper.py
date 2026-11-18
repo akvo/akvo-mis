@@ -36,6 +36,7 @@ class EmailTypes:
     feedback = "feedback"
     administration_upload = "administration_upload"
     administration_prefilled = "administration_prefilled"
+    data_onboarding_applied = "data_onboarding_applied"
 
     FieldStr = {
         user_register: "user_register",
@@ -56,6 +57,7 @@ class EmailTypes:
         feedback: "feedback",
         administration_upload: "administration_upload",
         administration_prefilled: "administration_prefilled",
+        data_onboarding_applied: "data_onboarding_applied",
     }
 
 
@@ -449,6 +451,18 @@ def email_context(context: dict, type: str):
             The spreadsheet that you requested has been successfully
             validated and ready to download.
             """,
+            }
+        )
+    if type == EmailTypes.data_onboarding_applied:
+        context.update(
+            {
+                "subject": "Data Onboarding applied",
+                "image": f"{WEBDOMAIN}/email-icons/check-circle.png",
+                "info_text": (
+                    f"{context.get('file_name', 'Your spreadsheet')} has"
+                    " been onboarded. Records loaded per form, and rows"
+                    " or answers left out:"
+                ),
             }
         )
     # prevent multiline if inside html template

@@ -3,6 +3,7 @@ import logging
 
 from django.conf import settings
 
+from api.v1.v1_data_onboarding.apply import apply_proposal
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
 from api.v1.v1_data_onboarding.models import DataOnboarding
 from api.v1.v1_data_onboarding.profile import (
@@ -11,7 +12,9 @@ from api.v1.v1_data_onboarding.profile import (
     read_sheets,
 )
 from api.v1.v1_data_onboarding.proposal import SCHEMA, validate_proposal
+from utils.email_helper import EmailTypes, send_email
 from utils.storage import download
+from utils.tenant_host import tenant_web_url
 
 logger = logging.getLogger(__name__)
 
@@ -106,4 +109,69 @@ def draft_proposal_result(task):
         ).update(
             status=DataOnboardingStatus.failed,
             error="The Proposal could not be drafted. Try again.",
+        )
+
+
+def apply_onboarding(onboarding_id):
+    onboarding = DataOnboarding.objects.get(id=onboarding_id)
+    try:
+        onboarding.report = apply_proposal(
+            onboarding.proposal, download(onboarding.file),
+            onboarding.file_name, onboarding.tenant, onboarding.created_by,
+        )
+        onboarding.status = DataOnboardingStatus.applied
+    except OnboardingError as exc:
+        onboarding.status = DataOnboardingStatus.failed
+        onboarding.error = str(exc)
+    except Exception:
+        logger.exception("Data Onboarding %s: Apply failed", onboarding_id)
+        onboarding.status = DataOnboardingStatus.failed
+        onboarding.error = "The Proposal could not be applied."
+    onboarding.save()
+    if onboarding.status == DataOnboardingStatus.applied:
+        _email_report(onboarding)
+
+
+def _email_report(onboarding):
+    report = onboarding.report
+    issues = report["issues"]
+    user = onboarding.created_by
+    url = (
+        f"{tenant_web_url(onboarding.tenant)}"
+        f"/control-center/data-onboarding/{onboarding.id}"
+    )
+    send_email(
+        context={
+            "send_to": [user.email],
+            "user": user,
+            "tenant": onboarding.tenant,
+            "file_name": onboarding.file_name,
+            "listing": [
+                {"name": f["name"], "value": f["loaded"]}
+                for f in report["forms"]
+            ] + [
+                {"name": "Skipped rows", "value": len(
+                    {(i["sheet"], i["row"]) for i in issues
+                     if i["kind"] == "skipped"}
+                )},
+                {"name": "Dropped answers", "value": sum(
+                    i["kind"] == "warning" for i in issues
+                )},
+            ],
+            "button": True,
+            "button_url": url,
+            "button_text": "View the Onboarding Report",
+        },
+        type=EmailTypes.data_onboarding_applied,
+    )
+
+
+def apply_onboarding_result(task):
+    # As draft_proposal_result: a killed worker must not leave it applying.
+    if not task.success:
+        DataOnboarding.objects.filter(
+            id=task.args[0], status=DataOnboardingStatus.applying
+        ).update(
+            status=DataOnboardingStatus.failed,
+            error="The Proposal could not be applied.",
         )

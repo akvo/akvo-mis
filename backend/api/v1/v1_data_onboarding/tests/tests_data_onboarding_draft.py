@@ -303,3 +303,65 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
             **self.auth(user), **self.host(),
         )
         self.assertEqual(res.status_code, 403)
+
+    @override_settings(TEST_ENV=True)
+    def test_upload_to_applied_report_and_email(self):
+        from django.core import mail
+
+        from api.v1.v1_data_onboarding.tasks import apply_onboarding
+
+        content = CSV + "S-004;;South;BH\nS-001;Again;North;BH\n"
+        pk = self.upload("sites.csv", content.encode()).json()["id"]
+        self.draft(pk, json.dumps(proposal()))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(
+                f"{URL}/{pk}/apply", **self.auth(self.a["user"]),
+                **self.host(),
+            )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "applying")
+        self.assertEqual(
+            self.async_task.call_args.args,
+            ("api.v1.v1_data_onboarding.tasks.apply_onboarding", pk),
+        )
+        again = self.client.post(
+            f"{URL}/{pk}/apply", **self.auth(self.a["user"]), **self.host()
+        )
+        self.assertEqual(again.status_code, 400)
+
+        with patch("openai.OpenAI") as openai:
+            apply_onboarding(pk)
+        openai.assert_not_called()
+
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "applied")
+        form_id = body["report"]["forms"][0]["form"]
+        self.assertEqual(body["report"]["forms"], [{
+            "key": "sites", "name": "Water sites", "form": form_id,
+            "loaded": 3,
+        }])
+        self.assertEqual(
+            [(i["sheet"], i["row"], i["question"], i["kind"])
+             for i in body["report"]["issues"]],
+            [("csv", 5, "site_name", "skipped"), ("csv", 6, None, "skipped")],
+        )
+
+        data = self.client.get(
+            f"/api/v1/form-data/{form_id}?page=1",
+            **self.auth(self.a["user"]), **self.host(),
+        ).json()
+        self.assertEqual(data["total"], 3)
+        self.assertEqual(
+            sorted(d["name"] for d in data["data"]),
+            ["Alpha well", "Beta well", "Gamma well"],
+        )
+
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ["admin@acme.org"])
+        html = email.alternatives[0][0]
+        self.assertIn(
+            f"acme.app.com/control-center/data-onboarding/{pk}", html
+        )
+        self.assertIn("Water sites : 3", html)

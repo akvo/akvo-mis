@@ -1,6 +1,7 @@
 import tempfile
 from uuid import uuid4
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django_q.tasks import async_task
 from drf_spectacular.utils import extend_schema
@@ -28,6 +29,7 @@ def _detail(onboarding):
         "status": DataOnboardingStatus.FieldStr[onboarding.status],
         "file_name": onboarding.file_name,
         "proposal": onboarding.proposal,
+        "report": onboarding.report,
         "error": onboarding.error,
         "created": onboarding.created,
         "created_by": onboarding.created_by.get_full_name(),
@@ -94,4 +96,29 @@ def data_onboarding_detail(request, version, pk):
     onboarding = get_object_or_404(
         DataOnboarding.objects.for_user(request.user), pk=pk
     )
+    return Response(_detail(onboarding))
+
+
+@extend_schema(tags=["Data Onboarding"], summary="Apply the Proposal")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, DataOnboardingAccess])
+def data_onboarding_apply(request, version, pk):
+    with transaction.atomic():
+        onboarding = get_object_or_404(
+            DataOnboarding.objects.for_user(request.user)
+            .select_for_update(),
+            pk=pk,
+        )
+        if onboarding.status != DataOnboardingStatus.proposed:
+            return Response(
+                {"message": "Only a proposed Data Onboarding can be applied."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        onboarding.status = DataOnboardingStatus.applying
+        onboarding.save()
+        transaction.on_commit(lambda: async_task(
+            "api.v1.v1_data_onboarding.tasks.apply_onboarding",
+            onboarding.id,
+            hook="api.v1.v1_data_onboarding.tasks.apply_onboarding_result",
+        ))
     return Response(_detail(onboarding))
