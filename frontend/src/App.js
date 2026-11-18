@@ -3,6 +3,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   Home,
+  Landing,
   Login,
   Register,
   Activate,
@@ -178,8 +179,10 @@ const RouteList = () => {
         exact
         path="/"
         element={
-          window?.appConfig?.showLandingPage ? (
-            <Home />
+          // "/" is the landing page on the base-domain host (and single-host
+          // installs); a tenant subdomain's "/" is the workspace app.
+          onBaseDomainHost() ? (
+            <Landing />
           ) : authUser ? (
             <Navigate to="/control-center" />
           ) : (
@@ -675,12 +678,12 @@ const App = () => {
     }
   }, [authUser, tenant, tenantLoaded, public_state]);
 
-  // Only treat "/" as a public home (bypassing the auth loader) when the
-  // landing page is enabled. When it is disabled, "/" is an authenticated
-  // redirect target, so we must keep the loader until the profile fetch
-  // resolves — otherwise a valid session is wrongly redirected to /login.
-  const showLandingPage = window?.appConfig?.showLandingPage;
-  const isHome = location.pathname === "/" && showLandingPage;
+  // "/" is the landing page on the base-domain host (and single-host installs),
+  // and a tenant subdomain's "/" is the workspace app. The landing is a
+  // standalone marketing surface with its own header (brand, language switcher,
+  // CTA), so it bypasses the auth loader and suppresses the workspace app shell
+  // — otherwise the two headers stack and the loader hides a public page.
+  const isLanding = location.pathname === "/" && onBaseDomainHost();
 
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
@@ -700,9 +703,9 @@ const App = () => {
             workspace's published dashboards and its account menu links
             to /control-center. Neither exists on the console, which
             brings its own header in AdminLayout. */}
-        {!onAdminHost() && <Layout.Header />}
+        {!onAdminHost() && !isLanding && <Layout.Header />}
         <Layout.Body>
-          {(loading || formsLoading) && !isHome && !isPublic ? (
+          {(loading || formsLoading) && !isLanding && !isPublic ? (
             <PageLoader message="Initializing. Please wait.." />
           ) : (
             <RouteList />
@@ -712,8 +715,8 @@ const App = () => {
             and labels itself with the page it is on, so on the console
             it offers an assistant that can only fail. Same reason the
             header above is suppressed. */}
-        {!onAdminHost() && <ChatbotWidget />}
-        {!onAdminHost() && <OnboardingTour />}
+        {!onAdminHost() && !isLanding && <ChatbotWidget />}
+        {!onAdminHost() && !isLanding && <OnboardingTour />}
       </Layout>
     </AbilityContext.Provider>
   );

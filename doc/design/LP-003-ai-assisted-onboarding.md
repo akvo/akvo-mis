@@ -12,11 +12,12 @@
 
 **Task ID**: LP-003
 **Author**: Iwan Firmawan
-**Date**: 2026-11-11
+**Date**: 2026-11-18 (rev. 2 — inherits LP-001 design system + i18n + brand conventions)
 **Status**: Review
-**Estimate**: ~12h (agentic coding + heavy reuse of the skill scripts) — see
-the honesty note in §8 on where this can overflow.
-**Depends on**: [[LP-002]] (the onboarding container/contract), [[LP-001]] (landing)
+**Estimate**: ~12h (AI-generated + heavy reuse of the skill scripts) — see the
+honesty note in §8 on where this can overflow.
+**Depends on**: [[LP-002]] (the onboarding container/contract), [[LP-001]] (landing,
+Tailwind scoped setup, content layout)
 
 ---
 
@@ -78,6 +79,13 @@ surface** is genuinely new and risky.
 - [ ] Every public endpoint carries Turnstile + rate limits; uploaded files go
       to isolated, short-retention storage; spreadsheet/chat content is treated
       as data, never instructions (prompt-injection safe).
+- [ ] **UI follows the akvo.org Tailwind design system** (scoped `#landing`),
+      inheriting [[LP-001]] D-8; the prototype AI chat is the interaction
+      reference, re-tinted to akvo tokens.
+- [ ] **Static chat chrome** (labels, buttons, gate prompts) is per-locale JSON
+      (en/es/fr, English default/fallback) with the `{brand}` token; **dynamic
+      assistant messages are generated in the selected language** by prompting
+      the model (not stored JSON), defaulting to English.
 - [ ] Backend passes `flake8`; frontend passes eslint.
 
 ---
@@ -166,6 +174,20 @@ LLM plan-generation (C4's AI part).
 
 ---
 
+## 7b. Design system & i18n (inherited from [[LP-001]])
+
+- **Styling**: akvo.org Tailwind scoped to `#landing` (LP-001 D-8); same tokens,
+  buttons and fonts as the landing and the wizard. No new Tailwind config; antd
+  untouched. The prototype AI chat is the layout/interaction reference, re-tinted.
+- **Static chrome** (chat header, upload button, gate confirmations, error
+  states) is per-locale JSON like the landing (`content/en.json` + `es`/`fr`),
+  **English default and fallback**, with the `{brand}` token.
+- **Dynamic AI language**: the assistant's own replies are produced by the model
+  in the active language (en/es/fr) by passing the locale into the prompt — not
+  stored JSON. English is the default; an unsupported locale falls back to
+  English. The plan it emits stays a structured object (§5); only its
+  plain-language rendering is localized.
+
 ## 8. Security, Risk & the Estimate
 
 **Risks (why this is its own increment):**
@@ -203,6 +225,8 @@ Treat 12h as the optimistic/reuse-maximised figure, not a guarantee.
 - Prior art: `akvo-mis-workspace-from-data` skill
   (`feature/461-workspace-from-spreadsheet-skill`) — the scripts in §6.
 - Reuse: `backend/api/v1/v1_chatbot/`, `backend/api/v1/v1_visualization/ai/`.
+- Design system: the **akvo-web** repo (<https://github.com/akvo/akvo-web>),
+  per [[LP-001]] D-8.
 - Prototype: the AI chat demo in `LP-001-landing-design-brief.md` (port to React).
 - **Live prototype (for review):** <https://claude.ai/artifact/FzcaWS4DNkPuVj3hmxHyZh>
   — open the AI setup via "Preview the AI setup". ⚠️ Keep this link private

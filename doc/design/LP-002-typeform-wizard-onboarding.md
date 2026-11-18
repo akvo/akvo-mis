@@ -11,10 +11,10 @@
 
 **Task ID**: LP-002
 **Author**: Iwan Firmawan
-**Date**: 2026-11-11
+**Date**: 2026-11-18 (rev. 2 — inherits LP-001 design system + i18n + brand conventions)
 **Status**: Review
-**Estimate**: ~8h (agentic coding; ports the approved wizard prototype)
-**Depends on**: [[LP-001]] (landing page + CTA)
+**Estimate**: ~8h (AI-generated; hands-on = review + verify). Reuses LP-001's Tailwind setup.
+**Depends on**: [[LP-001]] (landing page + CTA, Tailwind scoped setup, content layout)
 
 ---
 
@@ -47,7 +47,13 @@ Goal:
 - [ ] The wizard collects what the existing flow needs: organisation name, the
       **top administration unit name** (a place, e.g. country/region — for
       `/configure`), workspace address (subdomain) with **live availability
-      check**, admin name, email, password, workspace language.
+      check**, admin name, email, password, workspace language (en/es/fr).
+
+> **Prerequisite (shared with [[LP-001]] D-10):** MIS supports en/fr today —
+> `RegisterSerializer.language` is `ChoiceField(["en","fr"])`
+> (`serializers.py:1213`). The wizard's language step offering Español needs
+> `es` added to that choice list (and the register selector); tracked as the
+> MIS-wide 3-language task, not inside LP-002.
 - [ ] Final step shows a "creating your workspace" → "check your email to
       activate" screen (activation preserved).
 - [ ] After the activation link, the workspace is already configured from the
@@ -61,6 +67,12 @@ Goal:
 - [ ] Turnstile enforced on the `register` submission exactly as today (no new
       unprotected write path).
 - [ ] One new **read-only** endpoint only: subdomain availability (§4).
+- [ ] **UI follows the akvo.org Tailwind design system** (scoped `#landing`),
+      inheriting [[LP-001]] D-8; antd untouched; the wizard demo is the
+      interaction reference, re-tinted to akvo tokens.
+- [ ] **Wizard chrome (step prompts, labels, buttons) is per-locale JSON**
+      (en/es/fr, English default/fallback) like [[LP-001]] §6, with the `{brand}`
+      token for the product name. Values the user types are not translated.
 - [ ] No data-model change; no mobile/SQLite impact.
 - [ ] Frontend passes eslint (curly, no-undefined, prefer-arrow-callback,
       prettier); backend passes `flake8`.
@@ -120,6 +132,22 @@ thing protecting against throwaway/typo'd addresses (the gap MT-006 closed). A
 new instant-provision endpoint re-opens that hole and needs its own hardening,
 so it is rejected. The wizard is UX over an unchanged backend.
 
+### Design system & i18n (inherited from [[LP-001]])
+
+The wizard is part of the landing surface, so it reuses LP-001's setup rather
+than inventing its own:
+- **Styling**: akvo.org Tailwind, scoped to `#landing` (LP-001 D-8) — primary /
+  outline buttons, akvo tokens, Roboto Condensed / Assistant. No new Tailwind
+  config; antd screens untouched. The prototype wizard is the layout/interaction
+  reference, re-tinted to akvo colours.
+- **Content**: the wizard's static chrome (step prompts, field labels, button
+  text, validation messages) lives in per-locale JSON like the landing
+  (`content/en.json` + `es`/`fr`), **English default and fallback** (whole file
+  or per key), with the `{brand}` token for the product name. The data the user
+  enters (org, subdomain, email) is not translated.
+- **Languages**: the workspace-language step offers en/es/fr — gated on the
+  MIS-wide `es` prerequisite below.
+
 ### Seams to leave for [[LP-003]]
 - **One onboarding container owns orchestration** — the wizard and the future
   AI chat are two drivers of the same "collect → provision" contract; the
@@ -171,6 +199,8 @@ so it is rejected. The wizard is UX over an unchanged backend.
 ## 10. References
 - [[LP-001]] (landing page this plugs into), [[LP-003]] (AI onboarding reusing
   the same container/contract).
+- Design system: the **akvo-web** repo (<https://github.com/akvo/akvo-web>),
+  per [[LP-001]] D-8.
 - `MT-006-two-phase-registration.md`, `MT-029-signup-and-auth-abuse-hardening.md`.
 - Code: `frontend/src/pages/login/components/Register.jsx`,
   `backend/api/v1/v1_users/views.py` + `urls.py` + `serializers.py`,

@@ -10,7 +10,6 @@ from mis.settings import (
     APP_SHORT_NAME,
     APK_NAME,
     BASE_DOMAIN,
-    SHOW_LANDING_PAGE,
     MATOMO_URL,
     MATOMO_SITE_ID,
     MATOMO_DIM_TENANT,
@@ -80,7 +79,6 @@ class Command(BaseCommand):
                         "name": APP_NAME,
                         "shortName": APP_SHORT_NAME,
                         "apkName": APK_NAME,
-                        "showLandingPage": SHOW_LANDING_PAGE,
                         # Empty on a single-host deployment, which is how
                         # the frontend knows not to split itself into
                         # base-domain and workspace contexts at all.

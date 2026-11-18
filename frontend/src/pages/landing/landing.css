@@ -1,0 +1,58 @@
+/* With preflight off, `base` only declares the --tw-* variables that classes
+   like backdrop-blur need; keep it. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tailwind's reset, limited to the landing page. Without it `border` draws
+   nothing (no border-style) and antd's heading/paragraph margins leak in.
+   Utility classes still win over these rules. */
+#landing *,
+#landing ::before,
+#landing ::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: #e5e7eb;
+}
+#landing h1,
+#landing h2,
+#landing h3,
+#landing h4,
+#landing p,
+#landing ul,
+#landing ol,
+#landing figure {
+  margin: 0;
+}
+#landing ul,
+#landing ol {
+  padding: 0;
+  list-style: none;
+}
+#landing img,
+#landing svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+#landing a {
+  color: inherit;
+  text-decoration: inherit;
+}
+#landing button {
+  font: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* MIS's Home styles give the page wrapper a navy background; the landing
+   owns its own surface instead. Dark mode is handled by `dark:` classes. */
+#landing {
+  background: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  #landing {
+    background: #191919;
+  }
+}

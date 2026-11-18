@@ -12,9 +12,9 @@
 
 **Task ID**: LP-001
 **Author**: Iwan Firmawan
-**Date**: 2026-11-11
+**Date**: 2026-11-18 (rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
 **Status**: Review
-**Estimate**: ~6h (agentic coding, porting the approved prototype)
+**Estimate**: ~4h (AI-generated; hands-on time is review + verify). Scope: Tailwind v3.4.3 scoped setup, JSON content config, akvo tokens, dark mode — see §12.
 
 ---
 
@@ -43,9 +43,9 @@ Goal (this doc only):
 
 | In scope (LP-001) | Out of scope (later) |
 |-------------------|----------------------|
-| Marketing landing page behind `showLandingPage` on the base domain | The Typeform wizard → **[[LP-002]]** |
+| Marketing landing page at `/` on the base domain (always on) | The Typeform wizard → **[[LP-002]]** |
 | CTA links to the existing `/register` page | AI conversational onboarding → **[[LP-003]]** |
-| Benchmark table, i18n (en/fr), light/dark, mobile | Any new backend endpoint or data model |
+| Benchmark table, i18n (en/es/fr), light/dark, mobile | Any new backend endpoint or data model |
 
 ---
 
@@ -56,18 +56,40 @@ Goal (this doc only):
       "free forever" message, benchmark table, and a primary **Try it yourself**
       CTA.
 - [ ] The CTA takes the visitor to the existing registration page (`/register`).
-- [ ] The page is bilingual (en/fr) with a language switch; copy is not
-      hardcoded in one language.
+- [ ] The page is **trilingual (en / es / fr)** — akvo.org's default set — with
+      a language switch (English, Español, Français); copy is not hardcoded in
+      one language.
 - [ ] The page reads well on a phone (single column, no horizontal scroll) and
       supports light + dark.
 - [ ] A secondary **Talk to our team** link is present for the paid/custom path.
+- [ ] The **site name, page title and meta description** are config, not
+      literals — the brand name resolves from one source so a future rebrand
+      (Akvo MIS → AMIS) is a config change, not a code edit (D-11).
 
 ### Technical Acceptance Criteria
-- [ ] Landing renders only on the base-domain host and only when
-      `showLandingPage` is true; subdomains unaffected.
+- [ ] Landing always renders at `/` on the base-domain host **or** a single-host
+      install (`BASE_DOMAIN` empty) — never on a tenant subdomain. Guard:
+      `onBaseDomainHost()`. (The `SHOW_LANDING_PAGE` toggle was removed — Akvo
+      MIS always ships a landing page.)
 - [ ] No new backend endpoint, no data-model change.
-- [ ] Copy + benchmark rows are data/config (i18n), not scattered literals, so
-      Akvo can edit without a code change where practical.
+- [ ] **All visible content** (copy, CTAs, how-it-works steps, cards, benchmark
+      rows, footer links) comes from **per-locale JSON files** (`content/en.json`,
+      `es.json`, `fr.json`; English is the default/fallback) — no copy hardcoded
+      in components (D-9, §6).
+- [ ] **Styling uses akvo-web's scoped Tailwind setup**, re-tinted to the
+      **platform Ant Design primary `#1651b6`** (`src/variables.scss $blue`), not
+      akvo green — the app is antd-based, so the landing matches it: Tailwind
+      v3.4.3 **scoped to `#landing`** (preflight off, `important: "#landing"`),
+      token names kept, values set to the blue scale + `akvo-bright #5B8DEF` for
+      dark surfaces; Ant Design screens untouched (D-8).
+- [ ] **Standalone shell**: on the landing route the workspace app shell (antd
+      `Layout.Header`, chatbot, onboarding tour) is suppressed, so the landing's
+      own header (brand, language switch, CTA) is the only chrome (D-12).
+- [ ] **Interactive hero dashboard demo**: the hero carries a product-shot card
+      with sector tabs that switch stat tiles + an SVG trend chart; its copy and
+      data live in `hero.demo` per locale (D-12, §6).
+- [ ] **Compatible with the agreed prototype** (§11 link): same section set,
+      order and interactions, re-tinted to the platform blue tokens/fonts.
 - [ ] Frontend passes `./dc.sh exec -T frontend npx eslint` (curly,
       no-undefined, prefer-arrow-callback, prettier).
 
@@ -105,12 +127,114 @@ already drives `POST /register` → activation email → `/register/configure`
 **Decision**: Option 1 — replace the `<Home />` currently shown behind
 `showLandingPage` (App.js:181) with a dedicated `<Landing />`.
 
+**Amendment (2026-11-18):** the `SHOW_LANDING_PAGE` env toggle was removed
+end-to-end (env, `settings.py`, `generate_config.py`, `appConfig`, App.js).
+The landing now always renders on the base-domain host via `onBaseDomainHost()`,
+since Akvo MIS ships a landing page by default. Single-host installs
+(`BASE_DOMAIN` empty) now show it at `/` too.
+
 **Rationale**: The flag, base-domain gating and `/register` guard already
 exist. A separate site duplicates i18n, theming, Turnstile and deployment.
 Laziest correct path: one new component behind a flag already plumbed
 `generate_config.py` → `config.js` → `App.js`.
 
 **Impact**: `frontend/src/App.js` root route; new `pages/landing/`. No backend.
+
+### D-8: Style with akvo.org's Tailwind design system (scoped)
+
+**Decision**: Build the page with akvo.org's Tailwind design system — the tokens
+and component markup from **akvo-web** — using **Tailwind v3.4.3 scoped to
+`#landing`** (`important: "#landing"`, `corePlugins.preflight: false`, a small
+scoped reset in `landing.css`), the akvo tokens (`akvo #03AD8C`,
+`akvo-deep #025F4D` hero, `akvo-light #E6F7F4`, `akvo-text #027A63`,
+`akvo-border #56C8B2`, `text-*`, `bg-*`) and fonts (Roboto Condensed titles,
+Assistant body).
+
+**Rationale**: Reuses akvo.org's identity and component markup (hero band,
+feature card, CTA banner, buttons) class-for-class; scoping keeps Ant Design 4
+screens untouched; v3.4.3 runs on CRA 5 / Node 17.3 without ejecting. These
+brand tokens are authoritative and supersede the generic palette in the design
+brief.
+
+**Compatibility with the prototype**: the agreed prototype (§11) stays the
+**layout, section-order and interaction** reference (hero, free band,
+how-it-works, two-ways, why, benchmark, partner, final CTA — the wizard/AI demos
+belong to [[LP-002]]/[[LP-003]]). It is **re-tinted** to the akvo tokens/fonts:
+the prototype's teal + display font become `akvo` green + Roboto Condensed /
+Assistant. Same composition, akvo skin.
+
+**Impact / net-new**: `frontend/tailwind.config.js`, `pages/landing/landing.css`,
+fonts in `public/index.html`. **Dark mode is net-new** (akvo-web is light-only):
+add `dark:` per element and a brighter accent for text on dark. Set
+colours on headings directly (antd colours them); wide blocks use
+`w-0 min-w-full overflow-x-auto`.
+
+**Amendment (2026-11-18): palette = platform Ant Design primary, not akvo green.**
+Most of the platform UI is Ant Design, whose primary is `#1651b6`
+(`frontend/src/variables.scss $blue`). To keep the landing consistent with the
+app it funnels into, the scoped Tailwind **token names are kept** (`akvo`,
+`akvo-dark`, `akvo-deep`, `akvo-text`, `akvo-light`, `akvo-border`) but their
+**values are the blue scale**: `akvo #1651b6`, `akvo-dark #114299` (hover),
+`akvo-deep #0E2E6B` (hero band), `akvo-text #13448F` (text on white, 9:1),
+`akvo-light #E7EEF9`, `akvo-border #A9C2EE`, plus a new `akvo-bright #5B8DEF`
+for accents/text on dark surfaces. A header comment in `tailwind.config.js`
+flags that the names are historical. This supersedes the green hexes above.
+
+### D-9: All landing content from per-locale JSON files
+
+**Decision**: Every section's copy, CTAs, steps, cards, benchmark rows and
+footer links come from **per-locale JSON files** — `content/en.json`,
+`es.json`, `fr.json` (one file per language, same structure); the `<Landing>`
+component is presentation only. Schema + layout in §6.
+
+**Rationale**: Translators edit one language file at a time (clean diffs, no
+merge churn), the active locale can be lazy-loaded, and the benchmark table
+(which Akvo must skim/refresh per D-6) is a data array, not markup. Per-category
+splitting (`content/hero/en.json`, …) was rejected — 8 sections × 3 locales is
+too many tiny files to keep in sync for one page (YAGNI); revisit only if the
+content grows to many pages.
+
+**Impact**: three JSON files + a tiny typed loader (fallback to `en.json`,
+`{brand}` substitution); no backend.
+
+### D-10: Three default languages (en / es / fr)
+
+**Decision**: The landing page offers **English, Español and Français** — the
+three languages akvo.org ships by default. Each locale is its own file (§6);
+the switch lists all three. **English (`en`) is the default** — the initial
+locale and the fallback for any missing key.
+
+**Prerequisite (MIS-wide, related work)**: the registration handoff and the rest
+of MIS support **en/fr only** today — `RegisterSerializer.language` is a
+`ChoiceField(["en", "fr"])` (`backend/api/v1/v1_users/serializers.py:1213`) and
+the selector lives in `frontend/src/pages/register/Register.jsx`. Adding `es`
+means: extend that choice list to `["en","es","fr"]`, add Español to the
+register selector, and supply `es` strings wherever MIS shows `fr`. This is
+broader than the landing page (it extends MT-025) and should be tracked as its
+own small task/PR — the landing switcher must not offer a language the
+registration flow then rejects.
+
+**Impact**: the landing content JSON (en/es/fr) is self-contained; the MIS-wide
+`es` addition is a dependency for the CTA → `/register` handoff and for
+[[LP-002]]'s language step.
+
+### D-11: Site name, title and description are config (rebrand-ready)
+
+**Decision**: The brand name, the base-domain page `<title>` and the meta
+description are **configuration, not literals**, so a future rebrand
+**Akvo MIS → AMIS** is a config change, not a code edit.
+
+- Brand name resolves from **one source**, `appConfig.name`
+  (`generate_config.py`) — the same value the rest of MIS already uses. Rebrand
+  = change that one value.
+- Copy uses the `{brand}` token (§6) instead of writing "Akvo MIS", so headlines
+  and the title update with the name.
+- `site.title` / `site.description` live in the content JSON per locale.
+
+**Rationale**: Akvo already treats the workspace site title as data (MT-026/
+MT-030); the landing page follows the same principle for the base domain.
+
+**Impact**: no component edits on rebrand; one config value + the content JSON.
 
 ### D-5: Benchmark table is honest positioning, Akvo MIS in the middle
 
@@ -142,19 +266,123 @@ to walk back). The core/advanced boundary is a future product decision;
 **not** today's existing features. No `features`/plan flag or billing model is
 in scope here.
 
+### D-12: Standalone landing shell + interactive hero dashboard demo
+
+**Decision** (as built, 2026-11-18): the landing is a **standalone marketing
+surface**, not a page inside the workspace app frame.
+
+- **Shell suppression**: on the landing route, `App.js` hides the workspace app
+  shell — the antd `Layout.Header`, `ChatbotWidget` and `OnboardingTour` — so the
+  landing's own header (brand, EN/ES/FR switch, CTA) is the only chrome.
+  Guarded by the same `isLanding = pathname === "/" && onBaseDomainHost()`.
+  Without this the antd header stacked on top and hid the language switch.
+- **Interactive hero demo**: the hero is a two-column layout — copy + CTAs on one
+  side, a product-shot dashboard card (`HeroDemo.jsx`) on the other. The card has
+  sector tabs (Water & sanitation / Health facilities / Agriculture / Schools)
+  that switch two stat tiles and an inline **SVG trend chart** (no chart library —
+  pure geometry). Its text and numbers are config: `hero.demo` per locale (§6),
+  so it stays editable and translates with the switch.
+
+**Rationale**: the prototype's hero always carried an interactive product shot;
+dropping it left the hero flat, and the stacked antd header buried the language
+switch. Both are presentation-only — no backend, no new dependency.
+
+**Impact**: `pages/landing/HeroDemo.jsx` (new), two-column hero in `Landing.jsx`,
+`hero.demo` added to `content/{en,es,fr}.json`, three `App.js` shell guards.
+
 ---
 
-## 6. Type/Constant Mappings
+## 6. Content Configuration (JSON)
 
-None — this page stores nothing. Copy and benchmark rows live in i18n dicts.
+All visible text, links and benchmark rows come from **per-locale JSON files** —
+one file per language, same structure — so content is edited without touching
+components (D-9):
+
+```
+frontend/src/pages/landing/content/
+  en.json   ← source of truth for keys + fallback
+  es.json
+  fr.json
+```
+
+**Each file *is* a locale**, so strings are plain (no `{en,es,fr}` wrapper). The
+loader imports `content/${store.language}.json` and falls back to `en.json`
+**both** when that locale file is missing/fails to load entirely **and**
+per-key for anything it lacks. English is always present and is the default.
+Shape (abridged — `en.json`; sections render in this order):
+
+```json
+{
+  "site": {
+    "name": null,
+    "title": "{brand} — real-time monitoring",
+    "description": "…"
+  },
+  "hero": {
+    "badge": "Free forever",
+    "title": "Welcome to {brand}.",
+    "lead": "…",
+    "primaryCta":   { "label": "Try it yourself →", "href": "/register" },
+    "secondaryCta": { "label": "Talk to our team", "href": "…" },
+    "demo": {
+      "brandLabel": "akvo", "liveLabel": "live", "syncedLabel": "synced",
+      "demoBadge": "demo", "caption": "…",
+      "chartTitle": "…", "chartNote": "…",
+      "sectors": [
+        { "name": "…", "metricLabel": "…", "metricValue": "1,284",
+          "metricNote": "…", "rateLabel": "…", "rateValue": "92%",
+          "rateNote": "…", "mapNote": "…", "trend": [40, 44, 42, 50, 58, 62, 70] }
+      ]
+    }
+  },
+  "freeBand":   { "title": "…", "body": "…" },
+  "howItWorks": { "heading": "…", "steps": [ { "title": "…", "body": "…" } ] },
+  "why":        { "heading": "…", "subtitle": "…",
+                  "cards": [ { "icon": "offline", "title": "…", "body": "…" } ] },
+  "benchmark":  {
+    "heading": "…", "caption": "…",
+    "columns": [
+      { "key": "capability" },
+      { "key": "kobo",  "label": "KoboToolbox" },
+      { "key": "akvo",  "label": "Akvo MIS", "highlight": true },
+      { "key": "dhis2", "label": "DHIS2" }
+    ],
+    "rows": [ { "capability": "…", "kobo": "…", "akvo": "…", "dhis2": "…" } ]
+  },
+  "partner":  { "title": "…", "body": "…", "cta": { "label": "…", "href": "…" } },
+  "finalCta": { "title": "…", "body": "…", "cta": { "label": "…", "href": "/register" } },
+  "footer":   { "links": [ { "label": "…", "href": "…" } ] }
+}
+```
+
+`es.json` and `fr.json` mirror this tree with translated **text only** — the
+non-text keys (`href`, `key`, `icon`, `highlight`) stay identical.
+
+Rules:
+- **Brand name = one source.** `site.name: null` means "use `appConfig.name`"
+  (`generate_config.py`) — the single app-wide brand knob. A future rebrand
+  **Akvo MIS → AMIS** is that one value changed; set a literal `site.name` only
+  to override the brand on the landing alone (D-11).
+- **`{brand}` token.** Any string may contain `{brand}`; the loader replaces it
+  with the resolved name, so copy never hardcodes "Akvo MIS".
+- `site.title` / `site.description` set the base-domain `<title>` and meta
+  description.
+- `icon` is a key into a small fixed icon set (`offline`, `hierarchy`, `ai`,
+  `free`) — never markup. `highlight: true` marks the Akvo MIS column.
+- No HTML in strings; the component owns all markup and Tailwind classes.
+- **`en.json` is authoritative and always present.** A missing key, a missing
+  section, or an **absent/unparseable locale file** all fall back to `en.json`
+  (the whole file for an absent locale, per-key otherwise). A tiny unit test
+  asserts `es.json`/`fr.json` have the same key paths as `en.json` (catches
+  translation drift — the one cost of the per-locale split).
 
 ---
 
 ## 7. Compatibility & Migration
 
 - [x] Existing registration unaffected (CTA just links to it).
-- [x] Single-host installs (`BASE_DOMAIN` empty, `showLandingPage` false) see no
-      change — landing never renders.
+- [ ] Single-host installs (`BASE_DOMAIN` empty) now show the landing at `/`
+      (the `SHOW_LANDING_PAGE` gate was removed; this is an intentional change).
 - [ ] Mobile app: no impact (web-only).
 - [x] Seeders/CLI unchanged.
 
@@ -164,8 +392,8 @@ None — this page stores nothing. Copy and benchmark rows live in i18n dicts.
 
 - [ ] **No new public write** — the page only links to the existing,
       Turnstile-protected `/register`. No new attack surface.
-- [ ] **No secrets in landing config** — `showLandingPage`, copy and table rows
-      are public; keep them in `config.js`/i18n, never mix tokens.
+- [ ] **No secrets in landing config** — copy and table rows are public; keep
+      them in the content JSON, never mix tokens.
 
 ---
 
@@ -173,8 +401,9 @@ None — this page stores nothing. Copy and benchmark rows live in i18n dicts.
 
 | Test | Coverage |
 |------|----------|
-| Unit (frontend) | Landing renders behind flag; i18n copy renders for en/fr; benchmark table semantics. |
-| E2E / manual | Landing shows only on base domain + flag on; subdomain shows none; mobile viewport; CTA navigates to `/register`; light/dark. |
+| Unit (frontend) | Landing renders on the base-domain host; **sections render from `content/<locale>.json`** (en default; missing key/section **or an absent/unparseable locale file** → `en.json`); `es.json`/`fr.json` key paths match `en.json`; `{brand}` resolves from `appConfig.name`; benchmark table semantics. |
+| Styling / scoping | Tailwind classes apply only inside `#landing`; **antd screens visually unchanged** (spot-check a control page); light + dark. |
+| E2E / manual | Landing shows on the base-domain host (and single-host installs); tenant subdomain shows none; mobile viewport (table scrolls, no page widening); CTA navigates to `/register`. |
 
 ---
 
@@ -199,14 +428,18 @@ None — this page stores nothing. Copy and benchmark rows live in i18n dicts.
   chat demo ([[LP-003]]). ⚠️ **Keep this link private** (restricted to the
   owner + invited reviewers via the artifact's Share menu); do not publish it
   openly.
+- Design system (tokens + component markup): the **akvo-web** repo
+  (<https://github.com/akvo/akvo-web>) — tokens in `frontend/src/app/globals.css`,
+  components in `frontend/src/components/`. Live: <https://akvo-web.akvotest.org/>.
 - Related: `MT-006-two-phase-registration.md` (the sign-up the CTA funnels to),
   `MT-029-signup-and-auth-abuse-hardening.md` (Turnstile),
   `001_auth_subdomain_registration_spec.md` (base-domain `/register` guard).
-- Code touchpoints: `frontend/src/App.js` (root route, `showLandingPage`),
-  `backend/api/v1/v1_data/management/commands/generate_config.py`.
+- Code touchpoints: `frontend/src/App.js` (root route, `onBaseDomainHost()` guard),
+  `backend/api/v1/v1_data/management/commands/generate_config.py`,
+  `backend/mis/settings.py` and `env.example` (`SHOW_LANDING_PAGE` removed).
 - Next docs: **[[LP-002]]** (wizard), **[[LP-003]]** (AI onboarding).
 
-### Draft copy (tone reference — finalise + translate en/fr)
+### Draft copy (tone reference — finalise + translate en/es/fr)
 
 > **Welcome to Akvo MIS.** The powerful platform that manages your data with
 > ease — and uses AI to turn it into visualisations, automatically. Curious?
@@ -246,26 +479,50 @@ corroborated via vendor pricing + third-party reviews). Akvo MIS — this repo.
 
 ---
 
-## 12. Task Breakdown · **~6h** (high confidence — porting the prototype)
+## 12. Task Breakdown · **~4h** (AI-generated; hands-on = review + verify)
 
-Estimates assume agentic coding + reuse of the approved prototype
-(`LP-001-landing-design-brief.md`): porting HTML/CSS/JS to React, not redesign.
+Everything below is generated by AI from the agreed prototype (§11) and
+akvo.org's Tailwind system (akvo-web); the hours are human review/verify, not
+typing.
 
-**A1 · Landing route + flag wiring — 1.5h**
+**A0 · Tailwind v3.4.3 scoped setup — 1h**
+- Tech AC: pin `tailwindcss@3.4.3`; `tailwind.config.js` (content = landing,
+  `important:"#landing"`, preflight off, akvo tokens + fonts); `landing.css`
+  scoped reset; fonts in `public/index.html`; antd screens visually unchanged.
+
+**A1 · Landing route + flag wiring — 0.5h**
 - User AC: base-domain `/` shows the landing page; subdomains unaffected.
-- Tech AC: `<Landing/>` behind `showLandingPage && onBaseDomain` in `App.js`;
-  CTA links to `/register`; no authed/subdomain redirect regression.
+- Tech AC: `<Landing/>` at `/` guarded by `onBaseDomainHost()`; CTA → `/register`;
+  no authed/subdomain redirect regression.
 
-**A2 · Port landing sections to React/antd (from prototype) — 3h**
-- User AC: all sections render; phone-responsive; light/dark.
-- Tech AC: transcribe prototype HTML/CSS into components; benchmark is a
-  semantic `<table>`; eslint/prettier clean.
+**A2 · Build sections in the platform-blue tokens (from the prototype) — 1.5h**
+- User AC: all sections render; phone-responsive; same composition as the
+  prototype, in the platform `#1651b6` colours; the hero's interactive dashboard
+  demo switches on sector tap.
+- Tech AC: hero (two-column + `HeroDemo.jsx` with SVG trend chart) / free / how /
+  why / benchmark / partner / final / footer from akvo-web parts; benchmark
+  `w-0 min-w-full overflow-x-auto`; headings carry their own colour; the
+  workspace app shell is suppressed on the landing route (D-12);
+  eslint/prettier clean.
 
-**A3 · i18n (en/fr) + hook to `store.language` — 1.5h**
-- User AC: language switch flips all copy; defaults from tenant/store.
-- Tech AC: strings in i18n dict (no literals); FR verified; no EN/FR leakage.
+**A3 · Per-locale content files + loader (en/es/fr, brand token) — 0.5h**
+- User AC: editing `content/<locale>.json` changes copy without code; the switch
+  flips locale (English/Español/Français, English default); the brand name comes
+  from one config value (rebrand-ready).
+- Tech AC: loader imports `content/${store.language}.json`, falls back to
+  `en.json` — wholesale if the locale file is absent/unparseable, per-key
+  otherwise; replaces `{brand}` with `appConfig.name`; sets `<title>`/meta from
+  `site`; key-parity test across the three files; no copy in JSX. (MIS-wide `es`
+  in the register choices is a separate task — D-10.)
 
-**Total: ~6h.** (Optional: Matomo CTA event ~1h.)
+**A4 · Dark-mode pass (net-new) — 0.5h**
+- User AC: readable and on-brand in dark.
+- Tech AC: per-element `dark:` classes; brighter blue (`akvo-bright #5B8DEF`) for
+  text on dark; body background token.
+
+**Total: ~4h.** (Optional: Matomo CTA event ~0.5h.)
+
+**Dependencies:** A0 → A2; A1 independent; A2 → A3 → A4.
 
 ---
 

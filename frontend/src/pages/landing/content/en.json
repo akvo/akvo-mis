@@ -1,0 +1,213 @@
+{
+  "site": {
+    "name": null,
+    "title": "{brand} — real-time monitoring made simple",
+    "description": "{brand} is a real-time monitoring information system: offline mobile data collection, a multi-level hierarchy, dashboards and AI-assisted visualisation — free forever."
+  },
+  "nav": {
+    "cta": "Try it yourself"
+  },
+  "hero": {
+    "badge": "Free forever",
+    "title": "Welcome to {brand}.",
+    "lead": "The powerful platform that manages your data with ease — and uses AI to turn it into visualisations, automatically. Curious? Come try it yourself.",
+    "primaryCta": { "label": "Try it yourself →", "href": "/register" },
+    "secondaryCta": {
+      "label": "Talk to our team",
+      "href": "mailto:info@akvo.org"
+    },
+    "demo": {
+      "brandLabel": "akvo",
+      "liveLabel": "live",
+      "syncedLabel": "synced",
+      "demoBadge": "demo",
+      "caption": "Illustrative data — pick a sector to see the workspace respond.",
+      "chartTitle": "Functionality over time",
+      "chartNote": "AI-suggested view",
+      "sectors": [
+        {
+          "name": "Water & sanitation",
+          "metricLabel": "Water points",
+          "metricValue": "1,284",
+          "metricNote": "tracked",
+          "rateLabel": "Functional",
+          "rateValue": "92%",
+          "rateNote": "this round",
+          "mapNote": "142 sites · 3 regions",
+          "trend": [40, 44, 42, 50, 58, 62, 70]
+        },
+        {
+          "name": "Health facilities",
+          "metricLabel": "Facilities",
+          "metricValue": "318",
+          "metricNote": "tracked",
+          "rateLabel": "Fully staffed",
+          "rateValue": "76%",
+          "rateNote": "this round",
+          "mapNote": "47 districts · 2 regions",
+          "trend": [30, 35, 40, 38, 52, 55, 60]
+        },
+        {
+          "name": "Agriculture",
+          "metricLabel": "Farm plots",
+          "metricValue": "2,640",
+          "metricNote": "tracked",
+          "rateLabel": "Irrigated",
+          "rateValue": "48%",
+          "rateNote": "this season",
+          "mapNote": "312 villages · 5 regions",
+          "trend": [20, 28, 26, 34, 40, 46, 52]
+        },
+        {
+          "name": "Schools",
+          "metricLabel": "Schools",
+          "metricValue": "564",
+          "metricNote": "tracked",
+          "rateLabel": "Water access",
+          "rateValue": "83%",
+          "rateNote": "this round",
+          "mapNote": "89 districts · 4 regions",
+          "trend": [50, 52, 55, 60, 64, 68, 74]
+        }
+      ]
+    }
+  },
+  "freeBand": {
+    "title": "Free forever. Every core feature, no catch.",
+    "body": "Forms, offline mobile collection, dashboards and AI visualisation — all free, for good. Need advanced capabilities or a custom build? There is a paid option for that."
+  },
+  "howItWorks": {
+    "heading": "A workspace of your own, in three steps.",
+    "subtitle": "Self-service setup that feels like a conversation, not a form.",
+    "steps": [
+      {
+        "title": "Answer a few questions",
+        "body": "Tell us what you want to monitor — one question at a time."
+      },
+      {
+        "title": "We build your workspace",
+        "body": "Your forms, your places hierarchy and your dashboards are set up automatically from your answers."
+      },
+      {
+        "title": "Collect and visualise",
+        "body": "Gather data on web and offline mobile, then let AI turn it into dashboards and maps."
+      }
+    ]
+  },
+  "why": {
+    "heading": "The practical middle ground.",
+    "subtitle": "More structure than a survey tool, far less weight than a full health information system.",
+    "cards": [
+      {
+        "icon": "offline",
+        "title": "Offline mobile",
+        "body": "A native app with local storage and background sync for the field."
+      },
+      {
+        "icon": "hierarchy",
+        "title": "Hierarchy and monitoring",
+        "body": "Multi-level places and first-class monitoring forms for repeat visits."
+      },
+      {
+        "icon": "ai",
+        "title": "AI dashboards",
+        "body": "A dashboard builder with charts, maps and AI-suggested visualisations."
+      },
+      {
+        "icon": "free",
+        "title": "Free to start",
+        "body": "Every core feature, no tiers. Partner with us when you want to go further."
+      }
+    ]
+  },
+  "benchmark": {
+    "heading": "Kobo, {brand}, DHIS2 — where we sit.",
+    "subtitle": "An honest look. {brand} is deliberately in the middle of the complexity spectrum.",
+    "caption": "The middle path — more structure and monitoring than a survey tool, far less operational weight than a full HIS. Draft — pending review.",
+    "columns": [
+      { "key": "capability", "label": "Capability" },
+      { "key": "kobo", "label": "KoboToolbox" },
+      { "key": "akvo", "label": "{brand}", "highlight": true },
+      { "key": "dhis2", "label": "DHIS2" }
+    ],
+    "rows": [
+      {
+        "capability": "Primary focus",
+        "kobo": "Survey / field data collection",
+        "akvo": "Monitoring + management information",
+        "dhis2": "National-scale aggregate + tracker HIS"
+      },
+      {
+        "capability": "Setup complexity",
+        "kobo": "Low",
+        "akvo": "Medium",
+        "dhis2": "High"
+      },
+      {
+        "capability": "Offline mobile collection",
+        "kobo": "Yes (KoboCollect / Enketo)",
+        "akvo": "Yes (native app, local sync)",
+        "dhis2": "Yes (Android app)"
+      },
+      {
+        "capability": "Multi-level hierarchy",
+        "kobo": "Limited",
+        "akvo": "Built-in, drives access",
+        "dhis2": "Strong (core design)"
+      },
+      {
+        "capability": "Monitoring over time",
+        "kobo": "Via repeat groups, manual",
+        "akvo": "First-class monitoring forms",
+        "dhis2": "Longitudinal tracker"
+      },
+      {
+        "capability": "Dashboards / visualisation",
+        "kobo": "Basic + Excel export",
+        "akvo": "Builder: charts, maps, KPIs",
+        "dhis2": "Powerful, steep"
+      },
+      {
+        "capability": "AI-assisted visualisation",
+        "kobo": "No",
+        "akvo": "Yes",
+        "dhis2": "Via external tool"
+      },
+      {
+        "capability": "In-app AI assistant",
+        "kobo": "No",
+        "akvo": "Yes (chatbot)",
+        "dhis2": "No"
+      },
+      {
+        "capability": "Learning curve",
+        "kobo": "Gentle",
+        "akvo": "Moderate",
+        "dhis2": "Steep"
+      },
+      {
+        "capability": "Cost to start",
+        "kobo": "Free (nonprofit plan)",
+        "akvo": "Free forever (core)",
+        "dhis2": "Free and open source (self-host)"
+      }
+    ]
+  },
+  "partner": {
+    "title": "Ready to go further?",
+    "body": "The core platform is free forever. For advanced capabilities, custom solutions and long-term support, we partner with you.",
+    "cta": { "label": "Talk to our team", "href": "mailto:info@akvo.org" }
+  },
+  "finalCta": {
+    "title": "Your data, working for you — today.",
+    "body": "Spin up a workspace in a couple of minutes. Free forever.",
+    "cta": { "label": "Try it yourself →", "href": "/register" }
+  },
+  "footer": {
+    "tagline": "Real-time monitoring, made simple.",
+    "links": [
+      { "label": "Docs", "href": "https://akvo-mis.readthedocs.io/" },
+      { "label": "Contact", "href": "mailto:info@akvo.org" }
+    ]
+  }
+}

@@ -37,9 +37,9 @@ must feel credible to a technical/organisational buyer, not gimmicky.
   `:root`, redefine for dark mode, give `body` an explicit background.
 - **Mobile-first**: single column on phones, 16px side gutter, no horizontal
   scroll. The benchmark table must stay readable on a phone.
-- Bilingual-ready (English + French). Write the copy in English; keep strings
-  cleanly separated so a French version can drop in. Do not invent an
-  Indonesian version.
+- Trilingual (English + Español + Français — akvo.org's default set). Write the
+  copy in English; keep strings cleanly separated per locale so translations
+  drop in. English is the default + fallback. Do not invent an Indonesian version.
 - Accessibility: semantic headings, the comparison is a real `<table>` with
   header scope, CTAs are real buttons/links, visible focus states, legible
   contrast in both themes.
@@ -107,7 +107,7 @@ must feel credible to a technical/organisational buyer, not gimmicky.
    "free" reassurance once more.
 
 8. **Footer** — minimal: Akvo MIS, short links (docs, contact), language
-   switch (EN/FR) placeholder.
+   switch (EN/ES/FR) placeholder.
 
 ### Hard constraints
 - Do **not** fabricate customer logos, testimonials, fake reviews, or specific
@@ -131,8 +131,19 @@ support and the comparison table working on mobile.
   the existing sign-up; the **guided wizard** is `LP-002` and the **AI setup**
   is `LP-003`. The designer doesn't build those flows — just the landing page
   and the entry buttons.
-- Final copy must be translated EN/FR and fact-checked (comparison table rows,
+- Final copy must be translated EN/ES/FR and fact-checked (comparison table rows,
   the "free" promise) before publishing — see `LP-001-basic-landing-page.md` §10.
-- When it moves to build: landing lives behind the existing
-  `window.appConfig.showLandingPage` flag on the base domain
-  (`frontend/src/App.js`), replacing the current `<Home />` placeholder.
+
+### As built (2026-11-18) — this brief is the creative reference; the implementation diverges as follows
+- **Palette**: re-tinted to the **platform Ant Design primary `#1651b6`**
+  (`frontend/src/variables.scss $blue`), not the generic palette in this brief —
+  the app is antd-based, so the landing matches it. See
+  `LP-001-basic-landing-page.md` D-8/D-12.
+- **Hero**: carries an **interactive dashboard demo** (`HeroDemo.jsx`) — sector
+  tabs that switch stat tiles + an SVG trend chart; data in `hero.demo` per locale.
+- **Standalone shell**: the workspace app header/chatbot/tour are suppressed on
+  the landing route; the landing's own header holds the brand, EN/ES/FR switch
+  and CTA.
+- **Routing**: the landing renders at `/` on the base-domain host via
+  `onBaseDomainHost()`. The old `window.appConfig.showLandingPage` toggle was
+  **removed** — Akvo MIS always ships a landing page.
