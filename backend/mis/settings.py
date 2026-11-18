@@ -503,6 +503,9 @@ STORAGE_PATH = environ.get("STORAGE_PATH", "./storage")
 OPENAI_API_KEY = environ.get("OPENAI_API_KEY", "")
 OPENAI_ASSISTANT_ID = environ.get("OPENAI_ASSISTANT_ID", "")
 OPENAI_VECTOR_STORE_ID = environ.get("OPENAI_VECTOR_STORE_ID", "")
+DATA_ONBOARDING_OPENAI_MODEL = (
+    environ.get("DATA_ONBOARDING_OPENAI_MODEL") or "gpt-4o-mini"
+)
 
 FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(

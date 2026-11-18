@@ -53,6 +53,8 @@ import {
   FormBuilderCreate,
   FormBuilderEdit,
   FormLibrary,
+  DataOnboardingCreate,
+  DataOnboardingDetail,
   FindWorkspace,
   WorkspaceNotFound,
   DashboardList,
@@ -278,6 +280,18 @@ const RouteList = () => {
         <Route
           path="form-builder/:formId/edit"
           element={<Private element={FormBuilderEdit} alias="form-builder" />}
+        />
+        <Route
+          path="data-onboarding/create"
+          element={
+            <Private element={DataOnboardingCreate} alias="data-onboarding" />
+          }
+        />
+        <Route
+          path="data-onboarding/:id"
+          element={
+            <Private element={DataOnboardingDetail} alias="data-onboarding" />
+          }
         />
         <Route
           path="data"
