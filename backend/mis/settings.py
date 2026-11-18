@@ -589,6 +589,11 @@ Q_CLUSTER = {
     "workers": 4,
     "timeout": 600,
     "retry": 1200,
+    # Cap re-delivery: an unacknowledged task (ack timeout or a worker
+    # recycled mid-task on deploy) is otherwise retried forever. Bounding
+    # it stops a stuck task from looping indefinitely; the result hooks are
+    # also made idempotent (see claim_job_result) so each attempt is safe.
+    "max_attempts": 3,
     "queue_limit": 50,
     "bulk": 10,
     "orm": "default",
