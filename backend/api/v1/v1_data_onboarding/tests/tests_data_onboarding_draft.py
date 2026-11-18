@@ -141,7 +141,7 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
 
         for target, fake in (
             ("api.v1.v1_data_onboarding.views.storage.upload", upload),
-            ("api.v1.v1_data_onboarding.tasks.download", download),
+            ("api.v1.v1_data_onboarding.tasks.storage.download", download),
         ):
             p = patch(target, side_effect=fake)
             p.start()
@@ -353,7 +353,8 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertEqual(res.json()["status"], "applying")
         self.assertEqual(
             self.async_task.call_args.args,
-            ("api.v1.v1_data_onboarding.tasks.apply_onboarding", pk),
+            ("api.v1.v1_data_onboarding.tasks.apply_onboarding", pk,
+             self.a["user"].id),
         )
         again = self.client.post(
             f"{URL}/{pk}/apply", **self.auth(self.a["user"]), **self.host()
@@ -361,7 +362,7 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertEqual(again.status_code, 400)
 
         with patch("openai.OpenAI") as openai:
-            apply_onboarding(pk)
+            apply_onboarding(pk, self.a["user"].id)
         openai.assert_not_called()
 
         body = self.get(pk).json()
@@ -453,7 +454,8 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertEqual(self.apply(pk).status_code, 200)
 
         self.add_unit("Norths")  # the tree changed after review
-        apply_onboarding(pk, forms=self.async_task.call_args.kwargs["forms"])
+        apply_onboarding(*self.async_task.call_args.args[1:],
+                         forms=self.async_task.call_args.kwargs["forms"])
 
         body = self.get(pk).json()
         self.assertEqual(body["status"], "applied")

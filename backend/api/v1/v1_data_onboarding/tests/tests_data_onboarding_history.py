@@ -129,7 +129,7 @@ class DataOnboardingHistoryTestCase(TenantIsolationTestCase):
             file="data_onboarding/missing.csv",
         ).id
         with self.assertLogs("api.v1.v1_data_onboarding.tasks", "ERROR"):
-            apply_onboarding(pk)
+            apply_onboarding(pk, self.a["user"].id)
 
         body = self.get(f"/{pk}").json()
         self.assertEqual(body["status"], "failed")

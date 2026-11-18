@@ -35,7 +35,7 @@ class DataOnboardingEditTestCase(TenantIsolationTestCase):
 
         for target, fake in (
             ("api.v1.v1_data_onboarding.views.storage.upload", upload),
-            ("api.v1.v1_data_onboarding.tasks.download", download),
+            ("api.v1.v1_data_onboarding.tasks.storage.download", download),
         ):
             p = patch(target, side_effect=fake)
             p.start()
@@ -272,7 +272,7 @@ class DataOnboardingEditTestCase(TenantIsolationTestCase):
 
         res = self.revise(pk)
         self.assertEqual(res.status_code, 429)
-        self.assertIn("3 drafts and revisions", res.json()["message"])
+        self.assertIn("3 Proposals and revisions", res.json()["message"])
         self.assertEqual(self.get(pk)["status"], "proposed")
         self.assertEqual(self.upload().status_code, 429)
 

@@ -3,6 +3,7 @@ import csv
 import os
 import shutil
 import tempfile
+from unittest.mock import patch
 
 from django.db import transaction
 from django.test import TestCase
@@ -196,6 +197,33 @@ class ApplyProposalTestCase(TestCase):
             {d.administration.name for d in FormData.objects.all()}, {"Hill"}
         )
 
+    def test_an_unexpected_row_error_skips_only_that_row(self):
+        from api.v1.v1_data_onboarding import apply
+
+        real = apply.answer_fields
+
+        def answer_fields(question, value):
+            if value == "Beta":
+                raise RuntimeError("boom")
+            return real(question, value)
+
+        with patch.object(apply, "answer_fields", answer_fields), \
+                self.assertLogs("api.v1.v1_data_onboarding.apply", "ERROR"):
+            report = self.apply([
+                GOOD, {**GOOD, "id": "S2", "name": "Beta"},
+                {**GOOD, "id": "S3", "name": "Gamma"},
+            ])
+
+        self.assertEqual(report["forms"][0]["loaded"], 2)
+        self.assertEqual(
+            sorted(FormData.objects.values_list("name", flat=True)),
+            ["Alpha", "Gamma"],
+        )
+        self.assertEqual(report["issues"], [{
+            "sheet": "csv", "row": 3, "question": None, "kind": "skipped",
+            "reason": "This row could not be loaded.",
+        }])
+
     def test_row_rules(self):
         def spec(**kw):
             p = copy.deepcopy(PROPOSAL)
@@ -256,7 +284,13 @@ class ApplyProposalTestCase(TestCase):
              [{**GOOD, "tags": "blue|RED / blue"}], PROPOSAL,
              {"tags": ["blue", "red"]}, []),
             ("multi-select splits on the stated separator",
-             [{**GOOD, "tags": "Red+Blue"}], spec(multi_separator=r"\+"),
+             [{**GOOD, "tags": "Red+Blue"}], spec(multi_separator="+"),
+             {"tags": ["blue", "red"]}, []),
+            ("a separator is a literal character, not a pattern",
+             [{**GOOD, "tags": "Red | Blue"}], spec(multi_separator="|"),
+             {"tags": ["blue", "red"]}, []),
+            ("each character of the separator splits",
+             [{**GOOD, "tags": "Red; Blue,Red"}], spec(multi_separator=";,"),
              {"tags": ["blue", "red"]}, []),
             ("one bad choice drops the whole multi-select answer",
              [{**GOOD, "tags": "Red; Green"}], PROPOSAL, {"tags": None},
@@ -402,6 +436,24 @@ class AmbiguousAdministrationTestCase(TestCase):
                         self.assertTrue(cause["reason"])
                 finally:
                     transaction.set_rollback(True)
+
+    def test_the_report_keeps_no_names_from_the_file(self):
+        self.tree(["District", "Village"],
+                  [["KwaZulu-Natal", "Hill"], ["Coast", "Kwale"]])
+        p = self.proposal()
+        p["administration"]["levels"] = ["Country", "District", "Village"]
+
+        report = self.apply(
+            [{**GOOD, "district": "Coast", "village": "Kwalle"}], proposal=p
+        )
+
+        self.assertEqual(report["blocked"], [{
+            "form": "sites", "name": "Water sites",
+            "causes": [{"kind": "near_match", "reason": (
+                "Some new units are spelled like existing units, and would"
+                " duplicate them."
+            )}],
+        }])
 
     def test_unblocked_forms_apply_and_a_blocked_parent_blocks_monitoring(
         self

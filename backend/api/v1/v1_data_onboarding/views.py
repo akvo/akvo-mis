@@ -18,6 +18,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from api.v1.v1_data_onboarding.apply import planned_units
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
 from api.v1.v1_data_onboarding.edits import EDIT_OPS
 from api.v1.v1_data_onboarding.models import DataOnboarding
@@ -33,7 +34,24 @@ from utils import storage
 from utils.custom_permissions import DataOnboardingAccess
 
 
-def _detail(onboarding):
+def _units(onboarding, user):
+    """The units Apply would add for this viewer, read from the file.
+
+    In-app only: never stored, never sent to OpenAI.
+    """
+    if onboarding.status != DataOnboardingStatus.proposed:
+        return None
+    try:
+        sheets = read_upload(onboarding)
+    except OnboardingError:
+        return None  # the upload is gone
+    return planned_units(
+        onboarding.proposal, sheets, onboarding.tenant, user,
+        onboarding.blocked or [], onboarding.resolutions,
+    )
+
+
+def _detail(onboarding, user):
     return {
         "id": onboarding.id,
         "status": DataOnboardingStatus.FieldStr[onboarding.status],
@@ -41,6 +59,7 @@ def _detail(onboarding):
         "proposal": onboarding.proposal,
         "blocked": onboarding.blocked,
         "resolutions": onboarding.resolutions,
+        "units": _units(onboarding, user),
         "report": onboarding.report,
         "error": onboarding.error,
         "created": onboarding.created,
@@ -63,7 +82,7 @@ def _over_cap(tenant):
     if used < cap:
         return None
     return Response(
-        {"message": f"This workspace has used its {cap} drafts and"
+        {"message": f"This workspace has used its {cap} Proposals and"
                     " revisions for the last 24 hours. Try again later."},
         status=status.HTTP_429_TOO_MANY_REQUESTS,
     )
@@ -109,7 +128,9 @@ def _create(request):
         onboarding.id,
         hook="api.v1.v1_data_onboarding.tasks.draft_proposal_result",
     )
-    return Response(_detail(onboarding), status=status.HTTP_201_CREATED)
+    return Response(
+        _detail(onboarding, request.user), status=status.HTTP_201_CREATED
+    )
 
 
 @extend_schema(
@@ -144,7 +165,7 @@ def data_onboarding_detail(request, version, pk):
     onboarding = get_object_or_404(
         DataOnboarding.objects.for_user(request.user), pk=pk
     )
-    return Response(_detail(onboarding))
+    return Response(_detail(onboarding, request.user))
 
 
 def _chosen_forms(onboarding, chosen):
@@ -173,16 +194,9 @@ def _chosen_forms(onboarding, chosen):
 @permission_classes([IsAuthenticated, DataOnboardingAccess])
 def data_onboarding_apply(request, version, pk):
     with transaction.atomic():
-        onboarding = get_object_or_404(
-            DataOnboarding.objects.for_user(request.user)
-            .select_for_update(),
-            pk=pk,
-        )
-        if onboarding.status != DataOnboardingStatus.proposed:
-            return Response(
-                {"message": "Only a proposed Data Onboarding can be applied."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        onboarding, refusal = _locked_proposed(request, pk, "applied")
+        if refusal:
+            return refusal
         forms, error = _chosen_forms(onboarding, request.data.get("forms"))
         if error:
             return Response(
@@ -193,10 +207,11 @@ def data_onboarding_apply(request, version, pk):
         transaction.on_commit(lambda: async_task(
             "api.v1.v1_data_onboarding.tasks.apply_onboarding",
             onboarding.id,
+            request.user.id,
             forms=forms,
             hook="api.v1.v1_data_onboarding.tasks.apply_onboarding_result",
         ))
-    return Response(_detail(onboarding))
+    return Response(_detail(onboarding, request.user))
 
 
 def _locked_proposed(request, pk, what):
@@ -231,7 +246,7 @@ def data_onboarding_edits(request, version, pk):
                onboarding.blocked or [])
             store_proposal(
                 onboarding, proposal, read_upload(onboarding), "edit",
-                resolutions,
+                request.user, resolutions,
             )
         except OnboardingError as exc:
             return Response(
@@ -239,7 +254,7 @@ def data_onboarding_edits(request, version, pk):
             )
         onboarding.error = None
         onboarding.save()
-    return Response(_detail(onboarding))
+    return Response(_detail(onboarding, request.user))
 
 
 @extend_schema(
@@ -272,9 +287,10 @@ def data_onboarding_revise(request, version, pk):
             "api.v1.v1_data_onboarding.tasks.revise_proposal",
             onboarding.id,
             instruction.strip(),
+            request.user.id,
             hook="api.v1.v1_data_onboarding.tasks.revise_proposal_result",
         ))
-    return Response(_detail(onboarding))
+    return Response(_detail(onboarding, request.user))
 
 
 @extend_schema(

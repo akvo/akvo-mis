@@ -11,6 +11,7 @@ from api.v1.v1_data_onboarding.tests.tests_data_onboarding_draft import (
     openai_client,
     proposal,
 )
+from api.v1.v1_data_onboarding.models import DataOnboarding
 from api.v1.v1_profile.constants import FeatureAccessTypes, FeatureTypes
 from api.v1.v1_profile.models import (
     Administration,
@@ -68,7 +69,7 @@ class HierarchyLimitsTestCase(TenantIsolationTestCase):
         for target, kwargs in (
             ("api.v1.v1_data_onboarding.views.storage.upload",
              {"side_effect": upload}),
-            ("api.v1.v1_data_onboarding.tasks.download",
+            ("api.v1.v1_data_onboarding.tasks.storage.download",
              {"side_effect": download}),
             ("api.v1.v1_data_onboarding.views.async_task",
              {"return_value": "task-id"}),
@@ -128,14 +129,16 @@ class HierarchyLimitsTestCase(TenantIsolationTestCase):
 
     def apply(self, user, pk):
         from api.v1.v1_data_onboarding.tasks import apply_onboarding
+        from api.v1.v1_data_onboarding.views import async_task
 
         with self.captureOnCommitCallbacks(execute=True):
             res = self.client.post(
                 f"{URL}/{pk}/apply", **self.auth(user), **self.host()
             )
         self.assertEqual(res.status_code, 200)
+        args = async_task.call_args
         with patch("openai.OpenAI") as openai:
-            apply_onboarding(pk)
+            apply_onboarding(*args.args[1:], forms=args.kwargs["forms"])
         openai.assert_not_called()
         return self.get(user, pk)
 
@@ -187,6 +190,14 @@ class HierarchyLimitsTestCase(TenantIsolationTestCase):
         self.assertIn("below the root", body["error"])
         self.assertEqual(self.level_names(), ["", "district", "village"])
 
+    def test_no_one_adds_levels_below_an_existing_level(self):
+        # A level below the root, but no units under it yet.
+        self.a["child"].delete()
+        body = self.get(self.admin, self.draft(self.admin, three_levels()))
+        self.assertEqual(body["status"], "failed")
+        self.assertIn("below the root", body["error"])
+        self.assertEqual(self.level_names(), ["", "district"])
+
     def test_apply_rechecks_a_tree_populated_after_the_draft(self):
         self.fresh()
         pk = self.draft(self.admin, three_levels())
@@ -226,3 +237,47 @@ class HierarchyLimitsTestCase(TenantIsolationTestCase):
         for issue in body["report"]["issues"]:
             for value in ("South", "Vale", "acme-d", "Dale"):
                 self.assertNotIn(value, issue["reason"])
+
+    def test_a_scoped_user_applying_a_super_admins_proposal_is_confined(
+        self
+    ):
+        self.populated()
+        pk = self.draft(self.admin, three_levels())
+        user = self.scoped(self.north)
+        body = self.apply(user, pk)
+        self.assertEqual(body["status"], "applied")
+        self.assertEqual(body["report"]["forms"][0]["loaded"], 1)
+        self.assertEqual(
+            self.unit_names(), ["Hill", "North", "acme", "acme-d"]
+        )
+        self.assertEqual(len(self.outside(body)), 2)
+
+    def test_a_scoped_user_cannot_edit_in_new_levels(self):
+        self.fresh()
+        pk = self.draft(self.admin, three_levels())
+        res = self.client.post(
+            f"{URL}/{pk}/edits",
+            {"op": "rename_form", "form": "sites", "name": "Wells"},
+            content_type="application/json",
+            **self.auth(self.scoped(self.root)), **self.host(),
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Only a super admin", res.json()["message"])
+
+    def test_the_review_lists_the_units_apply_will_add(self):
+        self.populated()
+        pk = self.draft(self.admin, three_levels())
+        self.assertEqual(self.get(self.admin, pk)["units"], {
+            "new": [["North", "Hill"], ["South"], ["South", "Vale"],
+                    ["acme-d", "Dale"]],
+            "outside": [],
+        })
+        # A scoped viewer sees what Apply would add for them, and what
+        # it would leave out.
+        self.assertEqual(self.get(self.scoped(self.north), pk)["units"], {
+            "new": [["North", "Hill"]],
+            "outside": [["South"], ["South", "Vale"], ["acme-d", "Dale"]],
+        })
+        self.assertNotIn("Hill", json.dumps(
+            DataOnboarding.objects.get(pk=pk).proposal
+        ))

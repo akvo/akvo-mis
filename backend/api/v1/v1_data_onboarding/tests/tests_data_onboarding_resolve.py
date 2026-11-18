@@ -41,7 +41,7 @@ class ResolveAmbiguityTestCase(TenantIsolationTestCase):
 
         for target, fake in (
             ("api.v1.v1_data_onboarding.views.storage.upload", upload),
-            ("api.v1.v1_data_onboarding.tasks.download", download),
+            ("api.v1.v1_data_onboarding.tasks.storage.download", download),
         ):
             p = patch(target, side_effect=fake)
             p.start()
@@ -77,7 +77,8 @@ class ResolveAmbiguityTestCase(TenantIsolationTestCase):
         from api.v1.v1_data_onboarding.tasks import apply_onboarding
 
         self.assertEqual(self.apply(pk).status_code, 200)
-        apply_onboarding(pk, forms=self.async_task.call_args.kwargs["forms"])
+        apply_onboarding(*self.async_task.call_args.args[1:],
+                         forms=self.async_task.call_args.kwargs["forms"])
         body = self.get(pk).json()
         self.assertEqual(body["status"], "applied")
         return body["report"]

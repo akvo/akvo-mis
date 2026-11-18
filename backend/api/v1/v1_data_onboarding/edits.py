@@ -4,12 +4,12 @@ An op(proposal, profile, body, resolutions, blocked) changes the
 Proposal and resolutions in place from the request body, or raises
 OnboardingError. The caller re-runs every check before storing it.
 Edits never call OpenAI. Names from the file (alias, parent and
-near-match choices) go in resolutions only (see apply._Places): the
+near-match choices) go in resolutions only (see places.Places): the
 Proposal goes back to OpenAI on a revision.
 """
 import re
 
-from api.v1.v1_data_onboarding.apply import _fold
+from api.v1.v1_data_onboarding.places import cut_forms, fold
 from api.v1.v1_data_onboarding.profile import OnboardingError
 
 
@@ -148,26 +148,22 @@ def drop_form(proposal, profile, body, resolutions, blocked):
     """Drop a form, with the monitoring forms that hang off it."""
     key = _form(proposal, body)["key"]
     gone = {key} | {f["key"] for f in proposal["forms"] if f["parent"] == key}
-    proposal["forms"] = [f for f in proposal["forms"] if f["key"] not in gone]
-    proposal["data"] = [d for d in proposal["data"] if d["form"] not in gone]
+    proposal.update(cut_forms(proposal, {
+        f["key"] for f in proposal["forms"] if f["key"] not in gone
+    }))
     for k in gone:
         resolutions.get("levels", {}).pop(k, None)
-    admin = proposal["administration"]
-    if not any(d["sheet"] == admin["source"]["sheet"]
-               for d in proposal["data"]):
-        # Its units belonged to the dropped forms.
-        admin.update(units=[], source={"sheet": None, "columns": []})
 
 
 def choose_parent(proposal, profile, body, resolutions, blocked):
     name, parent = _get(body, "name"), _get(body, "parent", int)
-    if not any(_fold(u["name"]) == _fold(name)
+    if not any(fold(u["name"]) == fold(name)
                and parent in {p["id"] for p in u["parents"]}
                for u in _units(blocked, "shared_name")):
         raise OnboardingError("Pick one of the parents the review offers.")
     resolutions["parents"] = [
         p for p in resolutions.get("parents", [])
-        if _fold(p["name"]) != _fold(name)
+        if fold(p["name"]) != fold(name)
     ] + [{"name": name, "parent": parent}]
 
 
@@ -175,12 +171,12 @@ def resolve_near_match(proposal, profile, body, resolutions, blocked):
     """use "existing": an alias to the match; "new": add the unit."""
     name, match, use = (_get(body, k) for k in ("name", "match", "use"))
     if use not in ("existing", "new") or not any(
-        _fold(u["name"]) == _fold(name) and _fold(u["match"]) == _fold(match)
+        fold(u["name"]) == fold(name) and fold(u["match"]) == fold(match)
         for u in _units(blocked, "near_match")
     ):
         raise OnboardingError("Pick a near-match the review offers.")
     aliases = [a for a in resolutions.get("aliases", [])
-               if _fold(a["from"]) != _fold(name)]
+               if fold(a["from"]) != fold(name)]
     if use == "existing":
         aliases.append({"from": name, "to": match})
     else:

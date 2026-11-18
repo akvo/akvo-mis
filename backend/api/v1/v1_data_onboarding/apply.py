@@ -6,6 +6,7 @@ data. Row rules are ported from #462's mis.py. Report reasons name
 columns and questions, never cell values.
 """
 import datetime
+import logging
 import re
 import uuid
 
@@ -15,6 +16,18 @@ from django_q.tasks import async_task
 
 from api.v1.v1_data.functions import answer_fields
 from api.v1.v1_data.models import Answers, FormData
+from api.v1.v1_data_onboarding.ambiguity import blocked_forms
+from api.v1.v1_data_onboarding.places import (
+    Places,
+    admin_index,
+    cut_forms,
+    fold,
+    in_scope,
+    lookup,
+    norm,
+    text,
+    user_scope,
+)
 from api.v1.v1_data_onboarding.profile import OnboardingError, read_sheets
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.functions import (
@@ -24,31 +37,14 @@ from api.v1.v1_forms.functions import (
     validate_form_definition,
 )
 from api.v1.v1_forms.models import UserForms
-from api.v1.v1_profile.constants import FeatureAccessTypes, FeatureTypes
 from api.v1.v1_profile.models import Administration, Levels
 from api.v1.v1_visualization.functions import refresh_materialized_data
 from utils.custom_generator import generate_sqlite
 
+logger = logging.getLogger(__name__)
+
 ONBOARDING_NS = uuid.UUID("6f1c3b7e-0d55-4b8e-9a51-5a0f3f6c2d11")
-
-
-def _norm(v):
-    return " ".join(str(v).split())
-
-
-def _fold(v):
-    return _norm(v).casefold()
-
-
-def _text(v):
-    if isinstance(v, float) and v.is_integer():
-        return str(int(v))
-    return _norm(v)
-
-
-def _lookup(pairs, raw):
-    """pairs: {folded raw: target}. Returns raw when nothing matches."""
-    return pairs.get(_fold(raw), raw)
+ROW_FAILED = "This row could not be loaded."
 
 
 def _to_number(v):
@@ -65,7 +61,7 @@ def _to_number(v):
 def _to_date(v, fmt):
     if isinstance(v, (datetime.date, datetime.datetime)):
         return v.strftime("%Y-%m-%d")
-    s = _norm(v)
+    s = norm(v)
     try:
         if fmt:
             return datetime.datetime.strptime(s, fmt).strftime("%Y-%m-%d")
@@ -91,25 +87,13 @@ def _to_geo(v):
 
 def _match_option(options, value_map, raw):
     """Return the stored option value for a raw cell."""
-    label = _fold(_lookup(value_map, raw))
+    label = fold(lookup(value_map, raw))
     if label not in options:
         raise ValueError("Not one of the options.")
     return options[label]
 
 
 # --------------------------------------------------------- administration
-
-def _admin_index(tenant):
-    """{tuple of folded names below the root: Administration}."""
-    admins = list(Administration.objects.filter(tenant=tenant))
-    by_id = {a.id: a for a in admins}
-    index = {}
-    for a in admins:
-        ids = [int(i) for i in (a.path or "").split(".") if i]
-        names = [by_id[i].name for i in ids[1:]] + ([a.name] if ids else [])
-        index[tuple(_fold(n) for n in names)] = a
-    return index
-
 
 def check_hierarchy(proposal, tenant, user):
     """Why the Proposal may not add its levels here, or None."""
@@ -118,99 +102,15 @@ def check_hierarchy(proposal, tenant, user):
         return None
     if not user.is_superuser:
         return "Only a super admin can add administration levels."
-    if Administration.objects.filter(
-        tenant=tenant, parent__isnull=False
-    ).exists():
+    if Levels.objects.filter(tenant=tenant, level__gt=0).exists():
         return (
-            "Levels cannot be added: the administration tree already has"
-            " units below the root."
+            "Levels cannot be added: the tenant already has levels below"
+            " the root."
         )
     return None
 
 
-def _scope(user):
-    """Ids of the units whose subtrees the user may onboard; None: all."""
-    if user.is_superuser:
-        return None
-    return set(user.user_user_role.filter(
-        role__role_role_feature_access__type=FeatureTypes.data_onboarding,
-        role__role_role_feature_access__access=(
-            FeatureAccessTypes.data_onboard
-        ),
-    ).values_list("administration_id", flat=True))
-
-
-def _in_scope(unit, scope):
-    ids = [unit.id] + [int(i) for i in (unit.path or "").split(".") if i]
-    return scope is None or not scope.isdisjoint(ids)
-
-
-class _Places:
-    """Where location cells land in the tree, resolutions applied.
-
-    Resolutions (DataOnboarding.resolutions, never in the Proposal):
-    levels {form key: depth of its first location column}, parents
-    [{name, parent: unit id}] for a name under several parents, aliases
-    [{from, to}] and new_units [{name, match}] for near-matches.
-    """
-
-    def __init__(self, proposal, index, resolutions=None):
-        r = resolutions or {}
-        self.aliases = {
-            _fold(a["from"]): a["to"]
-            for a in proposal["administration"]["aliases"]
-            + r.get("aliases", [])
-        }
-        self.starts = r.get("levels", {})
-        self.parents = {_fold(p["name"]): p["parent"]
-                        for p in r.get("parents", [])}
-        self.new_units = {(_fold(u["name"]), _fold(u["match"]))
-                          for u in r.get("new_units", [])}
-        self.index = index
-        self.named = {}  # (depth, folded name): [(key, unit)]
-        for key, unit in index.items():
-            if key:
-                self.named.setdefault((len(key), key[-1]), []).append(
-                    (key, unit)
-                )
-
-    def start(self, spec):
-        return self.starts.get(spec["form"], 1)
-
-    def cells(self, cells):
-        return [_norm(_lookup(self.aliases, _text(c))) for c in cells]
-
-    def path(self, cells, start):
-        """Names from depth 1, or None when the top name can't be placed.
-
-        Columns starting below depth 1 borrow the path above from the
-        unit their top name names (as folded names: those units exist).
-        """
-        names = self.cells(cells)
-        if start == 1 or not names:
-            return names
-        found = self.named.get((start, _fold(names[0])), [])
-        if len(found) > 1:
-            parent = self.parents.get(_fold(names[0]))
-            found = [(k, u) for k, u in found if u.parent_id == parent]
-        if len(found) != 1:
-            return None
-        return list(found[0][0]) + names[1:]
-
-
-def _add_administration(admin, sheets, tenant, index, scope, places,
-                        start=1):
-    paths = [places.cells(u) for u in admin["units"]]
-    source = admin["source"]
-    if source["columns"]:
-        df = sheets[source["sheet"]]
-        for _, row in df.iterrows():
-            cells = [row[c] for c in source["columns"]]
-            if all(c is not None for c in cells):
-                path = places.path(cells, start)
-                if path:
-                    paths.append(path)
-
+def _add_administration(admin, paths, tenant, index, scope):
     levels = list(Levels.objects.filter(tenant=tenant).order_by("level"))
     # check_hierarchy has allowed any levels beyond the existing ones.
     for depth, name in enumerate(admin["levels"]):
@@ -221,10 +121,10 @@ def _add_administration(admin, sheets, tenant, index, scope, places,
 
     for path in sorted(paths, key=len):
         for depth in range(1, len(path) + 1):
-            key = tuple(_fold(n) for n in path[:depth])
+            key = tuple(fold(n) for n in path[:depth])
             if key in index:
                 continue
-            if not _in_scope(index[key[:-1]], scope):
+            if not in_scope(index[key[:-1]], scope):
                 break  # its rows are reported as outside the subtree
             if depth >= len(levels):
                 raise OnboardingError(
@@ -234,6 +134,28 @@ def _add_administration(admin, sheets, tenant, index, scope, places,
                 parent=index[key[:-1]], level=levels[depth],
                 name=path[depth - 1], tenant=tenant,
             )
+
+
+def planned_units(proposal, sheets, tenant, user, blocked,
+                  resolutions=None):
+    """The units Apply would add for user, for the review only.
+
+    {"new": [path], "outside": [path]}: name paths from depth 1 of each
+    unit Apply adds, and of each it leaves out as outside the user's
+    subtree. They hold file values: never in the Proposal or Report.
+    """
+    proposal = _unblocked(proposal, blocked, None)
+    index = admin_index(tenant)
+    scope = user_scope(user)
+    places = Places(proposal, index, resolutions)
+    new, outside = {}, {}
+    for path in places.unit_paths(proposal, sheets):
+        key = tuple(fold(n) for n in path)
+        known = next(n for n in range(len(key), -1, -1) if key[:n] in index)
+        found = new if in_scope(index[key[:known]], scope) else outside
+        for depth in range(known + 1, len(key) + 1):
+            found.setdefault(key[:depth], path[:depth])
+    return {"new": sorted(new.values()), "outside": sorted(outside.values())}
 
 
 # ------------------------------------------------------------------ forms
@@ -278,14 +200,14 @@ class _Rows:
         )
         self.options = {
             q.id: {
-                **{_fold(o.label): o.value for o in q.options.all()},
-                **{_fold(o.value): o.value for o in q.options.all()},
+                **{fold(o.label): o.value for o in q.options.all()},
+                **{fold(o.value): o.value for o in q.options.all()},
             }
             for q in self.questions
         }
         self.columns = {c["question"]: c["column"] for c in spec["columns"]}
         self.value_maps = {
-            m["question"]: {_fold(v["raw"]): v["label"] for v in m["values"]}
+            m["question"]: {fold(v["raw"]): v["label"] for v in m["values"]}
             for m in spec["value_maps"]
         }
         self.issues = []
@@ -308,14 +230,17 @@ class _Rows:
         if t == QuestionTypes.geo:
             return _to_geo(raw)
         if t == QuestionTypes.option:
-            return [_match_option(self.options[q.id], vmap, _text(raw))]
+            return [_match_option(self.options[q.id], vmap, text(raw))]
         if t == QuestionTypes.multiple_option:
-            sep = self.spec["multi_separator"] or r"[;,|/]"
-            parts = [p for p in re.split(sep, _text(raw)) if p.strip()]
+            # Each character of the separator splits, as a literal.
+            seps = self.spec["multi_separator"] or ";,|/"
+            parts = [p.strip() for p in
+                     re.split(f"[{re.escape(seps)}]", text(raw))
+                     if p.strip()]
             return sorted({
                 _match_option(self.options[q.id], vmap, p) for p in parts
             })
-        return _text(raw)
+        return text(raw)
 
     def raw(self, q, row):
         """The cell feeding q: None if blank, False if nothing feeds it."""
@@ -325,13 +250,13 @@ class _Rows:
                 return row[geo["column"]]
             if row[geo["lat"]] is None:
                 return None
-            return f"{_text(row[geo['lat']])},{_text(row[geo['lng']])}"
+            return f"{text(row[geo['lat']])},{text(row[geo['lng']])}"
         column = self.columns.get(q.name)
         if not column:
             return False
         value = row[column]
-        if value is not None and not _norm(_lookup(
-            self.value_maps.get(q.name, {}), _text(value)
+        if value is not None and not norm(lookup(
+            self.value_maps.get(q.name, {}), text(value)
         )):
             return None  # blank, or a value mapped to blank
         return value
@@ -343,10 +268,10 @@ class _Rows:
         path = self.places.path(cells, self.places.start(self.spec))
         if path is None:
             raise ValueError("Location is not in the administration tree.")
-        key = tuple(_fold(n) for n in path)
+        key = tuple(fold(n) for n in path)
         known = next(key[:n] for n in range(len(key), -1, -1)
                      if key[:n] in self.index)
-        if not _in_scope(self.index[known], self.scope):
+        if not in_scope(self.index[known], self.scope):
             raise ValueError("Location is outside your administration area.")
         if known != key:
             raise ValueError("Location is not in the administration tree.")
@@ -356,14 +281,14 @@ class _Rows:
         cells = [row[c] for c in self.spec["key_columns"]]
         if any(c is None for c in cells):
             return self.issue(line, None, "skipped", "Key column is blank.")
-        key = "|".join(_text(c) for c in cells)
+        key = "|".join(text(c) for c in cells)
         parent = None
         if self.parents is not None:
             cells = [row[c] for c in self.spec["parent_key_columns"]]
             if any(c is None for c in cells):
                 return self.issue(line, None, "skipped",
                                   "Parent key column is blank.")
-            parent = self.parents.get("|".join(_text(c) for c in cells))
+            parent = self.parents.get("|".join(text(c) for c in cells))
             if not parent:
                 return self.issue(line, None, "skipped",
                                   "No registration record has this key.")
@@ -426,7 +351,6 @@ class _Rows:
             uuid=record_uuid, parent=parent,
             published_version=self.form.active_version,
         )
-        self.records[key] = data
         answers = []
         for q, value in values:
             a_name, a_value, a_options = answer_fields(q, value)
@@ -437,6 +361,7 @@ class _Rows:
         Answers.objects.bulk_create(answers)
         if not settings.TEST_ENV and not self.form.parent:
             data.save_to_file
+        self.records[key] = data
         self.seen.add(key)
         self.loaded += 1
 
@@ -444,24 +369,10 @@ class _Rows:
 def _unblocked(proposal, blocked, chosen):
     """The Proposal cut down to the chosen forms that are not blocked."""
     skip = {b["form"] for b in blocked}
-    keys = {
+    return cut_forms(proposal, {
         f["key"] for f in proposal["forms"]
         if f["key"] not in skip and (chosen is None or f["key"] in chosen)
-    }
-    admin = proposal["administration"]
-    loaders = {
-        d["form"] for d in proposal["data"]
-        if d["sheet"] == admin["source"]["sheet"]
-    }
-    if loaders and not loaders & keys:
-        # The units belong to forms that are not applied.
-        admin = {**admin, "units": [],
-                 "source": {"sheet": None, "columns": []}}
-    return {
-        **proposal, "administration": admin,
-        "forms": [f for f in proposal["forms"] if f["key"] in keys],
-        "data": [d for d in proposal["data"] if d["form"] in keys],
-    }
+    })
 
 
 def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
@@ -472,35 +383,35 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
     when None) that are not blocked now are applied; the blocked ones
     are reported. Levels, units and forms are all-or-nothing: on any
     error none exist and the error propagates. Rows then load one by
-    one; a bad row is skipped and reported, never fatal.
+    one, each in its own savepoint; a bad row is skipped and reported,
+    never fatal.
     """
-    # Imported here: ambiguity reuses this module's helpers.
-    from api.v1.v1_data_onboarding.ambiguity import blocked_forms
-
     sheets = read_sheets(path, file_name)
     blocked = blocked_forms(proposal, sheets, tenant, user, resolutions)
     proposal = _unblocked(proposal, blocked, forms)
-    index = _admin_index(tenant)
+    index = admin_index(tenant)
     before = len(index)
-    scope = _scope(user)
+    scope = user_scope(user)
     with transaction.atomic():
         refusal = check_hierarchy(proposal, tenant, user)
         if refusal:
             raise OnboardingError(refusal)
-        places = _Places(proposal, index, resolutions)
-        admin = proposal["administration"]
-        source = next((d for d in proposal["data"]
-                       if d["sheet"] == admin["source"]["sheet"]), None)
+        places = Places(proposal, index, resolutions)
         _add_administration(
-            admin, sheets, tenant, index, scope, places,
-            places.start(source) if source else 1,
+            proposal["administration"], places.unit_paths(proposal, sheets),
+            tenant, index, scope,
         )
         forms = _create_forms(proposal["forms"], user)
     if len(index) > before:
         generate_sqlite(Administration, tenant=tenant)
     async_task("api.v1.v1_forms.tasks.refresh_form_config")
 
-    report = {"forms": [], "issues": [], "blocked": blocked}
+    # The causes' units hold names from the file: the Report keeps none.
+    report = {"forms": [], "issues": [], "blocked": [
+        {"form": b["form"], "name": b["name"], "causes": [
+            {"kind": c["kind"], "reason": c["reason"]} for c in b["causes"]
+        ]} for b in blocked
+    ]}
     records = {}  # form key: {row key: FormData}
     # Registration rows first, so visits can find their parent records.
     parent_of = {f["key"]: f["parent"] for f in proposal["forms"]}
@@ -513,7 +424,15 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
         rows = _Rows(form, spec, places, index, user, scope, parents)
         records[spec["form"]] = rows.records
         for i, row in sheets[spec["sheet"]].iterrows():
-            rows.load(i + 2, row)  # i is 0-based after a header row
+            line = i + 2  # i is 0-based after a header row
+            issues = len(rows.issues)
+            try:
+                with transaction.atomic():
+                    rows.load(line, row)
+            except Exception:
+                logger.exception("Data Onboarding: row %s failed", line)
+                del rows.issues[issues:]
+                rows.issue(line, None, "skipped", ROW_FAILED)
         report["forms"].append({
             "key": spec["form"], "name": form.name, "form": form.id,
             "loaded": rows.loaded,

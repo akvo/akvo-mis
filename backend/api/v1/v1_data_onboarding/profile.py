@@ -6,10 +6,11 @@ more distinct values than half the filled cells) carry their values;
 every other column carries a value shape and counts.
 """
 import csv
-import datetime
 import re
 
 import pandas as pd
+
+from api.v1.v1_data_onboarding.places import norm, text
 
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_ROWS = 50_000
@@ -26,10 +27,6 @@ class OnboardingError(ValueError):
 
 def extension(name):
     return name.rsplit(".", 1)[-1].lower() if "." in name else ""
-
-
-def _norm(s):
-    return " ".join(str(s).split())
 
 
 def read_sheets(path, name):
@@ -59,7 +56,7 @@ def read_sheets(path, name):
     result = {}
     for sheet, df in sheets.items():
         df = df.dropna(how="all")
-        df.columns = [_norm(c) for c in df.columns]
+        df.columns = [norm(c) for c in df.columns]
         result[str(sheet)] = df.astype(object).where(df.notna(), None)
     return result
 
@@ -69,14 +66,6 @@ def check_rows(sheets):
         raise OnboardingError(
             f"The file has more than {MAX_ROWS:,} rows. Trim it and retry."
         )
-
-
-def _text(v):
-    if isinstance(v, datetime.datetime):
-        return v.isoformat(sep=" ").removesuffix(" 00:00:00")
-    if isinstance(v, float) and v.is_integer():
-        return str(int(v))
-    return _norm(v)
 
 
 def _is_number(v):
@@ -134,7 +123,7 @@ def profile_sheets(sheets):
     for sheet, df in sheets.items():
         columns = []
         for name in df.columns:
-            values = [_text(v) for v in df[name] if v is not None]
+            values = [text(v) for v in df[name] if v is not None]
             values = [v for v in values if v]
             distinct = sorted(set(values))
             column = {

@@ -16,12 +16,16 @@ from api.v1.v1_data_onboarding.profile import (
     read_sheets,
 )
 from api.v1.v1_data_onboarding.proposal import SCHEMA, validate_proposal
+from api.v1.v1_users.models import SystemUser
 from utils.email_helper import EmailTypes, send_email
 from utils import storage
-from utils.storage import download
 from utils.tenant_host import tenant_web_url
 
 logger = logging.getLogger(__name__)
+
+DRAFT_FAILED = "The Proposal could not be drafted. Try again."
+REVISION_FAILED = "The Proposal could not be revised. Try again."
+APPLY_FAILED = "The Proposal could not be applied."
 
 INSTRUCTIONS = """\
 You help load a spreadsheet into Akvo MIS, a data collection system.
@@ -47,8 +51,9 @@ Draft a Proposal:
   visits take the location from their parent), geo columns, the column
   feeding each question, value maps from raw values to option labels (only for
   columns whose values are listed), the date format (strptime) when
-  dates are not ISO, the multi-select separator, and every column not
-  loaded with the reason.
+  dates are not ISO, the characters that separate choices in a
+  multi-select cell (each character splits on its own, e.g. ";,"), and
+  every column not loaded with the reason.
 - notes: the decisions you made, in plain words for a non-technical
   reader.
 """
@@ -90,12 +95,13 @@ def _ask_openai(instructions, content):
         raise OnboardingError("OpenAI did not return a Proposal.")
 
 
-def store_proposal(onboarding, proposal, sheets, what, resolutions=None):
+def store_proposal(onboarding, proposal, sheets, what, user,
+                   resolutions=None):
     """Check the Proposal and keep it with its blocked forms (unsaved).
 
     Every draft, revision and edit goes through here, so the checks
-    always run on what is stored. resolutions replace the stored ones
-    when given; a revision keeps them.
+    always run on what is stored, for the user acting now. resolutions
+    replace the stored ones when given; a revision keeps them.
     """
     if resolutions is None:
         resolutions = onboarding.resolutions
@@ -105,14 +111,11 @@ def store_proposal(onboarding, proposal, sheets, what, resolutions=None):
             f"The {what} did not match the Proposal format: "
             + "; ".join(errors[:10])
         )
-    refusal = check_hierarchy(
-        proposal, onboarding.tenant, onboarding.created_by
-    )
+    refusal = check_hierarchy(proposal, onboarding.tenant, user)
     if refusal:
         raise OnboardingError(refusal)
     onboarding.blocked = blocked_forms(
-        proposal, sheets, onboarding.tenant, onboarding.created_by,
-        resolutions,
+        proposal, sheets, onboarding.tenant, user, resolutions,
     )
     onboarding.proposal, onboarding.resolutions = proposal, resolutions
 
@@ -122,7 +125,9 @@ def read_upload(onboarding):
         raise OnboardingError(
             "The uploaded file has been deleted. Upload it again."
         )
-    return read_sheets(download(onboarding.file), onboarding.file_name)
+    return read_sheets(
+        storage.download(onboarding.file), onboarding.file_name
+    )
 
 
 def draft_proposal(onboarding_id):
@@ -132,7 +137,7 @@ def draft_proposal(onboarding_id):
         onboarding.profile = profile_sheets(sheets)
         store_proposal(
             onboarding, _ask_openai(INSTRUCTIONS, onboarding.profile),
-            sheets, "draft",
+            sheets, "draft", onboarding.created_by,
         )
         onboarding.status = DataOnboardingStatus.proposed
     except OnboardingError as exc:
@@ -141,16 +146,14 @@ def draft_proposal(onboarding_id):
     except Exception:
         logger.exception("Data Onboarding %s: drafting failed", onboarding_id)
         onboarding.status = DataOnboardingStatus.failed
-        onboarding.error = "The Proposal could not be drafted. Try again."
+        onboarding.error = DRAFT_FAILED
     onboarding.save()
 
 
-REVISION_FAILED = "The Proposal could not be revised. Try again."
-
-
-def revise_proposal(onboarding_id, instruction):
+def revise_proposal(onboarding_id, instruction, user_id):
     # A failed revision keeps the previous Proposal and stays proposed.
     onboarding = DataOnboarding.objects.get(id=onboarding_id)
+    user = SystemUser.objects.get(id=user_id)
     try:
         sheets = read_upload(onboarding)
         # Only the profile and the Proposal: resolutions and the blocked
@@ -159,7 +162,7 @@ def revise_proposal(onboarding_id, instruction):
             "profile": onboarding.profile,
             "proposal": onboarding.proposal,
             "instruction": instruction,
-        }), sheets, "revision")
+        }), sheets, "revision", user)
     except OnboardingError as exc:
         onboarding.error = str(exc)
     except Exception:
@@ -184,16 +187,18 @@ def draft_proposal_result(task):
             id=task.args[0], status=DataOnboardingStatus.drafting
         ).update(
             status=DataOnboardingStatus.failed,
-            error="The Proposal could not be drafted. Try again.",
+            error=DRAFT_FAILED,
         )
 
 
-def apply_onboarding(onboarding_id, forms=None):
+def apply_onboarding(onboarding_id, user_id, forms=None):
+    # Checks, scope and the new data are the applying user's.
     onboarding = DataOnboarding.objects.get(id=onboarding_id)
     try:
         onboarding.report = apply_proposal(
-            onboarding.proposal, download(onboarding.file),
-            onboarding.file_name, onboarding.tenant, onboarding.created_by,
+            onboarding.proposal, storage.download(onboarding.file),
+            onboarding.file_name, onboarding.tenant,
+            SystemUser.objects.get(id=user_id),
             forms=forms, resolutions=onboarding.resolutions,
         )
         onboarding.status = DataOnboardingStatus.applied
@@ -203,7 +208,7 @@ def apply_onboarding(onboarding_id, forms=None):
     except Exception:
         logger.exception("Data Onboarding %s: Apply failed", onboarding_id)
         onboarding.status = DataOnboardingStatus.failed
-        onboarding.error = "The Proposal could not be applied."
+        onboarding.error = APPLY_FAILED
     onboarding.save()
     if onboarding.status == DataOnboardingStatus.applied:
         _email_report(onboarding)
@@ -270,7 +275,7 @@ def apply_onboarding_result(task):
         id=task.args[0], status=DataOnboardingStatus.applying
     ).update(
         status=DataOnboardingStatus.failed,
-        error="The Proposal could not be applied.",
+        error=APPLY_FAILED,
     ):
         _email_failure(DataOnboarding.objects.get(id=task.args[0]))
 

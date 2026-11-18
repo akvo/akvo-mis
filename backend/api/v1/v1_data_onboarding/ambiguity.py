@@ -11,12 +11,12 @@ Proposal, never in it: the Proposal goes back to OpenAI.
 """
 import re
 
-from api.v1.v1_data_onboarding.apply import (
-    _Places,
-    _admin_index,
-    _fold,
-    _in_scope,
-    _scope,
+from api.v1.v1_data_onboarding.places import (
+    Places,
+    admin_index,
+    fold,
+    in_scope,
+    user_scope,
 )
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Levels
@@ -26,16 +26,16 @@ class _Context:
     def __init__(self, proposal, sheets, tenant, user, resolutions):
         self.proposal, self.sheets = proposal, sheets
         admin = proposal["administration"]
-        self.index = _admin_index(tenant)
-        self.places = _Places(proposal, self.index, resolutions)
+        self.index = admin_index(tenant)
+        self.places = Places(proposal, self.index, resolutions)
         levels = list(Levels.objects.filter(tenant=tenant).order_by("level"))
         self.level_names = [lv.name for lv in levels]
         # check_hierarchy refuses a Proposal whose new levels can't be added.
         self.depth = max(len(levels), len(admin["levels"])) - 1
-        self.scope = _scope(user)
+        self.scope = user_scope(user)
         # The default manager leaves archived forms out: they never clash.
         self.form_names = {
-            _fold(n) for n in
+            fold(n) for n in
             Forms.objects.filter(tenant=tenant).values_list("name", flat=True)
         }
         # {depth: {folded name: number of parents}}, {parent key: names}
@@ -64,7 +64,7 @@ class _Context:
         return {tuple(p) for p in paths if p is not None}
 
     def depths_of(self, names):
-        folded = {_fold(n) for n in names}
+        folded = {fold(n) for n in names}
         return {d for d, known in self.by_depth.items() if folded & set(known)}
 
     def level_name(self, depth):
@@ -126,8 +126,8 @@ def _shared_name(form, spec, ctx):
         depth = found.pop()
     units = []
     for name in sorted(names):
-        found = ctx.places.named.get((depth, _fold(name)), [])
-        chosen = ctx.places.parents.get(_fold(name))
+        found = ctx.places.named.get((depth, fold(name)), [])
+        chosen = ctx.places.parents.get(fold(name))
         if len(found) > 1 and chosen not in {u.parent_id for _, u in found}:
             units.append({"name": name, "parents": [
                 {"id": u.parent_id, "name": " › ".join(
@@ -180,20 +180,20 @@ def _near_match(form, spec, ctx):
         paths |= {tuple(ctx.places.cells(u)) for u in admin["units"]}
     matches = set()
     for path in paths:
-        key = tuple(_fold(n) for n in path)
+        key = tuple(fold(n) for n in path)
         depth = next(
             (d for d in range(1, len(key) + 1) if key[:d] not in ctx.index),
             None,
         )
         if depth is None or depth > ctx.depth:
             continue
-        if not _in_scope(ctx.index[key[:depth - 1]], ctx.scope):
+        if not in_scope(ctx.index[key[:depth - 1]], ctx.scope):
             continue  # outside the subtree: skipped, not ambiguous
         name = path[depth - 1]
         confirmed = ctx.places.new_units
         for sibling in ctx.children.get(key[:depth - 1], []):
             if _near(name, sibling) and \
-                    (_fold(name), _fold(sibling)) not in confirmed:
+                    (fold(name), fold(sibling)) not in confirmed:
                 matches.add((name, sibling))
     if not matches:
         return []
@@ -206,7 +206,7 @@ def _near_match(form, spec, ctx):
 
 
 def _name_clash(form, spec, ctx):
-    if _fold(form["name"]) not in ctx.form_names:
+    if fold(form["name"]) not in ctx.form_names:
         return []
     return [_cause(
         "name_clash",

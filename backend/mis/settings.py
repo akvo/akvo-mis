@@ -506,7 +506,7 @@ OPENAI_VECTOR_STORE_ID = environ.get("OPENAI_VECTOR_STORE_ID", "")
 DATA_ONBOARDING_OPENAI_MODEL = (
     environ.get("DATA_ONBOARDING_OPENAI_MODEL") or "gpt-4o-mini"
 )
-# Drafts and revisions a tenant may ask OpenAI for in 24 hours.
+# Proposals and revisions a tenant may ask OpenAI for in 24 hours.
 DATA_ONBOARDING_DAILY_CAP = int(
     environ.get("DATA_ONBOARDING_DAILY_CAP") or 20
 )

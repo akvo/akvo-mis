@@ -73,7 +73,10 @@ DATA = _obj(
         _obj(question=STR, values=_arr(_obj(raw=STR, label=STR)))
     ),
     date_format=_null(STR),
-    multi_separator=_null(STR),
+    multi_separator={**_null(STR), "description": (
+        "The characters that separate choices in a multi-select cell; each"
+        " character splits on its own (not a pattern). Null: any of ;,|/"
+    )},
     unmapped_columns=_arr(_obj(column=STR, reason=STR)),
 )
 

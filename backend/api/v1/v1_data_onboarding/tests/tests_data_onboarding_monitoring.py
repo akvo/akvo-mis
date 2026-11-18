@@ -193,7 +193,7 @@ class MonitoringEndpointTestCase(TenantIsolationTestCase):
 
         for target, fake in (
             ("api.v1.v1_data_onboarding.views.storage.upload", upload),
-            ("api.v1.v1_data_onboarding.tasks.download", download),
+            ("api.v1.v1_data_onboarding.tasks.storage.download", download),
         ):
             p = patch(target, side_effect=fake)
             p.start()
@@ -254,7 +254,7 @@ class MonitoringEndpointTestCase(TenantIsolationTestCase):
             res = self.client.post(f"{URL}/{pk}/apply", **self.headers)
         self.assertEqual(res.status_code, 200)
         with patch("openai.OpenAI") as openai:
-            apply_onboarding(pk)
+            apply_onboarding(pk, self.a["user"].id)
         openai.assert_not_called()
 
         report = self.client.get(f"{URL}/{pk}", **self.headers).json()[
