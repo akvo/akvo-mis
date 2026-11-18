@@ -62,8 +62,11 @@ const unitTree = (units) => {
 };
 
 // onEdit(body) sends a structured edit; without it the review is read-only.
-const ProposalReview = ({ proposal, blocked = [], text, onEdit }) => {
+// units: {new, outside} the server read from the file for this viewer;
+// without it (the upload is gone) the Proposal's suggestions show.
+const ProposalReview = ({ proposal, blocked = [], units, text, onEdit }) => {
   const { administration, forms, data, notes } = proposal;
+  const newUnits = units ? units.new : administration.units;
 
   const questionColumns = [
     { title: text.dataOnboardingQuestion, dataIndex: "label" },
@@ -85,10 +88,18 @@ const ProposalReview = ({ proposal, blocked = [], text, onEdit }) => {
     <div className="proposal-review">
       <Title level={4}>{text.dataOnboardingUnits}</Title>
       <Text type="secondary">{administration.levels.join(" › ")}</Text>
-      {administration.units.length ? (
-        <Tree treeData={unitTree(administration.units)} defaultExpandAll />
+      {newUnits.length ? (
+        <Tree treeData={unitTree(newUnits)} defaultExpandAll />
       ) : (
         <Empty description={text.dataOnboardingNoUnits} />
+      )}
+      {units?.outside.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          message={text.dataOnboardingUnitsOutside}
+          description={units.outside.map((p) => p.join(" › ")).join(", ")}
+        />
       )}
 
       <Divider />
@@ -96,6 +107,7 @@ const ProposalReview = ({ proposal, blocked = [], text, onEdit }) => {
       {forms.map((form) => {
         const spec = data.find((d) => d.form === form.key);
         const block = blocked.find((b) => b.form === form.key);
+        const parent = forms.find((f) => f.key === form.parent);
         const questions = form.question_group.flatMap((g) => g.question);
         const label = (name) =>
           questions.find((q) => q.name === name)?.label || name;
@@ -142,6 +154,11 @@ const ProposalReview = ({ proposal, blocked = [], text, onEdit }) => {
             }
             style={{ marginBottom: 16 }}
           >
+            {parent && (
+              <Text type="secondary">
+                {`${text.dataOnboardingParentForm}: ${parent.name}`}
+              </Text>
+            )}
             {block && (
               <BlockedCauses
                 causes={block.causes}

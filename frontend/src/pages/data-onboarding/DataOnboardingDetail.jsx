@@ -183,6 +183,7 @@ const DataOnboardingDetail = () => {
               <ProposalReview
                 proposal={onboarding.proposal}
                 blocked={blocked}
+                units={onboarding.units}
                 text={text}
                 onEdit={status === "proposed" ? edit : null}
               />

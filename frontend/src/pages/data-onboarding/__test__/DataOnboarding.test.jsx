@@ -349,6 +349,53 @@ describe("Data Onboarding", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the units Apply adds from the file, and those left out", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        id: 7,
+        status: "proposed",
+        file_name: "s.csv",
+        proposal,
+        units: {
+          new: [
+            ["North", "Hill"],
+            ["North", "Vale"],
+          ],
+          outside: [["South"], ["South", "Dale"]],
+        },
+      },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    expect(await screen.findByText("Vale")).toBeInTheDocument();
+    // The file's units replace the Proposal's suggestions.
+    expect(screen.queryByText("Hilltop")).toBeNull();
+    expect(screen.getByText(text.dataOnboardingUnitsOutside)).toBeVisible();
+    expect(screen.getByText("South, South › Dale")).toBeInTheDocument();
+  });
+
+  it("shows the registration form of each monitoring form", async () => {
+    const visits = {
+      ...proposal.forms[0],
+      key: "visits",
+      name: "Site visits",
+      type: "monitoring",
+      parent: "sites",
+    };
+    api.get.mockResolvedValue({
+      data: {
+        id: 7,
+        status: "proposed",
+        file_name: "s.csv",
+        proposal: { ...proposal, forms: [...proposal.forms, visits] },
+      },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    expect(await screen.findByText("Site visits")).toBeInTheDocument();
+    expect(
+      screen.getByText(`${text.dataOnboardingParentForm}: Water sites`)
+    ).toBeInTheDocument();
+  });
+
   it("shows a failed draft", async () => {
     api.get.mockResolvedValue({
       data: { id: 8, status: "failed", error: "OpenAI did not return JSON." },
