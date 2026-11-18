@@ -1,8 +1,9 @@
 """Read an uploaded spreadsheet and profile its columns.
 
 The profile is all OpenAI ever sees of the file (ADR 0001). Only
-category-like columns (at most CATEGORY_LIMIT distinct values) carry
-their values; every other column carries a value shape and counts.
+category-like columns (at most CATEGORY_LIMIT distinct values, and no
+more distinct values than half the filled cells) carry their values;
+every other column carries a value shape and counts.
 """
 import csv
 import datetime
@@ -144,7 +145,11 @@ def profile_sheets(sheets):
                 "distinct": len(distinct),
                 "shape": _shape(values),
             }
-            if len(distinct) <= CATEGORY_LIMIT:
+            # Unique-per-row columns (names, IDs) never send values.
+            if (
+                len(distinct) <= CATEGORY_LIMIT
+                and len(distinct) * 2 <= len(values)
+            ):
                 column["values"] = distinct
             columns.append(column)
         result.append({"name": sheet, "rows": len(df), "columns": columns})

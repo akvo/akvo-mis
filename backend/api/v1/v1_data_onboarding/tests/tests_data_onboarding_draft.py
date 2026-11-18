@@ -16,7 +16,7 @@ URL = "/api/v1/data-onboarding"
 CSV = (
     "site_id;site_name;district;water_source\n"
     "S-001;Alpha well;North;BH\n"
-    "S-002;Beta well;South;Well\n"
+    "S-002;Beta well;South;BH\n"
     "S-003;Gamma well;North;BH\n"
 )
 
@@ -237,6 +237,35 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertNotIn("MARKER", sent)
         self.assertIn("red", sent)
         self.assertIn("blue", sent)
+
+    def test_a_small_file_sends_only_values_that_repeat(self):
+        rows = [["name", "status"]]
+        rows += [
+            [f"MARKER{i:04d}", ["open", "closed", "pending"][i % 3]]
+            for i in range(20)
+        ]
+        pk = self.upload("people.xlsx", xlsx(rows)).json()["id"]
+        client = self.draft(pk, "not json")
+
+        sent = json.dumps(client.chat.completions.create.call_args.kwargs)
+        self.assertNotIn("MARKER", sent)
+        for status in ("open", "closed", "pending"):
+            self.assertIn(status, sent)
+
+    def test_value_maps_only_for_columns_whose_values_repeat(self):
+        p = proposal()
+        p["administration"]["source"]["sheet"] = "Sheet"
+        p["data"][0]["sheet"] = "Sheet"
+        p["data"][0]["value_maps"] = [
+            {"question": "site_name", "values": [{"raw": "x", "label": "y"}]}
+        ]
+        rows = [["site_id", "site_name", "district", "water_source"]]
+        rows += [[f"S{i}", f"Site {i}", "North", "BH"] for i in range(20)]
+        pk = self.upload("sites.xlsx", xlsx(rows)).json()["id"]
+        self.draft(pk, json.dumps(p))
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "failed")
+        self.assertIn("site_name", body["error"])
 
     def test_invalid_output_fails_the_draft(self):
         pk = self.upload("sites.csv", CSV.encode()).json()["id"]
