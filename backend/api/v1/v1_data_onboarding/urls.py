@@ -4,6 +4,7 @@ from api.v1.v1_data_onboarding.views import (
     data_onboarding_apply,
     data_onboarding_detail,
     data_onboarding_list,
+    data_onboarding_report,
 )
 
 urlpatterns = [
@@ -15,5 +16,9 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/data-onboarding/(?P<pk>[0-9]+)/apply$",
         data_onboarding_apply,
+    ),
+    re_path(
+        r"^(?P<version>(v1))/data-onboarding/(?P<pk>[0-9]+)/report$",
+        data_onboarding_report,
     ),
 ]

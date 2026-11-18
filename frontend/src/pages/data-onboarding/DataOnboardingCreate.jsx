@@ -15,6 +15,10 @@ const DataOnboardingCreate = () => {
   const pagePath = [
     { title: text.controlCenter, link: "/control-center" },
     { title: text.menuFormBuilder, link: "/control-center/form-builder" },
+    {
+      title: text.dataOnboardingHistory,
+      link: "/control-center/data-onboarding",
+    },
     { title: text.formBuilderDataOnboardingButton },
   ];
 

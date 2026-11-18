@@ -37,6 +37,7 @@ class EmailTypes:
     administration_upload = "administration_upload"
     administration_prefilled = "administration_prefilled"
     data_onboarding_applied = "data_onboarding_applied"
+    data_onboarding_failed = "data_onboarding_failed"
 
     FieldStr = {
         user_register: "user_register",
@@ -58,6 +59,7 @@ class EmailTypes:
         administration_upload: "administration_upload",
         administration_prefilled: "administration_prefilled",
         data_onboarding_applied: "data_onboarding_applied",
+        data_onboarding_failed: "data_onboarding_failed",
     }
 
 
@@ -462,6 +464,18 @@ def email_context(context: dict, type: str):
                     f"{context.get('file_name', 'Your spreadsheet')} has"
                     " been onboarded. Records loaded per form, and rows"
                     " or answers left out:"
+                ),
+            }
+        )
+    if type == EmailTypes.data_onboarding_failed:
+        context.update(
+            {
+                "subject": "Data Onboarding failed",
+                "image": f"{WEBDOMAIN}/email-icons/close-circle.png",
+                "info_text": (
+                    f"{context.get('file_name', 'Your spreadsheet')} could"
+                    " not be onboarded. Open the Data Onboarding page to"
+                    " see why."
                 ),
             }
         )

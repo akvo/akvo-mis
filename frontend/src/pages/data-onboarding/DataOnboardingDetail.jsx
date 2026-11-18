@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Alert, Button, Spin, message } from "antd";
 import { Breadcrumbs } from "../../components";
 import { api, store, uiText } from "../../lib";
+import { DownloadOutlined } from "@ant-design/icons";
 import ProposalReview from "./ProposalReview";
 import OnboardingReport from "./OnboardingReport";
 
@@ -28,6 +29,25 @@ const DataOnboardingDetail = () => {
       .finally(() => setApplying(false));
   };
 
+  const downloadReport = () => {
+    api
+      .get(`/data-onboarding/${id}/report`, { responseType: "blob" })
+      .then((res) => {
+        const filename =
+          /filename="(?<f>[^"]+)"/.exec(res.headers["content-disposition"])
+            ?.groups?.f || `onboarding-report-${id}.xlsx`;
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => message.error(text.dataOnboardingDownloadFailed));
+  };
+
   useEffect(() => {
     if (!busy) {
       return () => {};
@@ -50,6 +70,10 @@ const DataOnboardingDetail = () => {
   const pagePath = [
     { title: text.controlCenter, link: "/control-center" },
     { title: text.menuFormBuilder, link: "/control-center/form-builder" },
+    {
+      title: text.dataOnboardingHistory,
+      link: "/control-center/data-onboarding",
+    },
     { title: onboarding?.file_name || text.formBuilderDataOnboardingButton },
   ];
 
@@ -69,7 +93,12 @@ const DataOnboardingDetail = () => {
             <Alert
               type="error"
               showIcon
-              message={text.dataOnboardingFailed}
+              message={
+                // A draft failure leaves no Proposal; an Apply failure does.
+                onboarding.proposal
+                  ? text.dataOnboardingApplyFailed
+                  : text.dataOnboardingFailed
+              }
               description={onboarding.error}
             />
           )}
@@ -84,7 +113,16 @@ const DataOnboardingDetail = () => {
             </Button>
           )}
           {onboarding?.report ? (
-            <OnboardingReport report={onboarding.report} text={text} />
+            <>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={downloadReport}
+                style={{ float: "right" }}
+              >
+                {text.dataOnboardingDownloadReport}
+              </Button>
+              <OnboardingReport report={onboarding.report} text={text} />
+            </>
           ) : (
             onboarding?.proposal && (
               <ProposalReview proposal={onboarding.proposal} text={text} />

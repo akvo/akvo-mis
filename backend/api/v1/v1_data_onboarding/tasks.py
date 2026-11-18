@@ -1,7 +1,10 @@
 import json
 import logging
+from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import Q
+from django.utils import timezone
 
 from api.v1.v1_data_onboarding.apply import apply_proposal, check_hierarchy
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
@@ -13,6 +16,7 @@ from api.v1.v1_data_onboarding.profile import (
 )
 from api.v1.v1_data_onboarding.proposal import SCHEMA, validate_proposal
 from utils.email_helper import EmailTypes, send_email
+from utils import storage
 from utils.storage import download
 from utils.tenant_host import tenant_web_url
 
@@ -138,16 +142,37 @@ def apply_onboarding(onboarding_id):
     onboarding.save()
     if onboarding.status == DataOnboardingStatus.applied:
         _email_report(onboarding)
+    else:
+        _email_failure(onboarding)
+
+
+def _page_url(onboarding):
+    return (
+        f"{tenant_web_url(onboarding.tenant)}"
+        f"/control-center/data-onboarding/{onboarding.id}"
+    )
+
+
+def _email_failure(onboarding):
+    send_email(
+        context={
+            "send_to": [onboarding.created_by.email],
+            "user": onboarding.created_by,
+            "tenant": onboarding.tenant,
+            "file_name": onboarding.file_name,
+            "button": True,
+            "button_url": _page_url(onboarding),
+            "button_text": "Open the Data Onboarding",
+        },
+        type=EmailTypes.data_onboarding_failed,
+    )
 
 
 def _email_report(onboarding):
     report = onboarding.report
     issues = report["issues"]
     user = onboarding.created_by
-    url = (
-        f"{tenant_web_url(onboarding.tenant)}"
-        f"/control-center/data-onboarding/{onboarding.id}"
-    )
+    url = _page_url(onboarding)
     send_email(
         context={
             "send_to": [user.email],
@@ -176,10 +201,28 @@ def _email_report(onboarding):
 
 def apply_onboarding_result(task):
     # As draft_proposal_result: a killed worker must not leave it applying.
-    if not task.success:
-        DataOnboarding.objects.filter(
-            id=task.args[0], status=DataOnboardingStatus.applying
-        ).update(
-            status=DataOnboardingStatus.failed,
-            error="The Proposal could not be applied.",
-        )
+    if not task.success and DataOnboarding.objects.filter(
+        id=task.args[0], status=DataOnboardingStatus.applying
+    ).update(
+        status=DataOnboardingStatus.failed,
+        error="The Proposal could not be applied.",
+    ):
+        _email_failure(DataOnboarding.objects.get(id=task.args[0]))
+
+
+FILE_RETENTION = timedelta(days=14)
+
+
+def purge_onboarding_files():
+    # Scheduled (migration 0002). The upload holds personal data: keep it
+    # only until Apply, or 14 days for a Proposal never applied. The
+    # Proposal and Report hold no cell values and stay.
+    for onboarding in DataOnboarding.objects.filter(
+        Q(status=DataOnboardingStatus.applied)
+        | Q(created__lt=timezone.now() - FILE_RETENTION),
+        file__isnull=False,
+    ):
+        if storage.check(onboarding.file):
+            storage.delete(onboarding.file)
+        onboarding.file = None
+        onboarding.save(update_fields=["file"])

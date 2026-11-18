@@ -1,7 +1,11 @@
+import io
 import tempfile
 from uuid import uuid4
 
+import openpyxl
+
 from django.db import transaction
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django_q.tasks import async_task
 from drf_spectacular.utils import extend_schema
@@ -85,8 +89,20 @@ def _create(request):
 def data_onboarding_list(request, version):
     if request.method == "POST":
         return _create(request)
-    # The list itself lands with the report history.
-    return Response([])
+    # shortcut: unpaginated; drafts are capped per tenant per day, so the
+    # history stays small. Paginate if it grows past a few hundred rows.
+    return Response([
+        {
+            "id": o.id,
+            "status": DataOnboardingStatus.FieldStr[o.status],
+            "file_name": o.file_name,
+            "created": o.created,
+            "updated": o.updated,
+            "created_by": o.created_by.get_full_name(),
+        }
+        for o in DataOnboarding.objects.for_user(request.user)
+        .select_related("created_by").order_by("-created", "-id")
+    ])
 
 
 @extend_schema(tags=["Data Onboarding"], summary="Get a Data Onboarding")
@@ -122,3 +138,42 @@ def data_onboarding_apply(request, version, pk):
             hook="api.v1.v1_data_onboarding.tasks.apply_onboarding_result",
         ))
     return Response(_detail(onboarding))
+
+
+@extend_schema(
+    tags=["Data Onboarding"], summary="Download the Onboarding Report"
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, DataOnboardingAccess])
+def data_onboarding_report(request, version, pk):
+    onboarding = get_object_or_404(
+        DataOnboarding.objects.for_user(request.user), pk=pk
+    )
+    report = onboarding.report
+    if not report:
+        raise Http404
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Onboarding Report"
+    ws.append(["Form", "Records loaded"])
+    for form in report["forms"]:
+        ws.append([form["name"], form["loaded"]])
+    ws.append([])
+    ws.append(["Sheet", "Row", "Question", "Outcome", "Reason"])
+    for issue in report["issues"]:
+        ws.append([
+            issue["sheet"], issue["row"], issue["question"],
+            "Row skipped" if issue["kind"] == "skipped" else "Answer dropped",
+            issue["reason"],
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # noqa
+    )
+    resp["Content-Disposition"] = (
+        f'attachment; filename="onboarding-report-{onboarding.id}.xlsx"'
+    )
+    resp["Access-Control-Expose-Headers"] = "Content-Disposition"
+    return resp

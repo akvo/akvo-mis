@@ -2,7 +2,11 @@ import React from "react";
 import { act, render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { DataOnboardingCreate, DataOnboardingDetail } from "..";
+import {
+  DataOnboardingCreate,
+  DataOnboardingDetail,
+  DataOnboardingList,
+} from "..";
 import { api, uiText } from "../../../lib";
 
 jest.mock("../../../lib/api", () => ({
@@ -72,6 +76,10 @@ const renderAt = (path) =>
   render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
+        <Route
+          path="/control-center/data-onboarding"
+          element={<DataOnboardingList />}
+        />
         <Route
           path="/control-center/data-onboarding/create"
           element={<DataOnboardingCreate />}
@@ -189,5 +197,75 @@ describe("Data Onboarding", () => {
     expect(
       await screen.findByText("OpenAI did not return JSON.")
     ).toBeInTheDocument();
+  });
+
+  it("shows an Apply failure apart from a draft failure", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        id: 9,
+        status: "failed",
+        proposal,
+        error: "Apply ran out of time.",
+      },
+    });
+    renderAt("/control-center/data-onboarding/9");
+    expect(
+      await screen.findByText(text.dataOnboardingApplyFailed)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(text.dataOnboardingFailed)).toBeNull();
+  });
+
+  it("lists past Data Onboardings with who ran each and when", async () => {
+    api.get.mockResolvedValue({
+      data: [
+        {
+          id: 7,
+          status: "applied",
+          file_name: "sites.csv",
+          created: "2026-11-18T10:00:00",
+          updated: "2026-11-18T10:05:00",
+          created_by: "Ann Admin",
+        },
+      ],
+    });
+    renderAt("/control-center/data-onboarding");
+    const link = await screen.findByRole("link", { name: "sites.csv" });
+    expect(api.get).toHaveBeenCalledWith("/data-onboarding");
+    expect(link).toHaveAttribute("href", "/control-center/data-onboarding/7");
+    expect(screen.getByText("Ann Admin")).toBeInTheDocument();
+    expect(screen.getByText("applied")).toBeInTheDocument();
+    expect(screen.getByText(/2026-11-18 10:00/)).toBeInTheDocument();
+  });
+
+  it("downloads the Onboarding Report", async () => {
+    api.get.mockImplementation((url) =>
+      url.endsWith("/report")
+        ? Promise.resolve({
+            data: "xlsx",
+            headers: {
+              "content-disposition":
+                'attachment; filename="onboarding-report-7.xlsx"',
+            },
+          })
+        : Promise.resolve({
+            data: {
+              id: 7,
+              status: "applied",
+              proposal,
+              report: { forms: [], issues: [] },
+            },
+          })
+    );
+    window.URL.createObjectURL = jest.fn(() => "blob:x");
+    window.URL.revokeObjectURL = jest.fn();
+    renderAt("/control-center/data-onboarding/7");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: new RegExp(text.dataOnboardingDownloadReport),
+      })
+    );
+    expect(api.get).toHaveBeenCalledWith("/data-onboarding/7/report", {
+      responseType: "blob",
+    });
   });
 });
