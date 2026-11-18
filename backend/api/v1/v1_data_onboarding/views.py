@@ -29,7 +29,12 @@ from api.v1.v1_data_onboarding.profile import (
     extension,
     read_sheets,
 )
-from api.v1.v1_data_onboarding.tasks import read_upload, store_proposal
+from api.v1.v1_data_onboarding.tasks import (
+    APPLY_TIMEOUT,
+    FILE_DELETED,
+    read_upload,
+    store_proposal,
+)
 from utils import storage
 from utils.custom_permissions import DataOnboardingAccess
 
@@ -198,6 +203,8 @@ def data_onboarding_apply(request, version, pk):
         if refusal:
             return refusal
         forms, error = _chosen_forms(onboarding, request.data.get("forms"))
+        if not onboarding.file:
+            error = FILE_DELETED
         if error:
             return Response(
                 {"message": error}, status=status.HTTP_400_BAD_REQUEST
@@ -209,6 +216,7 @@ def data_onboarding_apply(request, version, pk):
             onboarding.id,
             request.user.id,
             forms=forms,
+            timeout=APPLY_TIMEOUT,
             hook="api.v1.v1_data_onboarding.tasks.apply_onboarding_result",
         ))
     return Response(_detail(onboarding, request.user))

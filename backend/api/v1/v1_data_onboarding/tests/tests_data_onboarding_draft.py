@@ -535,6 +535,38 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(self.async_task.call_args.kwargs["forms"], ["sites"])
 
+    def test_apply_refuses_once_the_upload_is_purged(self):
+        from api.v1.v1_data_onboarding.models import DataOnboarding
+
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        self.draft(pk, json.dumps(proposal()))
+        DataOnboarding.objects.filter(id=pk).update(file=None)
+
+        res = self.apply(pk)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("has been deleted", res.json()["message"])
+        self.assertEqual(self.get(pk).json()["status"], "proposed")
+
+    @override_settings(TEST_ENV=True)
+    def test_a_failed_refresh_after_the_data_still_applies(self):
+        from api.v1.v1_data_onboarding.tasks import apply_onboarding
+
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        self.draft(pk, json.dumps(proposal()))
+        self.assertEqual(self.apply(pk).status_code, 200)
+        self.assertEqual(self.async_task.call_args.kwargs["timeout"], 3600)
+
+        with patch(
+            "api.v1.v1_data_onboarding.apply.refresh_materialized_data",
+            side_effect=RuntimeError("view refresh"),
+        ), patch("api.v1.v1_data_onboarding.apply.async_task",
+                 side_effect=RuntimeError("queue down")):
+            apply_onboarding(*self.async_task.call_args.args[1:])
+
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "applied")
+        self.assertEqual(body["report"]["forms"][0]["key"], "sites")
+
     @override_settings(TEST_ENV=True)
     def test_apply_rechecks_against_the_tree_as_it_is_now(self):
         from api.v1.v1_data_onboarding.tasks import apply_onboarding

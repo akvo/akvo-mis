@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 DRAFT_FAILED = "The Proposal could not be drafted. Try again."
 REVISION_FAILED = "The Proposal could not be revised. Try again."
 APPLY_FAILED = "The Proposal could not be applied."
+FILE_DELETED = "The uploaded file has been deleted. Upload it again."
+# A 50,000-row Apply outlasts the cluster's 600 s. Keep it below
+# Q_CLUSTER retry, or the broker hands the task to a second worker.
+APPLY_TIMEOUT = 3600
 
 INSTRUCTIONS = """\
 You help load a spreadsheet into Akvo MIS, a data collection system.
@@ -103,7 +107,8 @@ def _ask_openai(instructions, content):
     from openai import OpenAI
     import httpx
 
-    client = OpenAI(api_key=api_key, timeout=httpx.Timeout(300.0))
+    # Two calls (_ask_valid) must end before the worker's 600 s timeout.
+    client = OpenAI(api_key=api_key, timeout=httpx.Timeout(240.0))
     sent = json.dumps(content)
     log = settings.DATA_ONBOARDING_LOG_OPENAI
     if log:
@@ -163,9 +168,7 @@ def store_proposal(onboarding, proposal, sheets, what, user,
 
 def read_upload(onboarding):
     if not onboarding.file:
-        raise OnboardingError(
-            "The uploaded file has been deleted. Upload it again."
-        )
+        raise OnboardingError(FILE_DELETED)
     return read_sheets(
         storage.download(onboarding.file), onboarding.file_name
     )

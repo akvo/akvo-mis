@@ -402,9 +402,13 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
             tenant, index, scope,
         )
         forms = _create_forms(proposal["forms"], user)
-    if len(index) > before:
-        generate_sqlite(Administration, tenant=tenant)
-    async_task("api.v1.v1_forms.tasks.refresh_form_config")
+    # The forms are committed: a failed refresh must not fail Apply.
+    try:
+        if len(index) > before:
+            generate_sqlite(Administration, tenant=tenant)
+        async_task("api.v1.v1_forms.tasks.refresh_form_config")
+    except Exception:
+        logger.exception("Data Onboarding: refresh after forms failed")
 
     # The causes' units hold names from the file: the Report keeps none.
     report = {"forms": [], "issues": [], "blocked": [
@@ -438,5 +442,8 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
             "loaded": rows.loaded,
         })
         report["issues"] += rows.issues
-    refresh_materialized_data()
+    try:
+        refresh_materialized_data()
+    except Exception:
+        logger.exception("Data Onboarding: refresh after rows failed")
     return report

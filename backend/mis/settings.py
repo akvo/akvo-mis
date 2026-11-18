@@ -601,7 +601,8 @@ Q_CLUSTER = {
     "name": "DjangORM",
     "workers": 4,
     "timeout": 600,
-    "retry": 1200,
+    # Above the longest per-task timeout (Data Onboarding Apply, 3600 s).
+    "retry": 3700,
     # Cap re-delivery: an unacknowledged task (ack timeout or a worker
     # recycled mid-task on deploy) is otherwise retried forever. Bounding
     # it stops a stuck task from looping indefinitely; the result hooks are
