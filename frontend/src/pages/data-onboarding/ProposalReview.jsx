@@ -10,13 +10,16 @@ import {
   Tree,
   Typography,
 } from "antd";
+import ResolveCause from "./ResolveCause";
 
 const { Title, Text } = Typography;
 
-// Units are names, or {name, match} for a near-match spelling.
-const unitText = (u) => (u.match ? `${u.name} → ${u.match}` : u);
+// Units are {name, match} for a near-match spelling, {name, parents}
+// for a name under several parents.
+const unitText = (u) => (u.match ? `${u.name} → ${u.match}` : u.name);
 
-export const BlockedCauses = ({ causes }) => (
+// resolve(cause, i), when given, renders the control that settles it.
+export const BlockedCauses = ({ causes, resolve }) => (
   <Alert
     type="error"
     showIcon
@@ -26,12 +29,13 @@ export const BlockedCauses = ({ causes }) => (
         {causes.map((c, i) => (
           <li key={i}>
             <span>{c.reason}</span>
-            {c.units?.length > 0 && (
+            {c.units?.length > 0 && !resolve && (
               <Text type="secondary">
                 {" "}
                 ({c.units.map(unitText).join(", ")})
               </Text>
             )}
+            {resolve && resolve(c, i)}
           </li>
         ))}
       </ul>
@@ -138,7 +142,26 @@ const ProposalReview = ({ proposal, blocked = [], text, onEdit }) => {
             }
             style={{ marginBottom: 16 }}
           >
-            {block && <BlockedCauses causes={block.causes} />}
+            {block && (
+              <BlockedCauses
+                causes={block.causes}
+                resolve={
+                  onEdit &&
+                  ((c, i) =>
+                    // One control per kind: a level mapping is one choice.
+                    block.causes.findIndex((x) => x.kind === c.kind) === i && (
+                      <ResolveCause
+                        cause={c}
+                        form={form}
+                        spec={spec}
+                        levels={administration.levels}
+                        onEdit={onEdit}
+                        text={text}
+                      />
+                    ))
+                }
+              />
+            )}
             <Table
               rowKey="name"
               size="small"

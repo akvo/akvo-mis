@@ -12,24 +12,22 @@ Proposal, never in it: the Proposal goes back to OpenAI.
 import re
 
 from api.v1.v1_data_onboarding.apply import (
+    _Places,
     _admin_index,
     _fold,
     _in_scope,
-    _lookup,
-    _norm,
     _scope,
-    _text,
 )
 from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Levels
 
 
 class _Context:
-    def __init__(self, proposal, sheets, tenant, user):
+    def __init__(self, proposal, sheets, tenant, user, resolutions):
         self.proposal, self.sheets = proposal, sheets
         admin = proposal["administration"]
-        self.aliases = {_fold(a["from"]): a["to"] for a in admin["aliases"]}
         self.index = _admin_index(tenant)
+        self.places = _Places(proposal, self.index, resolutions)
         levels = list(Levels.objects.filter(tenant=tenant).order_by("level"))
         self.level_names = [lv.name for lv in levels]
         # check_hierarchy refuses a Proposal whose new levels can't be added.
@@ -48,18 +46,22 @@ class _Context:
                 names[key[-1]] = names.get(key[-1], 0) + 1
                 self.children.setdefault(key[:-1], []).append(unit.name)
 
-    def paths(self, spec):
-        """Location paths of the spec's rows, aliases applied."""
+    def rows(self, spec):
         columns = spec["administration_columns"]
-        paths = set()
-        for cells in self.sheets[spec["sheet"]][columns].itertuples(
-            index=False
-        ):
-            if all(c is not None for c in cells):
-                paths.add(tuple(
-                    _norm(_lookup(self.aliases, _text(c))) for c in cells
-                ))
-        return paths
+        return {
+            cells for cells in self.sheets[spec["sheet"]][columns]
+            .itertuples(index=False) if all(c is not None for c in cells)
+        }
+
+    def paths(self, spec):
+        """The location cells of the spec's rows, aliases applied."""
+        return {tuple(self.places.cells(c)) for c in self.rows(spec)}
+
+    def full_paths(self, spec):
+        """As paths, from depth 1; rows that can't be placed left out."""
+        start = self.places.start(spec)
+        paths = (self.places.path(c, start) for c in self.rows(spec))
+        return {tuple(p) for p in paths if p is not None}
 
     def depths_of(self, names):
         folded = {_fold(n) for n in names}
@@ -86,21 +88,25 @@ def _no_location(form, spec, ctx):
 
 def _level_mapping(form, spec, ctx):
     columns = spec["administration_columns"] if spec else []
+    if not columns:
+        return []
+    start = ctx.places.start(spec)
     causes = []
-    if len(columns) > ctx.depth:
+    if start - 1 + len(columns) > ctx.depth:
         causes.append(_cause(
             "level_mapping",
             f"There are {len(columns)} location columns but only"
-            f" {ctx.depth} levels below the root.",
+            f" {ctx.depth - start + 1} levels below the root"
+            f"{'' if start == 1 else ' from the first column down'}.",
         ))
-    paths = ctx.paths(spec) if columns else set()
+    paths = ctx.paths(spec)
     for i, column in enumerate(columns):
         found = ctx.depths_of({p[i] for p in paths})
-        if found and i + 1 not in found:
+        if found and start + i not in found:
             causes.append(_cause(
                 "level_mapping",
                 f"Column '{column}' is read as level"
-                f" {ctx.level_name(i + 1)}, but its names are units of"
+                f" {ctx.level_name(start + i)}, but its names are units of"
                 f" level {ctx.level_name(min(found))}.",
                 column=column,
             ))
@@ -112,18 +118,30 @@ def _shared_name(form, spec, ctx):
     if not spec or not spec["administration_columns"]:
         return []
     names = {p[0] for p in ctx.paths(spec)}
-    found = ctx.depths_of(names)
-    if len(found) != 1 or 1 in found:
-        return []
-    known = ctx.by_depth[found.pop()]
-    shared = sorted(n for n in names if known.get(_fold(n), 0) > 1)
-    if not shared:
+    depth = ctx.places.start(spec)
+    if depth == 1:
+        found = ctx.depths_of(names)
+        if len(found) != 1 or 1 in found:
+            return []
+        depth = found.pop()
+    units = []
+    for name in sorted(names):
+        found = ctx.places.named.get((depth, _fold(name)), [])
+        chosen = ctx.places.parents.get(_fold(name))
+        if len(found) > 1 and chosen not in {u.parent_id for _, u in found}:
+            units.append({"name": name, "parents": [
+                {"id": u.parent_id, "name": " › ".join(
+                    ctx.index[k[:i]].name for i in range(1, len(k))
+                )}
+                for k, u in found
+            ]})
+    if not units:
         return []
     return [_cause(
         "shared_name",
         f"Some names in column '{spec['administration_columns'][0]}' exist"
         " under several parents, and no column gives the parent.",
-        units=shared,
+        units=units,
     )]
 
 
@@ -155,14 +173,11 @@ def _near_match(form, spec, ctx):
     """A unit Apply would add that looks like an existing sibling."""
     if not spec or not spec["administration_columns"]:
         return []
-    paths = ctx.paths(spec)
+    paths = ctx.full_paths(spec)
     admin = ctx.proposal["administration"]
     if spec["sheet"] == admin["source"]["sheet"]:
         # Apply adds the proposed units with this sheet's units.
-        paths |= {
-            tuple(_norm(_lookup(ctx.aliases, n)) for n in u)
-            for u in admin["units"]
-        }
+        paths |= {tuple(ctx.places.cells(u)) for u in admin["units"]}
     matches = set()
     for path in paths:
         key = tuple(_fold(n) for n in path)
@@ -175,8 +190,10 @@ def _near_match(form, spec, ctx):
         if not _in_scope(ctx.index[key[:depth - 1]], ctx.scope):
             continue  # outside the subtree: skipped, not ambiguous
         name = path[depth - 1]
+        confirmed = ctx.places.new_units
         for sibling in ctx.children.get(key[:depth - 1], []):
-            if _near(name, sibling):
+            if _near(name, sibling) and \
+                    (_fold(name), _fold(sibling)) not in confirmed:
                 matches.add((name, sibling))
     if not matches:
         return []
@@ -203,9 +220,9 @@ CHECKS = [
 ]
 
 
-def blocked_forms(proposal, sheets, tenant, user):
+def blocked_forms(proposal, sheets, tenant, user, resolutions=None):
     """[{form, name, causes}] for each form that cannot be applied."""
-    ctx = _Context(proposal, sheets, tenant, user)
+    ctx = _Context(proposal, sheets, tenant, user, resolutions)
     specs = {d["form"]: d for d in proposal["data"]}
     blocked = {}
     for form in proposal["forms"]:

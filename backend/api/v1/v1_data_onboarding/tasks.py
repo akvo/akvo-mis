@@ -90,12 +90,15 @@ def _ask_openai(instructions, content):
         raise OnboardingError("OpenAI did not return a Proposal.")
 
 
-def store_proposal(onboarding, proposal, sheets, what):
+def store_proposal(onboarding, proposal, sheets, what, resolutions=None):
     """Check the Proposal and keep it with its blocked forms (unsaved).
 
     Every draft, revision and edit goes through here, so the checks
-    always run on what is stored.
+    always run on what is stored. resolutions replace the stored ones
+    when given; a revision keeps them.
     """
+    if resolutions is None:
+        resolutions = onboarding.resolutions
     errors = validate_proposal(proposal, onboarding.profile)
     if errors:
         raise OnboardingError(
@@ -108,9 +111,10 @@ def store_proposal(onboarding, proposal, sheets, what):
     if refusal:
         raise OnboardingError(refusal)
     onboarding.blocked = blocked_forms(
-        proposal, sheets, onboarding.tenant, onboarding.created_by
+        proposal, sheets, onboarding.tenant, onboarding.created_by,
+        resolutions,
     )
-    onboarding.proposal = proposal
+    onboarding.proposal, onboarding.resolutions = proposal, resolutions
 
 
 def read_upload(onboarding):
@@ -190,7 +194,7 @@ def apply_onboarding(onboarding_id, forms=None):
         onboarding.report = apply_proposal(
             onboarding.proposal, download(onboarding.file),
             onboarding.file_name, onboarding.tenant, onboarding.created_by,
-            forms=forms,
+            forms=forms, resolutions=onboarding.resolutions,
         )
         onboarding.status = DataOnboardingStatus.applied
     except OnboardingError as exc:

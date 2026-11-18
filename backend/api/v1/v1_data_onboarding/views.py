@@ -40,6 +40,7 @@ def _detail(onboarding):
         "file_name": onboarding.file_name,
         "proposal": onboarding.proposal,
         "blocked": onboarding.blocked,
+        "resolutions": onboarding.resolutions,
         "report": onboarding.report,
         "error": onboarding.error,
         "created": onboarding.created,
@@ -222,12 +223,15 @@ def data_onboarding_edits(request, version, pk):
             return refusal
         op = EDIT_OPS.get(request.data.get("op"))
         proposal = copy.deepcopy(onboarding.proposal)
+        resolutions = copy.deepcopy(onboarding.resolutions)
         try:
             if not op:
                 raise OnboardingError("Unknown edit.")
-            op(proposal, onboarding.profile, request.data)
+            op(proposal, onboarding.profile, request.data, resolutions,
+               onboarding.blocked or [])
             store_proposal(
-                onboarding, proposal, read_upload(onboarding), "edit"
+                onboarding, proposal, read_upload(onboarding), "edit",
+                resolutions,
             )
         except OnboardingError as exc:
             return Response(

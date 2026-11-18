@@ -19,6 +19,9 @@ class DataOnboarding(models.Model):
     file_name = models.CharField(max_length=255)
     profile = models.JSONField(null=True, default=None)
     proposal = models.JSONField(null=True, default=None)
+    # Choices that settle ambiguity (see apply._Places). They hold names
+    # from the file, so never part of the Proposal, which goes to OpenAI.
+    resolutions = models.JSONField(default=dict)
     # Forms the checks block, with causes; never part of the Proposal.
     blocked = models.JSONField(null=True, default=None)
     # When each revision was asked for: counts against the daily cap.

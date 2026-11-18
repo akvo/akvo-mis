@@ -202,7 +202,15 @@ describe("Data Onboarding", () => {
         {
           kind: "shared_name",
           reason: "Some names exist under several parents.",
-          units: ["Hill"],
+          units: [
+            {
+              name: "Hill",
+              parents: [
+                { id: 2, name: "North" },
+                { id: 3, name: "South" },
+              ],
+            },
+          ],
         },
       ],
     },
@@ -256,6 +264,55 @@ describe("Data Onboarding", () => {
     expect(screen.getByText("Water sites")).toBeInTheDocument();
   });
 
+  it("resolves a near-match in the review, then can apply", async () => {
+    api.get.mockResolvedValue({
+      data: { id: 7, status: "proposed", proposal, blocked },
+    });
+    api.post.mockResolvedValue({
+      data: { id: 7, status: "proposed", proposal, blocked: [] },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: text.dataOnboardingUseExisting,
+      })
+    );
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/edits", {
+      op: "resolve_near_match",
+      name: "Kwalle",
+      match: "Kwale",
+      use: "existing",
+    });
+    expect(
+      await screen.findByRole("button", { name: text.dataOnboardingApply })
+    ).toBeEnabled();
+    expect(screen.queryByText(text.dataOnboardingBlocked)).toBeNull();
+  });
+
+  it("drops a form that has no location column", async () => {
+    const noLocation = [
+      {
+        form: "sites",
+        name: "Water sites",
+        causes: [{ kind: "no_location", reason: "No location column." }],
+      },
+    ];
+    api.get.mockResolvedValue({
+      data: { id: 7, status: "proposed", proposal, blocked: noLocation },
+    });
+    api.post.mockResolvedValue({
+      data: { id: 7, status: "proposed", proposal, blocked: noLocation },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    fireEvent.click(
+      await screen.findByRole("button", { name: text.dataOnboardingDropForm })
+    );
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/edits", {
+      op: "drop_form",
+      form: "sites",
+    });
+  });
+
   it("marks a blocked form with its causes and won't apply it", async () => {
     api.get.mockResolvedValue({
       data: { id: 7, status: "proposed", proposal, blocked },
@@ -266,7 +323,7 @@ describe("Data Onboarding", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(text.dataOnboardingBlocked)).toBeInTheDocument();
     expect(screen.getByText(/Kwalle → Kwale/)).toBeInTheDocument();
-    expect(screen.getByText(/Hill/)).toBeInTheDocument();
+    expect(screen.getByText("Hill")).toBeInTheDocument();
     expect(screen.getByText(text.dataOnboardingBlockedNote)).toBeVisible();
     expect(
       screen.getByRole("button", { name: text.dataOnboardingApply })

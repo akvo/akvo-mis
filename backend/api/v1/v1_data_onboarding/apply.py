@@ -145,17 +145,71 @@ def _in_scope(unit, scope):
     return scope is None or not scope.isdisjoint(ids)
 
 
-def _add_administration(admin, sheets, tenant, index, scope):
-    aliases = {_fold(a["from"]): a["to"] for a in admin["aliases"]}
-    paths = [list(u) for u in admin["units"]]
+class _Places:
+    """Where location cells land in the tree, resolutions applied.
+
+    Resolutions (DataOnboarding.resolutions, never in the Proposal):
+    levels {form key: depth of its first location column}, parents
+    [{name, parent: unit id}] for a name under several parents, aliases
+    [{from, to}] and new_units [{name, match}] for near-matches.
+    """
+
+    def __init__(self, proposal, index, resolutions=None):
+        r = resolutions or {}
+        self.aliases = {
+            _fold(a["from"]): a["to"]
+            for a in proposal["administration"]["aliases"]
+            + r.get("aliases", [])
+        }
+        self.starts = r.get("levels", {})
+        self.parents = {_fold(p["name"]): p["parent"]
+                        for p in r.get("parents", [])}
+        self.new_units = {(_fold(u["name"]), _fold(u["match"]))
+                          for u in r.get("new_units", [])}
+        self.index = index
+        self.named = {}  # (depth, folded name): [(key, unit)]
+        for key, unit in index.items():
+            if key:
+                self.named.setdefault((len(key), key[-1]), []).append(
+                    (key, unit)
+                )
+
+    def start(self, spec):
+        return self.starts.get(spec["form"], 1)
+
+    def cells(self, cells):
+        return [_norm(_lookup(self.aliases, _text(c))) for c in cells]
+
+    def path(self, cells, start):
+        """Names from depth 1, or None when the top name can't be placed.
+
+        Columns starting below depth 1 borrow the path above from the
+        unit their top name names (as folded names: those units exist).
+        """
+        names = self.cells(cells)
+        if start == 1 or not names:
+            return names
+        found = self.named.get((start, _fold(names[0])), [])
+        if len(found) > 1:
+            parent = self.parents.get(_fold(names[0]))
+            found = [(k, u) for k, u in found if u.parent_id == parent]
+        if len(found) != 1:
+            return None
+        return list(found[0][0]) + names[1:]
+
+
+def _add_administration(admin, sheets, tenant, index, scope, places,
+                        start=1):
+    paths = [places.cells(u) for u in admin["units"]]
     source = admin["source"]
     if source["columns"]:
         df = sheets[source["sheet"]]
         for _, row in df.iterrows():
             cells = [row[c] for c in source["columns"]]
             if all(c is not None for c in cells):
-                paths.append([_norm(_lookup(aliases, _text(c)))
-                              for c in cells])
+                path = places.path(cells, start)
+                if path:
+                    paths.append(path)
 
     levels = list(Levels.objects.filter(tenant=tenant).order_by("level"))
     # check_hierarchy has allowed any levels beyond the existing ones.
@@ -180,7 +234,6 @@ def _add_administration(admin, sheets, tenant, index, scope):
                 parent=index[key[:-1]], level=levels[depth],
                 name=path[depth - 1], tenant=tenant,
             )
-    return aliases
 
 
 # ------------------------------------------------------------------ forms
@@ -212,11 +265,11 @@ def _create_forms(forms, user):
 # ------------------------------------------------------------------- rows
 
 class _Rows:
-    def __init__(self, form, spec, aliases, index, user, scope=None,
+    def __init__(self, form, spec, places, index, user, scope=None,
                  parents=None):
         self.form, self.spec, self.parents = form, spec, parents
         self.records = {}  # key: FormData, for monitoring rows to find
-        self.aliases, self.index, self.user = aliases, index, user
+        self.places, self.index, self.user = places, index, user
         self.scope = scope
         self.questions = list(
             form.form_questions.select_related("question_group")
@@ -287,7 +340,10 @@ class _Rows:
         cells = [row[c] for c in self.spec["administration_columns"]]
         if any(c is None for c in cells):
             raise ValueError("Location is blank.")
-        key = tuple(_fold(_lookup(self.aliases, _text(c))) for c in cells)
+        path = self.places.path(cells, self.places.start(self.spec))
+        if path is None:
+            raise ValueError("Location is not in the administration tree.")
+        key = tuple(_fold(n) for n in path)
         known = next(key[:n] for n in range(len(key), -1, -1)
                      if key[:n] in self.index)
         if not _in_scope(self.index[known], self.scope):
@@ -408,7 +464,8 @@ def _unblocked(proposal, blocked, chosen):
     }
 
 
-def apply_proposal(proposal, path, file_name, tenant, user, forms=None):
+def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
+                   resolutions=None):
     """Apply a Proposal to the tenant and return the Onboarding Report.
 
     The ambiguity checks run again first: only the chosen forms (all
@@ -421,7 +478,7 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None):
     from api.v1.v1_data_onboarding.ambiguity import blocked_forms
 
     sheets = read_sheets(path, file_name)
-    blocked = blocked_forms(proposal, sheets, tenant, user)
+    blocked = blocked_forms(proposal, sheets, tenant, user, resolutions)
     proposal = _unblocked(proposal, blocked, forms)
     index = _admin_index(tenant)
     before = len(index)
@@ -430,8 +487,13 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None):
         refusal = check_hierarchy(proposal, tenant, user)
         if refusal:
             raise OnboardingError(refusal)
-        aliases = _add_administration(
-            proposal["administration"], sheets, tenant, index, scope
+        places = _Places(proposal, index, resolutions)
+        admin = proposal["administration"]
+        source = next((d for d in proposal["data"]
+                       if d["sheet"] == admin["source"]["sheet"]), None)
+        _add_administration(
+            admin, sheets, tenant, index, scope, places,
+            places.start(source) if source else 1,
         )
         forms = _create_forms(proposal["forms"], user)
     if len(index) > before:
@@ -448,7 +510,7 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None):
         parents = None
         if parent_of[spec["form"]]:
             parents = records.get(parent_of[spec["form"]], {})
-        rows = _Rows(form, spec, aliases, index, user, scope, parents)
+        rows = _Rows(form, spec, places, index, user, scope, parents)
         records[spec["form"]] = rows.records
         for i, row in sheets[spec["sheet"]].iterrows():
             rows.load(i + 2, row)  # i is 0-based after a header row
