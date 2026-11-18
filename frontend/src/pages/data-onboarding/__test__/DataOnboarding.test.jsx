@@ -189,6 +189,61 @@ describe("Data Onboarding", () => {
     ).toBeNull();
   });
 
+  const blocked = [
+    {
+      form: "sites",
+      name: "Water sites",
+      causes: [
+        {
+          kind: "near_match",
+          reason: "Some new units are spelled like existing units.",
+          units: [{ name: "Kwalle", match: "Kwale" }],
+        },
+        {
+          kind: "shared_name",
+          reason: "Some names exist under several parents.",
+          units: ["Hill"],
+        },
+      ],
+    },
+  ];
+
+  it("marks a blocked form with its causes and won't apply it", async () => {
+    api.get.mockResolvedValue({
+      data: { id: 7, status: "proposed", proposal, blocked },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    expect(
+      await screen.findByText("Some new units are spelled like existing units.")
+    ).toBeInTheDocument();
+    expect(screen.getByText(text.dataOnboardingBlocked)).toBeInTheDocument();
+    expect(screen.getByText(/Kwalle → Kwale/)).toBeInTheDocument();
+    expect(screen.getByText(/Hill/)).toBeInTheDocument();
+    expect(screen.getByText(text.dataOnboardingBlockedNote)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: text.dataOnboardingApply })
+    ).toBeDisabled();
+  });
+
+  it("lists the forms the re-check at Apply blocked", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        id: 7,
+        status: "applied",
+        proposal,
+        report: { forms: [], issues: [], blocked },
+      },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    expect(
+      await screen.findByText(text.dataOnboardingNotApplied)
+    ).toBeInTheDocument();
+    expect(screen.getByText("Water sites")).toBeInTheDocument();
+    expect(
+      screen.getByText("Some names exist under several parents.")
+    ).toBeInTheDocument();
+  });
+
   it("shows a failed draft", async () => {
     api.get.mockResolvedValue({
       data: { id: 8, status: "failed", error: "OpenAI did not return JSON." },

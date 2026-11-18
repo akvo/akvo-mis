@@ -385,14 +385,44 @@ class _Rows:
         self.loaded += 1
 
 
-def apply_proposal(proposal, path, file_name, tenant, user):
+def _unblocked(proposal, blocked, chosen):
+    """The Proposal cut down to the chosen forms that are not blocked."""
+    skip = {b["form"] for b in blocked}
+    keys = {
+        f["key"] for f in proposal["forms"]
+        if f["key"] not in skip and (chosen is None or f["key"] in chosen)
+    }
+    admin = proposal["administration"]
+    loaders = {
+        d["form"] for d in proposal["data"]
+        if d["sheet"] == admin["source"]["sheet"]
+    }
+    if loaders and not loaders & keys:
+        # The units belong to forms that are not applied.
+        admin = {**admin, "units": [],
+                 "source": {"sheet": None, "columns": []}}
+    return {
+        **proposal, "administration": admin,
+        "forms": [f for f in proposal["forms"] if f["key"] in keys],
+        "data": [d for d in proposal["data"] if d["form"] in keys],
+    }
+
+
+def apply_proposal(proposal, path, file_name, tenant, user, forms=None):
     """Apply a Proposal to the tenant and return the Onboarding Report.
 
-    Levels, units and forms are all-or-nothing: on any error none exist
-    and the error propagates. Rows then load one by one; a bad row is
-    skipped and reported, never fatal.
+    The ambiguity checks run again first: only the chosen forms (all
+    when None) that are not blocked now are applied; the blocked ones
+    are reported. Levels, units and forms are all-or-nothing: on any
+    error none exist and the error propagates. Rows then load one by
+    one; a bad row is skipped and reported, never fatal.
     """
+    # Imported here: ambiguity reuses this module's helpers.
+    from api.v1.v1_data_onboarding.ambiguity import blocked_forms
+
     sheets = read_sheets(path, file_name)
+    blocked = blocked_forms(proposal, sheets, tenant, user)
+    proposal = _unblocked(proposal, blocked, forms)
     index = _admin_index(tenant)
     before = len(index)
     scope = _scope(user)
@@ -408,7 +438,7 @@ def apply_proposal(proposal, path, file_name, tenant, user):
         generate_sqlite(Administration, tenant=tenant)
     async_task("api.v1.v1_forms.tasks.refresh_form_config")
 
-    report = {"forms": [], "issues": []}
+    report = {"forms": [], "issues": [], "blocked": blocked}
     records = {}  # form key: {row key: FormData}
     # Registration rows first, so visits can find their parent records.
     parent_of = {f["key"]: f["parent"] for f in proposal["forms"]}

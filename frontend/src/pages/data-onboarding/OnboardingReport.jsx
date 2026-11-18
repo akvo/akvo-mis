@@ -1,7 +1,8 @@
 import React from "react";
 import { Divider, Empty, Table, Tag, Typography } from "antd";
+import { BlockedCauses } from "./ProposalReview";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const OnboardingReport = ({ report, text }) => (
   <div className="onboarding-report">
@@ -16,6 +17,18 @@ const OnboardingReport = ({ report, text }) => (
       ]}
       dataSource={report.forms}
     />
+    {report.blocked?.length > 0 && (
+      <>
+        <Divider />
+        <Title level={5}>{text.dataOnboardingNotApplied}</Title>
+        {report.blocked.map((b) => (
+          <div key={b.form}>
+            <Text strong>{b.name}</Text>
+            <BlockedCauses causes={b.causes} />
+          </div>
+        ))}
+      </>
+    )}
     <Divider />
     <Title level={5}>{text.dataOnboardingIssues}</Title>
     {report.issues.length ? (

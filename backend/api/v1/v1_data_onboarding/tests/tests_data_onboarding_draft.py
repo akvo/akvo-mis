@@ -395,3 +395,74 @@ class DataOnboardingDraftTestCase(TenantIsolationTestCase):
             f"acme.app.com/control-center/data-onboarding/{pk}", html
         )
         self.assertIn("Water sites : 3", html)
+
+    def add_unit(self, name):
+        from api.v1.v1_profile.models import Administration
+
+        Administration.objects.create(
+            parent=self.a["root"], level=self.a["child_level"], name=name,
+            tenant=self.a["tenant"],
+        )
+
+    def apply(self, pk, **body):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(
+                f"{URL}/{pk}/apply", body, content_type="application/json",
+                **self.auth(self.a["user"]), **self.host(),
+            )
+
+    def test_a_blocked_form_shows_its_cause_and_cannot_be_applied(self):
+        self.add_unit("Norths")
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        self.draft(pk, json.dumps(proposal()))
+
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "proposed")
+        self.assertEqual(body["proposal"], proposal())  # findings kept out
+        self.assertEqual(body["blocked"], [{
+            "form": "sites", "name": "Water sites", "causes": [{
+                "kind": "near_match",
+                "reason": body["blocked"][0]["causes"][0]["reason"],
+                "units": [{"name": "North", "match": "Norths"}],
+            }],
+        }])
+        for body in ({}, {"forms": ["sites"]}):
+            res = self.apply(pk, **body)
+            self.assertEqual(res.status_code, 400)
+        self.assertEqual(self.get(pk).json()["status"], "proposed")
+
+    def test_apply_takes_a_set_of_unblocked_forms(self):
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        self.draft(pk, json.dumps(proposal()))
+        self.assertEqual(self.get(pk).json()["blocked"], [])
+
+        for forms in (["nope"], [], "sites"):
+            self.assertEqual(self.apply(pk, forms=forms).status_code, 400)
+        res = self.apply(pk, forms=["sites"])
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.async_task.call_args.kwargs["forms"], ["sites"])
+
+    @override_settings(TEST_ENV=True)
+    def test_apply_rechecks_against_the_tree_as_it_is_now(self):
+        from api.v1.v1_data_onboarding.tasks import apply_onboarding
+        from api.v1.v1_forms.models import Forms
+
+        pk = self.upload("sites.csv", CSV.encode()).json()["id"]
+        self.draft(pk, json.dumps(proposal()))
+        self.assertEqual(self.get(pk).json()["blocked"], [])
+        self.assertEqual(self.apply(pk).status_code, 200)
+
+        self.add_unit("Norths")  # the tree changed after review
+        apply_onboarding(pk, forms=self.async_task.call_args.kwargs["forms"])
+
+        body = self.get(pk).json()
+        self.assertEqual(body["status"], "applied")
+        self.assertEqual(body["report"]["forms"], [])
+        self.assertEqual(
+            [(b["form"], [c["kind"] for c in b["causes"]])
+             for b in body["report"]["blocked"]],
+            [("sites", ["near_match"])],
+        )
+        self.assertFalse(
+            Forms.objects.filter(name="Water sites").exists()
+        )

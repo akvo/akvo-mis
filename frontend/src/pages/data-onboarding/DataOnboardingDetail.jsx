@@ -16,6 +16,7 @@ const DataOnboardingDetail = () => {
   const text = useMemo(() => uiText[activeLang], [activeLang]);
 
   const status = onboarding?.status;
+  const blocked = onboarding?.blocked || [];
   const drafting = !onboarding || status === "drafting";
   const busy = drafting || status === "applying";
   const [applying, setApplying] = useState(false);
@@ -108,9 +109,26 @@ const DataOnboardingDetail = () => {
             </Spin>
           )}
           {status === "proposed" && (
-            <Button type="primary" loading={applying} onClick={apply}>
-              {text.dataOnboardingApply}
-            </Button>
+            <>
+              {blocked.length > 0 && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={text.dataOnboardingBlockedNote}
+                />
+              )}
+              <Button
+                type="primary"
+                loading={applying}
+                disabled={
+                  blocked.length >= (onboarding.proposal?.forms.length || 0)
+                }
+                onClick={apply}
+              >
+                {text.dataOnboardingApply}
+              </Button>
+            </>
           )}
           {onboarding?.report ? (
             <>
@@ -125,7 +143,11 @@ const DataOnboardingDetail = () => {
             </>
           ) : (
             onboarding?.proposal && (
-              <ProposalReview proposal={onboarding.proposal} text={text} />
+              <ProposalReview
+                proposal={onboarding.proposal}
+                blocked={blocked}
+                text={text}
+              />
             )
           )}
         </div>

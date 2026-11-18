@@ -19,6 +19,8 @@ class DataOnboarding(models.Model):
     file_name = models.CharField(max_length=255)
     profile = models.JSONField(null=True, default=None)
     proposal = models.JSONField(null=True, default=None)
+    # Forms the checks block, with causes; never part of the Proposal.
+    blocked = models.JSONField(null=True, default=None)
     report = models.JSONField(null=True, default=None)
     error = models.TextField(null=True, default=None)
     created_by = models.ForeignKey(

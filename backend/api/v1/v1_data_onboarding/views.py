@@ -33,6 +33,7 @@ def _detail(onboarding):
         "status": DataOnboardingStatus.FieldStr[onboarding.status],
         "file_name": onboarding.file_name,
         "proposal": onboarding.proposal,
+        "blocked": onboarding.blocked,
         "report": onboarding.report,
         "error": onboarding.error,
         "created": onboarding.created,
@@ -115,6 +116,27 @@ def data_onboarding_detail(request, version, pk):
     return Response(_detail(onboarding))
 
 
+def _chosen_forms(onboarding, chosen):
+    """(form keys to apply, error): all unblocked forms when not given."""
+    blocked = {b["form"] for b in onboarding.blocked or []}
+    forms = onboarding.proposal["forms"]
+    ready = [f["key"] for f in forms if f["key"] not in blocked]
+    if chosen is None:
+        chosen = ready
+    if not isinstance(chosen, list) or \
+            not all(isinstance(k, str) and k in ready for k in chosen):
+        return None, "Only unblocked forms of this Proposal can be applied."
+    if not chosen:
+        return None, "There is no unblocked form to apply."
+    for f in forms:
+        if f["key"] in chosen and f["parent"] and f["parent"] not in chosen:
+            return None, (
+                f"Form '{f['name']}' needs its registration form applied"
+                " with it."
+            )
+    return chosen, None
+
+
 @extend_schema(tags=["Data Onboarding"], summary="Apply the Proposal")
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, DataOnboardingAccess])
@@ -130,11 +152,17 @@ def data_onboarding_apply(request, version, pk):
                 {"message": "Only a proposed Data Onboarding can be applied."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        forms, error = _chosen_forms(onboarding, request.data.get("forms"))
+        if error:
+            return Response(
+                {"message": error}, status=status.HTTP_400_BAD_REQUEST
+            )
         onboarding.status = DataOnboardingStatus.applying
         onboarding.save()
         transaction.on_commit(lambda: async_task(
             "api.v1.v1_data_onboarding.tasks.apply_onboarding",
             onboarding.id,
+            forms=forms,
             hook="api.v1.v1_data_onboarding.tasks.apply_onboarding_result",
         ))
     return Response(_detail(onboarding))

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
+from api.v1.v1_data_onboarding.ambiguity import blocked_forms
 from api.v1.v1_data_onboarding.apply import apply_proposal, check_hierarchy
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
 from api.v1.v1_data_onboarding.models import DataOnboarding
@@ -82,9 +83,8 @@ def _ask_openai(profile):
 def draft_proposal(onboarding_id):
     onboarding = DataOnboarding.objects.get(id=onboarding_id)
     try:
-        onboarding.profile = profile_sheets(
-            read_sheets(download(onboarding.file), onboarding.file_name)
-        )
+        sheets = read_sheets(download(onboarding.file), onboarding.file_name)
+        onboarding.profile = profile_sheets(sheets)
         try:
             proposal = json.loads(_ask_openai(onboarding.profile) or "")
         except ValueError:
@@ -101,6 +101,9 @@ def draft_proposal(onboarding_id):
         if refusal:
             raise OnboardingError(refusal)
         onboarding.proposal = proposal
+        onboarding.blocked = blocked_forms(
+            proposal, sheets, onboarding.tenant, onboarding.created_by
+        )
         onboarding.status = DataOnboardingStatus.proposed
     except OnboardingError as exc:
         onboarding.status = DataOnboardingStatus.failed
@@ -124,12 +127,13 @@ def draft_proposal_result(task):
         )
 
 
-def apply_onboarding(onboarding_id):
+def apply_onboarding(onboarding_id, forms=None):
     onboarding = DataOnboarding.objects.get(id=onboarding_id)
     try:
         onboarding.report = apply_proposal(
             onboarding.proposal, download(onboarding.file),
             onboarding.file_name, onboarding.tenant, onboarding.created_by,
+            forms=forms,
         )
         onboarding.status = DataOnboardingStatus.applied
     except OnboardingError as exc:

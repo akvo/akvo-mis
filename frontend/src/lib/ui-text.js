@@ -421,6 +421,10 @@ const uiText = {
     dataOnboardingRow: "Row",
     dataOnboardingSkipped: "Row skipped",
     dataOnboardingDroppedAnswer: "Answer dropped",
+    dataOnboardingBlocked: "Blocked",
+    dataOnboardingBlockedNote:
+      "Blocked forms are not applied. Apply loads the other forms.",
+    dataOnboardingNotApplied: "Forms not applied",
     dataOnboardingApplyFailed: "The Proposal could not be applied.",
     dataOnboardingDownloadReport: "Download report",
     dataOnboardingDownloadFailed: "The report could not be downloaded.",
@@ -1949,6 +1953,10 @@ uiText.fr = {
   dataOnboardingRow: "Ligne",
   dataOnboardingSkipped: "Ligne ignorée",
   dataOnboardingDroppedAnswer: "Réponse abandonnée",
+  dataOnboardingBlocked: "Bloqué",
+  dataOnboardingBlockedNote:
+    "Les formulaires bloqués ne sont pas appliqués. L'application charge les autres formulaires.",
+  dataOnboardingNotApplied: "Formulaires non appliqués",
   dataOnboardingApplyFailed: "La proposition n'a pas pu être appliquée.",
   dataOnboardingDownloadReport: "Télécharger le rapport",
   dataOnboardingDownloadFailed: "Le rapport n'a pas pu être téléchargé.",

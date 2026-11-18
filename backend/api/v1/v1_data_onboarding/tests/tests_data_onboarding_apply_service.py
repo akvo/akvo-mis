@@ -99,14 +99,14 @@ class ApplyProposalTestCase(TestCase):
         self.dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.dir)
 
-    def apply(self, rows, proposal=PROPOSAL, header=HEADER):
+    def apply(self, rows, proposal=PROPOSAL, header=HEADER, **kw):
         path = os.path.join(self.dir, "sites.csv")
         with open(path, "w", newline="") as fh:
             writer = csv.writer(fh)
             writer.writerow(header)
             writer.writerows([[r.get(c, "") for c in header] for r in rows])
         return apply_proposal(proposal, path, "sites.csv", self.tenant,
-                              self.user)
+                              self.user, **kw)
 
     def answers(self, record):
         out = {}
@@ -301,3 +301,184 @@ class ApplyProposalTestCase(TestCase):
                         self.assertEqual(got.get(question), value)
                 finally:
                     transaction.set_rollback(True)
+
+
+@override_settings(USE_TZ=False, TEST_ENV=True)
+class AmbiguousAdministrationTestCase(TestCase):
+    """Each case blocks its form; the other forms still apply."""
+
+    setUp = ApplyProposalTestCase.setUp
+    apply = ApplyProposalTestCase.apply
+
+    def tree(self, levels, units):
+        """Levels below the root, and units as paths of names."""
+        made = [Levels.objects.get(tenant=self.tenant, level=0)]
+        for depth, name in enumerate(levels, 1):
+            made.append(Levels.objects.create(
+                tenant=self.tenant, name=name, level=depth
+            ))
+        nodes = {(): self.root}
+        for path in units:
+            for depth in range(1, len(path) + 1):
+                key = tuple(path[:depth])
+                if key not in nodes:
+                    nodes[key] = Administration.objects.create(
+                        parent=nodes[key[:-1]], level=made[depth],
+                        name=path[depth - 1], tenant=self.tenant,
+                    )
+
+    def proposal(self, columns=("district", "village"), aliases=()):
+        p = copy.deepcopy(PROPOSAL)
+        p["administration"]["source"]["columns"] = list(columns)
+        p["administration"]["aliases"] = [
+            {"from": a, "to": b} for a, b in aliases
+        ]
+        p["data"][0]["administration_columns"] = list(columns)
+        return p
+
+    def kinds(self, report):
+        return {
+            b["form"]: sorted({c["kind"] for c in b["causes"]})
+            for b in report["blocked"]
+        }
+
+    def test_ambiguity_cases(self):
+        two_levels = (["District", "Village"],
+                      [["KwaZulu-Natal", "Hill"], ["Coast", "Kwale"]])
+        # name, (levels, units) or None, rows, proposal, blocked kinds
+        cases = [
+            ("a clean file blocks nothing", two_levels,
+             [GOOD, {**GOOD, "id": "S2", "village": "Vale"}],
+             self.proposal(), {}),
+            ("more location columns than levels",
+             (["District"], [["KwaZulu-Natal"]]),
+             [GOOD], self.proposal(), {"sites": ["level_mapping"]}),
+            ("a column missing in the middle",
+             (["Province", "District", "Village"],
+              [["East", "KwaZulu-Natal", "Hill"]]),
+             [GOOD], self.proposal(), {"sites": ["level_mapping"]}),
+            ("a name under several parents without a parent column",
+             (["District", "Village"],
+              [["KwaZulu-Natal", "Hill"], ["Coast", "Hill"]]),
+             [{**GOOD, "district": "Hill"}], self.proposal(["district"]),
+             {"sites": ["level_mapping", "shared_name"]}),
+            ("a near-match spelling", two_levels,
+             [GOOD, {**GOOD, "id": "S2", "district": "Coast",
+                     "village": "Kwalle"}],
+             self.proposal(), {"sites": ["near_match"]}),
+            ("a near-match after normalizing punctuation", two_levels,
+             [{**GOOD, "district": "Kwa Zulu Natal"}],
+             self.proposal(), {"sites": ["near_match"]}),
+            ("an alias is input to the checks", two_levels,
+             [{**GOOD, "district": "Coast", "village": "Kwalle"}],
+             self.proposal(aliases=[("kwalle", "Kwale")]), {}),
+            ("a registration sheet with no location column",
+             None, [GOOD], self.proposal([]), {"sites": ["no_location"]}),
+        ]
+        for name, tree, rows, proposal, blocked in cases:
+            with self.subTest(name), transaction.atomic():
+                try:
+                    if tree:
+                        self.tree(*tree)
+                        # No new levels on a populated tree.
+                        proposal["administration"]["levels"] = \
+                            ["Country"] + tree[0]
+                    units = Administration.objects.filter(
+                        tenant=self.tenant).count()
+                    report = self.apply(rows, proposal=proposal)
+                    self.assertEqual(self.kinds(report), blocked)
+                    created = Forms.objects.filter(tenant=self.tenant)
+                    if not blocked:
+                        self.assertEqual(created.count(), 1)
+                        self.assertEqual(report["forms"][0]["loaded"],
+                                         len(rows))
+                        continue
+                    self.assertFalse(created.exists())
+                    self.assertEqual(report["forms"], [])
+                    if tree:  # a blocked form adds no units
+                        self.assertEqual(Administration.objects.filter(
+                            tenant=self.tenant).count(), units)
+                    for cause in report["blocked"][0]["causes"]:
+                        self.assertTrue(cause["reason"])
+                finally:
+                    transaction.set_rollback(True)
+
+    def test_unblocked_forms_apply_and_a_blocked_parent_blocks_monitoring(
+        self
+    ):
+        p = self.proposal()
+        nowhere = copy.deepcopy(p["forms"][0])
+        nowhere.update(key="nowhere", name="No location")
+        visits = copy.deepcopy(p["forms"][0])
+        visits.update(key="visits", name="Visits", type="monitoring",
+                      parent="nowhere")
+        visits["question_group"][0]["question"] = [
+            q("note", "input", meta=True)
+        ]
+        p["forms"] += [nowhere, visits]
+        p["data"].append({**copy.deepcopy(p["data"][0]), "form": "nowhere",
+                          "administration_columns": []})
+
+        report = self.apply([GOOD], proposal=p)
+
+        self.assertEqual(self.kinds(report), {
+            "nowhere": ["no_location"], "visits": ["parent_blocked"],
+        })
+        self.assertEqual(
+            list(Forms.objects.filter(tenant=self.tenant)
+                 .values_list("name", flat=True)),
+            ["Water sites"],
+        )
+        self.assertEqual(report["forms"][0]["loaded"], 1)
+
+    def test_only_the_chosen_forms_apply(self):
+        p = self.proposal()
+        other = copy.deepcopy(p["forms"][0])
+        other.update(key="other", name="Other sites")
+        p["forms"].append(other)
+        p["data"].append({**copy.deepcopy(p["data"][0]), "form": "other"})
+
+        report = self.apply([GOOD], proposal=p, forms=["other"])
+
+        self.assertEqual([f["key"] for f in report["forms"]], ["other"])
+        self.assertEqual(
+            list(Forms.objects.filter(tenant=self.tenant)
+                 .values_list("name", flat=True)),
+            ["Other sites"],
+        )
+
+    def test_rows_outside_the_subtree_are_not_ambiguous(self):
+        from api.v1.v1_profile.constants import (
+            FeatureAccessTypes,
+            FeatureTypes,
+        )
+        from api.v1.v1_profile.models import (
+            Role,
+            RoleFeatureAccess,
+            UserRole,
+        )
+
+        self.tree(["District", "Village"],
+                  [["KwaZulu-Natal", "Hill"], ["Coast", "Kwale"]])
+        mine = Administration.objects.get(name="KwaZulu-Natal")
+        self.user = SystemUser.objects.create_user(
+            email="team@fresh.org", password="Secret#Pass123",
+            first_name="T", last_name="T", tenant=self.tenant,
+        )
+        role = Role.objects.create(name="team",
+                                   administration_level=mine.level)
+        RoleFeatureAccess.objects.create(
+            role=role, type=FeatureTypes.data_onboarding,
+            access=FeatureAccessTypes.data_onboard,
+        )
+        UserRole.objects.create(user=self.user, role=role,
+                                administration=mine)
+
+        report = self.apply(
+            [GOOD, {**GOOD, "id": "S2", "district": "Coast",
+                    "village": "Kwalle"}],
+            proposal=self.proposal(),
+        )
+
+        self.assertEqual(report["blocked"], [])
+        self.assertEqual(report["forms"][0]["loaded"], 1)

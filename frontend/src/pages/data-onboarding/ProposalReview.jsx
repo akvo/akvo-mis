@@ -1,7 +1,42 @@
 import React from "react";
-import { Card, Divider, Empty, Table, Tag, Tree, Typography } from "antd";
+import {
+  Alert,
+  Card,
+  Divider,
+  Empty,
+  Table,
+  Tag,
+  Tree,
+  Typography,
+} from "antd";
 
 const { Title, Text } = Typography;
+
+// Units are names, or {name, match} for a near-match spelling.
+const unitText = (u) => (u.match ? `${u.name} → ${u.match}` : u);
+
+export const BlockedCauses = ({ causes }) => (
+  <Alert
+    type="error"
+    showIcon
+    style={{ marginBottom: 16 }}
+    message={
+      <ul style={{ margin: 0, paddingLeft: 16 }}>
+        {causes.map((c, i) => (
+          <li key={i}>
+            <span>{c.reason}</span>
+            {c.units?.length > 0 && (
+              <Text type="secondary">
+                {" "}
+                ({c.units.map(unitText).join(", ")})
+              </Text>
+            )}
+          </li>
+        ))}
+      </ul>
+    }
+  />
+);
 
 // Units are paths of names below the root; merge them into one tree.
 const unitTree = (units) => {
@@ -21,7 +56,7 @@ const unitTree = (units) => {
   return root;
 };
 
-const ProposalReview = ({ proposal, text }) => {
+const ProposalReview = ({ proposal, blocked = [], text }) => {
   const { administration, forms, data, notes } = proposal;
 
   const questionColumns = [
@@ -54,6 +89,7 @@ const ProposalReview = ({ proposal, text }) => {
       <Title level={4}>{text.dataOnboardingForms}</Title>
       {forms.map((form) => {
         const spec = data.find((d) => d.form === form.key);
+        const block = blocked.find((b) => b.form === form.key);
         const questions = form.question_group.flatMap((g) => g.question);
         const label = (name) =>
           questions.find((q) => q.name === name)?.label || name;
@@ -61,9 +97,15 @@ const ProposalReview = ({ proposal, text }) => {
           <Card
             key={form.key}
             title={form.name}
-            extra={<Tag>{form.type}</Tag>}
+            extra={
+              <>
+                {block && <Tag color="red">{text.dataOnboardingBlocked}</Tag>}
+                <Tag>{form.type}</Tag>
+              </>
+            }
             style={{ marginBottom: 16 }}
           >
+            {block && <BlockedCauses causes={block.causes} />}
             <Table
               rowKey="name"
               size="small"
