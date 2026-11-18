@@ -36,8 +36,11 @@ Draft a Proposal:
   the record. Question names are lowercase snake_case and unique in a
   form. Option and multiple_option questions list their options.
 - data: per sheet, the form it loads, key columns that identify a
-  record, administration columns, geo columns, the column feeding each
-  question, value maps from raw values to option labels (only for
+  record (for a visit sheet, these include the visit date), for a visit
+  sheet the parent key columns that hold its registration record's key
+  (empty otherwise), administration columns (empty for visit sheets:
+  visits take the location from their parent), geo columns, the column
+  feeding each question, value maps from raw values to option labels (only for
   columns whose values are listed), the date format (strptime) when
   dates are not ISO, the multi-select separator, and every column not
   loaded with the reason.

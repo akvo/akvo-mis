@@ -61,6 +61,7 @@ PROPOSAL = {
     }],
     "data": [{
         "form": "sites", "sheet": "csv", "key_columns": ["id"],
+        "parent_key_columns": [],
         "administration_columns": ["district", "village"],
         "geo": {"lat": "lat", "lng": "lng", "column": None},
         "columns": [

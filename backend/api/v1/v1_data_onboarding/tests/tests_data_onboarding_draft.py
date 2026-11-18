@@ -83,6 +83,7 @@ def proposal(**overrides):
                 "form": "sites",
                 "sheet": "csv",
                 "key_columns": ["site_id"],
+                "parent_key_columns": [],
                 "administration_columns": ["district"],
                 "geo": None,
                 "columns": [

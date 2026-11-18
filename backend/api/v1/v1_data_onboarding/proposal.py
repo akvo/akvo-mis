@@ -63,6 +63,9 @@ DATA = _obj(
     form=STR,
     sheet=STR,
     key_columns=_arr(STR),
+    # Monitoring only: the columns holding the parent record's key, in
+    # the order of the parent sheet's key_columns.
+    parent_key_columns=_arr(STR),
     administration_columns=_arr(STR),
     geo=_null(_obj(lat=_null(STR), lng=_null(STR), column=_null(STR))),
     columns=_arr(_obj(question=STR, column=STR)),
@@ -160,6 +163,19 @@ def validate_proposal(proposal, profile):
                     f"forms[{i}].{issue['path']}: {issue['message']}"
                 )
 
+    for i, form in enumerate(proposal["forms"]):
+        parent = forms.get(form["parent"])
+        if form["type"] == "monitoring" and (
+            not parent or parent["type"] != "registration"
+        ):
+            errors.append(
+                f"forms[{i}].parent: must be the key of a registration"
+                " form in this Proposal"
+            )
+        if form["type"] == "registration" and form["parent"] is not None:
+            errors.append(f"forms[{i}].parent: must be null on registration")
+
+    specs = {s["form"]: s for s in proposal["data"]}
     for i, spec in enumerate(proposal["data"]):
         path = f"data[{i}]"
         form = forms.get(spec["form"])
@@ -173,10 +189,20 @@ def validate_proposal(proposal, profile):
         questions = {
             q["name"] for g in form["question_group"] for q in g["question"]
         }
+        parent = specs.get(form["parent"])
+        if form["type"] == "monitoring" and (
+            not parent
+            or len(spec["parent_key_columns"]) != len(parent["key_columns"])
+        ):
+            errors.append(
+                f"{path}.parent_key_columns: must match the parent sheet's"
+                " key_columns"
+            )
         geo = spec["geo"] or {}
         check_columns(
             path, sheet,
-            spec["key_columns"] + spec["administration_columns"]
+            spec["key_columns"] + spec["parent_key_columns"]
+            + spec["administration_columns"]
             + [c for c in geo.values() if c]
             + [c["column"] for c in spec["columns"]]
             + [c["column"] for c in spec["unmapped_columns"]],

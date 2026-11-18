@@ -212,8 +212,10 @@ def _create_forms(forms, user):
 # ------------------------------------------------------------------- rows
 
 class _Rows:
-    def __init__(self, form, spec, aliases, index, user, scope=None):
-        self.form, self.spec = form, spec
+    def __init__(self, form, spec, aliases, index, user, scope=None,
+                 parents=None):
+        self.form, self.spec, self.parents = form, spec, parents
+        self.records = {}  # key: FormData, for monitoring rows to find
         self.aliases, self.index, self.user = aliases, index, user
         self.scope = scope
         self.questions = list(
@@ -299,6 +301,16 @@ class _Rows:
         if any(c is None for c in cells):
             return self.issue(line, None, "skipped", "Key column is blank.")
         key = "|".join(_text(c) for c in cells)
+        parent = None
+        if self.parents is not None:
+            cells = [row[c] for c in self.spec["parent_key_columns"]]
+            if any(c is None for c in cells):
+                return self.issue(line, None, "skipped",
+                                  "Parent key column is blank.")
+            parent = self.parents.get("|".join(_text(c) for c in cells))
+            if not parent:
+                return self.issue(line, None, "skipped",
+                                  "No registration record has this key.")
         if key in self.seen:
             return self.issue(
                 line, None, "skipped", "Repeated key; an earlier row loaded."
@@ -345,12 +357,20 @@ class _Rows:
                 else v)
             for q, v in values if q.meta and q.type != QuestionTypes.geo
         ) or key
+        record_uuid = str(uuid.uuid5(ONBOARDING_NS, f"{self.form.id}/{key}"))
+        if parent:
+            # A visit takes its identity and location from its parent.
+            name, administration, geo = (
+                parent.name, parent.administration, parent.geo
+            )
+            record_uuid = parent.uuid
         data = FormData.objects.create(
             name=name, form=self.form, administration=administration,
             geo=geo, created_by=self.user, is_pending=False,
-            uuid=str(uuid.uuid5(ONBOARDING_NS, f"{self.form.id}/{key}")),
+            uuid=record_uuid, parent=parent,
             published_version=self.form.active_version,
         )
+        self.records[key] = data
         answers = []
         for q, value in values:
             a_name, a_value, a_options = answer_fields(q, value)
@@ -389,9 +409,17 @@ def apply_proposal(proposal, path, file_name, tenant, user):
     async_task("api.v1.v1_forms.tasks.refresh_form_config")
 
     report = {"forms": [], "issues": []}
-    for spec in proposal["data"]:
+    records = {}  # form key: {row key: FormData}
+    # Registration rows first, so visits can find their parent records.
+    parent_of = {f["key"]: f["parent"] for f in proposal["forms"]}
+    for spec in sorted(proposal["data"],
+                       key=lambda s: parent_of[s["form"]] is not None):
         form = forms[spec["form"]]
-        rows = _Rows(form, spec, aliases, index, user, scope)
+        parents = None
+        if parent_of[spec["form"]]:
+            parents = records.get(parent_of[spec["form"]], {})
+        rows = _Rows(form, spec, aliases, index, user, scope, parents)
+        records[spec["form"]] = rows.records
         for i, row in sheets[spec["sheet"]].iterrows():
             rows.load(i + 2, row)  # i is 0-based after a header row
         report["forms"].append({
