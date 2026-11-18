@@ -130,6 +130,11 @@ def DashboardAccess(required_access):
     return FeatureAccess(FeatureTypes.dashboard_builder, required_access)
 
 
+DataOnboardingAccess = FeatureAccess(
+    FeatureTypes.data_onboarding, FeatureAccessTypes.data_onboard
+)
+
+
 class PublicGet(BasePermission):
     def has_permission(self, request, view):
         if request.method == "GET":

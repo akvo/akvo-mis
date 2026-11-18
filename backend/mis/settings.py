@@ -211,6 +211,7 @@ API_APPS = [
     "api.v1.v1_files",
     "api.v1.v1_visualization",
     "api.v1.v1_chatbot",
+    "api.v1.v1_data_onboarding",
     "api.sentry_test",
 ]
 
