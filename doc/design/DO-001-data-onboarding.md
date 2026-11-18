@@ -3,7 +3,7 @@
 **Task ID**: DO-001
 **GitHub Issue**: [#573](https://github.com/akvo/akvo-mis/issues/573)
 **Date**: 2026-11-16
-**Status**: Draft
+**Status**: Implemented
 
 Terms (Tenant, Data Onboarding, Proposal, Apply, Onboarding Report, Ambiguous Administration) are defined in `/GLOSSARY.md`. The core decision is recorded in `doc/adr/0001-llm-drafts-proposal-code-applies-it.md`.
 
@@ -34,7 +34,7 @@ PR #462 solved this with an external Claude skill that registered a new workspac
   - adds the approved units,
   - creates and publishes the new forms,
   - loads the records as approved data.
-- When Apply completes or fails, the user gets an email with a summary and a link. The full Onboarding Report is in-app and downloadable. Past Data Onboardings are listed with who ran them and when.
+- When Apply completes or fails, the user gets an email with a summary and a link. The full Onboarding Report is in-app and downloadable. Past Data Onboardings are listed with who started them and when.
 - Forms blocked by ambiguity can't be applied. The other forms in the same Proposal can.
 
 ### Technical Acceptance Criteria
@@ -45,7 +45,7 @@ PR #462 solved this with an external Claude skill that registered a new workspac
 - Proposal drafting and Apply run as Django-Q jobs. The client polls their status.
 - OpenAI output is validated against the Proposal format before it is stored. Invalid output fails the draft.
 - Every endpoint checks the Data Onboarding permission on the server. Hiding the button in the UI is not the protection.
-- There is a per-tenant cap on drafts and revisions (default 20/day). The model is configurable in settings next to `OPENAI_API_KEY`.
+- There is a per-tenant cap on Proposals and revisions (default 20/day). The model is configurable in settings next to `OPENAI_API_KEY`.
 - The uploaded file is deleted after Apply, or after 14 days if the Proposal is abandoned. The Proposal and Report are kept. The Report holds row numbers and reasons, not row contents.
 
 ## 3. Scope Rules
@@ -86,22 +86,41 @@ The LLM may suggest aliases and mappings. The deterministic checks decide.
 
 ## 5. Data Model Changes
 
-To be designed. Likely a tenant-scoped `DataOnboarding` record holding:
-- status,
-- the uploaded file reference,
-- the column profile,
-- the Proposal JSON and its revisions,
-- the Report,
-- the created-by user,
-- timestamps.
+App `api/v1/v1_data_onboarding`. One tenant-scoped model, `DataOnboarding` (table `data_onboarding`):
+
+| Field | Holds |
+|---|---|
+| `tenant` | Owning tenant |
+| `status` | `drafting`, `proposed`, `applying`, `applied`, `failed` (a revision shows as `drafting`; a failed revision returns to `proposed`) |
+| `file`, `file_name` | Storage path of the upload (purged after Apply, or after 14 days) and its original name |
+| `profile` | The column profile, all OpenAI ever sees of the file |
+| `proposal` | The latest Proposal only. A revision or edit replaces it; earlier ones are not kept |
+| `blocked` | Forms the ambiguity checks block, with their causes. Holds names from the file, so it is never part of the Proposal |
+| `resolutions` | Review choices that settle ambiguity (level of the first location column, parent, alias, confirmed new unit). Holds names from the file, so it is never part of the Proposal |
+| `revised` | Timestamps of revisions, counted against the daily cap |
+| `report` | The Onboarding Report: forms with records loaded, skipped rows and dropped answers, and blocked forms with cause kind and reason only. No cell values |
+| `error` | Why the last draft, revision or Apply failed |
+| `created_by`, `created`, `updated` | Who started it, and when |
 
 Plus constants:
-- `FeatureTypes.data_onboarding`,
-- `FeatureAccessTypes.data_onboard`, numbered after 12 (existing values are persisted, so they are never reused).
+- `FeatureTypes.data_onboarding` (4),
+- `FeatureAccessTypes.data_onboard` (13), numbered after 12 (existing values are persisted, so they are never reused).
+
+A Django-Q schedule (migration `0002`) purges uploads hourly.
 
 ## 6. API Contract
 
-To be designed: upload → draft (job), get status and Proposal, structured edit, revise (job), apply (job), get Report, download Report, list past Data Onboardings.
+All under `/api/v1/data-onboarding`, behind `DataOnboardingAccess` and scoped to the caller's tenant. Jobs run in Django-Q; the client polls the detail endpoint.
+
+| Method and path | Does |
+|---|---|
+| `GET /data-onboarding` | List past Data Onboardings: id, status, file name, started by, created, updated |
+| `POST /data-onboarding` | Upload one CSV or xlsx (`file`). Validates type, size and rows, counts against the daily cap (429 over it), queues the draft job. 201 with the detail |
+| `GET /data-onboarding/<id>` | Detail: status, Proposal, `blocked`, `resolutions`, Report, error, started by. When proposed, also `units`: `{new, outside}`, the name paths of units Apply would add for the viewer and those outside the viewer's subtree, read from the file. In-app only: never stored, never sent to OpenAI |
+| `POST /data-onboarding/<id>/edits` | One structured edit, `{"op": ..., ...}`: `rename_form`, `drop_column`, `keep_column`, `map_level`, `set_location_column`, `drop_form`, `choose_parent`, `resolve_near_match`. Proposed only. No OpenAI call; all checks re-run for the acting user |
+| `POST /data-onboarding/<id>/revise` | `{"instruction": ...}` (≤ 2,000 characters). Queues a re-draft through OpenAI from the profile and the Proposal only. Counts against the cap |
+| `POST /data-onboarding/<id>/apply` | Optional `{"forms": [keys]}` (default: all unblocked). Queues Apply for the acting user. Proposed only |
+| `GET /data-onboarding/<id>/report` | The Onboarding Report as xlsx |
 
 ## 7. Compatibility
 
@@ -124,7 +143,7 @@ To be designed: upload → draft (job), get status and Proposal, structured edit
 ## 10. Open Questions
 
 - Should the review offer a per-column "never send to OpenAI" control for sensitive category-like columns?
-- Revision history: keep every Proposal revision, or only the latest?
+- ~~Revision history: keep every Proposal revision, or only the latest?~~ Only the latest (D-5).
 
 ## 11. References
 
@@ -132,3 +151,16 @@ To be designed: upload → draft (job), get status and Proposal, structured edit
 - MT-029 (#525) signup and auth abuse hardening
 - FB-007 form import/export, FB-016 XLSForm import
 - MT-007 administration bulk upload hardening
+
+## 12. Decision Log
+
+- **D-1 Access needs `form_view` too.** "Onboard spreadsheet" shows only with both `form_view` and `data_onboard`; the Forms list gates stay as they are.
+- **D-2 The importer sees what they loaded.** Apply adds a `UserForms` row for the applying user on each new form.
+- **D-3 Tighter profile value rule.** A column sends its values only with ≤ 30 distinct values that repeat (distinct ≤ half the filled cells). Unique-per-row columns never send values.
+- **D-4 File values stay out of the Proposal.** Ambiguity findings (`blocked`) and review choices (`resolutions`) live beside the Proposal, because a revision resends the Proposal to OpenAI. The units shown in the review are computed from the file per request and never stored. The Report keeps blocked forms' cause kind and reason only.
+- **D-5 One edit endpoint, checks on every change.** Every draft, revision and edit re-runs validation, the hierarchy check and the ambiguity checks before it is stored. Only the latest Proposal is kept (answers the revision-history question).
+- **D-6 A failed revision keeps the previous Proposal** and stays proposed, with the error shown.
+- **D-7 Checks run for the acting user.** Edits, revisions and Apply use the scope and rights of the user making the request, not of the user who started the Data Onboarding.
+- **D-8 New levels only on a bare tree.** Adding levels is refused when the tenant has any level below the root, and for anyone but a super admin.
+- **D-9 Multi-select separator is a set of characters.** Each character of `multi_separator` splits a cell; parts are trimmed. It is not a pattern.
+- **D-10 Rows load in savepoints.** Any error in a row skips only that row ("This row could not be loaded."); the rest load.
