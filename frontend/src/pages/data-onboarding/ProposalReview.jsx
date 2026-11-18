@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Alert,
+  Button,
   Card,
   Divider,
   Empty,
@@ -56,7 +57,8 @@ const unitTree = (units) => {
   return root;
 };
 
-const ProposalReview = ({ proposal, blocked = [], text }) => {
+// onEdit(body) sends a structured edit; without it the review is read-only.
+const ProposalReview = ({ proposal, blocked = [], text, onEdit }) => {
   const { administration, forms, data, notes } = proposal;
 
   const questionColumns = [
@@ -93,10 +95,41 @@ const ProposalReview = ({ proposal, blocked = [], text }) => {
         const questions = form.question_group.flatMap((g) => g.question);
         const label = (name) =>
           questions.find((q) => q.name === name)?.label || name;
+        const columnEdit = (op, title) =>
+          onEdit
+            ? [
+                {
+                  key: op,
+                  render: (_, row) => (
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        onEdit({ op, form: form.key, column: row.column })
+                      }
+                    >
+                      {title}
+                    </Button>
+                  ),
+                },
+              ]
+            : [];
         return (
           <Card
             key={form.key}
-            title={form.name}
+            title={
+              <Text
+                editable={
+                  onEdit && {
+                    onChange: (name) =>
+                      name.trim() &&
+                      name !== form.name &&
+                      onEdit({ op: "rename_form", form: form.key, name }),
+                  }
+                }
+              >
+                {form.name}
+              </Text>
+            }
             extra={
               <>
                 {block && <Tag color="red">{text.dataOnboardingBlocked}</Tag>}
@@ -131,6 +164,7 @@ const ProposalReview = ({ proposal, blocked = [], text }) => {
                       dataIndex: "question",
                       render: label,
                     },
+                    ...columnEdit("drop_column", text.dataOnboardingDropColumn),
                   ]}
                   dataSource={spec.columns}
                 />
@@ -175,6 +209,10 @@ const ProposalReview = ({ proposal, blocked = [], text }) => {
                           title: text.dataOnboardingReason,
                           dataIndex: "reason",
                         },
+                        ...columnEdit(
+                          "keep_column",
+                          text.dataOnboardingKeepColumn
+                        ),
                       ]}
                       dataSource={spec.unmapped_columns}
                     />

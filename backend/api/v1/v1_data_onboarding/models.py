@@ -21,6 +21,8 @@ class DataOnboarding(models.Model):
     proposal = models.JSONField(null=True, default=None)
     # Forms the checks block, with causes; never part of the Proposal.
     blocked = models.JSONField(null=True, default=None)
+    # When each revision was asked for: counts against the daily cap.
+    revised = models.JSONField(default=list)
     report = models.JSONField(null=True, default=None)
     error = models.TextField(null=True, default=None)
     created_by = models.ForeignKey(

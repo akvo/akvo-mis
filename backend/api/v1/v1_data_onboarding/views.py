@@ -1,12 +1,16 @@
+import copy
 import io
 import tempfile
+from datetime import timedelta
 from uuid import uuid4
 
 import openpyxl
 
+from django.conf import settings
 from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django_q.tasks import async_task
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -15,6 +19,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
+from api.v1.v1_data_onboarding.edits import EDIT_OPS
 from api.v1.v1_data_onboarding.models import DataOnboarding
 from api.v1.v1_data_onboarding.profile import (
     MAX_FILE_SIZE,
@@ -23,6 +28,7 @@ from api.v1.v1_data_onboarding.profile import (
     extension,
     read_sheets,
 )
+from api.v1.v1_data_onboarding.tasks import read_upload, store_proposal
 from utils import storage
 from utils.custom_permissions import DataOnboardingAccess
 
@@ -41,6 +47,27 @@ def _detail(onboarding):
     }
 
 
+def _over_cap(tenant):
+    """The refusal when the tenant used its OpenAI calls for the day."""
+    since = timezone.now() - timedelta(days=1)
+    stamp = since.isoformat()
+    onboardings = DataOnboarding.objects.filter(tenant=tenant)
+    used = onboardings.filter(created__gte=since).count() + sum(
+        t >= stamp
+        for revised in onboardings.filter(updated__gte=since)
+        .values_list("revised", flat=True)
+        for t in revised
+    )
+    cap = settings.DATA_ONBOARDING_DAILY_CAP
+    if used < cap:
+        return None
+    return Response(
+        {"message": f"This workspace has used its {cap} drafts and"
+                    " revisions for the last 24 hours. Try again later."},
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
+    )
+
+
 def _create(request):
     file_obj = request.FILES.get("file")
     if not file_obj:
@@ -48,6 +75,9 @@ def _create(request):
             {"message": "file is required"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    refusal = _over_cap(request.user.tenant)
+    if refusal:
+        return refusal
     ext = extension(file_obj.name)
     try:
         if ext not in ("csv", "xlsx"):
@@ -164,6 +194,81 @@ def data_onboarding_apply(request, version, pk):
             onboarding.id,
             forms=forms,
             hook="api.v1.v1_data_onboarding.tasks.apply_onboarding_result",
+        ))
+    return Response(_detail(onboarding))
+
+
+def _locked_proposed(request, pk, what):
+    """(onboarding, refusal): the record locked, if it is proposed."""
+    onboarding = get_object_or_404(
+        DataOnboarding.objects.for_user(request.user).select_for_update(),
+        pk=pk,
+    )
+    if onboarding.status != DataOnboardingStatus.proposed:
+        return onboarding, Response(
+            {"message": f"Only a proposed Data Onboarding can be {what}."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return onboarding, None
+
+
+@extend_schema(tags=["Data Onboarding"], summary="Edit the Proposal")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, DataOnboardingAccess])
+def data_onboarding_edits(request, version, pk):
+    with transaction.atomic():
+        onboarding, refusal = _locked_proposed(request, pk, "edited")
+        if refusal:
+            return refusal
+        op = EDIT_OPS.get(request.data.get("op"))
+        proposal = copy.deepcopy(onboarding.proposal)
+        try:
+            if not op:
+                raise OnboardingError("Unknown edit.")
+            op(proposal, onboarding.profile, request.data)
+            store_proposal(
+                onboarding, proposal, read_upload(onboarding), "edit"
+            )
+        except OnboardingError as exc:
+            return Response(
+                {"message": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        onboarding.error = None
+        onboarding.save()
+    return Response(_detail(onboarding))
+
+
+@extend_schema(
+    tags=["Data Onboarding"],
+    summary="Re-draft the Proposal through OpenAI from an instruction",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, DataOnboardingAccess])
+def data_onboarding_revise(request, version, pk):
+    instruction = request.data.get("instruction")
+    if not isinstance(instruction, str) or not instruction.strip() \
+            or len(instruction) > 2000:
+        return Response(
+            {"message": "Type an instruction of up to 2,000 characters."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    with transaction.atomic():
+        onboarding, refusal = _locked_proposed(request, pk, "revised")
+        refusal = refusal or _over_cap(onboarding.tenant)
+        if refusal:
+            return refusal
+        # Revising shows as drafting; the previous Proposal stays.
+        onboarding.status = DataOnboardingStatus.drafting
+        onboarding.error = None
+        onboarding.revised = onboarding.revised + [
+            timezone.now().isoformat()
+        ]
+        onboarding.save()
+        transaction.on_commit(lambda: async_task(
+            "api.v1.v1_data_onboarding.tasks.revise_proposal",
+            onboarding.id,
+            instruction.strip(),
+            hook="api.v1.v1_data_onboarding.tasks.revise_proposal_result",
         ))
     return Response(_detail(onboarding))
 

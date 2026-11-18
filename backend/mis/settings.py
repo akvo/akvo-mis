@@ -506,6 +506,10 @@ OPENAI_VECTOR_STORE_ID = environ.get("OPENAI_VECTOR_STORE_ID", "")
 DATA_ONBOARDING_OPENAI_MODEL = (
     environ.get("DATA_ONBOARDING_OPENAI_MODEL") or "gpt-4o-mini"
 )
+# Drafts and revisions a tenant may ask OpenAI for in 24 hours.
+DATA_ONBOARDING_DAILY_CAP = int(
+    environ.get("DATA_ONBOARDING_DAILY_CAP") or 20
+)
 
 FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(

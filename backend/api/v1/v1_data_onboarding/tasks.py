@@ -54,7 +54,14 @@ Draft a Proposal:
 """
 
 
-def _ask_openai(profile):
+REVISE = """
+You now revise a Proposal you drafted. You get the profile, the current
+Proposal and the user's instruction. Apply the instruction, keep the
+rest of the Proposal as it is, and return the whole revised Proposal.
+"""
+
+
+def _ask_openai(instructions, content):
     api_key = getattr(settings, "OPENAI_API_KEY", None)
     if not api_key:
         raise OnboardingError("OpenAI is not configured.")
@@ -65,8 +72,8 @@ def _ask_openai(profile):
     response = client.chat.completions.create(
         model=settings.DATA_ONBOARDING_OPENAI_MODEL,
         messages=[
-            {"role": "system", "content": INSTRUCTIONS},
-            {"role": "user", "content": json.dumps(profile)},
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": json.dumps(content)},
         ],
         response_format={
             "type": "json_schema",
@@ -77,32 +84,51 @@ def _ask_openai(profile):
         temperature=0.2,
         max_tokens=16000,
     )
-    return response.choices[0].message.content
+    try:
+        return json.loads(response.choices[0].message.content or "")
+    except ValueError:
+        raise OnboardingError("OpenAI did not return a Proposal.")
+
+
+def store_proposal(onboarding, proposal, sheets, what):
+    """Check the Proposal and keep it with its blocked forms (unsaved).
+
+    Every draft, revision and edit goes through here, so the checks
+    always run on what is stored.
+    """
+    errors = validate_proposal(proposal, onboarding.profile)
+    if errors:
+        raise OnboardingError(
+            f"The {what} did not match the Proposal format: "
+            + "; ".join(errors[:10])
+        )
+    refusal = check_hierarchy(
+        proposal, onboarding.tenant, onboarding.created_by
+    )
+    if refusal:
+        raise OnboardingError(refusal)
+    onboarding.blocked = blocked_forms(
+        proposal, sheets, onboarding.tenant, onboarding.created_by
+    )
+    onboarding.proposal = proposal
+
+
+def read_upload(onboarding):
+    if not onboarding.file:
+        raise OnboardingError(
+            "The uploaded file has been deleted. Upload it again."
+        )
+    return read_sheets(download(onboarding.file), onboarding.file_name)
 
 
 def draft_proposal(onboarding_id):
     onboarding = DataOnboarding.objects.get(id=onboarding_id)
     try:
-        sheets = read_sheets(download(onboarding.file), onboarding.file_name)
+        sheets = read_upload(onboarding)
         onboarding.profile = profile_sheets(sheets)
-        try:
-            proposal = json.loads(_ask_openai(onboarding.profile) or "")
-        except ValueError:
-            raise OnboardingError("OpenAI did not return a Proposal.")
-        errors = validate_proposal(proposal, onboarding.profile)
-        if errors:
-            raise OnboardingError(
-                "The draft did not match the Proposal format: "
-                + "; ".join(errors[:10])
-            )
-        refusal = check_hierarchy(
-            proposal, onboarding.tenant, onboarding.created_by
-        )
-        if refusal:
-            raise OnboardingError(refusal)
-        onboarding.proposal = proposal
-        onboarding.blocked = blocked_forms(
-            proposal, sheets, onboarding.tenant, onboarding.created_by
+        store_proposal(
+            onboarding, _ask_openai(INSTRUCTIONS, onboarding.profile),
+            sheets, "draft",
         )
         onboarding.status = DataOnboardingStatus.proposed
     except OnboardingError as exc:
@@ -113,6 +139,37 @@ def draft_proposal(onboarding_id):
         onboarding.status = DataOnboardingStatus.failed
         onboarding.error = "The Proposal could not be drafted. Try again."
     onboarding.save()
+
+
+REVISION_FAILED = "The Proposal could not be revised. Try again."
+
+
+def revise_proposal(onboarding_id, instruction):
+    # A failed revision keeps the previous Proposal and stays proposed.
+    onboarding = DataOnboarding.objects.get(id=onboarding_id)
+    try:
+        sheets = read_upload(onboarding)
+        # Only the profile and the Proposal: resolutions and the blocked
+        # findings hold file values and never go to OpenAI.
+        store_proposal(onboarding, _ask_openai(INSTRUCTIONS + REVISE, {
+            "profile": onboarding.profile,
+            "proposal": onboarding.proposal,
+            "instruction": instruction,
+        }), sheets, "revision")
+    except OnboardingError as exc:
+        onboarding.error = str(exc)
+    except Exception:
+        logger.exception("Data Onboarding %s: revision failed", onboarding_id)
+        onboarding.error = REVISION_FAILED
+    onboarding.status = DataOnboardingStatus.proposed
+    onboarding.save()
+
+
+def revise_proposal_result(task):
+    if not task.success:
+        DataOnboarding.objects.filter(
+            id=task.args[0], status=DataOnboardingStatus.drafting
+        ).update(status=DataOnboardingStatus.proposed, error=REVISION_FAILED)
 
 
 def draft_proposal_result(task):

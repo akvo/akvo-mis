@@ -208,6 +208,54 @@ describe("Data Onboarding", () => {
     },
   ];
 
+  it("drops and keeps columns, and sends a revision", async () => {
+    const proposed = { id: 7, status: "proposed", proposal };
+    api.get.mockResolvedValue({ data: proposed });
+    api.post.mockResolvedValue({ data: proposed });
+    renderAt("/control-center/data-onboarding/7");
+    await screen.findByText("Water sites");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: text.dataOnboardingDropColumn })
+    );
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/edits", {
+      op: "drop_column",
+      form: "sites",
+      column: "source_col",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: text.dataOnboardingKeepColumn })
+    );
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/edits", {
+      op: "keep_column",
+      form: "sites",
+      column: "phone",
+    });
+
+    fireEvent.change(
+      screen.getByPlaceholderText(text.dataOnboardingReviseHint),
+      { target: { value: "Make it a yes/no question" } }
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: text.dataOnboardingRevise })
+    );
+    expect(api.post).toHaveBeenCalledWith("/data-onboarding/7/revise", {
+      instruction: "Make it a yes/no question",
+    });
+  });
+
+  it("shows a failed revision with the Proposal kept", async () => {
+    api.get.mockResolvedValue({
+      data: { id: 7, status: "proposed", proposal, error: "No Proposal." },
+    });
+    renderAt("/control-center/data-onboarding/7");
+    expect(
+      await screen.findByText(text.dataOnboardingRevisionFailed)
+    ).toBeInTheDocument();
+    expect(screen.getByText("No Proposal.")).toBeInTheDocument();
+    expect(screen.getByText("Water sites")).toBeInTheDocument();
+  });
+
   it("marks a blocked form with its causes and won't apply it", async () => {
     api.get.mockResolvedValue({
       data: { id: 7, status: "proposed", proposal, blocked },

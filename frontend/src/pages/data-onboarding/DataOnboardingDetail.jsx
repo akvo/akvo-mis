@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Alert, Button, Spin, message } from "antd";
+import { Alert, Button, Input, Spin, message } from "antd";
 import { Breadcrumbs } from "../../components";
 import { api, store, uiText } from "../../lib";
 import { DownloadOutlined } from "@ant-design/icons";
@@ -29,6 +29,22 @@ const DataOnboardingDetail = () => {
       .catch((err) => message.error(err.response?.data?.message))
       .finally(() => setApplying(false));
   };
+
+  const edit = (body) =>
+    api
+      .post(`/data-onboarding/${id}/edits`, body)
+      .then((res) => setOnboarding(res.data))
+      .catch((err) => message.error(err.response?.data?.message));
+
+  const [instruction, setInstruction] = useState("");
+  const revise = () =>
+    api
+      .post(`/data-onboarding/${id}/revise`, { instruction })
+      .then((res) => {
+        setOnboarding(res.data);
+        setInstruction("");
+      })
+      .catch((err) => message.error(err.response?.data?.message));
 
   const downloadReport = () => {
     api
@@ -110,6 +126,16 @@ const DataOnboardingDetail = () => {
           )}
           {status === "proposed" && (
             <>
+              {onboarding.error && (
+                // A failed revision keeps the previous Proposal.
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={text.dataOnboardingRevisionFailed}
+                  description={onboarding.error}
+                />
+              )}
               {blocked.length > 0 && (
                 <Alert
                   type="warning"
@@ -127,6 +153,17 @@ const DataOnboardingDetail = () => {
                 onClick={apply}
               >
                 {text.dataOnboardingApply}
+              </Button>
+              <Input.TextArea
+                rows={2}
+                maxLength={2000}
+                style={{ margin: "16px 0 8px" }}
+                placeholder={text.dataOnboardingReviseHint}
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+              />
+              <Button disabled={!instruction.trim()} onClick={revise}>
+                {text.dataOnboardingRevise}
               </Button>
             </>
           )}
@@ -147,6 +184,7 @@ const DataOnboardingDetail = () => {
                 proposal={onboarding.proposal}
                 blocked={blocked}
                 text={text}
+                onEdit={status === "proposed" ? edit : null}
               />
             )
           )}

@@ -20,6 +20,7 @@ from api.v1.v1_data_onboarding.apply import (
     _scope,
     _text,
 )
+from api.v1.v1_forms.models import Forms
 from api.v1.v1_profile.models import Levels
 
 
@@ -34,6 +35,11 @@ class _Context:
         # check_hierarchy refuses a Proposal whose new levels can't be added.
         self.depth = max(len(levels), len(admin["levels"])) - 1
         self.scope = _scope(user)
+        # The default manager leaves archived forms out: they never clash.
+        self.form_names = {
+            _fold(n) for n in
+            Forms.objects.filter(tenant=tenant).values_list("name", flat=True)
+        }
         # {depth: {folded name: number of parents}}, {parent key: names}
         self.by_depth, self.children = {}, {}
         for key, unit in self.index.items():
@@ -182,7 +188,19 @@ def _near_match(form, spec, ctx):
     )]
 
 
-CHECKS = [_level_mapping, _shared_name, _near_match, _no_location]
+def _name_clash(form, spec, ctx):
+    if _fold(form["name"]) not in ctx.form_names:
+        return []
+    return [_cause(
+        "name_clash",
+        f"An active form is already named '{form['name']}'. Rename this"
+        " form, or archive the old one.",
+    )]
+
+
+CHECKS = [
+    _level_mapping, _shared_name, _near_match, _no_location, _name_clash,
+]
 
 
 def blocked_forms(proposal, sheets, tenant, user):
