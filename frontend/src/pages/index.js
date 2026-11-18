@@ -1,4 +1,3 @@
-export { default as Home } from "./home/Home";
 export { default as Landing } from "./landing/Landing";
 export { default as Forms } from "./forms/Forms";
 export { default as Login } from "./login/Login";

@@ -2,7 +2,6 @@ import "./App.scss";
 import React, { useContext, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
-  Home,
   Landing,
   Login,
   Register,
@@ -214,7 +213,6 @@ const RouteList = () => {
           does its own redirects for the no-session and already-done
           cases. */}
       <Route exact path="/configure" element={<Configure />} />
-      <Route exact path="/data" element={<Home />} />
       <Route
         path="/control-center"
         element={

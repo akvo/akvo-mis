@@ -46,6 +46,15 @@
   cursor: pointer;
 }
 
+/* Full-bleed: the workspace Layout.Body (.body) adds the app's header-height
+   top padding, 50px side gutters and a grey page background. On the "/" route
+   Body.jsx tags it `.body-home`; cancel that padding so the landing reaches the
+   viewport edges. (This rule previously lived in the now-removed Home styles;
+   it matches the app's own `#root .layout .body` specificity.) */
+#root .layout .body.body-home {
+  padding: 0;
+}
+
 /* MIS's Home styles give the page wrapper a navy background; the landing
    owns its own surface instead. Dark mode is handled by `dark:` classes. */
 #landing {
