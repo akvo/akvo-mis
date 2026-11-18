@@ -3,7 +3,7 @@ import logging
 
 from django.conf import settings
 
-from api.v1.v1_data_onboarding.apply import apply_proposal
+from api.v1.v1_data_onboarding.apply import apply_proposal, check_hierarchy
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
 from api.v1.v1_data_onboarding.models import DataOnboarding
 from api.v1.v1_data_onboarding.profile import (
@@ -88,6 +88,11 @@ def draft_proposal(onboarding_id):
                 "The draft did not match the Proposal format: "
                 + "; ".join(errors[:10])
             )
+        refusal = check_hierarchy(
+            proposal, onboarding.tenant, onboarding.created_by
+        )
+        if refusal:
+            raise OnboardingError(refusal)
         onboarding.proposal = proposal
         onboarding.status = DataOnboardingStatus.proposed
     except OnboardingError as exc:

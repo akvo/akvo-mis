@@ -24,6 +24,7 @@ from api.v1.v1_forms.functions import (
     validate_form_definition,
 )
 from api.v1.v1_forms.models import UserForms
+from api.v1.v1_profile.constants import FeatureAccessTypes, FeatureTypes
 from api.v1.v1_profile.models import Administration, Levels
 from api.v1.v1_visualization.functions import refresh_materialized_data
 from utils.custom_generator import generate_sqlite
@@ -110,7 +111,41 @@ def _admin_index(tenant):
     return index
 
 
-def _add_administration(admin, sheets, tenant, user, index):
+def check_hierarchy(proposal, tenant, user):
+    """Why the Proposal may not add its levels here, or None."""
+    wanted = len(proposal["administration"]["levels"])
+    if wanted <= Levels.objects.filter(tenant=tenant).count():
+        return None
+    if not user.is_superuser:
+        return "Only a super admin can add administration levels."
+    if Administration.objects.filter(
+        tenant=tenant, parent__isnull=False
+    ).exists():
+        return (
+            "Levels cannot be added: the administration tree already has"
+            " units below the root."
+        )
+    return None
+
+
+def _scope(user):
+    """Ids of the units whose subtrees the user may onboard; None: all."""
+    if user.is_superuser:
+        return None
+    return set(user.user_user_role.filter(
+        role__role_role_feature_access__type=FeatureTypes.data_onboarding,
+        role__role_role_feature_access__access=(
+            FeatureAccessTypes.data_onboard
+        ),
+    ).values_list("administration_id", flat=True))
+
+
+def _in_scope(unit, scope):
+    ids = [unit.id] + [int(i) for i in (unit.path or "").split(".") if i]
+    return scope is None or not scope.isdisjoint(ids)
+
+
+def _add_administration(admin, sheets, tenant, index, scope):
     aliases = {_fold(a["from"]): a["to"] for a in admin["aliases"]}
     paths = [list(u) for u in admin["units"]]
     source = admin["source"]
@@ -123,19 +158,20 @@ def _add_administration(admin, sheets, tenant, user, index):
                               for c in cells])
 
     levels = list(Levels.objects.filter(tenant=tenant).order_by("level"))
-    # New levels only on a tree that is just the root, and for super admin.
-    if len(index) == 1 and user.is_superuser:
-        for depth, name in enumerate(admin["levels"]):
-            if depth >= len(levels):
-                levels.append(Levels.objects.create(
-                    tenant=tenant, name=name, level=depth
-                ))
+    # check_hierarchy has allowed any levels beyond the existing ones.
+    for depth, name in enumerate(admin["levels"]):
+        if depth >= len(levels):
+            levels.append(Levels.objects.create(
+                tenant=tenant, name=name, level=depth
+            ))
 
     for path in sorted(paths, key=len):
         for depth in range(1, len(path) + 1):
             key = tuple(_fold(n) for n in path[:depth])
             if key in index:
                 continue
+            if not _in_scope(index[key[:-1]], scope):
+                break  # its rows are reported as outside the subtree
             if depth >= len(levels):
                 raise OnboardingError(
                     "The locations go deeper than the administration levels."
@@ -176,9 +212,10 @@ def _create_forms(forms, user):
 # ------------------------------------------------------------------- rows
 
 class _Rows:
-    def __init__(self, form, spec, aliases, index, user):
+    def __init__(self, form, spec, aliases, index, user, scope=None):
         self.form, self.spec = form, spec
         self.aliases, self.index, self.user = aliases, index, user
+        self.scope = scope
         self.questions = list(
             form.form_questions.select_related("question_group")
             .prefetch_related("options")
@@ -249,7 +286,11 @@ class _Rows:
         if any(c is None for c in cells):
             raise ValueError("Location is blank.")
         key = tuple(_fold(_lookup(self.aliases, _text(c))) for c in cells)
-        if key not in self.index:
+        known = next(key[:n] for n in range(len(key), -1, -1)
+                     if key[:n] in self.index)
+        if not _in_scope(self.index[known], self.scope):
+            raise ValueError("Location is outside your administration area.")
+        if known != key:
             raise ValueError("Location is not in the administration tree.")
         return self.index[key]
 
@@ -334,9 +375,13 @@ def apply_proposal(proposal, path, file_name, tenant, user):
     sheets = read_sheets(path, file_name)
     index = _admin_index(tenant)
     before = len(index)
+    scope = _scope(user)
     with transaction.atomic():
+        refusal = check_hierarchy(proposal, tenant, user)
+        if refusal:
+            raise OnboardingError(refusal)
         aliases = _add_administration(
-            proposal["administration"], sheets, tenant, user, index
+            proposal["administration"], sheets, tenant, index, scope
         )
         forms = _create_forms(proposal["forms"], user)
     if len(index) > before:
@@ -346,7 +391,7 @@ def apply_proposal(proposal, path, file_name, tenant, user):
     report = {"forms": [], "issues": []}
     for spec in proposal["data"]:
         form = forms[spec["form"]]
-        rows = _Rows(form, spec, aliases, index, user)
+        rows = _Rows(form, spec, aliases, index, user, scope)
         for i, row in sheets[spec["sheet"]].iterrows():
             rows.load(i + 2, row)  # i is 0-based after a header row
         report["forms"].append({
