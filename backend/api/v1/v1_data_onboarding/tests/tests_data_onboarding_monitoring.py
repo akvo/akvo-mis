@@ -237,6 +237,30 @@ class MonitoringEndpointTestCase(TenantIsolationTestCase):
                 self.assertEqual(body["status"], "failed")
                 self.assertIn("parent", body["error"])
 
+    def test_a_monitoring_form_loses_its_location_question(self):
+        p = copy.deepcopy(PROPOSAL)
+        p["forms"][0]["question_group"][0]["question"].insert(
+            0, q("location", "cascade", extra={"type": "administration"})
+        )
+        _, body = self.draft(p)
+        self.assertEqual(body["status"], "proposed")
+        self.assertEqual(body["proposal"]["forms"], PROPOSAL["forms"])
+
+    def test_a_monitoring_form_copying_its_parent_rows_is_dropped(self):
+        p = copy.deepcopy(PROPOSAL)
+        p["data"][0].update(sheet="sites", key_columns=["site_id"],
+                            parent_key_columns=["site_id"],
+                            columns=[{"question": "status",
+                                      "column": "site_name"}])
+        _, body = self.draft(p)
+        self.assertEqual(body["status"], "proposed")
+        self.assertEqual(
+            [f["key"] for f in body["proposal"]["forms"]], ["sites"]
+        )
+        self.assertEqual(
+            [d["form"] for d in body["proposal"]["data"]], ["sites"]
+        )
+
     def test_visit_rows_need_parent_key_columns(self):
         p = copy.deepcopy(PROPOSAL)
         p["data"][0]["parent_key_columns"] = []

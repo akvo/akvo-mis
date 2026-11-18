@@ -42,11 +42,15 @@ Draft a Proposal:
   the tenant's units, so never rename a place). MIS reads the units to
   add from the location columns.
 - forms: one registration form per entity sheet, monitoring forms for
-  repeated visits (parent = the registration form key). A registration
+  repeated visits (parent = the registration form key). A sheet with
+  one row per record gets a registration form only. A registration
   form has exactly one administration question (type cascade, extra
   {"type": "administration"}) and at least one meta question that names
-  the record. Question names are lowercase snake_case and unique in a
-  form. Option and multiple_option questions list their options.
+  the record; a monitoring form has none (visits take the location of
+  their parent). Every column that holds data becomes a question,
+  unless it is empty or repeats another column. Question names are
+  lowercase snake_case and unique in a form. Option and multiple_option
+  questions list their options.
 - data: per sheet, the form it loads, key columns that identify a
   record (for a visit sheet, these include the visit date), for a visit
   sheet the parent key columns that hold its registration record's key

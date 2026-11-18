@@ -220,6 +220,10 @@ def normalize(proposal, profile):
     """Fix what models draft wrong but code can settle. On a valid shape.
 
     Models drop or mangle parts of a Proposal at random:
+    - a monitoring form on its parent's sheet with its parent's key
+      copies the registration row by row: it goes, with its spec;
+    - monitoring records take the parent's location: their location
+      question goes;
     - a data spec for a form that is not there loads nothing: it goes;
     - a column fed to a question the form lacks is not loaded, and is
       listed so with a reason the review shows;
@@ -233,8 +237,30 @@ def normalize(proposal, profile):
         s["name"]: {c["name"]: c for c in s["columns"]}
         for s in profile["sheets"]
     }
+    specs = {d["form"]: d for d in proposal["data"]}
+    kinds = {f["key"]: f["type"] for f in proposal["forms"]}
+
+    def copies_parent(form):
+        spec, parent = specs.get(form["key"]), specs.get(form["parent"])
+        return form["type"] == "monitoring" and spec and parent and \
+            kinds.get(form["parent"]) == "registration" and \
+            spec["sheet"] == parent["sheet"] and \
+            set(spec["key_columns"]) == set(parent["key_columns"])
+
+    proposal["forms"] = [
+        f for f in proposal["forms"] if not copies_parent(f)
+    ]
     forms = {f["key"]: f for f in proposal["forms"]}
     proposal["data"] = [d for d in proposal["data"] if d["form"] in forms]
+    for form in forms.values():
+        if form["type"] == "monitoring":
+            for g in form["question_group"]:
+                g["question"] = [
+                    q for q in g["question"] if not _is_location(q)
+                ]
+            form["question_group"] = [
+                g for g in form["question_group"] if g["question"]
+            ]
     source = proposal["administration"]["source"]
     for spec in proposal["data"]:
         form = forms[spec["form"]]
