@@ -1,3 +1,4 @@
+import hashlib
 import re
 from datetime import datetime, timezone as dt_timezone
 
@@ -44,7 +45,16 @@ def get_published_forms_payload(user):
     — a worse leak than the unscoped list it replaces.
     """
     tenant = getattr(user, "tenant", None)
-    cache_name = f"{PUBLISHED_FORMS_CACHE}-{tenant.id if tenant else 'none'}"
+    forms = Forms.objects.for_user(user).filter(status=FormStatus.published)
+    # The cache lives per process (backend and worker each have their own
+    # file cache), so a form a worker job publishes never clears this one.
+    # The key carries which forms are published, and at what version.
+    marks = hashlib.md5(str(list(forms.order_by("id").values_list(
+        "id", "version", "published_at"
+    ))).encode()).hexdigest()
+    cache_name = (
+        f"{PUBLISHED_FORMS_CACHE}-{tenant.id if tenant else 'none'}-{marks}"
+    )
     cached = get_cache(cache_name)
     if cached is not None:
         return cached
@@ -55,9 +65,7 @@ def get_published_forms_payload(user):
             "version": form.version,
             "content": FormDataSerializer(instance=form).data,
         }
-        for form in Forms.objects.for_user(user).filter(
-            status=FormStatus.published
-        )
+        for form in forms
     ]
     create_cache(cache_name, payload)
     return payload
