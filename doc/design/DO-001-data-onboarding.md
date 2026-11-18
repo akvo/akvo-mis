@@ -39,7 +39,7 @@ PR #462 solved this with an external Claude skill that registered a new workspac
 
 ### Technical Acceptance Criteria
 
-- OpenAI receives only the column profile: column names, types, value shapes, and the distinct values of category-like columns (at most 30 distinct values). Values from other columns never leave MIS (ADR 0001).
+- OpenAI receives only the column profile: column names, types, value shapes, and the distinct values of category-like columns (at most 30 distinct values, and at most half as many distinct values as filled cells). Values from other columns never leave MIS (ADR 0001).
 - The ambiguity checks are deterministic. They run on every draft and revision, and **again at Apply**.
 - Setup (units + forms) runs in one transaction. Data rows are best-effort: a bad row is skipped and reported, and the rest load.
 - Proposal drafting and Apply run as Django-Q jobs. The client polls their status.
@@ -82,7 +82,7 @@ The LLM may suggest aliases and mappings. The deterministic checks decide.
   - an optional answer that is invalid is dropped with a warning,
   - key columns give a stable uuid and link monitoring rows to their parent,
   - option values are derived from labels.
-- Value maps are possible only for category-like columns (at most 30 distinct values), because only their values reach OpenAI.
+- Value maps are possible only for category-like columns (at most 30 distinct values, and at most half as many distinct values as filled cells), because only their values reach OpenAI.
 
 ## 5. Data Model Changes
 
