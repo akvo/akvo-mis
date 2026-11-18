@@ -12,7 +12,7 @@
 
 **Task ID**: LP-001
 **Author**: Iwan Firmawan
-**Date**: 2026-11-18 (rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
+**Date**: 2026-11-18 (rev. 4 — hero motion pass: scroll reveals, pointer-reactive dot grid, and a mobile↔dashboard flip card (D-13) · rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
 **Status**: Review
 **Estimate**: ~4h (AI-generated; hands-on time is review + verify). Scope: Tailwind v3.4.3 scoped setup, JSON content config, akvo tokens, dark mode — see §12.
 
@@ -289,6 +289,40 @@ switch. Both are presentation-only — no backend, no new dependency.
 
 **Impact**: `pages/landing/HeroDemo.jsx` (new), two-column hero in `Landing.jsx`,
 `hero.demo` added to `content/{en,es,fr}.json`, three `App.js` shell guards.
+
+### D-13: Hero motion pass + mobile↔dashboard flip card (as-built polish)
+
+**Decision** (as built, 2026-11-18): add a scroll-motion layer and turn the hero
+product shot into a flip card so the page feels alive. This is **polish beyond
+the base LP-001 scope** (§12 A0–A4) — presentation-only, one new dependency, no
+backend.
+
+- **Dependency**: `framer-motion@6.5.1` (last v6; v7+ needs React 18, this app is
+  17). Currently in the **main bundle** — lazy-splitting the landing is a
+  follow-up so the app pages don't load it.
+- **Scroll reveals**: `Reveal` fades + rises sections into view and replays on
+  scroll up/down; `ScrollRevealText` reveals the how/why/benchmark headings
+  word-by-word, each word settling at full brand colour.
+- **Pointer-reactive hero backdrop**: `HeroDotField` draws a dot grid on a single
+  `<canvas>`; dots near the cursor brighten and grow (rAF paused off-screen).
+- **Flip card** (`HeroShowcase`): front `HeroMobile` — the mobile app's
+  offline-sync walkthrough as an optimised **GIF** (`mobile-sync.gif`, morphed
+  from the mobile-sync source frames via ImageMagick + gifsicle; only the GIF and
+  the final still `mobile-sync-7.png` (the reduced-motion fallback) are kept —
+  re-export the frames to retune) in a 3D-tilted, gently floating phone frame;
+  back `HeroDemo` — the interactive
+  dashboard. **Auto-flips** front↔back, with a **click-to-flip** button and
+  **hover-pause** so the dashboard stays usable. Each face is `backface-hidden`
+  with its own `rotateY` so the back reads un-mirrored.
+- **Accessibility**: every effect honours `prefers-reduced-motion` (static, no
+  animation); the flip collapses to just the static dashboard.
+
+**Impact**: new `pages/landing/{Reveal,ScrollRevealText,HeroDotField,HeroShowcase,HeroMobile}.jsx`,
+`framer-motion` dep, `public/assets/sprites/mobile-sync*`; `Landing.jsx` renders
+`<HeroShowcase>`, a `<HeroDotField/>` hero backdrop, and wraps sections in
+`<Reveal>`.
+
+**Follow-up**: lazy-split the landing so framer-motion leaves the app bundle.
 
 ---
 

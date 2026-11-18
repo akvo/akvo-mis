@@ -147,3 +147,9 @@ support and the comparison table working on mobile.
 - **Routing**: the landing renders at `/` on the base-domain host via
   `onBaseDomainHost()`. The old `window.appConfig.showLandingPage` toggle was
   **removed** — Akvo MIS always ships a landing page.
+- **Hero motion (polish, beyond base scope)**: scroll-reveal animations
+  (`framer-motion`), a pointer-reactive dot grid behind the hero, and a flip
+  card — front shows the mobile app's offline-sync walkthrough (a GIF) in a
+  tilted phone frame, back is the interactive dashboard; it auto-flips and is
+  click-to-flip. All effects honour `prefers-reduced-motion`. See
+  `LP-001-basic-landing-page.md` D-13.

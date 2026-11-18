@@ -7,7 +7,7 @@ import {
   resolveLang,
   brandName,
 } from "./content";
-import HeroDemo from "./HeroDemo";
+import HeroShowcase from "./HeroShowcase";
 import HeroDotField from "./HeroDotField";
 import Reveal from "./Reveal";
 import ScrollRevealText from "./ScrollRevealText";
@@ -192,7 +192,9 @@ const Landing = () => {
                 {renderCta(content.hero.secondaryCta, "onDark")}
               </div>
             </div>
-            {content.hero.demo ? <HeroDemo demo={content.hero.demo} /> : null}
+            {content.hero.demo ? (
+              <HeroShowcase demo={content.hero.demo} />
+            ) : null}
           </div>
         </section>
 
