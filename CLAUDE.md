@@ -615,3 +615,17 @@ When implementing a feature, always check if a design document exists:
 ls doc/design/
 cat doc/design/<feature-name>.md
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/<feature>/`. See `doc/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five roles, recorded as `Status:` lines in issue files. See `doc/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md`, ADRs in `doc/adr/`. See `doc/agents/domain.md`.
