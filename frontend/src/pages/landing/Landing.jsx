@@ -8,6 +8,9 @@ import {
   brandName,
 } from "./content";
 import HeroDemo from "./HeroDemo";
+import HeroDotField from "./HeroDotField";
+import Reveal from "./Reveal";
+import ScrollRevealText from "./ScrollRevealText";
 import "./landing.css";
 
 const ICON_PATHS = {
@@ -172,6 +175,7 @@ const Landing = () => {
 
         {/* Hero */}
         <section className="relative overflow-hidden bg-akvo-deep px-4 pb-16 pt-20 sm:px-6 md:pb-24 md:pt-28 lg:px-8">
+          <HeroDotField />
           <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2">
             <div>
               <span className="mb-4 inline-block rounded-full bg-akvo px-4 py-1.5 text-sm font-semibold text-white">
@@ -194,29 +198,33 @@ const Landing = () => {
 
         {/* Free band */}
         <section className="bg-akvo px-4 py-10 text-white sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+          <Reveal className="mx-auto max-w-7xl">
             <h2 className="font-title text-[26px] font-normal leading-tight text-white md:text-[34px]">
               {content.freeBand.title}
             </h2>
             <p className="mt-2 max-w-3xl text-base leading-relaxed text-white/90">
               {content.freeBand.body}
             </p>
-          </div>
+          </Reveal>
         </section>
 
         {/* How it works */}
         <section className="bg-bg-primary px-4 py-16 dark:bg-bg-dark md:py-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <h2 className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-akvo-text dark:text-akvo-bright md:text-[40px] md:leading-[48px]">
-              {content.howItWorks.heading}
-            </h2>
+            <ScrollRevealText
+              as="h2"
+              text={content.howItWorks.heading}
+              className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-akvo-text dark:text-akvo-bright md:text-[40px] md:leading-[48px]"
+            />
             <p className="mt-2 max-w-2xl text-lg text-text-muted dark:text-gray-400">
               {content.howItWorks.subtitle}
             </p>
             <ol className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
               {content.howItWorks.steps.map((step, i) => (
-                <li
+                <Reveal
+                  as="li"
                   key={step.title}
+                  delay={i * 0.08}
                   className="rounded-xl border border-akvo-border/40 bg-bg-secondary p-6 dark:border-white/10 dark:bg-white/5"
                 >
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-akvo font-title text-base text-white">
@@ -228,7 +236,7 @@ const Landing = () => {
                   <p className="mt-2 text-base leading-relaxed text-text-muted dark:text-gray-400">
                     {step.body}
                   </p>
-                </li>
+                </Reveal>
               ))}
             </ol>
           </div>
@@ -237,16 +245,19 @@ const Landing = () => {
         {/* Why */}
         <section className="bg-bg-secondary px-4 py-16 dark:bg-white/5 md:py-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <h2 className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-akvo-text dark:text-akvo-bright md:text-[40px] md:leading-[48px]">
-              {content.why.heading}
-            </h2>
+            <ScrollRevealText
+              as="h2"
+              text={content.why.heading}
+              className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-akvo-text dark:text-akvo-bright md:text-[40px] md:leading-[48px]"
+            />
             <p className="mt-2 max-w-2xl text-lg text-text-muted dark:text-gray-400">
               {content.why.subtitle}
             </p>
             <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {content.why.cards.map((card) => (
-                <div
+              {content.why.cards.map((card, i) => (
+                <Reveal
                   key={card.title}
+                  delay={i * 0.08}
                   className="rounded-xl border border-akvo-border/40 bg-white p-8 dark:border-white/10 dark:bg-bg-dark"
                 >
                   <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-akvo-light text-akvo-text">
@@ -258,7 +269,7 @@ const Landing = () => {
                   <p className="mt-3 text-base leading-relaxed text-text-muted dark:text-gray-400">
                     {card.body}
                   </p>
-                </div>
+                </Reveal>
               ))}
             </div>
           </div>
@@ -267,13 +278,15 @@ const Landing = () => {
         {/* Benchmark */}
         <section className="bg-bg-primary px-4 py-16 dark:bg-bg-dark md:py-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <h2 className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-akvo-text dark:text-akvo-bright md:text-[40px] md:leading-[48px]">
-              {content.benchmark.heading}
-            </h2>
+            <ScrollRevealText
+              as="h2"
+              text={content.benchmark.heading}
+              className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-akvo-text dark:text-akvo-bright md:text-[40px] md:leading-[48px]"
+            />
             <p className="mt-2 max-w-2xl text-lg text-text-muted dark:text-gray-400">
               {content.benchmark.subtitle}
             </p>
-            <div className="mt-8 w-0 min-w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10">
+            <Reveal className="mt-8 w-0 min-w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10">
               <table className="w-full min-w-[640px] text-left text-[15px]">
                 <thead className="bg-bg-secondary text-text-primary dark:bg-white/5 dark:text-white">
                   <tr>
@@ -310,7 +323,7 @@ const Landing = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Reveal>
             <p className="mt-4 max-w-3xl text-sm text-text-muted dark:text-gray-400">
               {content.benchmark.caption}
             </p>
@@ -320,7 +333,7 @@ const Landing = () => {
         {/* Partner + final CTA */}
         <section className="bg-bg-secondary px-4 py-16 dark:bg-white/5 md:py-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <div className="relative overflow-hidden rounded-2xl bg-akvo-deep px-6 py-12 text-center text-white md:px-16 md:py-20">
+            <Reveal className="relative overflow-hidden rounded-2xl bg-akvo-deep px-6 py-12 text-center text-white md:px-16 md:py-20">
               <h2 className="font-title text-[28px] font-normal leading-[34px] tracking-[-0.4px] text-white md:text-[40px] md:leading-[48px]">
                 {content.partner.title}
               </h2>
@@ -330,8 +343,8 @@ const Landing = () => {
               <div className="mt-8 flex justify-center">
                 {renderCta(content.partner.cta, "onDark")}
               </div>
-            </div>
-            <div className="mt-16 text-center">
+            </Reveal>
+            <Reveal className="mt-16 text-center">
               <h2 className="font-title text-[30px] font-normal leading-tight text-text-primary dark:text-white md:text-[44px]">
                 {content.finalCta.title}
               </h2>
@@ -341,7 +354,7 @@ const Landing = () => {
               <div className="mt-8 flex justify-center">
                 {renderCta(content.finalCta.cta, "primary")}
               </div>
-            </div>
+            </Reveal>
           </div>
         </section>
 
