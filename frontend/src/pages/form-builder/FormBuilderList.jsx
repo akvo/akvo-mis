@@ -583,27 +583,40 @@ const FormBuilderList = () => {
                   >
                     {text.formLibraryTitle}
                   </Button>
-                  <Can I="create" a="form-builder">
+                  <Can I="create" a="data-onboarding">
                     <Button
                       shape="round"
                       icon={<UploadOutlined />}
                       onClick={() => {
-                        setImportModalOpen(true);
-                      }}
-                      className="form-builder-import-button"
-                    >
-                      {text.formBuilderImportButton}
-                    </Button>
-                    <Button
-                      shape="round"
-                      type="primary"
-                      icon={<PlusOutlined />}
-                      onClick={() => {
-                        navigate("/control-center/form-builder/create");
+                        navigate("/control-center/data-onboarding/create");
                       }}
                     >
-                      {text.formBuilderCreateButton}
+                      {text.formBuilderDataOnboardingButton}
                     </Button>
+                  </Can>
+                  <Can I="create" a="form-builder">
+                    <Space>
+                      <Button
+                        shape="round"
+                        icon={<UploadOutlined />}
+                        onClick={() => {
+                          setImportModalOpen(true);
+                        }}
+                        className="form-builder-import-button"
+                      >
+                        {text.formBuilderImportButton}
+                      </Button>
+                      <Button
+                        shape="round"
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          navigate("/control-center/form-builder/create");
+                        }}
+                      >
+                        {text.formBuilderCreateButton}
+                      </Button>
+                    </Space>
                   </Can>
                 </Space>
               </Col>

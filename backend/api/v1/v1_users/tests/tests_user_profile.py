@@ -111,6 +111,7 @@ class UserProfileTestCase(TestCase, ProfileTestHelperMixin):
                 'can_dashboard_edit',
                 'can_dashboard_publish',
                 'can_dashboard_delete',
+                'can_data_onboard',
             ]
         )
         self.assertEqual(

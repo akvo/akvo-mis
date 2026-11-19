@@ -102,6 +102,9 @@ const defineAbilityFor = (user) => {
     if (can_form_publish) {
       can("publish", "form-builder");
     }
+    if (roles.some((r) => r?.can_data_onboard)) {
+      can("create", "data-onboarding");
+    }
 
     const can_dashboard_create =
       roles.filter((r) => r?.can_dashboard_create).length > 0;
