@@ -1,0 +1,10 @@
+{
+  "title": "Accédez à votre espace de travail",
+  "subtitle": "Chaque espace de travail a sa propre adresse. Saisissez la vôtre pour vous connecter.",
+  "addressLabel": "Adresse de l'espace de travail",
+  "addressRequired": "Saisissez l'adresse de votre espace de travail",
+  "addressPlaceholder": "acme",
+  "submit": "Continuer",
+  "noWorkspace": "Vous n'en avez pas ?",
+  "create": "Créez un espace de travail"
+}

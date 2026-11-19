@@ -153,3 +153,11 @@ support and the comparison table working on mobile.
   tilted phone frame, back is the interactive dashboard; it auto-flips and is
   click-to-flip. All effects honour `prefers-reduced-motion`. See
   `LP-001-basic-landing-page.md` D-13.
+- **Shared app shell (`LandingHeader`/`LandingFooter`)**: the header (one fixed
+  70px bar with an akvo-web-style scroll-progress bar) and footer also shell the
+  base-domain `/register` and `/find-workspace` pages, replacing the generic
+  workspace header there. See `LP-001-basic-landing-page.md` D-14.
+- **Global i18n**: the content loader became a global, locale-first, per-page
+  i18n library at `frontend/src/lib/i18n/<locale>/<page>.json`; register and
+  find-workspace are now translatable EN/ES/FR through the same language switch.
+  See `LP-001-basic-landing-page.md` D-15.

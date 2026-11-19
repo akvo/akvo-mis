@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import colors from "../../lib/theme";
 
 // Pointer-reactive dot field for the hero. Every dot is drawn on a single
 // canvas (per-dot math in a requestAnimationFrame loop) so hundreds stay smooth
@@ -12,7 +13,6 @@ const MAX_R = 3.2; // radius right under the pointer
 const INFLUENCE = 140; // px the pointer reaches
 const BASE_ALPHA = 0.1;
 const MAX_ALPHA = 0.55;
-const DOT_RGB = "130, 180, 255"; // light blue on the deep-blue hero
 
 const prefersReduced = () =>
   typeof window !== "undefined" &&
@@ -66,7 +66,7 @@ const HeroDotField = () => {
             }
           }
           ctx.beginPath();
-          ctx.fillStyle = `rgba(${DOT_RGB}, ${a})`;
+          ctx.fillStyle = `rgba(${colors.dotRgb}, ${a})`;
           ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.fill();
         }

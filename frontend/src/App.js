@@ -3,6 +3,8 @@ import React, { useContext, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   Landing,
+  LandingHeader,
+  LandingFooter,
   Login,
   Register,
   Activate,
@@ -700,6 +702,14 @@ const App = () => {
   // — otherwise the two headers stack and the loader hides a public page.
   const isLanding = location.pathname === "/" && onBaseDomainHost();
 
+  // The other base-domain public routes reuse the landing's header as their
+  // app shell: suppress the workspace header/chatbot/tour and render a fixed
+  // LandingHeader instead. The `#login` pages already reserve the header's
+  // height, so the fixed bar drops into that slot with no layout change.
+  const publicShell =
+    onBaseDomainHost() &&
+    ["/register", "/find-workspace"].includes(location.pathname);
+
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
     .filter((x) => x)?.length;
@@ -718,7 +728,13 @@ const App = () => {
             workspace's published dashboards and its account menu links
             to /control-center. Neither exists on the console, which
             brings its own header in AdminLayout. */}
-        {!onAdminHost() && !isLanding && <Layout.Header />}
+        {publicShell ? (
+          <div id="landing">
+            <LandingHeader showCta={location.pathname !== "/register"} />
+          </div>
+        ) : (
+          !onAdminHost() && !isLanding && <Layout.Header />
+        )}
         <Layout.Body>
           {(loading || formsLoading) && !isLanding && !isPublic ? (
             <PageLoader message="Initializing. Please wait.." />
@@ -726,12 +742,17 @@ const App = () => {
             <RouteList />
           )}
         </Layout.Body>
+        {publicShell && (
+          <div id="landing">
+            <LandingFooter />
+          </div>
+        )}
         {/* A workspace feature: it posts to a tenant-scoped endpoint
             and labels itself with the page it is on, so on the console
             it offers an assistant that can only fail. Same reason the
             header above is suppressed. */}
-        {!onAdminHost() && !isLanding && <ChatbotWidget />}
-        {!onAdminHost() && !isLanding && <OnboardingTour />}
+        {!onAdminHost() && !isLanding && !publicShell && <ChatbotWidget />}
+        {!onAdminHost() && !isLanding && !publicShell && <OnboardingTour />}
       </Layout>
     </AbilityContext.Provider>
   );

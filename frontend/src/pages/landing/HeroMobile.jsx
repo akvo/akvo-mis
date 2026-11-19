@@ -1,3 +1,4 @@
+import PropTypes from "prop-types";
 import { motion, useReducedMotion } from "framer-motion";
 
 // Front face of the hero flip card: the Akvo MIS mobile app in a phone frame,
@@ -7,7 +8,7 @@ import { motion, useReducedMotion } from "framer-motion";
 // shows the final still frame instead of the GIF.
 const SPRITE = "/assets/sprites";
 
-const HeroMobile = () => {
+const HeroMobile = ({ alt }) => {
   const reduce = useReducedMotion();
   const src = reduce
     ? `${SPRITE}/mobile-sync-7.png`
@@ -22,27 +23,31 @@ const HeroMobile = () => {
 
   return (
     <div
-      className="absolute inset-0 flex items-center justify-center bg-akvo-deep"
+      className="absolute inset-0 flex items-center justify-center bg-brand-deep"
       style={{ perspective: 1100 }}
     >
       <div
         aria-hidden="true"
-        className="absolute h-[70%] w-[70%] rounded-full bg-akvo-bright/20 blur-3xl"
+        className="absolute h-[70%] w-[70%] rounded-full bg-brand-bright/20 blur-3xl"
       />
       <motion.div
-        className="relative h-[94%] aspect-[390/844] overflow-hidden rounded-[2rem] border-[6px] border-[#060a14] bg-black shadow-2xl shadow-black/50"
+        className="relative h-[94%] aspect-[390/844] overflow-hidden rounded-[2rem] border-[6px] border-brand-frame bg-black shadow-2xl shadow-black/50"
         initial={reduce ? false : { rotateY: -16, rotateX: 6, y: 0 }}
         animate={float}
         transition={floatTx}
       >
-        <img
-          src={src}
-          alt="Akvo MIS mobile app syncing offline submissions"
-          className="h-full w-full object-cover"
-        />
+        <img src={src} alt={alt} className="h-full w-full object-cover" />
       </motion.div>
     </div>
   );
+};
+
+HeroMobile.propTypes = {
+  alt: PropTypes.string,
+};
+
+HeroMobile.defaultProps = {
+  alt: "",
 };
 
 export default HeroMobile;

@@ -12,7 +12,7 @@
 
 **Task ID**: LP-001
 **Author**: Iwan Firmawan
-**Date**: 2026-11-18 (rev. 4 — hero motion pass: scroll reveals, pointer-reactive dot grid, and a mobile↔dashboard flip card (D-13) · rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
+**Date**: 2026-11-19 (rev. 6 — header + footer extracted as the shared app shell for `/register` and `/find-workspace` (D-14): one fixed 70px bar everywhere, akvo-web-style scroll-progress bar, CTA hidden on register; landing content promoted to a global, locale-first, per-page i18n library at `lib/i18n/` and register/find-workspace made translatable through it (D-15) · rev. 5 — review feedback: `akvo-*` tokens renamed `brand-*` + all landing colours single-sourced in `lib/theme.js`; `<main>` landmark; a11y labels (close menu, flip card, phone alt, footer nav) moved to content JSON; language menu simplified to a disclosure with Escape-to-close; `useDocumentMeta` restores the previous title/description on unmount · rev. 4 — hero motion pass: scroll reveals, pointer-reactive dot grid, and a mobile↔dashboard flip card (D-13) · rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
 **Status**: Review
 **Estimate**: ~4h (AI-generated; hands-on time is review + verify). Scope: Tailwind v3.4.3 scoped setup, JSON content config, akvo tokens, dark mode — see §12.
 
@@ -73,15 +73,19 @@ Goal (this doc only):
       MIS always ships a landing page.)
 - [ ] No new backend endpoint, no data-model change.
 - [ ] **All visible content** (copy, CTAs, how-it-works steps, cards, benchmark
-      rows, footer links) comes from **per-locale JSON files** (`content/en.json`,
-      `es.json`, `fr.json`; English is the default/fallback) — no copy hardcoded
-      in components (D-9, §6).
+      rows, footer links) comes from the **global i18n library**
+      `frontend/src/lib/i18n/<locale>/<page>.json` — the `landing` namespace,
+      read with `useTranslation("landing")`; English is the default/fallback — no
+      copy hardcoded in components (D-15, which supersedes the D-9/§6 location).
+      The register and find-workspace pages share the same library.
 - [ ] **Styling uses akvo-web's scoped Tailwind setup**, re-tinted to the
       **platform Ant Design primary `#1651b6`** (`src/variables.scss $blue`), not
       akvo green — the app is antd-based, so the landing matches it: Tailwind
       v3.4.3 **scoped to `#landing`** (preflight off, `important: "#landing"`),
-      token names kept, values set to the blue scale + `akvo-bright #5B8DEF` for
-      dark surfaces; Ant Design screens untouched (D-8).
+      tokens renamed `brand-*` with blue-scale values + `brand-bright #5B8DEF`
+      for dark surfaces, all hexes in one source (`lib/theme.js`, imported by
+      both the Tailwind config and the hero canvas/SVG); Ant Design screens
+      untouched (D-8).
 - [ ] **Standalone shell**: on the landing route the workspace app shell (antd
       `Layout.Header`, chatbot, onboarding tour) is suppressed, so the landing's
       own header (brand, language switch, CTA) is the only chrome (D-12).
@@ -172,13 +176,22 @@ colours on headings directly (antd colours them); wide blocks use
 **Amendment (2026-11-18): palette = platform Ant Design primary, not akvo green.**
 Most of the platform UI is Ant Design, whose primary is `#1651b6`
 (`frontend/src/variables.scss $blue`). To keep the landing consistent with the
-app it funnels into, the scoped Tailwind **token names are kept** (`akvo`,
-`akvo-dark`, `akvo-deep`, `akvo-text`, `akvo-light`, `akvo-border`) but their
-**values are the blue scale**: `akvo #1651b6`, `akvo-dark #114299` (hover),
-`akvo-deep #0E2E6B` (hero band), `akvo-text #13448F` (text on white, 9:1),
-`akvo-light #E7EEF9`, `akvo-border #A9C2EE`, plus a new `akvo-bright #5B8DEF`
-for accents/text on dark surfaces. A header comment in `tailwind.config.js`
-flags that the names are historical. This supersedes the green hexes above.
+app it funnels into, the scoped Tailwind tokens carry the blue scale:
+`brand #1651b6`, `brand-dark #114299` (hover), `brand-deep #0E2E6B` (hero band),
+`brand-text #13448F` (text on white, 9:1), `brand-light #E7EEF9`,
+`brand-border #A9C2EE`, plus `brand-bright #5B8DEF` for accents/text on dark
+surfaces. This supersedes the green hexes above.
+
+**Amendment (2026-11-19): tokens renamed `brand-*`, colours single-sourced.**
+Review feedback: the `akvo-*` names now holding blue were misleading, so they
+are renamed `brand-*` (the values are unchanged). All landing hexes — the token
+scale plus the three colours the hero `<canvas>`/`<svg>` need (`brand-ink`,
+`brand-frame`, `brand-chart`, `dotRgb`) and which can't be Tailwind classes —
+now live in one CommonJS module, `frontend/src/lib/theme.js`, required by
+`tailwind.config.js` and imported by `HeroDemo.jsx`/`HeroDotField.jsx`. It sits
+in `lib/` (not under `landing/`) so other pages can adopt the design system
+gradually, and under `src/` (not in the config) because CRA's ModuleScopePlugin
+forbids component imports from outside `src/`. Change a colour there, once.
 
 ### D-9: All landing content from per-locale JSON files
 
@@ -324,9 +337,87 @@ backend.
 
 **Follow-up**: lazy-split the landing so framer-motion leaves the app bundle.
 
+### D-14: Landing header + footer extracted as the shell for the base-domain public routes
+
+**Decision** (2026-11-19): the landing header (brand + EN/ES/FR switch + CTA) and
+footer are extracted to `pages/landing/LandingHeader.jsx` and
+`pages/landing/LandingFooter.jsx` and reused as the app shell on the other
+base-domain public routes — `/register` and `/find-workspace` — which previously
+showed the generic workspace `Layout.Header` ("Replace with your organisation
+logo" + Log in).
+
+- **Shell-level mount**: `App.js` renders `<LandingHeader>` in place of
+  `<Layout.Header>`, and `<LandingFooter>` after `Layout.Body`, for
+  `publicShell = onBaseDomainHost() && pathname ∈ {/register, /find-workspace}`;
+  it also suppresses the chatbot/tour there (same treatment as the landing).
+  Mounting at the shell — not inside the page components — keeps the base-domain
+  gate in one place, so a tenant subdomain hitting `/find-workspace` still gets
+  the workspace header, not a double header.
+- **Fixed 70px bar everywhere**: the header is a single `position: fixed`, 70px
+  bar on every surface (landing, register, find-workspace) — no sticky/fixed
+  variant. The `#login` pages reserve `$header-height` (86px) at the top for a
+  fixed header, so the bar drops into that slot (~16px of body background shows
+  below it, which reads as the page's own gutter).
+- **Scroll progress** (akvo-web style): a primary-colour (`bg-brand`) bar along
+  the header's bottom edge fills with scroll. The app scrolls `document.body`
+  (not the viewport), so a capture-phase `scroll` listener reads the real
+  `scrollTop` rather than `window.scrollY` / framer-motion's `useScroll` — no
+  new dependency.
+- **Scoping**: `LandingHeader`/`LandingFooter` render only `<header>`/`<footer>`
+  (no `id`), so the caller places each inside an `id="landing"` element (Landing
+  already is; `App.js` wraps the shell usages) — the `#landing *` reset never
+  reaches the antd form.
+- **Per-route CTA**: `showCta` hides the header button on `/register` (a "try it
+  yourself" CTA there is self-referential); `/find-workspace` keeps it.
+
+**Impact**: new `pages/landing/{LandingHeader,LandingFooter}.jsx`; `Landing.jsx`
+renders `<LandingHeader/>`/`<LandingFooter/>` instead of inlining them; `App.js`
+gains the `publicShell` branch; `pages/index.js` exports both. No change to
+`Register.jsx`/`FindWorkspace.jsx`, no backend.
+
+### D-15: Landing content promoted to a global i18n library (supersedes D-9 location)
+
+**Decision** (2026-11-19): the landing content loader is promoted from
+`pages/landing/content.js` to a **global i18n library** at
+`frontend/src/lib/i18n/`, shared by every public base-domain page. Since the
+shared header/footer (D-14) brought the register and find-workspace pages under
+the same chrome and language switch, their hardcoded English copy was moved into
+this library too, so they translate EN/ES/FR with the switch.
+
+- **Engine**: `lib/i18n/index.js` holds the loader — `LANGS`, `resolveLang`,
+  `brandName`, `getContent(namespace, code)` and the `useTranslation(namespace)`
+  hook (re-renders on `store.language.active`). `store` is imported directly
+  (`../store`), not via the `lib` barrel, so the module never pulls
+  `geo.js → d3-scale` and stays Jest-loadable.
+- **Translations, locale-first and per page**: `lib/i18n/<locale>/<page>.json`
+  (e.g. `en/landing.json`, `es/register.json`). A translator opens one locale
+  folder and sees every page; a new page adds one small file per locale plus one
+  `BUNDLES` entry in `index.js` (static imports — no `require.context`, which
+  Jest can't resolve). This replaces the single-growing-file approach and the
+  per-locale landing files of D-9/§6.
+- **Namespaces today**: `landing`, `register`, `findWorkspace`. `{brand}`
+  substitution and en-fallback (whole-namespace and per-key) are unchanged from
+  D-9; a parity test (`lib/i18n/__test__`) asserts es/fr match en per page.
+- **Prerequisite still stands (D-10)**: the landing/switch offers `es`, but the
+  MIS-wide registration flow must accept it — `RegisterSerializer.language` is
+  still `["en","fr"]`. The workspace-language Select on register keeps its own
+  en/fr options until that MT-025 extension lands; the UI-locale switch (this
+  library) is independent of it.
+
+**Impact**: new `lib/i18n/` (engine + `{en,es,fr}/{landing,register,find-workspace}.json`
++ test); `pages/landing/content.js` and `content/` removed; the three landing
+components, `Register.jsx` and `FindWorkspace.jsx` read via `useTranslation`.
+
 ---
 
 ## 6. Content Configuration (JSON)
+
+> **Superseded by D-15**: the content system described below has moved from
+> `pages/landing/content/` to the global `frontend/src/lib/i18n/` library, now
+> split **locale-first and per page** (`lib/i18n/<locale>/<page>.json`) and
+> shared by the register and find-workspace pages. The shape, `{brand}` token
+> and en-fallback rules below still hold for the `landing` namespace
+> (`lib/i18n/<locale>/landing.json`); read it with `useTranslation("landing")`.
 
 All visible text, links and benchmark rows come from **per-locale JSON files** —
 one file per language, same structure — so content is edited without touching
@@ -435,7 +526,7 @@ Rules:
 
 | Test | Coverage |
 |------|----------|
-| Unit (frontend) | Landing renders on the base-domain host; **sections render from `content/<locale>.json`** (en default; missing key/section **or an absent/unparseable locale file** → `en.json`); `es.json`/`fr.json` key paths match `en.json`; `{brand}` resolves from `appConfig.name`; benchmark table semantics. |
+| Unit (frontend) | `lib/i18n/__test__` — `getContent`/`useTranslation` read from `lib/i18n/<locale>/<page>.json` (en default; missing key → en); `es`/`fr` key paths match `en` **per page** (landing, register, findWorkspace); `{brand}` resolves from `appConfig.name`. |
 | Styling / scoping | Tailwind classes apply only inside `#landing`; **antd screens visually unchanged** (spot-check a control page); light + dark. |
 | E2E / manual | Landing shows on the base-domain host (and single-host installs); tenant subdomain shows none; mobile viewport (table scrolls, no page widening); CTA navigates to `/register`. |
 
@@ -539,15 +630,15 @@ typing.
   workspace app shell is suppressed on the landing route (D-12);
   eslint/prettier clean.
 
-**A3 · Per-locale content files + loader (en/es/fr, brand token) — 0.5h**
-- User AC: editing `content/<locale>.json` changes copy without code; the switch
-  flips locale (English/Español/Français, English default); the brand name comes
-  from one config value (rebrand-ready).
-- Tech AC: loader imports `content/${store.language}.json`, falls back to
-  `en.json` — wholesale if the locale file is absent/unparseable, per-key
-  otherwise; replaces `{brand}` with `appConfig.name`; sets `<title>`/meta from
-  `site`; key-parity test across the three files; no copy in JSX. (MIS-wide `es`
-  in the register choices is a separate task — D-10.)
+**A3 · Global i18n library + loader (en/es/fr, brand token) — 0.5h** (as built, D-15)
+- User AC: editing `lib/i18n/<locale>/<page>.json` changes copy without code; the
+  switch flips locale (English/Español/Français, English default); the brand name
+  comes from one config value (rebrand-ready).
+- Tech AC: `useTranslation(ns)` / `getContent(ns, code)` merge the locale over
+  `en` (per-key fallback), replace `{brand}` with `appConfig.name`, and set
+  `<title>`/meta from `landing.site`; per-page key-parity test; no copy in JSX.
+  Shared by landing, register and find-workspace. (MIS-wide `es` in the register
+  choices is a separate task — D-10.)
 
 **A4 · Dark-mode pass (net-new) — 0.5h**
 - User AC: readable and on-brand in dark.

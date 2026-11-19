@@ -1,5 +1,6 @@
 import { useState } from "react";
 import PropTypes from "prop-types";
+import colors from "../../lib/theme";
 
 // Build the area + line path for a small sparkline-style chart from a list
 // of values. Pure geometry, no chart library — the dashboard is an
@@ -40,11 +41,11 @@ const HeroDemo = ({ demo }) => {
   );
 
   return (
-    <div className="w-full rounded-2xl border border-white/10 bg-[#0a1426] p-5 shadow-2xl shadow-black/30">
+    <div className="w-full rounded-2xl border border-white/10 bg-brand-ink p-5 shadow-2xl shadow-black/30">
       {/* Status row */}
       <div className="flex items-center gap-2">
         <span
-          className="h-2.5 w-2.5 rounded-full bg-akvo-bright"
+          className="h-2.5 w-2.5 rounded-full bg-brand-bright"
           aria-hidden="true"
         />
         <span className="font-mono text-sm text-white">{demo.brandLabel}</span>
@@ -52,7 +53,7 @@ const HeroDemo = ({ demo }) => {
           · {demo.liveLabel}
         </span>
         <span className="flex-1" />
-        <span className="rounded-full border border-akvo-bright/50 px-3 py-1 text-xs font-semibold text-akvo-bright">
+        <span className="rounded-full border border-brand-bright/50 px-3 py-1 text-xs font-semibold text-brand-bright">
           {demo.syncedLabel}
         </span>
       </div>
@@ -67,7 +68,7 @@ const HeroDemo = ({ demo }) => {
             onClick={() => setActive(i)}
             className={
               i === active
-                ? "rounded-full bg-akvo px-3 py-1.5 text-xs font-semibold text-white"
+                ? "rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white"
                 : "rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:border-white/40 hover:text-white"
             }
           >
@@ -86,7 +87,7 @@ const HeroDemo = ({ demo }) => {
             <p className="mt-1 font-title text-2xl font-bold text-white">
               {sector.metricValue}
             </p>
-            <p className="mt-1 text-xs font-semibold text-akvo-bright">
+            <p className="mt-1 text-xs font-semibold text-brand-bright">
               ↗ {sector.metricNote}
             </p>
           </div>
@@ -97,12 +98,12 @@ const HeroDemo = ({ demo }) => {
             <p className="mt-1 font-title text-2xl font-bold text-white">
               {sector.rateValue}
             </p>
-            <p className="mt-1 text-xs font-semibold text-akvo-bright">
+            <p className="mt-1 text-xs font-semibold text-brand-bright">
               {sector.rateNote}
             </p>
           </div>
         </div>
-        <div className="col-span-2 flex items-end rounded-xl border border-white/10 bg-gradient-to-br from-akvo-bright/15 to-transparent p-3">
+        <div className="col-span-2 flex items-end rounded-xl border border-white/10 bg-gradient-to-br from-brand-bright/15 to-transparent p-3">
           <span className="font-mono text-xs text-white/50">
             {sector.mapNote}
           </span>
@@ -115,7 +116,7 @@ const HeroDemo = ({ demo }) => {
           <span className="font-mono text-xs text-white/60">
             {demo.chartTitle}
           </span>
-          <span className="font-mono text-xs text-akvo-bright">
+          <span className="font-mono text-xs text-brand-bright">
             {demo.chartNote}
           </span>
         </div>
@@ -128,20 +129,28 @@ const HeroDemo = ({ demo }) => {
         >
           <defs>
             <linearGradient id="heroDemoFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3A74D9" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#3A74D9" stopOpacity="0" />
+              <stop
+                offset="0%"
+                stopColor={colors.brandChart}
+                stopOpacity="0.45"
+              />
+              <stop
+                offset="100%"
+                stopColor={colors.brandChart}
+                stopOpacity="0"
+              />
             </linearGradient>
           </defs>
           <path d={area} fill="url(#heroDemoFill)" />
           <path
             d={line}
             fill="none"
-            stroke="#5B8DEF"
+            stroke={colors.brandBright}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <circle cx={last[0]} cy={last[1]} r="5" fill="#5B8DEF" />
+          <circle cx={last[0]} cy={last[1]} r="5" fill={colors.brandBright} />
         </svg>
       </div>
 
@@ -165,6 +174,8 @@ HeroDemo.propTypes = {
     caption: PropTypes.string,
     chartTitle: PropTypes.string,
     chartNote: PropTypes.string,
+    mobileAlt: PropTypes.string,
+    flipLabel: PropTypes.string,
     sectors: PropTypes.arrayOf(PropTypes.object),
   }).isRequired,
 };

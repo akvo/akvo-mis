@@ -1,4 +1,6 @@
 export { default as Landing } from "./landing/Landing";
+export { default as LandingHeader } from "./landing/LandingHeader";
+export { default as LandingFooter } from "./landing/LandingFooter";
 export { default as Forms } from "./forms/Forms";
 export { default as Login } from "./login/Login";
 export { default as Register } from "./register/Register";
