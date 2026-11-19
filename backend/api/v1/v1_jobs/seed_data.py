@@ -40,25 +40,35 @@ def get_geo_value(aw):
     return geo
 
 
-def get_administration(aw: str) -> Administration:
+def get_administration(aw: str, tenant_id=None) -> Administration:
+    # Resolve an "A|B|C" name path to the deepest administration. The first
+    # level is scoped to the form's tenant: in the async worker there is no
+    # request context, so a bare name lookup can match another tenant's root
+    # (e.g. several tenants named "Indonesia") and derail the whole chain
+    # (JOB-580). Each deeper level is chained from the LAST resolved parent,
+    # not the split index, so a skipped level cannot overrun adm_list.
     adms = aw.split("|")
     adm_list = []
     adm = None
-    for ix, adm in enumerate(adms):
-        find_adm = Administration.objects.filter(name=adm).first()
-        if len(adm_list):
-            parent = adm_list[ix - 1]
+    for name in adms:
+        if adm_list:
             find_adm = Administration.objects.filter(
-                name=adm, parent_id=parent.id
+                name=name, parent_id=adm_list[-1].id
             ).first()
+        else:
+            root_qs = Administration.objects.filter(name=name)
+            if tenant_id is not None:
+                root_qs = root_qs.filter(tenant_id=tenant_id)
+            find_adm = root_qs.first()
         if find_adm:
             adm_list.append(find_adm)
-    if len(adm_list):
+    if adm_list:
         adm = adm_list[-1]
     return adm
 
 
-def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
+def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id,
+                    tenant_id=None):
     # check if prev submission exist
     prev_form_data = None
     if data_id:
@@ -68,7 +78,7 @@ def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
     names = []
     administration = dp["administration"]
     if isinstance(administration, str):
-        adm = get_administration(aw=administration)
+        adm = get_administration(aw=administration, tenant_id=tenant_id)
         if adm:
             administration = adm.id
     geo = get_geo_value(aw=dp["geolocation"])
@@ -99,7 +109,7 @@ def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
             extra_type = (q.extra or {}).get("type")
             if extra_type not in ("entity",):
                 if isinstance(aw, str):
-                    adm = get_administration(aw=aw)
+                    adm = get_administration(aw=aw, tenant_id=tenant_id)
                     if adm:
                         administration = adm.id
                         answer.value = administration
@@ -124,6 +134,8 @@ def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id):
         if q.type == QuestionTypes.date:
             if aw:
                 answer.name = aw
+                if q.meta:
+                    names.append(str(aw))
             else:
                 valid = False
         if q.type == QuestionTypes.number:
@@ -238,17 +250,56 @@ def save_data(
 ):
     is_super_admin = user.is_superuser
     data_id = None if pd.isnull(dp["data_id"]) else dp["data_id"]
-    temp = collect_answers(user=user, dp=dp, qs=qs, data_id=data_id)
+    # Form's tenant: used to scope administration-name resolution and the
+    # submitter's subtree in the async worker, which has no request context
+    # and therefore no tenant-filtered managers (JOB-580).
+    form_tenant_id = Forms.objects.filter(pk=form_id).values_list(
+        "tenant_id", flat=True
+    ).first()
+    temp = collect_answers(
+        user=user, dp=dp, qs=qs, data_id=data_id, tenant_id=form_tenant_id
+    )
     administration = temp.get("administration")
     geo = temp.get("geo")
     answerlist = temp.get("answerlist")
     name = temp.get("name")
     answer_history_list = temp.get("answer_history_list")
-    parent = FormData.objects.filter(uuid=temp.get("uuid")).first()
+    data_uuid = temp.get("uuid")
 
+    # Monitoring link (JOB-580): a child-form row references its registration
+    # parent by parent_id. On a new row, link the parent and inherit its uuid,
+    # administration and geo so the monitoring datapoint matches the parent,
+    # mirroring the web/mobile submit path. parent_id is ignored on edit
+    # (data_id set); validation already guarantees it is valid for new rows.
+    raw_parent_id = dp.get("parent_id")
+    parent_id = (
+        None if raw_parent_id is None or pd.isnull(raw_parent_id)
+        else int(raw_parent_id)
+    )
+    parent = None
+    if parent_id and not data_id:
+        parent = FormData.objects.filter(pk=parent_id).first()
+    if parent is None:
+        parent = FormData.objects.filter(uuid=data_uuid).first()
+    elif not data_id:
+        # Inherit identity from the registration parent.
+        data_uuid = parent.uuid
+        administration = parent.administration_id
+        geo = parent.geo
+
+    # Datapoint name comes from meta-question answers (collect_answers). When
+    # the form has no meta question, fall back to the parent's name so
+    # monitoring rows are not blank in the data list (JOB-580).
+    if not name and parent:
+        name = parent.name
+
+    # Scope the submitter's administration subtree to the FORM's tenant (see
+    # form_tenant_id above): a bare parent__isnull root .first() could pick
+    # another tenant's root and reject every row for a superadmin outside the
+    # first tenant (JOB-580).
     user_adm = Administration.objects.filter(
-        parent__isnull=True
-    ).first()
+        parent__isnull=True, tenant_id=form_tenant_id
+    ).first() or Administration.objects.filter(parent__isnull=True).first()
     if not user.is_superuser and user.user_user_role.exists():
         # Get the administration from the user's role
         user_role = user.user_user_role.filter(
@@ -272,7 +323,7 @@ def save_data(
                 geo=geo,
                 updated_by=user,
                 updated=timezone.now(),
-                uuid=temp.get("uuid"),
+                uuid=data_uuid,
                 is_pending=False,
             )
             data = FormData.objects.get(pk=data_id)
@@ -284,7 +335,7 @@ def save_data(
                 administration_id=administration,
                 geo=geo,
                 created_by=user,
-                uuid=temp.get("uuid"),
+                uuid=data_uuid,
                 parent=parent,
                 is_pending=False,
             )
@@ -296,7 +347,7 @@ def save_data(
             administration_id=administration,
             geo=geo,
             created_by=user,
-            uuid=temp.get("uuid"),
+            uuid=data_uuid,
             parent=parent,
             is_pending=True,
         )

@@ -156,6 +156,34 @@ parent_id,error
 
 **Decision**: Ignore `parent_id` when `data_id` is present. Parent is fixed at creation; re-pointing an existing monitoring row to a different parent is out of scope. Validation of parent_id is skipped for rows that carry a valid `data_id`.
 
+### D-6: Tenant-scope the bulk-upload admin gate (pre-existing bug)
+
+**Problem found during live testing (django61, tenant 8):** `save_data` gates
+every row with `if administration not in user_decendants: return None`, where
+`user_adm = Administration.objects.filter(parent__isnull=True).first()`. In the
+async django-q worker there is no request context, so `Administration.objects`
+is not tenant-filtered and `.first()` returns the global first root (tenant 1).
+A superadmin uploading in any other tenant therefore had **every row rejected**,
+surfacing as the "No changes were detected" email (0 records seeded). This hit
+monitoring hardest (rows inherit the parent's admin) but also broke registration
+bulk upload for non-first-tenant superadmins.
+
+**Decision:** Scope the root lookup to the form's tenant, with a fallback to the
+old global root so single-tenant / test setups are unchanged:
+
+```python
+form_tenant_id = Forms.objects.filter(pk=form_id).values_list(
+    "tenant_id", flat=True).first()
+user_adm = Administration.objects.filter(
+    parent__isnull=True, tenant_id=form_tenant_id
+).first() or Administration.objects.filter(parent__isnull=True).first()
+```
+
+**Impact:** `seed_data.save_data`. Verified on the live DB (rolled back): row
+links to parent 2169, inherits uuid/admin 26343, persists 2 answers. Note:
+django-q caches code in memory — the worker must be restarted to pick up
+seed/validate changes.
+
 ### D-5: Blank template for child forms
 
 **Options Considered**:
