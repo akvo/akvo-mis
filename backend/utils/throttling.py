@@ -98,3 +98,10 @@ class LoginIPThrottle(_IPKeyedThrottle):
 
 class LoginEmailThrottle(_EmailKeyedThrottle):
     scope = "login_email"
+
+
+class SubdomainCheckIPThrottle(_IPKeyedThrottle):
+    # The onboarding address step calls the availability endpoint as the
+    # visitor types, so the rate is generous; it only caps scripted abuse of
+    # a read-only endpoint.
+    scope = "subdomain_check_ip"

@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth.password_validation import validate_password
 from django.core import exceptions as django_exceptions
 from django.core import signing
@@ -861,6 +863,7 @@ class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     configured = serializers.SerializerMethodField()
     subdomain = serializers.SerializerMethodField()
+    onboarding = serializers.SerializerMethodField()
     administration = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     organisation = serializers.SerializerMethodField()
@@ -984,6 +987,12 @@ class UserSerializer(serializers.ModelSerializer):
         # own and is therefore never redirected.
         return instance.tenant.subdomain if instance.tenant_id else ""
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_onboarding(self, instance: SystemUser):
+        # The wizard's answers staged on Tenant.meta, so the activation page
+        # can auto-configure the workspace without asking again (LP-002 B5).
+        return instance.tenant.meta if instance.tenant_id else {}
+
     class Meta:
         model = SystemUser
         fields = [
@@ -1001,6 +1010,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "configured",
             "subdomain",
+            "onboarding",
             # The console's route guard reads this and has nothing else
             # to read: `is_superuser` is a workspace role (D-1), and a
             # tenant-less account's `subdomain` is "" for reasons that
@@ -1156,6 +1166,11 @@ class ConfigureSerializer(serializers.Serializer):
         max_length=255, required=False, allow_null=True, allow_blank=True,
         default=None
     )
+    # Optional: when the onboarding wizard drives configure it passes the
+    # workspace's organisation name so the first Organisation row is seeded.
+    organisation = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
 
 
 class TenantBrandingSerializer(serializers.Serializer):
@@ -1210,7 +1225,7 @@ class RegisterSerializer(serializers.Serializer):
         },
     )
     language = serializers.ChoiceField(
-        choices=["en", "fr"],
+        choices=["en", "es", "fr"],
         default="en",
         required=False,
     )
@@ -1229,6 +1244,30 @@ class RegisterSerializer(serializers.Serializer):
         write_only=True,
         max_length=2048,
     )
+    # Free-form onboarding context (the sector the workspace monitors, and any
+    # other wizard answers without a column of their own). Stored on
+    # `Tenant.meta`. Bounded in `validate_meta` because this endpoint is
+    # public: it is not a general-purpose store.
+    meta = serializers.JSONField(required=False, default=dict)
+
+    # Keep the public, free-form `meta` field from being abused as storage.
+    META_MAX_KEYS = 25
+    META_MAX_BYTES = 4096
+
+    def validate_meta(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Must be an object.")
+        if len(value) > self.META_MAX_KEYS:
+            raise serializers.ValidationError(
+                f"At most {self.META_MAX_KEYS} keys."
+            )
+        try:
+            size = len(json.dumps(value).encode("utf-8"))
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("Must be JSON-serialisable.")
+        if size > self.META_MAX_BYTES:
+            raise serializers.ValidationError("Too large.")
+        return value
 
     def validate_subdomain(self, value):
         """Refuse a name sign-up may not claim.

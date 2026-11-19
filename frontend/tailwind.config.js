@@ -3,7 +3,11 @@
 // keep every utility class inside <div id="landing">, so Ant Design screens
 // render exactly as before. Tokens + fonts mirror akvo.org (akvo-web).
 module.exports = {
-  content: ["./src/pages/landing/**/*.{js,jsx}"],
+  content: [
+    "./src/pages/landing/**/*.{js,jsx}",
+    "./src/pages/onboarding/**/*.{js,jsx}",
+    "./src/components/Turnstile.jsx",
+  ],
   important: "#landing",
   corePlugins: { preflight: false },
   darkMode: "media",

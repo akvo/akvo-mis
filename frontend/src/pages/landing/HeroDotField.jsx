@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
+import PropTypes from "prop-types";
 
-// Pointer-reactive dot field for the hero. Every dot is drawn on a single
-// canvas (per-dot math in a requestAnimationFrame loop) so hundreds stay smooth
-// where hundreds of DOM nodes would not. Dots near the pointer brighten and
-// grow; the rest breathe faintly. Alpha stays low so it never beats the
-// headline's contrast. Renders a static grid under prefers-reduced-motion and
-// pauses the loop while the hero is scrolled off-screen.
+// Dot field drawn on a single canvas (per-dot math in a requestAnimationFrame
+// loop) so hundreds stay smooth where hundreds of DOM nodes would not. With
+// `interactive` (default) dots near the pointer brighten and grow; with
+// `interactive={false}` they animate on their own as a slow radial ripple from
+// the centre (used as an autonomous brand-coloured backdrop). Alpha stays low
+// so it never beats the foreground; static under prefers-reduced-motion, and the
+// loop pauses while off-screen.
 const SPACING = 30; // px between dots
 const BASE_R = 1.1; // resting radius
 const MAX_R = 3.2; // radius right under the pointer
@@ -19,7 +21,7 @@ const prefersReduced = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-const HeroDotField = () => {
+const HeroDotField = ({ interactive = true }) => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -51,11 +53,13 @@ const HeroDotField = () => {
     const draw = (t) => {
       ctx.clearRect(0, 0, width, height);
       const breathe = reduce ? 0 : Math.sin(t / 1600) * 0.03;
+      const cx = width / 2;
+      const cy = height / 2;
       for (let y = SPACING / 2; y < height; y += SPACING) {
         for (let x = SPACING / 2; x < width; x += SPACING) {
           let r = BASE_R;
           let a = BASE_ALPHA + breathe;
-          if (pointer.active) {
+          if (interactive && pointer.active) {
             const dx = x - pointer.x;
             const dy = y - pointer.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -64,6 +68,15 @@ const HeroDotField = () => {
               r = BASE_R + (MAX_R - BASE_R) * f;
               a = BASE_ALPHA + (MAX_ALPHA - BASE_ALPHA) * f;
             }
+          } else if (!interactive) {
+            // Autonomous: a slow ripple travelling out from the centre, so the
+            // grid lives on its own without a pointer to chase.
+            const dx = x - cx;
+            const dy = y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const wave = 0.5 + 0.5 * Math.sin(dist * 0.018 - t * 0.0022);
+            r = BASE_R + (MAX_R - BASE_R) * wave * 0.65;
+            a = BASE_ALPHA + (MAX_ALPHA - BASE_ALPHA) * wave * 0.45;
           }
           ctx.beginPath();
           ctx.fillStyle = `rgba(${DOT_RGB}, ${a})`;
@@ -103,7 +116,7 @@ const HeroDotField = () => {
     );
     io.observe(parent);
 
-    if (!reduce) {
+    if (interactive && !reduce) {
       parent.addEventListener("pointermove", onMove);
       parent.addEventListener("pointerleave", onLeave);
     }
@@ -117,7 +130,7 @@ const HeroDotField = () => {
         window.cancelAnimationFrame(raf);
       }
     };
-  }, []);
+  }, [interactive]);
 
   return (
     <canvas
@@ -126,6 +139,10 @@ const HeroDotField = () => {
       className="pointer-events-none absolute inset-0 h-full w-full"
     />
   );
+};
+
+HeroDotField.propTypes = {
+  interactive: PropTypes.bool,
 };
 
 export default HeroDotField;

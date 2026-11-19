@@ -11,7 +11,7 @@
     "badge": "Free forever",
     "title": "Welcome to {brand}.",
     "lead": "The powerful platform that manages your data with ease — and uses AI to turn it into visualisations, automatically. Curious? Come try it yourself.",
-    "primaryCta": { "label": "Try it yourself →", "href": "/register" },
+    "primaryCta": { "label": "Try it yourself →", "href": "/onboarding" },
     "secondaryCta": {
       "label": "Talk to our team",
       "href": "mailto:info@akvo.org"
@@ -201,7 +201,7 @@
   "finalCta": {
     "title": "Your data, working for you — today.",
     "body": "Spin up a workspace in a couple of minutes. Free forever.",
-    "cta": { "label": "Try it yourself →", "href": "/register" }
+    "cta": { "label": "Try it yourself →", "href": "/onboarding" }
   },
   "footer": {
     "tagline": "Real-time monitoring, made simple.",

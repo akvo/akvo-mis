@@ -1,5 +1,6 @@
 # Create your views here.
 import datetime
+import re
 from math import ceil
 from pathlib import Path
 
@@ -80,6 +81,11 @@ from utils.throttling import (
     EmailDispatchIPThrottle,
     LoginEmailThrottle,
     LoginIPThrottle,
+    SubdomainCheckIPThrottle,
+)
+from utils.workspace_name import (
+    host_collision_reason,
+    self_service_reason,
 )
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 from utils.tenant_host import (
@@ -476,6 +482,52 @@ def tenant_info(request, version):
     return Response(body, status=status.HTTP_200_OK)
 
 
+@extend_schema(tags=["Auth"])
+@api_view(["GET"])
+@throttle_classes([SubdomainCheckIPThrottle])
+def register_subdomain(request, version):
+    """Read-only availability for the onboarding address step.
+
+    Runs the same three checks the register POST runs -- format, reserved /
+    collision names, and uniqueness -- and creates nothing. The register POST
+    stays authoritative (it closes the TOCTOU race); this only spares the
+    visitor a round-trip to discover a taken or reserved name.
+    """
+    if not settings.SIGNUP_ENABLED or not is_base_domain(
+        request.get_host()
+    ):
+        return Response(
+            {"message": "Self-service sign-up is not available here"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    value = (request.query_params.get("value") or "").strip().lower()
+    if len(value) < 3:
+        return Response(
+            {
+                "available": False,
+                "reason": "Workspace name must be at least 3 characters",
+            }
+        )
+    if not re.fullmatch(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?", value):
+        return Response(
+            {
+                "available": False,
+                "reason": (
+                    "Only lowercase letters, digits and hyphens, and it "
+                    "cannot start or end with a hyphen"
+                ),
+            }
+        )
+    reason = host_collision_reason(value) or self_service_reason(value)
+    if reason:
+        return Response({"available": False, "reason": reason})
+    if Tenant.objects.filter(subdomain=value).exists():
+        return Response(
+            {"available": False, "reason": "That address is taken."}
+        )
+    return Response({"available": True, "reason": None})
+
+
 @extend_schema(
     request=RegisterSerializer,
     responses={200: UserSerializer, 400: DefaultResponseSerializer},
@@ -523,6 +575,7 @@ def register(request, version):
                 subdomain=validated["subdomain"],
                 name=tenant_name,
                 language=validated.get("language", "en"),
+                meta=validated.get("meta") or {},
             )
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
@@ -673,6 +726,13 @@ def configure_project(request, version):
             name=validated["root_unit_name"],
             tenant=user.tenant,
         )
+        # Seed the workspace's own organisation so a fresh tenant is not empty
+        # of organisations (LP-002: created here, after the tenant exists, from
+        # the onboarding answer the wizard staged in Tenant.meta).
+        if validated.get("organisation"):
+            Organisation.objects.get_or_create(
+                tenant=user.tenant, name=validated["organisation"].strip()
+            )
         if validated.get("logo"):
             user.tenant.logo = validated["logo"]
             user.tenant.save(update_fields=["logo"])

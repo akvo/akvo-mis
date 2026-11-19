@@ -3,6 +3,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   Landing,
+  Onboarding,
   Login,
   Register,
   Activate,
@@ -201,6 +202,12 @@ const RouteList = () => {
         exact
         path="/register"
         element={onBaseDomainHost() ? <Register /> : <Navigate to="/" />}
+      />
+      {/* LP-002 guided onboarding wizard — base-domain only, like /register. */}
+      <Route
+        exact
+        path="/onboarding"
+        element={onBaseDomainHost() ? <Onboarding /> : <Navigate to="/" />}
       />
       <Route exact path="/activate/:token" element={<Activate />} />
       {/* The console's one-time code becomes a session here. Reached
@@ -676,12 +683,14 @@ const App = () => {
     }
   }, [authUser, tenant, tenantLoaded, public_state]);
 
-  // "/" is the landing page on the base-domain host (and single-host installs),
-  // and a tenant subdomain's "/" is the workspace app. The landing is a
-  // standalone marketing surface with its own header (brand, language switcher,
-  // CTA), so it bypasses the auth loader and suppresses the workspace app shell
-  // — otherwise the two headers stack and the loader hides a public page.
-  const isLanding = location.pathname === "/" && onBaseDomainHost();
+  // The public landing surface — the landing at "/" and the onboarding wizard at
+  // "/onboarding" — on the base-domain host (and single-host installs). Both
+  // render in their own LandingShell (brand, language switch), so they bypass the
+  // auth loader and suppress the workspace app shell; otherwise the two headers
+  // stack and the loader hides a public page. A tenant subdomain's "/" is the app.
+  const isPublicShell =
+    (location.pathname === "/" || location.pathname === "/onboarding") &&
+    onBaseDomainHost();
 
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
@@ -701,9 +710,9 @@ const App = () => {
             workspace's published dashboards and its account menu links
             to /control-center. Neither exists on the console, which
             brings its own header in AdminLayout. */}
-        {!onAdminHost() && !isLanding && <Layout.Header />}
+        {!onAdminHost() && !isPublicShell && <Layout.Header />}
         <Layout.Body>
-          {(loading || formsLoading) && !isLanding && !isPublic ? (
+          {(loading || formsLoading) && !isPublicShell && !isPublic ? (
             <PageLoader message="Initializing. Please wait.." />
           ) : (
             <RouteList />
@@ -713,8 +722,8 @@ const App = () => {
             and labels itself with the page it is on, so on the console
             it offers an assistant that can only fail. Same reason the
             header above is suppressed. */}
-        {!onAdminHost() && !isLanding && <ChatbotWidget />}
-        {!onAdminHost() && !isLanding && <OnboardingTour />}
+        {!onAdminHost() && !isPublicShell && <ChatbotWidget />}
+        {!onAdminHost() && !isPublicShell && <OnboardingTour />}
       </Layout>
     </AbilityContext.Provider>
   );

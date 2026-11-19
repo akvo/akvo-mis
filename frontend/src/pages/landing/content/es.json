@@ -11,7 +11,7 @@
     "badge": "Gratis para siempre",
     "title": "Bienvenido a {brand}.",
     "lead": "La potente plataforma que gestiona tus datos con facilidad — y usa IA para convertirlos en visualizaciones, automáticamente. ¿Con curiosidad? Ven y pruébalo tú mismo.",
-    "primaryCta": { "label": "Pruébalo tú mismo →", "href": "/register" },
+    "primaryCta": { "label": "Pruébalo tú mismo →", "href": "/onboarding" },
     "secondaryCta": {
       "label": "Habla con nuestro equipo",
       "href": "mailto:info@akvo.org"
@@ -204,7 +204,7 @@
   "finalCta": {
     "title": "Tus datos, trabajando para ti — hoy.",
     "body": "Crea un espacio de trabajo en un par de minutos. Gratis para siempre.",
-    "cta": { "label": "Pruébalo tú mismo →", "href": "/register" }
+    "cta": { "label": "Pruébalo tú mismo →", "href": "/onboarding" }
   },
   "footer": {
     "tagline": "Monitoreo en tiempo real, simplificado.",

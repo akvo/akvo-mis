@@ -18,6 +18,7 @@ from api.v1.v1_users.views import (
     OrganisationEditDeleteView,
     update_profile,
     register,
+    register_subdomain,
     activate_account,
     resend_activation,
     configure_project,
@@ -122,6 +123,9 @@ urlpatterns = [
     re_path(r"^(?P<version>(v1))/register/configure$", configure_project),
     re_path(
         r"^(?P<version>(v1))/register/resend-activation$", resend_activation
+    ),
+    re_path(
+        r"^(?P<version>(v1))/register/subdomain$", register_subdomain
     ),
     re_path(r"^(?P<version>(v1))/register$", register),
     re_path(r"^(?P<version>(v1))/users", list_users),

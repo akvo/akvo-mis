@@ -1481,6 +1481,11 @@ const uiText = {
   de: {},
 };
 
+// Spanish is offered at sign-up (LP-002 D-10') but the MIS UI is not yet
+// translated; fall back to English for every key so an `es` workspace never
+// renders blank. Real `es` strings can override these incrementally.
+uiText.es = { ...uiText.en };
+
 uiText.fr = {
   ...uiText.en,
 
