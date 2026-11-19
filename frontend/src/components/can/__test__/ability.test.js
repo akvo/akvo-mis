@@ -93,3 +93,27 @@ describe("ability for an inspection session", () => {
     expect(ability(user).can("manage", "settings")).toBe(false);
   });
 });
+
+describe("data onboarding ability", () => {
+  it("is granted by the data onboard role flag", () => {
+    const a = ability(userWith({ can_data_onboard: true }));
+    expect(a.can("create", "data-onboarding")).toBe(true);
+  });
+
+  it("is not implied by form builder roles", () => {
+    const a = ability(
+      userWith({ can_form_builder: true, can_form_create: true })
+    );
+    expect(a.can("create", "data-onboarding")).toBe(false);
+  });
+
+  it("is held by every super admin", () => {
+    const owner = { id: 2, is_superuser: true, roles: [] };
+    expect(ability(owner).can("create", "data-onboarding")).toBe(true);
+  });
+
+  it("is withheld from an inspecting operator", () => {
+    const op = { id: 1, is_superuser: true, is_inspecting: true, roles: [] };
+    expect(ability(op).can("create", "data-onboarding")).toBe(false);
+  });
+});
