@@ -139,6 +139,16 @@ class ApplyProposalTestCase(TestCase):
         form = Forms.objects.get(tenant=self.tenant, name="Water sites")
         self.assertEqual(form.status, FormStatus.published)
         self.assertIsNotNone(form.active_version)
+        self.assertEqual(
+            list(form.form_question_group.values_list("order", flat=True)),
+            [1],
+        )
+        self.assertEqual(
+            list(form.form_questions.order_by("order")
+                 .values_list("name", "order")),
+            [("location", 1), ("name", 2), ("count", 3), ("source", 4),
+             ("visited", 5), ("tags", 6), ("gps", 7)],
+        )
         self.assertTrue(
             UserForms.objects.filter(user=self.user, form=form).exists()
         )

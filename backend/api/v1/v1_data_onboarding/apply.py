@@ -165,6 +165,11 @@ def _create_forms(forms, user):
     ordered = sorted(forms, key=lambda f: f["type"] == "monitoring")
     for spec in ordered:
         norm = normalize_form_definition(spec)
+        # The Proposal orders by position; the import reads "order" only.
+        for gi, group in enumerate(norm["question_group"], 1):
+            group["order"] = gi
+            for qi, question in enumerate(group["question"], 1):
+                question["order"] = qi
         errors = [
             i for i in validate_form_definition(norm) if i["level"] == "error"
         ]
