@@ -81,7 +81,6 @@ class ChatMessageView(APIView):
         )
 
         api_key = getattr(settings, "OPENAI_API_KEY", "")
-        assistant_id = getattr(settings, "OPENAI_ASSISTANT_ID", "")
         vector_store_id = getattr(settings, "OPENAI_VECTOR_STORE_ID", "")
 
         if not api_key:
@@ -157,108 +156,10 @@ class ChatMessageView(APIView):
                 except Exception as resp_err:
                     logger.info(
                         f"Responses API unavailable ({resp_err}). "
-                        "Trying Assistants API..."
+                        "Falling back to Chat Completions."
                     )
 
-            # Strategy 2: Try OpenAI Assistants API (threads + vector store)
-            try:
-                if (
-                    not thread_id
-                    or thread_id.startswith("chat_")
-                    or thread_id.startswith("resp_")
-                ):
-                    thread = client.beta.threads.create()
-                    thread_id = thread.id
-
-                try:
-                    client.beta.threads.messages.create(
-                        thread_id=thread_id,
-                        role="user",
-                        content=augmented_message,
-                    )
-                except Exception as post_err:
-                    logger.info(
-                        f"Post to thread '{thread_id}' failed ({post_err}). "
-                        "Creating a new thread."
-                    )
-                    thread = client.beta.threads.create()
-                    thread_id = thread.id
-                    client.beta.threads.messages.create(
-                        thread_id=thread_id,
-                        role="user",
-                        content=augmented_message,
-                    )
-
-                run = None
-                if assistant_id:
-                    try:
-                        run = client.beta.threads.runs.create_and_poll(
-                            thread_id=thread_id,
-                            assistant_id=assistant_id,
-                        )
-                    except Exception as asst_err:
-                        logger.warning(
-                            f"Failed run with assistant_id '{assistant_id}': "
-                            f"{asst_err}. Falling back to direct run."
-                        )
-                        run = None
-
-                if not run:
-                    run_kwargs = {
-                        "thread_id": thread_id,
-                        "instructions": DEFAULT_INSTRUCTIONS,
-                        "model": "gpt-4o-mini",
-                    }
-                    if vector_store_id:
-                        run_kwargs["tools"] = [{"type": "file_search"}]
-                        run_kwargs["tool_resources"] = {
-                            "file_search": {
-                                "vector_store_ids": [vector_store_id]
-                            }
-                        }
-                    run = client.beta.threads.runs.create_and_poll(
-                        **run_kwargs
-                    )
-
-                if run.status == "completed":
-                    messages = client.beta.threads.messages.list(
-                        thread_id=thread_id,
-                        order="desc",
-                        limit=10,
-                    )
-                    assistant_reply = ""
-                    msg_list = getattr(messages, "data", messages)
-                    for msg in msg_list:
-                        if getattr(msg, "role", None) == "assistant":
-                            content_blocks = getattr(msg, "content", []) or []
-                            for block in content_blocks:
-                                if hasattr(block, "text") and hasattr(
-                                    block.text, "value"
-                                ):
-                                    assistant_reply += block.text.value
-                            break
-
-                    cleaned_reply = clean_citation_sources(assistant_reply)
-                    return Response(
-                        {
-                            "response": (
-                                cleaned_reply
-                                or (
-                                    "I'm sorry, I couldn't find an answer "
-                                    "to that."
-                                )
-                            ),
-                            "thread_id": thread_id,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
-            except Exception as beta_err:
-                logger.info(
-                    f"Assistants API endpoint unavailable ({beta_err}). "
-                    "Falling back to Chat Completions with instructions."
-                )
-
-            # Strategy 3: Chat Completions API fallback
+            # Strategy 2: Chat Completions API fallback
             # (always works with any key)
             chat_resp = client.chat.completions.create(
                 model="gpt-4o-mini",

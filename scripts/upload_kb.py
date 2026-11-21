@@ -3,15 +3,15 @@
 scripts/upload_kb.py
 
 Uploads Akvo MIS Knowledge Base PDFs to OpenAI Vector Store.
-Reuses existing Vector Store and Assistant if IDs or matching names are found.
+Reuses an existing Vector Store if an ID or a matching name is found.
 
 Usage:
     OPENAI_API_KEY=sk-... python scripts/upload_kb.py
 
 Options:
-    --create-assistant       Create or update the OpenAI Assistant
+    --create-assistant       Ignored (the Assistants API was shut down)
     --vector-store-id ID     Specify an existing Vector Store ID
-    --assistant-id ID        Specify an existing Assistant ID
+    --assistant-id ID        Ignored (see above)
     --dry-run                Validate PDF paths without calling OpenAI
 """
 
@@ -27,32 +27,6 @@ PDF_FILES = [
 ]
 
 VECTOR_STORE_NAME = "akvo-mis-kb"
-ASSISTANT_NAME = "Mira - Akvo MIS Support"
-
-ASSISTANT_INSTRUCTIONS = (
-    "You are Mira, the intelligent support assistant for Akvo MIS.\n"
-    "Your role is to help users navigate the platform, design forms, "
-    "manage data, configure approvals, and understand features.\n\n"
-    "Guidelines:\n"
-    "1. Ground your answers directly in the attached documentation.\n"
-    "2. If the user message includes a page context tag "
-    "(e.g. [Context: User is on the 'Control Center' page]), use that "
-    "context when the question relates to the current page. If the question "
-    "is about a general or external feature (such as downloading the mobile "
-    "app, which is done via the /app server URL and not within the web "
-    "Control Center), answer accurately from the documentation without "
-    "forcing the answer into the current page context.\n"
-    "3. Keep answers concise, step-by-step, actionable, and formatted.\n"
-    "4. If docs do not cover a topic, politely inform the user.\n"
-    "5. SCOPE: You only answer questions about Akvo MIS and its features "
-    "(forms, data collection, approvals, users, mobile app, reports, and "
-    "related platform topics). If a question is clearly unrelated to "
-    "Akvo MIS — for example about politics, geography, science, history, "
-    "other software products, or general knowledge — politely decline and "
-    "redirect: 'I can only help with Akvo MIS questions. Feel free to ask "
-    "me about forms, data collection, approvals, or any other platform "
-    "feature!'\n"
-)
 
 
 def get_project_root() -> Path:
@@ -97,73 +71,6 @@ def get_or_create_vector_store(client, vector_store_id: str = None) -> str:
     vector_store = client.vector_stores.create(name=VECTOR_STORE_NAME)
     print(f"Vector Store Created: {vector_store.id}")
     return vector_store.id
-
-
-def get_or_create_assistant(
-    client, vs_id: str, assistant_id: str = None
-) -> str:
-    """Retrieves/updates existing assistant or creates a new one."""
-    if assistant_id:
-        try:
-            assistant = client.beta.assistants.retrieve(
-                assistant_id=assistant_id
-            )
-            print(f"Found Assistant: {assistant.id} ({assistant.name})")
-            # Update tool_resources to attach current vector store
-            client.beta.assistants.update(
-                assistant_id=assistant.id,
-                instructions=ASSISTANT_INSTRUCTIONS,
-                tools=[{"type": "file_search"}],
-                tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-            )
-            print(f"Updated Assistant {assistant.id} with VS {vs_id}")
-            return assistant.id
-        except Exception as e:
-            print(f"Warning: Could not retrieve Assistant {assistant_id}: {e}")
-
-    # Search for an existing assistant by name
-    print(f"Checking for existing Assistant named '{ASSISTANT_NAME}'...")
-    try:
-        assistants = client.beta.assistants.list(limit=50)
-        for a in assistants.data:
-            if a.name == ASSISTANT_NAME:
-                print(f"Found existing Assistant by name: {a.id}")
-                client.beta.assistants.update(
-                    assistant_id=a.id,
-                    instructions=ASSISTANT_INSTRUCTIONS,
-                    tools=[{"type": "file_search"}],
-                    tool_resources={
-                        "file_search": {"vector_store_ids": [vs_id]}
-                    },
-                )
-                print(f"Updated Assistant {a.id} with VS {vs_id}")
-                return a.id
-    except Exception as e:
-        print(f"Warning: Could not list assistants: {e}")
-
-    # If none found, create a new one
-    print(f"Creating new OpenAI Assistant '{ASSISTANT_NAME}'...")
-    try:
-        assistant = client.beta.assistants.create(
-            name=ASSISTANT_NAME,
-            instructions=ASSISTANT_INSTRUCTIONS,
-            model="gpt-4o-mini",
-            tools=[{"type": "file_search"}],
-            tool_resources={"file_search": {"vector_store_ids": [vs_id]}},
-        )
-        print(f"Assistant Created: {assistant.id}")
-        return assistant.id
-    except Exception as e:
-        err_detail = ""
-        if hasattr(e, "response") and hasattr(e.response, "json"):
-            try:
-                err_detail = f" | Details: {e.response.json()}"
-            except Exception:
-                pass
-        print(
-            f"Warning: Could not create Assistant automatically: {e}{err_detail}"  # noqa
-        )
-        return ""
 
 
 def upload_kb(
@@ -218,11 +125,14 @@ def upload_kb(
         for s in file_streams:
             s.close()
 
-    # 3. Resolve Assistant
-    asst_id = None
-    if create_assistant or os.environ.get("OPENAI_ASSISTANT_ID"):
-        asst_id_to_use = assistant_id or os.environ.get("OPENAI_ASSISTANT_ID")
-        asst_id = get_or_create_assistant(client, vs_id, asst_id_to_use)
+    # 3. The Assistants API was shut down on 2026-08-26. The chatbot
+    #    queries the vector store directly, so there is no assistant.
+    if create_assistant or assistant_id:
+        print(
+            "\nNote: --create-assistant and --assistant-id are ignored. "
+            "The chatbot uses the vector store through the Responses "
+            "API, so no assistant is needed."
+        )
 
     print("\n" + "=" * 60)
     print("Knowledge Base Ingestion Complete!")
@@ -233,11 +143,6 @@ def upload_kb(
     )
     print(f"OPENAI_API_KEY={masked_key}")
     print(f"OPENAI_VECTOR_STORE_ID={vs_id}")
-    if asst_id:
-        print(f"OPENAI_ASSISTANT_ID={asst_id}")
-    else:
-        print("# Tip: Run with --create-assistant to auto-link the assistant")
-        print("OPENAI_ASSISTANT_ID=asst_...")
     print("=" * 60 + "\n")
 
 
