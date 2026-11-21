@@ -78,6 +78,8 @@ const applyBrand = (node, brand) => {
   return node;
 };
 
+// Read window live so a config.js that loads after this module (or a test
+// that sets window.appConfig) is reflected; appName is captured at import.
 export const brandName = () => window?.appConfig?.name || "Akvo MIS";
 
 // Merge one namespace of the active locale over English and substitute {brand}.

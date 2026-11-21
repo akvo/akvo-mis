@@ -161,3 +161,11 @@ support and the comparison table working on mobile.
   i18n library at `frontend/src/lib/i18n/<locale>/<page>.json`; register and
   find-workspace are now translatable EN/ES/FR through the same language switch.
   See `LP-001-basic-landing-page.md` D-15.
+- **Platform UI i18n (2026-11-21)**: the library grew past the public pages to
+  hold the **whole app UI string set** — the `uiText` dictionary moved into
+  `lib/i18n/<locale>/ui.js` (JS, not JSON, since values carry JSX/functions),
+  was translated es/fr, and the login → activate → configure funnel the CTA
+  feeds into was wired to it; `lib/ui-text.js` is now a re-export shim and
+  `RegisterSerializer.language` accepts `es`. So flipping to Español on the
+  landing stays Español through sign-up and setup. See
+  `LP-001-basic-landing-page.md` D-16 (satisfies the D-10 prerequisite).

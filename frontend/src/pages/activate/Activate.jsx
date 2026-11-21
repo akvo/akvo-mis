@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "../login/style.scss";
 import { Row, Col, Button, Form, Input, Spin, Typography } from "antd";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, store } from "../../lib";
+import { api, store, uiText } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { reloadData } from "../../util/form";
 
@@ -22,6 +22,9 @@ const Activate = () => {
   const [resent, setResent] = useState(false);
   const { notify } = useNotification();
   const { resend, resending } = useResendActivation();
+  const { language } = store.useState((s) => s);
+  const { active: activeLang } = language;
+  const text = useMemo(() => uiText[activeLang], [activeLang]);
 
   // Fire exactly once. Listing dependencies is not enough on its own: an
   // effect that re-runs when this component sets its own state would POST the
@@ -64,7 +67,7 @@ const Activate = () => {
         setResent(true);
       })
       .catch(() => {
-        notify({ type: "error", message: "Could not send the email" });
+        notify({ type: "error", message: text.couldNotSendEmail });
       });
   };
 
@@ -84,11 +87,8 @@ const Activate = () => {
     return frame(
       <>
         <div style={{ fontSize: 46, lineHeight: 1, color: "#52c41a" }}>✓</div>
-        <Title level={2}>Email verified</Title>
-        <Text type="secondary">
-          Your account is active. One quick step left — tell us about your
-          project.
-        </Text>
+        <Title level={2}>{text.activateVerifiedTitle}</Title>
+        <Text type="secondary">{text.activateVerifiedDesc}</Text>
         <Button
           type="primary"
           shape="round"
@@ -98,7 +98,7 @@ const Activate = () => {
             navigate("/configure");
           }}
         >
-          Continue to setup →
+          {text.activateContinueSetup}
         </Button>
       </>
     );
@@ -109,7 +109,7 @@ const Activate = () => {
       <>
         <Spin size="large" />
         <Title level={2} style={{ marginTop: 16 }}>
-          Verifying your email…
+          {text.activateVerifying}
         </Title>
       </>
     );
@@ -119,13 +119,11 @@ const Activate = () => {
     return frame(
       <>
         <div style={{ fontSize: 46, lineHeight: 1, color: "#52c41a" }}>✓</div>
-        <Title level={2}>Check your inbox</Title>
-        <Text type="secondary">
-          If that account still needs activating, a fresh link is on its way.
-        </Text>
+        <Title level={2}>{text.activateCheckInboxTitle}</Title>
+        <Text type="secondary">{text.activateCheckInboxDesc}</Text>
         <Link to="/login">
           <Button type="primary" shape="round" block style={{ marginTop: 24 }}>
-            Back to login
+            {text.backToLogin}
           </Button>
         </Link>
       </>
@@ -136,11 +134,8 @@ const Activate = () => {
     return frame(
       <>
         <div style={{ fontSize: 46, lineHeight: 1, color: "#ff4d4f" }}>!</div>
-        <Title level={2}>We could not check your link</Title>
-        <Text type="secondary">
-          Something went wrong on the way to the server. Your link is probably
-          fine — try again in a moment.
-        </Text>
+        <Title level={2}>{text.activateErrorTitle}</Title>
+        <Text type="secondary">{text.activateErrorDesc}</Text>
         <Button
           type="primary"
           shape="round"
@@ -150,7 +145,7 @@ const Activate = () => {
             window.location.reload();
           }}
         >
-          Try again
+          {text.activateTryAgain}
         </Button>
       </>
     );
@@ -171,11 +166,8 @@ const Activate = () => {
             >
               ⏱
             </div>
-            <h1 style={{ textAlign: "center" }}>This link has expired</h1>
-            <p className="disclaimer">
-              Activation links are valid for 7 days. Request a fresh one and
-              we&apos;ll email it right away.
-            </p>
+            <h1 style={{ textAlign: "center" }}>{text.activateExpiredTitle}</h1>
+            <p className="disclaimer">{text.activateExpiredDesc}</p>
             <Form
               name="resend-activation-form"
               layout="vertical"
@@ -185,16 +177,16 @@ const Activate = () => {
                   no account to look it up from. */}
               <Form.Item
                 name="email"
-                label="Email"
+                label={text.userEmail}
                 rules={[
                   {
                     required: true,
                     type: "email",
-                    message: "Enter a valid email address.",
+                    message: text.valEmail,
                   },
                 ]}
               >
-                <Input placeholder="you@organisation.org" />
+                <Input placeholder={text.activateEmailPlaceholder} />
               </Form.Item>
               <Form.Item>
                 <Button
@@ -204,11 +196,11 @@ const Activate = () => {
                   block
                   loading={resending}
                 >
-                  Resend activation email
+                  {text.loginResendActivation}
                 </Button>
               </Form.Item>
               <p className="disclaimer">
-                <Link to="/login">Back to login</Link>
+                <Link to="/login">{text.backToLogin}</Link>
               </p>
             </Form>
           </div>

@@ -12,7 +12,13 @@
 
 **Task ID**: LP-001
 **Author**: Iwan Firmawan
-**Date**: 2026-11-19 (rev. 6 — header + footer extracted as the shared app shell for `/register` and `/find-workspace` (D-14): one fixed 70px bar everywhere, akvo-web-style scroll-progress bar, CTA hidden on register; landing content promoted to a global, locale-first, per-page i18n library at `lib/i18n/` and register/find-workspace made translatable through it (D-15) · rev. 5 — review feedback: `akvo-*` tokens renamed `brand-*` + all landing colours single-sourced in `lib/theme.js`; `<main>` landmark; a11y labels (close menu, flip card, phone alt, footer nav) moved to content JSON; language menu simplified to a disclosure with Escape-to-close; `useDocumentMeta` restores the previous title/description on unmount · rev. 4 — hero motion pass: scroll reveals, pointer-reactive dot grid, and a mobile↔dashboard flip card (D-13) · rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
+**Date**: 2026-11-21 (rev. 7 — the global i18n library grew from per-page public
+content to the **whole platform UI string set**: the `uiText` dictionary moved
+into `lib/i18n/<locale>/ui.js` (JS, not JSON — values carry JSX/functions),
+`es`/`fr` were translated, brand identifiers were extracted to
+`lib/i18n/app-name.js`, the login/activate/configure funnel pages were wired to
+it, and `RegisterSerializer.language` now accepts `es` — satisfying the D-10
+prerequisite (D-16) · rev. 6 — header + footer extracted as the shared app shell for `/register` and `/find-workspace` (D-14): one fixed 70px bar everywhere, akvo-web-style scroll-progress bar, CTA hidden on register; landing content promoted to a global, locale-first, per-page i18n library at `lib/i18n/` and register/find-workspace made translatable through it (D-15) · rev. 5 — review feedback: `akvo-*` tokens renamed `brand-*` + all landing colours single-sourced in `lib/theme.js`; `<main>` landmark; a11y labels (close menu, flip card, phone alt, footer nav) moved to content JSON; language menu simplified to a disclosure with Escape-to-close; `useDocumentMeta` restores the previous title/description on unmount · rev. 4 — hero motion pass: scroll reveals, pointer-reactive dot grid, and a mobile↔dashboard flip card (D-13) · rev. 3 — as built: platform Ant Design primary `#1651b6` palette, interactive hero dashboard demo, standalone landing shell, `SHOW_LANDING_PAGE` gate removed · rev. 2 — akvo.org Tailwind design system + JSON content config + 3 default languages en/es/fr)
 **Status**: Review
 **Estimate**: ~4h (AI-generated; hands-on time is review + verify). Scope: Tailwind v3.4.3 scoped setup, JSON content config, akvo tokens, dark mode — see §12.
 
@@ -227,6 +233,10 @@ broader than the landing page (it extends MT-025) and should be tracked as its
 own small task/PR — the landing switcher must not offer a language the
 registration flow then rejects.
 
+**Resolved (D-16, 2026-11-21)**: `RegisterSerializer.language` now accepts
+`["en","es","fr"]`, and the MIS UI string set is translated es/fr through the
+global i18n library — the switch can offer `es` safely.
+
 **Impact**: the landing content JSON (en/es/fr) is self-contained; the MIS-wide
 `es` addition is a dependency for the CTA → `/register` handoff and for
 [[LP-002]]'s language step.
@@ -398,15 +408,64 @@ this library too, so they translate EN/ES/FR with the switch.
 - **Namespaces today**: `landing`, `register`, `findWorkspace`. `{brand}`
   substitution and en-fallback (whole-namespace and per-key) are unchanged from
   D-9; a parity test (`lib/i18n/__test__`) asserts es/fr match en per page.
-- **Prerequisite still stands (D-10)**: the landing/switch offers `es`, but the
-  MIS-wide registration flow must accept it — `RegisterSerializer.language` is
-  still `["en","fr"]`. The workspace-language Select on register keeps its own
-  en/fr options until that MT-025 extension lands; the UI-locale switch (this
-  library) is independent of it.
+- **Prerequisite (D-10) — now resolved (D-16)**: the landing/switch offers `es`
+  and the MIS-wide registration flow accepts it —
+  `RegisterSerializer.language` is `["en","es","fr"]` and the register
+  workspace-language Select gained its Español option. The UI-locale switch
+  (this library) is independent of that data-language field.
 
 **Impact**: new `lib/i18n/` (engine + `{en,es,fr}/{landing,register,find-workspace}.json`
 + test); `pages/landing/content.js` and `content/` removed; the three landing
 components, `Register.jsx` and `FindWorkspace.jsx` read via `useTranslation`.
+
+### D-16: Platform UI strings join the global i18n library; funnel pages go es/fr
+
+**Decision** (2026-11-21): the global i18n library (D-15) now also holds the
+**whole platform UI string set**, not just the public per-page JSON namespaces.
+The large `uiText` dictionary that the authenticated app renders from — menus,
+buttons, table headers, every antd screen's copy — moved out of the monolithic
+`lib/ui-text.js` and into the library at `lib/i18n/<locale>/ui.js`, and the
+login → activate → configure **funnel** the landing CTA feeds into was wired to
+it and translated es/fr. This is the D-10 prerequisite landing: the switch may
+now offer `es` without the registration flow rejecting it.
+
+- **Format — JS, not JSON.** The public page namespaces are JSON, but `uiText`
+  values include React/JSX fragments and functions (e.g. `downloadAppText`,
+  count-interpolating strings), which JSON can't carry — so these three files
+  stay `.js`. `lib/i18n/ui.js` assembles them as
+  `{ en, es: {...en, ...es}, fr: {...en, ...fr} }`, so `en` is the per-key
+  fallback and a missing translation renders English rather than `undefined`.
+- **`lib/ui-text.js` is now a re-export shim** of `./i18n/ui` — every existing
+  `import { uiText } from "../lib"` keeps working, no call-site churn.
+- **Brand identifiers extracted** to `lib/i18n/app-name.js` (`appName`,
+  `apkName`), which imports nothing, so the JSX-eager `en/ui.js` can read them
+  without a circular import / TDZ crash at module load. `brandName()` in
+  `index.js` stays a **live** `window.appConfig` read (a test or a late
+  `config.js` is reflected); `app-name.js` captures its value at import.
+- **Funnel pages wired + translated**: `login/` (LoginForm, ResetForm),
+  `activate/` and `configure/` read `uiText[language.active]` via a `useMemo`
+  on `store.language.active`; their previously-hardcoded English strings became
+  `uiText` keys with es/fr values. Dead keys (~80, zero references) were pruned
+  from `en/ui.js` in the same pass.
+- **D-10 prerequisite satisfied**: `RegisterSerializer.language` is now
+  `ChoiceField(["en","es","fr"])`
+  (`backend/api/v1/v1_users/serializers.py`) — the one backend line D-10/D-15
+  flagged — and the workspace-language Select on `Register.jsx` gained its
+  **Español** option to match. The UI-locale switch is independent of that
+  data-language field; both now cover en/es/fr.
+
+**Rationale**: once the shared shell (D-14) and the switch put register,
+find-workspace and the landing under one EN/ES/FR control, leaving the rest of
+the app English-only made the switch half-functional — flipping to Español on
+the landing dropped back to English the moment the CTA opened the real app.
+Moving `uiText` into the same library (rather than a parallel mechanism) keeps
+one locale source and one switch. Presentation + one serializer line; no new
+dependency, no data-model change.
+
+**Impact**: `lib/i18n/{app-name.js, ui.js, en/ui.js, es/ui.js, fr/ui.js}` (new);
+`lib/ui-text.js` reduced to a shim; `login/`, `activate/`, `configure/` pages
+wired; `serializers.py` choice extended; `ui-text.test.js` + snapshot assert
+en/es/fr.
 
 ---
 
@@ -527,6 +586,7 @@ Rules:
 | Test | Coverage |
 |------|----------|
 | Unit (frontend) | `lib/i18n/__test__` — `getContent`/`useTranslation` read from `lib/i18n/<locale>/<page>.json` (en default; missing key → en); `es`/`fr` key paths match `en` **per page** (landing, register, findWorkspace); `{brand}` resolves from `appConfig.name`. |
+| Unit (frontend) | `lib/__test__/ui-text.test.js` — the platform `uiText` dictionary exposes `en`/`es`/`fr`, each locale merged over `en` so a missing key falls back to English (D-16); snapshot guards the assembled shape. The funnel pages (login/activate/configure) render their copy from it. |
 | Styling / scoping | Tailwind classes apply only inside `#landing`; **antd screens visually unchanged** (spot-check a control page); light + dark. |
 | E2E / manual | Landing shows on the base-domain host (and single-host installs); tenant subdomain shows none; mobile viewport (table scrolls, no page widening); CTA navigates to `/register`. |
 

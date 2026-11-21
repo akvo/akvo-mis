@@ -29,6 +29,11 @@ const HeroDotField = () => {
       return () => {};
     }
     const ctx = canvas.getContext("2d");
+    // jsdom (and any environment without 2d canvas) returns null here; bail
+    // rather than crash on ctx.setTransform during tests or on old devices.
+    if (!ctx) {
+      return () => {};
+    }
     const reduce = prefersReduced();
     const pointer = { x: 0, y: 0, active: false };
     let width = 0;

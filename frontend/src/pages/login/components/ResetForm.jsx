@@ -58,7 +58,7 @@ const ResetForm = () => {
     >
       <Form.Item
         name="email"
-        label="Email Address"
+        label={text.userEmail}
         rules={[
           {
             type: "email",
@@ -67,7 +67,7 @@ const ResetForm = () => {
           },
         ]}
       >
-        <Input placeholder="Email" />
+        <Input placeholder={text.loginEmailPlaceholder} />
       </Form.Item>
       <Form.Item style={{ marginTop: 8 }}>
         <Button

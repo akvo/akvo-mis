@@ -11,6 +11,7 @@ const { Title, Text } = Typography;
 
 const LANGUAGE_OPTIONS = [
   { value: "en", label: "English" },
+  { value: "es", label: "Español" },
   { value: "fr", label: "Français" },
 ];
 

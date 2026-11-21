@@ -49,7 +49,7 @@ describe("Activate", () => {
     renderAt("stale-token");
     expect(await screen.findByText(/This link has expired/i)).toBeVisible();
     expect(
-      screen.getByRole("button", { name: /Resend activation email/i })
+      screen.getByRole("button", { name: /Resend the activation email/i })
     ).toBeInTheDocument();
   });
 

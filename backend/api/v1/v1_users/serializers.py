@@ -1211,7 +1211,7 @@ class RegisterSerializer(serializers.Serializer):
         },
     )
     language = serializers.ChoiceField(
-        choices=["en", "fr"],
+        choices=["en", "es", "fr"],
         default="en",
         required=False,
     )
