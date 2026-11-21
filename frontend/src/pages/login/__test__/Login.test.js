@@ -15,8 +15,9 @@ describe("Login and Registration", () => {
   });
 
   test("test if the login form exists", () => {
-    const { asFragment } = render(<TestApp />);
-    userEvent.click(screen.getByText("Log in"), { button: 0 });
+    // Root "/" is the public landing page now; the sign-in form lives at
+    // /login (same entry the throttle test below uses).
+    const { asFragment } = render(<TestApp entryPoint="/login" />);
     expect(screen.getByText(/Welcome back/i)).toBeInTheDocument();
     expect(
       screen.getByText(/Please enter your account details/i)

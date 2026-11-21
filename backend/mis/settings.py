@@ -20,7 +20,6 @@ APP_NAME = environ.get("APP_NAME", "mis")
 APP_SHORT_NAME = environ.get("APP_SHORT_NAME", "mis")
 APK_SHORT_NAME = environ.get("APK_SHORT_NAME", "mis-mobile")
 APK_NAME = environ.get("APK_NAME", "MIS mobile")
-SHOW_LANDING_PAGE = environ.get("SHOW_LANDING_PAGE", "false").lower() == "true"
 
 if 'SENTRY_DSN' in environ:
     import sentry_sdk

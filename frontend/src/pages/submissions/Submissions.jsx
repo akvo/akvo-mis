@@ -105,6 +105,7 @@ const Submissions = () => {
 
   useEffect(() => {
     if (!selectedForm) {
+      setLoading(false);
       return () => {};
     }
     // A slow response for a previous tab/page must not overwrite the

@@ -245,11 +245,18 @@ class RegisterEndpointTestCase(TestCase):
         tenant = Tenant.objects.get(subdomain="senegal-rural-water")
         self.assertEqual(tenant.language, "fr")
 
-    def test_register_rejects_unsupported_language(self):
+    def test_register_persists_spanish_language(self):
         with mock.patch("api.v1.v1_users.views.send_email"):
             response = self.register(subdomain="spanish", language="es")
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="spanish")
+        self.assertEqual(tenant.language, "es")
+
+    def test_register_rejects_unsupported_language(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="german", language="de")
         self.assertEqual(response.status_code, 400)
-        self.assertFalse(Tenant.objects.filter(subdomain="spanish").exists())
+        self.assertFalse(Tenant.objects.filter(subdomain="german").exists())
 
     def test_country_subdomain_is_rejected_with_its_reason(self):
         response = self.register(subdomain="indonesia")
