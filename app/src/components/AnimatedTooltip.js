@@ -1,17 +1,24 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import RenderHtml from 'react-native-render-html';
+import useTheme from '../lib/theme';
 
 const AnimatedTooltip = ({ visible = false, content = null }) => {
+  const theme = useTheme();
+
   if (!visible) {
     return null;
   }
 
   return (
     <View style={{ paddingHorizontal: 10 }}>
-      <View style={styles.arrow} />
-      <View style={[styles.tooltipContainer]}>
-        <RenderHtml source={{ html: content }} contentWidth={100} baseStyle={styles.htmlContent} />
+      <View style={[styles.arrow, { borderBottomColor: theme.bg.surfaceElevated3 }]} />
+      <View style={[styles.tooltipContainer, { backgroundColor: theme.bg.surfaceElevated3 }]}>
+        <RenderHtml
+          source={{ html: content }}
+          contentWidth={100}
+          baseStyle={{ color: theme.text.primary }}
+        />
       </View>
     </View>
   );
@@ -28,20 +35,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 10,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: 'grey',
     marginLeft: 0,
   },
   tooltipContainer: {
     padding: 10,
     marginLeft: -10,
     maxWidth: 360,
-    backgroundColor: 'grey',
     borderRadius: 5,
     shadowOpacity: 0.3,
     marginTop: -1,
-  },
-  htmlContent: {
-    color: 'white',
   },
 });
 

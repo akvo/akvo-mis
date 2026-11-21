@@ -36,7 +36,6 @@ from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
-    OpenApiResponse,
     extend_schema,
     inline_serializer,
 )
@@ -49,8 +48,6 @@ from .serializers import (
     MobileAssignmentSerializer,
     MobileDataPointDownloadListSerializer,
     SyncDeviceFormDataSerializer,
-    SyncDeviceParamsSerializer,
-    DraftFormDataSerializer,
 )
 from .geometry import (
     enabled_geoshape_question_ids,
@@ -62,10 +59,7 @@ from api.v1.v1_forms.models import Forms, Questions, QuestionTypes
 from api.v1.v1_forms.constants import FormStatus
 from api.v1.v1_data.models import FormData
 from api.v1.v1_forms.serializers import WebFormDetailSerializer
-from api.v1.v1_data.serializers import (
-    SubmitPendingFormSerializer,
-    SubmitUpdateDraftFormSerializer,
-)
+from api.v1.v1_data.serializers import SubmitPendingFormSerializer
 from api.v1.v1_files.serializers import (
     UploadImagesSerializer,
     AttachmentsSerializer,
@@ -128,9 +122,10 @@ def get_mobile_forms(request, version):
     try:
         passcode = CustomPasscode().encode(code)
         mobile_assignment = MobileAssignment.objects.get(passcode=passcode)
-        keep_last_synced_at = request.query_params.get(
-            "keep_last_synced_at", "false"
-        ).lower() == "true"
+        keep_last_synced_at = (
+            request.query_params.get("keep_last_synced_at", "false").lower()
+            == "true"
+        )
         if not keep_last_synced_at:
             mobile_assignment.last_synced_at = None
         mobile_assignment.save()
@@ -169,40 +164,20 @@ def get_mobile_form_details(request: Request, version, form_id):
     request=SyncDeviceFormDataSerializer,
     responses={200: DefaultResponseSerializer},
     tags=["Mobile Device Form"],
-    parameters=[
-        OpenApiParameter(
-            name="is_draft",
-            required=False,
-            default=False,
-            type=OpenApiTypes.BOOL,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="is_published",
-            required=False,
-            default=False,
-            type=OpenApiTypes.BOOL,
-            location=OpenApiParameter.QUERY,
-        ),
-        OpenApiParameter(
-            name="id",
-            required=False,
-            type=OpenApiTypes.NUMBER,
-            location=OpenApiParameter.QUERY,
-        ),
-    ],
     summary="Submit pending form data",
 )
 @api_view(["POST"])
 @permission_classes([IsMobileAssignment])
 def sync_pending_form_data(request, version):
-    params = SyncDeviceParamsSerializer(
-        data=request.GET
-    )
-    if not params.is_valid():
+    # Legacy APKs still push drafts (DRAFT-002). A 4xx makes the device keep
+    # it locally (saveAsDraft / saveAsPending) until it is submitted properly.
+    if request.GET.get("is_draft") == "true":
         return Response(
             {
-                "message": validate_serializers_message(params.errors)
+                "message": (
+                    "Draft sync is no longer supported. "
+                    "Submit the form to sync it."
+                )
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
@@ -211,6 +186,11 @@ def sync_pending_form_data(request, version):
         Forms.objects.for_user(assignment.user),
         pk=request.data.get("formId"),
     )
+    if not request.data.get("answers"):
+        return Response(
+            {"message": "Answers is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     user = assignment.user
     administration = assignment.administrations.order_by(
         "level__level"
@@ -223,21 +203,15 @@ def sync_pending_form_data(request, version):
             # If user has a role with data access, use that administration
             administration = user_role.administration
 
-    is_draft = params.validated_data["is_draft"]
-    # Allow empty answers for drafts only
-    if not request.data.get("answers") and not is_draft:
-        return Response(
-            {"message": "Answers is required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
     answers = []
     qna = request.data.get("answers") or {}
     adm_id = administration.id
-    adm_qs = Questions.objects.filter(
-        type=QuestionTypes.cascade, form_id=form.id
-    ).filter(
-        Q(extra__isnull=True) | ~Q(extra__type__in=["entity"])
-    ).order_by("order").first()
+    adm_qs = (
+        Questions.objects.filter(type=QuestionTypes.cascade, form_id=form.id)
+        .filter(Q(extra__isnull=True) | ~Q(extra__type__in=["entity"]))
+        .order_by("order")
+        .first()
+    )
     adm_key = str(adm_qs.id) if adm_qs else None
     if adm_key and adm_key in qna:
         adm_id = qna[adm_key]
@@ -249,16 +223,18 @@ def sync_pending_form_data(request, version):
         where the base question ID is "1"
         """
         index = 0
-        if '-' in str(q_key):
-            [base_q_id, q_index] = str(q_key).split('-')
+        if "-" in str(q_key):
+            [base_q_id, q_index] = str(q_key).split("-")
             index = q_index
         else:
             base_q_id = str(q_key)
-        answers.append({
-            "question": base_q_id,
-            "value": qna[q_key],
-            "index": index,
-        })
+        answers.append(
+            {
+                "question": base_q_id,
+                "value": qna[q_key],
+                "index": index,
+            }
+        )
     payload = {
         "administration": adm_id,
         "name": request.data.get("name"),
@@ -279,27 +255,8 @@ def sync_pending_form_data(request, version):
         context={
             "user": user,
             "form": form,
-            "is_draft": is_draft,
-        }
+        },
     )
-    draft_exists = FormData.objects_draft.filter(
-        form=form,
-        created_by=user,
-        uuid=request.data.get("uuid"),
-        form__parent__isnull=True,
-    ).first()
-    if params.validated_data.get("id"):
-        draft_exists = params.validated_data.get("id")
-    if draft_exists:
-        serializer = SubmitUpdateDraftFormSerializer(
-            instance=draft_exists,
-            data=data,
-            context={
-                "user": user,
-                "form": form,
-                "is_draft": is_draft,
-            }
-        )
     if not serializer.is_valid():
         return Response(
             {
@@ -309,35 +266,23 @@ def sync_pending_form_data(request, version):
             status=status.HTTP_400_BAD_REQUEST,
         )
     instance = serializer.save()
-    is_published = request.GET.get("is_published", False)
-    is_published = True if is_published in ["true", "True", "1"] else False
-    if is_published and draft_exists:
-        draft_exists.publish()
-        direct_to_data = user.is_superuser or not draft_exists.has_approval
-        if direct_to_data and not draft_exists.parent:
-            draft_exists.save_to_file
-
-    if not is_draft or is_published:
-        user_tenant = getattr(user, "tenant", None)
-        tenant_name = (
-            getattr(user_tenant, "name", None) or user_tenant.subdomain
-            if user_tenant
-            else None
-        )
-        subdomain = user_tenant.subdomain if user_tenant else None
-        async_task(
-            "utils.matomo.track_submission_task",
-            tenant_name=tenant_name,
-            form_name=form.name,
-            form_id=form.id,
-            source="mobile",
-            user_id=str(user.id) if user else None,
-            subdomain=subdomain,
-        )
-
-    # The id lets the device store the backend identity of a draft right
-    # after its first upload, so the next save syncs as ?id=<draft> instead
-    # of creating a duplicate (the uuid fallback cannot match child forms).
+    # Drafts are rejected upstream, so every sync here is a real submission.
+    user_tenant = getattr(user, "tenant", None)
+    tenant_name = (
+        getattr(user_tenant, "name", None) or user_tenant.subdomain
+        if user_tenant
+        else None
+    )
+    subdomain = user_tenant.subdomain if user_tenant else None
+    async_task(
+        "utils.matomo.track_submission_task",
+        tenant_name=tenant_name,
+        form_name=form.name,
+        form_id=form.id,
+        source="mobile",
+        user_id=str(user.id) if user else None,
+        subdomain=subdomain,
+    )
     return Response(
         {"message": "ok", "id": instance.id},
         status=status.HTTP_200_OK,
@@ -437,10 +382,38 @@ class UploadAttachmentsView(APIView):
                 ),
                 type={"type": "array", "items": {"type": "string"}},
                 enum=[
-                    "pdf", "docx", "xlsx", "pptx", "txt", "csv", "zip", "rar",
-                    "jpg", "jpeg", "png", "gif", "bmp", "doc", "xls", "ppt",
-                    "mp4", "avi", "mov", "mkv", "flv", "wmv", "mp3", "wav",
-                    "ogg", "flac", "aac", "wma", "m4a", "opus", "webm", "3gp",
+                    "pdf",
+                    "docx",
+                    "xlsx",
+                    "pptx",
+                    "txt",
+                    "csv",
+                    "zip",
+                    "rar",
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "gif",
+                    "bmp",
+                    "doc",
+                    "xls",
+                    "ppt",
+                    "mp4",
+                    "avi",
+                    "mov",
+                    "mkv",
+                    "flv",
+                    "wmv",
+                    "mp3",
+                    "wav",
+                    "ogg",
+                    "flac",
+                    "aac",
+                    "wma",
+                    "m4a",
+                    "opus",
+                    "webm",
+                    "3gp",
                 ],
             )
         ],
@@ -581,8 +554,7 @@ def upload_apk_file(request, version):
     file_cache.write(download.content)
     file_cache.close()
     storage.upload(
-        cache_file_name, folder="apk",
-        filename=f"{APK_SHORT_NAME}.apk"
+        cache_file_name, folder="apk", filename=f"{APK_SHORT_NAME}.apk"
     )
     serializer.save()
     return Response({"message": "ok"}, status=status.HTTP_201_CREATED)
@@ -620,14 +592,18 @@ class MobileAssignmentViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         search = getattr(self, "_validated_search", None)
-        mobile_users = MobileAssignment.objects.for_user(
-            user
-        ).prefetch_related("administrations", "forms").filter(user=user)
+        mobile_users = (
+            MobileAssignment.objects.for_user(user)
+            .prefetch_related("administrations", "forms")
+            .filter(user=user)
+        )
         adm_q = Q()
         if user.is_superuser:
-            adm = Administration.objects.for_user(user).filter(
-                parent__isnull=True
-            ).first()
+            adm = (
+                Administration.objects.for_user(user)
+                .filter(parent__isnull=True)
+                .first()
+            )
             adm_q = Q(administrations=adm) | Q(
                 administrations__path__startswith=f"{adm.id}."
             )
@@ -635,21 +611,19 @@ class MobileAssignmentViewSet(ModelViewSet):
             role__role_role_access__data_access=DataAccessTypes.submit
         ).all():
             adm = ur.administration
-            path = f"{adm.path}{adm.id}." \
-                if adm.path else f"{adm.id}."
+            path = f"{adm.path}{adm.id}." if adm.path else f"{adm.id}."
             adm_q |= Q(administrations__path__startswith=path)
         if adm_q:
-            descendant_users = MobileAssignment.objects.for_user(
-                user
-            ).prefetch_related(
-                "administrations", "forms"
-            ).filter(adm_q)
+            descendant_users = (
+                MobileAssignment.objects.for_user(user)
+                .prefetch_related("administrations", "forms")
+                .filter(adm_q)
+            )
             mobile_users |= descendant_users
         qs = mobile_users.order_by("-id").distinct()
         if search:
             qs = qs.filter(
-                Q(name__icontains=search)
-                | Q(user__email__icontains=search)
+                Q(name__icontains=search) | Q(user__email__icontains=search)
             )
         return qs
 
@@ -691,29 +665,33 @@ def get_forms_tree(request, version):
     # Both the outer query and the children prefetch go through for_user:
     # scoping only the parents would still surface another tenant's
     # monitoring forms under a same-named registration form.
-    registration_forms = Forms.objects.for_user(request.user).filter(
-        parent__isnull=True,
-        status=FormStatus.published
-    ).prefetch_related(
-        Prefetch(
-            "children",
-            queryset=Forms.objects.for_user(request.user).filter(
-                status=FormStatus.published
-            ).order_by("name")
+    registration_forms = (
+        Forms.objects.for_user(request.user)
+        .filter(parent__isnull=True, status=FormStatus.published)
+        .prefetch_related(
+            Prefetch(
+                "children",
+                queryset=Forms.objects.for_user(request.user)
+                .filter(status=FormStatus.published)
+                .order_by("name"),
+            )
         )
-    ).order_by("name")
+        .order_by("name")
+    )
 
     result = []
     for reg in registration_forms:
-        result.append({
-            "id": reg.id,
-            "name": reg.name,
-            "type": "registration",
-            "children": [
-                {"id": m.id, "name": m.name, "type": "monitoring"}
-                for m in reg.children.all()
-            ]
-        })
+        result.append(
+            {
+                "id": reg.id,
+                "name": reg.name,
+                "type": "registration",
+                "children": [
+                    {"id": m.id, "name": m.name, "type": "monitoring"}
+                    for m in reg.children.all()
+                ],
+            }
+        )
     return Response(result, status=status.HTTP_200_OK)
 
 
@@ -781,9 +759,7 @@ class MobileDataPointDownloadListRowSerializer(
                         "this becomes the whole candidate count."
                     )
                 ),
-                "data": MobileDataPointDownloadListRowSerializer(
-                    many=True
-                ),
+                "data": MobileDataPointDownloadListRowSerializer(many=True),
                 "total_page": serializers.IntegerField(),
                 "current": serializers.IntegerField(),
                 "complete": serializers.BooleanField(
@@ -819,10 +795,7 @@ def get_datapoint_download_list(request, version):
     assignment = cast(MobileAssignmentToken, request.auth).assignment
     forms = assignment.forms.values("id")
     administrations = [
-        {
-            "id": a.id,
-            "path": f"{a.path}{a.id}." if a.path else f"{a.id}."
-        }
+        {"id": a.id, "path": f"{a.path}{a.id}." if a.path else f"{a.id}."}
         for a in assignment.administrations.all()
     ]
     paginator = Pagination()
@@ -872,7 +845,6 @@ def get_datapoint_download_list(request, version):
     )
     queryset = queryset.filter(
         is_pending=False,
-        is_draft=False,
     )
     # Held before the cursor narrows it. `geometry_total` has to describe
     # the whole candidate set: a device that lost a page would otherwise
@@ -949,38 +921,3 @@ def mark_sync_complete(request, version):
     assignment.last_synced_at = timezone.now()
     assignment.save()
     return Response({"message": "ok"}, status=status.HTTP_200_OK)
-
-
-@extend_schema(tags=["Mobile Draft Form Data"])
-class DraftFormDataViewSet(ModelViewSet):
-    serializer_class = DraftFormDataSerializer
-    permission_classes = [IsMobileAssignment]
-    pagination_class = Pagination
-
-    def get_queryset(self):
-        user = self.request.auth.assignment.user
-        return FormData.objects_draft.for_user(user).filter(
-            created_by=user
-        ).order_by("-created")
-
-    @extend_schema(
-        responses={
-            204: OpenApiResponse(description="Deletion with no response")
-        },
-        summary="Delete a draft submission from the device",
-    )
-    def destroy(self, request, *args, **kwargs):
-        """
-        The device deletes a draft it owns. get_queryset already scopes to the
-        assignment's user, so a 404 is returned for anything else.
-
-        The web equivalent (DraftFormDataDetailView) cannot serve this: it
-        requires IsAuthenticated, and AssignmentAwareJWTAuthentication resolves
-        a MobileAssignmentToken to AnonymousUser, so a device never passes it.
-
-        hard_delete rather than delete: a soft-deleted draft still comes back
-        through the draft-list download, undoing the deletion on next sync.
-        """
-        draft_data = self.get_object()
-        draft_data.hard_delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)

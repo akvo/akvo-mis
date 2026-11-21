@@ -166,13 +166,6 @@ class PrefixTest(SeederTestModeMixin, TestCase):
         for child in children:
             self.assertTrue(child.name.startswith(DUMMY_PREFIX))
 
-    def test_drafts_are_prefixed(self):
-        self.seed("-r", 4, "--draft=true", "--approved=false")
-        drafts = FormData.objects_draft.all()
-        self.assertTrue(drafts.exists())
-        for draft in drafts:
-            self.assertTrue(draft.name.startswith(DUMMY_PREFIX))
-
     def test_generated_accounts_are_namespaced(self):
         self.seed("-r", 2)
         seeded = SystemUser.objects.filter(
@@ -200,12 +193,6 @@ class CleanTest(SeederTestModeMixin, TestCase):
 
         self.assertEqual(FormData.objects_with_deleted.count(), 0)
         self.assertEqual(Answers.objects.count(), 0)
-
-    def test_clean_removes_drafts(self):
-        self.seed("-r", 4, "--draft=true", "--approved=false")
-        self.assertTrue(FormData.objects_draft.exists())
-        self.seed("--clean=true")
-        self.assertEqual(FormData.objects_draft.count(), 0)
 
     def test_clean_collects_soft_deleted_rows(self):
         # The default manager hides soft-deleted rows, so a --clean built
@@ -331,22 +318,17 @@ class CleanPreservesRealDataTest(SeederTestModeMixin, TestCase):
 class ApprovedOnlyTest(SeederTestModeMixin, TestCase):
     """The default run is approved-only; the contradiction is an error."""
 
-    def test_default_run_has_no_pending_no_draft_no_approvers(self):
+    def test_default_run_has_no_pending_no_approvers(self):
         self.seed("-r", 3)
         self.assertEqual(
             FormData.objects.filter(is_pending=True).count(), 0
         )
-        self.assertEqual(FormData.objects_draft.count(), 0)
         self.assertEqual(
             SystemUser.objects.filter(
                 email__startswith=f"{DUMMY_EMAIL_PREFIX}approver"
             ).count(),
             0,
         )
-
-    def test_approved_true_with_draft_true_is_rejected(self):
-        with self.assertRaisesMessage(CommandError, "contradicts"):
-            self.seed("-r", 2, "--draft=true")
 
     def test_approved_false_produces_pending_rows(self):
         self.seed("-r", 4, "--approved=false")

@@ -16,7 +16,6 @@ import {
   completeDatapointSync,
   downloadDatapointsJson,
   fetchFormDatapointsPageByPage,
-  fetchDraftDatapointsPageByPage,
   geometryIndexNeedsFullPull,
   recordGeometryTotal,
 } from '../lib/sync-datapoints';
@@ -33,17 +32,21 @@ import {
  */
 const SyncService = () => {
   const isOnline = UIState.useState((s) => s.online);
-  const isManualSynced = UIState.useState((s) => s.isManualSynced);
   const syncInterval = BuildParamsState.useState((s) => s.dataSyncInterval);
   const syncInSecond = parseInt(syncInterval, 10) * 1000;
   const userId = UserState.useState((s) => s.id);
   const db = useSQLiteContext();
   const syncLockRef = useRef(false);
   const onSyncLockRef = useRef(false);
+  const onSyncDirtyRef = useRef(false);
   const syncFailureCount = useRef(0);
 
   const onSync = useCallback(async () => {
     if (onSyncLockRef.current) {
+      // A trigger (instant submit / interval tick) arrived mid-run. Record it so
+      // this run re-raises once it finishes, instead of the new row waiting for
+      // the next interval.
+      onSyncDirtyRef.current = true;
       return;
     }
     onSyncLockRef.current = true;
@@ -129,6 +132,15 @@ const SyncService = () => {
       }
     } finally {
       onSyncLockRef.current = false;
+      if (onSyncDirtyRef.current) {
+        // A submit landed while this run held the lock. Re-raise through the same
+        // instant path (lock is free now) so it uploads without waiting. Runs in a
+        // microtask after the await, so this bump is top-level, not reentrant.
+        onSyncDirtyRef.current = false;
+        UIState.update((s) => {
+          s.instantSync += 1;
+        });
+      }
     }
   }, [db, userId]);
 
@@ -159,6 +171,30 @@ const SyncService = () => {
     // eslint-disable-next-line consistent-return
     return () => clearInterval(syncTimer);
   }, [syncInSecond, isOnline, onSync]);
+
+  // Instant sync: FormPage bumps UIState.instantSync after a successful submit.
+  // Reuses onSync() (lock, WiFi-only gate, retries, status bar). Offline is left
+  // to the interval fallback, which resumes when connectivity returns.
+  useEffect(() => {
+    const unsub = UIState.subscribe(
+      (s) => s.instantSync,
+      () => {
+        if (!isOnline) {
+          return;
+        }
+        onSync().catch((err) => {
+          Sentry.withScope((scope) => {
+            scope.setTag('component', 'SyncService');
+            scope.setTag('trigger', 'instant');
+            Sentry.captureException(err);
+          });
+        });
+      },
+    );
+    return () => {
+      unsub();
+    };
+  }, [isOnline, onSync]);
 
   const onSyncDataPoint = useCallback(async () => {
     const SYNC_PAGE_SIZE = 100;
@@ -477,94 +513,6 @@ const SyncService = () => {
     }
   }, [db]);
 
-  const onSyncDraftDatapoint = useCallback(async () => {
-    const allDraftSynced = await crudDataPoints.getDraftPendingSync(db);
-    if (allDraftSynced?.length || (allDraftSynced?.length === 0 && isManualSynced)) {
-      try {
-        await crudDataPoints.deleteDraftSynced(db);
-        DatapointSyncState.update((s) => {
-          s.draftInProgress = true;
-        });
-
-        await fetchDraftDatapointsPageByPage(async (pageData) => {
-          await pageData.reduce(async (previousPromise, draftData) => {
-            await previousPromise;
-
-            const {
-              administration: administrationId,
-              datapoint_name: name,
-              geolocation: geo,
-              form: formId,
-              id: draftId,
-              repeats,
-              ...d
-            } = draftData;
-
-            const existingDraft = await crudDataPoints.getByDraftId(db, { draftId });
-
-            if (existingDraft && existingDraft?.syncedAt) {
-              await crudDataPoints.updateDataPoint(db, {
-                ...d,
-                id: existingDraft.id,
-                name,
-                geo,
-                repeats: JSON.stringify(repeats),
-                submitted: 0,
-                syncedAt: new Date().toISOString(),
-              });
-            } else {
-              const form = await crudForms.getByFormId(db, { formId });
-              if (!form) {
-                return;
-              }
-
-              // Drafts uploaded by versions without draftId bookkeeping can
-              // only be matched by uuid — link instead of inserting a
-              // duplicate; local answers stay queued and win on next upload
-              const localDraft = d?.uuid
-                ? await crudDataPoints.getDraftByUUID(db, { uuid: d.uuid, form: form.id })
-                : null;
-              if (localDraft) {
-                await crudDataPoints.linkDraftId(db, localDraft.id, draftId);
-                return;
-              }
-
-              const draftDatapoint = {
-                ...d,
-                administrationId,
-                name,
-                geo,
-                draftId,
-                repeats: JSON.stringify(repeats),
-                form: form.id,
-                submitted: 0,
-                user: userId,
-                createdAt: new Date().toISOString(),
-                syncedAt: new Date().toISOString(),
-              };
-              await crudDataPoints.saveDataPoint(db, draftDatapoint);
-            }
-          }, Promise.resolve());
-        });
-
-        await crudDataPoints.deleteDraftIdIsNull(db);
-
-        DatapointSyncState.update((s) => {
-          s.draftInProgress = false;
-        });
-      } catch (error) {
-        UIState.update((s) => {
-          s.statusBar = {
-            type: SYNC_STATUS.failed,
-            bgColor: '#ec003f',
-            icon: 'alert',
-            error: String(error),
-          };
-        });
-      }
-    }
-  }, [db, userId, isManualSynced]);
-
   const runSyncSequence = useCallback(async () => {
     if (syncLockRef.current) {
       return;
@@ -592,22 +540,7 @@ const SyncService = () => {
         Sentry.captureException(error);
       }
 
-      // Phase 2: Sync draft datapoints
-      UIState.update((s) => {
-        s.statusBar = {
-          type: SYNC_STATUS.on_progress,
-          bgColor: '#2563eb',
-          icon: 'cloud-upload',
-          syncPhase: 'syncing_drafts',
-        };
-      });
-      try {
-        await onSyncDraftDatapoint();
-      } catch (error) {
-        Sentry.captureException(error);
-      }
-
-      // Phase 3: Download all datapoints from server
+      // Phase 2: Download all datapoints from server
       UIState.update((s) => {
         s.statusBar = {
           type: SYNC_STATUS.on_progress,
@@ -640,7 +573,7 @@ const SyncService = () => {
     } finally {
       syncLockRef.current = false;
     }
-  }, [onSync, onSyncDraftDatapoint, onSyncDataPoint]);
+  }, [onSync, onSyncDataPoint]);
 
   useEffect(() => {
     const unsubsDataSync = DatapointSyncState.subscribe(

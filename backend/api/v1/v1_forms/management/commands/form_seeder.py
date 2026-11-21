@@ -48,7 +48,6 @@ def migrate_question_answers(question, target_form_id, tenant=None):
         source_data = answer.data
         valid_children = source_data.children.filter(
             is_pending=False,
-            is_draft=False,
         )
         if not valid_children.exists():
             continue  # No valid children to migrate to

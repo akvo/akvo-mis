@@ -29,7 +29,7 @@ class DataAnswersTestCase(TestCase):
             "/api/v1/login", user_payload, content_type="application/json"
         )
         self.token = user_response.json().get("token")
-        self.call_command(repeat=2, approved=False, draft=False)
+        self.call_command(repeat=2, approved=False)
         self.data = FormData.objects.filter(
             form__pk=3,
             is_pending=False,

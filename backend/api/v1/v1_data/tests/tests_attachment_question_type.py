@@ -49,6 +49,15 @@ class AddNewDataTestCase(TestCase, ProfileTestHelperMixin):
             }, {
                 "question": 444,
                 "value": "/attachments/my_work.pdf"
+            }, {
+                "question": 445,
+                "value": "/attachments/application.pdf"
+            }, {
+                "question": 446,
+                "value": self.adm.id
+            }, {
+                "question": 551,
+                "value": "data:base64,signature123"
             }]
         }
         data = self.client.post(

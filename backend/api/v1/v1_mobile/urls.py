@@ -12,7 +12,6 @@ from .views import (
     MobileAssignmentViewSet,
     check_apk_version,
     UploadAttachmentsView,
-    DraftFormDataViewSet,
     get_forms_tree,
 )
 
@@ -64,15 +63,5 @@ urlpatterns = [
     re_path(
         r"^(?P<version>(v1))/device/attachments",
         UploadAttachmentsView.as_view(),
-    ),
-    # Declared before the list route: that pattern is unanchored, so it would
-    # otherwise swallow /device/draft-list/<pk>.
-    re_path(
-        r"^(?P<version>(v1))/device/draft-list/(?P<pk>[0-9]+)",
-        DraftFormDataViewSet.as_view({"delete": "destroy"}),
-    ),
-    re_path(
-        r"^(?P<version>(v1))/device/draft-list",
-        DraftFormDataViewSet.as_view({"get": "list"}),
     ),
 ]

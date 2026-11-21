@@ -28,8 +28,9 @@ import {
 import { generateValidationSchemaFieldLevel } from '../lib';
 import { requestDatapointSync } from '../../lib/sync-datapoints';
 import { QUESTION_TYPES } from '../../lib/constants';
-import styles from '../styles';
+import getStyles from '../styles';
 import i18n from '../../lib/i18n';
+import useTheme from '../../lib/theme';
 
 const MIN_POINTS_FOR_AREA = 3;
 
@@ -49,6 +50,8 @@ const TypeGeoDrawing = ({
   disabled = false,
   extra = null,
 }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const navigation = useNavigation();
   const db = SQLite.useSQLiteContext();
   const activeLang = FormState.useState((s) => s.lang);
@@ -267,12 +270,6 @@ const TypeGeoDrawing = ({
   }, [db, userId, id]);
 
   const handleDraw = () => {
-    /**
-     * `extra` travels with the route because MapDrawView runs the same rules as this field, and
-     * one of them - the `maxAreaHa` ceiling - reads its threshold from the question rather than
-     * from a constant (GEO-003 D-5). Without it the map silently evaluated every polygon as if
-     * no ceiling were configured, which looks identical to "no ceiling set".
-     */
     navigation.navigate('MapDrawView', { id, value: points, name: label, type, extra });
   };
 
@@ -305,6 +302,12 @@ const TypeGeoDrawing = ({
     });
   };
 
+  const pillStyle = { borderRadius: theme.radius.xl, paddingVertical: theme.spacing.md };
+  const pillTitleStyle = { fontSize: theme.typography.size.md, fontWeight: '600' };
+  const outlineStyle = [pillStyle, { borderColor: theme.buttonTertiary.border }];
+  const outlineTitleStyle = [pillTitleStyle, { color: theme.buttonTertiary.text }];
+  const outlineDisabledStyle = { borderColor: theme.buttonTertiary.borderDisabled };
+
   return (
     <View>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
@@ -312,18 +315,23 @@ const TypeGeoDrawing = ({
         <View>
           {points.length ? (
             <>
-              <Text testID="text-point-count">
+              <Text testID="text-point-count" style={{ color: theme.text.primary }}>
                 {trans.polygonPoints}: {points.length}
               </Text>
               {isClosed && points.length >= MIN_POINTS_FOR_AREA && (
-                <Text testID="text-area" style={areaUnreliable ? styles.polygonWarningText : null}>
+                <Text
+                  testID="text-area"
+                  style={areaUnreliable ? styles.polygonWarningText : { color: theme.text.primary }}
+                >
                   {trans.polygonArea}: {areaUnreliable ? '~' : ''}
                   {polygonAreaHectares(points).toFixed(2)} ha
                 </Text>
               )}
             </>
           ) : (
-            <Text testID="text-no-points">{trans.polygonNoPoints}</Text>
+            <Text testID="text-no-points" style={{ color: theme.text.secondary }}>
+              {trans.polygonNoPoints}
+            </Text>
           )}
           {showHint &&
             status === OVERLAP_STATUS.notValidated &&
@@ -365,7 +373,22 @@ const TypeGeoDrawing = ({
           </View>
         </View>
         <View style={styles.geoButtonGroup}>
-          <Button onPress={handleDraw} testID="button-draw-on-map" disabled={disabled}>
+          <Button
+            onPress={handleDraw}
+            testID="button-draw-on-map"
+            disabled={disabled}
+            buttonStyle={[pillStyle, { backgroundColor: theme.buttonPrimary.bg }]}
+            titleStyle={[pillTitleStyle, { color: theme.buttonPrimary.text }]}
+            disabledStyle={{ backgroundColor: theme.buttonPrimary.bgDisabled }}
+            disabledTitleStyle={{ color: theme.buttonPrimary.textDisabled }}
+            icon={{
+              name: 'map-outline',
+              type: 'ionicon',
+              size: 18,
+              color: disabled ? theme.buttonPrimary.textDisabled : theme.buttonPrimary.text,
+            }}
+            iconContainerStyle={{ marginRight: theme.spacing.sm }}
+          >
             {trans.buttonDrawOnMap}
           </Button>
           {showValidate && (
@@ -373,7 +396,10 @@ const TypeGeoDrawing = ({
               onPress={handleValidate}
               testID="button-validate-polygon"
               disabled={disabled || checking}
-              color="secondary"
+              buttonStyle={[pillStyle, { backgroundColor: theme.buttonSecondary.bg }]}
+              titleStyle={[pillTitleStyle, { color: theme.buttonSecondary.text }]}
+              disabledStyle={{ backgroundColor: theme.buttonSecondary.bgDisabled }}
+              disabledTitleStyle={{ color: theme.buttonSecondary.textDisabled }}
             >
               {trans.buttonValidatePolygon}
             </Button>
@@ -384,6 +410,10 @@ const TypeGeoDrawing = ({
               testID="button-retry-sync"
               disabled={disabled}
               type="outline"
+              buttonStyle={outlineStyle}
+              titleStyle={outlineTitleStyle}
+              disabledStyle={outlineDisabledStyle}
+              disabledTitleStyle={{ color: theme.buttonTertiary.textDisabled }}
             >
               {trans.buttonRetrySync}
             </Button>
@@ -394,6 +424,10 @@ const TypeGeoDrawing = ({
               testID="button-review-overlaps"
               disabled={disabled}
               type="outline"
+              buttonStyle={outlineStyle}
+              titleStyle={outlineTitleStyle}
+              disabledStyle={outlineDisabledStyle}
+              disabledTitleStyle={{ color: theme.buttonTertiary.textDisabled }}
             >
               {trans.buttonViewOverlaps}
             </Button>

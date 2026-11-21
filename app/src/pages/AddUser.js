@@ -10,8 +10,10 @@ import { BaseLayout } from '../components';
 import { UserState, UIState, AuthState } from '../store';
 import { api, cascades, i18n } from '../lib';
 import { crudForms, crudUsers, crudConfig } from '../database/crud';
+import useTheme from '../lib/theme';
 
 const AddUser = ({ navigation }) => {
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [userCount, setUserCount] = useState(0);
   const db = useSQLiteContext();
@@ -142,9 +144,9 @@ const AddUser = ({ navigation }) => {
         {({ setFieldValue, values, handleSubmit, isSubmitting }) => (
           <BaseLayout.Content>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>
+              <Text style={[styles.label, { color: theme.text.primary }]}>
                 {`${trans.addUserPasscode} `}
-                <Text style={styles.asterisk}>*</Text>
+                <Text style={{ color: theme.status.error }}>*</Text>
               </Text>
               <Input
                 placeholder={trans.addUserPasscode}
@@ -153,7 +155,7 @@ const AddUser = ({ navigation }) => {
                 value={values.name}
                 name="name"
                 testID="input-name"
-                containerStyle={styles.input}
+                containerStyle={[styles.input, { borderColor: theme.border.divider }]}
               />
             </View>
 
@@ -163,7 +165,7 @@ const AddUser = ({ navigation }) => {
                 loading={loading}
                 disabled={isSubmitting}
                 testID="button-save"
-                buttonStyle={styles.button}
+                buttonStyle={{ backgroundColor: theme.buttonPrimary.bg }}
               >
                 {loading ? trans.buttonSaving : trans.buttonSave}
               </Button>
@@ -183,12 +185,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 8,
   },
-  asterisk: {
-    color: '#ff0000',
-  },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
     borderRadius: 4,
     padding: 8,
   },
@@ -197,9 +195,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 8,
     paddingHorizontal: 16,
-  },
-  button: {
-    backgroundColor: '#007bff',
   },
 });
 

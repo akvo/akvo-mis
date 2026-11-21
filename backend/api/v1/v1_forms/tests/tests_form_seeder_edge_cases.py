@@ -76,8 +76,8 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
             ).exists()
         )
 
-    def test_pending_and_draft_children_are_skipped(self):
-        """Pending and draft children should NOT receive migrated answers;
+    def test_pending_children_are_skipped(self):
+        """Pending children should NOT receive migrated answers;
         the answer stays on the source data."""
         FormData.objects.create(
             name="Pending Child",
@@ -86,14 +86,6 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
             created_by=self.user,
             parent=self.reg_data,
             is_pending=True,
-        )
-        FormData.objects.create(
-            name="Draft Child",
-            form=self.mon_form,
-            administration=self.admin,
-            created_by=self.user,
-            parent=self.reg_data,
-            is_draft=True,
         )
         Answers.objects.create(
             data=self.reg_data,
@@ -110,7 +102,7 @@ class MigrateQuestionAnswersEdgeCaseTests(TestCase):
                 data=self.reg_data, question=self.question
             ).exists()
         )
-        # No answer copied to the pending/draft children
+        # No answer copied to the pending children
         self.assertEqual(
             Answers.objects.filter(question=self.question).exclude(
                 data=self.reg_data

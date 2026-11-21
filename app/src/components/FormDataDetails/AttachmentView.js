@@ -6,7 +6,8 @@ import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sentry from '@sentry/react-native';
 import MIME_TYPES from '../../lib/mime_types';
-import styles from './styles';
+import useTheme from '../../lib/theme';
+import getStyles from './styles';
 
 const AttachmentView = ({
   label,
@@ -22,6 +23,8 @@ const AttachmentView = ({
 }) => {
   // Non-image files render no Image, so there is no onError signal — an
   // explicit existence check is the only way (one call per attachment).
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [fileMissing, setFileMissing] = useState(false);
 
   useEffect(() => {
@@ -83,7 +86,7 @@ const AttachmentView = ({
     <View style={{ width: '100%' }}>
       <Text
         testID={`text-answer-${index}`}
-        style={{ color: 'blue', textDecorationLine: 'underline' }}
+        style={{ color: theme.buttonGhost.color, textDecorationLine: 'underline' }}
       >
         {uri.split('/').pop()}
       </Text>
@@ -91,7 +94,7 @@ const AttachmentView = ({
         title={openLabel}
         onPress={openFileManager}
         testID={`open-file-button-${index}`}
-        buttonStyle={{ width: '100%', backgroundColor: '#1E90FF', marginTop: 8 }}
+        buttonStyle={{ width: '100%', backgroundColor: theme.buttonPrimary.bg, marginTop: 8 }}
       />
     </View>
   );
