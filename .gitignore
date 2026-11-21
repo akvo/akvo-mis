@@ -23,5 +23,3 @@ skills/*.zip
 # Local PG dump produced by db/script/dump-db.sh for the PG12->18 volume
 # migration; replayed by initdb on a fresh volume. Never commit it.
 db/docker-entrypoint-initdb.d/001-init.sql
-# Local issue tracker for agent skills (doc/agents/issue-tracker.md)
-.scratch/
