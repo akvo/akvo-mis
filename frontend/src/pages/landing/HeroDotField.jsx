@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
+import colors from "../../lib/theme";
 
 // Dot field drawn on a single canvas (per-dot math in a requestAnimationFrame
 // loop) so hundreds stay smooth where hundreds of DOM nodes would not. With
@@ -14,7 +15,6 @@ const MAX_R = 3.2; // radius right under the pointer
 const INFLUENCE = 140; // px the pointer reaches
 const BASE_ALPHA = 0.1;
 const MAX_ALPHA = 0.55;
-const DOT_RGB = "130, 180, 255"; // light blue on the deep-blue hero
 
 const prefersReduced = () =>
   typeof window !== "undefined" &&
@@ -31,6 +31,11 @@ const HeroDotField = ({ interactive = true }) => {
       return () => {};
     }
     const ctx = canvas.getContext("2d");
+    // jsdom (and any environment without 2d canvas) returns null here; bail
+    // rather than crash on ctx.setTransform during tests or on old devices.
+    if (!ctx) {
+      return () => {};
+    }
     const reduce = prefersReduced();
     const pointer = { x: 0, y: 0, active: false };
     let width = 0;
@@ -79,7 +84,7 @@ const HeroDotField = ({ interactive = true }) => {
             a = BASE_ALPHA + (MAX_ALPHA - BASE_ALPHA) * wave * 0.45;
           }
           ctx.beginPath();
-          ctx.fillStyle = `rgba(${DOT_RGB}, ${a})`;
+          ctx.fillStyle = `rgba(${colors.dotRgb}, ${a})`;
           ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.fill();
         }

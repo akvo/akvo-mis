@@ -1,0 +1,10 @@
+{
+  "title": "Ve a tu espacio de trabajo",
+  "subtitle": "Cada espacio de trabajo tiene su propia dirección. Introduce la tuya para iniciar sesión.",
+  "addressLabel": "Dirección del espacio de trabajo",
+  "addressRequired": "Introduce la dirección de tu espacio de trabajo",
+  "addressPlaceholder": "acme",
+  "submit": "Continuar",
+  "noWorkspace": "¿No tienes uno?",
+  "create": "Crea un espacio de trabajo"
+}

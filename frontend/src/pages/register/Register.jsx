@@ -5,6 +5,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { baseDomainHost } from "../../util/tenant";
+import { useTranslation } from "../../lib/i18n";
 
 const { Title, Text } = Typography;
 
@@ -56,6 +57,7 @@ const Register = () => {
   // form.setFields, which needs a registered antd field, and this
   // control is Cloudflare's iframe rather than an Input.
   const [captchaError, setCaptchaError] = useState("");
+  const c = useTranslation("register");
 
   useEffect(() => {
     if (!siteKey) {
@@ -165,7 +167,7 @@ const Register = () => {
           message:
             err.response?.data?.message ||
             err.response?.data?.detail ||
-            "Registration failed",
+            c.failed,
         });
       })
       .finally(() => {
@@ -182,13 +184,11 @@ const Register = () => {
         // is a deliberate no-op, look broken.
         notify({
           type: "success",
-          message:
-            res?.data?.message ||
-            "If that account still needs activating, an email is on its way",
+          message: res?.data?.message || c.sent.resent,
         });
       })
       .catch(() => {
-        notify({ type: "error", message: "Could not send the email" });
+        notify({ type: "error", message: c.sent.resendError });
       });
   };
 
@@ -202,14 +202,18 @@ const Register = () => {
               style={{ textAlign: "center" }}
             >
               <div style={{ fontSize: 46, lineHeight: 1 }}>📬</div>
-              <Title level={2}>Check your email</Title>
+              <Title level={2}>{c.sent.title}</Title>
               <Text type="secondary">
-                We sent an activation link to <strong>{sentTo}</strong>. Click
-                it to verify your address and finish setting up.
+                {c.sent.body.split("{email}").map((part, i) => (
+                  <React.Fragment key={i}>
+                    {i > 0 ? <strong>{sentTo}</strong> : null}
+                    {part}
+                  </React.Fragment>
+                ))}
               </Text>
               <div style={{ marginTop: 24 }}>
                 <Text type="secondary">
-                  Didn&apos;t get it?{" "}
+                  {c.sent.didntGet}{" "}
                   <Button
                     type="link"
                     size="small"
@@ -217,7 +221,7 @@ const Register = () => {
                     onClick={onResend}
                     style={{ padding: 0 }}
                   >
-                    Resend email
+                    {c.sent.resend}
                   </Button>{" "}
                   ·{" "}
                   <Button
@@ -228,7 +232,7 @@ const Register = () => {
                     }}
                     style={{ padding: 0 }}
                   >
-                    use a different address
+                    {c.sent.useDifferent}
                   </Button>
                 </Text>
               </div>
@@ -244,8 +248,8 @@ const Register = () => {
       <Row className="wrapper" align="middle">
         <Col span={24} className="right-side">
           <div className="login-form-container">
-            <h1>Create your workspace</h1>
-            <p className="disclaimer">You&apos;ll verify your email next.</p>
+            <h1>{c.title}</h1>
+            <p className="disclaimer">{c.subtitle}</p>
             <Form
               form={form}
               name="register-form"
@@ -258,110 +262,107 @@ const Register = () => {
             >
               <Form.Item
                 name="email"
-                label="Email"
+                label={c.emailLabel}
                 rules={[
                   {
                     required: true,
                     type: "email",
-                    message: "Enter a valid email address.",
+                    message: c.emailInvalid,
                   },
                 ]}
               >
-                <Input placeholder="you@organisation.org" />
+                <Input placeholder={c.emailPlaceholder} />
               </Form.Item>
               <Form.Item
                 name="password"
-                label="Password"
+                label={c.passwordLabel}
                 rules={[
-                  { required: true, message: "Password is required" },
+                  { required: true, message: c.passwordRequired },
                   {
                     min: 8,
-                    message: "Password must be at least 8 characters.",
+                    message: c.passwordMin,
                   },
                 ]}
               >
                 <Input.Password
                   disabled={loading}
-                  placeholder="At least 8 characters"
+                  placeholder={c.passwordPlaceholder}
                 />
               </Form.Item>
               <Form.Item
                 name="confirm_password"
-                label="Confirm password"
+                label={c.confirmLabel}
                 // Validated here rather than server-side: the server only ever
                 // receives one password, and a typo caught after the account
                 // exists would need a reset to recover from.
                 dependencies={["password"]}
                 rules={[
-                  { required: true, message: "Confirm your password" },
+                  { required: true, message: c.confirmRequired },
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       if (!value || getFieldValue("password") === value) {
                         return Promise.resolve();
                       }
-                      return Promise.reject(
-                        new Error("The two passwords do not match.")
-                      );
+                      return Promise.reject(new Error(c.confirmMismatch));
                     },
                   }),
                 ]}
               >
                 <Input.Password
                   disabled={loading}
-                  placeholder="Repeat your password"
+                  placeholder={c.confirmPlaceholder}
                 />
               </Form.Item>
               <Form.Item
                 name="language"
-                label="Workspace language"
+                label={c.languageLabel}
                 rules={[
                   {
                     required: true,
-                    message: "Please select a workspace language.",
+                    message: c.languageRequired,
                   },
                 ]}
               >
                 <Select
                   options={LANGUAGE_OPTIONS}
                   disabled={loading}
-                  placeholder="Select language"
+                  placeholder={c.languagePlaceholder}
                 />
               </Form.Item>
               <Form.Item
                 name="name"
-                label="Workspace name"
-                extra="The full name of your organisation (e.g. Ministry of Health & Human Services)."
+                label={c.nameLabel}
+                extra={c.nameExtra}
                 rules={[
                   { required: false },
                   {
                     max: 255,
-                    message: "Workspace name cannot exceed 255 characters.",
+                    message: c.nameMax,
                   },
                 ]}
               >
-                <Input
-                  disabled={loading}
-                  placeholder="e.g. Ministry of Health & Human Services"
-                />
+                <Input disabled={loading} placeholder={c.namePlaceholder} />
               </Form.Item>
               <Form.Item
                 name="subdomain"
-                label="Workspace address"
-                extra="At least 3 characters: lowercase letters, numbers and hyphens. This becomes your web address and can't be changed later."
+                label={c.addressLabel}
+                extra={c.addressExtra}
                 rules={[
                   {
                     required: true,
                     pattern: /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
-                    message:
-                      "Use lowercase letters, numbers and hyphens — no spaces, no leading or trailing hyphen.",
+                    message: c.addressPattern,
                   },
                   {
                     min: 3,
-                    message: "Workspace name must be at least 3 characters.",
+                    message: c.addressMin,
                   },
                 ]}
               >
-                <Input placeholder="acme" addonAfter={addressSuffix} />
+                <Input
+                  placeholder={c.addressPlaceholder}
+                  addonAfter={addressSuffix}
+                />
               </Form.Item>
               {siteKey ? (
                 <Form.Item
@@ -379,11 +380,11 @@ const Register = () => {
                   block
                   loading={loading}
                 >
-                  Create workspace
+                  {c.submit}
                 </Button>
               </Form.Item>
               <p className="disclaimer">
-                Already have one? <Link to="/login">Sign in</Link>
+                {c.haveOne} <Link to="/login">{c.signIn}</Link>
               </p>
             </Form>
           </div>

@@ -54,7 +54,7 @@ const HeroShowcase = ({ demo }) => {
       <button
         type="button"
         onClick={() => setFlipped((f) => !f)}
-        aria-label="Flip card"
+        aria-label={demo.flipLabel}
         className="absolute right-3 bottom-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white/90 backdrop-blur-sm transition-colors hover:bg-black/60"
       >
         <svg
@@ -85,7 +85,7 @@ const HeroShowcase = ({ demo }) => {
         </div>
         {/* Front (mobile): overlays the same box. */}
         <div className="absolute inset-0" style={FRONT_FACE}>
-          <HeroMobile />
+          <HeroMobile alt={demo.mobileAlt} />
         </div>
       </motion.div>
     </div>

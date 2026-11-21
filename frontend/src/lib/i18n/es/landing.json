@@ -5,13 +5,17 @@
     "description": "{brand} es un sistema de información para el monitoreo en tiempo real: recolección móvil sin conexión, una jerarquía de varios niveles, tableros y visualización asistida por IA — gratis para siempre."
   },
   "nav": {
-    "cta": "Pruébalo tú mismo"
+    "cta": "Pruébalo tú mismo",
+    "closeMenu": "Cerrar el menú de idiomas"
   },
   "hero": {
     "badge": "Gratis para siempre",
     "title": "Bienvenido a {brand}.",
     "lead": "La potente plataforma que gestiona tus datos con facilidad — y usa IA para convertirlos en visualizaciones, automáticamente. ¿Con curiosidad? Ven y pruébalo tú mismo.",
-    "primaryCta": { "label": "Pruébalo tú mismo →", "href": "/onboarding" },
+    "primaryCta": {
+      "label": "Pruébalo tú mismo →",
+      "href": "/onboarding"
+    },
     "secondaryCta": {
       "label": "Habla con nuestro equipo",
       "href": "mailto:info@akvo.org"
@@ -22,6 +26,8 @@
       "syncedLabel": "sincronizado",
       "demoBadge": "demo",
       "caption": "Datos ilustrativos — elige un sector y mira responder el espacio de trabajo.",
+      "flipLabel": "Girar la tarjeta",
+      "mobileAlt": "La aplicación móvil de {brand} sincronizando envíos sin conexión",
       "chartTitle": "Funcionalidad en el tiempo",
       "chartNote": "Vista sugerida por IA",
       "sectors": [
@@ -125,10 +131,23 @@
     "subtitle": "Una mirada honesta. {brand} se sitúa deliberadamente en el medio del espectro de complejidad.",
     "caption": "El camino intermedio — más estructura y monitoreo que una herramienta de encuestas, mucho menos peso operativo que un HIS completo. Borrador — pendiente de revisión.",
     "columns": [
-      { "key": "capability", "label": "Capacidad" },
-      { "key": "kobo", "label": "KoboToolbox" },
-      { "key": "akvo", "label": "{brand}", "highlight": true },
-      { "key": "dhis2", "label": "DHIS2" }
+      {
+        "key": "capability",
+        "label": "Capacidad"
+      },
+      {
+        "key": "kobo",
+        "label": "KoboToolbox"
+      },
+      {
+        "key": "akvo",
+        "label": "{brand}",
+        "highlight": true
+      },
+      {
+        "key": "dhis2",
+        "label": "DHIS2"
+      }
     ],
     "rows": [
       {
@@ -204,13 +223,23 @@
   "finalCta": {
     "title": "Tus datos, trabajando para ti — hoy.",
     "body": "Crea un espacio de trabajo en un par de minutos. Gratis para siempre.",
-    "cta": { "label": "Pruébalo tú mismo →", "href": "/onboarding" }
+    "cta": {
+      "label": "Pruébalo tú mismo →",
+      "href": "/onboarding"
+    }
   },
   "footer": {
     "tagline": "Monitoreo en tiempo real, simplificado.",
+    "navLabel": "Pie de página",
     "links": [
-      { "label": "Documentación", "href": "https://akvo-mis.readthedocs.io/" },
-      { "label": "Contacto", "href": "mailto:info@akvo.org" }
+      {
+        "label": "Documentación",
+        "href": "https://akvo-mis.readthedocs.io/"
+      },
+      {
+        "label": "Contacto",
+        "href": "mailto:info@akvo.org"
+      }
     ]
   }
 }

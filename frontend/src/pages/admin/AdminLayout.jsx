@@ -80,6 +80,7 @@ const AdminLayout = () => {
             <Space size={24} className="admin-nav">
               {tab("/admin/tenants", text.consoleTenants)}
               {tab("/admin/operators", text.consoleOperators)}
+              {tab("/admin/form-library", text.consoleFormLibrary)}
             </Space>
           </Space>
         </Col>

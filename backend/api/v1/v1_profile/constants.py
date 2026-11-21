@@ -56,6 +56,7 @@ class FeatureAccessTypes:
     dashboard_edit = 10
     dashboard_publish = 11
     dashboard_delete = 12
+    data_onboard = 13
 
     FieldStr = {
         invite_user: "Invite User",
@@ -69,6 +70,7 @@ class FeatureAccessTypes:
         dashboard_edit: "Dashboard Edit",
         dashboard_publish: "Dashboard Publish",
         dashboard_delete: "Dashboard Delete",
+        data_onboard: "Data Onboard",
     }
 
 
@@ -76,9 +78,12 @@ class FeatureTypes:
     user_access = 1
     form_builder = 2
     dashboard_builder = 3
+    data_onboarding = 4
     FieldStr = {
         user_access: "User Access",
         form_builder: "Form Builder",
+        # Dict order is the role editor's section order.
+        data_onboarding: "Data Onboarding",
         dashboard_builder: "Dashboard Builder",
     }
     FieldGroup = {
@@ -94,6 +99,9 @@ class FeatureTypes:
         ],
         # One entry is the whole role-editor integration: generate_config
         # walks FieldStr and emits each key's FieldGroup members.
+        data_onboarding: [
+            FeatureAccessTypes.data_onboard,
+        ],
         dashboard_builder: [
             FeatureAccessTypes.dashboard_view,
             FeatureAccessTypes.dashboard_create,

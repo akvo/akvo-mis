@@ -1,7 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 // Scoped to the landing page only: `important: "#landing"` and preflight off
 // keep every utility class inside <div id="landing">, so Ant Design screens
-// render exactly as before. Tokens + fonts mirror akvo.org (akvo-web).
+// render exactly as before. The `brand` token scale mirrors the platform's
+// Ant Design primary; all hexes live in ./src/lib/theme.js (the one
+// place colours change — the hero canvas/SVG import the same file).
+const brand = require("./src/lib/theme");
+
 module.exports = {
   content: [
     "./src/pages/landing/**/*.{js,jsx}",
@@ -14,17 +18,18 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Token names are historical (akvo-web was green); values are the
-        // platform's Ant Design primary (#1651b6, src/variables.scss $blue)
-        // so the landing matches the antd-based app. Change hex here only.
-        akvo: {
-          DEFAULT: "#1651b6", // primary: buttons, accents (antd $blue)
-          dark: "#114299", // hover
-          light: "#E7EEF9", // light backgrounds, badges
-          border: "#A9C2EE", // borders, outline buttons
-          deep: "#0E2E6B", // hero band (deep navy)
-          text: "#13448F", // blue text on white (9:1)
-          bright: "#5B8DEF", // accent on dark surfaces / dark mode (6:1 on navy)
+        brand: {
+          DEFAULT: brand.brand,
+          dark: brand.brandDark,
+          light: brand.brandLight,
+          border: brand.brandBorder,
+          deep: brand.brandDeep,
+          text: brand.brandText,
+          bright: brand.brandBright,
+          lead: brand.brandLead,
+          ink: brand.brandInk,
+          frame: brand.brandFrame,
+          chart: brand.brandChart,
         },
         "text-primary": "#191919",
         "text-secondary": "#474747",

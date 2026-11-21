@@ -4,6 +4,8 @@ import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   Landing,
   Onboarding,
+  LandingHeader,
+  LandingFooter,
   Login,
   Register,
   Activate,
@@ -53,6 +55,10 @@ import {
   FormBuilderList,
   FormBuilderCreate,
   FormBuilderEdit,
+  FormLibrary,
+  DataOnboardingCreate,
+  DataOnboardingDetail,
+  DataOnboardingList,
   FindWorkspace,
   WorkspaceNotFound,
   DashboardList,
@@ -63,6 +69,8 @@ import {
   Tenants,
   TenantDetail,
   Operators,
+  FormLibraryConsole,
+  PromoteTemplatePage,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -162,6 +170,16 @@ const RouteList = () => {
           <Route path="tenants" element={<Tenants />} />
           <Route path="tenants/:id" element={<TenantDetail />} />
           <Route path="operators" element={<Operators />} />
+          <Route path="form-library" element={<FormLibraryConsole />} />
+          <Route
+            path="form-library/promote"
+            element={<PromoteTemplatePage />}
+          />
+          <Route path="form-library/create" element={<FormBuilderCreate />} />
+          <Route
+            path="form-library/:formId/edit"
+            element={<FormBuilderEdit />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>
@@ -267,8 +285,30 @@ const RouteList = () => {
           element={<Private element={FormBuilderCreate} alias="form-builder" />}
         />
         <Route
+          path="form-builder/library"
+          element={<Private element={FormLibrary} alias="form-builder" />}
+        />
+        <Route
           path="form-builder/:formId/edit"
           element={<Private element={FormBuilderEdit} alias="form-builder" />}
+        />
+        <Route
+          path="data-onboarding"
+          element={
+            <Private element={DataOnboardingList} alias="data-onboarding" />
+          }
+        />
+        <Route
+          path="data-onboarding/create"
+          element={
+            <Private element={DataOnboardingCreate} alias="data-onboarding" />
+          }
+        />
+        <Route
+          path="data-onboarding/:id"
+          element={
+            <Private element={DataOnboardingDetail} alias="data-onboarding" />
+          }
         />
         <Route
           path="data"
@@ -692,6 +732,14 @@ const App = () => {
     (location.pathname === "/" || location.pathname === "/onboarding") &&
     onBaseDomainHost();
 
+  // The other base-domain public routes reuse the landing's header as their
+  // app shell: suppress the workspace header/chatbot/tour and render a fixed
+  // LandingHeader instead. The `#login` pages already reserve the header's
+  // height, so the fixed bar drops into that slot with no layout change.
+  const publicShell =
+    onBaseDomainHost() &&
+    ["/register", "/find-workspace"].includes(location.pathname);
+
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
     .filter((x) => x)?.length;
@@ -710,20 +758,34 @@ const App = () => {
             workspace's published dashboards and its account menu links
             to /control-center. Neither exists on the console, which
             brings its own header in AdminLayout. */}
-        {!onAdminHost() && !isPublicShell && <Layout.Header />}
+        {publicShell ? (
+          <div id="landing">
+            <LandingHeader showCta={location.pathname !== "/register"} />
+          </div>
+        ) : (
+          !onAdminHost() && !isPublicShell && <Layout.Header />
+        )}
         <Layout.Body>
-          {(loading || formsLoading) && !isPublicShell && !isPublic ? (
+          {(loading || formsLoading) &&
+          !isPublicShell &&
+          !publicShell &&
+          !isPublic ? (
             <PageLoader message="Initializing. Please wait.." />
           ) : (
             <RouteList />
           )}
         </Layout.Body>
+        {publicShell && (
+          <div id="landing">
+            <LandingFooter />
+          </div>
+        )}
         {/* A workspace feature: it posts to a tenant-scoped endpoint
             and labels itself with the page it is on, so on the console
             it offers an assistant that can only fail. Same reason the
             header above is suppressed. */}
-        {!onAdminHost() && !isPublicShell && <ChatbotWidget />}
-        {!onAdminHost() && !isPublicShell && <OnboardingTour />}
+        {!onAdminHost() && !isPublicShell && !publicShell && <ChatbotWidget />}
+        {!onAdminHost() && !isPublicShell && !publicShell && <OnboardingTour />}
       </Layout>
     </AbilityContext.Provider>
   );

@@ -212,17 +212,17 @@ const Onboarding = () => {
       </p>
     ) : null;
   const inputCls =
-    "mt-1 w-full rounded-lg border border-akvo-border bg-bg-secondary px-4 py-3 text-base text-text-primary outline-none focus:border-akvo dark:bg-white/5 dark:text-white";
+    "mt-1 w-full rounded-lg border border-brand-border bg-bg-secondary px-4 py-3 text-base text-text-primary outline-none focus:border-brand dark:bg-white/5 dark:text-white";
 
   return (
     <LandingShell showCta={false}>
-      <section className="relative flex flex-1 items-center justify-center overflow-hidden bg-akvo-deep px-4 py-12 sm:px-6">
+      <section className="relative flex flex-1 items-center justify-center overflow-hidden bg-brand-deep px-4 py-12 sm:px-6">
         <HeroDotField interactive={false} />
-        <div className="relative z-10 w-full max-w-xl rounded-2xl border border-akvo-border/50 bg-white p-6 shadow-xl dark:bg-bg-dark sm:p-8">
+        <div className="relative z-10 w-full max-w-xl rounded-2xl border border-brand-border/50 bg-white p-6 shadow-xl dark:bg-bg-dark sm:p-8">
           <div className="flex items-center gap-4">
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-akvo-light">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-brand-light">
               <div
-                className="h-full rounded-full bg-akvo transition-all duration-500"
+                className="h-full rounded-full bg-brand transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -230,7 +230,7 @@ const Onboarding = () => {
               type="button"
               aria-label="Close and return to the landing page"
               onClick={() => navigate("/")}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-secondary text-text-muted hover:bg-akvo-light hover:text-akvo-text dark:bg-white/10"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-secondary text-text-muted hover:bg-brand-light hover:text-brand-text dark:bg-white/10"
             >
               ✕
             </button>
@@ -238,7 +238,7 @@ const Onboarding = () => {
 
           {step >= 1 && step <= INPUT_STEPS ? (
             <div className="mt-6">
-              <p className="font-mono text-sm uppercase tracking-wide text-akvo-text dark:text-akvo-bright">
+              <p className="font-mono text-sm uppercase tracking-wide text-brand-text dark:text-brand-bright">
                 Step {step} of {INPUT_STEPS}
               </p>
 
@@ -258,8 +258,8 @@ const Onboarding = () => {
                         onClick={() => set("sector", s.key)}
                         className={
                           data.sector === s.key
-                            ? "flex w-full items-center gap-3 rounded-xl border-2 border-akvo bg-akvo-light px-4 py-3 text-left font-semibold text-akvo-text"
-                            : "flex w-full items-center gap-3 rounded-xl border border-akvo-border bg-bg-secondary px-4 py-3 text-left text-text-secondary hover:border-akvo dark:bg-white/5 dark:text-gray-300"
+                            ? "flex w-full items-center gap-3 rounded-xl border-2 border-brand bg-brand-light px-4 py-3 text-left font-semibold text-brand-text"
+                            : "flex w-full items-center gap-3 rounded-xl border border-brand-border bg-bg-secondary px-4 py-3 text-left text-text-secondary hover:border-brand dark:bg-white/5 dark:text-gray-300"
                         }
                       >
                         {s.label}
@@ -322,7 +322,7 @@ const Onboarding = () => {
                     Workspace address
                     <span className="mt-1 flex items-stretch">
                       <input
-                        className="w-full rounded-l-lg border border-akvo-border bg-bg-secondary px-4 py-3 text-base text-text-primary outline-none focus:border-akvo dark:bg-white/5 dark:text-white"
+                        className="w-full rounded-l-lg border border-brand-border bg-bg-secondary px-4 py-3 text-base text-text-primary outline-none focus:border-brand dark:bg-white/5 dark:text-white"
                         value={data.subdomain}
                         onChange={(e) =>
                           set(
@@ -332,7 +332,7 @@ const Onboarding = () => {
                         }
                         placeholder="your-org"
                       />
-                      <span className="flex items-center rounded-r-lg border border-l-0 border-akvo-border bg-akvo-light px-3 font-mono text-sm text-akvo-text">
+                      <span className="flex items-center rounded-r-lg border border-l-0 border-brand-border bg-brand-light px-3 font-mono text-sm text-brand-text">
                         .{domain}
                       </span>
                     </span>
@@ -343,7 +343,7 @@ const Onboarding = () => {
                     </p>
                   ) : null}
                   {!checking && avail && avail.available ? (
-                    <p className="mt-1.5 text-sm font-semibold text-akvo-text dark:text-akvo-bright">
+                    <p className="mt-1.5 text-sm font-semibold text-brand-text dark:text-brand-bright">
                       ✓ Available
                     </p>
                   ) : null}
@@ -408,7 +408,7 @@ const Onboarding = () => {
                   <button
                     type="button"
                     onClick={back}
-                    className="rounded-full border border-akvo-border px-5 py-2.5 text-sm font-semibold text-text-secondary hover:bg-bg-secondary dark:text-gray-300"
+                    className="rounded-full border border-brand-border px-5 py-2.5 text-sm font-semibold text-text-secondary hover:bg-bg-secondary dark:text-gray-300"
                   >
                     Back
                   </button>
@@ -419,7 +419,7 @@ const Onboarding = () => {
                   type="button"
                   onClick={advance}
                   disabled={submitting}
-                  className="rounded-full bg-akvo px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-akvo-dark disabled:opacity-60"
+                  className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-60"
                 >
                   {step === INPUT_STEPS
                     ? submitting
@@ -433,7 +433,7 @@ const Onboarding = () => {
 
           {step === 6 ? (
             <div className="mt-6 py-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-akvo-light text-2xl text-akvo-text">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-light text-2xl text-brand-text">
                 ✓
               </div>
               <h2 className="mt-5 font-title text-2xl font-bold text-text-primary dark:text-white">
@@ -454,7 +454,7 @@ const Onboarding = () => {
               <button
                 type="button"
                 onClick={() => navigate("/")}
-                className="mt-8 rounded-full bg-akvo px-6 py-2.5 text-sm font-semibold text-white hover:bg-akvo-dark"
+                className="mt-8 rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark"
               >
                 Done
               </button>

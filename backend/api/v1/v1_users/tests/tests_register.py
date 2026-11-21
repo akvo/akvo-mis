@@ -296,6 +296,13 @@ class RegisterEndpointTestCase(TestCase):
         tenant = Tenant.objects.get(subdomain="senegal-rural-water")
         self.assertEqual(tenant.language, "fr")
 
+    def test_register_persists_spanish_language(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(subdomain="spanish", language="es")
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="spanish")
+        self.assertEqual(tenant.language, "es")
+
     def test_register_rejects_unsupported_language(self):
         # en/es/fr are accepted (es added in LP-002 D-10'); German is not.
         with mock.patch("api.v1.v1_users.views.send_email"):

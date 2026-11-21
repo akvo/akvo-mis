@@ -153,3 +153,19 @@ support and the comparison table working on mobile.
   tilted phone frame, back is the interactive dashboard; it auto-flips and is
   click-to-flip. All effects honour `prefers-reduced-motion`. See
   `LP-001-basic-landing-page.md` D-13.
+- **Shared app shell (`LandingHeader`/`LandingFooter`)**: the header (one fixed
+  70px bar with an akvo-web-style scroll-progress bar) and footer also shell the
+  base-domain `/register` and `/find-workspace` pages, replacing the generic
+  workspace header there. See `LP-001-basic-landing-page.md` D-14.
+- **Global i18n**: the content loader became a global, locale-first, per-page
+  i18n library at `frontend/src/lib/i18n/<locale>/<page>.json`; register and
+  find-workspace are now translatable EN/ES/FR through the same language switch.
+  See `LP-001-basic-landing-page.md` D-15.
+- **Platform UI i18n (2026-11-21)**: the library grew past the public pages to
+  hold the **whole app UI string set** — the `uiText` dictionary moved into
+  `lib/i18n/<locale>/ui.js` (JS, not JSON, since values carry JSX/functions),
+  was translated es/fr, and the login → activate → configure funnel the CTA
+  feeds into was wired to it; `lib/ui-text.js` is now a re-export shim and
+  `RegisterSerializer.language` accepts `es`. So flipping to Español on the
+  landing stays Español through sign-up and setup. See
+  `LP-001-basic-landing-page.md` D-16 (satisfies the D-10 prerequisite).

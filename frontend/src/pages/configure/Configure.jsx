@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import "../login/style.scss";
 import {
   Row,
@@ -14,7 +14,13 @@ import {
 } from "antd";
 import { UploadOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Navigate, useNavigate } from "react-router-dom";
-import { api, store, validateLogoFile, LOGO_ACCEPT_TYPES } from "../../lib";
+import {
+  api,
+  store,
+  uiText,
+  validateLogoFile,
+  LOGO_ACCEPT_TYPES,
+} from "../../lib";
 import { useNotification } from "../../util/hooks";
 import { fetchLevels } from "../../util/level";
 
@@ -38,7 +44,8 @@ const Configure = () => {
   const level0Name = Form.useWatch("level_0_name", form);
   const rootUnitName = Form.useWatch("root_unit_name", form);
   const { notify } = useNotification();
-  const { user: authUser } = store.useState((s) => s);
+  const { user: authUser, language } = store.useState((s) => s);
+  const text = useMemo(() => uiText[language.active], [language.active]);
 
   const beforeUpload = (file) => {
     if (!validateLogoFile(file, notify)) {
@@ -83,7 +90,7 @@ const Configure = () => {
         setUploadingLogo(false);
         notify({
           type: "error",
-          message: err.response?.data?.message || "Failed to upload logo",
+          message: err.response?.data?.message || text.configureLogoUploadError,
         });
         onError(err);
       });
@@ -139,8 +146,7 @@ const Configure = () => {
         setLoading(false);
         notify({
           type: "error",
-          message:
-            err.response?.data?.message || "Could not save your workspace",
+          message: err.response?.data?.message || text.configureSaveError,
         });
       });
   };
@@ -155,13 +161,14 @@ const Configure = () => {
               style={{ textAlign: "center" }}
             >
               <div style={{ fontSize: 46, lineHeight: 1 }}>🎉</div>
-              <Title level={2}>You&apos;re all set</Title>
+              <Title level={2}>{text.configureDoneTitle}</Title>
               <Text type="secondary">
-                Welcome, {done.firstName}. Your workspace is ready with{" "}
+                {text.configureWelcome}, {done.firstName}.{" "}
+                {text.configureReadyWith}{" "}
                 <strong>
                   {done.level0}: {done.root}
                 </strong>{" "}
-                at the top. Next, add the tiers beneath it.
+                {text.configureAtTop}
               </Text>
               <Button
                 type="primary"
@@ -172,7 +179,7 @@ const Configure = () => {
                   navigate("/control-center/master-data/levels");
                 }}
               >
-                Continue to Level management →
+                {text.configureContinue}
               </Button>
             </div>
           </Col>
@@ -197,17 +204,14 @@ const Configure = () => {
               labelPlacement="vertical"
               style={{ marginBottom: 28 }}
               items={[
-                { title: "Sign up" },
-                { title: "Verify email" },
-                { title: "Configure project" },
-                { title: "Dashboard" },
+                { title: text.configureStep1 },
+                { title: text.configureStep2 },
+                { title: text.configureStep3 },
+                { title: text.configureStep4 },
               ]}
             />
-            <h1>Set up your project</h1>
-            <p className="disclaimer">
-              This names your administrative hierarchy. You can add deeper tiers
-              afterwards; these two top-level names are set once here.
-            </p>
+            <h1>{text.configureTitle}</h1>
+            <p className="disclaimer">{text.configureSubtitle}</p>
             <Form
               form={form}
               name="configure-form"
@@ -218,44 +222,50 @@ const Configure = () => {
                 <Col span={12}>
                   <Form.Item
                     name="first_name"
-                    label="First name"
-                    rules={[{ required: true, message: "Required" }]}
+                    label={text.configureFirstName}
+                    rules={[
+                      { required: true, message: text.configureRequired },
+                    ]}
                   >
-                    <Input placeholder="Jane" />
+                    <Input placeholder={text.configureFirstNamePlaceholder} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
                   <Form.Item
                     name="last_name"
-                    label="Last name"
-                    rules={[{ required: true, message: "Required" }]}
+                    label={text.configureLastName}
+                    rules={[
+                      { required: true, message: text.configureRequired },
+                    ]}
                   >
-                    <Input placeholder="Doe" />
+                    <Input placeholder={text.configureLastNamePlaceholder} />
                   </Form.Item>
                 </Col>
               </Row>
               <Form.Item
                 name="level_0_name"
-                label="Top level name"
-                extra="The label for your highest administrative tier — e.g. Country, National, or Region. Not a place, a tier."
+                label={text.configureTopLevelName}
+                extra={text.configureTopLevelExtra}
                 rules={[
-                  { required: true, message: "Give your top tier a name." },
+                  { required: true, message: text.configureTopLevelRequired },
                 ]}
               >
-                <Input placeholder="Country" />
+                <Input placeholder={text.configureTopLevelPlaceholder} />
               </Form.Item>
               <Form.Item
                 name="root_unit_name"
-                label="Top unit name"
-                extra="Your single top unit at that tier — e.g. Kenya. Everything you upload later sits under it."
-                rules={[{ required: true, message: "Name your top unit." }]}
+                label={text.configureTopUnitName}
+                extra={text.configureTopUnitExtra}
+                rules={[
+                  { required: true, message: text.configureTopUnitRequired },
+                ]}
               >
-                <Input placeholder="Kenya" />
+                <Input placeholder={text.configureTopUnitPlaceholder} />
               </Form.Item>
               <Form.Item
                 name="logo"
-                label="Workspace logo"
-                extra="Optional. PNG, JPG, or JPEG up to 2MB. Displayed in the top navigation and login page."
+                label={text.configureLogoLabel}
+                extra={text.configureLogoExtra}
               >
                 <Upload
                   name="file"
@@ -274,7 +284,7 @@ const Configure = () => {
                       }
                       loading={uploadingLogo}
                     >
-                      Upload logo
+                      {text.configureUploadLogo}
                     </Button>
                   )}
                 </Upload>
@@ -283,7 +293,7 @@ const Configure = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Preview — this is the hierarchy you're creating:"
+                message={text.configurePreview}
                 style={{ marginBottom: 8 }}
               />
               <div
@@ -295,12 +305,12 @@ const Configure = () => {
                 }}
               >
                 <div>
-                  <Tag>Level 0</Tag>
+                  <Tag>{text.configureLevel0Tag}</Tag>
                   <strong>{level0Name || "—"}</strong>
                 </div>
                 <div style={{ marginTop: 4 }}>
                   <Text type="secondary" style={{ marginRight: 8 }}>
-                    └ top unit
+                    {text.configureTopUnitHint}
                   </Text>
                   <strong>{rootUnitName || "—"}</strong>
                 </div>
@@ -314,7 +324,7 @@ const Configure = () => {
                   block
                   loading={loading}
                 >
-                  Finish setup
+                  {text.configureFinish}
                 </Button>
               </Form.Item>
             </Form>
