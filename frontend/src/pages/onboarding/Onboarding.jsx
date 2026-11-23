@@ -1,34 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, store } from "../../lib";
+import { useTranslation } from "../../lib/i18n";
 import { baseDomain } from "../../util/tenant";
 import LandingShell from "../landing/LandingShell";
 import HeroDotField from "../landing/HeroDotField";
 import Turnstile from "../../components/Turnstile";
 
-// LP-002 guided onboarding wizard (route + card style, D-4). Chooser + 5 steps
-// over the existing two-phase registration. The final step POSTs /register with
-// the four fields it needs (email/password/subdomain/language) + name = the
-// workspace (org) display name, and meta = { sector, org, adminName, place }:
-// free-form context stored on Tenant.meta. The post-activation /configure step
-// (B5) reads meta to create the first Organisation (from org), name the root
-// administration unit (from place) and set the admin's name.
-// ponytail: copy is hardcoded English for now; moves to per-locale JSON (D-9).
+// LP-002 guided onboarding wizard (route + card style, D-4), extended by LP-004
+// with live Form Library categories and a starter-forms step. Six input steps
+// over the existing two-phase registration:
+//   1 category · 2 starter forms · 3 org · 4 place · 5 address · 6 admin
+// The final step POSTs /register with the four fields it needs
+// (email/password/subdomain/language) + name = the workspace (org) display
+// name, and meta = { category, template_ids, org, adminName, place }: free-form
+// context stored on Tenant.meta. The post-activation /configure step reads meta
+// to create the first Organisation (org), name the root unit (place), set the
+// admin's name, and clone the chosen library templates (template_ids) as drafts.
+// Chrome strings come from the global i18n library (en/es/fr, en fallback):
+// lib/i18n/<locale>/onboarding.json, read with useTranslation("onboarding").
 const DRAFT_KEY = "akvo_onboarding_draft";
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const INPUT_STEPS = 5; // monitor, org, place, address, admin
-
-const SECTORS = [
-  { key: "water", label: "Water & sanitation" },
-  { key: "health", label: "Health facilities" },
-  { key: "agriculture", label: "Agriculture & farms" },
-  { key: "education", label: "Education / schools" },
-  { key: "other", label: "Something else" },
-];
+const INPUT_STEPS = 6; // category, starter forms, org, place, address, admin
+const MAX_STARTER_FORMS = 10; // mirrors RegisterSerializer.MAX_STARTER_FORMS
+const SKIP = "skip"; // step-1 "Something else / skip" sentinel (distinct from
+// null = untouched, so the step can require a deliberate choice)
 
 const EMPTY = {
-  sector: "",
+  category: null,
+  template_ids: [],
   org: "",
   place: "",
   subdomain: "",
@@ -49,13 +50,15 @@ const firstError = (value) => String(Array.isArray(value) ? value[0] : value);
 
 const Onboarding = () => {
   const navigate = useNavigate();
+  const c = useTranslation("onboarding");
   const activeLang = store.useState((s) => s.language.active);
   // Workspace language = the landing locale (en/es/fr all accepted, B6/D-10').
   const language = ["es", "fr"].includes(activeLang) ? activeLang : "en";
   const domain = baseDomain() || "mis.akvo.org";
 
-  const [step, setStep] = useState(1); // 1..5 inputs · 6 done (no chooser)
+  const [step, setStep] = useState(1); // 1..6 inputs · 7 done
   const [data, setData] = useState(loadDraft);
+  const [categories, setCategories] = useState([]);
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -67,7 +70,16 @@ const Onboarding = () => {
   const availTimer = useRef(0);
 
   useEffect(() => {
-    document.title = "Create your workspace";
+    document.title = c.title;
+  }, [c.title]);
+
+  // Fetch the starter-forms catalogue once. On any failure categories stay
+  // empty, so step 1 shows just the skip tile and onboarding never dead-ends.
+  useEffect(() => {
+    api
+      .get("register/form-library")
+      .then((res) => setCategories(res.data?.categories || []))
+      .catch(() => setCategories([]));
   }, []);
 
   useEffect(() => {
@@ -82,11 +94,27 @@ const Onboarding = () => {
     }
   }, [data]);
 
+  // Drop the saved draft once onboarding is complete (step 7 is only reached
+  // after a successful register). Declared AFTER the save effect so that if a
+  // data-save and this run in the same commit, this one wins and the draft
+  // never lingers — the removeItem in submit() alone can be clobbered by a
+  // trailing save.
+  useEffect(() => {
+    if (step !== 7) {
+      return;
+    }
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+    } catch (err) {
+      // ignore storage failures
+    }
+  }, [step]);
+
   // Live availability check on the address step, debounced.
   useEffect(() => {
     setAvail(null);
     const v = data.subdomain.trim().toLowerCase();
-    if (step !== 4 || v.length < 3 || !SUBDOMAIN_RE.test(v)) {
+    if (step !== 5 || v.length < 3 || !SUBDOMAIN_RE.test(v)) {
       return () => {};
     }
     setChecking(true);
@@ -106,43 +134,84 @@ const Onboarding = () => {
     setErrors((e) => ({ ...e, [key]: "" }));
   };
 
+  // Picking a category (or skip) resets the template selection: the ticked
+  // ids belong to whichever category was open, and must not carry across.
+  const chooseCategory = (value) => {
+    setData((d) => ({ ...d, category: value, template_ids: [] }));
+    setErrors((e) => ({ ...e, category: "" }));
+  };
+
+  const toggleTemplate = (id) => {
+    setData((d) => {
+      if (d.template_ids.includes(id)) {
+        return { ...d, template_ids: d.template_ids.filter((x) => x !== id) };
+      }
+      if (d.template_ids.length >= MAX_STARTER_FORMS) {
+        return d; // at the cap the backend would reject; stop adding here
+      }
+      return { ...d, template_ids: [...d.template_ids, id] };
+    });
+  };
+
+  // The templates to show on step 2: the chosen category's, or none (skip,
+  // an unknown category, or a category with no published templates).
+  const chosenCategory =
+    data.category && data.category !== SKIP ? data.category : null;
+  const chosenTemplates = chosenCategory
+    ? categories.find((x) => x.id === chosenCategory.id)?.templates || []
+    : [];
+
   const validate = (which) => {
     const e = {};
-    if (which === 1 && !data.sector) {
-      e.sector = "Pick one to continue.";
+    if (which === 1 && !data.category) {
+      e.category = c.categoryRequired;
     }
-    if (which === 2 && !data.org.trim()) {
-      e.org = "Enter your organisation name.";
+    // Step 2 (starter forms) is opt-in: an empty selection is valid.
+    if (which === 3 && !data.org.trim()) {
+      e.org = c.orgRequired;
     }
-    if (which === 3 && !data.place.trim()) {
-      e.place = "Enter the country or region.";
-    }
-    if (which === 4) {
-      const v = data.subdomain.trim().toLowerCase();
-      if (v.length < 3) {
-        e.subdomain = "At least 3 characters.";
-      } else if (!SUBDOMAIN_RE.test(v)) {
-        e.subdomain = "Lowercase letters, digits and hyphens only.";
-      } else if (avail && !avail.available) {
-        e.subdomain = avail.reason || "That address is taken.";
-      }
+    if (which === 4 && !data.place.trim()) {
+      e.place = c.placeRequired;
     }
     if (which === 5) {
+      const v = data.subdomain.trim().toLowerCase();
+      if (v.length < 3) {
+        e.subdomain = c.addressMin;
+      } else if (!SUBDOMAIN_RE.test(v)) {
+        e.subdomain = c.addressPattern;
+      } else if (avail && !avail.available) {
+        e.subdomain = avail.reason || c.addressTaken;
+      }
+    }
+    if (which === 6) {
       if (!data.adminName.trim()) {
-        e.adminName = "Enter your name.";
+        e.adminName = c.nameRequired;
       }
       if (!EMAIL_RE.test(data.email.trim())) {
-        e.email = "Enter a valid email.";
+        e.email = c.emailInvalid;
       }
       if (password.length < 8) {
-        e.password = "At least 8 characters.";
+        e.password = c.passwordMin;
       }
     }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const back = () => setStep((s) => Math.max(1, s - 1));
+  // Step 2 (starter forms) is skipped when the chosen category offers no
+  // templates — the "Something else / skip" tile, or a category with none.
+  // There is nothing to pick, so don't strand the visitor on an empty screen;
+  // jump straight between step 1 and step 3 in both directions.
+  const skipForms = chosenTemplates.length === 0;
+
+  // When step 2 is auto-skipped, renumber the UI so the user sees a contiguous
+  // 1..5 (total 5, no missing "step 2") instead of a confusing 1 → 3 of 6. The
+  // internal `step` index is unchanged — it still drives which screen renders.
+  const totalSteps = skipForms ? INPUT_STEPS - 1 : INPUT_STEPS;
+  const displayStep = skipForms && step > 2 ? step - 1 : step;
+
+  const back = () =>
+    setStep((s) => Math.max(1, s === 3 && skipForms ? 1 : s - 1));
 
   const submit = () => {
     setSubmitting(true);
@@ -154,7 +223,8 @@ const Onboarding = () => {
       name: data.org.trim(),
       captcha_token: captchaToken,
       meta: {
-        sector: data.sector,
+        category: chosenCategory,
+        template_ids: data.template_ids,
         org: data.org.trim(),
         adminName: data.adminName.trim(),
         place: data.place.trim(),
@@ -169,7 +239,7 @@ const Onboarding = () => {
         } catch (err) {
           // ignore
         }
-        setStep(6);
+        setStep(7);
       })
       .catch((err) => {
         // A Turnstile token is single-use; clear it so a retry re-solves.
@@ -187,7 +257,7 @@ const Onboarding = () => {
         }
         setErrors(next);
         if (next.subdomain) {
-          setStep(4);
+          setStep(5);
         }
       })
       .finally(() => setSubmitting(false));
@@ -201,10 +271,10 @@ const Onboarding = () => {
       submit();
       return;
     }
-    setStep((s) => s + 1);
+    setStep((s) => (s === 1 && skipForms ? 3 : s + 1));
   };
 
-  const pct = (step / (INPUT_STEPS + 1)) * 100;
+  const pct = (displayStep / (totalSteps + 1)) * 100;
   const err = (key) =>
     errors[key] ? (
       <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
@@ -213,6 +283,10 @@ const Onboarding = () => {
     ) : null;
   const inputCls =
     "mt-1 w-full rounded-lg border border-brand-border bg-bg-secondary px-4 py-3 text-base text-text-primary outline-none focus:border-brand dark:bg-white/5 dark:text-white";
+  const tileCls = (selected) =>
+    selected
+      ? "flex w-full items-center gap-3 rounded-xl border-2 border-brand bg-brand-light px-4 py-3 text-left font-semibold text-brand-text"
+      : "flex w-full items-center gap-3 rounded-xl border border-brand-border bg-bg-secondary px-4 py-3 text-left text-text-secondary hover:border-brand dark:bg-white/5 dark:text-gray-300";
 
   return (
     <LandingShell showCta={false}>
@@ -228,7 +302,7 @@ const Onboarding = () => {
             </div>
             <button
               type="button"
-              aria-label="Close and return to the landing page"
+              aria-label={c.close}
               onClick={() => navigate("/")}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-secondary text-text-muted hover:bg-brand-light hover:text-brand-text dark:bg-white/10"
             >
@@ -239,87 +313,143 @@ const Onboarding = () => {
           {step >= 1 && step <= INPUT_STEPS ? (
             <div className="mt-6">
               <p className="font-mono text-sm uppercase tracking-wide text-brand-text dark:text-brand-bright">
-                Step {step} of {INPUT_STEPS}
+                {c.stepPrefix} {displayStep} {c.stepJoin} {totalSteps}
               </p>
 
               {step === 1 ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
-                    What do you want to monitor?
+                    {c.monitorTitle}
                   </h2>
                   <p className="mt-1 text-text-muted dark:text-gray-400">
-                    Pick the closest — this shapes your starter forms.
+                    {c.monitorHint}
                   </p>
                   <div className="mt-5 space-y-3">
-                    {SECTORS.map((s) => (
+                    {categories.map((cat) => (
                       <button
-                        key={s.key}
+                        key={cat.id}
                         type="button"
-                        onClick={() => set("sector", s.key)}
-                        className={
-                          data.sector === s.key
-                            ? "flex w-full items-center gap-3 rounded-xl border-2 border-brand bg-brand-light px-4 py-3 text-left font-semibold text-brand-text"
-                            : "flex w-full items-center gap-3 rounded-xl border border-brand-border bg-bg-secondary px-4 py-3 text-left text-text-secondary hover:border-brand dark:bg-white/5 dark:text-gray-300"
+                        onClick={() =>
+                          chooseCategory({
+                            id: cat.id,
+                            name: cat.name,
+                            slug: cat.slug,
+                          })
                         }
+                        className={tileCls(
+                          chosenCategory && chosenCategory.id === cat.id
+                        )}
                       >
-                        {s.label}
+                        {cat.name}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => chooseCategory(SKIP)}
+                      className={tileCls(data.category === SKIP)}
+                    >
+                      {c.skipTile}
+                    </button>
                   </div>
-                  {err("sector")}
+                  {err("category")}
                 </>
               ) : null}
 
               {step === 2 ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
-                    What’s your organisation called?
+                    {c.formsTitle}
                   </h2>
-                  <label className="mt-5 block text-sm font-semibold text-text-secondary dark:text-gray-300">
-                    Organisation name
-                    <input
-                      className={inputCls}
-                      value={data.org}
-                      onChange={(e) => set("org", e.target.value)}
-                      placeholder="Rural Water Trust"
-                    />
-                  </label>
-                  {err("org")}
+                  <p className="mt-1 text-text-muted dark:text-gray-400">
+                    {c.formsHint}
+                  </p>
+                  {chosenTemplates.length > 0 ? (
+                    <div className="mt-5 space-y-3">
+                      {chosenTemplates.map((t) => {
+                        const ticked = data.template_ids.includes(t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => toggleTemplate(t.id)}
+                            className={tileCls(ticked)}
+                          >
+                            <span
+                              className={
+                                ticked
+                                  ? "flex h-5 w-5 items-center justify-center rounded border-2 border-brand bg-brand text-xs text-white"
+                                  : "flex h-5 w-5 items-center justify-center rounded border-2 border-brand-border text-xs"
+                              }
+                            >
+                              {ticked ? "✓" : ""}
+                            </span>
+                            <span className="flex-1">{t.name}</span>
+                            {t.monitoring_count > 0 ? (
+                              <span className="rounded-full bg-brand-light px-2 py-0.5 font-mono text-xs text-brand-text">
+                                +{t.monitoring_count} {c.monitoring}
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="mt-5 rounded-xl border border-brand-border bg-bg-secondary px-4 py-3 text-text-muted dark:bg-white/5 dark:text-gray-400">
+                      {c.formsEmpty}
+                    </p>
+                  )}
                 </>
               ) : null}
 
               {step === 3 ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
-                    Where do you work?
+                    {c.orgTitle}
                   </h2>
-                  <p className="mt-1 text-text-muted dark:text-gray-400">
-                    The top place you report on — your first administrative
-                    unit.
-                  </p>
                   <label className="mt-5 block text-sm font-semibold text-text-secondary dark:text-gray-300">
-                    Country or region
+                    {c.orgLabel}
                     <input
                       className={inputCls}
-                      value={data.place}
-                      onChange={(e) => set("place", e.target.value)}
-                      placeholder="Kenya"
+                      value={data.org}
+                      onChange={(e) => set("org", e.target.value)}
+                      placeholder={c.orgPlaceholder}
                     />
                   </label>
-                  {err("place")}
+                  {err("org")}
                 </>
               ) : null}
 
               {step === 4 ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
-                    Choose your workspace address.
+                    {c.placeTitle}
                   </h2>
                   <p className="mt-1 text-text-muted dark:text-gray-400">
-                    This is where your team signs in.
+                    {c.placeHint}
                   </p>
                   <label className="mt-5 block text-sm font-semibold text-text-secondary dark:text-gray-300">
-                    Workspace address
+                    {c.placeLabel}
+                    <input
+                      className={inputCls}
+                      value={data.place}
+                      onChange={(e) => set("place", e.target.value)}
+                      placeholder={c.placePlaceholder}
+                    />
+                  </label>
+                  {err("place")}
+                </>
+              ) : null}
+
+              {step === 5 ? (
+                <>
+                  <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
+                    {c.addressTitle}
+                  </h2>
+                  <p className="mt-1 text-text-muted dark:text-gray-400">
+                    {c.addressHint}
+                  </p>
+                  <label className="mt-5 block text-sm font-semibold text-text-secondary dark:text-gray-300">
+                    {c.addressLabel}
                     <span className="mt-1 flex items-stretch">
                       <input
                         className="w-full rounded-l-lg border border-brand-border bg-bg-secondary px-4 py-3 text-base text-text-primary outline-none focus:border-brand dark:bg-white/5 dark:text-white"
@@ -330,7 +460,7 @@ const Onboarding = () => {
                             e.target.value.toLowerCase().replace(/\s/g, "")
                           )
                         }
-                        placeholder="your-org"
+                        placeholder={c.addressPlaceholder}
                       />
                       <span className="flex items-center rounded-r-lg border border-l-0 border-brand-border bg-brand-light px-3 font-mono text-sm text-brand-text">
                         .{domain}
@@ -339,12 +469,12 @@ const Onboarding = () => {
                   </label>
                   {checking ? (
                     <p className="mt-1.5 text-sm text-text-muted dark:text-gray-400">
-                      Checking availability…
+                      {c.addressChecking}
                     </p>
                   ) : null}
                   {!checking && avail && avail.available ? (
                     <p className="mt-1.5 text-sm font-semibold text-brand-text dark:text-brand-bright">
-                      ✓ Available
+                      {c.addressAvailable}
                     </p>
                   ) : null}
                   {!checking &&
@@ -352,41 +482,41 @@ const Onboarding = () => {
                   !avail.available &&
                   !errors.subdomain ? (
                     <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
-                      {avail.reason || "That address is taken."}
+                      {avail.reason || c.addressTaken}
                     </p>
                   ) : null}
                   {err("subdomain")}
                 </>
               ) : null}
 
-              {step === 5 ? (
+              {step === 6 ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
-                    Who’s the workspace admin?
+                    {c.adminTitle}
                   </h2>
                   <label className="mt-5 block text-sm font-semibold text-text-secondary dark:text-gray-300">
-                    Your name
+                    {c.nameLabel}
                     <input
                       className={inputCls}
                       value={data.adminName}
                       onChange={(e) => set("adminName", e.target.value)}
-                      placeholder="Full name"
+                      placeholder={c.namePlaceholder}
                     />
                   </label>
                   {err("adminName")}
                   <label className="mt-4 block text-sm font-semibold text-text-secondary dark:text-gray-300">
-                    Email
+                    {c.emailLabel}
                     <input
                       className={inputCls}
                       type="email"
                       value={data.email}
                       onChange={(e) => set("email", e.target.value)}
-                      placeholder="you@org.org"
+                      placeholder={c.emailPlaceholder}
                     />
                   </label>
                   {err("email")}
                   <label className="mt-4 block text-sm font-semibold text-text-secondary dark:text-gray-300">
-                    Password
+                    {c.passwordLabel}
                     <input
                       className={inputCls}
                       type="password"
@@ -395,7 +525,7 @@ const Onboarding = () => {
                         setPassword(e.target.value);
                         setErrors((x) => ({ ...x, password: "" }));
                       }}
-                      placeholder="At least 8 characters"
+                      placeholder={c.passwordPlaceholder}
                     />
                   </label>
                   {err("password")}
@@ -410,7 +540,7 @@ const Onboarding = () => {
                     onClick={back}
                     className="rounded-full border border-brand-border px-5 py-2.5 text-sm font-semibold text-text-secondary hover:bg-bg-secondary dark:text-gray-300"
                   >
-                    Back
+                    {c.back}
                   </button>
                 ) : (
                   <span />
@@ -423,29 +553,28 @@ const Onboarding = () => {
                 >
                   {step === INPUT_STEPS
                     ? submitting
-                      ? "Creating…"
-                      : "Create my workspace"
-                    : "Continue"}
+                      ? c.creating
+                      : c.create
+                    : c.continue}
                 </button>
               </div>
             </div>
           ) : null}
 
-          {step === 6 ? (
+          {step === 7 ? (
             <div className="mt-6 py-8 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-light text-2xl text-brand-text">
                 ✓
               </div>
               <h2 className="mt-5 font-title text-2xl font-bold text-text-primary dark:text-white">
-                Check your email to activate.
+                {c.doneTitle}
               </h2>
               <p className="mt-3 text-text-muted dark:text-gray-400">
-                We’re creating{" "}
+                {c.doneCreating}{" "}
                 <strong className="text-text-primary dark:text-white">
                   {data.subdomain}.{domain}
                 </strong>{" "}
-                and pre-configuring it from your answers. Click the activation
-                link we just sent to{" "}
+                {c.doneSentTo}{" "}
                 <strong className="text-text-primary dark:text-white">
                   {data.email}
                 </strong>
@@ -456,7 +585,7 @@ const Onboarding = () => {
                 onClick={() => navigate("/")}
                 className="mt-8 rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark"
               >
-                Done
+                {c.done}
               </button>
             </div>
           ) : null}

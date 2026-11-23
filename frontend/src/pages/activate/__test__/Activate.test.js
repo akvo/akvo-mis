@@ -12,6 +12,10 @@ const renderAt = (token) =>
       <Routes>
         <Route path="/activate/:token" element={<Activate />} />
         <Route path="/configure" element={<div>configure reached</div>} />
+        <Route
+          path="/control-center"
+          element={<div>control center reached</div>}
+        />
       </Routes>
     </MemoryRouter>
   );
@@ -42,6 +46,48 @@ describe("Activate", () => {
     expect(await screen.findByText(/Email verified/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Continue to setup/i }));
     expect(await screen.findByText(/configure reached/i)).toBeInTheDocument();
+  });
+
+  test("an onboarding sign-up auto-configures from meta.place and lands in the control center", async () => {
+    // The wizard staged the visitor's answers on the tenant; activation returns
+    // them as `onboarding`. With a place present, Activate drives /configure
+    // automatically and drops the user in the control center — the manual
+    // configure form is never shown.
+    axios.mockResolvedValue({
+      status: 200,
+      data: {
+        token: "jwt",
+        expiration_time: "2030-01-01",
+        configured: false,
+        email: "founder@acme.org",
+        is_superuser: true,
+        roles: [],
+        forms: [],
+        onboarding: {
+          place: "Kenya",
+          org: "Acme Water",
+          adminName: "Ada Founder",
+        },
+      },
+    });
+    renderAt("good-token");
+
+    expect(
+      await screen.findByText(/control center reached/i)
+    ).toBeInTheDocument();
+
+    // The country the visitor typed (meta.place) is what becomes the tenant's
+    // root administration unit, sent here as root_unit_name under a generic
+    // "Country" level-0 label the admin can rename later.
+    const configureCall = axios.mock.calls.find(
+      ([cfg]) => cfg.url === "register/configure"
+    );
+    expect(configureCall).toBeTruthy();
+    expect(configureCall[0].data).toMatchObject({
+      level_0_name: "Country",
+      root_unit_name: "Kenya",
+      organisation: "Acme Water",
+    });
   });
 
   test("a dead token offers a resend instead of a dead end", async () => {
