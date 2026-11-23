@@ -1,0 +1,110 @@
+import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import axios from "axios";
+import Onboarding from "../Onboarding";
+import "@testing-library/jest-dom";
+
+jest.mock("axios");
+
+// LP-004: the wizard's step 1 is driven by GET /register/form-library and a new
+// step 2 lets the visitor tick starter templates of the chosen category.
+const CATEGORIES = {
+  categories: [
+    {
+      id: 4,
+      name: "WASH",
+      slug: "wash",
+      templates: [
+        { id: 901, name: "JMP Core WASH Household", monitoring_count: 1 },
+        { id: 905, name: "Water Point Mapping", monitoring_count: 0 },
+      ],
+    },
+  ],
+};
+
+const renderWizard = () =>
+  render(
+    <MemoryRouter>
+      <Onboarding />
+    </MemoryRouter>
+  );
+
+// The step indicator renders "Step {n} of {total}" across separate text nodes,
+// so read the whole <p>'s normalised text rather than matching one node.
+const stepLabel = () => {
+  const el = screen.getByText((_, node) => {
+    const txt = (node?.textContent || "").replace(/\s+/g, " ").trim();
+    return node?.tagName === "P" && /^Step \d+ of \d+$/.test(txt);
+  });
+  return el.textContent.replace(/\s+/g, " ").trim();
+};
+
+describe("Onboarding starter-forms wizard (LP-004)", () => {
+  beforeEach(() => {
+    axios.mockImplementation((req) => {
+      if (req.url === "register/form-library") {
+        return Promise.resolve({ status: 200, data: CATEGORIES });
+      }
+      return Promise.resolve({ status: 200, data: {} });
+    });
+    try {
+      window.localStorage.clear();
+    } catch (err) {
+      // ignore
+    }
+  });
+
+  test("step 1 lists the fetched categories plus a skip tile", async () => {
+    renderWizard();
+    expect(await screen.findByText("WASH")).toBeInTheDocument();
+    expect(screen.getByText("Something else / skip")).toBeInTheDocument();
+  });
+
+  test("choosing a category shows its templates on step 2, unticked", async () => {
+    renderWizard();
+    fireEvent.click(await screen.findByText("WASH"));
+    fireEvent.click(screen.getByText("Continue"));
+    expect(screen.getByText("JMP Core WASH Household")).toBeInTheDocument();
+    // monitoring count surfaces as a badge; the one with 0 shows no badge.
+    expect(screen.getByText("+1 monitoring")).toBeInTheDocument();
+    expect(screen.queryByText(/\+0 monitoring/)).not.toBeInTheDocument();
+  });
+
+  test("skip auto-advances past the forms step and renumbers to 5", async () => {
+    renderWizard();
+    fireEvent.click(await screen.findByText("Something else / skip"));
+    // Picking skip means there are no templates to show, so the count drops to
+    // 5 even before leaving step 1.
+    expect(stepLabel()).toBe("Step 1 of 5");
+    fireEvent.click(screen.getByText("Continue"));
+    // The empty forms step is skipped entirely: we land on the org step, shown
+    // as a contiguous "Step 2 of 5" — not "Step 3 of 6" with a phantom step 2,
+    // and not the empty-state screen.
+    expect(screen.getByText(/organisation called/i)).toBeInTheDocument();
+    expect(stepLabel()).toBe("Step 2 of 5");
+    expect(
+      screen.queryByText(/add forms later from the Form Library/i)
+    ).not.toBeInTheDocument();
+  });
+
+  test("a category with templates keeps the full 6-step count", async () => {
+    renderWizard();
+    fireEvent.click(await screen.findByText("WASH"));
+    // WASH has templates, so the forms step stays in the count.
+    expect(stepLabel()).toBe("Step 1 of 6");
+    fireEvent.click(screen.getByText("Continue"));
+    expect(screen.getByText("Add starter forms?")).toBeInTheDocument();
+    expect(stepLabel()).toBe("Step 2 of 6");
+  });
+
+  test("step 1 cannot be skipped without a choice", async () => {
+    renderWizard();
+    await screen.findByText("WASH");
+    fireEvent.click(screen.getByText("Continue"));
+    // No tile chosen → still on step 1 with an error, not on step 2.
+    expect(screen.getByText("Pick one to continue.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/add forms later from the Form Library/i)
+    ).not.toBeInTheDocument();
+  });
+});

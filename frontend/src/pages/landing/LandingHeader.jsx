@@ -64,7 +64,7 @@ const LandingHeader = ({ showCta, cta }) => {
   const currentLabel = (LANGS.find((l) => l.code === lang) || LANGS[0]).label;
 
   const ctaToShow = showCta
-    ? cta || { label: content.nav.cta, href: "/register" }
+    ? cta || { label: content.nav.cta, href: "/onboarding" }
     : null;
 
   return (

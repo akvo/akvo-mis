@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { reloadData } from "../../util/form";
+import { fetchLevels } from "../../util/level";
 
 const { Title, Text } = Typography;
 
@@ -35,6 +36,38 @@ const Activate = () => {
       return;
     }
     started.current = true;
+    // LP-002 B5: an onboarding-wizard sign-up staged its answers on the tenant
+    // (res.data.onboarding); configure the workspace automatically from them and
+    // drop the visitor into the control center. Any failure falls back to the
+    // manual /configure form (no regression). Defined inside the effect so it is
+    // not an extra dependency.
+    const autoConfigure = (meta, user) => {
+      const parts = (meta.adminName || user.name || "").trim().split(/\s+/);
+      const firstName = (parts.shift() || user.name || "Admin").slice(0, 50);
+      const lastName = (parts.join(" ") || "-").slice(0, 50);
+      api
+        .post("register/configure", {
+          first_name: firstName,
+          last_name: lastName,
+          level_0_name: "Country",
+          root_unit_name: meta.place,
+          organisation: meta.org || "",
+        })
+        .then((res) => {
+          store.update((s) => {
+            s.user = res.data;
+          });
+          reloadData(res.data);
+          // App's levels request can finish before configure creates level 0,
+          // leaving the store's hierarchy empty until a reload; refresh it now,
+          // as the manual Configure page does after a successful save.
+          fetchLevels();
+          navigate("/control-center");
+        })
+        .catch(() => {
+          navigate("/configure");
+        });
+    };
     // Two-argument then, not .catch: only a rejected *request* means the link
     // is bad. A .catch here would also swallow anything thrown while adopting
     // the session, and tell an already-activated user their link had expired —
@@ -49,7 +82,12 @@ const Activate = () => {
           s.user = res.data;
         });
         reloadData(res.data);
-        setVerified(true);
+        const meta = res.data.onboarding || {};
+        if (!res.data.configured && meta.place) {
+          autoConfigure(meta, res.data);
+        } else {
+          setVerified(true);
+        }
       },
       (err) => {
         // Only a 400 means the link itself is bad. An unreachable
@@ -59,7 +97,7 @@ const Activate = () => {
         setFailed(err?.response?.status === 400 ? "expired" : "error");
       }
     );
-  }, [token]);
+  }, [token, navigate]);
 
   const onResend = (values) => {
     resend(values.email)

@@ -1,4 +1,5 @@
 export { default as Landing } from "./landing/Landing";
+export { default as Onboarding } from "./onboarding/Onboarding";
 export { default as LandingHeader } from "./landing/LandingHeader";
 export { default as LandingFooter } from "./landing/LandingFooter";
 export { default as Forms } from "./forms/Forms";

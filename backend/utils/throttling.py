@@ -98,3 +98,17 @@ class LoginIPThrottle(_IPKeyedThrottle):
 
 class LoginEmailThrottle(_EmailKeyedThrottle):
     scope = "login_email"
+
+
+class SubdomainCheckIPThrottle(_IPKeyedThrottle):
+    # The onboarding address step calls the availability endpoint as the
+    # visitor types, so the rate is generous; it only caps scripted abuse of
+    # a read-only endpoint.
+    scope = "subdomain_check_ip"
+
+
+class FormLibraryIPThrottle(_IPKeyedThrottle):
+    # The onboarding starter-forms catalogue, fetched once per page load. Its
+    # own scope so it does not share the availability check's keystroke-driven
+    # budget (LP-004 review).
+    scope = "form_library_ip"

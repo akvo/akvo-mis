@@ -69,6 +69,11 @@ class Tenant(models.Model):
     # Unknown keys are rejected at the serializer rather than by the
     # column, which is the trade a JSON field makes.
     features = models.JSONField(default=dict, blank=True)
+    # Free-form onboarding context captured at sign-up (e.g. the sector the
+    # workspace monitors, plus any wizard answers without a column of their
+    # own). Unlike `features`, this is not a controlled enum; it is bounded at
+    # the register serializer because the sign-up endpoint is public.
+    meta = models.JSONField(default=dict, blank=True)
     # The primary workspace language, set during registration.
     language = models.CharField(max_length=10, default="en")
     # Relative path to the workspace logo (e.g. /images/logo-xxx.png)

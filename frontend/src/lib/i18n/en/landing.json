@@ -14,7 +14,7 @@
     "lead": "The powerful platform that manages your data with ease — and uses AI to turn it into visualisations, automatically. Curious? Come try it yourself.",
     "primaryCta": {
       "label": "Try it yourself →",
-      "href": "/register"
+      "href": "/onboarding"
     },
     "secondaryCta": {
       "label": "Talk to our team",
@@ -225,7 +225,7 @@
     "body": "Spin up a workspace in a couple of minutes. Free forever.",
     "cta": {
       "label": "Try it yourself →",
-      "href": "/register"
+      "href": "/onboarding"
     }
   },
   "footer": {

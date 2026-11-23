@@ -9,6 +9,9 @@ import frRegister from "./fr/register.json";
 import enFindWorkspace from "./en/find-workspace.json";
 import esFindWorkspace from "./es/find-workspace.json";
 import frFindWorkspace from "./fr/find-workspace.json";
+import enOnboarding from "./en/onboarding.json";
+import esOnboarding from "./es/onboarding.json";
+import frOnboarding from "./fr/onboarding.json";
 
 // Global i18n for the public base-domain pages. Translations are split per
 // page and per locale as `./<locale>/<namespace>.json`, so a translator opens
@@ -27,6 +30,7 @@ const BUNDLES = {
     es: esFindWorkspace,
     fr: frFindWorkspace,
   },
+  onboarding: { en: enOnboarding, es: esOnboarding, fr: frOnboarding },
 };
 
 export const LANGS = [
