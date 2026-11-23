@@ -74,6 +74,7 @@ class UserProfileTestCase(TestCase, ProfileTestHelperMixin):
                 'id',
                 'configured',
                 'subdomain',
+                'onboarding',
                 'is_platform_admin',
                 'is_inspecting',
             ]
