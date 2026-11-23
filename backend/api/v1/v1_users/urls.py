@@ -19,6 +19,7 @@ from api.v1.v1_users.views import (
     update_profile,
     register,
     register_subdomain,
+    register_form_library,
     activate_account,
     resend_activation,
     configure_project,
@@ -126,6 +127,9 @@ urlpatterns = [
     ),
     re_path(
         r"^(?P<version>(v1))/register/subdomain$", register_subdomain
+    ),
+    re_path(
+        r"^(?P<version>(v1))/register/form-library$", register_form_library
     ),
     re_path(r"^(?P<version>(v1))/register$", register),
     re_path(r"^(?P<version>(v1))/users", list_users),

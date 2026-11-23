@@ -1,5 +1,6 @@
 # Create your views here.
 import datetime
+import logging
 import re
 from math import ceil
 from pathlib import Path
@@ -34,6 +35,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from api.v1.v1_forms.constants import FormStatus
+from api.v1.v1_forms.services.form_library import (
+    clone_family,
+    library_registration_qs,
+)
 from api.v1.v1_profile.constants import OrganisationTypes
 from api.v1.v1_profile.models import (
     Administration,
@@ -95,6 +101,8 @@ from utils.tenant_host import (
     tenant_may_embed,
     tenant_web_url,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def user_web_url(user):
@@ -528,6 +536,62 @@ def register_subdomain(request, version):
     return Response({"available": True, "reason": None})
 
 
+@extend_schema(tags=["Auth"])
+@api_view(["GET"])
+@throttle_classes([SubdomainCheckIPThrottle])
+def register_form_library(request, version):
+    """Public starter-forms catalogue for the onboarding wizard (LP-004).
+
+    Published registration templates grouped by their FormCategory, returned
+    as names / ids / monitoring counts only -- never question structure. A
+    category with no published template is omitted, and an uncategorised
+    template is not surfaced (the wizard groups by category). The register
+    POST remains the only write; this read only spares a pre-auth visitor a
+    login before they can see what they would be starting with.
+    """
+    # ponytail: throttled read, no response cache -- the catalogue is small and
+    # the query cheap; add a short-TTL cache only if traffic needs it.
+    if not settings.SIGNUP_ENABLED or not is_base_domain(
+        request.get_host()
+    ):
+        return Response(
+            {"message": "Self-service sign-up is not available here"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    templates = (
+        library_registration_qs()
+        .annotate(
+            monitoring_count=Count(
+                "children",
+                filter=Q(children__status=FormStatus.published),
+            )
+        )
+        .prefetch_related("categories")
+        .order_by("name")
+    )
+    by_category = {}
+    for tpl in templates:
+        for category in tpl.categories.all():
+            group = by_category.setdefault(
+                category.id,
+                {
+                    "id": category.id,
+                    "name": category.name,
+                    "slug": category.slug,
+                    "templates": [],
+                },
+            )
+            group["templates"].append(
+                {
+                    "id": tpl.id,
+                    "name": tpl.name,
+                    "monitoring_count": tpl.monitoring_count,
+                }
+            )
+    categories = sorted(by_category.values(), key=lambda c: c["name"])
+    return Response({"categories": categories})
+
+
 @extend_schema(
     request=RegisterSerializer,
     responses={200: UserSerializer, 400: DefaultResponseSerializer},
@@ -736,9 +800,39 @@ def configure_project(request, version):
         if validated.get("logo"):
             user.tenant.logo = validated["logo"]
             user.tenant.save(update_fields=["logo"])
+    # Starter forms (LP-004): clone the library templates the wizard staged on
+    # Tenant.meta. Done AFTER (outside) the config transaction so a clone
+    # failure can never roll back a configured workspace -- the workspace is
+    # configured either way; the forms are a best-effort bonus.
+    _clone_starter_forms(user)
     return Response(
         UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )
+
+
+def _clone_starter_forms(user):
+    """Clone the starter templates the wizard staged on `Tenant.meta`.
+
+    Ids come from server-side `Tenant.meta` (bounded at register), never the
+    configure request body, and are re-validated through the public library
+    query -- so a tampered meta can only ever clone published templates, and
+    arbitrary / cross-tenant ids are silently dropped. Each clone is isolated:
+    one failing template is logged and skipped, never failing configuration.
+    """
+    ids = (user.tenant.meta or {}).get("template_ids") or []
+    ids = ids[: RegisterSerializer.MAX_STARTER_FORMS]
+    if not ids:
+        return
+    for template in library_registration_qs().filter(pk__in=ids):
+        try:
+            clone_family(template, user=user)
+        except Exception:
+            logger.exception(
+                "LP-004: starter-form clone failed for template %s "
+                "(tenant %s)",
+                template.id,
+                user.tenant_id,
+            )
 
 
 @extend_schema(

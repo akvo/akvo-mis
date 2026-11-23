@@ -1254,6 +1254,11 @@ class RegisterSerializer(serializers.Serializer):
     # Keep the public, free-form `meta` field from being abused as storage.
     META_MAX_KEYS = 25
     META_MAX_BYTES = 4096
+    # Starter forms (LP-004): the wizard stages the chosen library template ids
+    # in meta.template_ids; configure clones them. Capped because configure
+    # loops once per id, and re-validates every id against the public library
+    # query, so a tampered list can only ever clone published templates.
+    MAX_STARTER_FORMS = 10
 
     def validate_meta(self, value):
         if not isinstance(value, dict):
@@ -1268,7 +1273,27 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError("Must be JSON-serialisable.")
         if size > self.META_MAX_BYTES:
             raise serializers.ValidationError("Too large.")
+        template_ids = value.get("template_ids")
+        if template_ids is not None and not self._valid_template_ids(
+            template_ids
+        ):
+            raise serializers.ValidationError(
+                "template_ids must be a list of up to "
+                f"{self.MAX_STARTER_FORMS} positive integers."
+            )
         return value
+
+    def _valid_template_ids(self, ids):
+        # bool is an int subclass, so reject it explicitly -- True would
+        # otherwise read as the id 1.
+        return (
+            isinstance(ids, list)
+            and len(ids) <= self.MAX_STARTER_FORMS
+            and all(
+                isinstance(i, int) and not isinstance(i, bool) and i > 0
+                for i in ids
+            )
+        )
 
     def validate_subdomain(self, value):
         """Refuse a name sign-up may not claim.
