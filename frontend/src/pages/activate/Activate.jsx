@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { reloadData } from "../../util/form";
+import { fetchLevels } from "../../util/level";
 
 const { Title, Text } = Typography;
 
@@ -57,6 +58,10 @@ const Activate = () => {
             s.user = res.data;
           });
           reloadData(res.data);
+          // App's levels request can finish before configure creates level 0,
+          // leaving the store's hierarchy empty until a reload; refresh it now,
+          // as the manual Configure page does after a successful save.
+          fetchLevels();
           navigate("/control-center");
         })
         .catch(() => {

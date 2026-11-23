@@ -744,6 +744,12 @@ const App = () => {
     .map((x) => location.pathname.includes(x))
     .filter((x) => x)?.length;
 
+  // Keep the activation route mounted even while a just-signed-in session is
+  // refetching forms: swapping in the loader unmounts <Activate/> and loses its
+  // one-shot guard, so bootstrap finishing before auto-configuration could
+  // remount it and fire overlapping activation/configuration requests.
+  const isActivate = location.pathname.startsWith("/activate");
+
   return (
     <AbilityContext.Provider value={ability(authUser)}>
       {/* The class is what makes room: the banner is fixed, and a fixed
@@ -769,7 +775,8 @@ const App = () => {
           {(loading || formsLoading) &&
           !isPublicShell &&
           !publicShell &&
-          !isPublic ? (
+          !isPublic &&
+          !isActivate ? (
             <PageLoader message="Initializing. Please wait.." />
           ) : (
             <RouteList />
