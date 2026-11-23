@@ -410,6 +410,12 @@ class UserRole(models.Model):
             access=FeatureAccessTypes.dashboard_delete,
         ).exists()
 
+    def can_data_onboard(self):
+        return self.role.role_role_feature_access.filter(
+            type=FeatureTypes.data_onboarding,
+            access=FeatureAccessTypes.data_onboard,
+        ).exists()
+
     def __str__(self):
         return f"{self.user.name} - {self.role.name} ({self.administration})"
 

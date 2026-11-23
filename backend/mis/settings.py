@@ -20,7 +20,6 @@ APP_NAME = environ.get("APP_NAME", "mis")
 APP_SHORT_NAME = environ.get("APP_SHORT_NAME", "mis")
 APK_SHORT_NAME = environ.get("APK_SHORT_NAME", "mis-mobile")
 APK_NAME = environ.get("APK_NAME", "MIS mobile")
-SHOW_LANDING_PAGE = environ.get("SHOW_LANDING_PAGE", "false").lower() == "true"
 
 if 'SENTRY_DSN' in environ:
     import sentry_sdk
@@ -211,6 +210,7 @@ API_APPS = [
     "api.v1.v1_files",
     "api.v1.v1_visualization",
     "api.v1.v1_chatbot",
+    "api.v1.v1_data_onboarding",
     "api.sentry_test",
 ]
 
@@ -502,6 +502,18 @@ STORAGE_PATH = environ.get("STORAGE_PATH", "./storage")
 OPENAI_API_KEY = environ.get("OPENAI_API_KEY", "")
 OPENAI_ASSISTANT_ID = environ.get("OPENAI_ASSISTANT_ID", "")
 OPENAI_VECTOR_STORE_ID = environ.get("OPENAI_VECTOR_STORE_ID", "")
+DATA_ONBOARDING_OPENAI_MODEL = (
+    environ.get("DATA_ONBOARDING_OPENAI_MODEL") or "gpt-4o-mini"
+)
+# Proposals and revisions a tenant may ask OpenAI for in 24 hours.
+DATA_ONBOARDING_DAILY_CAP = int(
+    environ.get("DATA_ONBOARDING_DAILY_CAP") or 20
+)
+# Log what Data Onboarding sends to and gets from OpenAI. Off by default:
+# category values can be sensitive, and replies are large.
+DATA_ONBOARDING_LOG_OPENAI = (
+    environ.get("DATA_ONBOARDING_LOG_OPENAI", "false").lower() == "true"
+)
 
 FORM_GEO_VALUE = {"lat": -18.1236015, "lng": 178.3805867}  # Fiji coordinates
 FORM_IMPORT_MAX_FILE_SIZE = int(
@@ -588,7 +600,13 @@ Q_CLUSTER = {
     "name": "DjangORM",
     "workers": 4,
     "timeout": 600,
-    "retry": 1200,
+    # Above the longest per-task timeout (Data Onboarding Apply, 3600 s).
+    "retry": 3700,
+    # Cap re-delivery: an unacknowledged task (ack timeout or a worker
+    # recycled mid-task on deploy) is otherwise retried forever. Bounding
+    # it stops a stuck task from looping indefinitely; the result hooks are
+    # also made idempotent (see claim_job_result) so each attempt is safe.
+    "max_attempts": 3,
     "queue_limit": 50,
     "bulk": 10,
     "orm": "default",

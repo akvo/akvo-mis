@@ -2,7 +2,6 @@
 
 exports[`UI Text check text languages 1`] = `
 Object {
-  "de": Object {},
   "en": Object {
     "AdministrationDataDownload": "Administration Data Download",
     "AdministrationDataUpload": "Administration Data Upload",
@@ -11,6 +10,18 @@ Object {
     "EntitiesDataUpload": "Entities Data Upload",
     "EntitiesDownloadPageHint": "Uncheck Prefilled if you only want an upload template",
     "actionColumn": "Action",
+    "activateCheckInboxDesc": "If that account still needs activating, a fresh link is on its way.",
+    "activateCheckInboxTitle": "Check your inbox",
+    "activateContinueSetup": "Continue to setup →",
+    "activateEmailPlaceholder": "you@organisation.org",
+    "activateErrorDesc": "Something went wrong on the way to the server. Your link is probably fine — try again in a moment.",
+    "activateErrorTitle": "We could not check your link",
+    "activateExpiredDesc": "Activation links are valid for 7 days. Request a fresh one and we'll email it right away.",
+    "activateExpiredTitle": "This link has expired",
+    "activateTryAgain": "Try again",
+    "activateVerifiedDesc": "Your account is active. One quick step left — tell us about your project.",
+    "activateVerifiedTitle": "Email verified",
+    "activateVerifying": "Verifying your email…",
     "addAdmDesc": <React.Fragment>
       This page allows you to add administration to the 
       Test App
@@ -25,7 +36,6 @@ Object {
        platform.
     </React.Fragment>,
     "addAttributes": "Add Attribute",
-    "addEntities": "Add Entities",
     "addEntity": "Add New",
     "addEntityData": "Add New",
     "addEntityDesc": <React.Fragment>
@@ -39,7 +49,6 @@ Object {
        platform.
     </React.Fragment>,
     "addLevel": "Add Level",
-    "addNew": "Add New",
     "addNewButton": "Add New",
     "addNewUser": "Add new user",
     "addOptionButton": "Add option",
@@ -98,7 +107,6 @@ Object {
     "approvalsTab1": "My Pending",
     "approvalsTab2": "Subordinates Approvals",
     "approvalsTab3": "Approved",
-    "approvalsTitle": "Approvals",
     "approveNoteRequired": "Please provide notes or feedback to decline or approved the submission",
     "approversDescription": <React.Fragment>
       This is where you can see the approvers for each submitted form across different administrative areas:
@@ -118,8 +126,8 @@ Object {
     "backManageData": "Back to Manage Data",
     "backToAdmLabel": "Back to Administrative List",
     "backToCenterLabel": "Back to Control Center",
+    "backToLogin": "Back to login",
     "batchAttachments": "Attachments",
-    "batchDatasets": "Batch Datasets",
     "batchFileTypeError": "Invalid attachment file type. Please upload a valid file.",
     "batchFilesHint": "Please upload a file with one of the following extensions: .xlsx, .xls, .csv, .ods, .pdf, .docx, .doc",
     "batchHintDesc": "The operation of merging datasets cannot be undone, and will Create a new batch that will require approval from you admin",
@@ -153,14 +161,88 @@ Object {
     "channelCol": "Channel",
     "checkboxSelectAll": "Select all {{name}}",
     "chooseTemplate": "Choose a template",
+    "closeButton": "Close",
     "codeField": "Code",
     "codeFieldRequired": "Code is required",
     "codeLabel": "Code",
+    "configureAtTop": "at the top. Next, add the tiers beneath it.",
+    "configureContinue": "Continue to Level management →",
+    "configureDoneTitle": "You're all set",
+    "configureFinish": "Finish setup",
+    "configureFirstName": "First name",
+    "configureFirstNamePlaceholder": "Jane",
+    "configureLastName": "Last name",
+    "configureLastNamePlaceholder": "Doe",
+    "configureLevel0Tag": "Level 0",
+    "configureLogoExtra": "Optional. PNG, JPG, or JPEG up to 2MB. Displayed in the top navigation and login page.",
+    "configureLogoLabel": "Workspace logo",
+    "configureLogoUploadError": "Failed to upload logo",
+    "configurePreview": "Preview — this is the hierarchy you're creating:",
+    "configureReadyWith": "Your workspace is ready with",
+    "configureRequired": "Required",
+    "configureSaveError": "Could not save your workspace",
+    "configureStep1": "Sign up",
+    "configureStep2": "Verify email",
+    "configureStep3": "Configure project",
+    "configureStep4": "Dashboard",
+    "configureSubtitle": "This names your administrative hierarchy. You can add deeper tiers afterwards; these two top-level names are set once here.",
+    "configureTitle": "Set up your project",
+    "configureTopLevelExtra": "The label for your highest administrative tier — e.g. Country, National, or Region. Not a place, a tier.",
+    "configureTopLevelName": "Top level name",
+    "configureTopLevelPlaceholder": "Country",
+    "configureTopLevelRequired": "Give your top tier a name.",
+    "configureTopUnitExtra": "Your single top unit at that tier — e.g. Kenya. Everything you upload later sits under it.",
+    "configureTopUnitHint": "└ top unit",
+    "configureTopUnitName": "Top unit name",
+    "configureTopUnitPlaceholder": "Kenya",
+    "configureTopUnitRequired": "Name your top unit.",
+    "configureUploadLogo": "Upload logo",
+    "configureWelcome": "Welcome",
     "confirmDeleteEntity": "Are you sure you want to delete this entity?",
     "confirmDeleteEntityData": "Are you sure you want to delete this data?",
     "consoleDeactivate": "Deactivate",
     "consoleDelete": "Delete",
+    "consoleFLActionsCol": "Actions",
+    "consoleFLAddMonitoring": "Add monitoring form",
+    "consoleFLBack": "Back to library",
+    "consoleFLCancel": "Cancel",
+    "consoleFLCategoriesCol": "Categories",
+    "consoleFLCategoriesLabel": "Categories",
+    "consoleFLCategoriesPlaceholder": "Assign one or more categories",
+    "consoleFLCategoryAdd": "Add",
+    "consoleFLCategoryDeleteConfirm": "Delete this category?",
+    "consoleFLCategoryEmpty": "No categories yet",
+    "consoleFLCategoryError": "Category operation failed",
+    "consoleFLCategoryPlaceholder": "New category name",
+    "consoleFLDeleteButton": "Delete",
+    "consoleFLDeleteConfirm": "Remove this template from the library? Existing copies are unaffected.",
+    "consoleFLDeleteError": "Failed to remove template",
+    "consoleFLDeleteSuccess": "Template removed from the library",
+    "consoleFLDescription": "Curate the shared catalog of reusable form templates.",
+    "consoleFLEditButton": "Edit in Form Builder",
+    "consoleFLEmpty": "No templates yet",
+    "consoleFLFromScratch": "From scratch (Form Builder)",
+    "consoleFLFromWorkspace": "Select from an existing workspace",
+    "consoleFLManageCategories": "Manage categories",
+    "consoleFLMonitoringCol": "Monitoring forms",
+    "consoleFLNameCol": "Template",
+    "consoleFLNewTemplate": "New template",
+    "consoleFLPreviewEmpty": "Select a source form to preview it here",
+    "consoleFLPreviewHeading": "Form preview",
+    "consoleFLPromoteButton": "Promote from workspace",
+    "consoleFLPromoteError": "Failed to promote form",
+    "consoleFLPromoteSuccess": "Form promoted to the library",
+    "consoleFLPromoteTitle": "Promote a workspace form to the library",
+    "consoleFLPromotedFrom": "Promoted from",
+    "consoleFLSourceLabel": "Source form",
+    "consoleFLSourcePlaceholder": "Select a published registration form",
+    "consoleFLSourceRequired": "Please select a source form",
+    "consoleFLUsedCol": "Used",
+    "consoleFLWorkspaceLabel": "Workspace",
+    "consoleFLWorkspacePlaceholder": "Select a workspace",
+    "consoleFLWorkspaceRequired": "Please select a workspace",
     "consoleFeatures": "Features",
+    "consoleFormLibrary": "Form Library",
     "consoleInspect": "Inspect",
     "consoleInspectFailed": "Could not open that workspace",
     "consoleInviteOperator": "Invite operator",
@@ -192,7 +274,11 @@ Object {
     "consoleUsers": "Users",
     "contactAdmin": "Please contact the administrator",
     "controlCenter": "Control Center",
+    "couldNotSendEmail": "Could not send the email",
+    "createAccount": "Create an account",
+    "createDraftMonitoring": "Create Draft Monitoring Data",
     "createNewBatch": "Create a new batch",
+    "dashboardAiApplyWarning": "Dashboard created, but some AI widgets could not be applied.",
     "dashboardBackToEditing": "Back to editing",
     "dashboardCreateBtn": "Create dashboard",
     "dashboardCreateHint": "Name it, then pick the registration form whose data this dashboard will show.",
@@ -302,16 +388,6 @@ Object {
         </li>
       </ul>
     </React.Fragment>,
-    "dataDownloadButton": "Download Data",
-    "dataDownloadText": <React.Fragment>
-      This is where you :
-      <ul>
-        <li>
-          Access downloaded data
-        </li>
-      </ul>
-    </React.Fragment>,
-    "dataDownloadTitle": "Data Download",
     "dataEntitiesDownloadText": <React.Fragment>
       This is where you :
       <ul>
@@ -330,7 +406,61 @@ Object {
     </React.Fragment>,
     "dataExportFail": "Data download failed",
     "dataExportSuccess": "Data downloaded successfully",
-    "dataUploadButton": "Data Upload",
+    "dataOnboardingAddNew": "Add as a new unit",
+    "dataOnboardingApply": "Apply",
+    "dataOnboardingApplyFailed": "The Proposal could not be applied.",
+    "dataOnboardingApplying": "Applying the Proposal: adding units, creating forms and loading records.",
+    "dataOnboardingBlocked": "Blocked",
+    "dataOnboardingBlockedNote": "Blocked forms are not applied. Apply loads the other forms.",
+    "dataOnboardingChooseParent": "Choose the parent",
+    "dataOnboardingColumn": "Column",
+    "dataOnboardingCreated": "Started",
+    "dataOnboardingCreatedBy": "Started by",
+    "dataOnboardingDownloadFailed": "The report could not be downloaded.",
+    "dataOnboardingDownloadReport": "Download report",
+    "dataOnboardingDrafting": "Drafting the Proposal. A large file can take a few minutes.",
+    "dataOnboardingDropColumn": "Drop",
+    "dataOnboardingDropForm": "Drop this form",
+    "dataOnboardingDropped": "Columns not loaded",
+    "dataOnboardingDroppedAnswer": "Answer dropped",
+    "dataOnboardingFailed": "The Proposal could not be drafted.",
+    "dataOnboardingFile": "File",
+    "dataOnboardingFirstLevel": "Level of the first column",
+    "dataOnboardingForms": "Forms",
+    "dataOnboardingHistory": "Data Onboardings",
+    "dataOnboardingIssues": "Skipped rows and dropped answers",
+    "dataOnboardingKeepColumn": "Keep",
+    "dataOnboardingKeyColumns": "Key columns",
+    "dataOnboardingLoaded": "Records loaded",
+    "dataOnboardingLocationColumn": "Location column",
+    "dataOnboardingLocationColumns": "Location columns, top level first",
+    "dataOnboardingMapping": "Column to question",
+    "dataOnboardingName": "Name",
+    "dataOnboardingNoIssues": "Every row loaded.",
+    "dataOnboardingNoUnits": "No units to add",
+    "dataOnboardingNotApplied": "Forms not applied",
+    "dataOnboardingNotes": "Notes",
+    "dataOnboardingOptions": "Options",
+    "dataOnboardingParentForm": "Registration form",
+    "dataOnboardingQuestion": "Question",
+    "dataOnboardingRaw": "Value in the file",
+    "dataOnboardingReason": "Reason",
+    "dataOnboardingReport": "Onboarding Report",
+    "dataOnboardingRequired": "Required",
+    "dataOnboardingRevise": "Revise",
+    "dataOnboardingReviseHint": "Describe any other change, for example: treat Status as a yes/no question.",
+    "dataOnboardingRevisionFailed": "The Proposal could not be revised.",
+    "dataOnboardingRow": "Row",
+    "dataOnboardingSheet": "Sheet",
+    "dataOnboardingSkipped": "Row skipped",
+    "dataOnboardingStatus": "Status",
+    "dataOnboardingType": "Type",
+    "dataOnboardingUnits": "Administration units to add",
+    "dataOnboardingUnitsOutside": "These units are outside your administration area. Apply will not add them or load their rows:",
+    "dataOnboardingUpdated": "Last updated",
+    "dataOnboardingUploadHint": "Click or drag one CSV or xlsx file here (up to 10 MB and 50,000 rows)",
+    "dataOnboardingUseExisting": "Use the existing unit",
+    "dataOnboardingValueMaps": "Value maps",
     "dataUploadText": <React.Fragment>
       This is where you :
       <ul>
@@ -428,9 +558,7 @@ Object {
     "editUser": "Edit User",
     "endOfListLabel": "End of List",
     "entitiesUploadSuccessTitle": "Entities Data has been Successfully Uploaded",
-    "entityDataTitle": "Entity Data",
     "entityIsRequired": "Entity is required",
-    "entityLabel": "Entity",
     "entityTabTitle": "Entities",
     "entityText": "Entity",
     "entityType": "Entity Type",
@@ -467,7 +595,6 @@ Object {
     "existingApproverTitle": "There are existing approvers for:",
     "export2ExcelError": "Unable to export data to Excel",
     "export2ExcelSuccess": "Data exported to Excel successfully",
-    "exportButton": "Export",
     "exportEntityError": "Unable to export entities",
     "exportPanelText": <React.Fragment>
       <p>
@@ -478,7 +605,6 @@ Object {
     </React.Fragment>,
     "failed": "Failed",
     "fetchingForm": "Fetching form..",
-    "fileTypeError": "Invalid file type. Please upload a valid file.",
     "fileUploadFail": "Could not upload file",
     "fileUploadSuccess": "File uploaded successfully",
     "finish": "Finish",
@@ -506,6 +632,7 @@ Object {
     "formBuilderCreateMonitoringButton": "Create Monitoring Form",
     "formBuilderCreateSuccess": "Form created successfully",
     "formBuilderCreateTitle": "Create Form",
+    "formBuilderDataOnboardingButton": "Onboard spreadsheet",
     "formBuilderDeleteButton": "Delete permanently",
     "formBuilderDeleteConfirmDesc": "This action cannot be undone.",
     "formBuilderDeleteConfirmTitle": "Permanently delete this form?",
@@ -719,151 +846,27 @@ Object {
       <br />
       Once you have sumitted a webform, please do not forget to add it as part of a batch and send it for approval.
     </p>,
-    "formPasscode": "Form Passcode",
+    "formLibraryAllCategories": "All categories",
+    "formLibraryDescription": "Browse curated, ready-to-use form templates and start a new form from one with a single click.",
+    "formLibraryEmptyText": "No templates available",
+    "formLibraryMonitoringLabel": "monitoring form(s)",
+    "formLibraryMonitoringTab": "Monitoring",
+    "formLibraryPreviewButton": "Preview",
+    "formLibraryPreviewTitle": "Template preview",
+    "formLibraryRegistrationTab": "Registration",
+    "formLibrarySearchPlaceholder": "Search templates",
+    "formLibraryTitle": "Form Library",
+    "formLibraryUncategorized": "Uncategorized",
+    "formLibraryUseButton": "Use this form",
+    "formLibraryUseError": "Failed to use this template",
+    "formLibraryUseSuccess": "Template copied to your workspace as a new draft.",
+    "formLibraryUsedCount": "Used",
+    "formLibraryViewOnly": "View only",
     "formSuccessSubTitle": "Do note that this data has NOT been sent for approval. If you are ready to send the submissions for approval, please create a batch and send to the approver",
     "formSuccessSubTitleForAdmin": "Do note that the data submitted by SUPER ADMIN role will not go through the approval flow and recorded as approved data",
     "formSuccessTitle": "Thank you for the submission",
     "generating": "Generating",
     "helloText": "Hello",
-    "homeFooterAboutText": <React.Fragment>
-      Test App
-       is a comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation. It serves as a centralised hub for evidence-based reporting and efficient resource allocation.
-    </React.Fragment>,
-    "homeFooterAboutTitle": <React.Fragment>
-      About 
-      Test App
-    </React.Fragment>,
-    "homeFooterContactAddress": Array [
-      "<Your Address>",
-    ],
-    "homeFooterContactDetails": Array [
-      "<Your Organisation>",
-      "<Your Department>",
-    ],
-    "homeFooterContactPhone": "<Your Phone Number>",
-    "homeFooterContactTitle": "Contact Us",
-    "homeFooterCopyrightText": "© 2025 <Your Organisation>",
-    "homeFooterPoweredByText": "Powered by",
-    "homeFooterQuickLinksTitle": "Quick Links",
-    "homeHeroCaptionEyebrowSuffix": "Platform",
-    "homeHeroCaptionTitle": <React.Fragment>
-      Reliable data
-      <br />
-      for every community you serve.
-    </React.Fragment>,
-    "homeHeroCtaLearnMore": "Learn more",
-    "homeHeroEyebrowDept": "<Your Department>",
-    "homeHeroEyebrowLive": "Live",
-    "homeHeroEyebrowOrg": "<Your Organisation>",
-    "homeHeroTitleAccent": "monitoring & information",
-    "homeHeroTitlePrefix": "— a comprehensive platform for",
-    "homeHeroTitleSuffix": "services.",
-    "homeJumbotronImage": Object {
-      "alt": "Water landscape",
-      "src": "https://images.unsplash.com/photo-1642450909999-7106494ef779?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-    },
-    "homeJumbotronSubtitle": <React.Fragment>
-      A comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation.
-    </React.Fragment>,
-    "homeJumbotronTitle": <React.Fragment>
-      Test App
-    </React.Fragment>,
-    "homeKeyRolesHeadline": <React.Fragment>
-      Policy, oversight and 
-      <span
-        className="accent"
-      >
-        compliance
-      </span>
-       across your sector.
-    </React.Fragment>,
-    "homeKeyRolesItems": Array [
-      Object {
-        "imgAlt": "Policy and legislation",
-        "imgSrc": "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Formulating regulatory frameworks and policies to promote sustainable and equitable service delivery. Providing expert advice to support effective governance.",
-        "title": "Policy & Legislation",
-        "type": "right",
-      },
-      Object {
-        "imgAlt": "Monitoring and oversight",
-        "imgSrc": "https://images.unsplash.com/photo-1708807472445-d33589e6b090?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Overseeing adherence to established policies, legislation, and industry standards. Ensuring accountability and transparency in service delivery.",
-        "title": "Monitoring & Oversight",
-        "type": "left",
-      },
-      Object {
-        "imgAlt": "Technical and policy advisory",
-        "imgSrc": "/logo.svg",
-        "text": "Providing expert advice on sector issues to support effective governance and operational efficiency.",
-        "title": "Technical & Policy Advisory",
-        "type": "right",
-      },
-      Object {
-        "imgAlt": "Service delivery oversight",
-        "imgSrc": "https://plus.unsplash.com/premium_photo-1661964131234-fda88ca041c5?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Serving as the primary organisation responsible for monitoring service delivery and ensuring compliance with national regulations and standards.",
-        "title": "Service Delivery Oversight",
-        "type": "left",
-      },
-    ],
-    "homeKeyRolesText": "The key roles and responsibilities of the organisation include policy and legislation development, technical and policy advisory, compliance monitoring, and service delivery oversight.",
-    "homeKeyRolesTitle": "Key Roles and Responsibilities",
-    "homeMandateHeadline": <React.Fragment>
-      Ensuring a 
-      <span
-        className="accent"
-      >
-        sustainable
-      </span>
-       monitoring and reporting system.
-    </React.Fragment>,
-    "homeMandateText": "Your organisation is mandated with the responsibility of ensuring sustainable service delivery through the development of evidence-based policies, efficient data management, and rigorous compliance monitoring.",
-    "homeMandateTitle": "Our Mandate",
-    "homeQuickLinks": Array [
-      Object {
-        "href": "/privacy-policy",
-        "isPage": true,
-        "text": "Privacy Policy",
-      },
-      Object {
-        "href": "/terms-n-conditions",
-        "isPage": true,
-        "text": "Terms & Conditions",
-      },
-      Object {
-        "href": "/cookie-policy",
-        "isPage": true,
-        "text": "Cookie Policy",
-      },
-      Object {
-        "href": "/app",
-        "isPage": false,
-        "text": <React.Fragment>
-          Download 
-          Test App
-           App
-        </React.Fragment>,
-      },
-    ],
-    "homeStructureImage": Object {
-      "alt": "Organisation Structure",
-      "src": "/logo.svg",
-    },
-    "homeStructureText": "Replace this text with a description of your organisation structure. This section can be updated in ui-text.js or configured via a content management system.",
-    "homeStructureTitle": "Organisation Structure",
-    "homeVideoHeadline": <React.Fragment>
-      See 
-      <span
-        className="accent"
-      >
-        Test App
-      </span>
-       in action.
-    </React.Fragment>,
-    "homeVideoIframeTitle": "Test App introduction video\\"",
-    "homeVideoText": "A short walkthrough of how the platform supports data collection, monitoring, and decision-making for your organisation.",
-    "homeVideoTitle": "Watch & Learn",
     "informUser": "Inform User for Changes",
     "initialRegistration": "Initial Registration",
     "instructionsMailed": "Instructions mailed successfully",
@@ -883,6 +886,9 @@ Object {
     "loadMoreLable": "Load More",
     "loadingText": "Loading...",
     "login": "Log in",
+    "loginAccountDetails": "Please enter your account details",
+    "loginContactLink": "contact",
+    "loginEmailPlaceholder": "Email",
     "loginLoadingTex": <React.Fragment>
       Verifying
       <br />
@@ -890,9 +896,12 @@ Object {
         Please wait..
       </small>
     </React.Fragment>,
+    "loginNotActivated": "This account has not been activated yet",
+    "loginPasswordLabel": "Password",
+    "loginPasswordPlaceholder": "Password",
+    "loginResendActivation": "Resend the activation email",
     "loginTitle": "Welcome back",
-    "lorem": "Lorem ipsum dolor sit amet consectetur adipisicing elit. Possimus, assumenda quos? Quia deleniti sapiente aut! Ab consequatur cumque fugit ea. Dolore ex rerum quisquam inventore eum dicta doloribus harum cum.",
-    "lorem2": "Lorem ipsum dolor sit amet consectetur adipisicing elit.",
+    "loginTroublePrefix": "Having trouble accessing the platform? Please",
     "manageAdministrativeList": "Manage Administrative List",
     "manageAttributeText": <React.Fragment>
       This is where you manage attributes based on their fields. You can :
@@ -946,7 +955,6 @@ Object {
         </li>
       </ul>
     </React.Fragment>,
-    "manageEntityTitle": "Manage Entities",
     "manageEntityTypes": "Manage Entity Types",
     "manageEntityTypesText": <React.Fragment>
       This is where you manage entity types based on their fields. You can :
@@ -981,7 +989,6 @@ Object {
     </React.Fragment>,
     "manageRoles": "Manage Roles",
     "manageRolesTitle": "Manage Roles",
-    "manageUserButton": "Manage Users",
     "manageUserText": <React.Fragment>
       This is where you manage users based on their roles , regions and questionnaire access . You can :
       <ul>
@@ -996,24 +1003,7 @@ Object {
         </li>
       </ul>
     </React.Fragment>,
-    "manageUserTitle": "User Management",
     "manageUsers": "Manage Users",
-    "mdPanelButton": "Master Data",
-    "mdPanelText": <React.Fragment>
-      This is where you :
-      <ul>
-        <li>
-          View all master data
-        </li>
-        <li>
-          Modify existing data
-        </li>
-        <li>
-          Delete existing data
-        </li>
-      </ul>
-    </React.Fragment>,
-    "mdPanelTitle": "Master Data",
     "menuAdministrativeList": "Administrative List",
     "menuApprovals": "Approvals",
     "menuAttributes": "Attributes",
@@ -1044,7 +1034,6 @@ Object {
     "mobileButtonAdd": "Add new data collector",
     "mobileButtonSave": "Save",
     "mobileConfirmDelete": "Are you sure you want to delete this assignment?",
-    "mobileConfirmDeletion": "Are you sure?",
     "mobileEditText": "Edit Assignment",
     "mobileErrDelete": "Unable to delete assingment",
     "mobileFormsRequired": "Form is required: one or multiple",
@@ -1059,7 +1048,6 @@ Object {
        
       platform.
     </React.Fragment>,
-    "mobilePanelButton": "Manage Data Collectors",
     "mobilePanelEditDesc": <React.Fragment>
       This page allows you to edit mobile data collectors to the 
       Test App
@@ -1081,7 +1069,6 @@ Object {
       </ul>
     </React.Fragment>,
     "mobilePanelTitle": "Mobile Data Collectors",
-    "mobileSelectAdm": "Select administrations...",
     "mobileSelectForms": "Select forms...",
     "mobileSuccessAdded": "Mobile assignment added",
     "mobileSuccessUpdated": "Mobile assignment update",
@@ -1104,7 +1091,6 @@ Object {
     "nameField": "Name",
     "nameFieldRequired": "Name is required",
     "nameLabel": "Name",
-    "newLevelName": "New level name",
     "newSubmissionBtn": "Add New Submission",
     "newsEvents": "News & Events",
     "next": "Next",
@@ -1117,8 +1103,6 @@ Object {
     "notesFeedback": "Notes & Feedback",
     "notifyError": "An error occured",
     "optionsField": "Options",
-    "orgLabelAttr": "Organization Attributes",
-    "orgLabelName": "Organization Name",
     "orgPanelButton": "Manage Organization",
     "orgPanelText": <React.Fragment>
       This is where you :
@@ -1163,17 +1147,6 @@ Object {
     "passwordRule6": "Minimum 8 Characters",
     "passwordUpdateSuccess": "Password updated successfully",
     "platformConsole": "Platform Console",
-    "prefilledAdmModalContent": "We're processing your request. Once complete, the prefilled administration template will be sent to your email shortly.  Please keep a close eye on your email, Thank you. ",
-    "prefilledAdmModalTitle": "Prefilled Administration requested",
-    "prefilledAdmUploadLabel": "Upload the data",
-    "prefilledDownloadTitle": "Administrative Download",
-    "prefilledPanelText": <React.Fragment>
-      <p>
-        This page shows your pre-filled administrative data export requests.
-        <br />
-        For exports which are already generated, please click on the Download button to download the data.
-      </p>
-    </React.Fragment>,
     "prev": "Prev",
     "preview": "Preview",
     "printBtn": "Print",
@@ -1184,8 +1157,8 @@ Object {
     "questionCol": "Question",
     "questionnaireText": "Questionnaire",
     "questionnairesLabel": "Questionnaires",
-    "questionnairesRequired": "Please select at least one questionnaire access level: Read-only, Editor, or Approver.",
     "recentActivityCol": "Recent Activity",
+    "recoverPassword": "Recover Password",
     "regionCol": "Region",
     "registrationView": "Registration",
     "rejectText": "Reject",
@@ -1196,7 +1169,6 @@ Object {
       <br />
       Your password must include:
     </React.Fragment>,
-    "resetText": "Reset",
     "responseCol": "Response",
     "roleAccess": "Role Access",
     "roleAccessRequired": "Role access is required",
@@ -1206,8 +1178,6 @@ Object {
     "roleConfirmDelete": "Are you sure you want to delete {roleName}?",
     "roleDeleteTitle": "You are about to delete the role",
     "roleDescription": "Role Description",
-    "roleDescriptionRequired": "Role description is required",
-    "roleErrDeleteTitle": "Unable to delete the role",
     "roleErrorAdd": "Role could not be added",
     "roleErrorUpdate": "Role could not be updated",
     "roleFeatures": "Role Features",
@@ -1215,7 +1185,6 @@ Object {
     "roleName": "Role Name",
     "roleNameRequired": "Role name is required",
     "roleSuccessAdded": "Role added",
-    "roleSuccessDeleted": "Role deleted",
     "roleSuccessUpdated": "Role updated",
     "roleTotalUsers": "Total Users",
     "rolesLabel": "Role(s)",
@@ -1226,7 +1195,6 @@ Object {
     "searchEntityType": "Enter name...",
     "searchNameOrCode": "Enter name or code...",
     "searchPlaceholder": "Search...",
-    "selectAttributes": "Select attributes...",
     "selectChildForms": "Select Monitoring Forms",
     "selectEntity": "Select entity...",
     "selectForm": "Please select a form",
@@ -1256,7 +1224,6 @@ Object {
     "successAddedOrg": "Organisation added",
     "successDataUpdated": "Data updated",
     "successDeletedEntity": "Entity deleted",
-    "successDeletedOrg": "Organisation deleted",
     "successEntityDataAdded": "Entity data added",
     "successEntityDataDeleted": "Entity data deleted",
     "successEntityDataUpdated": "Entity data updated",
@@ -1304,7 +1271,7 @@ Object {
     "tourReviewStep2Desc": "Open Manage Data to browse and filter submissions. Approvals and drafts also live under Data.",
     "tourReviewStep2Title": "Review submissions",
     "tourSetupFinalBtn": "Create your first form",
-    "tourSetupStep1Desc": "Add sections and questions, then publish. Your field team can fill it in as soon as it is published.",
+    "tourSetupStep1Desc": "Add sections and questions, then publish — or skip the blank page and start from a ready-made template in the Form Library. Your field team can fill it in as soon as it is published.",
     "tourSetupStep1Title": "Build a form",
     "tourSetupStep2Desc": "Your field team collects data offline in the mobile app. Share the download link with them.",
     "tourSetupStep2Title": "Get the app to your field team",
@@ -1321,7 +1288,6 @@ Object {
     "updateOrganisation": "Update Organization",
     "updateUser": "Update User",
     "uploadAnotherFileLabel": "Upload Another File",
-    "uploadAttachments": "Upload Attachments",
     "uploadAttachmentsComment": "Add a comment for the attachment",
     "uploadAttachmentsError": "Unable to upload attachments",
     "uploadAttachmentsRequired": "Please upload at least one attachment file",
@@ -1345,11 +1311,8 @@ Object {
     "userEmail": "Email Address",
     "userFirstName": "First name",
     "userLastName": "Last name",
-    "userNationalApprover": "National Approver",
     "userOrganisation": "Organization",
     "userPhoneNumber": "Phone Number",
-    "userSelectLevelRequired": "Please select an administration level",
-    "userTrained": "Trained",
     "usernameRequired": "Please input your Username!",
     "usersLoadFail": "Could not load users",
     "valEmail": "Please enter a valid Email Address",
@@ -1374,130 +1337,1506 @@ Object {
     </React.Fragment>,
     "yesText": "Yes",
   },
-  "fr": Object {
-    "AdministrationDataDownload": "Administration Data Download",
-    "AdministrationDataUpload": "Administration Data Upload",
-    "AdministrationDownloadPageHint": "Uncheck Prefilled if you only want an upload template",
-    "EntitiesDataDownload": "Entities Data Download",
-    "EntitiesDataUpload": "Entities Data Upload",
-    "EntitiesDownloadPageHint": "Uncheck Prefilled if you only want an upload template",
-    "actionColumn": "Action",
+  "es": Object {
+    "AdministrationDataDownload": "Descarga de datos de administración",
+    "AdministrationDataUpload": "Carga de datos de administración",
+    "AdministrationDownloadPageHint": "Desmarque Rellenado previamente si solo desea una plantilla de carga",
+    "EntitiesDataDownload": "Descarga de datos de entidades",
+    "EntitiesDataUpload": "Carga de datos de entidades",
+    "EntitiesDownloadPageHint": "Desmarque Precargado si solo desea una plantilla de carga",
+    "actionColumn": "Acción",
+    "activateCheckInboxDesc": "Si esa cuenta aún necesita activarse, un nuevo enlace está en camino.",
+    "activateCheckInboxTitle": "Revise su bandeja de entrada",
+    "activateContinueSetup": "Continuar con la configuración →",
+    "activateEmailPlaceholder": "usted@organizacion.org",
+    "activateErrorDesc": "Algo salió mal al conectar con el servidor. Su enlace probablemente está bien; inténtelo de nuevo en un momento.",
+    "activateErrorTitle": "No pudimos comprobar su enlace",
+    "activateExpiredDesc": "Los enlaces de activación son válidos durante 7 días. Solicite uno nuevo y se lo enviaremos por correo de inmediato.",
+    "activateExpiredTitle": "Este enlace ha caducado",
+    "activateTryAgain": "Intentar de nuevo",
+    "activateVerifiedDesc": "Su cuenta está activa. Queda un paso rápido: cuéntenos sobre su proyecto.",
+    "activateVerifiedTitle": "Correo verificado",
+    "activateVerifying": "Verificando su correo electrónico…",
     "addAdmDesc": <React.Fragment>
-      This page allows you to add administration to the 
+      Esta página le permite añadir administración a la plataforma 
       Test App
-       platform.
+      .
     </React.Fragment>,
-    "addAdministration": "Add Administration",
-    "addAttachment": "Add Attachment",
-    "addAttachmentDesc": "Add a new attachment to the batch",
+    "addAdministration": "Añadir administración",
+    "addAttachment": "Añadir adjunto",
+    "addAttachmentDesc": "Añadir un nuevo adjunto al lote",
     "addAttributeDesc": <React.Fragment>
-      This page allows you to add attribute to the 
+      Esta página le permite añadir atributo a la plataforma 
       Test App
-       platform.
+      .
     </React.Fragment>,
-    "addAttributes": "Add Attribute",
-    "addEntities": "Add Entities",
-    "addEntity": "Add New",
-    "addEntityData": "Add New",
+    "addAttributes": "Añadir atributo",
+    "addEntity": "Añadir nuevo",
+    "addEntityData": "Añadir nuevo",
     "addEntityDesc": <React.Fragment>
-      This page allows you to add entity to the 
+      Esta página le permite añadir entidad a la plataforma 
       Test App
-       platform.
+      .
     </React.Fragment>,
     "addEntityTypeDesc": <React.Fragment>
-      This page allows you to add entity type to the 
+      Esta página le permite añadir tipo de entidad a la plataforma 
       Test App
-       platform.
+      .
     </React.Fragment>,
-    "addLevel": "Add Level",
-    "addNew": "Add New",
-    "addNewButton": "Add New",
-    "addNewUser": "Ajouter un nouvel utilisateur",
-    "addOptionButton": "Add option",
+    "addLevel": "Añadir nivel",
+    "addNewButton": "Añadir nuevo",
+    "addNewUser": "Añadir nuevo usuario",
+    "addOptionButton": "Añadir opción",
     "addOrgDesc": <React.Fragment>
-      This page allows you to add organisations to the 
+      Esta página le permite añadir organizaciones a la plataforma 
       Test App
-       platform.
+      .
     </React.Fragment>,
-    "addOrganisation": "Ajouter une organisation",
-    "addRole": "Add Role",
+    "addOrganisation": "Añadir organización",
+    "addRole": "Añadir rol",
     "addRoleDescription": [Function],
-    "addUser": "Ajouter un utilisateur",
+    "addUser": "Añadir usuario",
     "addUserDescription": <React.Fragment>
-      This page allows you to add users to the 
+      Esta página le permite añadir usuarios a la plataforma 
       Test App
-       platform. You will only be able to add users for regions under your jurisdisction.
+      . Solo podrá añadir usuarios para las regiones bajo su jurisdicción.
       <br />
-      Once you have added the user, the user will be notified by email to set their password and access the platform
+      Una vez que haya añadido el usuario, este será notificado por correo electrónico para establecer su contraseña y acceder a la plataforma
     </React.Fragment>,
-    "admConfirmDelete": "Are you sure you want to delete this administration?",
-    "admErrDeleteTitle": "Unable to delete the administration",
-    "admErrSaveTitle": "Unable to save the administration",
-    "admFieldRequired": "Administration is required",
-    "admLevel": "Administration Level",
-    "admName": "Administration Name",
-    "admNameRequired": "Administration name is required",
+    "admConfirmDelete": "¿Está seguro de que desea eliminar esta administración?",
+    "admErrDeleteTitle": "No se puede eliminar la administración",
+    "admErrSaveTitle": "No se puede guardar la administración",
+    "admFieldRequired": "La administración es obligatoria",
+    "admLevel": "Nivel de administración",
+    "admName": "Nombre de administración",
+    "admNameRequired": "El nombre de administración es obligatorio",
     "admPanelText": <React.Fragment>
-      This is where you :
+      Aquí es donde :
       <ul>
         <li>
-          Add new administration
+          Añadir nueva administración
         </li>
         <li>
-          Modify existing administration
+          Modificar administración existente
         </li>
         <li>
-          Delete existing administration
+          Eliminar administración existente
         </li>
         <li>
-          Bulk upload administration
+          Carga masiva de administración
         </li>
       </ul>
     </React.Fragment>,
-    "admParent": "Administration Parent",
-    "admSuccessAdded": "Administration added",
-    "admSuccessDeleted": "Administration deleted",
-    "admSuccessUpdated": "Administration updated",
-    "admTabTitle": "Administrative List",
+    "admParent": "Administración superior",
+    "admSuccessAdded": "Administración añadida",
+    "admSuccessDeleted": "Administración eliminada",
+    "admSuccessUpdated": "Administración actualizada",
+    "admTabTitle": "Lista administrativa",
+    "administrationField": "Administración",
+    "administrationLabel": "Administración",
+    "administrationUploadFailedHint": "No se cambió nada. Le hemos enviado por correo electrónico un archivo con las filas que necesitan corrección.",
+    "administrationUploadFailedTitle": "No se pudo importar su archivo",
+    "administrationUploadSuccessTitle": "Los datos de administración se han cargado correctamente",
+    "allData": "Todos los datos",
+    "allEntities": "Todas las entidades",
+    "approvalsTab1": "Mis pendientes",
+    "approvalsTab2": "Aprobaciones de subordinados",
+    "approvalsTab3": "Aprobado",
+    "approveNoteRequired": "Proporcione notas o comentarios para rechazar o aprobar el envío",
+    "approversDescription": <React.Fragment>
+      Aquí es donde puede ver los aprobadores de cada formulario enviado en diferentes áreas administrativas:
+    </React.Fragment>,
+    "attrConfirmDelete": "¿Está seguro de que desea eliminar este atributo?",
+    "attrErrDeleteTitle": "No se puede eliminar el atributo",
+    "attrName": "Nombre del atributo",
+    "attrNameRequired": "El nombre del atributo es obligatorio",
+    "attrSuccessAdded": "Atributo añadido",
+    "attrSuccessDeleted": "Atributo eliminado",
+    "attrSuccessUpdated": "Atributo actualizado",
+    "attrTabTitle": "Atributos",
+    "attrType": "Tipo de atributo",
+    "attrTypeRequired": "El tipo de atributo es obligatorio",
+    "backBtn": "Atrás",
+    "backHome": "Volver a la página de inicio",
+    "backManageData": "Volver a Gestionar datos",
+    "backToAdmLabel": "Volver a la lista administrativa",
+    "backToCenterLabel": "Volver al centro de control",
+    "backToLogin": "Volver al inicio de sesión",
+    "batchAttachments": "Adjuntos",
+    "batchFileTypeError": "Tipo de archivo adjunto no válido. Cargue un archivo válido.",
+    "batchFilesHint": "Cargue un archivo con una de las siguientes extensiones: .xlsx, .xls, .csv, .ods, .pdf, .docx, .doc",
+    "batchHintDesc": "La operación de fusionar conjuntos de datos no se puede deshacer, y creará un nuevo lote que requerirá la aprobación de su administrador",
+    "batchHintText": "Está a punto de crear un archivo CSV de lote",
+    "batchName": "Nombre del lote",
+    "batchNoApproverMessage": "No se pueden crear datos de lote, porque todavía no hay aprobador.",
+    "batchSelectedDatasets": "Conjuntos de datos seleccionados del lote",
+    "brandingCurrentLogo": "Logotipo actual",
+    "brandingLogoHint": "Formatos admitidos: PNG, JPG, JPEG, SVG hasta 2 MB.",
+    "brandingLogoLabel": "Logotipo del espacio de trabajo",
+    "brandingModalTitle": "Marca del espacio",
+    "brandingNoLogo": "Sin logotipo personalizado (logotipo de Akvo por defecto)",
+    "brandingPanelButton": "Gestionar la marca",
+    "brandingPanelDescription": "Personalice el logotipo de su espacio que se muestra en la navegación y el inicio de sesión.",
+    "brandingPanelTitle": "Marca del espacio",
+    "brandingRemoveBtn": "Eliminar el logotipo",
+    "brandingRemoveError": "No se pudo eliminar el logotipo",
+    "brandingRemoveSuccess": "Logotipo eliminado correctamente",
+    "brandingUploadBtn": "Subir el logotipo",
+    "brandingUploadError": "No se pudo actualizar la marca",
+    "brandingUploadSuccess": "Marca actualizada correctamente",
+    "browseComputer": "Explorar su equipo",
+    "bulkUpload": "Carga masiva",
+    "bulkUploadAttr": "Atributos",
+    "bulkUploadAttrPlaceholder": "Seleccionar atributos...",
+    "bulkUploadButton": "Carga masiva",
+    "bulkUploadCheckboxPrefilled": "Lista administrativa rellenada previamente",
+    "bulkUploadNoApproverMessage": "No se pueden subir datos, porque todavía no hay aprobador.",
+    "cancelButton": "Cancelar",
+    "ccDescriptionPanel": "Acceso instantáneo a todas las páginas de administración y los paneles de resumen para la aprobación de datos.",
+    "channelCol": "Canal",
+    "checkboxSelectAll": "Seleccionar todo {{name}}",
+    "chooseTemplate": "Elegir una plantilla",
+    "closeButton": "Cerrar",
+    "codeField": "Código",
+    "codeFieldRequired": "El código es obligatorio",
+    "codeLabel": "Código",
+    "configureAtTop": "en la parte superior. A continuación, añada los niveles por debajo.",
+    "configureContinue": "Continuar a la gestión de niveles →",
+    "configureDoneTitle": "Todo listo",
+    "configureFinish": "Finalizar configuración",
+    "configureFirstName": "Nombre",
+    "configureFirstNamePlaceholder": "Juana",
+    "configureLastName": "Apellido",
+    "configureLastNamePlaceholder": "Pérez",
+    "configureLevel0Tag": "Nivel 0",
+    "configureLogoExtra": "Opcional. PNG, JPG o JPEG de hasta 2 MB. Se muestra en la navegación superior y en la página de inicio de sesión.",
+    "configureLogoLabel": "Logotipo del espacio de trabajo",
+    "configureLogoUploadError": "No se pudo subir el logotipo",
+    "configurePreview": "Vista previa: esta es la jerarquía que está creando:",
+    "configureReadyWith": "Su espacio de trabajo está listo con",
+    "configureRequired": "Obligatorio",
+    "configureSaveError": "No se pudo guardar su espacio de trabajo",
+    "configureStep1": "Registrarse",
+    "configureStep2": "Verificar correo",
+    "configureStep3": "Configurar proyecto",
+    "configureStep4": "Panel",
+    "configureSubtitle": "Esto nombra su jerarquía administrativa. Puede añadir niveles más profundos después; estos dos nombres de nivel superior se establecen una sola vez aquí.",
+    "configureTitle": "Configure su proyecto",
+    "configureTopLevelExtra": "La etiqueta de su nivel administrativo más alto, p. ej. País, Nacional o Región. No un lugar, sino un nivel.",
+    "configureTopLevelName": "Nombre del nivel superior",
+    "configureTopLevelPlaceholder": "País",
+    "configureTopLevelRequired": "Asigne un nombre a su nivel superior.",
+    "configureTopUnitExtra": "Su única unidad superior en ese nivel, p. ej. Kenia. Todo lo que cargue después se ubicará bajo ella.",
+    "configureTopUnitHint": "└ unidad superior",
+    "configureTopUnitName": "Nombre de la unidad superior",
+    "configureTopUnitPlaceholder": "Kenia",
+    "configureTopUnitRequired": "Asigne un nombre a su unidad superior.",
+    "configureUploadLogo": "Subir logotipo",
+    "configureWelcome": "Bienvenido",
+    "confirmDeleteEntity": "¿Está seguro de que desea eliminar esta entidad?",
+    "confirmDeleteEntityData": "¿Está seguro de que desea eliminar estos datos?",
+    "consoleDeactivate": "Desactivar",
+    "consoleDelete": "Eliminar",
+    "consoleFLActionsCol": "Acciones",
+    "consoleFLAddMonitoring": "Añadir un formulario de seguimiento",
+    "consoleFLBack": "Volver a la biblioteca",
+    "consoleFLCancel": "Cancelar",
+    "consoleFLCategoriesCol": "Categorías",
+    "consoleFLCategoriesLabel": "Categorías",
+    "consoleFLCategoriesPlaceholder": "Asigne una o varias categorías",
+    "consoleFLCategoryAdd": "Añadir",
+    "consoleFLCategoryDeleteConfirm": "¿Eliminar esta categoría?",
+    "consoleFLCategoryEmpty": "Aún no hay categorías",
+    "consoleFLCategoryError": "La operación sobre la categoría falló",
+    "consoleFLCategoryPlaceholder": "Nombre de la nueva categoría",
+    "consoleFLDeleteButton": "Eliminar",
+    "consoleFLDeleteConfirm": "¿Quitar esta plantilla de la biblioteca? Las copias existentes no se ven afectadas.",
+    "consoleFLDeleteError": "No se pudo quitar la plantilla",
+    "consoleFLDeleteSuccess": "Plantilla eliminada de la biblioteca",
+    "consoleFLDescription": "Gestione el catálogo compartido de plantillas de formularios reutilizables.",
+    "consoleFLEditButton": "Editar en el creador",
+    "consoleFLEmpty": "Aún no hay plantillas",
+    "consoleFLFromScratch": "Desde cero (Creador de formularios)",
+    "consoleFLFromWorkspace": "Seleccionar desde un espacio existente",
+    "consoleFLManageCategories": "Gestionar categorías",
+    "consoleFLMonitoringCol": "Formularios de seguimiento",
+    "consoleFLNameCol": "Plantilla",
+    "consoleFLNewTemplate": "Nueva plantilla",
+    "consoleFLPreviewEmpty": "Seleccione un formulario de origen para la vista previa",
+    "consoleFLPreviewHeading": "Vista previa del formulario",
+    "consoleFLPromoteButton": "Promover desde un espacio",
+    "consoleFLPromoteError": "No se pudo promover el formulario",
+    "consoleFLPromoteSuccess": "Formulario promovido a la biblioteca",
+    "consoleFLPromoteTitle": "Promover un formulario a la biblioteca",
+    "consoleFLPromotedFrom": "Promovido desde",
+    "consoleFLSourceLabel": "Formulario de origen",
+    "consoleFLSourcePlaceholder": "Seleccione un formulario de registro publicado",
+    "consoleFLSourceRequired": "Seleccione un formulario de origen",
+    "consoleFLUsedCol": "Usado",
+    "consoleFLWorkspaceLabel": "Espacio de trabajo",
+    "consoleFLWorkspacePlaceholder": "Seleccione un espacio de trabajo",
+    "consoleFLWorkspaceRequired": "Seleccione un espacio de trabajo",
+    "consoleFeatures": "Funcionalidades",
+    "consoleFormLibrary": "Biblioteca de formularios",
+    "consoleInspect": "Inspeccionar",
+    "consoleInspectFailed": "No se pudo abrir este espacio",
+    "consoleInviteOperator": "Invitar a un operador",
+    "consoleLogo": "Logotipo",
+    "consoleLogoRemoved": "Logotipo eliminado correctamente",
+    "consoleLogoUpdated": "Logotipo actualizado correctamente",
+    "consoleOperators": "Operadores",
+    "consoleReactivate": "Reactivar",
+    "consoleRemoveLogo": "Eliminar el logotipo",
+    "consoleRename": "Renombrar",
+    "consoleRestore": "Restaurar",
+    "consoleResultCount": "Resultados: {from} – {to} de {total} espacios",
+    "consoleRevoke": "Revocar",
+    "consoleSearchTenants": "Buscar un subdominio o un nombre",
+    "consoleStateActive": "Activo",
+    "consoleStateAll": "Todos",
+    "consoleStateDeleted": "Eliminado",
+    "consoleStateSuspended": "Suspendido",
+    "consoleSuspend": "Suspender",
+    "consoleTenants": "Espacios",
+    "consoleTotalDashboards": "Paneles",
+    "consoleTotalDatapoints": "Puntos de datos",
+    "consoleTotalDevices": "Dispositivos",
+    "consoleTotalForms": "Formularios",
+    "consoleTotalUsers": "Usuarios",
+    "consoleTotalWorkspaces": "Espacios",
+    "consoleTotalsRow": "Total",
+    "consoleUploadLogo": "Subir el logotipo",
+    "consoleUsers": "Usuarios",
+    "contactAdmin": "Póngase en contacto con el administrador",
+    "controlCenter": "Centro de control",
+    "couldNotSendEmail": "No se pudo enviar el correo",
+    "createAccount": "Crear una cuenta",
+    "createDraftMonitoring": "Crear borrador de datos de seguimiento",
+    "createNewBatch": "Crear un nuevo lote",
+    "dashboardAiApplyWarning": "Panel creado, pero algunos widgets de IA no se pudieron aplicar.",
+    "dashboardBackToEditing": "Volver a la edición",
+    "dashboardCreateBtn": "Crear panel",
+    "dashboardCreateHint": "Asígnele un nombre y luego elija el formulario de registro cuyos datos mostrará este panel.",
+    "dashboardCreateTitle": "Crear un panel",
+    "dashboardCreated": "Panel creado",
+    "dashboardDateQuestion": "Fecha para filtrar",
+    "dashboardDateSaved": "Pregunta de fecha guardada",
+    "dashboardDateSubmission": "Fecha de envío",
+    "dashboardDeleteConfirm": "¿Eliminar este panel?",
+    "dashboardDeleted": "Panel eliminado",
+    "dashboardDuplicated": "Panel duplicado",
+    "dashboardEdit": "Editar panel",
+    "dashboardEmbedBadge": "Externo",
+    "dashboardEmbedHint": "Pegado exactamente como se proporciona, el tamaño proviene del fragmento: déle un ancho y un alto para mostrarlo a ese tamaño, centrado.",
+    "dashboardEmbedLabel": "Código de inserción",
+    "dashboardEmbedPlaceholder": "Pegue el código de inserción desde el cuadro de diálogo Compartir de su herramienta de informes",
+    "dashboardEmbedRequired": "Pegue el código de inserción",
+    "dashboardEmbedUnavailable": "El contenido externo de este panel no se puede mostrar porque los paneles insertados no están disponibles aquí.",
+    "dashboardEmptyDesc": "Cree su primer panel personalizado para visualizar los datos de sus formularios.",
+    "dashboardEmptyTitle": "Aún no hay paneles",
+    "dashboardExport": "Exportar",
+    "dashboardExportFailed": "No se pudo exportar este panel",
+    "dashboardExportFiltered": "Filtrado por",
+    "dashboardExportPdf": "Documento PDF",
+    "dashboardExportPng": "Imagen PNG",
+    "dashboardFilterAllForms": "Todos los formularios",
+    "dashboardFilterAllLocations": "Todas las ubicaciones",
+    "dashboardFilterChoose": "Elegir preguntas…",
+    "dashboardFilterCovers": "Cubre:",
+    "dashboardFilterGone": "(ya no está en el formulario)",
+    "dashboardFilterLocation": "Ubicación",
+    "dashboardFilterNoMatch": "Ninguna pregunta coincide",
+    "dashboardFilterOnlyOn": "solo en",
+    "dashboardFilterPeriod": "Fecha",
+    "dashboardFilterQuestions": "Preguntas de filtro",
+    "dashboardFilterRemove": "Quitar",
+    "dashboardFilterScope": "Respuestas de",
+    "dashboardFilterSearch": "Buscar por pregunta, nombre o grupo",
+    "dashboardFilterSelected": "seleccionada(s)",
+    "dashboardFilterSuggested": "Usadas en sus widgets",
+    "dashboardFilters": "Filtros",
+    "dashboardFiltersActive": "activo(s)",
+    "dashboardFiltersApply": "Aplicar",
+    "dashboardFiltersClear": "Borrar todo",
+    "dashboardFiltersHowTo": "Marque opciones para mostrar solo las marcadas. Los datos sin respuesta a una pregunta filtrada se ocultan.",
+    "dashboardFiltersMatch": "Mostrar los datos que coincidan con",
+    "dashboardFiltersMatchAll": "Todos los filtros",
+    "dashboardFiltersMatchAny": "Cualquier filtro",
+    "dashboardFiltersMore": "más filtros",
+    "dashboardFiltersRemove": "Quitar el filtro",
+    "dashboardFiltersTooMany": "Demasiadas opciones marcadas: {max} como máximo en total. Desmarque algunas.",
+    "dashboardForbidden": "Ya no tiene permiso para realizar esta acción.",
+    "dashboardFormExtra": "Este panel mostrará los datos de este formulario y de sus formularios de seguimiento. Esto no se puede cambiar después.",
+    "dashboardFormLabel": "Fuente de datos",
+    "dashboardFormPlaceholder": "Seleccione un formulario de registro",
+    "dashboardFormRequired": "Seleccione un formulario de registro",
+    "dashboardGoFormBuilder": "Vaya al Creador de formularios para crear y publicar un formulario.",
+    "dashboardKindEmbed": "Insertar un panel externo",
+    "dashboardKindEmbedHint": "Mostrar un informe publicado por Power BI, Tableau, Looker Studio u otra herramienta.",
+    "dashboardKindLabel": "¿Qué es este panel?",
+    "dashboardKindWidgets": "Construirlo aquí",
+    "dashboardKindWidgetsHint": "Componga gráficos y tablas a partir de los datos de sus propios formularios.",
+    "dashboardListSubtitle": "Cree y gestione sus paneles de datos personalizados.",
+    "dashboardListTitle": "Mis paneles",
+    "dashboardMadePrivate": "El panel ahora es privado",
+    "dashboardMadePublic": "El panel ahora es público",
+    "dashboardMakePublicBody": "Cualquier persona con el enlace podrá abrir este panel sin iniciar sesión, y aparecerá en el menú Paneles para cada visitante de este espacio de trabajo.",
+    "dashboardMakePublicOk": "Hacer público",
+    "dashboardMakePublicRawData": "Este panel incluye una tabla y un mapa. Los visitantes públicos verán las filas de envío individuales y la ubicación de cada punto registrado, no solo los totales.",
+    "dashboardMakePublicTitle": "¿Hacer público este panel?",
+    "dashboardNameLabel": "Nombre del panel",
+    "dashboardNameRequired": "Introduzca un nombre de panel",
+    "dashboardNew": "Nuevo panel",
+    "dashboardNoForms": "No hay formularios de registro publicados disponibles.",
+    "dashboardNotFound": "El panel está vacío",
+    "dashboardNotFoundHint": "Este panel aún no se ha publicado o puede que se haya eliminado.",
+    "dashboardPreview": "Vista previa",
+    "dashboardPublished": "Panel publicado",
+    "dashboardSaved": "Panel guardado",
+    "dashboardSlugConflict": "Ya existe un panel con un nombre similar. Elija un nombre diferente.",
+    "dashboardViewEmpty": "Este panel aún no tiene widgets.",
+    "dashboardVisibilityHintDraft": "Publique primero este panel. Solo un panel publicado se puede hacer público.",
+    "dashboardVisibilityHintOn": "Cualquiera puede abrirlo sin iniciar sesión, y aparece en el menú Paneles para cada visitante. Surte efecto de inmediato: no es necesario guardar.",
+    "dashboardVisibilityPrivate": "Privado",
+    "dashboardVisibilityPublic": "Público",
+    "dashboardVisibilityTitle": "Panel público",
+    "dashboardWidgetError": "No se pudo cargar este widget",
+    "dashboardWidgetFormGone": "El formulario de este widget ya no existe.",
+    "dashboardWidgetNoData": "No hay datos disponibles",
+    "dashboardWidgetNoDataFiltered": "No se encontraron datos para los filtros actuales",
+    "dashboardWidgetQuestionGone": "La pregunta de este widget ya no existe.",
+    "dashboardWidgetRetry": "Reintentar",
+    "dashboards": "Paneles",
+    "dataAdministrationDownloadText": <React.Fragment>
+      Aquí es donde :
+      <ul>
+        <li>
+          Descargar datos de administración
+        </li>
+      </ul>
+    </React.Fragment>,
+    "dataAdministrationUploadText": <React.Fragment>
+      Aquí es donde :
+      <ul>
+        <li>
+          Carga masiva de datos de administración
+        </li>
+      </ul>
+    </React.Fragment>,
+    "dataEntitiesDownloadText": <React.Fragment>
+      Aquí es donde :
+      <ul>
+        <li>
+          Descargar datos de entidades
+        </li>
+      </ul>
+    </React.Fragment>,
+    "dataEntitiesUploadText": <React.Fragment>
+      Aquí es donde :
+      <ul>
+        <li>
+          Carga masiva de datos de entidades
+        </li>
+      </ul>
+    </React.Fragment>,
+    "dataExportFail": "La descarga de datos falló",
+    "dataExportSuccess": "Datos descargados correctamente",
+    "dataOnboardingAddNew": "Añadir como nueva unidad",
+    "dataOnboardingApply": "Aplicar",
+    "dataOnboardingApplyFailed": "No se pudo aplicar la propuesta.",
+    "dataOnboardingApplying": "Aplicando la propuesta: añadiendo unidades, creando formularios y cargando registros.",
+    "dataOnboardingBlocked": "Bloqueado",
+    "dataOnboardingBlockedNote": "Los formularios bloqueados no se aplican. Aplicar carga los demás formularios.",
+    "dataOnboardingChooseParent": "Elegir el padre",
+    "dataOnboardingColumn": "Columna",
+    "dataOnboardingCreated": "Iniciada",
+    "dataOnboardingCreatedBy": "Iniciada por",
+    "dataOnboardingDownloadFailed": "No se pudo descargar el informe.",
+    "dataOnboardingDownloadReport": "Descargar el informe",
+    "dataOnboardingDrafting": "Redactando la propuesta. Un archivo grande puede tardar unos minutos.",
+    "dataOnboardingDropColumn": "Quitar",
+    "dataOnboardingDropForm": "Quitar este formulario",
+    "dataOnboardingDropped": "Columnas no cargadas",
+    "dataOnboardingDroppedAnswer": "Respuesta descartada",
+    "dataOnboardingFailed": "No se pudo redactar la propuesta.",
+    "dataOnboardingFile": "Archivo",
+    "dataOnboardingFirstLevel": "Nivel de la primera columna",
+    "dataOnboardingForms": "Formularios",
+    "dataOnboardingHistory": "Incorporaciones de datos",
+    "dataOnboardingIssues": "Filas omitidas y respuestas descartadas",
+    "dataOnboardingKeepColumn": "Mantener",
+    "dataOnboardingKeyColumns": "Columnas clave",
+    "dataOnboardingLoaded": "Registros cargados",
+    "dataOnboardingLocationColumn": "Columna de ubicación",
+    "dataOnboardingLocationColumns": "Columnas de ubicación, nivel superior primero",
+    "dataOnboardingMapping": "Columna a pregunta",
+    "dataOnboardingName": "Nombre",
+    "dataOnboardingNoIssues": "Todas las filas se cargaron.",
+    "dataOnboardingNoUnits": "No hay unidades para añadir",
+    "dataOnboardingNotApplied": "Formularios no aplicados",
+    "dataOnboardingNotes": "Notas",
+    "dataOnboardingOptions": "Opciones",
+    "dataOnboardingParentForm": "Formulario de registro",
+    "dataOnboardingQuestion": "Pregunta",
+    "dataOnboardingRaw": "Valor en el archivo",
+    "dataOnboardingReason": "Motivo",
+    "dataOnboardingReport": "Informe de incorporación",
+    "dataOnboardingRequired": "Obligatorio",
+    "dataOnboardingRevise": "Revisar",
+    "dataOnboardingReviseHint": "Describa cualquier otro cambio, por ejemplo: tratar Estado como una pregunta de sí/no.",
+    "dataOnboardingRevisionFailed": "No se pudo revisar la propuesta.",
+    "dataOnboardingRow": "Fila",
+    "dataOnboardingSheet": "Hoja",
+    "dataOnboardingSkipped": "Fila omitida",
+    "dataOnboardingStatus": "Estado",
+    "dataOnboardingType": "Tipo",
+    "dataOnboardingUnits": "Unidades administrativas para añadir",
+    "dataOnboardingUnitsOutside": "Estas unidades están fuera de su área administrativa. Aplicar no las añadirá ni cargará sus filas:",
+    "dataOnboardingUpdated": "Última actualización",
+    "dataOnboardingUploadHint": "Haga clic o arrastre aquí un archivo CSV o xlsx (hasta 10 MB y 50 000 filas)",
+    "dataOnboardingUseExisting": "Usar la unidad existente",
+    "dataOnboardingValueMaps": "Correspondencias de valores",
+    "dataUploadText": <React.Fragment>
+      Aquí es donde :
+      <ul>
+        <li>
+          Descargar plantilla de carga
+        </li>
+        <li>
+          Carga masiva de nuevos datos
+        </li>
+        <li>
+          Actualización masiva de datos existentes
+        </li>
+      </ul>
+    </React.Fragment>,
+    "dataUploadTitle": "Carga de datos",
+    "datapointCol": "Punto de datos",
+    "dateFromPlaceholder": "Desde",
+    "dateToPlaceholder": "Hasta",
+    "deleteAttachmentDesc": "¿Está seguro de que desea eliminar este adjunto?",
+    "deleteAttachmentError": "No se puede eliminar el adjunto",
+    "deleteAttachmentSuccess": "Adjunto eliminado correctamente",
+    "deleteAttachmentTitle": "Eliminar adjunto",
+    "deleteDraftContent": "¿Está seguro de que desea eliminar {{draftName}}?",
+    "deleteDraftError": "No se puede eliminar el borrador",
+    "deleteDraftSuccess": "Borrador eliminado correctamente",
+    "deleteDraftTitle": "Eliminar borrador",
+    "deleteOrganisationDesc": [Function],
+    "deleteOrganisationTitle": "Está a punto de eliminar la organización",
+    "deleteText": "Eliminar",
+    "deleteUserDesc": <React.Fragment>
+      El usuario ya no podrá acceder a la plataforma 
+      Test App
+       como Encuestador/Administrador, etc.
+    </React.Fragment>,
+    "deleteUserHint": "Eliminar este usuario no eliminará la(s) asociación(es) de datos",
+    "deleteUserTitle": "Está a punto de eliminar al usuario",
+    "download": "Descargar",
+    "downloadAppText": <React.Fragment>
+      Download 
+      Test App
+       App
+    </React.Fragment>,
+    "downloadAppsLinkText": "o descargue usando los enlaces de abajo:",
+    "downloadAppsQRText": <React.Fragment>
+      Descargue la 
+      <b>
+        aplicación 
+        Test App
+      </b>
+       usando los códigos QR de abajo
+    </React.Fragment>,
+    "downloadData": "Descargar datos",
+    "downloadHere": "descargar aquí",
+    "downloadReport": "Descargar informe",
+    "downloadReportError": "No se pudo descargar el informe",
+    "downloadReportSuccess": "Informe descargado correctamente",
+    "downloadTitle": "Descargas",
+    "draft": "Borrador",
+    "draftCreatedByCol": "Creado por",
+    "draftFormDescription": <p>
+      Por favor, complete el formulario web de abajo con las respuestas pertinentes. Puede guardar sus respuestas y continuar más tarde, o si ha completado el formulario, puede enviarlo.
+    </p>,
+    "draftFormPublishConfirmContent": "¿Está seguro de que desea publicar este borrador? Esta acción no se puede deshacer.",
+    "draftFormPublishConfirmTitle": "Publicar borrador",
+    "draftFormPublishError": "No se pudo publicar el borrador",
+    "draftFormPublishSuccess": "Borrador publicado correctamente",
+    "draftFormSaveError": "No se pudo guardar el borrador",
+    "draftFormSaveSuccess": "Borrador guardado correctamente",
+    "draftUpdatedByPrefix": "por",
+    "dropFile": "Suelte su archivo aquí",
+    "editAdmDesc": <React.Fragment>
+      Esta página le permite editar la administración de la plataforma 
+      Test App
+      .
+    </React.Fragment>,
+    "editAdministration": "Editar administración",
+    "editAndPublishDraft": "Editar y publicar borrador",
+    "editAttachment": "Editar adjunto",
+    "editAttachmentDesc": "Reemplazar el adjunto existente por uno nuevo",
+    "editAttributeDesc": <React.Fragment>
+      Esta página le permite editar el atributo de la plataforma 
+      Test App
+      .
+    </React.Fragment>,
+    "editAttributes": "Editar atributo",
+    "editButton": "Editar",
+    "editEntity": "Editar entidad",
+    "editEntityData": "Editar datos",
+    "editEntityDesc": <React.Fragment>
+      Esta página le permite editar la entidad de la plataforma 
+      Test App
+      .
+    </React.Fragment>,
+    "editEntityTypeDesc": <React.Fragment>
+      Esta página le permite editar el tipo de entidad de la plataforma
+       
+      Test App
+      .
+    </React.Fragment>,
+    "editOrgDesc": <React.Fragment>
+      Esta página le permite editar las organizaciones de la plataforma
+       
+      Test App
+      .
+    </React.Fragment>,
+    "editOrganisation": "Editar organización",
+    "editProfile": "Editar perfil",
+    "editRole": "Editar rol",
+    "editText": "Editar",
+    "editUser": "Editar usuario",
+    "endOfListLabel": "Fin de la lista",
+    "entitiesUploadSuccessTitle": "Los datos de entidades se han cargado correctamente",
+    "entityIsRequired": "La entidad es obligatoria",
+    "entityTabTitle": "Entidades",
+    "entityText": "Entidad",
+    "entityType": "Tipo de entidad",
+    "entityTypes": "Tipos de entidad",
+    "errAddOrg": "No se pudo añadir la organización",
+    "errDeleteCascadeText1": "Está asociado a otros recursos o tiene restricciones en cascada.",
+    "errDeleteCascadeText2": "Por favor, revise y resuelva las dependencias antes de intentar eliminar.",
+    "errDeleteEntityDataTitle": "No se pudieron eliminar los datos",
+    "errDeleteEntityTitle": "No se pudo eliminar la entidad",
+    "errSaveEntityDataTitle": "No se pudieron guardar los datos",
+    "errUpdateOrg": "No se pudo actualizar la organización",
+    "error": "Error",
+    "errorAuth": "No está autorizado para acceder a esta página",
+    "errorDataLoad": "No se pudieron cargar los datos",
+    "errorEntityData": [Function],
+    "errorEntityNotExists": [Function],
+    "errorFileList": "No se pudo obtener la lista de archivos",
+    "errorFileUpload": "No se pudo subir el archivo",
+    "errorMandatoryFields": "Responda todas las preguntas obligatorias",
+    "errorMonitoringRequiresRegistration": [Function],
+    "errorPageNA": "Vaya, esta página no está disponible",
+    "errorSomething": "Algo salió mal",
+    "errorURL": <React.Fragment>
+      Por favor, verifique la URL de nuevo o permítanos llevarle de vuelta a la página de inicio de 
+      Test App
+       
+    </React.Fragment>,
+    "errorUnknown": "Se produjo un error desconocido",
+    "errorUserLoad": "No se pudieron cargar los datos del usuario",
+    "errorVerifyCreds": "Verifique sus credenciales para el recurso solicitado",
+    "eventTitle": "Noticias y eventos",
+    "existingApproverDescription": "Por favor, actualice la configuración en gestionar árbol de validación o elimine estos formularios para el usuario actual",
+    "existingApproverTitle": "Hay aprobadores existentes para:",
+    "export2ExcelError": "No se pudieron exportar los datos a Excel",
+    "export2ExcelSuccess": "Datos exportados a Excel correctamente",
+    "exportEntityError": "No se pudieron exportar las entidades",
+    "exportPanelText": <React.Fragment>
+      <p>
+        Esta página muestra su lista de solicitudes de exportación de datos.
+        <br />
+        Para las exportaciones que ya están generadas, haga clic en el botón Descargar para descargar los datos.
+      </p>
+    </React.Fragment>,
+    "failed": "Fallido",
+    "fetchingForm": "Obteniendo formulario..",
+    "fileUploadFail": "No se pudo cargar el archivo",
+    "fileUploadSuccess": "Archivo cargado correctamente",
+    "finish": "Finalizar",
+    "finishSubmissionBatchBtn": "Finalizar e ir al lote",
+    "finishSubmissionBtn": "Finalizar e ir a Gestionar datos",
+    "forgotDesc": "Introduzca el correo electrónico asociado a su cuenta y le enviaremos un correo con instrucciones para restablecer su contraseña",
+    "forgotTitle": "Restablecer su contraseña",
+    "formAccess": "Acceso al formulario",
+    "formAssignmentError": "No tiene ningún formulario asignado, póngase en contacto con el administrador",
+    "formBuilderActionsCol": "Acciones",
+    "formBuilderActivateButton": "Activar",
+    "formBuilderActivateError": "No se pudo activar la versión",
+    "formBuilderActivateVersionDesc": "Esto reemplazará el esquema activo actual. El editor se recargará.",
+    "formBuilderActivateVersionTitle": [Function],
+    "formBuilderActiveTag": "Activo",
+    "formBuilderArchiveButton": "Archivar",
+    "formBuilderArchiveConfirmDesc": [Function],
+    "formBuilderArchiveConfirmTitle": "¿Archivar este formulario?",
+    "formBuilderArchiveError": "No se pudo archivar el formulario",
+    "formBuilderArchiveSuccess": "Formulario archivado",
+    "formBuilderArchivedAtCol": "Archivado",
+    "formBuilderBackToSaved": "Volver al estado guardado",
+    "formBuilderCreateButton": "Crear nuevo formulario",
+    "formBuilderCreateError": "No se pudo crear el formulario",
+    "formBuilderCreateMonitoringButton": "Crear formulario de seguimiento",
+    "formBuilderCreateSuccess": "Formulario creado correctamente",
+    "formBuilderCreateTitle": "Crear formulario",
+    "formBuilderDataOnboardingButton": "Crear desde una hoja de cálculo",
+    "formBuilderDeleteButton": "Eliminar permanentemente",
+    "formBuilderDeleteConfirmDesc": "Esta acción no se puede deshacer.",
+    "formBuilderDeleteConfirmTitle": "¿Eliminar permanentemente este formulario?",
+    "formBuilderDeleteDisabledTooltip": "Los formularios con envíos no se pueden eliminar; manténgalo archivado o restáurelo.",
+    "formBuilderDeleteError": "No se pudo eliminar el formulario",
+    "formBuilderDeleteSuccess": "Formulario eliminado permanentemente",
+    "formBuilderDescription": <React.Fragment>
+      Aquí es donde puede crear y gestionar sus formularios. Puede :
+      <ul>
+        <li>
+          Crear nuevos formularios con varios tipos de preguntas
+        </li>
+        <li>
+          Modificar formularios existentes con control de versiones
+        </li>
+        <li>
+          Eliminar formularios que ya no se necesitan
+        </li>
+      </ul>
+    </React.Fragment>,
+    "formBuilderDraftRestored": "Hemos recuperado su trabajo anterior: revíselo antes de guardar.",
+    "formBuilderDuplicateButton": "Duplicar",
+    "formBuilderDuplicateError": "No se pudo duplicar el formulario",
+    "formBuilderDuplicateSuccess": "Formulario duplicado",
+    "formBuilderEditTitle": "Editar formulario",
+    "formBuilderEmptyText": "No se encontraron formularios",
+    "formBuilderExportButton": "Exportar",
+    "formBuilderExportCascadeCsvButton": "Exportar CSV en cascada",
+    "formBuilderExportCascadeCsvError": "No se pudo exportar el CSV en cascada",
+    "formBuilderExportError": "No se pudo exportar el formulario",
+    "formBuilderExportXlsformButton": "Exportar XLSForm",
+    "formBuilderExportXlsformError": "No se pudo exportar XLSForm",
+    "formBuilderExportXlsformWarningTitle": "Advertencias de exportación XLSForm",
+    "formBuilderFilterStatusAll": "Todos los estados",
+    "formBuilderFilterTypeAll": "Todos los tipos",
+    "formBuilderImportButton": "Importar un formulario",
+    "formBuilderImportCloseButton": "Cerrar",
+    "formBuilderImportConfirmButton": "Importar",
+    "formBuilderImportDraggerHint": [Function],
+    "formBuilderImportDraggerHintXlsform": [Function],
+    "formBuilderImportDraggerText": "Haga clic o arrastre aquí un archivo de formulario",
+    "formBuilderImportErrorsTitle": "Errores de validación",
+    "formBuilderImportFailed": "Error de importación",
+    "formBuilderImportFileTooLarge": [Function],
+    "formBuilderImportFormLabel": "Formulario",
+    "formBuilderImportFormTypeLabel": "Tipo de formulario",
+    "formBuilderImportFormTypeMonitoring": "Seguimiento",
+    "formBuilderImportFormTypeRegistration": "Registro",
+    "formBuilderImportFormTypeRequired": "Seleccione un tipo de formulario",
+    "formBuilderImportFormatJson": "JSON (nativo)",
+    "formBuilderImportFormatLabel": "Formato",
+    "formBuilderImportFormatXlsform": "XLSForm (.xlsx)",
+    "formBuilderImportGroupsLabel": "Grupos",
+    "formBuilderImportInProgress": "Importando formulario…",
+    "formBuilderImportInvalidFile": "Solo se admiten archivos .json",
+    "formBuilderImportInvalidFileXlsform": "Solo se admiten archivos .xlsx o .xls",
+    "formBuilderImportModalTitle": "Importar un formulario",
+    "formBuilderImportModeCopy": "Importar como nueva copia",
+    "formBuilderImportModeUpdate": "Actualizar formulario existente",
+    "formBuilderImportNameMismatchWarning": "El nombre del archivo difiere del nombre del formulario existente; asegúrese de que está actualizando el formulario correcto.",
+    "formBuilderImportOpenEditor": "Abrir en el editor",
+    "formBuilderImportParentLabel": "Formulario de registro principal",
+    "formBuilderImportParentPlaceholder": "Seleccione un formulario de registro",
+    "formBuilderImportParentRequired": "Un formulario de seguimiento requiere un formulario de registro principal.",
+    "formBuilderImportPreflightError": "No se pudo validar el archivo",
+    "formBuilderImportQuestionsLabel": "Preguntas",
+    "formBuilderImportRetryButton": "Probar otro archivo",
+    "formBuilderImportSkippedCount": [Function],
+    "formBuilderImportSuccess": "Formulario importado",
+    "formBuilderImportUpdateDesc": [Function],
+    "formBuilderImportUpdateTitle": [Function],
+    "formBuilderImportWarningsTitle": "Advertencias",
+    "formBuilderImportXlsformNoticeDesc": <div
+      style={
+        Object {
+          "fontSize": 13,
+          "lineHeight": 1.5,
+          "textAlign": "left",
+        }
+      }
+    >
+      <p
+        style={
+          Object {
+            "margin": "4px 0 8px 0",
+            "textAlign": "left",
+          }
+        }
+      >
+        Su XLSForm se importó correctamente, pero Kobo y Akvo MIS no funcionan de forma idéntica y es posible que alguna lógica del formulario necesite ajustes manuales para coincidir completamente con el original. Por favor, revise las advertencias a continuación y pruebe el formulario antes de publicarlo.
+      </p>
+      <p
+        style={
+          Object {
+            "fontWeight": 600,
+            "margin": "8px 0 4px 0",
+            "textAlign": "left",
+          }
+        }
+      >
+        Aspectos comunes a comprobar:
+      </p>
+      <ul
+        style={
+          Object {
+            "listStyleType": "disc",
+            "margin": "0 0 8px 0",
+            "paddingLeft": 18,
+            "textAlign": "left",
+          }
+        }
+      >
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Campos calculados: es posible que las fórmulas deban volver a verificarse
+        </li>
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Conteos de repetición dinámicos: los grupos repetibles controlados por una variable pueden necesitar configuración manual
+        </li>
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Relevancia de grupo / lógica de omisión: la visibilidad condicional de grupos debe comprobarse dos veces
+        </li>
+        <li
+          style={
+            Object {
+              "marginBottom": 4,
+            }
+          }
+        >
+          Preguntas de seguimiento de "Otro": estas no se convierten automáticamente; añádalas manualmente si es necesario
+        </li>
+      </ul>
+      <p
+        style={
+          Object {
+            "margin": "8px 0 0 0",
+            "textAlign": "left",
+          }
+        }
+      >
+        Recomendamos previsualizar el formulario completo y probar un envío antes de que entre en funcionamiento.
+      </p>
+    </div>,
+    "formBuilderImportXlsformNoticeTitle": "Esta importación necesita una revisión rápida",
+    "formBuilderLastUpdatedCol": "Última actualización",
+    "formBuilderMonitoringFor": [Function],
+    "formBuilderMonitoringType": "Seguimiento",
+    "formBuilderNameCol": "Nombre",
+    "formBuilderParentFormError": "Formulario principal no encontrado o no publicado. No se puede crear el formulario de seguimiento.",
+    "formBuilderPreviewButton": "Vista previa",
+    "formBuilderPreviewError": "No se pudo cargar la versión",
+    "formBuilderPreviewingBanner": [Function],
+    "formBuilderPublishButton": "Publicar",
+    "formBuilderPublishConfirmDesc": "Estará disponible para la recopilación de datos.",
+    "formBuilderPublishConfirmTitle": "¿Publicar este formulario?",
+    "formBuilderPublishError": "No se pudo publicar el formulario",
+    "formBuilderPublishSuccess": "Formulario publicado",
+    "formBuilderPublishedAtCol": "Publicado el",
+    "formBuilderPublishedByCol": "Publicado por",
+    "formBuilderPublishedInfo": "Editar un formulario publicado crea una nueva instantánea de versión. Haga clic en Publicar para activarla.",
+    "formBuilderRefreshButton": "Actualizar",
+    "formBuilderRegistrationType": "Registro",
+    "formBuilderResetDraft": "Cargar desde el servidor",
+    "formBuilderRestoreButton": "Restaurar",
+    "formBuilderRestoreConfirmDesc": "Volverá como borrador; vuelva a publicarlo para reanudar la recopilación de datos.",
+    "formBuilderRestoreConfirmTitle": "¿Restaurar este formulario?",
+    "formBuilderRestoreError": "No se pudo restaurar el formulario",
+    "formBuilderRestoreSuccess": "Formulario restaurado",
+    "formBuilderSaveError": "No se pudo guardar el formulario",
+    "formBuilderSaveSuccess": "Formulario guardado",
+    "formBuilderSearchPlaceholder": "Buscar por nombre",
+    "formBuilderSetActiveButton": "Establecer como activo",
+    "formBuilderSnapshotPending": [Function],
+    "formBuilderStatusArchived": "Archivado",
+    "formBuilderStatusCol": "Estado",
+    "formBuilderStatusDraft": "Borrador",
+    "formBuilderStatusPublished": "Publicado",
+    "formBuilderTabActive": "Activo",
+    "formBuilderTabArchived": "Archivado",
+    "formBuilderTypeCol": "Tipo",
+    "formBuilderUnpublishButton": "Despublicar",
+    "formBuilderUnpublishDesc": "El formulario ya no estará disponible para la recopilación de datos.",
+    "formBuilderUnpublishError": "No se pudo despublicar el formulario",
+    "formBuilderUnpublishSuccess": "Formulario despublicado",
+    "formBuilderUnpublishTitle": "¿Despublicar este formulario?",
+    "formBuilderVersionActivated": [Function],
+    "formBuilderVersionCol": "Versión",
+    "formBuilderVersionHistoryEmpty": "Aún no hay versiones publicadas",
+    "formBuilderVersionHistoryTitle": "Historial de versiones",
+    "formBuilderVersionsButton": "Versiones",
+    "formColumn": "Formulario",
+    "formDescription": <p>
+      Por favor, complete el formulario web a continuación con las respuestas pertinentes. Deberá responder todas las preguntas obligatorias antes de poder enviar.
+      <br />
+      Una vez que haya enviado un formulario web, no olvide añadirlo como parte de un lote y enviarlo para su aprobación.
+    </p>,
+    "formLibraryAllCategories": "Todas las categorías",
+    "formLibraryDescription": "Explore plantillas de formularios listas para usar y cree un formulario nuevo a partir de una con un solo clic.",
+    "formLibraryEmptyText": "No hay plantillas disponibles",
+    "formLibraryMonitoringLabel": "formulario(s) de seguimiento",
+    "formLibraryMonitoringTab": "Seguimiento",
+    "formLibraryPreviewButton": "Vista previa",
+    "formLibraryPreviewTitle": "Vista previa de la plantilla",
+    "formLibraryRegistrationTab": "Registro",
+    "formLibrarySearchPlaceholder": "Buscar plantillas",
+    "formLibraryTitle": "Biblioteca de formularios",
+    "formLibraryUncategorized": "Sin categoría",
+    "formLibraryUseButton": "Usar este formulario",
+    "formLibraryUseError": "No se pudo usar esta plantilla",
+    "formLibraryUseSuccess": "Plantilla copiada a su espacio de trabajo como un nuevo borrador.",
+    "formLibraryUsedCount": "Usado",
+    "formLibraryViewOnly": "Solo lectura",
+    "formSuccessSubTitle": "Tenga en cuenta que estos datos NO se han enviado para su aprobación. Si está listo para enviar los envíos para su aprobación, cree un lote y envíelo al aprobador",
+    "formSuccessSubTitleForAdmin": "Tenga en cuenta que los datos enviados por el rol de SUPER ADMIN no pasarán por el flujo de aprobación y se registrarán como datos aprobados",
+    "formSuccessTitle": "Gracias por el envío",
+    "generating": "Generando",
+    "helloText": "Hola",
+    "informUser": "Informar al usuario sobre los cambios",
+    "initialRegistration": "Registro inicial",
+    "instructionsMailed": "Instrucciones enviadas correctamente",
+    "invalidInviteDesc": "Lorem, ipsum dolor sit amet consectetur adipisicing elit. Autem provident voluptatum cum numquam, quidem vitae, qui quam beatae exercitationem ullam perferendis! Nobis in aut fuga voluptate harum, tempore distinctio optio.",
+    "invalidInviteTitle": "Código de invitación no válido",
+    "isSuperAdminLabel": "¿Es superadministrador?",
+    "lastLoginLabel": "Último inicio de sesión",
+    "lastResponseCol": "Última respuesta",
+    "lastUpdatedCol": "Última actualización",
+    "latestData": "Datos más recientes",
+    "latestUpdateText": "Últimas actualizaciones",
+    "levelDeleteTitle": "¿Eliminar el nivel más profundo?",
+    "levelField": "Nivel",
+    "levelFieldRequired": "El nivel es obligatorio",
+    "levelFrozenHint": "Ya no se pueden añadir ni eliminar niveles porque ya existen unidades administrativas. El cambio de nombre sigue disponible.",
+    "levelLabel": "Nivel",
+    "loadMoreLable": "Cargar más",
+    "loadingText": "Cargando...",
+    "login": "Iniciar sesión",
+    "loginAccountDetails": "Introduzca los datos de su cuenta",
+    "loginContactLink": "contáctenos",
+    "loginEmailPlaceholder": "Correo electrónico",
+    "loginLoadingTex": <React.Fragment>
+      Verificando
+      <br />
+      <small>
+        Espere por favor..
+      </small>
+    </React.Fragment>,
+    "loginNotActivated": "Esta cuenta aún no se ha activado",
+    "loginPasswordLabel": "Contraseña",
+    "loginPasswordPlaceholder": "Contraseña",
+    "loginResendActivation": "Reenviar el correo de activación",
+    "loginTitle": "Bienvenido de nuevo",
+    "loginTroublePrefix": "¿Tiene problemas para acceder a la plataforma? Por favor",
+    "manageAdministrativeList": "Gestionar lista administrativa",
+    "manageAttributeText": <React.Fragment>
+      Aquí es donde gestiona los atributos según sus campos. Puede :
+      <ul>
+        <li>
+          Añadir un nuevo atributo
+        </li>
+        <li>
+          Modificar un atributo existente
+        </li>
+        <li>
+          Eliminar un atributo existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageAttributes": "Gestionar atributos",
+    "manageDataButton": "Gestionar datos",
+    "manageDataTab1": "Datos de registro",
+    "manageDataTab2": "Datos de seguimiento",
+    "manageDataTab3": "Resumen de seguimiento",
+    "manageDataTabList": "Lista de puntos de datos",
+    "manageDataTabMap": "Vista de mapa",
+    "manageDataText": <React.Fragment>
+      Aquí puede:
+      <ul>
+        <li>
+          Añadir nuevos datos mediante formularios web
+        </li>
+        <li>
+          Cargar datos de forma masiva mediante hojas de cálculo
+        </li>
+        <li>
+          Descargar datos
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageDataTitle": "Gestionar datos",
+    "manageDataValidationSetup": "Árbol de validación",
+    "manageDraftText": <React.Fragment>
+      Aquí es donde puede gestionar sus borradores. Puede:
+      <ul>
+        <li>
+          Ver sus borradores guardados
+        </li>
+        <li>
+          Editar borradores existentes
+        </li>
+        <li>
+          Eliminar borradores existentes
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageDraftTitle": "Gestionar borradores",
+    "manageEntities": "Gestionar entidades",
+    "manageEntitiesText": <React.Fragment>
+      Aquí es donde gestiona las entidades según sus campos. Puede :
+      <ul>
+        <li>
+          Añadir una nueva entidad
+        </li>
+        <li>
+          Modificar una entidad existente
+        </li>
+        <li>
+          Eliminar una entidad existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageEntityTypes": "Gestionar tipos de entidad",
+    "manageEntityTypesText": <React.Fragment>
+      Aquí es donde gestiona los tipos de entidad según sus campos. Puede :
+      <ul>
+        <li>
+          Añadir un nuevo tipo de entidad
+        </li>
+        <li>
+          Modificar un tipo de entidad existente
+        </li>
+        <li>
+          Eliminar un tipo de entidad existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageLevelText": "Defina los niveles de su jerarquía administrativa, desde el nivel superior hacia abajo. Los niveles pueden renombrarse en cualquier momento, pero solo pueden añadirse o eliminarse mientras no existan unidades administrativas por debajo de su nivel superior.",
+    "manageLevels": "Gestionar niveles",
+    "manageOrganisations": "Gestionar organizaciones",
+    "manageRoleText": <React.Fragment>
+      Aquí es donde gestiona los roles según sus campos. Puede:
+      <ul>
+        <li>
+          Añadir un nuevo rol
+        </li>
+        <li>
+          Modificar un rol existente
+        </li>
+        <li>
+          Eliminar un rol existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageRoles": "Gestionar roles",
+    "manageRolesTitle": "Gestionar roles",
+    "manageUserText": <React.Fragment>
+      Aquí es donde gestiona los usuarios según sus roles, regiones y acceso a cuestionarios . Puede :
+      <ul>
+        <li>
+          Añadir un nuevo usuario
+        </li>
+        <li>
+          Modificar un usuario existente
+        </li>
+        <li>
+          Eliminar un usuario existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageUsers": "Gestionar usuarios",
+    "menuAdministrativeList": "Lista administrativa",
+    "menuApprovals": "Aprobaciones",
+    "menuAttributes": "Atributos",
+    "menuControlCenter": "Centro de control",
+    "menuDashboards": "Paneles",
+    "menuData": "Datos",
+    "menuDocumentation": "Documentación",
+    "menuDownloadApps": "Descargar la aplicación",
+    "menuDownloads": "Descargas",
+    "menuEntities": "Entidades",
+    "menuEntityTypes": "Tipos de entidad",
+    "menuFormBuilder": "Creador de formularios",
+    "menuLevels": "Niveles",
+    "menuManageData": "Gestionar datos",
+    "menuManageDraft": "Gestionar borradores",
+    "menuManageMobileUsers": "Gestionar usuarios móviles",
+    "menuManagePlatformUsers": "Gestionar usuarios de la plataforma",
+    "menuManageRoles": "Gestionar roles",
+    "menuMasterData": "Datos maestros",
+    "menuOrganisations": "Organizaciones",
+    "menuPendingSubmissions": "Envíos",
+    "menuProductTour": "Hacer un recorrido",
+    "menuSettings": "Ajustes",
+    "menuUsers": "Usuarios",
+    "menuValidationTree": "Árbol de validación",
+    "mobileAddText": "Añadir asignación",
+    "mobileAdmRequired": "La administración es obligatoria: una o varias",
+    "mobileAppText": "Aplicación móvil",
+    "mobileButtonAdd": "Añadir nuevo recopilador de datos",
+    "mobileButtonSave": "Guardar",
+    "mobileConfirmDelete": "¿Está seguro de que desea eliminar esta asignación?",
+    "mobileEditText": "Editar asignación",
+    "mobileErrDelete": "No se puede eliminar la asignación",
+    "mobileFormsRequired": "El formulario es obligatorio: uno o varios",
+    "mobileLabelAdm": "Administraciones",
+    "mobileLabelForms": "Formularios",
+    "mobileLabelName": "Nombre",
+    "mobileLevelRequired": "El nivel es obligatorio",
+    "mobileNameRequired": "El nombre es obligatorio",
+    "mobilePanelAddDesc": <React.Fragment>
+      Esta página le permite añadir recopiladores de datos móviles a la plataforma 
+      Test App
+       .
+    </React.Fragment>,
+    "mobilePanelEditDesc": <React.Fragment>
+      Esta página le permite editar recopiladores de datos móviles en la plataforma 
+      Test App
+       .
+    </React.Fragment>,
+    "mobilePanelText": <React.Fragment>
+      Aquí es donde usted :
+      <ul>
+        <li>
+          Añade un nuevo recopilador de datos móviles
+        </li>
+        <li>
+          Modifica un recopilador de datos móviles existente
+        </li>
+        <li>
+          Elimina un recopilador de datos móviles existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "mobilePanelTitle": "Recopiladores de datos móviles",
+    "mobileSelectForms": "Seleccionar formularios...",
+    "mobileSuccessAdded": "Asignación móvil añadida",
+    "mobileSuccessUpdated": "Actualización de asignación móvil",
+    "monitoringDataDescription": <React.Fragment>
+      Aquí es donde usted :
+      <ul>
+        <li>
+          Obtiene la lista de formularios que se recopilaron para este punto de datos (nuevo y actualización)
+        </li>
+        <li>
+          Edita los datos de seguimiento
+        </li>
+      </ul>
+    </React.Fragment>,
+    "monitoringDataTitle": "Datos de seguimiento",
+    "moreCount": "+{{count}} más",
+    "moreItems": "Más elementos",
+    "myProfile": "Mi perfil",
+    "nameCol": "Nombre",
+    "nameField": "Nombre",
+    "nameFieldRequired": "El nombre es obligatorio",
+    "nameLabel": "Nombre",
+    "newSubmissionBtn": "Añadir nuevo envío",
+    "newsEvents": "Noticias y eventos",
+    "next": "Siguiente",
+    "noFormSelectedText": "Ningún formulario seleccionado",
+    "noFormText": "Sin datos",
+    "noInformationAvailable": "No hay información disponible",
+    "noTemplate": "No se encontraron plantillas",
+    "noText": "No",
+    "notAssigned": "Sin asignar",
+    "notesFeedback": "Notas y comentarios",
+    "notifyError": "Se produjo un error",
+    "optionsField": "Opciones",
+    "orgPanelButton": "Gestionar organización",
+    "orgPanelText": <React.Fragment>
+      Aquí es donde usted :
+      <ul>
+        <li>
+          Añade una nueva organización
+        </li>
+        <li>
+          Modifica una organización existente
+        </li>
+        <li>
+          Elimina una organización existente
+        </li>
+      </ul>
+    </React.Fragment>,
+    "orgPanelTitle": "Gestionar organización",
+    "orgTabTitle": "Organizaciones",
+    "organisationDeleteFail": "No se pudo eliminar la organización",
+    "organisationsLoadFail": "No se pudieron cargar las organizaciones",
+    "panelApprovalsDesc": <React.Fragment>
+      Aquí es donde usted :
+      <ul>
+        <li>
+          Ve las aprobaciones de datos pendientes que esperan su aprobación
+           
+        </li>
+        <li>
+          Ve las aprobaciones pendientes de sus aprobadores subordinados
+        </li>
+        <li>
+          Asigna aprobadores subordinados
+        </li>
+      </ul>
+    </React.Fragment>,
+    "passwordCriteriaError": "Criterios de contraseña incorrectos",
+    "passwordMatchError": "¡Las dos contraseñas que ha introducido no coinciden!",
+    "passwordRequired": "Introduzca su contraseña",
+    "passwordRule1": "Carácter en minúscula",
+    "passwordRule2": "Números",
+    "passwordRule3": "Carácter especial ( -._!\`'#%&,:;<>=@{}~$()*+/?[]^|] )",
+    "passwordRule4": "Carácter en mayúscula",
+    "passwordRule5": "Sin espacios en blanco",
+    "passwordRule6": "Mínimo 8 caracteres",
+    "passwordUpdateSuccess": "Contraseña actualizada correctamente",
+    "platformConsole": "Consola de la plataforma",
+    "prev": "Anterior",
+    "preview": "Vista previa",
+    "printBtn": "Imprimir",
+    "profileDes": "Esta página muestra la configuración actual de su usuario. También muestra las actividades más importantes para la configuración actual de su usuario",
+    "profileLabel": "Perfil",
+    "publish": "Publicar",
+    "published": "Publicado",
+    "questionCol": "Pregunta",
+    "questionnaireText": "Cuestionario",
+    "questionnairesLabel": "Cuestionarios",
+    "recentActivityCol": "Actividad reciente",
+    "recoverPassword": "Recuperar contraseña",
+    "regionCol": "Región",
+    "registrationView": "Registro",
+    "rejectText": "Rechazar",
+    "reports": "Informes",
+    "requiredError": "{{field}} es obligatorio",
+    "resetHint": <React.Fragment>
+      Configure su contraseña para la plataforma.
+      <br />
+      Su contraseña debe incluir:
+    </React.Fragment>,
+    "responseCol": "Respuesta",
+    "roleAccess": "Acceso del rol",
+    "roleAccessRequired": "El acceso del rol es obligatorio",
+    "roleAdmLevel": "Nivel de administración",
+    "roleAdmLevelPlaceholder": "Seleccione un nivel de administración...",
+    "roleAdmLevelRequired": "El nivel de administración es obligatorio",
+    "roleConfirmDelete": "¿Está seguro de que desea eliminar {roleName}?",
+    "roleDeleteTitle": "Está a punto de eliminar el rol",
+    "roleDescription": "Descripción del rol",
+    "roleErrorAdd": "No se pudo añadir el rol",
+    "roleErrorUpdate": "No se pudo actualizar el rol",
+    "roleFeatures": "Funciones del rol",
+    "roleLabel": "Rol",
+    "roleName": "Nombre del rol",
+    "roleNameRequired": "El nombre del rol es obligatorio",
+    "roleSuccessAdded": "Rol añadido",
+    "roleSuccessUpdated": "Rol actualizado",
+    "roleTotalUsers": "Total de usuarios",
+    "rolesLabel": "Rol(es)",
+    "rolesRequired": "Seleccione al menos un rol",
+    "saveButton": "Guardar",
+    "saveEditButton": "Guardar cambios",
+    "searchEntity": "Introduzca un nombre...",
+    "searchEntityType": "Introduzca un nombre...",
+    "searchNameOrCode": "Introduzca un nombre o código...",
+    "searchPlaceholder": "Buscar...",
+    "selectChildForms": "Seleccione formularios de seguimiento",
+    "selectEntity": "Seleccione una entidad...",
+    "selectForm": "Seleccione un formulario",
+    "selectFormPlaceholder": "Seleccionar formulario",
+    "selectIndicatorPlaceholder": "Seleccionar indicador",
+    "selectLevel": "Seleccione un nivel...",
+    "selectMonitoringFormPlaceholder": "Seleccionar formulario de seguimiento",
+    "selectOne": "Seleccione uno...",
+    "selectQuestionPlaceholder": "Seleccionar pregunta",
+    "selectRole": "Seleccione un rol...",
+    "selectRowsToDownload": "Seleccione las filas que desea descargar",
+    "selectText": "Seleccionar...",
+    "selectType": "Seleccione un tipo...",
+    "selectViewMode": "Seleccionar vista",
+    "sendInstructions": "Enviar instrucciones",
+    "sendNewRequest": "Notificar al aprobador",
+    "settings": "Ajustes del sistema",
+    "settingsDescriptionPanel": "Esta página permite al Superadministrador mantener las listas maestras críticas del sistema.",
+    "showAllQuestionsSwitch": "Mostrar todas las preguntas",
+    "showEmpty": "Mostrar valores vacíos",
+    "showPendingUsers": "Mostrar usuarios pendientes",
+    "signOut": "Cerrar sesión",
+    "submissionComment": "Comentario del envío",
+    "submissionDateCol": "Fecha de envío",
+    "submissionsText": "Envíos",
+    "successAddedEntity": "Entidad añadida",
+    "successAddedOrg": "Organización añadida",
+    "successDataUpdated": "Datos actualizados",
+    "successDeletedEntity": "Entidad eliminada",
+    "successEntityDataAdded": "Datos de la entidad añadidos",
+    "successEntityDataDeleted": "Datos de la entidad eliminados",
+    "successEntityDataUpdated": "Datos de la entidad actualizados",
+    "successUpdatedEntity": "Entidad actualizada",
+    "successUpdatedOrg": "Organización actualizada",
+    "templateDownloadAdministrationHint": "Si todavía no tiene una plantilla, ",
+    "templateDownloadEntityHint": "Si todavía no tiene una plantilla de entidad, ",
+    "templateDownloadHint": "Si todavía no tiene una plantilla, descargue",
+    "templateFetchFail": "No se pudo obtener la plantilla",
+    "totalMonitoring": "Total de seguimiento",
+    "tourApprovals": "Placeat impedit iure quaerat neque sit quasi",
+    "tourApprovers": "Magni provident aliquam harum cupiditate iste",
+    "tourBtnBack": "Atrás",
+    "tourBtnNext": "Siguiente",
+    "tourBtnShowMeHow": "Muéstreme cómo",
+    "tourBtnSkip": "Omitir",
+    "tourControlCenter": "Lorem ipsum dolor sit, amet consectetur adipisicing elit",
+    "tourCopyAppLink": "Copiar el enlace de la aplicación",
+    "tourDataUploads": "Velit amet omnis dolores. Ad eveniet ex beatae dolorum",
+    "tourDataUploadsPanel": "Velit amet omnis dolores. Ad eveniet ex beatae dolorum",
+    "tourExploreFinalBtn": "Crear un panel",
+    "tourExploreStep1Desc": "Abra Gestionar datos para explorar, filtrar y revisar los envíos por formulario y por ubicación.",
+    "tourExploreStep1Title": "Explorar sus datos",
+    "tourExploreStep2Desc": "Cree un panel a partir de sus datos, publíquelo y luego manténgalo privado o compártalo públicamente.",
+    "tourExploreStep2Title": "Visualizar en un panel",
+    "tourExploreStep3Desc": "Exporte los envíos desde Gestionar datos. Las exportaciones grandes se ejecutan en segundo plano y le esperan aquí.",
+    "tourExploreStep3Title": "Descargar sus datos",
+    "tourExploreViewDataBtn": "Explorar los datos",
+    "tourExports": "Velit amet omnis dolores. Ad eveniet ex beatae dolorum",
+    "tourGetHelpDesc": "¿Preguntas? Use nuestro asistente de IA en cualquier momento en la parte inferior derecha, o consulte nuestra documentación.",
+    "tourGetHelpTitle": "Obtener ayuda en cualquier momento",
+    "tourGoalExploreDesc": "Explore, visualice y descargue los resultados",
+    "tourGoalExploreTitle": "Explorar datos y paneles",
+    "tourGoalRecommended": "Recomendado",
+    "tourGoalReviewDesc": "Compruebe los envíos pendientes",
+    "tourGoalReviewTitle": "Revisar y aprobar datos",
+    "tourGoalSetupDesc": "Cree un formulario y entréguelo a su equipo de campo",
+    "tourGoalSetupTitle": "Configurar una recopilación de datos",
+    "tourLinkCopied": "Enlace de descarga de la aplicación copiado al portapapeles",
+    "tourLinkCopyError": "No se pudo copiar el enlace",
+    "tourManageData": "Lorem ipsum dolor sit, amet consectetur adipisicing elit",
+    "tourReviewFinalBtn": "Revisar las aprobaciones pendientes",
+    "tourReviewStep1Desc": "Los envíos que esperan su decisión llegan aquí. También puede ver lo que sus aprobadores subordinados aún tienen que revisar.",
+    "tourReviewStep1Title": "Sus aprobaciones pendientes",
+    "tourReviewStep2Desc": "Abra Gestionar datos para explorar y filtrar los envíos. Las aprobaciones y los borradores también están en Datos.",
+    "tourReviewStep2Title": "Revisar los envíos",
+    "tourSetupFinalBtn": "Crear su primer formulario",
+    "tourSetupStep1Desc": "Añada secciones y preguntas, y luego publique, o evite la página en blanco partiendo de una plantilla lista para usar de la Biblioteca de formularios. Su equipo de campo podrá rellenarlo en cuanto se publique.",
+    "tourSetupStep1Title": "Crear un formulario",
+    "tourSetupStep2Desc": "Su equipo de campo recopila los datos sin conexión en la aplicación móvil. Comparta el enlace de descarga con ellos.",
+    "tourSetupStep2Title": "Entregar la aplicación a su equipo de campo",
+    "tourSetupStep3Desc": "Los nuevos envíos del campo aparecen aquí. Filtre por formulario o añada uno usted mismo desde la web.",
+    "tourSetupStep3Title": "Siga la llegada de los envíos",
+    "tourStepOf": "PASO {current} DE {total}",
+    "tourUserManagement": "Magni provident aliquam harum cupiditate iste",
+    "tourWelcomeSubtitle": "¿Qué le gustaría hacer primero? Le guiamos en menos de un minuto.",
+    "tourWelcomeTitle": "Bienvenido a Akvo MIS",
+    "upcomingEventText": "Próximos eventos",
+    "updateDataButton": "Actualizar datos",
+    "updateDataError": "No se pudieron actualizar los datos",
+    "updateExisting": "Actualizar datos existentes",
+    "updateOrganisation": "Actualizar organización",
+    "updateUser": "Actualizar usuario",
+    "uploadAnotherFileLabel": "Subir otro archivo",
+    "uploadAttachmentsComment": "Añada un comentario para el adjunto",
+    "uploadAttachmentsError": "No se pudieron subir los adjuntos",
+    "uploadAttachmentsRequired": "Suba al menos un archivo adjunto",
+    "uploadAttachmentsSuccess": "Adjuntos subidos correctamente",
+    "uploadDataLabel": "Suba sus datos",
+    "uploadMasterDataLabel": "Suba sus datos",
+    "uploadNotReadyHint": "Defina primero sus niveles administrativos: dé nombre al nivel superior y añada al menos un nivel por debajo. Puede hacerlo en Datos maestros → Niveles.",
+    "uploadTab1": "Resumen de datos",
+    "uploadTab2": "Datos sin procesar",
+    "uploadText": "Subir",
+    "uploadThankyouText": <React.Fragment>
+      Gracias por subir el archivo de datos. Tenga en cuenta que los datos serán validados por el sistema . Se le notificará por correo electrónico si los datos no superan las pruebas de validación . También se adjuntarán los errores de validación que deben corregirse. Si no hay errores de validación , los datos se enviarán para su verificación, aprobación y certificación
+    </React.Fragment>,
+    "uploading": "Subiendo..",
+    "uploadsTab1": "Envío pendiente",
+    "uploadsTab2": "Aprobación pendiente",
+    "uploadsTab3": "Aprobado",
+    "userAssociations": "Este usuario tiene las siguientes asociaciones de datos",
+    "userCol": "Usuario",
+    "userDeleteFail": "No se pudo eliminar el usuario",
+    "userEmail": "Correo electrónico",
+    "userFirstName": "Nombre",
+    "userLastName": "Apellido",
+    "userOrganisation": "Organización",
+    "userPhoneNumber": "Número de teléfono",
+    "usernameRequired": "Introduzca su usuario",
+    "usersLoadFail": "No se pudieron cargar los usuarios",
+    "valEmail": "Introduzca una dirección de correo electrónico válida",
+    "valFirstName": "El nombre es obligatorio",
+    "valLastName": "El apellido es obligatorio",
+    "valOrgAttributes": "Seleccione atributos",
+    "valOrgName": "El nombre de la organización es obligatorio",
+    "valOrganization": "Seleccione una organización",
+    "valPhone": "El número de teléfono es obligatorio",
+    "valRole": "Seleccione un rol",
+    "viewAttachment": "Ver adjunto",
+    "viewDetails": "Ver detalles",
+    "viewFullContext": "Ver contexto completo",
+    "viewText": "Ver",
+    "webformText": "Formulario web",
+    "welcomeShort": <React.Fragment>
+      Bienvenido a la plataforma 
+      <b>
+        Test App
+      </b>
+    </React.Fragment>,
+    "yesText": "Sí",
+  },
+  "fr": Object {
+    "AdministrationDataDownload": "Téléchargement des données d'administration",
+    "AdministrationDataUpload": "Importation des données d'administration",
+    "AdministrationDownloadPageHint": "Décochez Pré-rempli si vous souhaitez uniquement un modèle d'importation",
+    "EntitiesDataDownload": "Téléchargement des données d'entités",
+    "EntitiesDataUpload": "Importation des données d'entités",
+    "EntitiesDownloadPageHint": "Décochez Prérempli si vous ne voulez qu'un modèle d'importation",
+    "actionColumn": "Action",
+    "activateCheckInboxDesc": "Si ce compte doit encore être activé, un nouveau lien est en route.",
+    "activateCheckInboxTitle": "Consultez votre boîte de réception",
+    "activateContinueSetup": "Continuer la configuration →",
+    "activateEmailPlaceholder": "vous@organisation.org",
+    "activateErrorDesc": "Un problème est survenu lors de la connexion au serveur. Votre lien est probablement valide ; réessayez dans un instant.",
+    "activateErrorTitle": "Nous n'avons pas pu vérifier votre lien",
+    "activateExpiredDesc": "Les liens d'activation sont valables 7 jours. Demandez-en un nouveau et nous vous l'enverrons par e-mail immédiatement.",
+    "activateExpiredTitle": "Ce lien a expiré",
+    "activateTryAgain": "Réessayer",
+    "activateVerifiedDesc": "Votre compte est actif. Il reste une étape rapide : parlez-nous de votre projet.",
+    "activateVerifiedTitle": "E-mail vérifié",
+    "activateVerifying": "Vérification de votre e-mail…",
+    "addAdmDesc": <React.Fragment>
+      Cette page vous permet d'ajouter une administration à la plateforme
+       
+      Test App
+      .
+    </React.Fragment>,
+    "addAdministration": "Ajouter une administration",
+    "addAttachment": "Ajouter une pièce jointe",
+    "addAttachmentDesc": "Ajouter une nouvelle pièce jointe au lot",
+    "addAttributeDesc": <React.Fragment>
+      Cette page vous permet d'ajouter un attribut à la plateforme
+       
+      Test App
+      .
+    </React.Fragment>,
+    "addAttributes": "Ajouter un attribut",
+    "addEntity": "Ajouter",
+    "addEntityData": "Ajouter",
+    "addEntityDesc": <React.Fragment>
+      Cette page vous permet d'ajouter une entité à la plateforme 
+      Test App
+      .
+    </React.Fragment>,
+    "addEntityTypeDesc": <React.Fragment>
+      Cette page vous permet d'ajouter un type d'entité à la plateforme 
+      Test App
+      .
+    </React.Fragment>,
+    "addLevel": "Ajouter un niveau",
+    "addNewButton": "Ajouter",
+    "addNewUser": "Ajouter un nouvel utilisateur",
+    "addOptionButton": "Ajouter une option",
+    "addOrgDesc": <React.Fragment>
+      Cette page vous permet d'ajouter des organisations à la plateforme
+       
+      Test App
+      .
+    </React.Fragment>,
+    "addOrganisation": "Ajouter une organisation",
+    "addRole": "Ajouter un rôle",
+    "addRoleDescription": [Function],
+    "addUser": "Ajouter un utilisateur",
+    "addUserDescription": <React.Fragment>
+      Cette page vous permet d'ajouter des utilisateurs à la plateforme
+       
+      Test App
+      . Vous pourrez uniquement ajouter des utilisateurs pour les régions relevant de votre juridiction.
+      <br />
+      Une fois l'utilisateur ajouté, celui-ci sera notifié par e-mail afin de définir son mot de passe et d'accéder à la plateforme
+    </React.Fragment>,
+    "admConfirmDelete": "Êtes-vous sûr de vouloir supprimer cette administration ?",
+    "admErrDeleteTitle": "Impossible de supprimer l'administration",
+    "admErrSaveTitle": "Impossible d'enregistrer l'administration",
+    "admFieldRequired": "L'administration est obligatoire",
+    "admLevel": "Niveau d'administration",
+    "admName": "Nom de l'administration",
+    "admNameRequired": "Le nom de l'administration est obligatoire",
+    "admPanelText": <React.Fragment>
+      C'est ici que vous :
+      <ul>
+        <li>
+          Ajouter une nouvelle administration
+        </li>
+        <li>
+          Modifier une administration existante
+        </li>
+        <li>
+          Supprimer une administration existante
+        </li>
+        <li>
+          Importer en masse une administration
+        </li>
+      </ul>
+    </React.Fragment>,
+    "admParent": "Administration parente",
+    "admSuccessAdded": "Administration ajoutée",
+    "admSuccessDeleted": "Administration supprimée",
+    "admSuccessUpdated": "Administration mise à jour",
+    "admTabTitle": "Liste administrative",
     "administrationField": "Administration",
     "administrationLabel": "Administration",
-    "administrationUploadFailedHint": "Nothing was changed. We have emailed you a file listing the rows that need fixing.",
-    "administrationUploadFailedTitle": "Your file could not be imported",
-    "administrationUploadSuccessTitle": "Administration Data has been Successfully Uploaded",
-    "allData": "All Data",
-    "allEntities": "All Entities",
-    "approvalsTab1": "My Pending",
-    "approvalsTab2": "Subordinates Approvals",
-    "approvalsTab3": "Approved",
-    "approvalsTitle": "Approvals",
-    "approveNoteRequired": "Please provide notes or feedback to decline or approved the submission",
+    "administrationUploadFailedHint": "Rien n'a été modifié. Nous vous avons envoyé par e-mail un fichier répertoriant les lignes à corriger.",
+    "administrationUploadFailedTitle": "Votre fichier n'a pas pu être importé",
+    "administrationUploadSuccessTitle": "Les données d'administration ont été importées avec succès",
+    "allData": "Toutes les données",
+    "allEntities": "Toutes les entités",
+    "approvalsTab1": "Mes approbations en attente",
+    "approvalsTab2": "Approbations des subordonnés",
+    "approvalsTab3": "Approuvé",
+    "approveNoteRequired": "Veuillez fournir des notes ou des commentaires pour refuser ou approuver la soumission",
     "approversDescription": <React.Fragment>
-      This is where you can see the approvers for each submitted form across different administrative areas:
+      C'est ici que vous pouvez voir les approbateurs de chaque formulaire soumis dans différentes zones administratives :
     </React.Fragment>,
-    "attrConfirmDelete": "Are you sure you want to delete this attribute?",
-    "attrErrDeleteTitle": "Unable to delete the attribute",
-    "attrName": "Attribute name",
-    "attrNameRequired": "Attribute name is required",
-    "attrSuccessAdded": "Attribute added",
-    "attrSuccessDeleted": "Attribute deleted",
-    "attrSuccessUpdated": "Attribute updated",
-    "attrTabTitle": "Attributes",
-    "attrType": "Attribute type",
-    "attrTypeRequired": "Attribute type is required",
+    "attrConfirmDelete": "Êtes-vous sûr de vouloir supprimer cet attribut ?",
+    "attrErrDeleteTitle": "Impossible de supprimer l'attribut",
+    "attrName": "Nom de l'attribut",
+    "attrNameRequired": "Le nom de l'attribut est obligatoire",
+    "attrSuccessAdded": "Attribut ajouté",
+    "attrSuccessDeleted": "Attribut supprimé",
+    "attrSuccessUpdated": "Attribut mis à jour",
+    "attrTabTitle": "Attributs",
+    "attrType": "Type d'attribut",
+    "attrTypeRequired": "Le type d'attribut est obligatoire",
     "backBtn": "Retour",
     "backHome": "Retour à la page d'accueil",
-    "backManageData": "Back to Manage Data",
-    "backToAdmLabel": "Back to Administrative List",
-    "backToCenterLabel": "Back to Control Center",
-    "batchAttachments": "Attachments",
-    "batchDatasets": "Batch Datasets",
-    "batchFileTypeError": "Invalid attachment file type. Please upload a valid file.",
-    "batchFilesHint": "Please upload a file with one of the following extensions: .xlsx, .xls, .csv, .ods, .pdf, .docx, .doc",
-    "batchHintDesc": "The operation of merging datasets cannot be undone, and will Create a new batch that will require approval from you admin",
-    "batchHintText": "You are about to create a Batch CSV File",
-    "batchName": "Batch Name",
-    "batchNoApproverMessage": "Can't create batch data, because there's no approver yet.",
-    "batchSelectedDatasets": "Batch Selected Datasets",
+    "backManageData": "Retour à Gérer les données",
+    "backToAdmLabel": "Retour à la liste administrative",
+    "backToCenterLabel": "Retour au centre de contrôle",
+    "backToLogin": "Retour à la connexion",
+    "batchAttachments": "Pièces jointes",
+    "batchFileTypeError": "Type de fichier de pièce jointe non valide. Veuillez importer un fichier valide.",
+    "batchFilesHint": "Veuillez importer un fichier avec l'une des extensions suivantes : .xlsx, .xls, .csv, .ods, .pdf, .docx, .doc",
+    "batchHintDesc": "L'opération de fusion des jeux de données ne peut pas être annulée, et créera un nouveau lot qui nécessitera l'approbation de votre administrateur",
+    "batchHintText": "Vous êtes sur le point de créer un fichier CSV de lot",
+    "batchName": "Nom du lot",
+    "batchNoApproverMessage": "Impossible de créer des données de lot, car il n'y a pas encore d'approbateur.",
+    "batchSelectedDatasets": "Jeux de données sélectionnés du lot",
     "brandingCurrentLogo": "Logo actuel",
     "brandingLogoHint": "Formats supportés : PNG, JPG, JPEG, SVG jusqu'à 2 Mo.",
     "brandingLogoLabel": "Logo de l'espace de travail",
@@ -1512,26 +2851,100 @@ Object {
     "brandingUploadBtn": "Téléverser le logo",
     "brandingUploadError": "Impossible de mettre à jour l'image de marque",
     "brandingUploadSuccess": "Image de marque mise à jour avec succès",
-    "browseComputer": "Browse your computer",
-    "bulkUpload": "Bulk Upload",
-    "bulkUploadAttr": "Attributes",
-    "bulkUploadAttrPlaceholder": "Select Attributes...",
-    "bulkUploadButton": "Bulk Upload",
-    "bulkUploadCheckboxPrefilled": "Prefilled administrative list",
-    "bulkUploadNoApproverMessage": "Can't upload data, because there's no approver yet.",
-    "cancelButton": "Cancel",
-    "ccDescriptionPanel": "Instant access to all the administration pages and overview panels for data approvals.",
-    "channelCol": "Channel",
-    "checkboxSelectAll": "Select all {{name}}",
+    "browseComputer": "Parcourir votre ordinateur",
+    "bulkUpload": "Importation en masse",
+    "bulkUploadAttr": "Attributs",
+    "bulkUploadAttrPlaceholder": "Sélectionner des attributs...",
+    "bulkUploadButton": "Importation en masse",
+    "bulkUploadCheckboxPrefilled": "Liste administrative pré-remplie",
+    "bulkUploadNoApproverMessage": "Impossible de téléverser des données, car il n'y a pas encore d'approbateur.",
+    "cancelButton": "Annuler",
+    "ccDescriptionPanel": "Accès instantané à toutes les pages d'administration et aux panneaux de synthèse pour l'approbation des données.",
+    "channelCol": "Canal",
+    "checkboxSelectAll": "Tout sélectionner {{name}}",
     "chooseTemplate": "Choisir un modèle",
+    "closeButton": "Fermer",
     "codeField": "Code",
-    "codeFieldRequired": "Code is required",
+    "codeFieldRequired": "Le code est obligatoire",
     "codeLabel": "Code",
-    "confirmDeleteEntity": "Are you sure you want to delete this entity?",
-    "confirmDeleteEntityData": "Are you sure you want to delete this data?",
+    "configureAtTop": "au sommet. Ensuite, ajoutez les niveaux en dessous.",
+    "configureContinue": "Continuer vers la gestion des niveaux →",
+    "configureDoneTitle": "Tout est prêt",
+    "configureFinish": "Terminer la configuration",
+    "configureFirstName": "Prénom",
+    "configureFirstNamePlaceholder": "Jeanne",
+    "configureLastName": "Nom",
+    "configureLastNamePlaceholder": "Dupont",
+    "configureLevel0Tag": "Niveau 0",
+    "configureLogoExtra": "Facultatif. PNG, JPG ou JPEG jusqu'à 2 Mo. Affiché dans la navigation supérieure et la page de connexion.",
+    "configureLogoLabel": "Logo de l'espace de travail",
+    "configureLogoUploadError": "Impossible de téléverser le logo",
+    "configurePreview": "Aperçu : voici la hiérarchie que vous créez :",
+    "configureReadyWith": "Votre espace de travail est prêt avec",
+    "configureRequired": "Obligatoire",
+    "configureSaveError": "Impossible d'enregistrer votre espace de travail",
+    "configureStep1": "Inscription",
+    "configureStep2": "Vérifier l'e-mail",
+    "configureStep3": "Configurer le projet",
+    "configureStep4": "Tableau de bord",
+    "configureSubtitle": "Ceci nomme votre hiérarchie administrative. Vous pourrez ajouter des niveaux plus profonds ensuite ; ces deux noms de niveau supérieur se définissent une seule fois ici.",
+    "configureTitle": "Configurez votre projet",
+    "configureTopLevelExtra": "L'étiquette de votre niveau administratif le plus élevé, p. ex. Pays, National ou Région. Pas un lieu, mais un niveau.",
+    "configureTopLevelName": "Nom du niveau supérieur",
+    "configureTopLevelPlaceholder": "Pays",
+    "configureTopLevelRequired": "Donnez un nom à votre niveau supérieur.",
+    "configureTopUnitExtra": "Votre unique unité supérieure à ce niveau, p. ex. Kenya. Tout ce que vous importerez ensuite se place sous elle.",
+    "configureTopUnitHint": "└ unité supérieure",
+    "configureTopUnitName": "Nom de l'unité supérieure",
+    "configureTopUnitPlaceholder": "Kenya",
+    "configureTopUnitRequired": "Donnez un nom à votre unité supérieure.",
+    "configureUploadLogo": "Téléverser le logo",
+    "configureWelcome": "Bienvenue",
+    "confirmDeleteEntity": "Êtes-vous sûr de vouloir supprimer cette entité ?",
+    "confirmDeleteEntityData": "Êtes-vous sûr de vouloir supprimer ces données ?",
     "consoleDeactivate": "Désactiver",
     "consoleDelete": "Supprimer",
+    "consoleFLActionsCol": "Actions",
+    "consoleFLAddMonitoring": "Ajouter un formulaire de suivi",
+    "consoleFLBack": "Retour à la bibliothèque",
+    "consoleFLCancel": "Annuler",
+    "consoleFLCategoriesCol": "Catégories",
+    "consoleFLCategoriesLabel": "Catégories",
+    "consoleFLCategoriesPlaceholder": "Attribuez une ou plusieurs catégories",
+    "consoleFLCategoryAdd": "Ajouter",
+    "consoleFLCategoryDeleteConfirm": "Supprimer cette catégorie ?",
+    "consoleFLCategoryEmpty": "Aucune catégorie pour l'instant",
+    "consoleFLCategoryError": "L'opération sur la catégorie a échoué",
+    "consoleFLCategoryPlaceholder": "Nom de la nouvelle catégorie",
+    "consoleFLDeleteButton": "Supprimer",
+    "consoleFLDeleteConfirm": "Retirer ce modèle de la bibliothèque ? Les copies existantes ne sont pas affectées.",
+    "consoleFLDeleteError": "Échec du retrait du modèle",
+    "consoleFLDeleteSuccess": "Modèle retiré de la bibliothèque",
+    "consoleFLDescription": "Gérez le catalogue partagé de modèles de formulaires réutilisables.",
+    "consoleFLEditButton": "Modifier dans le générateur",
+    "consoleFLEmpty": "Aucun modèle pour l'instant",
+    "consoleFLFromScratch": "À partir de zéro (Générateur de formulaires)",
+    "consoleFLFromWorkspace": "Sélectionner depuis un espace existant",
+    "consoleFLManageCategories": "Gérer les catégories",
+    "consoleFLMonitoringCol": "Formulaires de suivi",
+    "consoleFLNameCol": "Modèle",
+    "consoleFLNewTemplate": "Nouveau modèle",
+    "consoleFLPreviewEmpty": "Sélectionnez un formulaire source pour l'aperçu",
+    "consoleFLPreviewHeading": "Aperçu du formulaire",
+    "consoleFLPromoteButton": "Promouvoir depuis un espace",
+    "consoleFLPromoteError": "Échec de la promotion du formulaire",
+    "consoleFLPromoteSuccess": "Formulaire promu vers la bibliothèque",
+    "consoleFLPromoteTitle": "Promouvoir un formulaire vers la bibliothèque",
+    "consoleFLPromotedFrom": "Promu depuis",
+    "consoleFLSourceLabel": "Formulaire source",
+    "consoleFLSourcePlaceholder": "Sélectionnez un formulaire d'enregistrement publié",
+    "consoleFLSourceRequired": "Veuillez sélectionner un formulaire source",
+    "consoleFLUsedCol": "Utilisé",
+    "consoleFLWorkspaceLabel": "Espace de travail",
+    "consoleFLWorkspacePlaceholder": "Sélectionnez un espace de travail",
+    "consoleFLWorkspaceRequired": "Veuillez sélectionner un espace de travail",
     "consoleFeatures": "Fonctionnalités",
+    "consoleFormLibrary": "Bibliothèque de formulaires",
     "consoleInspect": "Inspecter",
     "consoleInspectFailed": "Impossible d'ouvrir cet espace",
     "consoleInviteOperator": "Inviter un opérateur",
@@ -1561,9 +2974,13 @@ Object {
     "consoleTotalsRow": "Total",
     "consoleUploadLogo": "Téléverser le logo",
     "consoleUsers": "Utilisateurs",
-    "contactAdmin": "Please contact the administrator",
+    "contactAdmin": "Veuillez contacter l'administrateur",
     "controlCenter": "Centre de contrôle",
-    "createNewBatch": "Create a new batch",
+    "couldNotSendEmail": "Impossible d'envoyer l'e-mail",
+    "createAccount": "Créer un compte",
+    "createDraftMonitoring": "Créer un brouillon de données de suivi",
+    "createNewBatch": "Créer un nouveau lot",
+    "dashboardAiApplyWarning": "Tableau de bord créé, mais certains widgets d'IA n'ont pas pu être appliqués.",
     "dashboardBackToEditing": "Retour à l'édition",
     "dashboardCreateBtn": "Créer le tableau de bord",
     "dashboardCreateHint": "Donnez-lui un nom, puis choisissez le formulaire d'enregistrement dont ce tableau de bord affichera les données.",
@@ -1658,161 +3075,221 @@ Object {
     "dashboardWidgetRetry": "Réessayer",
     "dashboards": "Tableaux de bord",
     "dataAdministrationDownloadText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Download administration data
+          Télécharger les données d'administration
         </li>
       </ul>
     </React.Fragment>,
     "dataAdministrationUploadText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Bulk upload administration data
+          Importer en masse les données d'administration
         </li>
       </ul>
     </React.Fragment>,
-    "dataDownloadButton": "Download Data",
-    "dataDownloadText": <React.Fragment>
-      This is where you :
-      <ul>
-        <li>
-          Access downloaded data
-        </li>
-      </ul>
-    </React.Fragment>,
-    "dataDownloadTitle": "Data Download",
     "dataEntitiesDownloadText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Download entities data
+          Télécharger les données des entités
         </li>
       </ul>
     </React.Fragment>,
     "dataEntitiesUploadText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Bulk upload entities data
+          Importer en masse les données des entités
         </li>
       </ul>
     </React.Fragment>,
-    "dataExportFail": "Data download failed",
-    "dataExportSuccess": "Data downloaded successfully",
-    "dataUploadButton": "Data Upload",
+    "dataExportFail": "Le téléchargement des données a échoué",
+    "dataExportSuccess": "Données téléchargées avec succès",
+    "dataOnboardingAddNew": "Ajouter comme nouvelle unité",
+    "dataOnboardingApply": "Appliquer",
+    "dataOnboardingApplyFailed": "La proposition n'a pas pu être appliquée.",
+    "dataOnboardingApplying": "Application de la proposition : ajout des unités, création des formulaires et chargement des enregistrements.",
+    "dataOnboardingBlocked": "Bloqué",
+    "dataOnboardingBlockedNote": "Les formulaires bloqués ne sont pas appliqués. L'application charge les autres formulaires.",
+    "dataOnboardingChooseParent": "Choisir le parent",
+    "dataOnboardingColumn": "Colonne",
+    "dataOnboardingCreated": "Commencée",
+    "dataOnboardingCreatedBy": "Commencée par",
+    "dataOnboardingDownloadFailed": "Le rapport n'a pas pu être téléchargé.",
+    "dataOnboardingDownloadReport": "Télécharger le rapport",
+    "dataOnboardingDrafting": "Rédaction de la proposition. Un gros fichier peut prendre quelques minutes.",
+    "dataOnboardingDropColumn": "Retirer",
+    "dataOnboardingDropForm": "Retirer ce formulaire",
+    "dataOnboardingDropped": "Colonnes non chargées",
+    "dataOnboardingDroppedAnswer": "Réponse abandonnée",
+    "dataOnboardingFailed": "La proposition n'a pas pu être rédigée.",
+    "dataOnboardingFile": "Fichier",
+    "dataOnboardingFirstLevel": "Niveau de la première colonne",
+    "dataOnboardingForms": "Formulaires",
+    "dataOnboardingHistory": "Intégrations de données",
+    "dataOnboardingIssues": "Lignes ignorées et réponses abandonnées",
+    "dataOnboardingKeepColumn": "Garder",
+    "dataOnboardingKeyColumns": "Colonnes clés",
+    "dataOnboardingLoaded": "Enregistrements chargés",
+    "dataOnboardingLocationColumn": "Colonne de localisation",
+    "dataOnboardingLocationColumns": "Colonnes de localisation, niveau supérieur d'abord",
+    "dataOnboardingMapping": "Colonne vers question",
+    "dataOnboardingName": "Nom",
+    "dataOnboardingNoIssues": "Toutes les lignes ont été chargées.",
+    "dataOnboardingNoUnits": "Aucune unité à ajouter",
+    "dataOnboardingNotApplied": "Formulaires non appliqués",
+    "dataOnboardingNotes": "Notes",
+    "dataOnboardingOptions": "Options",
+    "dataOnboardingParentForm": "Formulaire d'enregistrement",
+    "dataOnboardingQuestion": "Question",
+    "dataOnboardingRaw": "Valeur dans le fichier",
+    "dataOnboardingReason": "Raison",
+    "dataOnboardingReport": "Rapport d'intégration",
+    "dataOnboardingRequired": "Obligatoire",
+    "dataOnboardingRevise": "Réviser",
+    "dataOnboardingReviseHint": "Décrivez toute autre modification, par exemple : traiter Statut comme une question oui/non.",
+    "dataOnboardingRevisionFailed": "La proposition n'a pas pu être révisée.",
+    "dataOnboardingRow": "Ligne",
+    "dataOnboardingSheet": "Feuille",
+    "dataOnboardingSkipped": "Ligne ignorée",
+    "dataOnboardingStatus": "Statut",
+    "dataOnboardingType": "Type",
+    "dataOnboardingUnits": "Unités administratives à ajouter",
+    "dataOnboardingUnitsOutside": "Ces unités sont hors de votre zone administrative. L'application ne les ajoutera pas et ne chargera pas leurs lignes :",
+    "dataOnboardingUpdated": "Dernière mise à jour",
+    "dataOnboardingUploadHint": "Cliquez ou déposez ici un fichier CSV ou xlsx (10 Mo et 50 000 lignes au plus)",
+    "dataOnboardingUseExisting": "Utiliser l'unité existante",
+    "dataOnboardingValueMaps": "Correspondances de valeurs",
     "dataUploadText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Download upload template
+          Télécharger le modèle d'importation
         </li>
         <li>
-          Bulk upload new data
+          Importer en masse de nouvelles données
         </li>
         <li>
-          Bulk update existing data
+          Mettre à jour en masse les données existantes
         </li>
       </ul>
     </React.Fragment>,
-    "dataUploadTitle": "Data Upload",
-    "datapointCol": "Datapoint",
+    "dataUploadTitle": "Importation de données",
+    "datapointCol": "Point de données",
     "dateFromPlaceholder": "De",
     "dateToPlaceholder": "À",
-    "deleteAttachmentDesc": "Are you sure you want to delete this attachment?",
-    "deleteAttachmentError": "Unable to delete attachment",
-    "deleteAttachmentSuccess": "Attachment deleted successfully",
-    "deleteAttachmentTitle": "Delete Attachment",
+    "deleteAttachmentDesc": "Êtes-vous sûr de vouloir supprimer cette pièce jointe ?",
+    "deleteAttachmentError": "Impossible de supprimer la pièce jointe",
+    "deleteAttachmentSuccess": "Pièce jointe supprimée avec succès",
+    "deleteAttachmentTitle": "Supprimer la pièce jointe",
+    "deleteDraftContent": "Êtes-vous sûr de vouloir supprimer {{draftName}} ?",
+    "deleteDraftError": "Impossible de supprimer le brouillon",
+    "deleteDraftSuccess": "Brouillon supprimé avec succès",
+    "deleteDraftTitle": "Supprimer le brouillon",
     "deleteOrganisationDesc": [Function],
-    "deleteOrganisationTitle": "You are about to delete the organization",
-    "deleteText": "Delete",
+    "deleteOrganisationTitle": "Vous êtes sur le point de supprimer l'organisation",
+    "deleteText": "Supprimer",
     "deleteUserDesc": <React.Fragment>
-      The User will no longer be able to access the 
+      L'utilisateur ne pourra plus accéder à la plateforme 
       Test App
-       platform as an Enumrator/Admin etc
+       en tant qu'enquêteur/administrateur, etc.
     </React.Fragment>,
-    "deleteUserHint": "Deleting this user will not delete the data association(s)",
-    "deleteUserTitle": "You are about to delete the user",
-    "download": "Download",
+    "deleteUserHint": "La suppression de cet utilisateur ne supprimera pas la ou les associations de données",
+    "deleteUserTitle": "Vous êtes sur le point de supprimer l'utilisateur",
+    "download": "Télécharger",
     "downloadAppText": <React.Fragment>
       Download 
       Test App
        App
     </React.Fragment>,
-    "downloadAppsLinkText": "or download using the links below:",
+    "downloadAppsLinkText": "ou téléchargez à l'aide des liens ci-dessous :",
     "downloadAppsQRText": <React.Fragment>
-      Download the 
+      Téléchargez l'
       <b>
+        application 
         Test App
-         App
       </b>
-       using the QR codes below
+       à l'aide des codes QR ci-dessous
     </React.Fragment>,
-    "downloadData": "Download Data",
-    "downloadHere": "download here",
-    "downloadReport": "Download Report",
-    "downloadReportError": "Unable to download report",
-    "downloadReportSuccess": "Report downloaded successfully",
-    "downloadTitle": "Downloads",
+    "downloadData": "Télécharger les données",
+    "downloadHere": "télécharger ici",
+    "downloadReport": "Télécharger le rapport",
+    "downloadReportError": "Impossible de télécharger le rapport",
+    "downloadReportSuccess": "Rapport téléchargé avec succès",
+    "downloadTitle": "Téléchargements",
     "draft": "Brouillon",
+    "draftCreatedByCol": "Créé par",
     "draftFormDescription": <p>
-      Please fill up the webform below with relevant responses. You can save your responses and continue later or if you have completed the form then you can submit it.
+      Veuillez remplir le formulaire web ci-dessous avec les réponses pertinentes. Vous pouvez enregistrer vos réponses et continuer plus tard, ou si vous avez terminé le formulaire, vous pouvez le soumettre.
     </p>,
-    "dropFile": "Drop your file here",
+    "draftFormPublishConfirmContent": "Êtes-vous sûr de vouloir publier ce brouillon ? Cette action est irréversible.",
+    "draftFormPublishConfirmTitle": "Publier le brouillon",
+    "draftFormPublishError": "Impossible de publier le brouillon",
+    "draftFormPublishSuccess": "Brouillon publié avec succès",
+    "draftFormSaveError": "Impossible d'enregistrer le brouillon",
+    "draftFormSaveSuccess": "Brouillon enregistré avec succès",
+    "draftUpdatedByPrefix": "par",
+    "dropFile": "Déposez votre fichier ici",
     "editAdmDesc": <React.Fragment>
-      This page allows you to edit administration to the 
+      Cette page vous permet de modifier l'administration de la plateforme
+       
       Test App
-       platform.
+      .
     </React.Fragment>,
-    "editAdministration": "Edit Administration",
-    "editAttachment": "Edit Attachment",
-    "editAttachmentDesc": "Replace the existing attachment with a new one",
+    "editAdministration": "Modifier l'administration",
+    "editAndPublishDraft": "Modifier et publier le brouillon",
+    "editAttachment": "Modifier la pièce jointe",
+    "editAttachmentDesc": "Remplacer la pièce jointe existante par une nouvelle",
     "editAttributeDesc": <React.Fragment>
-      This page allows you to edit attribute to the 
+      Cette page vous permet de modifier l'attribut de la plateforme
+       
       Test App
-       platform.
+      .
     </React.Fragment>,
-    "editAttributes": "Edit Attribute",
-    "editButton": "Edit",
-    "editEntity": "Edit Entity",
-    "editEntityData": "Edit data",
+    "editAttributes": "Modifier l'attribut",
+    "editButton": "Modifier",
+    "editEntity": "Modifier l'entité",
+    "editEntityData": "Modifier les données",
     "editEntityDesc": <React.Fragment>
-      This page allows you to edit entity to the 
+      Cette page vous permet de modifier l'entité de la plateforme
+       
       Test App
-       platform.
+      .
     </React.Fragment>,
     "editEntityTypeDesc": <React.Fragment>
-      This page allows you to edit entity type to the 
+      Cette page vous permet de modifier le type d'entité de la plateforme
+       
       Test App
-       platform.
+      .
     </React.Fragment>,
     "editOrgDesc": <React.Fragment>
-      This page allows you to edit organisations to the 
+      Cette page vous permet de modifier les organisations de la plateforme
+       
       Test App
-       platform.
+      .
     </React.Fragment>,
     "editOrganisation": "Modifier l'organisation",
-    "editProfile": "Edit Profile",
-    "editRole": "Edit Role",
-    "editText": "Edit",
+    "editProfile": "Modifier le profil",
+    "editRole": "Modifier le rôle",
+    "editText": "Modifier",
     "editUser": "Modifier l'utilisateur",
-    "endOfListLabel": "End of List",
-    "entitiesUploadSuccessTitle": "Entities Data has been Successfully Uploaded",
-    "entityDataTitle": "Entity Data",
-    "entityIsRequired": "Entity is required",
-    "entityLabel": "Entity",
-    "entityTabTitle": "Entities",
-    "entityText": "Entity",
-    "entityType": "Entity Type",
-    "entityTypes": "Entity Types",
-    "errAddOrg": "Organization could not be added",
-    "errDeleteCascadeText1": "It is associated with other resources or has cascade restrictions.",
-    "errDeleteCascadeText2": "Please review and resolve dependencies before attempting to delete.",
-    "errDeleteEntityDataTitle": "Unable to delete the data",
-    "errDeleteEntityTitle": "Unable to delete the entity",
-    "errSaveEntityDataTitle": "Unable to save the data",
-    "errUpdateOrg": "Organization could not be updated",
+    "endOfListLabel": "Fin de la liste",
+    "entitiesUploadSuccessTitle": "Les données d'entités ont été importées avec succès",
+    "entityIsRequired": "L'entité est obligatoire",
+    "entityTabTitle": "Entités",
+    "entityText": "Entité",
+    "entityType": "Type d'entité",
+    "entityTypes": "Types d'entité",
+    "errAddOrg": "Impossible d'ajouter l'organisation",
+    "errDeleteCascadeText1": "Il est associé à d'autres ressources ou comporte des restrictions en cascade.",
+    "errDeleteCascadeText2": "Veuillez examiner et résoudre les dépendances avant de tenter la suppression.",
+    "errDeleteEntityDataTitle": "Impossible de supprimer les données",
+    "errDeleteEntityTitle": "Impossible de supprimer l'entité",
+    "errSaveEntityDataTitle": "Impossible d'enregistrer les données",
+    "errUpdateOrg": "Impossible de mettre à jour l'organisation",
     "error": "Erreur",
     "errorAuth": "Vous n'êtes pas autorisé à accéder à cette page",
     "errorDataLoad": "Impossible de charger les données",
@@ -1825,44 +3302,41 @@ Object {
     "errorPageNA": "Oups, cette page n'est pas disponible",
     "errorSomething": "Une erreur s'est produite",
     "errorURL": <React.Fragment>
-      Please check the URL again or let us take you back to the 
+      Veuillez vérifier à nouveau l'URL ou laissez-nous vous ramener à la page d'accueil de 
       Test App
        
-      homepage
     </React.Fragment>,
     "errorUnknown": "Une erreur inconnue s'est produite",
     "errorUserLoad": "Échec du chargement des données utilisateur",
     "errorVerifyCreds": "Veuillez vérifier vos identifiants pour la ressource demandée",
     "eventTitle": "Actualités et événements",
-    "existingApproverDescription": "Please update the setup in manage validation tree or remove these forms for the current user",
-    "existingApproverTitle": "There are existing approvers for:",
-    "export2ExcelError": "Unable to export data to Excel",
-    "export2ExcelSuccess": "Data exported to Excel successfully",
-    "exportButton": "Export",
-    "exportEntityError": "Unable to export entities",
+    "existingApproverDescription": "Veuillez mettre à jour la configuration dans gérer l'arbre de validation ou retirer ces formulaires pour l'utilisateur actuel",
+    "existingApproverTitle": "Il existe des approbateurs pour :",
+    "export2ExcelError": "Impossible d'exporter les données vers Excel",
+    "export2ExcelSuccess": "Données exportées vers Excel avec succès",
+    "exportEntityError": "Impossible d'exporter les entités",
     "exportPanelText": <React.Fragment>
       <p>
-        This page shows your list of data export requests.
+        Cette page affiche votre liste de demandes d'exportation de données.
         <br />
-        For exports which are already generated, please click on the Download button to download the data.
+        Pour les exportations déjà générées, veuillez cliquer sur le bouton Télécharger pour télécharger les données.
       </p>
     </React.Fragment>,
-    "failed": "Failed",
-    "fetchingForm": "Fetching form..",
-    "fileTypeError": "Invalid file type. Please upload a valid file.",
-    "fileUploadFail": "Could not upload file",
-    "fileUploadSuccess": "File uploaded successfully",
-    "finish": "Finish",
+    "failed": "Échec",
+    "fetchingForm": "Récupération du formulaire..",
+    "fileUploadFail": "Impossible d'importer le fichier",
+    "fileUploadSuccess": "Fichier importé avec succès",
+    "finish": "Terminer",
     "finishSubmissionBatchBtn": "Terminer et aller au lot",
     "finishSubmissionBtn": "Terminer et aller à Gérer les données",
-    "forgotDesc": "Enter the email associated with your account and we&apos;ll Send an email with instructions to reset your password",
-    "forgotTitle": "Reset your password",
-    "formAccess": "Form Access",
-    "formAssignmentError": "You don't have any form assignment, please contact the administrator",
+    "forgotDesc": "Saisissez l'e-mail associé à votre compte et nous vous enverrons un e-mail avec les instructions pour réinitialiser votre mot de passe",
+    "forgotTitle": "Réinitialiser votre mot de passe",
+    "formAccess": "Accès au formulaire",
+    "formAssignmentError": "Vous n'avez aucun formulaire attribué, veuillez contacter l'administrateur",
     "formBuilderActionsCol": "Actions",
     "formBuilderActivateButton": "Activer",
     "formBuilderActivateError": "Échec de l'activation de la version",
-    "formBuilderActivateVersionDesc": "This will replace the current active schema. The editor will reload.",
+    "formBuilderActivateVersionDesc": "Cela remplacera le schéma actif actuel. L'éditeur va se recharger.",
     "formBuilderActivateVersionTitle": [Function],
     "formBuilderActiveTag": "Actif",
     "formBuilderArchiveButton": "Archiver",
@@ -1877,23 +3351,24 @@ Object {
     "formBuilderCreateMonitoringButton": "Créer un formulaire de suivi",
     "formBuilderCreateSuccess": "Formulaire créé avec succès",
     "formBuilderCreateTitle": "Créer un formulaire",
+    "formBuilderDataOnboardingButton": "Créer depuis un tableur",
     "formBuilderDeleteButton": "Supprimer définitivement",
     "formBuilderDeleteConfirmDesc": "Cette action est irréversible.",
     "formBuilderDeleteConfirmTitle": "Supprimer définitivement ce formulaire ?",
-    "formBuilderDeleteDisabledTooltip": "Forms with submissions can't be deleted — keep it archived or restore it.",
+    "formBuilderDeleteDisabledTooltip": "Les formulaires comportant des soumissions ne peuvent pas être supprimés — gardez-le archivé ou restaurez-le.",
     "formBuilderDeleteError": "Échec de la suppression du formulaire",
     "formBuilderDeleteSuccess": "Formulaire définitivement supprimé",
     "formBuilderDescription": <React.Fragment>
-      This is where you can create and manage your Forms. You can :
+      C'est ici que vous pouvez créer et gérer vos formulaires. Vous pouvez :
       <ul>
         <li>
-          Create new forms with various question types
+          Créer de nouveaux formulaires avec divers types de questions
         </li>
         <li>
-          Modify existing forms with version control
+          Modifier les formulaires existants avec contrôle de version
         </li>
         <li>
-          Delete forms that are no longer needed
+          Supprimer les formulaires qui ne sont plus nécessaires
         </li>
       </ul>
     </React.Fragment>,
@@ -1913,13 +3388,13 @@ Object {
     "formBuilderFilterStatusAll": "Tous les statuts",
     "formBuilderFilterTypeAll": "Tous les types",
     "formBuilderImportButton": "Importer un formulaire",
-    "formBuilderImportCloseButton": "Close",
-    "formBuilderImportConfirmButton": "Import",
+    "formBuilderImportCloseButton": "Fermer",
+    "formBuilderImportConfirmButton": "Importer",
     "formBuilderImportDraggerHint": [Function],
     "formBuilderImportDraggerHintXlsform": [Function],
     "formBuilderImportDraggerText": "Cliquez ou glissez un fichier de formulaire ici",
     "formBuilderImportErrorsTitle": "Erreurs de validation",
-    "formBuilderImportFailed": "Import failed",
+    "formBuilderImportFailed": "Échec de l'importation",
     "formBuilderImportFileTooLarge": [Function],
     "formBuilderImportFormLabel": "Formulaire",
     "formBuilderImportFormTypeLabel": "Type de formulaire",
@@ -1930,22 +3405,22 @@ Object {
     "formBuilderImportFormatLabel": "Format",
     "formBuilderImportFormatXlsform": "XLSForm (.xlsx)",
     "formBuilderImportGroupsLabel": "Groupes",
-    "formBuilderImportInProgress": "Importing form…",
+    "formBuilderImportInProgress": "Importation du formulaire…",
     "formBuilderImportInvalidFile": "Seuls les fichiers .json sont pris en charge",
     "formBuilderImportInvalidFileXlsform": "Seuls les fichiers .xlsx ou .xls sont pris en charge",
     "formBuilderImportModalTitle": "Importer un formulaire",
-    "formBuilderImportModeCopy": "Import as new copy",
-    "formBuilderImportModeUpdate": "Update existing form",
-    "formBuilderImportNameMismatchWarning": "The name in the file differs from the existing form's name — make sure you are updating the right form.",
-    "formBuilderImportOpenEditor": "Open in editor",
-    "formBuilderImportParentLabel": "Parent registration form",
-    "formBuilderImportParentPlaceholder": "Select a registration form",
-    "formBuilderImportParentRequired": "A monitoring form requires a parent registration form.",
+    "formBuilderImportModeCopy": "Importer comme nouvelle copie",
+    "formBuilderImportModeUpdate": "Mettre à jour le formulaire existant",
+    "formBuilderImportNameMismatchWarning": "Le nom dans le fichier diffère du nom du formulaire existant — assurez-vous de mettre à jour le bon formulaire.",
+    "formBuilderImportOpenEditor": "Ouvrir dans l'éditeur",
+    "formBuilderImportParentLabel": "Formulaire d'enregistrement parent",
+    "formBuilderImportParentPlaceholder": "Sélectionnez un formulaire d'enregistrement",
+    "formBuilderImportParentRequired": "Un formulaire de suivi nécessite un formulaire d'enregistrement parent.",
     "formBuilderImportPreflightError": "Échec de la validation du fichier",
     "formBuilderImportQuestionsLabel": "Questions",
-    "formBuilderImportRetryButton": "Try another file",
+    "formBuilderImportRetryButton": "Essayer un autre fichier",
     "formBuilderImportSkippedCount": [Function],
-    "formBuilderImportSuccess": "Form imported",
+    "formBuilderImportSuccess": "Formulaire importé",
     "formBuilderImportUpdateDesc": [Function],
     "formBuilderImportUpdateTitle": [Function],
     "formBuilderImportWarningsTitle": "Avertissements",
@@ -1966,7 +3441,7 @@ Object {
           }
         }
       >
-        Your XLSForm was imported successfully, but Kobo and Akvo MIS don't work identically and some form logic may need manual adjustment to fully match your original. Please review the warnings below and test the form before publishing.
+        Votre XLSForm a été importé avec succès, mais Kobo et Akvo MIS ne fonctionnent pas de manière identique et une partie de la logique du formulaire peut nécessiter un ajustement manuel pour correspondre pleinement à votre original. Veuillez examiner les avertissements ci-dessous et tester le formulaire avant de le publier.
       </p>
       <p
         style={
@@ -1977,7 +3452,7 @@ Object {
           }
         }
       >
-        Common things to check:
+        Éléments courants à vérifier :
       </p>
       <ul
         style={
@@ -1996,7 +3471,7 @@ Object {
             }
           }
         >
-          Calculated fields – formulas may need to be re-verified
+          Champs calculés – les formules peuvent devoir être revérifiées
         </li>
         <li
           style={
@@ -2005,7 +3480,7 @@ Object {
             }
           }
         >
-          Dynamic repeat counts – repeat groups driven by a variable may need manual setup
+          Comptes de répétition dynamiques – les groupes répétables pilotés par une variable peuvent nécessiter une configuration manuelle
         </li>
         <li
           style={
@@ -2014,7 +3489,7 @@ Object {
             }
           }
         >
-          Group relevance / skip logic – conditional group visibility should be double-checked
+          Pertinence de groupe / logique de saut – la visibilité conditionnelle des groupes doit être revérifiée
         </li>
         <li
           style={
@@ -2023,7 +3498,7 @@ Object {
             }
           }
         >
-          "Other" follow-up questions – these aren't auto-converted; add them manually if needed
+          Questions de suivi "Autre" – elles ne sont pas converties automatiquement ; ajoutez-les manuellement si nécessaire
         </li>
       </ul>
       <p
@@ -2034,15 +3509,15 @@ Object {
           }
         }
       >
-        We recommend previewing the full form and testing a submission before it goes live.
+        Nous recommandons de prévisualiser le formulaire complet et de tester une soumission avant sa mise en service.
       </p>
     </div>,
-    "formBuilderImportXlsformNoticeTitle": "This import needs a quick review",
+    "formBuilderImportXlsformNoticeTitle": "Cette importation nécessite une vérification rapide",
     "formBuilderLastUpdatedCol": "Dernière mise à jour",
     "formBuilderMonitoringFor": [Function],
     "formBuilderMonitoringType": "Suivi",
     "formBuilderNameCol": "Nom",
-    "formBuilderParentFormError": "Parent form not found or not published. Cannot create monitoring form.",
+    "formBuilderParentFormError": "Formulaire parent introuvable ou non publié. Impossible de créer le formulaire de suivi.",
     "formBuilderPreviewButton": "Aperçu",
     "formBuilderPreviewError": "Échec du chargement de la version",
     "formBuilderPreviewingBanner": [Function],
@@ -2053,7 +3528,7 @@ Object {
     "formBuilderPublishSuccess": "Formulaire publié",
     "formBuilderPublishedAtCol": "Publié le",
     "formBuilderPublishedByCol": "Publié par",
-    "formBuilderPublishedInfo": "Editing a published form creates a new version snapshot. Click Publish to activate it.",
+    "formBuilderPublishedInfo": "Modifier un formulaire publié crée un nouvel instantané de version. Cliquez sur Publier pour l'activer.",
     "formBuilderRefreshButton": "Actualiser",
     "formBuilderRegistrationType": "Enregistrement",
     "formBuilderResetDraft": "Charger depuis le serveur",
@@ -2084,307 +3559,185 @@ Object {
     "formBuilderVersionHistoryEmpty": "Aucune version publiée pour le moment",
     "formBuilderVersionHistoryTitle": "Historique des versions",
     "formBuilderVersionsButton": "Versions",
-    "formColumn": "Form",
+    "formColumn": "Formulaire",
     "formDescription": <p>
-      Please fill up the webform below with relevant responses. You will need to answer all mandatory questions before you can submit.
+      Veuillez remplir le formulaire web ci-dessous avec les réponses pertinentes. Vous devrez répondre à toutes les questions obligatoires avant de pouvoir soumettre.
       <br />
-      Once you have sumitted a webform, please do not forget to add it as part of a batch and send it for approval.
+      Une fois que vous avez soumis un formulaire web, n'oubliez pas de l'ajouter dans un lot et de l'envoyer pour approbation.
     </p>,
-    "formPasscode": "Form Passcode",
-    "formSuccessSubTitle": "Do note that this data has NOT been sent for approval. If you are ready to send the submissions for approval, please create a batch and send to the approver",
-    "formSuccessSubTitleForAdmin": "Do note that the data submitted by SUPER ADMIN role will not go through the approval flow and recorded as approved data",
-    "formSuccessTitle": "Thank you for the submission",
-    "generating": "Generating",
-    "helloText": "Hello",
-    "homeFooterAboutText": <React.Fragment>
-      Test App
-       is a comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation. It serves as a centralised hub for evidence-based reporting and efficient resource allocation.
-    </React.Fragment>,
-    "homeFooterAboutTitle": <React.Fragment>
-      About 
-      Test App
-    </React.Fragment>,
-    "homeFooterContactAddress": Array [
-      "<Your Address>",
-    ],
-    "homeFooterContactDetails": Array [
-      "<Your Organisation>",
-      "<Your Department>",
-    ],
-    "homeFooterContactPhone": "<Your Phone Number>",
-    "homeFooterContactTitle": "Contact Us",
-    "homeFooterCopyrightText": "© 2025 <Your Organisation>",
-    "homeFooterPoweredByText": "Powered by",
-    "homeFooterQuickLinksTitle": "Quick Links",
-    "homeHeroCaptionEyebrowSuffix": "Platform",
-    "homeHeroCaptionTitle": <React.Fragment>
-      Reliable data
-      <br />
-      for every community you serve.
-    </React.Fragment>,
-    "homeHeroCtaLearnMore": "Learn more",
-    "homeHeroEyebrowDept": "<Your Department>",
-    "homeHeroEyebrowLive": "Live",
-    "homeHeroEyebrowOrg": "<Your Organisation>",
-    "homeHeroTitleAccent": "monitoring & information",
-    "homeHeroTitlePrefix": "— a comprehensive platform for",
-    "homeHeroTitleSuffix": "services.",
-    "homeJumbotronImage": Object {
-      "alt": "Water landscape",
-      "src": "https://images.unsplash.com/photo-1642450909999-7106494ef779?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-    },
-    "homeJumbotronSubtitle": <React.Fragment>
-      A comprehensive platform designed to support data collection, monitoring, and decision-making for your organisation.
-    </React.Fragment>,
-    "homeJumbotronTitle": <React.Fragment>
-      Test App
-    </React.Fragment>,
-    "homeKeyRolesHeadline": <React.Fragment>
-      Policy, oversight and 
-      <span
-        className="accent"
-      >
-        compliance
-      </span>
-       across your sector.
-    </React.Fragment>,
-    "homeKeyRolesItems": Array [
-      Object {
-        "imgAlt": "Policy and legislation",
-        "imgSrc": "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Formulating regulatory frameworks and policies to promote sustainable and equitable service delivery. Providing expert advice to support effective governance.",
-        "title": "Policy & Legislation",
-        "type": "right",
-      },
-      Object {
-        "imgAlt": "Monitoring and oversight",
-        "imgSrc": "https://images.unsplash.com/photo-1708807472445-d33589e6b090?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Overseeing adherence to established policies, legislation, and industry standards. Ensuring accountability and transparency in service delivery.",
-        "title": "Monitoring & Oversight",
-        "type": "left",
-      },
-      Object {
-        "imgAlt": "Technical and policy advisory",
-        "imgSrc": "/logo.svg",
-        "text": "Providing expert advice on sector issues to support effective governance and operational efficiency.",
-        "title": "Technical & Policy Advisory",
-        "type": "right",
-      },
-      Object {
-        "imgAlt": "Service delivery oversight",
-        "imgSrc": "https://plus.unsplash.com/premium_photo-1661964131234-fda88ca041c5?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        "text": "Serving as the primary organisation responsible for monitoring service delivery and ensuring compliance with national regulations and standards.",
-        "title": "Service Delivery Oversight",
-        "type": "left",
-      },
-    ],
-    "homeKeyRolesText": "The key roles and responsibilities of the organisation include policy and legislation development, technical and policy advisory, compliance monitoring, and service delivery oversight.",
-    "homeKeyRolesTitle": "Key Roles and Responsibilities",
-    "homeMandateHeadline": <React.Fragment>
-      Ensuring a 
-      <span
-        className="accent"
-      >
-        sustainable
-      </span>
-       monitoring and reporting system.
-    </React.Fragment>,
-    "homeMandateText": "Your organisation is mandated with the responsibility of ensuring sustainable service delivery through the development of evidence-based policies, efficient data management, and rigorous compliance monitoring.",
-    "homeMandateTitle": "Our Mandate",
-    "homeQuickLinks": Array [
-      Object {
-        "href": "/privacy-policy",
-        "isPage": true,
-        "text": "Privacy Policy",
-      },
-      Object {
-        "href": "/terms-n-conditions",
-        "isPage": true,
-        "text": "Terms & Conditions",
-      },
-      Object {
-        "href": "/cookie-policy",
-        "isPage": true,
-        "text": "Cookie Policy",
-      },
-      Object {
-        "href": "/app",
-        "isPage": false,
-        "text": <React.Fragment>
-          Download 
-          Test App
-           App
-        </React.Fragment>,
-      },
-    ],
-    "homeStructureImage": Object {
-      "alt": "Organisation Structure",
-      "src": "/logo.svg",
-    },
-    "homeStructureText": "Replace this text with a description of your organisation structure. This section can be updated in ui-text.js or configured via a content management system.",
-    "homeStructureTitle": "Organisation Structure",
-    "homeVideoHeadline": <React.Fragment>
-      See 
-      <span
-        className="accent"
-      >
-        Test App
-      </span>
-       in action.
-    </React.Fragment>,
-    "homeVideoIframeTitle": "Test App introduction video\\"",
-    "homeVideoText": "A short walkthrough of how the platform supports data collection, monitoring, and decision-making for your organisation.",
-    "homeVideoTitle": "Watch & Learn",
-    "informUser": "Inform User for Changes",
-    "initialRegistration": "Initial Registration",
-    "instructionsMailed": "Instructions mailed successfully",
+    "formLibraryAllCategories": "Toutes les catégories",
+    "formLibraryDescription": "Parcourez des modèles de formulaires prêts à l'emploi et créez un nouveau formulaire à partir de l'un d'eux en un clic.",
+    "formLibraryEmptyText": "Aucun modèle disponible",
+    "formLibraryMonitoringLabel": "formulaire(s) de suivi",
+    "formLibraryMonitoringTab": "Suivi",
+    "formLibraryPreviewButton": "Aperçu",
+    "formLibraryPreviewTitle": "Aperçu du modèle",
+    "formLibraryRegistrationTab": "Enregistrement",
+    "formLibrarySearchPlaceholder": "Rechercher des modèles",
+    "formLibraryTitle": "Bibliothèque de formulaires",
+    "formLibraryUncategorized": "Sans catégorie",
+    "formLibraryUseButton": "Utiliser ce formulaire",
+    "formLibraryUseError": "Échec de l'utilisation de ce modèle",
+    "formLibraryUseSuccess": "Modèle copié dans votre espace de travail en tant que nouveau brouillon.",
+    "formLibraryUsedCount": "Utilisé",
+    "formLibraryViewOnly": "Lecture seule",
+    "formSuccessSubTitle": "Veuillez noter que ces données n'ont PAS été envoyées pour approbation. Si vous êtes prêt à envoyer les soumissions pour approbation, veuillez créer un lot et l'envoyer à l'approbateur",
+    "formSuccessSubTitleForAdmin": "Veuillez noter que les données soumises par le rôle SUPER ADMIN ne passeront pas par le flux d'approbation et seront enregistrées comme données approuvées",
+    "formSuccessTitle": "Merci pour votre soumission",
+    "generating": "Génération",
+    "helloText": "Bonjour",
+    "informUser": "Informer l'utilisateur des modifications",
+    "initialRegistration": "Enregistrement initial",
+    "instructionsMailed": "Instructions envoyées avec succès",
     "invalidInviteDesc": "Lorem, ipsum dolor sit amet consectetur adipisicing elit. Autem provident voluptatum cum numquam, quidem vitae, qui quam beatae exercitationem ullam perferendis! Nobis in aut fuga voluptate harum, tempore distinctio optio.",
-    "invalidInviteTitle": "Invalid Invite Code",
-    "isSuperAdminLabel": "Is Superadmin?",
-    "lastLoginLabel": "Last login",
-    "lastResponseCol": "Last Response",
-    "lastUpdatedCol": "Last Updated",
-    "latestData": "Latest Data",
+    "invalidInviteTitle": "Code d'invitation non valide",
+    "isSuperAdminLabel": "Est superadministrateur ?",
+    "lastLoginLabel": "Dernière connexion",
+    "lastResponseCol": "Dernière réponse",
+    "lastUpdatedCol": "Dernière mise à jour",
+    "latestData": "Données les plus récentes",
     "latestUpdateText": "Dernières mises à jour",
-    "levelDeleteTitle": "Remove the deepest level?",
-    "levelField": "Level",
-    "levelFieldRequired": "Level is required",
-    "levelFrozenHint": "Levels can no longer be added or removed because administrative units already exist. Renaming is still available.",
-    "levelLabel": "Level",
-    "loadMoreLable": "Load More",
-    "loadingText": "Loading...",
+    "levelDeleteTitle": "Supprimer le niveau le plus profond ?",
+    "levelField": "Niveau",
+    "levelFieldRequired": "Le niveau est obligatoire",
+    "levelFrozenHint": "Les niveaux ne peuvent plus être ajoutés ni supprimés car des unités administratives existent déjà. Le renommage reste possible.",
+    "levelLabel": "Niveau",
+    "loadMoreLable": "Charger plus",
+    "loadingText": "Chargement...",
     "login": "Connexion",
+    "loginAccountDetails": "Veuillez saisir les informations de votre compte",
+    "loginContactLink": "nous contacter",
+    "loginEmailPlaceholder": "E-mail",
     "loginLoadingTex": <React.Fragment>
-      Verifying
+      Vérification
       <br />
       <small>
-        Please wait..
+        Veuillez patienter..
       </small>
     </React.Fragment>,
-    "loginTitle": "Welcome back",
-    "lorem": "Lorem ipsum dolor sit amet consectetur adipisicing elit. Possimus, assumenda quos? Quia deleniti sapiente aut! Ab consequatur cumque fugit ea. Dolore ex rerum quisquam inventore eum dicta doloribus harum cum.",
-    "lorem2": "Lorem ipsum dolor sit amet consectetur adipisicing elit.",
-    "manageAdministrativeList": "Manage Administrative List",
+    "loginNotActivated": "Ce compte n'a pas encore été activé",
+    "loginPasswordLabel": "Mot de passe",
+    "loginPasswordPlaceholder": "Mot de passe",
+    "loginResendActivation": "Renvoyer l'e-mail d'activation",
+    "loginTitle": "Content de vous revoir",
+    "loginTroublePrefix": "Vous avez des difficultés à accéder à la plateforme ? Veuillez",
+    "manageAdministrativeList": "Gérer la liste administrative",
     "manageAttributeText": <React.Fragment>
-      This is where you manage attributes based on their fields. You can :
+      C'est ici que vous gérez les attributs en fonction de leurs champs. Vous pouvez :
       <ul>
         <li>
-          Add new attribute
+          Ajouter un nouvel attribut
         </li>
         <li>
-          Modify existing attribute
+          Modifier un attribut existant
         </li>
         <li>
-          Delete existing attribute
+          Supprimer un attribut existant
         </li>
       </ul>
     </React.Fragment>,
-    "manageAttributes": "Manage Attributes",
+    "manageAttributes": "Gérer les attributs",
     "manageDataButton": "Gérer les données",
-    "manageDataTab1": "Registration Data",
-    "manageDataTab2": "Monitoring Data",
-    "manageDataTab3": "Monitoring Overview",
-    "manageDataTabList": "Datapoint List",
-    "manageDataTabMap": "Map View",
+    "manageDataTab1": "Données d'enregistrement",
+    "manageDataTab2": "Données de suivi",
+    "manageDataTab3": "Aperçu du suivi",
+    "manageDataTabList": "Liste des points de données",
+    "manageDataTabMap": "Vue cartographique",
     "manageDataText": <React.Fragment>
-      This is where you :
+      C'est ici que vous pouvez :
       <ul>
         <li>
-          Add new data using webforms
+          Ajouter de nouvelles données via des formulaires web
         </li>
         <li>
-          Bulk upload data using spreadsheets
+          Importer des données en masse via des tableurs
         </li>
         <li>
-          Download data
+          Télécharger des données
         </li>
       </ul>
     </React.Fragment>,
     "manageDataTitle": "Gérer les données",
     "manageDataValidationSetup": "Arbre de validation",
-    "manageEntities": "Manage Entities",
+    "manageDraftText": <React.Fragment>
+      C'est ici que vous pouvez gérer vos brouillons. Vous pouvez :
+      <ul>
+        <li>
+          Consulter vos brouillons enregistrés
+        </li>
+        <li>
+          Modifier les brouillons existants
+        </li>
+        <li>
+          Supprimer les brouillons existants
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageDraftTitle": "Gérer les brouillons",
+    "manageEntities": "Gérer les entités",
     "manageEntitiesText": <React.Fragment>
-      This is where you manage entitys based on their fields. You can :
+      C'est ici que vous gérez les entités en fonction de leurs champs. Vous pouvez :
       <ul>
         <li>
-          Add new entity
+          Ajouter une nouvelle entité
         </li>
         <li>
-          Modify existing entity
+          Modifier une entité existante
         </li>
         <li>
-          Delete existing entity
+          Supprimer une entité existante
         </li>
       </ul>
     </React.Fragment>,
-    "manageEntityTitle": "Manage Entities",
-    "manageEntityTypes": "Manage Entity Types",
+    "manageEntityTypes": "Gérer les types d'entité",
     "manageEntityTypesText": <React.Fragment>
-      This is where you manage entity types based on their fields. You can :
+      C'est ici que vous gérez les types d'entité en fonction de leurs champs. Vous pouvez :
       <ul>
         <li>
-          Add new entity type
+          Ajouter un nouveau type d'entité
         </li>
         <li>
-          Modify existing entity type
+          Modifier un type d'entité existant
         </li>
         <li>
-          Delete existing entity type
+          Supprimer un type d'entité existant
         </li>
       </ul>
     </React.Fragment>,
-    "manageLevelText": "Define the tiers of your administrative hierarchy, from the top level down. Tiers can be renamed at any time, but they can only be added or removed while no administrative units exist below your top level.",
-    "manageLevels": "Manage Levels",
+    "manageLevelText": "Définissez les niveaux de votre hiérarchie administrative, du niveau supérieur vers le bas. Les niveaux peuvent être renommés à tout moment, mais ils ne peuvent être ajoutés ou supprimés que tant qu'aucune unité administrative n'existe sous votre niveau supérieur.",
+    "manageLevels": "Gérer les niveaux",
     "manageOrganisations": "Gérer les organisations",
     "manageRoleText": <React.Fragment>
-      This is where you manage roles based on their fields. You can :
+      C'est ici que vous gérez les rôles selon leurs champs. Vous pouvez :
       <ul>
         <li>
-          Add new role
+          Ajouter un nouveau rôle
         </li>
         <li>
-          Modify existing role
+          Modifier un rôle existant
         </li>
         <li>
-          Delete existing role
+          Supprimer un rôle existant
         </li>
       </ul>
     </React.Fragment>,
-    "manageRoles": "Manage Roles",
-    "manageRolesTitle": "Manage Roles",
-    "manageUserButton": "Manage Users",
+    "manageRoles": "Gérer les rôles",
+    "manageRolesTitle": "Gérer les rôles",
     "manageUserText": <React.Fragment>
-      This is where you manage users based on their roles , regions and questionnaire access . You can :
+      C'est ici que vous gérez les utilisateurs en fonction de leurs rôles, régions et accès aux questionnaires . Vous pouvez :
       <ul>
         <li>
-          Add new user
+          Ajouter un nouvel utilisateur
         </li>
         <li>
-          Modify existing user
+          Modifier un utilisateur existant
         </li>
         <li>
-          Delete existing user
+          Supprimer un utilisateur existant
         </li>
       </ul>
     </React.Fragment>,
-    "manageUserTitle": "User Management",
     "manageUsers": "Gérer les utilisateurs",
-    "mdPanelButton": "Master Data",
-    "mdPanelText": <React.Fragment>
-      This is where you :
-      <ul>
-        <li>
-          View all master data
-        </li>
-        <li>
-          Modify existing data
-        </li>
-        <li>
-          Delete existing data
-        </li>
-      </ul>
-    </React.Fragment>,
-    "mdPanelTitle": "Master Data",
     "menuAdministrativeList": "Liste administrative",
     "menuApprovals": "Approbations",
     "menuAttributes": "Attributs",
@@ -2409,235 +3762,211 @@ Object {
     "menuSettings": "Paramètres",
     "menuUsers": "Utilisateurs",
     "menuValidationTree": "Arbre de validation",
-    "mobileAddText": "Add Assignment",
-    "mobileAdmRequired": "Administration is required: one or multiple",
-    "mobileAppText": "Mobile App",
-    "mobileButtonAdd": "Add new data collector",
-    "mobileButtonSave": "Save",
-    "mobileConfirmDelete": "Are you sure you want to delete this assignment?",
-    "mobileConfirmDeletion": "Are you sure?",
-    "mobileEditText": "Edit Assignment",
-    "mobileErrDelete": "Unable to delete assingment",
-    "mobileFormsRequired": "Form is required: one or multiple",
+    "mobileAddText": "Ajouter une affectation",
+    "mobileAdmRequired": "L'administration est obligatoire : une ou plusieurs",
+    "mobileAppText": "Application mobile",
+    "mobileButtonAdd": "Ajouter un nouveau collecteur de données",
+    "mobileButtonSave": "Enregistrer",
+    "mobileConfirmDelete": "Êtes-vous sûr de vouloir supprimer cette affectation ?",
+    "mobileEditText": "Modifier l'affectation",
+    "mobileErrDelete": "Impossible de supprimer l'affectation",
+    "mobileFormsRequired": "Le formulaire est obligatoire : un ou plusieurs",
     "mobileLabelAdm": "Administrations",
-    "mobileLabelForms": "Forms",
-    "mobileLabelName": "Name",
-    "mobileLevelRequired": "Level is required",
-    "mobileNameRequired": "Name is required",
+    "mobileLabelForms": "Formulaires",
+    "mobileLabelName": "Nom",
+    "mobileLevelRequired": "Le niveau est obligatoire",
+    "mobileNameRequired": "Le nom est obligatoire",
     "mobilePanelAddDesc": <React.Fragment>
-      This page allows you to add mobile data collectors to the 
+      Cette page vous permet d'ajouter des collecteurs de données mobiles à la plateforme 
       Test App
-       
-      platform.
+       .
     </React.Fragment>,
-    "mobilePanelButton": "Manage Data Collectors",
     "mobilePanelEditDesc": <React.Fragment>
-      This page allows you to edit mobile data collectors to the 
+      Cette page vous permet de modifier les collecteurs de données mobiles sur la plateforme 
       Test App
-       
-      platform.
+       .
     </React.Fragment>,
     "mobilePanelText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Add new mobile data collector
+          Ajoutez un nouveau collecteur de données mobiles
         </li>
         <li>
-          Modify existing mobile data collector
+          Modifiez un collecteur de données mobiles existant
         </li>
         <li>
-          Delete existing mobile data collector
+          Supprimez un collecteur de données mobiles existant
         </li>
       </ul>
     </React.Fragment>,
-    "mobilePanelTitle": "Mobile Data Collectors",
-    "mobileSelectAdm": "Select administrations...",
-    "mobileSelectForms": "Select forms...",
-    "mobileSuccessAdded": "Mobile assignment added",
-    "mobileSuccessUpdated": "Mobile assignment update",
+    "mobilePanelTitle": "Collecteurs de données mobiles",
+    "mobileSelectForms": "Sélectionner des formulaires...",
+    "mobileSuccessAdded": "Affectation mobile ajoutée",
+    "mobileSuccessUpdated": "Mise à jour de l'affectation mobile",
     "monitoringDataDescription": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Get the list of forms that were collected for this datapoint (new and update)
+          Obtenez la liste des formulaires qui ont été collectés pour ce point de données (nouveau et mise à jour)
         </li>
         <li>
-          Edit monitoring data
+          Modifiez les données de suivi
         </li>
       </ul>
     </React.Fragment>,
-    "monitoringDataTitle": "Monitoring data",
-    "moreCount": "+{{count}} more",
-    "moreItems": "More Items",
+    "monitoringDataTitle": "Données de suivi",
+    "moreCount": "+{{count}} de plus",
+    "moreItems": "Plus d'éléments",
     "myProfile": "Mon profil",
-    "nameCol": "Name",
-    "nameField": "Name",
-    "nameFieldRequired": "Name is required",
-    "nameLabel": "Name",
-    "newLevelName": "New level name",
+    "nameCol": "Nom",
+    "nameField": "Nom",
+    "nameFieldRequired": "Le nom est obligatoire",
+    "nameLabel": "Nom",
     "newSubmissionBtn": "Ajouter une nouvelle soumission",
     "newsEvents": "Actualités et événements",
-    "next": "Next",
+    "next": "Suivant",
     "noFormSelectedText": "Aucun formulaire sélectionné",
     "noFormText": "Aucune donnée",
     "noInformationAvailable": "Aucune information disponible",
     "noTemplate": "Aucun modèle trouvé",
-    "noText": "No",
-    "notAssigned": "Not assigned",
-    "notesFeedback": "Notes & Feedback",
-    "notifyError": "An error occured",
+    "noText": "Non",
+    "notAssigned": "Non attribué",
+    "notesFeedback": "Notes et commentaires",
+    "notifyError": "Une erreur s'est produite",
     "optionsField": "Options",
-    "orgLabelAttr": "Organization Attributes",
-    "orgLabelName": "Organization Name",
-    "orgPanelButton": "Manage Organization",
+    "orgPanelButton": "Gérer l'organisation",
     "orgPanelText": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          Add new organization
+          Ajoutez une nouvelle organisation
         </li>
         <li>
-          Modify existing organization
+          Modifiez une organisation existante
         </li>
         <li>
-          Delete existing organization
+          Supprimez une organisation existante
         </li>
       </ul>
     </React.Fragment>,
-    "orgPanelTitle": "Manage Organization",
+    "orgPanelTitle": "Gérer l'organisation",
     "orgTabTitle": "Organisations",
-    "organisationDeleteFail": "Could not delete organization",
-    "organisationsLoadFail": "Could not load organizations",
+    "organisationDeleteFail": "Impossible de supprimer l'organisation",
+    "organisationsLoadFail": "Impossible de charger les organisations",
     "panelApprovalsDesc": <React.Fragment>
-      This is where you :
+      C'est ici que vous :
       <ul>
         <li>
-          View pending data approvals awaiting your approval 
+          Consultez les approbations de données en attente de votre approbation
+           
         </li>
         <li>
-          View pending approvals by your subordinate approvers
+          Consultez les approbations en attente de vos approbateurs subordonnés
         </li>
         <li>
-          Assign subordinate approvers
+          Attribuez des approbateurs subordonnés
         </li>
       </ul>
     </React.Fragment>,
-    "passwordCriteriaError": "False Password Criteria",
-    "passwordMatchError": "The two passwords that you entered do not match!",
-    "passwordRequired": "Please input your Password!",
-    "passwordRule1": "Lowercase Character",
-    "passwordRule2": "Numbers",
-    "passwordRule3": "Special Character ( -._!\`'#%&,:;<>=@{}~$()*+/?[]^|] )",
-    "passwordRule4": "Uppercase Character",
-    "passwordRule5": "No White Space",
-    "passwordRule6": "Minimum 8 Characters",
-    "passwordUpdateSuccess": "Password updated successfully",
+    "passwordCriteriaError": "Critères de mot de passe incorrects",
+    "passwordMatchError": "Les deux mots de passe que vous avez saisis ne correspondent pas !",
+    "passwordRequired": "Veuillez saisir votre mot de passe",
+    "passwordRule1": "Caractère minuscule",
+    "passwordRule2": "Chiffres",
+    "passwordRule3": "Caractère spécial ( -._!\`'#%&,:;<>=@{}~$()*+/?[]^|] )",
+    "passwordRule4": "Caractère majuscule",
+    "passwordRule5": "Aucun espace blanc",
+    "passwordRule6": "Minimum 8 caractères",
+    "passwordUpdateSuccess": "Mot de passe mis à jour avec succès",
     "platformConsole": "Console de plateforme",
-    "prefilledAdmModalContent": "We're processing your request. Once complete, the prefilled administration template will be sent to your email shortly.  Please keep a close eye on your email, Thank you. ",
-    "prefilledAdmModalTitle": "Prefilled Administration requested",
-    "prefilledAdmUploadLabel": "Upload the data",
-    "prefilledDownloadTitle": "Administrative Download",
-    "prefilledPanelText": <React.Fragment>
-      <p>
-        This page shows your pre-filled administrative data export requests.
-        <br />
-        For exports which are already generated, please click on the Download button to download the data.
-      </p>
-    </React.Fragment>,
-    "prev": "Prev",
+    "prev": "Précédent",
     "preview": "Aperçu",
     "printBtn": "Imprimer",
-    "profileDes": "This page shows your current user setup. It also shows the most important activities for your current user setup",
-    "profileLabel": "Profile",
+    "profileDes": "Cette page affiche la configuration actuelle de votre utilisateur. Elle affiche également les activités les plus importantes pour la configuration actuelle de votre utilisateur",
+    "profileLabel": "Profil",
     "publish": "Publier",
     "published": "Publié",
     "questionCol": "Question",
     "questionnaireText": "Questionnaire",
     "questionnairesLabel": "Questionnaires",
-    "questionnairesRequired": "Please select at least one questionnaire access level: Read-only, Editor, or Approver.",
-    "recentActivityCol": "Recent Activity",
-    "regionCol": "Region",
-    "registrationView": "Registration",
-    "rejectText": "Reject",
+    "recentActivityCol": "Activité récente",
+    "recoverPassword": "Récupérer le mot de passe",
+    "regionCol": "Région",
+    "registrationView": "Enregistrement",
+    "rejectText": "Rejeter",
     "reports": "Rapports",
-    "requiredError": "{{field}} is required",
+    "requiredError": "{{field}} est obligatoire",
     "resetHint": <React.Fragment>
-      Please set your password for the platform.
+      Veuillez définir votre mot de passe pour la plateforme.
       <br />
-      Your password must include:
+      Votre mot de passe doit comporter :
     </React.Fragment>,
-    "resetText": "Reset",
-    "responseCol": "Response",
-    "roleAccess": "Role Access",
-    "roleAccessRequired": "Role access is required",
-    "roleAdmLevel": "Administration Level",
-    "roleAdmLevelPlaceholder": "Select administration level...",
-    "roleAdmLevelRequired": "Administration level is required",
-    "roleConfirmDelete": "Are you sure you want to delete {roleName}?",
-    "roleDeleteTitle": "You are about to delete the role",
-    "roleDescription": "Role Description",
-    "roleDescriptionRequired": "Role description is required",
-    "roleErrDeleteTitle": "Unable to delete the role",
-    "roleErrorAdd": "Role could not be added",
-    "roleErrorUpdate": "Role could not be updated",
-    "roleFeatures": "Role Features",
-    "roleLabel": "Role",
-    "roleName": "Role Name",
-    "roleNameRequired": "Role name is required",
-    "roleSuccessAdded": "Role added",
-    "roleSuccessDeleted": "Role deleted",
-    "roleSuccessUpdated": "Role updated",
-    "roleTotalUsers": "Total Users",
-    "rolesLabel": "Role(s)",
-    "rolesRequired": "Please select at least one role",
-    "saveButton": "Save",
-    "saveEditButton": "Save Edits",
-    "searchEntity": "Enter name...",
-    "searchEntityType": "Enter name...",
-    "searchNameOrCode": "Enter name or code...",
-    "searchPlaceholder": "Search...",
-    "selectAttributes": "Select attributes...",
-    "selectChildForms": "Select Monitoring Forms",
-    "selectEntity": "Select entity...",
-    "selectForm": "Please select a form",
-    "selectFormPlaceholder": "Select Form",
-    "selectIndicatorPlaceholder": "Select Indicator",
-    "selectLevel": "Select level...",
-    "selectMonitoringFormPlaceholder": "Select Monitoring Form",
-    "selectOne": "Select one...",
-    "selectQuestionPlaceholder": "Select Question",
-    "selectRole": "Select role...",
-    "selectRowsToDownload": "Please select rows to download",
-    "selectText": "Select...",
-    "selectType": "Select type...",
-    "selectViewMode": "Select View",
-    "sendInstructions": "Send Instructions",
-    "sendNewRequest": "Notify Approver",
+    "responseCol": "Réponse",
+    "roleAccess": "Accès du rôle",
+    "roleAccessRequired": "L'accès du rôle est obligatoire",
+    "roleAdmLevel": "Niveau d'administration",
+    "roleAdmLevelPlaceholder": "Sélectionnez un niveau d'administration...",
+    "roleAdmLevelRequired": "Le niveau d'administration est obligatoire",
+    "roleConfirmDelete": "Êtes-vous sûr de vouloir supprimer {roleName} ?",
+    "roleDeleteTitle": "Vous êtes sur le point de supprimer le rôle",
+    "roleDescription": "Description du rôle",
+    "roleErrorAdd": "Le rôle n'a pas pu être ajouté",
+    "roleErrorUpdate": "Le rôle n'a pas pu être mis à jour",
+    "roleFeatures": "Fonctionnalités du rôle",
+    "roleLabel": "Rôle",
+    "roleName": "Nom du rôle",
+    "roleNameRequired": "Le nom du rôle est obligatoire",
+    "roleSuccessAdded": "Rôle ajouté",
+    "roleSuccessUpdated": "Rôle mis à jour",
+    "roleTotalUsers": "Total des utilisateurs",
+    "rolesLabel": "Rôle(s)",
+    "rolesRequired": "Veuillez sélectionner au moins un rôle",
+    "saveButton": "Enregistrer",
+    "saveEditButton": "Enregistrer les modifications",
+    "searchEntity": "Saisissez un nom...",
+    "searchEntityType": "Saisissez un nom...",
+    "searchNameOrCode": "Saisissez un nom ou un code...",
+    "searchPlaceholder": "Rechercher...",
+    "selectChildForms": "Sélectionnez les formulaires de suivi",
+    "selectEntity": "Sélectionnez une entité...",
+    "selectForm": "Veuillez sélectionner un formulaire",
+    "selectFormPlaceholder": "Sélectionner un formulaire",
+    "selectIndicatorPlaceholder": "Sélectionner un indicateur",
+    "selectLevel": "Sélectionnez un niveau...",
+    "selectMonitoringFormPlaceholder": "Sélectionner un formulaire de suivi",
+    "selectOne": "Sélectionnez-en un...",
+    "selectQuestionPlaceholder": "Sélectionner une question",
+    "selectRole": "Sélectionnez un rôle...",
+    "selectRowsToDownload": "Veuillez sélectionner les lignes à télécharger",
+    "selectText": "Sélectionner...",
+    "selectType": "Sélectionnez un type...",
+    "selectViewMode": "Sélectionner une vue",
+    "sendInstructions": "Envoyer les instructions",
+    "sendNewRequest": "Notifier l'approbateur",
     "settings": "Paramètres système",
-    "settingsDescriptionPanel": "This page allows Super Admin to maintain system critical master lists.",
-    "showAllQuestionsSwitch": "Show all questions",
+    "settingsDescriptionPanel": "Cette page permet au Super administrateur de gérer les listes maîtres critiques du système.",
+    "showAllQuestionsSwitch": "Afficher toutes les questions",
     "showEmpty": "Afficher les valeurs vides",
-    "showPendingUsers": "Show Pending Users",
+    "showPendingUsers": "Afficher les utilisateurs en attente",
     "signOut": "Se déconnecter",
-    "submissionComment": "Submission comment",
-    "submissionDateCol": "Submission Date",
-    "submissionsText": "Submissions",
-    "successAddedEntity": "Entity added",
-    "successAddedOrg": "Organisation added",
-    "successDataUpdated": "Data updated",
-    "successDeletedEntity": "Entity deleted",
-    "successDeletedOrg": "Organisation deleted",
-    "successEntityDataAdded": "Entity data added",
-    "successEntityDataDeleted": "Entity data deleted",
-    "successEntityDataUpdated": "Entity data updated",
-    "successUpdatedEntity": "Entity updated",
-    "successUpdatedOrg": "Organisation updated",
-    "templateDownloadAdministrationHint": "If you do not already have a template, please ",
-    "templateDownloadEntityHint": "If you do not already have an entity template, please ",
-    "templateDownloadHint": "If you do not already have a template, please download",
-    "templateFetchFail": "Could not fetch template",
-    "totalMonitoring": "Total Monitoring",
+    "submissionComment": "Commentaire de la soumission",
+    "submissionDateCol": "Date de soumission",
+    "submissionsText": "Soumissions",
+    "successAddedEntity": "Entité ajoutée",
+    "successAddedOrg": "Organisation ajoutée",
+    "successDataUpdated": "Données mises à jour",
+    "successDeletedEntity": "Entité supprimée",
+    "successEntityDataAdded": "Données de l'entité ajoutées",
+    "successEntityDataDeleted": "Données de l'entité supprimées",
+    "successEntityDataUpdated": "Données de l'entité mises à jour",
+    "successUpdatedEntity": "Entité mise à jour",
+    "successUpdatedOrg": "Organisation mise à jour",
+    "templateDownloadAdministrationHint": "Si vous n'avez pas encore de modèle, veuillez ",
+    "templateDownloadEntityHint": "Si vous n'avez pas encore de modèle d'entité, veuillez ",
+    "templateDownloadHint": "Si vous n'avez pas encore de modèle, veuillez télécharger",
+    "templateFetchFail": "Impossible de récupérer le modèle",
+    "totalMonitoring": "Total du suivi",
     "tourApprovals": "Placeat impedit iure quaerat neque sit quasi",
     "tourApprovers": "Magni provident aliquam harum cupiditate iste",
     "tourBtnBack": "Retour",
@@ -2675,7 +4004,7 @@ Object {
     "tourReviewStep2Desc": "Ouvrez Gérer les données pour parcourir et filtrer les soumissions. Les approbations et les brouillons se trouvent également sous Données.",
     "tourReviewStep2Title": "Examiner les soumissions",
     "tourSetupFinalBtn": "Créer votre premier formulaire",
-    "tourSetupStep1Desc": "Ajoutez des sections et des questions, puis publiez. Votre équipe de terrain pourra le remplir dès sa publication.",
+    "tourSetupStep1Desc": "Ajoutez des sections et des questions, puis publiez — ou évitez la page blanche en partant d'un modèle prêt à l'emploi dans la Bibliothèque de formulaires. Votre équipe de terrain pourra le remplir dès sa publication.",
     "tourSetupStep1Title": "Créer un formulaire",
     "tourSetupStep2Desc": "Votre équipe de terrain collecte les données hors ligne dans l'application mobile. Partagez le lien de téléchargement avec elle.",
     "tourSetupStep2Title": "Transmettre l'application à votre équipe de terrain",
@@ -2686,43 +4015,39 @@ Object {
     "tourWelcomeSubtitle": "Que souhaitez-vous faire en premier ? Nous vous guidons en moins d'une minute.",
     "tourWelcomeTitle": "Bienvenue sur Akvo MIS",
     "upcomingEventText": "Événements à venir",
-    "updateDataButton": "Update data",
-    "updateDataError": "Unable to update data",
-    "updateExisting": "Update Existing Data",
+    "updateDataButton": "Mettre à jour les données",
+    "updateDataError": "Impossible de mettre à jour les données",
+    "updateExisting": "Mettre à jour les données existantes",
     "updateOrganisation": "Mettre à jour l'organisation",
     "updateUser": "Mettre à jour l'utilisateur",
-    "uploadAnotherFileLabel": "Upload Another File",
-    "uploadAttachments": "Upload Attachments",
-    "uploadAttachmentsComment": "Add a comment for the attachment",
-    "uploadAttachmentsError": "Unable to upload attachments",
-    "uploadAttachmentsRequired": "Please upload at least one attachment file",
-    "uploadAttachmentsSuccess": "Attachments uploaded successfully",
-    "uploadDataLabel": "Upload your data",
-    "uploadMasterDataLabel": "Upload your data",
-    "uploadNotReadyHint": "Define your administrative levels first: name the top level and add at least one level below it. You can do that under Master Data → Levels.",
-    "uploadTab1": "Data Summary",
-    "uploadTab2": "Raw Data",
-    "uploadText": "Upload",
+    "uploadAnotherFileLabel": "Importer un autre fichier",
+    "uploadAttachmentsComment": "Ajoutez un commentaire pour la pièce jointe",
+    "uploadAttachmentsError": "Impossible d'importer les pièces jointes",
+    "uploadAttachmentsRequired": "Veuillez importer au moins un fichier joint",
+    "uploadAttachmentsSuccess": "Pièces jointes importées avec succès",
+    "uploadDataLabel": "Importez vos données",
+    "uploadMasterDataLabel": "Importez vos données",
+    "uploadNotReadyHint": "Définissez d'abord vos niveaux administratifs : nommez le niveau supérieur et ajoutez au moins un niveau en dessous. Vous pouvez le faire dans Données maîtres → Niveaux.",
+    "uploadTab1": "Résumé des données",
+    "uploadTab2": "Données brutes",
+    "uploadText": "Importer",
     "uploadThankyouText": <React.Fragment>
-      Thank you for uploading the data file. Do note that the data will be validated by the system . You will be notified via email if the data fails the validation tests . There will also be an attachment of the validation errors that needs to be corrected. If there are no validation errors , then the data will be forwarded for verification, approval, and certification
+      Merci d'avoir importé le fichier de données. Veuillez noter que les données seront validées par le système . Vous serez notifié par e-mail si les données échouent aux tests de validation . Les erreurs de validation à corriger seront également jointes. S'il n'y a aucune erreur de validation , les données seront transmises pour vérification, approbation et certification
     </React.Fragment>,
-    "uploading": "Uploading..",
-    "uploadsTab1": "Pending Submission",
-    "uploadsTab2": "Pending Approval",
-    "uploadsTab3": "Approved",
-    "userAssociations": "This user has following data association(s)",
-    "userCol": "User",
-    "userDeleteFail": "Could not delete user",
-    "userEmail": "Email Address",
-    "userFirstName": "First name",
-    "userLastName": "Last name",
-    "userNationalApprover": "National Approver",
-    "userOrganisation": "Organization",
-    "userPhoneNumber": "Phone Number",
-    "userSelectLevelRequired": "Please select an administration level",
-    "userTrained": "Trained",
-    "usernameRequired": "Please input your Username!",
-    "usersLoadFail": "Could not load users",
+    "uploading": "Importation..",
+    "uploadsTab1": "Soumission en attente",
+    "uploadsTab2": "Approbation en attente",
+    "uploadsTab3": "Approuvé",
+    "userAssociations": "Cet utilisateur a les association(s) de données suivantes",
+    "userCol": "Utilisateur",
+    "userDeleteFail": "Impossible de supprimer l'utilisateur",
+    "userEmail": "Adresse e-mail",
+    "userFirstName": "Prénom",
+    "userLastName": "Nom de famille",
+    "userOrganisation": "Organisation",
+    "userPhoneNumber": "Numéro de téléphone",
+    "usernameRequired": "Veuillez saisir votre nom d'utilisateur",
+    "usersLoadFail": "Impossible de charger les utilisateurs",
     "valEmail": "Veuillez entrer une adresse e-mail valide",
     "valFirstName": "Le prénom est requis",
     "valLastName": "Le nom de famille est requis",
@@ -2731,19 +4056,18 @@ Object {
     "valOrganization": "Veuillez sélectionner une organisation",
     "valPhone": "Le numéro de téléphone est requis",
     "valRole": "Veuillez sélectionner un rôle",
-    "viewAttachment": "View Attachment",
+    "viewAttachment": "Voir la pièce jointe",
     "viewDetails": "Voir les détails",
-    "viewFullContext": "View Full Context",
-    "viewText": "View",
-    "webformText": "Webform",
+    "viewFullContext": "Voir le contexte complet",
+    "viewText": "Voir",
+    "webformText": "Formulaire web",
     "welcomeShort": <React.Fragment>
-      Welcome to the 
+      Bienvenue sur la plateforme 
       <b>
         Test App
       </b>
-       platform
     </React.Fragment>,
-    "yesText": "Yes",
+    "yesText": "Oui",
   },
 }
 `;

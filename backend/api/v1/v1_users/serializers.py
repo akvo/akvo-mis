@@ -830,6 +830,7 @@ class UserRoleListSerializer(serializers.ModelSerializer):
             "can_dashboard_edit",
             "can_dashboard_publish",
             "can_dashboard_delete",
+            "can_data_onboard",
         ]
 
 
@@ -1210,7 +1211,7 @@ class RegisterSerializer(serializers.Serializer):
         },
     )
     language = serializers.ChoiceField(
-        choices=["en", "fr"],
+        choices=["en", "es", "fr"],
         default="en",
         required=False,
     )

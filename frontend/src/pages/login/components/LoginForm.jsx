@@ -112,7 +112,7 @@ const LoginForm = () => {
     >
       <Form.Item
         name="email"
-        label="Email Address"
+        label={text.userEmail}
         rules={[
           {
             required: true,
@@ -120,11 +120,11 @@ const LoginForm = () => {
           },
         ]}
       >
-        <Input placeholder="Email" />
+        <Input placeholder={text.loginEmailPlaceholder} />
       </Form.Item>
       <Form.Item
         name="password"
-        label="Password"
+        label={text.loginPasswordLabel}
         disabled={loading}
         rules={[
           {
@@ -133,13 +133,16 @@ const LoginForm = () => {
           },
         ]}
       >
-        <Input.Password disabled={loading} placeholder="Password" />
+        <Input.Password
+          disabled={loading}
+          placeholder={text.loginPasswordPlaceholder}
+        />
       </Form.Item>
       {unverifiedEmail && (
         <Alert
           type="warning"
           showIcon
-          message="This account has not been activated yet"
+          message={text.loginNotActivated}
           description={
             <Button
               type="link"
@@ -148,7 +151,7 @@ const LoginForm = () => {
               onClick={onResend}
               style={{ padding: 0 }}
             >
-              Resend the activation email
+              {text.loginResendActivation}
             </Button>
           }
           style={{ marginBottom: "1rem" }}
@@ -156,13 +159,13 @@ const LoginForm = () => {
       )}
       <Form.Item>
         <Link className="login-form-forgot" to="/forgot-password">
-          Recover Password
+          {text.recoverPassword}
         </Link>
       </Form.Item>
       {showRegister && (
         <Form.Item>
           <Link className="login-form-forgot" to="/register">
-            Create an account
+            {text.createAccount}
           </Link>
         </Form.Item>
       )}
@@ -173,7 +176,7 @@ const LoginForm = () => {
           shape="round"
           loading={loading}
         >
-          Log in
+          {text.login}
         </Button>
       </Form.Item>
     </Form>

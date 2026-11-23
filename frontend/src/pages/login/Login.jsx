@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import PropTypes from "prop-types";
 import "./style.scss";
 import { Row, Col, Spin } from "antd";
 import { LoginForm, RegistrationForm, ResetForm } from "./components";
@@ -6,10 +7,9 @@ import { ContactForm } from "../../components";
 import { useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
 
-const ContactUsText = () => (
+const ContactUsText = ({ text }) => (
   <p className="contact-text">
-    Please enter your account details <br /> Having trouble accessing the
-    platform? Please{" "}
+    {text.loginAccountDetails} <br /> {text.loginTroublePrefix}{" "}
     <a
       href="#"
       onClick={() => {
@@ -18,11 +18,15 @@ const ContactUsText = () => (
         });
       }}
     >
-      contact
+      {text.loginContactLink}
     </a>
     .
   </p>
 );
+
+ContactUsText.propTypes = {
+  text: PropTypes.object.isRequired,
+};
 
 const Login = () => {
   const { invitationId } = useParams();
@@ -114,7 +118,7 @@ const Login = () => {
                             exactly one workspace, so that reader never
                             existed — and the address bar already says
                             which workspace this is. */}
-                        <ContactUsText />
+                        <ContactUsText text={text} />
                       </div>
                       <LoginForm />
                     </div>

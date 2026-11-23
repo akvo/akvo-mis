@@ -1,0 +1,245 @@
+{
+  "site": {
+    "name": null,
+    "title": "{brand} — monitoreo en tiempo real, simplificado",
+    "description": "{brand} es un sistema de información para el monitoreo en tiempo real: recolección móvil sin conexión, una jerarquía de varios niveles, tableros y visualización asistida por IA — gratis para siempre."
+  },
+  "nav": {
+    "cta": "Pruébalo tú mismo",
+    "closeMenu": "Cerrar el menú de idiomas"
+  },
+  "hero": {
+    "badge": "Gratis para siempre",
+    "title": "Bienvenido a {brand}.",
+    "lead": "La potente plataforma que gestiona tus datos con facilidad — y usa IA para convertirlos en visualizaciones, automáticamente. ¿Con curiosidad? Ven y pruébalo tú mismo.",
+    "primaryCta": {
+      "label": "Pruébalo tú mismo →",
+      "href": "/register"
+    },
+    "secondaryCta": {
+      "label": "Habla con nuestro equipo",
+      "href": "mailto:info@akvo.org"
+    },
+    "demo": {
+      "brandLabel": "akvo",
+      "liveLabel": "en vivo",
+      "syncedLabel": "sincronizado",
+      "demoBadge": "demo",
+      "caption": "Datos ilustrativos — elige un sector y mira responder el espacio de trabajo.",
+      "flipLabel": "Girar la tarjeta",
+      "mobileAlt": "La aplicación móvil de {brand} sincronizando envíos sin conexión",
+      "chartTitle": "Funcionalidad en el tiempo",
+      "chartNote": "Vista sugerida por IA",
+      "sectors": [
+        {
+          "name": "Agua y saneamiento",
+          "metricLabel": "Puntos de agua",
+          "metricValue": "1,284",
+          "metricNote": "registrados",
+          "rateLabel": "Funcional",
+          "rateValue": "92%",
+          "rateNote": "esta ronda",
+          "mapNote": "142 sitios · 3 regiones",
+          "trend": [40, 44, 42, 50, 58, 62, 70]
+        },
+        {
+          "name": "Centros de salud",
+          "metricLabel": "Centros",
+          "metricValue": "318",
+          "metricNote": "registrados",
+          "rateLabel": "Con personal completo",
+          "rateValue": "76%",
+          "rateNote": "esta ronda",
+          "mapNote": "47 distritos · 2 regiones",
+          "trend": [30, 35, 40, 38, 52, 55, 60]
+        },
+        {
+          "name": "Agricultura",
+          "metricLabel": "Parcelas",
+          "metricValue": "2,640",
+          "metricNote": "registradas",
+          "rateLabel": "Con riego",
+          "rateValue": "48%",
+          "rateNote": "esta temporada",
+          "mapNote": "312 aldeas · 5 regiones",
+          "trend": [20, 28, 26, 34, 40, 46, 52]
+        },
+        {
+          "name": "Escuelas",
+          "metricLabel": "Escuelas",
+          "metricValue": "564",
+          "metricNote": "registradas",
+          "rateLabel": "Acceso a agua",
+          "rateValue": "83%",
+          "rateNote": "esta ronda",
+          "mapNote": "89 distritos · 4 regiones",
+          "trend": [50, 52, 55, 60, 64, 68, 74]
+        }
+      ]
+    }
+  },
+  "freeBand": {
+    "title": "Gratis para siempre. Todas las funciones básicas, sin trucos.",
+    "body": "Formularios, recolección móvil sin conexión, tableros y visualización con IA — todo gratis, de verdad. ¿Necesitas capacidades avanzadas o un desarrollo a medida? Hay una opción de pago para eso."
+  },
+  "howItWorks": {
+    "heading": "Tu propio espacio de trabajo, en tres pasos.",
+    "subtitle": "Una configuración autoservicio que se siente como una conversación, no como un formulario.",
+    "steps": [
+      {
+        "title": "Responde unas preguntas",
+        "body": "Cuéntanos qué quieres monitorear — una pregunta a la vez."
+      },
+      {
+        "title": "Creamos tu espacio de trabajo",
+        "body": "Tus formularios, tu jerarquía de lugares y tus tableros se configuran automáticamente a partir de tus respuestas."
+      },
+      {
+        "title": "Recolecta y visualiza",
+        "body": "Recopila datos en la web y en móvil sin conexión, y deja que la IA los convierta en tableros y mapas."
+      }
+    ]
+  },
+  "why": {
+    "heading": "El punto medio práctico.",
+    "subtitle": "Más estructura que una herramienta de encuestas, mucho menos peso que un sistema de información sanitaria completo.",
+    "cards": [
+      {
+        "icon": "offline",
+        "title": "Móvil sin conexión",
+        "body": "Una app nativa con almacenamiento local y sincronización en segundo plano para el campo."
+      },
+      {
+        "icon": "hierarchy",
+        "title": "Jerarquía y monitoreo",
+        "body": "Lugares de varios niveles y formularios de monitoreo de primera clase para visitas repetidas."
+      },
+      {
+        "icon": "ai",
+        "title": "Tableros con IA",
+        "body": "Un generador de tableros con gráficos, mapas y visualizaciones sugeridas por IA."
+      },
+      {
+        "icon": "free",
+        "title": "Gratis para empezar",
+        "body": "Todas las funciones básicas, sin niveles. Asóciate con nosotros cuando quieras ir más allá."
+      }
+    ]
+  },
+  "benchmark": {
+    "heading": "Kobo, {brand}, DHIS2 — dónde encajamos.",
+    "subtitle": "Una mirada honesta. {brand} se sitúa deliberadamente en el medio del espectro de complejidad.",
+    "caption": "El camino intermedio — más estructura y monitoreo que una herramienta de encuestas, mucho menos peso operativo que un HIS completo. Borrador — pendiente de revisión.",
+    "columns": [
+      {
+        "key": "capability",
+        "label": "Capacidad"
+      },
+      {
+        "key": "kobo",
+        "label": "KoboToolbox"
+      },
+      {
+        "key": "akvo",
+        "label": "{brand}",
+        "highlight": true
+      },
+      {
+        "key": "dhis2",
+        "label": "DHIS2"
+      }
+    ],
+    "rows": [
+      {
+        "capability": "Enfoque principal",
+        "kobo": "Encuestas / recolección de datos de campo",
+        "akvo": "Monitoreo + información de gestión",
+        "dhis2": "HIS agregado y de seguimiento a escala nacional"
+      },
+      {
+        "capability": "Complejidad de configuración",
+        "kobo": "Baja",
+        "akvo": "Media",
+        "dhis2": "Alta"
+      },
+      {
+        "capability": "Recolección móvil sin conexión",
+        "kobo": "Sí (KoboCollect / Enketo)",
+        "akvo": "Sí (app nativa, sincronización local)",
+        "dhis2": "Sí (app Android)"
+      },
+      {
+        "capability": "Jerarquía de varios niveles",
+        "kobo": "Limitada",
+        "akvo": "Integrada, controla el acceso",
+        "dhis2": "Fuerte (diseño central)"
+      },
+      {
+        "capability": "Monitoreo en el tiempo",
+        "kobo": "Con grupos repetibles, manual",
+        "akvo": "Formularios de monitoreo de primera clase",
+        "dhis2": "Seguimiento longitudinal"
+      },
+      {
+        "capability": "Tableros / visualización",
+        "kobo": "Básico + exportación a Excel",
+        "akvo": "Generador: gráficos, mapas, KPIs",
+        "dhis2": "Potente, con curva pronunciada"
+      },
+      {
+        "capability": "Visualización asistida por IA",
+        "kobo": "No",
+        "akvo": "Sí",
+        "dhis2": "Mediante herramienta externa"
+      },
+      {
+        "capability": "Asistente de IA en la app",
+        "kobo": "No",
+        "akvo": "Sí (chatbot)",
+        "dhis2": "No"
+      },
+      {
+        "capability": "Curva de aprendizaje",
+        "kobo": "Suave",
+        "akvo": "Moderada",
+        "dhis2": "Pronunciada"
+      },
+      {
+        "capability": "Costo para empezar",
+        "kobo": "Gratis (plan sin fines de lucro)",
+        "akvo": "Gratis para siempre (núcleo)",
+        "dhis2": "Gratis y de código abierto (autoalojado)"
+      }
+    ]
+  },
+  "partner": {
+    "title": "¿Listo para ir más allá?",
+    "body": "La plataforma básica es gratis para siempre. Para capacidades avanzadas, soluciones a medida y soporte a largo plazo, nos asociamos contigo.",
+    "cta": {
+      "label": "Habla con nuestro equipo",
+      "href": "mailto:info@akvo.org"
+    }
+  },
+  "finalCta": {
+    "title": "Tus datos, trabajando para ti — hoy.",
+    "body": "Crea un espacio de trabajo en un par de minutos. Gratis para siempre.",
+    "cta": {
+      "label": "Pruébalo tú mismo →",
+      "href": "/register"
+    }
+  },
+  "footer": {
+    "tagline": "Monitoreo en tiempo real, simplificado.",
+    "navLabel": "Pie de página",
+    "links": [
+      {
+        "label": "Documentación",
+        "href": "https://akvo-mis.readthedocs.io/"
+      },
+      {
+        "label": "Contacto",
+        "href": "mailto:info@akvo.org"
+      }
+    ]
+  }
+}

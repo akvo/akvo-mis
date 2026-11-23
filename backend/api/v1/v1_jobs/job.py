@@ -24,7 +24,7 @@ from api.v1.v1_forms.models import (
     QuestionOptions,
 )
 from api.v1.v1_forms.constants import QuestionTypes
-from django.db.models import Prefetch
+from django.db.models import Prefetch, F
 from api.v1.v1_data.models import FormData, Answers
 from api.v1.v1_jobs.constants import JobStatus, JobTypes
 
@@ -1147,52 +1147,85 @@ def job_generate_data_download_result(task):
 def seed_data_job(job_id):
     try:
         job = Jobs.objects.get(pk=job_id)
-        seed_excel_data(job)
+        result = seed_excel_data(job)
     except (ValueError, OSError, NameError, TypeError):
-        print("Error seed data job")
+        logger.error("Error seed data job")
         return False
     except Exception as unknown_error:
-        print("Unknown error seed data job", unknown_error)
+        logger.error("Unknown error seed data job: %s", unknown_error)
         return False
-    return True
+    # seed_excel_data returns the seeded records, or None when the upload
+    # had no changes (it already sent the "No Data Updates" email). Report
+    # the count so seed_data_job_result only sends the "New Data Submission"
+    # email when records were actually created -- a no-change upload must
+    # not trigger a second email.
+    return len(result) if result else 0
+
+
+def claim_job_result(task_id, success):
+    """Atomically move a job from on_progress to its terminal state.
+
+    django-q re-delivers a task whenever it is not acknowledged in time
+    (ack timeout, or the worker being recycled on a rolling deploy), and
+    the result hook fires on *every* delivery. Without an atomic claim the
+    hook re-sends emails and spawns duplicate follow-up jobs on each
+    delivery -- this is exactly what flooded prod with 368 "No Data
+    Updates" emails from only two uploads.
+
+    Returns the Jobs row for the single delivery that wins the claim, or
+    None if another delivery already finalized it -- callers MUST no-op on
+    None so side effects happen at most once per job.
+    """
+    terminal = JobStatus.done if success else JobStatus.failed
+    fields = {"status": terminal, "attempt": F("attempt") + 1}
+    if success:
+        fields["available"] = timezone.now()
+    claimed = Jobs.objects.filter(
+        task_id=task_id, status=JobStatus.on_progress
+    ).update(**fields)
+    if not claimed:
+        return None
+    return Jobs.objects.filter(task_id=task_id).first()
 
 
 def seed_data_job_result(task):
-    job = Jobs.objects.get(task_id=task.id)
-    job.attempt = job.attempt + 1
+    # seed_data_job returns the number of records seeded, 0 for a no-change
+    # upload (whose "No Data Updates" email was already sent), or False on a
+    # caught error. task.success is False only on an uncaught failure or
+    # timeout. Mark the job done/failed accordingly, and send the "New Data
+    # Submission" email only when records were actually created.
+    result = task.result
+    errored = (result is False) or (not task.success)
+    job = claim_job_result(task.id, not errored)
+    if job is None or errored or not result:
+        return
     is_super_admin = job.user.is_superuser
-    if task.result:
-        job.status = JobStatus.done
-        job.available = timezone.now()
-        form_id = job.info.get("form")
-        form = Forms.objects.filter(pk=int(form_id)).first()
-        file = job.info.get("file")
-        storage.download(f"upload/{file}")
-        df = pd.read_excel(f"./tmp/{file}", sheet_name="data")
-        subject = (
-            "New Data Uploaded"
-            if is_super_admin
-            else "New Request @{0}".format(job.user.get_full_name())
-        )
-        data = {
-            "subject": subject,
-            "title": "New Data Submission",
-            "send_to": [job.user.email],
-            "user": job.user,
-            "listing": [
-                {
-                    "name": "Upload Date",
-                    "value": job.created.strftime("%m-%d-%Y, %H:%M:%S"),
-                },
-                {"name": "Questionnaire", "value": form.name},
-                {"name": "Number of Records", "value": df.shape[0]},
-            ],
-            "is_super_admin": is_super_admin,
-        }
-        send_email(context=data, type=EmailTypes.new_request)
-    else:
-        job.status = JobStatus.failed
-    job.save()
+    form_id = job.info.get("form")
+    form = Forms.objects.filter(pk=int(form_id)).first()
+    file = job.info.get("file")
+    storage.download(f"upload/{file}")
+    df = pd.read_excel(f"./tmp/{file}", sheet_name="data")
+    subject = (
+        "New Data Uploaded"
+        if is_super_admin
+        else "New Request @{0}".format(job.user.get_full_name())
+    )
+    data = {
+        "subject": subject,
+        "title": "New Data Submission",
+        "send_to": [job.user.email],
+        "user": job.user,
+        "listing": [
+            {
+                "name": "Upload Date",
+                "value": job.created.strftime("%m-%d-%Y, %H:%M:%S"),
+            },
+            {"name": "Questionnaire", "value": form.name},
+            {"name": "Number of Records", "value": df.shape[0]},
+        ],
+        "is_super_admin": is_super_admin,
+    }
+    send_email(context=data, type=EmailTypes.new_request)
 
 
 def validate_excel(job_id):
@@ -1238,31 +1271,36 @@ def validate_excel(job_id):
 
 
 def validate_excel_result(task):
-    job = Jobs.objects.get(task_id=task.id)
-    job.attempt = job.attempt + 1
+    # Idempotency guard: django-q can deliver this hook more than once for
+    # the same upload. Only the delivery that wins the claim may spawn the
+    # seed_data job, otherwise a single valid upload fans out into one
+    # seed_data job (and one email) per re-delivery.
+    #
+    # Gate on task.success too, not just task.result: on a timeout or
+    # uncaught failure django-q sets success=False and leaves an error
+    # string in result (which is truthy), so keying off result alone would
+    # mark the job done and spawn a seed_data job from a run that never
+    # actually validated the file.
+    valid = bool(task.success) and bool(task.result)
+    job = claim_job_result(task.id, valid)
+    if job is None or not valid:
+        return
     job_info = job.info
-    if task.result:
-        job.status = JobStatus.done
-        job.available = timezone.now()
-        job.save()
-        job_info.update({"ref_job_id": job.id})
-        new_job = Jobs.objects.create(
-            result=job.info.get("file"),
-            type=JobTypes.seed_data,
-            status=JobStatus.on_progress,
-            user=job.user,
-            info=job_info,
-        )
-        task_id = async_task(
-            "api.v1.v1_jobs.job.seed_data_job",
-            new_job.id,
-            hook="api.v1.v1_jobs.job.seed_data_job_result",
-        )
-        new_job.task_id = task_id
-        new_job.save()
-    else:
-        job.status = JobStatus.failed
-        job.save()
+    job_info.update({"ref_job_id": job.id})
+    new_job = Jobs.objects.create(
+        result=job.info.get("file"),
+        type=JobTypes.seed_data,
+        status=JobStatus.on_progress,
+        user=job.user,
+        info=job_info,
+    )
+    task_id = async_task(
+        "api.v1.v1_jobs.job.seed_data_job",
+        new_job.id,
+        hook="api.v1.v1_jobs.job.seed_data_job_result",
+    )
+    new_job.task_id = task_id
+    new_job.save()
 
 
 def set_bulk_upload_job(job_id, job_status, result=None):

@@ -1,0 +1,10 @@
+{
+  "title": "Go to your workspace",
+  "subtitle": "Each workspace has its own address. Enter yours to sign in.",
+  "addressLabel": "Workspace address",
+  "addressRequired": "Enter your workspace address",
+  "addressPlaceholder": "acme",
+  "submit": "Continue",
+  "noWorkspace": "Don't have one?",
+  "create": "Create a workspace"
+}
