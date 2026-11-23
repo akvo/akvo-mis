@@ -64,10 +64,18 @@ const Onboarding = () => {
   const [submitting, setSubmitting] = useState(false);
   const [avail, setAvail] = useState(null); // { available, reason } | null
   const [checking, setChecking] = useState(false);
+  // The catalogue loads async; until it does we must not decide the
+  // starter-forms step is empty (a draft could otherwise skip it yet still
+  // submit saved template ids).
+  const [catalogueLoaded, setCatalogueLoaded] = useState(false);
+  // A request-level failure (captcha, throttle, 5xx, network) that maps to no
+  // single field — shown near the submit button so the visitor is never stuck.
+  const [formError, setFormError] = useState("");
   const siteKey = window?.appConfig?.turnstileSiteKey || "";
   const [captchaToken, setCaptchaToken] = useState("");
+  // Bumped on a failed submit to reset the single-use Turnstile widget.
+  const [captchaNonce, setCaptchaNonce] = useState(0);
   const mounted = useRef(false);
-  const availTimer = useRef(0);
 
   useEffect(() => {
     document.title = c.title;
@@ -79,7 +87,8 @@ const Onboarding = () => {
     api
       .get("register/form-library")
       .then((res) => setCategories(res.data?.categories || []))
-      .catch(() => setCategories([]));
+      .catch(() => setCategories([]))
+      .finally(() => setCatalogueLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -110,23 +119,43 @@ const Onboarding = () => {
     }
   }, [step]);
 
-  // Live availability check on the address step, debounced.
+  // Live availability check on the address step, debounced. The cleanup marks
+  // this run superseded (`active = false`) so a slower in-flight request for an
+  // old value can never apply its result to a newer one, and so "Checking…"
+  // never sticks when the value becomes ineligible before the timer fires.
   useEffect(() => {
-    setAvail(null);
     const v = data.subdomain.trim().toLowerCase();
-    if (step !== 5 || v.length < 3 || !SUBDOMAIN_RE.test(v)) {
+    const eligible = step === 5 && v.length >= 3 && SUBDOMAIN_RE.test(v);
+    setAvail(null);
+    setChecking(eligible);
+    if (!eligible) {
       return () => {};
     }
-    setChecking(true);
-    window.clearTimeout(availTimer.current);
-    availTimer.current = window.setTimeout(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
       api
         .get(`register/subdomain?value=${encodeURIComponent(v)}`)
-        .then((res) => setAvail(res.data))
-        .catch(() => setAvail(null))
-        .finally(() => setChecking(false));
+        .then((res) => {
+          if (active) {
+            setAvail(res.data);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setAvail(null);
+          }
+        })
+        .finally(() => {
+          if (active) {
+            setChecking(false);
+          }
+        });
     }, 450);
-    return () => window.clearTimeout(availTimer.current);
+    return () => {
+      active = false;
+      setChecking(false);
+      window.clearTimeout(timer);
+    };
   }, [data.subdomain, step]);
 
   const set = (key, value) => {
@@ -136,8 +165,21 @@ const Onboarding = () => {
 
   // Picking a category (or skip) resets the template selection: the ticked
   // ids belong to whichever category was open, and must not carry across.
+  // Re-picking the SAME category keeps them — only an actual change clears.
   const chooseCategory = (value) => {
-    setData((d) => ({ ...d, category: value, template_ids: [] }));
+    setData((d) => {
+      const sameCategory =
+        d.category === value ||
+        (d.category &&
+          value &&
+          typeof d.category === "object" &&
+          typeof value === "object" &&
+          d.category.id === value.id);
+      if (sameCategory) {
+        return d;
+      }
+      return { ...d, category: value, template_ids: [] };
+    });
     setErrors((e) => ({ ...e, category: "" }));
   };
 
@@ -198,11 +240,13 @@ const Onboarding = () => {
     return Object.keys(e).length === 0;
   };
 
-  // Step 2 (starter forms) is skipped when the chosen category offers no
-  // templates — the "Something else / skip" tile, or a category with none.
-  // There is nothing to pick, so don't strand the visitor on an empty screen;
-  // jump straight between step 1 and step 3 in both directions.
-  const skipForms = chosenTemplates.length === 0;
+  // Step 2 (starter forms) is skipped when there is nothing to pick: the
+  // "Something else / skip" tile, or a chosen category the *loaded* catalogue
+  // shows has no templates. Before the catalogue loads we do NOT skip — a
+  // returning visitor's draft must not leap past the step yet still submit the
+  // template ids it saved (H). Jump straight between step 1 and step 3.
+  const skipForms =
+    data.category === SKIP || (catalogueLoaded && chosenTemplates.length === 0);
 
   // When step 2 is auto-skipped, renumber the UI so the user sees a contiguous
   // 1..5 (total 5, no missing "step 2") instead of a confusing 1 → 3 of 6. The
@@ -215,6 +259,7 @@ const Onboarding = () => {
 
   const submit = () => {
     setSubmitting(true);
+    setFormError("");
     const payload = {
       email: data.email.trim(),
       password,
@@ -224,7 +269,11 @@ const Onboarding = () => {
       captcha_token: captchaToken,
       meta: {
         category: chosenCategory,
-        template_ids: data.template_ids,
+        // Only submit ids that belong to the chosen (loaded) category, so a
+        // stale draft id for another category is never cloned (H).
+        template_ids: data.template_ids.filter((id) =>
+          chosenTemplates.some((t) => t.id === id)
+        ),
         org: data.org.trim(),
         adminName: data.adminName.trim(),
         place: data.place.trim(),
@@ -242,9 +291,12 @@ const Onboarding = () => {
         setStep(7);
       })
       .catch((err) => {
-        // A Turnstile token is single-use; clear it so a retry re-solves.
+        // A Turnstile token is single-use; clear it and reset the widget so a
+        // retry solves a fresh challenge instead of re-sending an empty token.
         setCaptchaToken("");
-        const details = err.response?.data?.details || {};
+        setCaptchaNonce((n) => n + 1);
+        const res = err.response;
+        const details = res?.data?.details || {};
         const next = {};
         if (details.subdomain) {
           next.subdomain = firstError(details.subdomain);
@@ -255,9 +307,35 @@ const Onboarding = () => {
         if (details.password) {
           next.password = firstError(details.password);
         }
+        // The org display name is submitted as `name`; show its error on the
+        // organisation step.
+        if (details.name) {
+          next.org = firstError(details.name);
+        }
         setErrors(next);
+        // Send the visitor back to the step that owns the failing field.
         if (next.subdomain) {
           setStep(5);
+        } else if (next.org) {
+          setStep(3);
+        }
+        // No field-level detail (captcha, meta, throttle, 5xx, network): show a
+        // message near the button so Create is never silently re-enabled with
+        // no explanation.
+        if (!Object.keys(next).length) {
+          let msg = res?.data?.message || res?.data?.detail;
+          if (!msg) {
+            if (!res) {
+              msg = c.errorNetwork;
+            } else if (res.status === 429) {
+              msg = c.errorRateLimited;
+            } else if (res.status >= 500) {
+              msg = c.errorServer;
+            } else {
+              msg = c.errorGeneric;
+            }
+          }
+          setFormError(msg);
         }
       })
       .finally(() => setSubmitting(false));
@@ -336,6 +414,9 @@ const Onboarding = () => {
                             slug: cat.slug,
                           })
                         }
+                        aria-pressed={Boolean(
+                          chosenCategory && chosenCategory.id === cat.id
+                        )}
                         className={tileCls(
                           chosenCategory && chosenCategory.id === cat.id
                         )}
@@ -345,6 +426,7 @@ const Onboarding = () => {
                     ))}
                     <button
                       type="button"
+                      aria-pressed={data.category === SKIP}
                       onClick={() => chooseCategory(SKIP)}
                       className={tileCls(data.category === SKIP)}
                     >
@@ -371,6 +453,7 @@ const Onboarding = () => {
                           <button
                             key={t.id}
                             type="button"
+                            aria-pressed={ticked}
                             onClick={() => toggleTemplate(t.id)}
                             className={tileCls(ticked)}
                           >
@@ -529,8 +612,21 @@ const Onboarding = () => {
                     />
                   </label>
                   {err("password")}
-                  <Turnstile siteKey={siteKey} onToken={setCaptchaToken} />
+                  <Turnstile
+                    siteKey={siteKey}
+                    onToken={setCaptchaToken}
+                    resetSignal={captchaNonce}
+                  />
                 </>
+              ) : null}
+
+              {formError ? (
+                <p
+                  role="alert"
+                  className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400"
+                >
+                  {formError}
+                </p>
               ) : null}
 
               <div className="mt-8 flex items-center justify-between gap-3">

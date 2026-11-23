@@ -6,9 +6,20 @@ import PropTypes from "prop-types";
 // include it and read the token from `onToken`.
 const SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
-const Turnstile = ({ siteKey, onToken }) => {
+const Turnstile = ({ siteKey, onToken, resetSignal }) => {
   const boxRef = useRef(null);
   const idRef = useRef(null);
+
+  // Reset the solved widget when the parent bumps `resetSignal` (e.g. after a
+  // failed registration whose single-use token was cleared), so a retry issues
+  // a fresh challenge instead of re-sending an empty token. 0 = initial, never
+  // resets on mount.
+  useEffect(() => {
+    if (resetSignal && window.turnstile && idRef.current !== null) {
+      window.turnstile.reset(idRef.current);
+      onToken("");
+    }
+  }, [resetSignal, onToken]);
 
   useEffect(() => {
     if (!siteKey) {
@@ -54,6 +65,11 @@ const Turnstile = ({ siteKey, onToken }) => {
 Turnstile.propTypes = {
   siteKey: PropTypes.string,
   onToken: PropTypes.func.isRequired,
+  resetSignal: PropTypes.number,
+};
+
+Turnstile.defaultProps = {
+  resetSignal: 0,
 };
 
 export default Turnstile;
