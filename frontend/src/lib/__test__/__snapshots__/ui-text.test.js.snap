@@ -483,6 +483,10 @@ Object {
     "deleteAttachmentError": "Unable to delete attachment",
     "deleteAttachmentSuccess": "Attachment deleted successfully",
     "deleteAttachmentTitle": "Delete Attachment",
+    "deleteDraftContent": "Are you sure you want to delete {{draftName}}?",
+    "deleteDraftError": "Unable to delete draft",
+    "deleteDraftSuccess": "Draft deleted successfully",
+    "deleteDraftTitle": "Delete Draft",
     "deleteOrganisationDesc": [Function],
     "deleteOrganisationTitle": "You are about to delete the organization",
     "deleteText": "Delete",
@@ -515,9 +519,17 @@ Object {
     "downloadReportSuccess": "Report downloaded successfully",
     "downloadTitle": "Downloads",
     "draft": "Draft",
+    "draftCreatedByCol": "Created by",
     "draftFormDescription": <p>
       Please fill up the webform below with relevant responses. You can save your responses and continue later or if you have completed the form then you can submit it.
     </p>,
+    "draftFormPublishConfirmContent": "Are you sure you want to publish this draft ? This action cannot be undone.",
+    "draftFormPublishConfirmTitle": "Publish Draft",
+    "draftFormPublishError": "Unable to publish draft",
+    "draftFormPublishSuccess": "Draft published successfully",
+    "draftFormSaveError": "Unable to save draft",
+    "draftFormSaveSuccess": "Draft saved successfully",
+    "draftUpdatedByPrefix": "by",
     "dropFile": "Drop your file here",
     "editAdmDesc": <React.Fragment>
       This page allows you to edit administration to the 
@@ -525,6 +537,7 @@ Object {
        platform.
     </React.Fragment>,
     "editAdministration": "Edit Administration",
+    "editAndPublishDraft": "Edit and Publish Draft",
     "editAttachment": "Edit Attachment",
     "editAttachmentDesc": "Replace the existing attachment with a new one",
     "editAttributeDesc": <React.Fragment>
@@ -940,6 +953,21 @@ Object {
     </React.Fragment>,
     "manageDataTitle": "Manage Data",
     "manageDataValidationSetup": "Validation Tree",
+    "manageDraftText": <React.Fragment>
+      This is where you can manage your drafts. You can:
+      <ul>
+        <li>
+          View your saved drafts
+        </li>
+        <li>
+          Edit existing drafts
+        </li>
+        <li>
+          Delete existing drafts
+        </li>
+      </ul>
+    </React.Fragment>,
+    "manageDraftTitle": "Manage Drafts",
     "manageEntities": "Manage Entities",
     "manageEntitiesText": <React.Fragment>
       This is where you manage entitys based on their fields. You can :
@@ -1018,6 +1046,7 @@ Object {
     "menuFormBuilder": "Form Builder",
     "menuLevels": "Levels",
     "menuManageData": "Manage Data",
+    "menuManageDraft": "Manage Drafts",
     "menuManageMobileUsers": "Manage Mobile Users",
     "menuManagePlatformUsers": "Manage Platform Users",
     "menuManageRoles": "Manage Roles",
@@ -3752,6 +3781,7 @@ Object {
     "menuFormBuilder": "Générateur de formulaires",
     "menuLevels": "Niveaux",
     "menuManageData": "Gérer les données",
+    "menuManageDraft": "Gérer les brouillons",
     "menuManageMobileUsers": "Gérer les utilisateurs mobiles",
     "menuManagePlatformUsers": "Gérer les utilisateurs de la plateforme",
     "menuManageRoles": "Gérer les rôles",
