@@ -2,9 +2,13 @@ import React from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import { Text, Icon, Divider } from '@rneui/themed';
 import { FormState } from '../../store';
-import styles from '../styles';
+import getStyles from '../styles';
+import useTheme from '../../lib/theme';
 
 const RepeatSection = ({ group, repeatIndex }) => {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
   // Skip rendering section title for the first instance (index 0)
   if (repeatIndex === 0) {
     return null;
@@ -12,11 +16,8 @@ const RepeatSection = ({ group, repeatIndex }) => {
 
   const handleRemoveRepeat = () => {
     FormState.update((s) => {
-      // Get current repeats for this group
       const currentRepeats = s.repeats || {};
       const groupRepeats = currentRepeats[group.id] || [0];
-
-      // Filter out this repeat index
       const updatedRepeats = groupRepeats.filter((idx) => idx !== repeatIndex);
       s.repeats = {
         ...currentRepeats,
@@ -37,7 +38,7 @@ const RepeatSection = ({ group, repeatIndex }) => {
           onPress={handleRemoveRepeat}
           testID={`remove-repeat-${group.id}-${repeatIndex}`}
         >
-          <Icon type="ionicon" name="trash-outline" size={20} color="#cc0000" />
+          <Icon type="ionicon" name="trash-outline" size={20} color={theme.status.error} />
         </TouchableOpacity>
       </View>
     </View>

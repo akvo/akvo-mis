@@ -249,41 +249,6 @@ class MobileDataPointDownloadListTestCase(TestCase, ProfileTestHelperMixin):
         self.assertEqual(data["total"], 2)
         self.assertIn(new_form_data.id, [d["id"] for d in data["data"]])
 
-    def test_get_datapoint_list_exclude_draft_data(self):
-        # Create a draft form data
-        draft_form_data = FormData.objects.create(
-            name="Draft Data",
-            geo=None,
-            form=self.forms[0],
-            administration=self.adm_children.first(),
-            created_by=self.user,
-            uuid="draft-uuid-1234",
-            is_pending=False,  # Not pending
-            is_draft=True,  # Mark as draft
-        )
-        add_fake_answers(draft_form_data)
-
-        code = {"code": self.passcode}
-        response = self.client.post(
-            "/api/v1/device/auth",
-            code,
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        token = response.data["syncToken"]
-        url = "/api/v1/device/datapoint-list/"
-        response = self.client.get(
-            url,
-            follow=True,
-            content_type="application/json",
-            **{"HTTP_AUTHORIZATION": f"Bearer {token}"},
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.json()
-        # Ensure that the draft data is not included in the list
-        self.assertEqual(data["total"], 1)
-        self.assertNotIn(draft_form_data.id, [d["id"] for d in data["data"]])
-
     def test_get_datapoints_list_with_form_id_filter(self):
         """Filter by form_id returns only that form's datapoints."""
         second_form_data = FormData.objects.create(

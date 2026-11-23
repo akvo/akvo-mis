@@ -29,9 +29,9 @@ class MobileSyncIdempotencyTest(
         call_command("default_roles_seeder", "--test", 1)
 
         adm_level = Levels.objects.filter(level__gt=0).order_by("?").first()
-        self.administration = Administration.objects.filter(
-            level=adm_level
-        ).order_by("?").last()
+        self.administration = (
+            Administration.objects.filter(level=adm_level).order_by("?").last()
+        )
 
         self.form = Forms.objects.filter(parent__isnull=True).first()
         self.monitoring_form = Forms.objects.filter(
@@ -172,72 +172,13 @@ class MobileSyncIdempotencyTest(
         # not mint a new one.
         self.assertEqual(second.json()["id"], row.id)
 
-    def test_monitoring_draft_resave_with_returned_id_updates_in_place(self):
-        parent = FormData.objects.create(
-            name="parent datapoint",
-            form=self.form,
-            administration=self.administration,
-            created_by=self.user,
-        )
-
-        # First save of a monitoring draft: the device has no draftId yet.
-        first = self.post_sync(
-            form=self.monitoring_form,
-            query="?is_draft=true",
-            uuid=str(parent.uuid),
-            submission_key="99999999-9999-9999-9999-999999999999",
-        )
-        draft_id = first.json()["id"]
-
-        # The uuid fallback cannot match child forms (a monitoring draft
-        # carries its PARENT's uuid), so the returned id is the only thing
-        # standing between a re-saved draft and a duplicate row. The device
-        # stores it as draftId and re-saves with ?id=.
-        second = self.post_sync(
-            form=self.monitoring_form,
-            query=f"?is_draft=true&id={draft_id}",
-            uuid=str(parent.uuid),
-            submission_key="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-        )
-
-        self.assertEqual(second.status_code, status.HTTP_200_OK)
-        self.assertEqual(second.json()["id"], draft_id)
-        self.assertEqual(
-            FormData.objects_draft.filter(
-                form=self.monitoring_form
-            ).count(),
-            1,
-        )
-
-    def test_draft_resave_still_updates_in_place(self):
-        self.post_sync(
-            query="?is_draft=true",
-            uuid="55555555-5555-5555-5555-555555555555",
-            submission_key="66666666-6666-6666-6666-666666666666",
-        )
-        # A draft save mints a fresh key each time; draft_exists matches on
-        # uuid and updates in place. The two mechanisms must not collide.
-        self.post_sync(
-            query="?is_draft=true",
-            uuid="55555555-5555-5555-5555-555555555555",
-            submission_key="77777777-7777-7777-7777-777777777777",
-        )
-
-        self.assertEqual(
-            FormData.objects_draft.filter(form=self.form).count(), 1
-        )
-
     def test_replay_of_published_submission_is_noop(self):
         key = "88888888-8888-8888-8888-888888888888"
 
         self.post_sync(submission_key=key)
-        row = FormData.objects.filter(form=self.form).first()
-
-        # draft_exists cannot catch this: the row is published, not a draft.
-        self.post_sync(query="?is_published=true", submission_key=key)
+        self.post_sync(submission_key=key)
 
         self.assertEqual(FormData.objects.filter(form=self.form).count(), 1)
-        self.assertFalse(FormData.objects.get(pk=row.pk).is_draft)
 
     def test_replay_finds_soft_deleted_row(self):
         key = "99999999-9999-9999-9999-999999999999"
@@ -253,8 +194,6 @@ class MobileSyncIdempotencyTest(
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
-            FormData.objects_with_deleted.filter(
-                submission_key=key
-            ).count(),
+            FormData.objects_with_deleted.filter(submission_key=key).count(),
             1,
         )

@@ -41,10 +41,14 @@ const AuthByPassForm = ({ navigation }) => {
             await crudSessions.addSession(db, { token: bearerToken, passcode: 'NO PASSCODE' });
           }
           await cascades.createSqliteDir();
-          // save forms
+          // check users exist
+          const activeUser = await crudUsers.getActiveUser(db);
+          // save forms scoped to the active user, so Home's list (which
+          // filters by the logged-in user) shows them without a sync first.
           await crudForms.upsertForm(db, {
             id: data.id,
             version: data.version,
+            userId: activeUser?.id,
             formJSON: data,
           });
           // download cascades files
@@ -54,19 +58,25 @@ const AuthByPassForm = ({ navigation }) => {
               cascades.download(downloadUrl, cascadeFile);
             });
           }
-          // check users exist
-          const activeUser = await crudUsers.getActiveUser(db);
-          // update auth state
-          AuthState.update((s) => {
-            s.authenticationCode = 'NO PASSCODE';
-            s.token = bearerToken;
-          });
           if (!activeUser || !activeUser?.id) {
+            // No user yet: token must be set so the authed stack (AddUser)
+            // is reachable; AddUser creates the user and re-saves the forms.
+            AuthState.update((s) => {
+              s.authenticationCode = 'NO PASSCODE';
+              s.token = bearerToken;
+            });
             goTo('AddUser');
           } else {
+            // Set the user before the token flip: the token swaps the
+            // navigator to the authed stack and mounts Home at once, and
+            // Home reads the current user id to query its forms.
             UserState.update((s) => {
               s.id = activeUser?.id;
               s.name = activeUser?.name;
+            });
+            AuthState.update((s) => {
+              s.authenticationCode = 'NO PASSCODE';
+              s.token = bearerToken;
             });
             goTo('Home');
           }
