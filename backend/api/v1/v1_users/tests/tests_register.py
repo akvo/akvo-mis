@@ -476,6 +476,14 @@ class SubdomainAvailabilityTestCase(TestCase):
     def test_short_name_is_invalid(self):
         self.assertFalse(self.check("ab").json()["available"])
 
+    def test_over_63_chars_is_invalid(self):
+        # The register POST (RegexField max_length=63) always rejects a longer
+        # label, so it is never "available"; the check also keeps oversized
+        # input out of the profanity scan.
+        body = self.check("a" * 64).json()
+        self.assertFalse(body["available"])
+        self.assertIn("63", body["reason"])
+
     def test_bad_characters_are_invalid(self):
         self.assertFalse(self.check("Bad_Name").json()["available"])
 

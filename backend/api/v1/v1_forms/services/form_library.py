@@ -44,13 +44,18 @@ def _published_children(registration):
 
 
 @transaction.atomic
-def clone_family(registration, user):
+def clone_family(registration, user, preserve_names=False):
     """'Use this form': clone the template family into the caller's tenant.
 
     duplicate_form already re-tenants each copy to ``user.tenant`` and sets it
     draft, and does NOT copy meta, so the clone carries no template flag. We
     only re-point the children's parent, stamp provenance, and bump the
     template's import_count.
+
+    With ``preserve_names`` the clones keep the template's real names, not
+    duplicate_form's " (Copy)" suffix. That suffix fits the in-workspace
+    "Use this form" action (the copy sits beside existing forms), but not when
+    the clone seeds a brand-new workspace (LP-004 onboarding starter forms).
 
     Returns (new_registration, [new_monitoring, ...]).
     """
@@ -62,7 +67,11 @@ def clone_family(registration, user):
             "at": timezone.now().date().isoformat(),
         }
     }
-    new_registration.save(update_fields=["meta"])
+    reg_fields = ["meta"]
+    if preserve_names:
+        new_registration.name = registration.name
+        reg_fields.append("name")
+    new_registration.save(update_fields=reg_fields)
 
     new_children = []
     for child in _published_children(registration):
@@ -70,7 +79,11 @@ def clone_family(registration, user):
         # duplicate_form copies parent_id verbatim (the library registration);
         # re-point it to the freshly created registration in the caller tenant.
         new_child.parent_id = new_registration.id
-        new_child.save(update_fields=["parent"])
+        child_fields = ["parent"]
+        if preserve_names:
+            new_child.name = child.name
+            child_fields.append("name")
+        new_child.save(update_fields=child_fields)
         new_children.append(new_child)
 
     Forms.objects.filter(pk=registration.id).update(

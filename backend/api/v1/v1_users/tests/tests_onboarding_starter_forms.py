@@ -18,7 +18,7 @@ from api.v1.v1_forms.models import (
     Questions,
 )
 from api.v1.v1_profile.models import Levels
-from api.v1.v1_users.models import SystemUser, Tenant
+from api.v1.v1_users.models import Organisation, SystemUser, Tenant
 
 
 def _template(
@@ -283,4 +283,38 @@ class ConfigureClonesStarterFormsTestCase(TestCase):
         self.assertEqual(self.configure(auth).status_code, 200)
         self.assertEqual(
             Forms.objects.filter(tenant=user.tenant).count(), 0
+        )
+
+    def test_starter_forms_keep_names_and_selection_order(self):
+        # Two templates staged reversed, so the clone order is observable.
+        first = _template("Agriculture Baseline", published_children=1)
+        second = _template("WASH Household", published_children=0)
+        user, auth = self.signup({"template_ids": [second.id, first.id]})
+        self.assertEqual(self.configure(auth).status_code, 200)
+
+        registrations = Forms.objects.filter(
+            tenant=user.tenant, type=FormTypes.registration
+        ).order_by("id")
+        # Cloned in the visitor's order (second, then first), each keeping its
+        # real name -- no " (Copy)" suffix.
+        self.assertEqual(
+            [r.name for r in registrations],
+            ["WASH Household", "Agriculture Baseline"],
+        )
+        # The monitoring child keeps its real name too.
+        child = Forms.objects.get(
+            tenant=user.tenant, type=FormTypes.monitoring
+        )
+        self.assertEqual(child.name, "Agriculture Baseline Monitoring 0")
+
+    def test_configure_seeds_organisation_from_meta_when_omitted(self):
+        user, auth = self.signup({"org": "Rural Water Trust"})
+        # self.config carries no `organisation`; configure must fall back to
+        # the org the wizard staged on Tenant.meta, so the manual /configure
+        # fallback path does not lose it.
+        self.assertEqual(self.configure(auth).status_code, 200)
+        self.assertTrue(
+            Organisation.objects.filter(
+                tenant=user.tenant, name="Rural Water Trust"
+            ).exists()
         )

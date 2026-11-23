@@ -305,6 +305,10 @@ THROTTLE_RATES = {
     # Read-only subdomain availability, called live from the onboarding
     # address step; loose because it is keystroke-driven and creates nothing.
     "subdomain_check_ip": "240/hour",
+    # The starter-forms catalogue, fetched once per onboarding page load. Own
+    # scope so a burst of keystroke-driven availability checks (behind a shared
+    # office IP) cannot exhaust the budget and 429 the single catalogue fetch.
+    "form_library_ip": "240/hour",
     # 30 rather than 10. Any per-email login limit is a lockout vector
     # -- anyone who knows an address can spend its budget -- and the
     # same argument is why `email_dispatch_email` is capped rather than

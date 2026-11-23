@@ -85,6 +85,7 @@ from utils.email_helper import send_email
 from utils.throttling import (
     EmailDispatchEmailThrottle,
     EmailDispatchIPThrottle,
+    FormLibraryIPThrottle,
     LoginEmailThrottle,
     LoginIPThrottle,
     SubdomainCheckIPThrottle,
@@ -516,6 +517,18 @@ def register_subdomain(request, version):
                 "reason": "Workspace name must be at least 3 characters",
             }
         )
+    # Apply the register serializer's 63-char max here, before the
+    # reserved-name checks: POST /register (RegexField max_length=63) always
+    # rejects a longer label, so it is never "available", and this keeps an
+    # oversized hyphenated value out of self_service_reason's profanity scan,
+    # whose token search assumes that bound and is costlier on this public GET.
+    if len(value) > 63:
+        return Response(
+            {
+                "available": False,
+                "reason": "Workspace name must be at most 63 characters",
+            }
+        )
     if not re.fullmatch(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?", value):
         return Response(
             {
@@ -538,7 +551,7 @@ def register_subdomain(request, version):
 
 @extend_schema(tags=["Auth"])
 @api_view(["GET"])
-@throttle_classes([SubdomainCheckIPThrottle])
+@throttle_classes([FormLibraryIPThrottle])
 def register_form_library(request, version):
     """Public starter-forms catalogue for the onboarding wizard (LP-004).
 
@@ -792,10 +805,18 @@ def configure_project(request, version):
         )
         # Seed the workspace's own organisation so a fresh tenant is not empty
         # of organisations (LP-002: created here, after the tenant exists, from
-        # the onboarding answer the wizard staged in Tenant.meta).
-        if validated.get("organisation"):
+        # the onboarding answer the wizard staged in Tenant.meta). Fall back to
+        # Tenant.meta["org"] when the request omits it, so the wizard's answer
+        # is still used if auto-configure fails and the user completes the
+        # manual /configure form (which does not send an organisation).
+        organisation = (
+            validated.get("organisation")
+            or (user.tenant.meta or {}).get("org")
+            or ""
+        )
+        if organisation.strip():
             Organisation.objects.get_or_create(
-                tenant=user.tenant, name=validated["organisation"].strip()
+                tenant=user.tenant, name=organisation.strip()
             )
         if validated.get("logo"):
             user.tenant.logo = validated["logo"]
@@ -823,9 +844,24 @@ def _clone_starter_forms(user):
     ids = ids[: RegisterSerializer.MAX_STARTER_FORMS]
     if not ids:
         return
-    for template in library_registration_qs().filter(pk__in=ids):
+    # Clone in the visitor's selection order, not the database's:
+    # filter(pk__in) returns rows in an arbitrary order, so index them and
+    # walk `ids`. The library query is the security gate, so unknown,
+    # unpublished or cross-tenant ids simply fall out here.
+    by_id = {
+        form.id: form
+        for form in library_registration_qs().filter(pk__in=ids)
+    }
+    seen = set()
+    for template_id in ids:
+        template = by_id.get(template_id)
+        if template is None or template_id in seen:
+            continue
+        seen.add(template_id)
         try:
-            clone_family(template, user=user)
+            # Starter forms seed a fresh workspace, so keep the template's real
+            # names rather than the " (Copy)" suffix (LP-004 review).
+            clone_family(template, user=user, preserve_names=True)
         except Exception:
             logger.exception(
                 "LP-004: starter-form clone failed for template %s "
