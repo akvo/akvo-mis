@@ -11,7 +11,15 @@
 
 **Task ID**: LP-002
 **Author**: Iwan Firmawan
-**Date**: 2026-11-19 (rev. 4 — **implemented & QA'd**: wizard is sector-first (no chooser step); onboarding renders on a brand-blue (`akvo-deep`) background with an autonomous dot field (`HeroDotField interactive={false}`); `Tenant.meta` stores sector + staged org, created at `/configure`. · rev. 3 — new `/onboarding` route; shared public shell extracted from the landing; `es` added MIS-wide; palette = platform blue `#1651b6` (D-4/D-5/D-10') · rev. 2 — inherits LP-001 design system + i18n + brand conventions)
+**Date**: 2026-11-23 (rev. 5 — post-merge / [[LP-004]] alignment: the `akvo-*`
+Tailwind tokens were renamed **`brand-*`** in the feature/575 merge, so the
+onboarding band is `bg-brand-deep` (not `bg-akvo-deep`) and the blue tokens are
+`brand-*`; the wizard chrome moved from hardcoded English into the global i18n
+library (`lib/i18n/<locale>/onboarding.json`, `useTranslation("onboarding")`),
+and the shell suppression guard is `isPublicShell` in `App.js`; **[[LP-004]]**
+then added a starter-forms step, so `INPUT_STEPS = 6` with dynamic 1..5-of-5
+renumbering when that step is skipped, and `Tenant.meta` now stores `category` +
+`template_ids` — the free-form `sector` key is retired. · rev. 4 — **implemented & QA'd**: wizard is sector-first (no chooser step); onboarding renders on a brand-blue (`akvo-deep`) background with an autonomous dot field (`HeroDotField interactive={false}`); `Tenant.meta` stores sector + staged org, created at `/configure`. · rev. 3 — new `/onboarding` route; shared public shell extracted from the landing; `es` added MIS-wide; palette = platform blue `#1651b6` (D-4/D-5/D-10') · rev. 2 — inherits LP-001 design system + i18n + brand conventions)
 **Status**: Implemented
 **Estimate**: ~11h (AI-generated; hands-on = review + verify). Reuses LP-001's Tailwind setup; +shared shell + MIS-wide `es`.
 **Depends on**: [[LP-001]] (landing page + CTA, Tailwind scoped setup, content layout, platform-blue palette)
@@ -215,7 +223,8 @@ consumes it instead of inlining the header/footer; `App.js` shell-suppression
 guard widened to `/onboarding` (`isPublicShell`).
 
 **As built**: `/onboarding` renders the wizard card centered on a brand deep-blue
-band (`bg-akvo-deep`) with the landing's `HeroDotField` behind it in
+band (`bg-brand-deep`; was `bg-akvo-deep` before the feature/575 token rename)
+with the landing's `HeroDotField` behind it in
 **`interactive={false}`** mode — the same canvas dot grid, animating as an
 autonomous radial ripple (no pointer) so the public surface reads as one system
 with the landing hero without a cursor to chase.
@@ -307,7 +316,9 @@ is **not** blocking LP-002.
 > frontend eslint clean, webpack compiles, E2E wizard → activation →
 > auto-configure → control center confirmed in-browser). One build-time deviation:
 > the standalone chooser step was dropped — the wizard goes straight to the sector
-> question (wizard-only), so `INPUT_STEPS = 5`.
+> question (wizard-only), so `INPUT_STEPS = 5`. (**[[LP-004]]** later replaced the
+> sector step with live categories and inserted a starter-forms step, raising this
+> to `INPUT_STEPS = 6` with dynamic 1..5-of-5 renumbering when it is skipped.)
 
 Estimates assume agentic coding + porting the prototype wizard; tests folded
 into each task's Tech AC. All tasks ≤8h.
