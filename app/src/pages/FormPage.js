@@ -520,7 +520,7 @@ const FormPage = ({ navigation, route }) => {
       <ConfirmDialog
         visible={showExitConfirmationDialog}
         danger
-        title={trans.confirmExitTitle || 'Exit without saving?'}
+        title={trans.confirmExitTitle}
         message={trans.confirmExit}
         testID="exit-confirmation-dialog"
         onClose={() => setShowExitConfirmationDialog(false)}

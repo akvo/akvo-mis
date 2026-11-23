@@ -64,7 +64,10 @@ const TypeOption = ({
     return (
       <View style={styles.optionContainer}>
         <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
-        <View style={[pillStyles.container, { backgroundColor: theme.input.bg }]}>
+        <View
+          style={[pillStyles.container, { backgroundColor: theme.input.bg }]}
+          accessibilityRole="radiogroup"
+        >
           {option.map((opt) => {
             const isSelected = opt.value === selectedValue;
             return (
@@ -77,6 +80,8 @@ const TypeOption = ({
                   }
                 }}
                 disabled={disabled}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: isSelected, disabled }}
                 testID={`type-option-pill-${opt.value}`}
               >
                 <Text

@@ -1,10 +1,13 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
+import * as Sentry from '@sentry/react-native';
+import { useSQLiteContext } from 'expo-sqlite';
 
 import { BaseLayout, SettingRow, SettingSection } from '../components';
 import { config } from './Settings/config';
 import { UIState, BuildParamsState } from '../store';
 import { i18n } from '../lib';
+import { crudConfig } from '../database/crud';
 
 const darkModeOptions = ['auto', 'light', 'dark'];
 const darkModeLabels = { auto: 'appearanceAuto', light: 'appearanceLight', dark: 'appearanceDark' };
@@ -15,12 +18,19 @@ const Settings = ({ navigation }) => {
   const trans = i18n.text(activeLang);
   const nonEnglish = activeLang !== 'en';
   const authenticationType = BuildParamsState.useState((s) => s.authenticationType);
+  const db = useSQLiteContext();
 
-  const handleCycleDarkMode = () => {
+  const handleCycleDarkMode = async () => {
     const nextIndex = (darkModeOptions.indexOf(darkModePreference) + 1) % darkModeOptions.length;
+    const next = darkModeOptions[nextIndex];
     UIState.update((s) => {
-      s.darkModePreference = darkModeOptions[nextIndex];
+      s.darkModePreference = next;
     });
+    try {
+      await crudConfig.updateConfig(db, { darkModePreference: next });
+    } catch (err) {
+      Sentry.captureException(err);
+    }
   };
 
   const goToForm = (id) => {

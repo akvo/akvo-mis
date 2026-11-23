@@ -32,7 +32,7 @@ import {
 import { tables, openDatabase } from './src/database';
 import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09, m10, m11, m12 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10, m11, m12, m13 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -189,6 +189,13 @@ const handleInitConfig = async (db) => {
         s.lang = configExist.lang;
       });
     }
+
+    // Saved by Settings > Appearance (APP-487); drives the light/dark theme.
+    if (configExist.darkModePreference) {
+      UIState.update((s) => {
+        s.darkModePreference = configExist.darkModePreference;
+      });
+    }
   }
 };
 
@@ -328,6 +335,13 @@ const migrateDbIfNeeded = async (db) => {
       await txDb.execAsync('PRAGMA user_version = 12');
     });
     currentDbVersion = 12;
+  }
+  if (currentDbVersion === 12) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m13.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 13');
+    });
+    currentDbVersion = 13;
   }
 
   // Every DATABASE_VERSION bump sends exactly one launch down this path. Without

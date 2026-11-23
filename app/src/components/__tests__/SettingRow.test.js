@@ -71,7 +71,7 @@ describe.each([
         switchTestID="row-switch"
       />,
     );
-    fireEvent(getByTestId('row-switch'), 'valueChange', false);
+    fireEvent.press(getByTestId('row-switch'));
     expect(onValueChange).toHaveBeenCalledWith(false);
   });
 

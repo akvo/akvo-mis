@@ -20,6 +20,7 @@ const tables = [
       syncInterval: 'REAL',
       syncWifiOnly: 'TINYINT',
       lang: 'VARCHAR(255) DEFAULT "en" NOT NULL',
+      darkModePreference: "VARCHAR(10) DEFAULT 'auto'",
       gpsThreshold: 'INTEGER NULL',
       gpsAccuracyLevel: 'INTEGER NULL',
       geoLocationTimeout: 'INTEGER NULL',
