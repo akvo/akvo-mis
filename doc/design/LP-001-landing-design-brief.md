@@ -169,3 +169,9 @@ support and the comparison table working on mobile.
   `RegisterSerializer.language` accepts `es`. So flipping to Español on the
   landing stays Español through sign-up and setup. See
   `LP-001-basic-landing-page.md` D-16 (satisfies the D-10 prerequisite).
+- **Token rename (2026-11-23, feature/575 merge)**: the landing's `akvo-*`
+  Tailwind tokens were consolidated to **`brand-*`** (e.g. `brand-deep`,
+  `brand-light`, `brand-border`); the scoped `#landing` setup and the `#1651b6`
+  platform blue are unchanged. The hero's `HeroDotField` dot grid is reused by the
+  [[LP-002]]/[[LP-004]] `/onboarding` wizard in autonomous (`interactive={false}`)
+  mode as a brand-coloured backdrop.

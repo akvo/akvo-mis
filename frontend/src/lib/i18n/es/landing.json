@@ -14,7 +14,7 @@
     "lead": "La potente plataforma que gestiona tus datos con facilidad — y usa IA para convertirlos en visualizaciones, automáticamente. ¿Con curiosidad? Ven y pruébalo tú mismo.",
     "primaryCta": {
       "label": "Pruébalo tú mismo →",
-      "href": "/register"
+      "href": "/onboarding"
     },
     "secondaryCta": {
       "label": "Habla con nuestro equipo",
@@ -225,7 +225,7 @@
     "body": "Crea un espacio de trabajo en un par de minutos. Gratis para siempre.",
     "cta": {
       "label": "Pruébalo tú mismo →",
-      "href": "/register"
+      "href": "/onboarding"
     }
   },
   "footer": {

@@ -8,6 +8,9 @@ import frRegister from "../fr/register.json";
 import enFindWorkspace from "../en/find-workspace.json";
 import esFindWorkspace from "../es/find-workspace.json";
 import frFindWorkspace from "../fr/find-workspace.json";
+import enOnboarding from "../en/onboarding.json";
+import esOnboarding from "../es/onboarding.json";
+import frOnboarding from "../fr/onboarding.json";
 
 // Every key path (objects by key, arrays by index) so a missing or extra key
 // in a translation is caught — the one cost of the per-locale split.
@@ -31,6 +34,7 @@ const PAGES = {
     es: esFindWorkspace,
     fr: frFindWorkspace,
   },
+  onboarding: { en: enOnboarding, es: esOnboarding, fr: frOnboarding },
 };
 
 describe("i18n", () => {

@@ -44,6 +44,57 @@ class RegisterEndpointTestCase(TestCase):
         # tenants registration itself creates.
         return Tenant.objects.exclude(subdomain="default")
 
+    def test_register_stores_meta_on_the_tenant(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="withmeta",
+                email="meta@acme.org",
+                meta={"sector": "water", "org": "Rural Water Trust"},
+            )
+        self.assertEqual(response.status_code, 200)
+        tenant = Tenant.objects.get(subdomain="withmeta")
+        self.assertEqual(
+            tenant.meta, {"sector": "water", "org": "Rural Water Trust"}
+        )
+
+    def test_register_defaults_meta_to_empty_dict(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="nometa", email="nometa@acme.org"
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Tenant.objects.get(subdomain="nometa").meta, {})
+
+    def test_register_rejects_non_object_meta(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="badmeta",
+                email="badmeta@acme.org",
+                meta=["not", "a", "dict"],
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("meta", response.json()["details"])
+
+    def test_register_rejects_oversized_meta(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="bigmeta",
+                email="bigmeta@acme.org",
+                meta={"blob": "x" * 5000},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("meta", response.json()["details"])
+
+    def test_register_accepts_spanish(self):
+        with mock.patch("api.v1.v1_users.views.send_email"):
+            response = self.register(
+                subdomain="espanol", email="es@acme.org", language="es"
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            Tenant.objects.get(subdomain="espanol").language, "es"
+        )
+
     def test_register_creates_an_inactive_superadmin_and_no_token(self):
         with mock.patch("api.v1.v1_users.views.send_email"):
             response = self.register()
@@ -253,6 +304,7 @@ class RegisterEndpointTestCase(TestCase):
         self.assertEqual(tenant.language, "es")
 
     def test_register_rejects_unsupported_language(self):
+        # en/es/fr are accepted (es added in LP-002 D-10'); German is not.
         with mock.patch("api.v1.v1_users.views.send_email"):
             response = self.register(subdomain="german", language="de")
         self.assertEqual(response.status_code, 400)
@@ -398,3 +450,42 @@ class RegisterGateTestCase(TestCase):
         """
         self.assertTrue(settings.SIGNUP_ENABLED)
         self.assertEqual(self.register().status_code, 200)
+
+
+@override_settings(USE_TZ=False)
+class SubdomainAvailabilityTestCase(TestCase):
+    """GET /register/subdomain: the read-only live check for the wizard."""
+
+    def check(self, value, host=None):
+        extra = {"HTTP_HOST": host} if host else {}
+        return self.client.get(
+            "/api/v1/register/subdomain", {"value": value}, **extra
+        )
+
+    def test_free_name_is_available(self):
+        response = self.check("freebie")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["available"])
+
+    def test_taken_name_is_unavailable(self):
+        Tenant.objects.create(subdomain="taken", name="Taken")
+        body = self.check("taken").json()
+        self.assertFalse(body["available"])
+        self.assertIn("taken", body["reason"].lower())
+
+    def test_short_name_is_invalid(self):
+        self.assertFalse(self.check("ab").json()["available"])
+
+    def test_over_63_chars_is_invalid(self):
+        # The register POST (RegexField max_length=63) always rejects a longer
+        # label, so it is never "available"; the check also keeps oversized
+        # input out of the profanity scan.
+        body = self.check("a" * 64).json()
+        self.assertFalse(body["available"])
+        self.assertIn("63", body["reason"])
+
+    def test_bad_characters_are_invalid(self):
+        self.assertFalse(self.check("Bad_Name").json()["available"])
+
+    def test_reserved_name_is_unavailable(self):
+        self.assertFalse(self.check("admin").json()["available"])

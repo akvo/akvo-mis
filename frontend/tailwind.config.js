@@ -7,7 +7,11 @@
 const brand = require("./src/lib/theme");
 
 module.exports = {
-  content: ["./src/pages/landing/**/*.{js,jsx}"],
+  content: [
+    "./src/pages/landing/**/*.{js,jsx}",
+    "./src/pages/onboarding/**/*.{js,jsx}",
+    "./src/components/Turnstile.jsx",
+  ],
   important: "#landing",
   corePlugins: { preflight: false },
   darkMode: "media",
