@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { api, store } from "../../lib";
-import { useTranslation } from "../../lib/i18n";
+import { useTranslation, LANGS } from "../../lib/i18n";
 import { baseDomain } from "../../util/tenant";
 import LandingShell from "../landing/LandingShell";
 import HeroDotField from "../landing/HeroDotField";
@@ -22,7 +22,28 @@ import Turnstile from "../../components/Turnstile";
 const DRAFT_KEY = "akvo_onboarding_draft";
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const INPUT_STEPS = 6; // category, starter forms, org, place, address, admin
+// The ordered input steps — the single source of truth for the wizard. Render,
+// validation and navigation key off these NAMES, never a literal step number,
+// so inserting or reordering a step is a one-line change here (the done-screen
+// collision bug came from hand-renumbering scattered literals).
+const STEPS = [
+  "category",
+  "forms",
+  "org",
+  "place",
+  "address",
+  "language",
+  "admin",
+];
+const INPUT_STEPS = STEPS.length;
+// The "check your email to activate" screen, after a successful submit; derived
+// so it always sits past the inputs and never collides with the last one.
+const DONE_STEP = INPUT_STEPS + 1;
+// 1-based step number for a key (0 if absent). FORMS is the skippable step; the
+// address step runs the live availability check.
+const stepNo = (key) => STEPS.indexOf(key) + 1;
+const FORMS_STEP = stepNo("forms");
+const ADDRESS_STEP = stepNo("address");
 const MAX_STARTER_FORMS = 10; // mirrors RegisterSerializer.MAX_STARTER_FORMS
 const SKIP = "skip"; // step-1 "Something else / skip" sentinel (distinct from
 // null = untouched, so the step can require a deliberate choice)
@@ -103,13 +124,13 @@ const Onboarding = () => {
     }
   }, [data]);
 
-  // Drop the saved draft once onboarding is complete (step 7 is only reached
+  // Drop the saved draft once onboarding is complete (DONE_STEP is only reached
   // after a successful register). Declared AFTER the save effect so that if a
   // data-save and this run in the same commit, this one wins and the draft
   // never lingers — the removeItem in submit() alone can be clobbered by a
   // trailing save.
   useEffect(() => {
-    if (step !== 7) {
+    if (step !== DONE_STEP) {
       return;
     }
     try {
@@ -125,7 +146,8 @@ const Onboarding = () => {
   // never sticks when the value becomes ineligible before the timer fires.
   useEffect(() => {
     const v = data.subdomain.trim().toLowerCase();
-    const eligible = step === 5 && v.length >= 3 && SUBDOMAIN_RE.test(v);
+    const eligible =
+      step === ADDRESS_STEP && v.length >= 3 && SUBDOMAIN_RE.test(v);
     setAvail(null);
     setChecking(eligible);
     if (!eligible) {
@@ -183,6 +205,16 @@ const Onboarding = () => {
     setErrors((e) => ({ ...e, category: "" }));
   };
 
+  // The workspace language is driven by store.language.active — the same state
+  // the shared-shell header switch sets — so the dedicated step defaults to the
+  // header's choice, keeps a single source of truth, and re-renders the wizard
+  // in the chosen language. `language` derives from it for the register payload.
+  const chooseLanguage = (code) => {
+    store.update((s) => {
+      s.language.active = code;
+    });
+  };
+
   const toggleTemplate = (id) => {
     setData((d) => {
       if (d.template_ids.includes(id)) {
@@ -203,19 +235,24 @@ const Onboarding = () => {
     ? categories.find((x) => x.id === chosenCategory.id)?.templates || []
     : [];
 
+  // The current step's key, derived from STEPS; render and validation switch on
+  // this name, never a raw step number.
+  const stepKey = STEPS[step - 1];
+
   const validate = (which) => {
+    const key = STEPS[which - 1];
     const e = {};
-    if (which === 1 && !data.category) {
+    if (key === "category" && !data.category) {
       e.category = c.categoryRequired;
     }
-    // Step 2 (starter forms) is opt-in: an empty selection is valid.
-    if (which === 3 && !data.org.trim()) {
+    // The "forms" (starter forms) step is opt-in: an empty selection is valid.
+    if (key === "org" && !data.org.trim()) {
       e.org = c.orgRequired;
     }
-    if (which === 4 && !data.place.trim()) {
+    if (key === "place" && !data.place.trim()) {
       e.place = c.placeRequired;
     }
-    if (which === 5) {
+    if (key === "address") {
       const v = data.subdomain.trim().toLowerCase();
       if (v.length < 3) {
         e.subdomain = c.addressMin;
@@ -225,7 +262,7 @@ const Onboarding = () => {
         e.subdomain = avail.reason || c.addressTaken;
       }
     }
-    if (which === 6) {
+    if (key === "admin") {
       if (!data.adminName.trim()) {
         e.adminName = c.nameRequired;
       }
@@ -240,22 +277,24 @@ const Onboarding = () => {
     return Object.keys(e).length === 0;
   };
 
-  // Step 2 (starter forms) is skipped when there is nothing to pick: the
+  // The starter-forms step is skipped when there is nothing to pick: the
   // "Something else / skip" tile, or a chosen category the *loaded* catalogue
   // shows has no templates. Before the catalogue loads we do NOT skip — a
   // returning visitor's draft must not leap past the step yet still submit the
-  // template ids it saved (H). Jump straight between step 1 and step 3.
+  // template ids it saved (H). Navigation jumps across FORMS_STEP both ways.
   const skipForms =
     data.category === SKIP || (catalogueLoaded && chosenTemplates.length === 0);
 
-  // When step 2 is auto-skipped, renumber the UI so the user sees a contiguous
-  // 1..5 (total 5, no missing "step 2") instead of a confusing 1 → 3 of 6. The
-  // internal `step` index is unchanged — it still drives which screen renders.
+  // When the forms step is auto-skipped, renumber the UI so the user sees a
+  // contiguous count (no missing step) instead of a jump. The internal `step`
+  // index is unchanged — it still drives which screen renders.
   const totalSteps = skipForms ? INPUT_STEPS - 1 : INPUT_STEPS;
-  const displayStep = skipForms && step > 2 ? step - 1 : step;
+  const displayStep = skipForms && step > FORMS_STEP ? step - 1 : step;
 
   const back = () =>
-    setStep((s) => Math.max(1, s === 3 && skipForms ? 1 : s - 1));
+    setStep((s) =>
+      Math.max(1, s === FORMS_STEP + 1 && skipForms ? FORMS_STEP - 1 : s - 1)
+    );
 
   const submit = () => {
     setSubmitting(true);
@@ -288,7 +327,7 @@ const Onboarding = () => {
         } catch (err) {
           // ignore
         }
-        setStep(7);
+        setStep(DONE_STEP);
       })
       .catch((err) => {
         // A Turnstile token is single-use; clear it and reset the widget so a
@@ -315,9 +354,9 @@ const Onboarding = () => {
         setErrors(next);
         // Send the visitor back to the step that owns the failing field.
         if (next.subdomain) {
-          setStep(5);
+          setStep(ADDRESS_STEP);
         } else if (next.org) {
-          setStep(3);
+          setStep(stepNo("org"));
         }
         // No field-level detail (captcha, meta, throttle, 5xx, network): show a
         // message near the button so Create is never silently re-enabled with
@@ -349,7 +388,9 @@ const Onboarding = () => {
       submit();
       return;
     }
-    setStep((s) => (s === 1 && skipForms ? 3 : s + 1));
+    setStep((s) =>
+      s === FORMS_STEP - 1 && skipForms ? FORMS_STEP + 1 : s + 1
+    );
   };
 
   const pct = (displayStep / (totalSteps + 1)) * 100;
@@ -394,7 +435,7 @@ const Onboarding = () => {
                 {c.stepPrefix} {displayStep} {c.stepJoin} {totalSteps}
               </p>
 
-              {step === 1 ? (
+              {stepKey === "category" ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
                     {c.monitorTitle}
@@ -437,7 +478,7 @@ const Onboarding = () => {
                 </>
               ) : null}
 
-              {step === 2 ? (
+              {stepKey === "forms" ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
                     {c.formsTitle}
@@ -484,7 +525,7 @@ const Onboarding = () => {
                 </>
               ) : null}
 
-              {step === 3 ? (
+              {stepKey === "org" ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
                     {c.orgTitle}
@@ -502,7 +543,7 @@ const Onboarding = () => {
                 </>
               ) : null}
 
-              {step === 4 ? (
+              {stepKey === "place" ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
                     {c.placeTitle}
@@ -523,7 +564,7 @@ const Onboarding = () => {
                 </>
               ) : null}
 
-              {step === 5 ? (
+              {stepKey === "address" ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
                     {c.addressTitle}
@@ -572,7 +613,31 @@ const Onboarding = () => {
                 </>
               ) : null}
 
-              {step === 6 ? (
+              {stepKey === "language" ? (
+                <>
+                  <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
+                    {c.languageTitle}
+                  </h2>
+                  <p className="mt-1 text-text-muted dark:text-gray-400">
+                    {c.languageHint}
+                  </p>
+                  <div className="mt-5 space-y-3">
+                    {LANGS.map((l) => (
+                      <button
+                        key={l.code}
+                        type="button"
+                        aria-pressed={language === l.code}
+                        onClick={() => chooseLanguage(l.code)}
+                        className={tileCls(language === l.code)}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+
+              {stepKey === "admin" ? (
                 <>
                   <h2 className="mt-2 font-title text-2xl font-bold text-text-primary dark:text-white">
                     {c.adminTitle}
@@ -654,10 +719,22 @@ const Onboarding = () => {
                     : c.continue}
                 </button>
               </div>
+
+              {/* Returning users land here from the landing CTA too; give them
+                  a way to reach their existing workspace (D-4a). */}
+              <p className="mt-6 text-center text-sm text-text-muted dark:text-gray-400">
+                {c.haveWorkspace}{" "}
+                <Link
+                  to="/find-workspace"
+                  className="font-semibold text-brand-text hover:underline dark:text-brand-bright"
+                >
+                  {c.findWorkspaceLink}
+                </Link>
+              </p>
             </div>
           ) : null}
 
-          {step === 7 ? (
+          {step === DONE_STEP ? (
             <div className="mt-6 py-8 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-light text-2xl text-brand-text">
                 ✓

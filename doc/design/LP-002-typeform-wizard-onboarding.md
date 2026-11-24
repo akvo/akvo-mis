@@ -204,6 +204,28 @@ target for post-activation auto-configure failures (§4), and avoids coupling th
 wizard's lifecycle to the existing form. One content value changes
 (`hero.primaryCta.href` → `/onboarding`).
 
+### D-4a: Returning-user escape hatch to `/find-workspace` (2026-11-24)
+
+The wizard creates a **new** workspace, but the landing CTA funnels everyone
+here — including visitors who **already have one**. Forcing them through sign-up
+to reach their workspace is a dead end. The wizard now shows a subtle **"Already
+have a workspace? Find it →"** link to `/find-workspace` (the base-domain lookup
+that redirects to a workspace's own host) beneath the step controls on every
+input step. Presentation-only; reuses the existing route. Strings live in the
+`onboarding` i18n namespace (en/es/fr).
+
+### D-4b: Workspace language is a dedicated step, defaulted from the header (2026-11-24)
+
+The shared-shell header EN/ES/FR switch always *set* the workspace language (the
+language the wizard renders in → `store.language.active` → the `register`
+payload's `language`). To satisfy the UAC's "collects workspace language" as a
+**visible field**, the wizard now has a dedicated **language step** (between
+address and admin, so `INPUT_STEPS = 7`). Its options **default to the header's
+current choice** and write back to the same `store.language.active`, so there is
+one source of truth and no divergence between the display and workspace language;
+selecting a language re-renders the wizard in it. The header switch stays as the
+always-visible way to change it mid-flow.
+
 ### D-5: Shared public shell extracted from the landing
 
 **Decision** (QB): extract the landing's **header (brand + language switch) and

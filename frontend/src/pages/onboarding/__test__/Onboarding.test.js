@@ -70,31 +70,31 @@ describe("Onboarding starter-forms wizard (LP-004)", () => {
     expect(screen.queryByText(/\+0 monitoring/)).not.toBeInTheDocument();
   });
 
-  test("skip auto-advances past the forms step and renumbers to 5", async () => {
+  test("skip auto-advances past the forms step and renumbers to 6", async () => {
     renderWizard();
     fireEvent.click(await screen.findByText("Something else / skip"));
-    // Picking skip means there are no templates to show, so the count drops to
-    // 5 even before leaving step 1.
-    expect(stepLabel()).toBe("Step 1 of 5");
+    // Picking skip means there are no templates to show, so the count drops by
+    // one (6, not 7) even before leaving step 1.
+    expect(stepLabel()).toBe("Step 1 of 6");
     fireEvent.click(screen.getByText("Continue"));
     // The empty forms step is skipped entirely: we land on the org step, shown
-    // as a contiguous "Step 2 of 5" — not "Step 3 of 6" with a phantom step 2,
+    // as a contiguous "Step 2 of 6" — not "Step 3 of 7" with a phantom step 2,
     // and not the empty-state screen.
     expect(screen.getByText(/organisation called/i)).toBeInTheDocument();
-    expect(stepLabel()).toBe("Step 2 of 5");
+    expect(stepLabel()).toBe("Step 2 of 6");
     expect(
       screen.queryByText(/add forms later from the Form Library/i)
     ).not.toBeInTheDocument();
   });
 
-  test("a category with templates keeps the full 6-step count", async () => {
+  test("a category with templates keeps the full 7-step count", async () => {
     renderWizard();
     fireEvent.click(await screen.findByText("WASH"));
     // WASH has templates, so the forms step stays in the count.
-    expect(stepLabel()).toBe("Step 1 of 6");
+    expect(stepLabel()).toBe("Step 1 of 7");
     fireEvent.click(screen.getByText("Continue"));
     expect(screen.getByText("Add starter forms?")).toBeInTheDocument();
-    expect(stepLabel()).toBe("Step 2 of 6");
+    expect(stepLabel()).toBe("Step 2 of 7");
   });
 
   test("step 1 cannot be skipped without a choice", async () => {
