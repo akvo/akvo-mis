@@ -97,6 +97,29 @@ describe("Onboarding starter-forms wizard (LP-004)", () => {
     expect(stepLabel()).toBe("Step 2 of 7");
   });
 
+  test("prefills the workspace address from a ?subdomain= query param", async () => {
+    // The WorkspaceNotFound "Create this workspace" link lands here with the
+    // guessed address; the wizard starts the address step from it (sanitised,
+    // lower-cased, winning over any draft).
+    window.history.replaceState({}, "", "/onboarding?subdomain=Sleman");
+    try {
+      renderWizard();
+      fireEvent.click(await screen.findByText("Something else / skip"));
+      fireEvent.click(screen.getByText("Continue")); // -> org
+      fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: "Acme" },
+      });
+      fireEvent.click(screen.getByText("Continue")); // -> place
+      fireEvent.change(screen.getByRole("textbox"), {
+        target: { value: "Kenya" },
+      });
+      fireEvent.click(screen.getByText("Continue")); // -> address
+      expect(screen.getByDisplayValue("sleman")).toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, "", "/");
+    }
+  });
+
   test("step 1 cannot be skipped without a choice", async () => {
     renderWizard();
     await screen.findByText("WASH");

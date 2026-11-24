@@ -11,7 +11,14 @@
 
 **Task ID**: LP-002
 **Author**: Iwan Firmawan
-**Date**: 2026-11-23 (rev. 5 — post-merge / [[LP-004]] alignment: the `akvo-*`
+**Date**: 2026-11-24 (rev. 6 — a dedicated **language step** (D-4b) raises the
+input steps to `INPUT_STEPS = 7`; the step machine is now **name-based** (an
+ordered `STEPS` list is the single source of truth — render/validate/navigate
+key off names, the done screen is derived); a returning-user **find-workspace**
+escape hatch (D-4a); and **all in-app "create a workspace" links now target
+`/onboarding`** (D-4c) — login, find-workspace, workspace-not-found — with the
+wizard prefilling the address step from a `?subdomain=` query param. · rev. 5 —
+post-merge / [[LP-004]] alignment: the `akvo-*`
 Tailwind tokens were renamed **`brand-*`** in the feature/575 merge, so the
 onboarding band is `bg-brand-deep` (not `bg-akvo-deep`) and the blue tokens are
 `brand-*`; the wizard chrome moved from hardcoded English into the global i18n
@@ -225,6 +232,23 @@ current choice** and write back to the same `store.language.active`, so there is
 one source of truth and no divergence between the display and workspace language;
 selecting a language re-renders the wizard in it. The header switch stays as the
 always-visible way to change it mid-flow.
+
+### D-4c: All in-app "create a workspace" links target `/onboarding` (2026-11-24)
+
+D-4 retargeted the *landing CTA*; the other in-app entry points to sign-up were
+left pointing at the bare `/register` form and are now moved to `/onboarding`
+too, so every "create a workspace" path leads to the wizard, not the dense form:
+
+- `LoginForm.jsx` — the base-domain-only "Create an account" link.
+- `FindWorkspace.jsx` — the "no workspace? create one" link under the lookup.
+- `WorkspaceNotFound.jsx` — the "Create this workspace" button, which also
+  **carries the guessed address** as `/onboarding?subdomain=<x>`.
+
+The wizard reads that `?subdomain=` query param on mount and **prefills the
+address step** from it (sanitised like the input, winning over any stale draft),
+so a visitor who mistyped a workspace host lands with that guess already filled.
+Direct `/register` is still untouched (D-4); only navigation *to* sign-up moved.
+Presentation-only; no backend change.
 
 ### D-5: Shared public shell extracted from the landing
 

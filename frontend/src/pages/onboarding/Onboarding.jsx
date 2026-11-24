@@ -58,12 +58,27 @@ const EMPTY = {
   email: "",
 };
 
+// A `?subdomain=` query param (e.g. the WorkspaceNotFound "Create this
+// workspace" link) prefills the address field, sanitised like the input and
+// winning over any stale draft value — the visitor arrived at that exact
+// address on purpose.
+const subdomainFromQuery = () => {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("subdomain");
+    return raw ? raw.toLowerCase().replace(/\s/g, "") : "";
+  } catch (err) {
+    return "";
+  }
+};
+
 const loadDraft = () => {
+  const fromQuery = subdomainFromQuery();
   try {
     const raw = window.localStorage.getItem(DRAFT_KEY);
-    return raw ? { ...EMPTY, ...JSON.parse(raw) } : { ...EMPTY };
+    const base = raw ? { ...EMPTY, ...JSON.parse(raw) } : { ...EMPTY };
+    return fromQuery ? { ...base, subdomain: fromQuery } : base;
   } catch (err) {
-    return { ...EMPTY };
+    return fromQuery ? { ...EMPTY, subdomain: fromQuery } : { ...EMPTY };
   }
 };
 
