@@ -38,6 +38,7 @@ def proposal(**overrides):
                     {
                         "name": "site",
                         "label": "Site",
+                        "repeatable": False,
                         "question": [
                             {
                                 "name": "location",
@@ -48,6 +49,9 @@ def proposal(**overrides):
                                 "option": [],
                                 "rule": None,
                                 "extra": {"type": "administration"},
+                                "tooltip": None,
+                                "dependency": [],
+                                "dependency_rule": "AND",
                             },
                             {
                                 "name": "site_name",
@@ -58,6 +62,9 @@ def proposal(**overrides):
                                 "option": [],
                                 "rule": None,
                                 "extra": None,
+                                "tooltip": None,
+                                "dependency": [],
+                                "dependency_rule": "AND",
                             },
                             {
                                 "name": "water_source",
@@ -71,6 +78,9 @@ def proposal(**overrides):
                                 ],
                                 "rule": None,
                                 "extra": None,
+                                "tooltip": None,
+                                "dependency": [],
+                                "dependency_rule": "AND",
                             },
                         ],
                     }

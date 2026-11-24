@@ -11,8 +11,12 @@ _Avoid_: Workspace (UI copy only), account, organisation
 ## Data Onboarding
 
 **Data Onboarding**:
-Turning a data team's existing spreadsheet into new administration units, new forms and loaded records inside a tenant.
+Turning a data team's existing spreadsheet into new administration units, new forms and loaded records inside a tenant. The spreadsheet may instead be a Form Definition, which gives forms only.
 _Avoid_: Spreadsheet import, AI form builder, import (taken by XLSForm and form definition import)
+
+**Form Definition** (in Data Onboarding):
+A spreadsheet that describes a questionnaire rather than holding records: an XLSForm, an Akvo Flow export, a paper survey, a question list.
+_Avoid_: Template, form file
 
 **Proposal**:
 The drafted setup of a Data Onboarding (units to add, forms, column-to-question mapping, what is dropped), which the user reviews and approves.

@@ -41,7 +41,8 @@ def q(name, type, required=False, meta=False, option=(), extra=None):
         "name": name, "label": name.title(), "type": type,
         "required": required, "meta": meta,
         "option": [{"label": o, "value": o.lower()} for o in option],
-        "rule": None, "extra": extra,
+        "rule": None, "extra": extra, "tooltip": None, "dependency": [],
+        "dependency_rule": "AND",
     }
 
 
@@ -69,6 +70,7 @@ PROPOSAL = {
             "key": "visits", "name": "Site visits", "type": "monitoring",
             "parent": "sites",
             "question_group": [{"name": "visit", "label": "Visit",
+                                "repeatable": False,
                                 "question": [
                                     q("date", "date", required=True),
                                     q("status", "option",
@@ -79,6 +81,7 @@ PROPOSAL = {
             "key": "sites", "name": "Water sites", "type": "registration",
             "parent": None,
             "question_group": [{"name": "site", "label": "Site",
+                                "repeatable": False,
                                 "question": [
                                     q("location", "cascade", required=True,
                                       extra={"type": "administration"}),

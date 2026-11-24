@@ -6,7 +6,11 @@ stored. Forms are canonical form definitions, as the form definition
 import accepts them, plus a `key` the data specs refer to.
 Administration and data follow the plan.json sections from #462. Maps
 are lists of pairs, because strict schemas cannot have free-form keys.
+A Proposal drafted from a form definition (definition.py) has forms
+and no data.
 """
+import re
+
 from api.v1.v1_forms.functions import (
     normalize_form_definition,
     validate_form_definition,
@@ -14,8 +18,10 @@ from api.v1.v1_forms.functions import (
 
 QUESTION_TYPES = [
     "input", "text", "number", "option", "multiple_option", "date", "geo",
-    "cascade",
+    "cascade", "image", "attachment",
 ]
+# Answers a spreadsheet cell cannot hold: asked, never loaded.
+FILE_TYPES = ("image", "attachment")
 
 
 def _obj(**props):
@@ -49,14 +55,26 @@ QUESTION = _obj(
     rule=_null(_obj(min=_null(NUM), max=_null(NUM), allowDecimal=BOOL)),
     # The administration question: type cascade, extra.type administration.
     extra=_null(_obj(type={"type": "string", "enum": ["administration"]})),
+    tooltip=_null(STR),
+    # Shown only when an earlier question has one of the option values,
+    # a number within min..max, or a value equal (or not) to a text.
+    dependency=_arr(_obj(
+        question=STR, options=_arr(STR), min=_null(NUM), max=_null(NUM),
+        equal=_null(STR), notEqual=_null(STR),
+    )),
+    # How several dependency entries combine.
+    dependency_rule={"type": "string", "enum": ["AND", "OR"]},
 )
+DEPENDENCY_KEYS = ("min", "max", "equal", "notEqual")
 
 FORM = _obj(
     key=STR,
     name=STR,
     type={"type": "string", "enum": ["registration", "monitoring"]},
     parent=_null(STR),  # key of the registration form, for monitoring
-    question_group=_arr(_obj(name=STR, label=STR, question=_arr(QUESTION))),
+    question_group=_arr(_obj(
+        name=STR, label=STR, repeatable=BOOL, question=_arr(QUESTION),
+    )),
 )
 
 DATA = _obj(
@@ -129,6 +147,7 @@ def validate_proposal(proposal, profile):
     A well-shaped Proposal is normalized in place first. Messages name
     columns and questions, never cell values.
     """
+    _fill_defaults(proposal)
     errors = _shape_errors(SCHEMA, proposal, "proposal")
     if errors:
         return errors
@@ -181,7 +200,19 @@ def validate_proposal(proposal, profile):
 
     specs = {s["form"]: s for s in proposal["data"]}
     for i, form in enumerate(proposal["forms"]):
-        if form["key"] not in specs:
+        # Only on an earlier question: A on B and B on A hide both for good.
+        earlier = set()
+        for g in form["question_group"]:
+            for q in g["question"]:
+                for d in q["dependency"]:
+                    if d["question"] not in earlier:
+                        errors.append(
+                            f"forms[{i}].{q['name']}: depends on"
+                            f" '{d['question']}', not an earlier question"
+                        )
+                earlier.add(q["name"])
+        # A form definition holds no records: its forms load nothing.
+        if form["key"] not in specs and not profile.get("definition"):
             errors.append(f"forms[{i}]: no data spec loads '{form['key']}'")
     for i, spec in enumerate(proposal["data"]):
         path = f"data[{i}]"
@@ -211,6 +242,56 @@ def validate_proposal(proposal, profile):
     return errors
 
 
+def _fill_defaults(proposal):
+    """Give a Proposal stored before a field existed its default."""
+    if not isinstance(proposal, dict):
+        return
+    for form in proposal.get("forms") or []:
+        groups = form.get("question_group") if isinstance(form, dict) else None
+        for g in groups or []:
+            if not isinstance(g, dict):
+                continue
+            g.setdefault("repeatable", False)
+            for q in g.get("question") or []:
+                if isinstance(q, dict):
+                    q.setdefault("tooltip", None)
+                    q.setdefault("dependency", [])
+                    q.setdefault("dependency_rule", "AND")
+
+
+def _is_code(v):
+    return bool(re.fullmatch(r"[a-z0-9_]+", v))
+
+
+def _settle_questions(form, definition):
+    questions = {q["name"]: q for g in form["question_group"]
+                 for q in g["question"]}
+    for q in questions.values():
+        if q["type"] == "cascade" and not _is_location(q):
+            q.update(type="input", option=[], extra=None)
+        # Not in a data Proposal: its value maps name option labels.
+        options = q["option"] if definition else []
+        if options and all(_is_code(o["label"]) for o in options) and \
+                not all(_is_code(o["value"]) for o in options):
+            for o in options:
+                o["label"], o["value"] = o["value"], o["label"]
+    for q in questions.values():
+        for d in q["dependency"]:
+            parent = questions.get(d["question"])
+            if parent and parent["option"]:
+                values = {o["label"].strip().casefold(): o["value"]
+                          for o in parent["option"]}
+                values.update({o["value"].strip().casefold(): o["value"]
+                               for o in parent["option"]})
+                d["options"] = [values[v.strip().casefold()]
+                                for v in d["options"]
+                                if v.strip().casefold() in values]
+        q["dependency"] = [
+            d for d in q["dependency"]
+            if d["options"] or any(d[k] is not None for k in DEPENDENCY_KEYS)
+        ]
+
+
 def _is_location(question):
     return question["type"] == "cascade" and \
         (question["extra"] or {}).get("type") == "administration"
@@ -231,6 +312,15 @@ def normalize(proposal, profile):
       `administration_columns`, top level first;
     - value maps and options for columns whose values were never sent
       are made up: the maps go, and the question takes text;
+    - a column fed to a photo or file question cannot load: it is
+      listed as not loaded;
+    - a cascade that is not the administration question has no source
+      in MIS: it takes text;
+    - in a definition, options whose labels are all codes and values
+      are not were swapped: they are swapped back;
+    - dependency options name the parent's options by label or by
+      value in any case: they become its values, and an entry left with
+      no condition goes;
     - a column in use is not listed as not loaded.
     """
     sheets = {
@@ -253,6 +343,8 @@ def normalize(proposal, profile):
     forms = {f["key"]: f for f in proposal["forms"]}
     proposal["data"] = [d for d in proposal["data"] if d["form"] in forms]
     for form in forms.values():
+        _settle_questions(form, bool(profile.get("definition")))
+    for form in forms.values():
         if form["type"] == "monitoring":
             for g in form["question_group"]:
                 g["question"] = [
@@ -272,12 +364,20 @@ def normalize(proposal, profile):
                     "column": c["column"],
                     "reason": "The form has no question for this column.",
                 })
+            elif questions[c["question"]]["type"] in FILE_TYPES:
+                spec["unmapped_columns"].append({
+                    "column": c["column"],
+                    "reason": "Photos and files cannot be loaded from a"
+                              " spreadsheet.",
+                })
         location = {n for n, q in questions.items() if _is_location(q)}
         moved = [c["column"] for c in spec["columns"]
                  if c["question"] in location]
         spec["columns"] = [c for c in spec["columns"]
                            if c["question"] in questions
-                           and c["question"] not in location]
+                           and c["question"] not in location
+                           and questions[c["question"]]["type"]
+                           not in FILE_TYPES]
         sheet = sheets.get(spec["sheet"], {})
         fed = {c["question"]: c["column"] for c in spec["columns"]}
         spec["value_maps"] = [
