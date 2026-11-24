@@ -7,10 +7,10 @@ const Body = ({ children, className = "body", ...props }) => {
   if (["/not-found", "/coming-soon"].includes(pathname)) {
     return "";
   }
-  // Full-bleed for the public landing surface (landing + onboarding wizard):
-  // drops the workspace `.body` padding/gutters so their own shell reaches the
-  // viewport edges (the rule lives in landing.css, keyed on `.body-home`).
-  if (["/", "/onboarding"].includes(pathname)) {
+  // Full-bleed for the public onboarding wizard at "/": drops the workspace
+  // `.body` padding/gutters so its own shell reaches the viewport edges (the
+  // rule lives in landing.css, keyed on `.body-home`).
+  if (pathname === "/") {
     className += " body-home";
   }
   return (

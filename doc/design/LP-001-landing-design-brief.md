@@ -173,5 +173,12 @@ support and the comparison table working on mobile.
   Tailwind tokens were consolidated to **`brand-*`** (e.g. `brand-deep`,
   `brand-light`, `brand-border`); the scoped `#landing` setup and the `#1651b6`
   platform blue are unchanged. The hero's `HeroDotField` dot grid is reused by the
-  [[LP-002]]/[[LP-004]] `/onboarding` wizard in autonomous (`interactive={false}`)
+  [[LP-002]]/[[LP-004]] onboarding wizard in autonomous (`interactive={false}`)
   mode as a brand-coloured backdrop.
+- **In-app landing retired (2026-11-24)**: per manager direction the **official
+  marketing landing moves to the marcomm team** (off-app). The base-domain `/`
+  now serves the **[[LP-002]] onboarding wizard** directly; the in-app
+  `<Landing>` component is unrouted (kept as a reference for marcomm), and the
+  bare `/register` page was removed. This brief stays the creative reference for
+  whoever builds the marcomm landing. See `LP-001-basic-landing-page.md` top
+  amendment and [[LP-002]] D-4d.

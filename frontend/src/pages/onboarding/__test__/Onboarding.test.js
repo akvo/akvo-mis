@@ -101,7 +101,7 @@ describe("Onboarding starter-forms wizard (LP-004)", () => {
     // The WorkspaceNotFound "Create this workspace" link lands here with the
     // guessed address; the wizard starts the address step from it (sanitised,
     // lower-cased, winning over any draft).
-    window.history.replaceState({}, "", "/onboarding?subdomain=Sleman");
+    window.history.replaceState({}, "", "/?subdomain=Sleman");
     try {
       renderWizard();
       fireEvent.click(await screen.findByText("Something else / skip"));
@@ -129,5 +129,30 @@ describe("Onboarding starter-forms wizard (LP-004)", () => {
     expect(
       screen.queryByText(/add forms later from the Form Library/i)
     ).not.toBeInTheDocument();
+  });
+
+  test("the header shows a Log in link to find-workspace", async () => {
+    renderWizard();
+    await screen.findByText("WASH");
+    expect(screen.getByText("Log in").closest("a")).toHaveAttribute(
+      "href",
+      "/find-workspace"
+    );
+  });
+
+  test("the close button starts over in place, clearing the answers", async () => {
+    // "/" is the wizard itself, so there is no landing to navigate to on close;
+    // the ✕ resets the wizard rather than looping back to the same screen.
+    renderWizard();
+    fireEvent.click(await screen.findByText("WASH"));
+    fireEvent.click(screen.getByText("Continue"));
+    expect(screen.getByText("Add starter forms?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Start over"));
+    // Back on a fresh step 1: the chosen category is gone (so the count drops to
+    // 6 with the forms step skipped), and the forms screen is no longer shown.
+    expect(screen.getByText(/do you want to monitor/i)).toBeInTheDocument();
+    expect(screen.queryByText("Add starter forms?")).not.toBeInTheDocument();
+    expect(stepLabel()).toBe("Step 1 of 6");
   });
 });

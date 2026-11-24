@@ -9,10 +9,10 @@ import "./landing.css";
 // surface with the landing. Composes LandingHeader/LandingFooter rather than
 // duplicating them. `showCta` hides the header CTA on pages that are already the
 // CTA target (the wizard). The main pads for the 70px fixed header.
-const LandingShell = ({ children, showCta = true }) => (
+const LandingShell = ({ children, showCta = true, showLogin = false }) => (
   <div id="landing">
     <div className="flex min-h-screen flex-col font-sans text-text-secondary antialiased dark:bg-bg-dark dark:text-gray-300">
-      <LandingHeader showCta={showCta} />
+      <LandingHeader showCta={showCta} showLogin={showLogin} />
       <main className="flex flex-1 flex-col pt-[70px]">{children}</main>
       <LandingFooter />
     </div>
@@ -22,6 +22,7 @@ const LandingShell = ({ children, showCta = true }) => (
 LandingShell.propTypes = {
   children: PropTypes.node,
   showCta: PropTypes.bool,
+  showLogin: PropTypes.bool,
 };
 
 export default LandingShell;

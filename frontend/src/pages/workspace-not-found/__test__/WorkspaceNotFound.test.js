@@ -81,7 +81,7 @@ describe("WorkspaceNotFound", () => {
       // the one the sign-up form starts from.
       expect(
         screen.getByRole("link", { name: /Create this workspace/i })
-      ).toHaveAttribute("href", "https://app.com/onboarding?subdomain=sleman");
+      ).toHaveAttribute("href", "https://app.com/?subdomain=sleman");
     });
   });
 });

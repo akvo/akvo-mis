@@ -6,7 +6,8 @@
   },
   "nav": {
     "cta": "Try it yourself",
-    "closeMenu": "Close language menu"
+    "closeMenu": "Close language menu",
+    "login": "Log in"
   },
   "hero": {
     "badge": "Free forever",
@@ -14,7 +15,7 @@
     "lead": "The powerful platform that manages your data with ease — and uses AI to turn it into visualisations, automatically. Curious? Come try it yourself.",
     "primaryCta": {
       "label": "Try it yourself →",
-      "href": "/onboarding"
+      "href": "/"
     },
     "secondaryCta": {
       "label": "Talk to our team",
@@ -225,7 +226,7 @@
     "body": "Spin up a workspace in a couple of minutes. Free forever.",
     "cta": {
       "label": "Try it yourself →",
-      "href": "/onboarding"
+      "href": "/"
     }
   },
   "footer": {

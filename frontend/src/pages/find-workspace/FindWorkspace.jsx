@@ -45,7 +45,7 @@ const FindWorkspace = () => {
                 </Button>
               </Form.Item>
               <p className="disclaimer">
-                {c.noWorkspace} <Link to="/onboarding">{c.create}</Link>
+                {c.noWorkspace} <Link to="/">{c.create}</Link>
               </p>
             </Form>
           </div>

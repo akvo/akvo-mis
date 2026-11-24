@@ -43,7 +43,7 @@ const WorkspaceNotFound = () => {
                 shape="round"
                 block
                 href={baseDomainUrl(
-                  `/onboarding?subdomain=${encodeURIComponent(requested)}`
+                  `/?subdomain=${encodeURIComponent(requested)}`
                 )}
               >
                 Create this workspace

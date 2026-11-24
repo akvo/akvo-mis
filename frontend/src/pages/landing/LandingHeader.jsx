@@ -13,7 +13,10 @@ import "./landing.css";
 // - `showCta`: whether to show the right-hand button (default true).
 // - `cta`: `{ label, href }` to override the landing's own "try it yourself"
 //   CTA.
-const LandingHeader = ({ showCta, cta }) => {
+// - `showLogin`: whether to show a "Log in" button beside the language switch
+//   (default false). On the base domain there is no single login form, so it
+//   goes to `/find-workspace` (the lookup that forwards to a workspace's host).
+const LandingHeader = ({ showCta, cta, showLogin }) => {
   const active = store.useState((s) => s.language.active);
   const lang = resolveLang(active);
   const content = getContent("landing", active);
@@ -64,7 +67,7 @@ const LandingHeader = ({ showCta, cta }) => {
   const currentLabel = (LANGS.find((l) => l.code === lang) || LANGS[0]).label;
 
   const ctaToShow = showCta
-    ? cta || { label: content.nav.cta, href: "/onboarding" }
+    ? cta || { label: content.nav.cta, href: "/" }
     : null;
 
   return (
@@ -134,6 +137,14 @@ const LandingHeader = ({ showCta, cta }) => {
             </>
           ) : null}
         </div>
+        {showLogin ? (
+          <Link
+            to="/find-workspace"
+            className="inline-flex border border-brand bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          >
+            {content.nav.login}
+          </Link>
+        ) : null}
         {ctaToShow ? (
           <Link
             to={ctaToShow.href}
@@ -158,10 +169,12 @@ LandingHeader.propTypes = {
     label: PropTypes.string.isRequired,
     href: PropTypes.string.isRequired,
   }),
+  showLogin: PropTypes.bool,
 };
 
 LandingHeader.defaultProps = {
   showCta: true,
+  showLogin: false,
 };
 
 export default LandingHeader;

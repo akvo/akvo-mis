@@ -122,7 +122,6 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
                               id="login-form_password"
                               placeholder="Password"
                               type="password"
-                              value=""
                             />
                             <span
                               class="ant-input-suffix"
@@ -200,7 +199,7 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
                         >
                           <a
                             class="login-form-forgot"
-                            href="/onboarding"
+                            href="/"
                           >
                             Create an account
                           </a>

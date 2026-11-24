@@ -464,7 +464,7 @@ const ApprovalDetail = ({
                         setExpandedRowKeys([]);
                         onExpand(record, e);
                       }}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   ) : (
                     <LeftCircleOutlined
@@ -475,7 +475,7 @@ const ApprovalDetail = ({
                         }
                         onExpand(record, e);
                       }}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   ),
               }

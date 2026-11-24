@@ -6,7 +6,8 @@
   },
   "nav": {
     "cta": "Essayez vous-même",
-    "closeMenu": "Fermer le menu des langues"
+    "closeMenu": "Fermer le menu des langues",
+    "login": "Se connecter"
   },
   "hero": {
     "badge": "Gratuit pour toujours",
@@ -14,7 +15,7 @@
     "lead": "La plateforme puissante qui gère vos données avec aisance — et utilise l'IA pour les transformer en visualisations, automatiquement. Curieux ? Essayez par vous-même.",
     "primaryCta": {
       "label": "Essayez vous-même →",
-      "href": "/onboarding"
+      "href": "/"
     },
     "secondaryCta": {
       "label": "Parler à notre équipe",
@@ -225,7 +226,7 @@
     "body": "Créez un espace de travail en quelques minutes. Gratuit pour toujours.",
     "cta": {
       "label": "Essayez vous-même →",
-      "href": "/onboarding"
+      "href": "/"
     }
   },
   "footer": {
