@@ -820,7 +820,11 @@ class FormBuilderViewSet(viewsets.ModelViewSet):
                 {"message": "Template not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        new_reg, new_children = clone_family(form, request.user)
+        # Keep the template's names (no " (Copy)" suffix): the clone seeds the
+        # caller's own workspace, not a duplicate sitting beside the original.
+        new_reg, new_children = clone_family(
+            form, request.user, preserve_names=True
+        )
 
         def _row(f):
             return {

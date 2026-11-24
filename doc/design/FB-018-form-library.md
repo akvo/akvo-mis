@@ -160,6 +160,11 @@ and it pre-fills from the parent's submissions. So the library's unit is the who
      `duplicate_form` can't do — it copies `parent_id` verbatim).
   3. stamp the new registration's `meta.copied_from = {form_id, name, at}`
      (provenance only; no link back to the template at runtime).
+  4. **preserve the template's names** (`clone_family(..., preserve_names=True)`):
+     `duplicate_form` appends " (Copy)" to disambiguate an in-tenant Form Builder
+     duplicate sitting beside its original, but a library import seeds the caller's
+     own workspace, so the clean template name is kept and the user renames if they
+     wish.
 - **Family discovery = the `parent`/`children` FK**, not `meta`. `meta` only carries
   provenance, so child ids are never duplicated into it where they could drift.
 - **Browse lists registration family-roots only** (`parent__isnull=True`). Monitoring
@@ -236,10 +241,12 @@ All routes live on the existing `FormBuilderViewSet`
 }
 
 // POST /api/v1/manage/forms/library/901/use
-// Response 201  (the whole family, now owned by the caller's tenant)
+// Response 201  (the whole family, now owned by the caller's tenant;
+// names are preserved — no " (Copy)" suffix, since the clone seeds the
+// caller's own workspace rather than sitting beside the original)
 {
-  "registration": { "id": 1457, "name": "JMP Core WASH Household (Copy)", "status": "draft" },
-  "monitoring": [ { "id": 1458, "name": "JMP WASH — Routine Monitoring (Copy)", "status": "draft" } ]
+  "registration": { "id": 1457, "name": "JMP Core WASH Household", "status": "draft" },
+  "monitoring": [ { "id": 1458, "name": "JMP WASH — Routine Monitoring", "status": "draft" } ]
 }
 ```
 

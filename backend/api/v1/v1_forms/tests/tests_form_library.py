@@ -164,6 +164,9 @@ class FormLibraryTestCase(TestCase):
         self.assertIsNone(new_reg.meta.get("template"))
         self.assertEqual(new_reg.status, FormStatus.draft)
         self.assertNotEqual(new_reg.id, tpl_reg.id)
+        # names are preserved — no " (Copy)" suffix on a library import
+        self.assertEqual(new_reg.name, "Use Me")
+        self.assertEqual(new_child.name, "Use Me Monitoring")
         self.assertEqual(new_child.parent_id, new_reg.id)
         self.assertEqual(new_child.tenant_id, new_reg.tenant_id)
         # provenance stamped, no runtime link

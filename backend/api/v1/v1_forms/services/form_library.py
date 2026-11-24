@@ -52,10 +52,13 @@ def clone_family(registration, user, preserve_names=False):
     only re-point the children's parent, stamp provenance, and bump the
     template's import_count.
 
-    With ``preserve_names`` the clones keep the template's real names, not
-    duplicate_form's " (Copy)" suffix. That suffix fits the in-workspace
-    "Use this form" action (the copy sits beside existing forms), but not when
-    the clone seeds a brand-new workspace (LP-004 onboarding starter forms).
+    With ``preserve_names`` the clones keep the template's real names instead
+    of duplicate_form's " (Copy)" suffix. That suffix disambiguates a Form
+    Builder duplicate sitting beside its original (same tenant), but a library
+    import seeds the caller's own workspace where there is nothing to
+    disambiguate. Both such callers ("Use this form" and LP-004 onboarding
+    starter forms) pass it True; the default stays False so the shared helper
+    is unchanged.
 
     Returns (new_registration, [new_monitoring, ...]).
     """
