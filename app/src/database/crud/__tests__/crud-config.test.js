@@ -1,47 +1,44 @@
 import crudConfig from '../crud-config';
+import { makeInMemoryDb } from '../../test-helpers/in-memory-db';
 
-jest.mock('expo-sqlite');
+let db;
 
-describe('crudConfig function', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+beforeEach(() => {
+  db = makeInMemoryDb();
+  db.raw.exec(`CREATE TABLE config (
+    id INTEGER PRIMARY KEY, appVersion TEXT, authenticationCode TEXT, lang TEXT,
+    serverURL TEXT, syncInterval INTEGER, syncWifiOnly INTEGER
+  )`);
+});
+
+describe('addConfig', () => {
+  it('inserts the single config row (id 1)', async () => {
+    const id = await crudConfig.addConfig(db, { serverURL: 'URL', lang: 'en' });
+    expect(id).toBe(1);
+    const row = db.raw.prepare('SELECT * FROM config WHERE id = 1').get();
+    expect(row.serverURL).toBe('URL');
+    expect(row.lang).toBe('en');
+  });
+});
+
+describe('getConfig', () => {
+  it('returns null when config does not exist', async () => {
+    const result = await crudConfig.getConfig(db);
+    expect(result).toBeNull();
   });
 
-  describe('addConfig', () => {
-    it('should insert into config table', async () => {
-      const result = await crudConfig.addConfig();
-      expect(result).toEqual({ rowsAffected: 1 });
-    });
+  it('returns the stored config', async () => {
+    await crudConfig.addConfig(db, { serverURL: 'URL', lang: 'en', authenticationCode: 'abc' });
+    const result = await crudConfig.getConfig(db);
+    expect(result).toMatchObject({ id: 1, serverURL: 'URL', lang: 'en', authenticationCode: 'abc' });
   });
+});
 
-  describe('getConfig', () => {
-    it('should return false if config does not exist', async () => {
-      const result = await crudConfig.getConfig();
-      expect(result).toBe(false);
-    });
-
-    it('should return config table value', async () => {
-      // Mock the result set for select
-      const config = {
-        appVersion: '1.0.0',
-        authenticationCode: 'testincodeg123',
-        id: 1,
-        lang: 'en',
-        serverURL: 'URL',
-        syncInterval: null,
-        syncWifiOnly: null,
-      };
-      const mockSelectSql = jest.fn(() => config);
-      crudConfig.getConfig = mockSelectSql;
-      const result = await crudConfig.getConfig();
-      expect(result).toEqual(config);
-    });
-  });
-
-  describe('updateConfig', () => {
-    it('should update the config table', async () => {
-      const result = await crudConfig.updateConfig({ serverURL: 'new URL' });
-      expect(result).toEqual({ rowsAffected: 1 });
-    });
+describe('updateConfig', () => {
+  it('updates the config row', async () => {
+    await crudConfig.addConfig(db, { serverURL: 'URL' });
+    await crudConfig.updateConfig(db, { serverURL: 'new URL' });
+    const row = db.raw.prepare('SELECT serverURL FROM config WHERE id = 1').get();
+    expect(row.serverURL).toBe('new URL');
   });
 });

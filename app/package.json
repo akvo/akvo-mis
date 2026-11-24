@@ -77,6 +77,7 @@
     "babel-jest": "^29.5.0",
     "babel-plugin-transform-remove-console": "^6.9.4",
     "babel-preset-react-native": "^5.0.2",
+    "better-sqlite3": "^11.0.0",
     "coveralls": "^3.1.1",
     "eas-cli": "^18.0.1",
     "eslint": "^8.42.0",
