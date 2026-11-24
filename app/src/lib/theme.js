@@ -91,6 +91,13 @@ const dark = {
     error: '#FF2C20',
   },
 
+  // ---- count tiles (APP-585, dark mode) ---- fg/bg each clear 4.5:1 at the 12px tile text
+  tile: {
+    draft: { bg: '#3A2E0A', fg: '#FFD54A' },
+    pending: { bg: '#11284D', fg: '#8FB6FF' },
+    synced: { bg: '#10331F', fg: '#6FDC95' },
+  },
+
   // ---- status banner (app-defined, not in the Figma export) ----
   // Text colors are per mode so every pair clears WCAG AA (4.5:1) for 14px text.
   banner: {
@@ -238,6 +245,13 @@ const light = {
     warning: '#A1440B',
     draft: '#89570A',
     error: '#C8170D',
+  },
+
+  // ---- count tiles (APP-585, light mode) ---- canvas tile colors; each pair ≥ 4.5:1
+  tile: {
+    draft: { bg: '#FFF1DB', fg: '#8A4B00' },
+    pending: { bg: '#E3EEFF', fg: '#1B4F9C' },
+    synced: { bg: '#E1F4E8', fg: '#17623A' },
   },
 
   // ---- status banner (app-defined, not in the Figma export) ----
