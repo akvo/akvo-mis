@@ -1,6 +1,7 @@
 export { default as Stack } from './Stack';
 export { default as BaseLayout } from './BaseLayout';
 export { default as FormCard } from './FormCard';
+export { default as SyncButton } from './SyncButton';
 export { default as DatapointCard, DatapointLegend } from './DatapointCard';
 export { default as SectionLabel } from './SectionLabel';
 export { default as SectionHeader } from './SectionHeader';
