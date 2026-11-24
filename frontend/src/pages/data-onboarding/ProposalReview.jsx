@@ -84,25 +84,31 @@ const ProposalReview = ({ proposal, blocked = [], units, text, onEdit }) => {
     },
   ];
 
+  // A form definition holds no records: no levels, no units to show.
+  const hasPlaces = administration.levels.length > 0 || data.length > 0;
+
   return (
     <div className="proposal-review">
-      <Title level={4}>{text.dataOnboardingUnits}</Title>
-      <Text type="secondary">{administration.levels.join(" › ")}</Text>
-      {newUnits.length ? (
-        <Tree treeData={unitTree(newUnits)} defaultExpandAll />
-      ) : (
-        <Empty description={text.dataOnboardingNoUnits} />
+      {hasPlaces && (
+        <>
+          <Title level={4}>{text.dataOnboardingUnits}</Title>
+          <Text type="secondary">{administration.levels.join(" › ")}</Text>
+          {newUnits.length ? (
+            <Tree treeData={unitTree(newUnits)} defaultExpandAll />
+          ) : (
+            <Empty description={text.dataOnboardingNoUnits} />
+          )}
+          {units?.outside.length > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              message={text.dataOnboardingUnitsOutside}
+              description={units.outside.map((p) => p.join(" › ")).join(", ")}
+            />
+          )}
+          <Divider />
+        </>
       )}
-      {units?.outside.length > 0 && (
-        <Alert
-          type="info"
-          showIcon
-          message={text.dataOnboardingUnitsOutside}
-          description={units.outside.map((p) => p.join(" › ")).join(", ")}
-        />
-      )}
-
-      <Divider />
       <Title level={4}>{text.dataOnboardingForms}</Title>
       {forms.map((form) => {
         const spec = data.find((d) => d.form === form.key);

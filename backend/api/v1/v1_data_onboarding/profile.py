@@ -29,13 +29,17 @@ def extension(name):
     return name.rsplit(".", 1)[-1].lower() if "." in name else ""
 
 
-def read_sheets(path, name):
-    """Return {sheet name: DataFrame of str-or-None cells}."""
+def read_sheets(path, name, header=0):
+    """Return {sheet name: DataFrame of str-or-None cells}.
+
+    header=None reads every row as cells, with no header row.
+    """
     ext = extension(name)
     if ext not in ("csv", "xlsx"):
         raise OnboardingError("Upload a CSV or xlsx file.")
     # Only empty cells are blank: NA, None, - stay values.
-    opts = {"dtype": object, "keep_default_na": False, "na_values": [""]}
+    opts = {"dtype": object, "keep_default_na": False, "na_values": [""],
+            "header": header}
     try:
         if ext == "csv":
             with open(path, encoding="utf-8-sig", newline="") as fh:
@@ -56,7 +60,8 @@ def read_sheets(path, name):
     result = {}
     for sheet, df in sheets.items():
         df = df.dropna(how="all")
-        df.columns = [norm(c) for c in df.columns]
+        if header is not None:
+            df.columns = [norm(c) for c in df.columns]
         result[str(sheet)] = df.astype(object).where(df.notna(), None)
     return result
 

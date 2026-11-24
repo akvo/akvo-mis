@@ -9,10 +9,19 @@ from django.utils import timezone
 from api.v1.v1_data_onboarding.ambiguity import blocked_forms
 from api.v1.v1_data_onboarding.apply import apply_proposal, check_hierarchy
 from api.v1.v1_data_onboarding.constants import DataOnboardingStatus
+from api.v1.v1_data_onboarding.definition import (
+    definition_sheets,
+    grids,
+    is_xlsform,
+    layout_content,
+    xlsform_proposal,
+)
+from api.v1.v1_data_onboarding.hints import add_hints
 from api.v1.v1_data_onboarding.models import DataOnboarding
 from api.v1.v1_data_onboarding.places import drop_invented_aliases
 from api.v1.v1_data_onboarding.profile import (
     OnboardingError,
+    extension,
     profile_sheets,
     read_sheets,
 )
@@ -69,6 +78,83 @@ Draft a Proposal:
   every column not loaded with the reason.
 - notes: the decisions you made, in plain words for a non-technical
   reader.
+
+The profile also carries hints code measured on the whole file. They
+name columns only:
+- registration_keys: an ID column whose values repeat, so each record
+  shows on several rows. Columns constant per record belong to the
+  registration form, varying ones to a monitoring form for the visits.
+- hierarchy: place columns that nest, parent first: the location
+  columns, in that order.
+- geo: lat/lng column pairs, or single "lat, lng" columns.
+- links: a column of one sheet that holds another sheet's unique keys:
+  its rows are visits of that sheet's records.
+- column flags: personal (personal data: leave it out, listed as not
+  loaded with that reason, unless it names the record), derived
+  (computed from other columns: leave it out with that reason),
+  day_month_order (the day and month order is unclear: pick the
+  date_format and say so in notes).
+A data file does not tell help texts, conditions or repeats: every
+question has tooltip null, dependency [] and dependency_rule "AND",
+every group repeatable false.
+"""
+
+DEFINITION_INSTRUCTIONS = """\
+You turn a form definition into Akvo MIS forms. You get sheets that
+describe a questionnaire: a question list, a paper survey, or an
+export from another tool (Akvo Flow, Kobo, ODK, SurveyCTO, Google
+Forms). Per sheet you get the rows above its header (titles, group
+headers) as cells, then each row after the header as {column name:
+cell}, filled cells only; a column name may start with its group
+header ("Options: Allow multiple"). The sheets hold no records.
+
+Draft a Proposal:
+- forms: one form per questionnaire. Several sheets may describe the
+  same questionnaire in different layouts (a full export and a paper
+  version): make one form from them, from the most detailed sheet. A
+  questionnaire is a registration form, unless the file says it
+  records visits to another one: then it is monitoring, parent = the
+  key of that form.
+- A flag column (Mandatory, Allow multiple, Data point name,
+  Repeatable) holds yes or no; a missing cell means no.
+- Keep every question, in order, in its groups (sections). A
+  repeatable group has repeatable true. Keep labels as written; help
+  text is the tooltip. Question names: the variable name when given,
+  else lowercase snake_case from the label; unique in a form.
+- Types: short text input, long text text, number (rule: min, max and
+  allowDecimal from the definition), date, single choice option,
+  multiple choice multiple_option, GPS location geo, photo image, file
+  attachment. A cascade of places (country, district, village) is the
+  form's one administration question: type cascade, extra {"type":
+  "administration"}. A cascade or lookup of anything else (an
+  organisation, a project, species) is option with its listed values,
+  or input when none are listed. Only the
+  administration question has extra; every other question has extra
+  null.
+- A choice question is multiple_option, not option, when the
+  definition lets it take several answers: an "allow multiple" (or
+  "multiple", "multi-select") flag of yes, select_multiple, or
+  checkboxes.
+- Option and multiple_option questions list their options; a value is
+  the code the definition gives, else the label in lowercase
+  snake_case.
+- required is true only for questions the definition marks mandatory
+  or required. meta is true for the questions the definition uses to
+  name the record (data point name, identifier), else for the one
+  question that best names it (the site, the household).
+- dependency: a question shown only for some answers of an earlier
+  question names that question and the option values that show it,
+  min and max for a number, or the text the answer must equal (equal)
+  or must not equal (notEqual); unused fields are null. With several
+  conditions, dependency_rule says if all (AND) or any (OR) must hold.
+  Questions shown always have [] and "AND".
+- Leave out what is not a question: notes, calculations, and metadata
+  such as start time or device id.
+- administration: levels [], source sheet null and columns [],
+  aliases [].
+- data: [] (there are no records to load).
+- notes: what you merged, left out or guessed, in plain words for a
+  non-technical reader.
 """
 
 
@@ -166,23 +252,49 @@ def store_proposal(onboarding, proposal, sheets, what, user,
     onboarding.proposal, onboarding.resolutions = proposal, resolutions
 
 
-def read_upload(onboarding):
+def _upload_path(onboarding):
     if not onboarding.file:
         raise OnboardingError(FILE_DELETED)
-    return read_sheets(
-        storage.download(onboarding.file), onboarding.file_name
-    )
+    return storage.download(onboarding.file)
+
+
+def read_upload(onboarding):
+    return read_sheets(_upload_path(onboarding), onboarding.file_name)
+
+
+def _draft(path, sheets, file_name):
+    """(profile, Proposal): from a form definition, or from records."""
+    cells = grids(read_sheets(path, file_name, header=None))
+    if extension(file_name) == "xlsx" and is_xlsform(cells):
+        profile = {"definition": "xlsform", "sheets": []}
+        return profile, xlsform_proposal(path, cells, file_name)
+    names = definition_sheets(cells)
+    if names:
+        profile = {"definition": "layout", "sheets": [],
+                   "definition_sheets": names}
+        proposal = _ask_valid(DEFINITION_INSTRUCTIONS,
+                              layout_content(cells, names), profile)
+        rest = [n for n in cells if n not in names]
+        if rest and isinstance(proposal.get("notes"), list):
+            proposal["notes"].append(
+                "Read as a form definition. Not read: "
+                + ", ".join(rest) + "."
+            )
+        return profile, proposal
+    profile = add_hints(sheets, profile_sheets(sheets))
+    return profile, _ask_valid(INSTRUCTIONS, profile, profile)
 
 
 def draft_proposal(onboarding_id):
     onboarding = DataOnboarding.objects.get(id=onboarding_id)
     try:
-        sheets = read_upload(onboarding)
-        onboarding.profile = profile_sheets(sheets)
+        path = _upload_path(onboarding)
+        sheets = read_sheets(path, onboarding.file_name)
+        onboarding.profile, proposal = _draft(
+            path, sheets, onboarding.file_name,
+        )
         store_proposal(
-            onboarding,
-            _ask_valid(INSTRUCTIONS, onboarding.profile, onboarding.profile),
-            sheets, "draft", onboarding.created_by,
+            onboarding, proposal, sheets, "draft", onboarding.created_by,
         )
         onboarding.status = DataOnboardingStatus.proposed
     except OnboardingError as exc:
@@ -203,7 +315,9 @@ def revise_proposal(onboarding_id, instruction, user_id):
         sheets = read_upload(onboarding)
         # Only the profile and the Proposal: resolutions and the blocked
         # findings hold file values and never go to OpenAI.
-        store_proposal(onboarding, _ask_valid(INSTRUCTIONS + REVISE, {
+        base = DEFINITION_INSTRUCTIONS \
+            if onboarding.profile.get("definition") else INSTRUCTIONS
+        store_proposal(onboarding, _ask_valid(base + REVISE, {
             "profile": onboarding.profile,
             "proposal": onboarding.proposal,
             "instruction": instruction,

@@ -5,7 +5,7 @@
 **Date**: 2026-11-16
 **Status**: Implemented
 
-Terms (Tenant, Data Onboarding, Proposal, Apply, Onboarding Report, Ambiguous Administration) are defined in `/GLOSSARY.md`. The core decision is recorded in `doc/adr/0001-llm-drafts-proposal-code-applies-it.md`.
+Terms (Tenant, Data Onboarding, Proposal, Apply, Onboarding Report, Ambiguous Administration) are defined in `/GLOSSARY.md`. The core decision is recorded in `doc/adr/0001-llm-drafts-proposal-code-applies-it.md`; form definition files in `doc/adr/0002-form-definition-sheets-reach-openai-cell-by-cell.md`.
 
 ---
 
@@ -21,6 +21,7 @@ PR #462 solved this with an external Claude skill that registered a new workspac
 
 - A user with the `data_onboard` access sees **Onboard spreadsheet** on the Forms list. Tenant super admin has it by default.
 - The user uploads one CSV or xlsx file (multi-sheet allowed, ≤ 10 MB, ≤ 50k rows).
+- The file may define a form instead of holding records: an XLSForm (Kobo, ODK), an Akvo Flow export, a paper survey or a question list. Its Proposal has the forms, with their groups, options, help texts, conditions and repeats, and no records.
 - MIS shows progress while it drafts the Proposal, then shows the Proposal for review:
   - administration units to add,
   - each form, question by question,
@@ -39,7 +40,8 @@ PR #462 solved this with an external Claude skill that registered a new workspac
 
 ### Technical Acceptance Criteria
 
-- OpenAI receives only the column profile: column names, types, value shapes, and the distinct values of category-like columns (at most 30 distinct values, and at most half as many distinct values as filled cells). Values from other columns never leave MIS (ADR 0001).
+- OpenAI receives only the column profile: column names, types, value shapes, and the distinct values of category-like columns (at most 30 distinct values, and at most half as many distinct values as filled cells). Values from other columns never leave MIS (ADR 0001). The profile also carries hints code measured, naming columns only (D-14).
+- An XLSForm never reaches OpenAI. Another definition layout reaches it cell by cell, only for the sheets code has identified as definitions (ADR 0002).
 - The ambiguity checks are deterministic. They run on every draft and revision, and **again at Apply**.
 - Setup (units + forms) runs in one transaction. Data rows are best-effort: a bad row is skipped and reported, and the rest load.
 - Proposal drafting and Apply run as Django-Q jobs. The client polls their status.
@@ -83,6 +85,9 @@ The LLM may suggest aliases and mappings. The deterministic checks decide.
   - key columns give a stable uuid and link monitoring rows to their parent,
   - option values are derived from labels.
 - Value maps are possible only for category-like columns (at most 30 distinct values, and at most half as many distinct values as filled cells), because only their values reach OpenAI.
+- Questions also carry `tooltip`, `dependency` (entries naming an earlier question, with `options`, `min`/`max`, `equal` or `notEqual`) and `dependency_rule` (`AND`/`OR`); groups carry `repeatable`. Apply turns dependency names into the question ids the form import reads. A data file's questions have none of these.
+- `image` and `attachment` questions are allowed, for definitions. A column fed to one is listed as not loaded: a cell can't hold a photo.
+- A definition's Proposal has no `data` and no levels; `profile.definition` is `xlsform` or `layout`.
 
 ## 5. Data Model Changes
 
@@ -125,12 +130,14 @@ All under `/api/v1/data-onboarding`, behind `DataOnboardingAccess` and scoped to
 ## 7. Compatibility
 
 - Mobile: published forms sync as usual. No app change.
-- Existing imports (XLSForm, form definition, bulk administrations) are unchanged.
+- Existing imports (form definition, bulk administrations) are unchanged. The XLSForm import also reads a `relevance` column as `relevant` (SurveyCTO's name for it).
+- Proposals stored before the definition fields existed get their defaults (`tooltip` null, `dependency` [], `dependency_rule` AND, `repeatable` false) when next checked.
 
 ## 8. Security Considerations
 
 - Every upload is a trust boundary. Validate type, size and row count before parsing.
-- Data sent to OpenAI is limited to the profile. Category values can still be sensitive, for example a health status column (see Open Questions).
+- Data sent to OpenAI is limited to the profile. Category values can still be sensitive, for example a health status column (see Open Questions). A column flagged personal sends no values, even when they repeat.
+- Definition sheets are sent cell by cell (ADR 0002). The gate is two definition headers in the first 10 rows and at most 1,000 rows. Other sheets of the file are not read.
 - All reads and writes are tenant-scoped. Subtree enforcement applies to non-super-admin importers.
 
 ## 9. Testing Strategy
@@ -139,6 +146,7 @@ All under `/api/v1/data-onboarding`, behind `DataOnboardingAccess` and scoped to
 - A test seeds a high-cardinality column with marker values and asserts that none of them reach the OpenAI request.
 - Secondary seam: one check-and-apply service function, with table tests for the ambiguity checks (cases 1–4) and the row rules.
 - No separate tests for the profiler, the prompt or form creation. Form creation reuses the form definition import and its tests.
+- Definitions: an XLSForm drafts without OpenAI and applies with its conditions and repeats; another layout sends only its definition sheets; a long sheet with question-like headers stays data. The hints have table tests.
 
 ## 10. Open Questions
 
@@ -166,3 +174,8 @@ All under `/api/v1/data-onboarding`, behind `DataOnboardingAccess` and scoped to
 - **D-10 Rows load in savepoints.** Any error in a row skips only that row ("This row could not be loaded."); the rest load.
 - **D-11 Code places the location, not the model.** The Proposal has no unit list: the units to add are read from the file's location columns. Models drafted bare names (a village as a province) and mapped the location columns to the administration question instead of `administration_columns`; such columns are moved there before the checks run. Models also "corrected" known names to ones they guessed ("Jakarta" to "DKI Jakarta"), which would add duplicates: an alias is kept only from an unknown spelling to an existing unit or a listed value of a location column.
 - **D-12 Settle model slips in code, then ask once to fix the rest.** Before validation, code drops data specs for missing forms and value maps for columns whose values were not sent, turns option questions on such columns into text (their options were made up), lists columns fed to a missing question as not loaded, and stops listing used columns as not loaded. A monitoring form loses its location question (visits take the parent's), and one that reads its parent's sheet with its parent's key is dropped, since it only copies the registration rows. A form with no data spec is an error. If the Proposal still fails validation, the errors (column and question names only) go back to OpenAI once; a second failure fails the draft.
+- **D-13 Form definitions are onboarded too** (ADR 0002). QA brought XLSForms and an Akvo Flow export; the profile path drafted their definition rows as records. XLSForms go through the form builder's XLSForm import; other layouts go to OpenAI with their own instructions. A revision uses the same instructions as the draft.
+- **D-14 #462's structural hints join the profile.** Per sheet: `registration_keys` (a repeating ID column, with the columns constant per record and those that vary), `hierarchy` (nesting place columns, parent first), `geo` (lat/lng pairs). Per file: `links` (a column holding another sheet's unique keys). Per column: `flags` (`personal`, `derived`, `day_month_order`). The prompt says how to use each; personal and derived columns are left out by default, and the user can keep them in review.
+- **D-15 A form with no data spec is allowed only in a definition's Proposal.** In a data Proposal it is still an error (D-12).
+- **D-16 The Report lists every created form**, with 0 records for a form no sheet loads.
+- **D-17 Code settles two slips in a definition's questions.** gpt-4o-mini wrote conditions with option labels ("Yes") where MIS matches values ("yes"), and kept an Akvo Flow organisation cascade as a cascade with no source. Dependency options are mapped to the parent's option values (by label or value, any case); an entry left with no condition is dropped, so its question always shows. A cascade that is not the administration question takes text. In a definition, options whose labels are all codes and whose values are not (the model swapped them) are swapped back; not in a data Proposal, whose value maps name labels.
