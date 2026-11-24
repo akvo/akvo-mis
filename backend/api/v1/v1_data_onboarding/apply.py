@@ -29,6 +29,7 @@ from api.v1.v1_data_onboarding.places import (
     user_scope,
 )
 from api.v1.v1_data_onboarding.profile import OnboardingError, read_sheets
+from api.v1.v1_data_onboarding.proposal import DEPENDENCY_KEYS
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.functions import (
     create_published_version,
@@ -160,16 +161,34 @@ def planned_units(proposal, sheets, tenant, user, blocked,
 
 # ------------------------------------------------------------------ forms
 
+def _dependency(d, ids):
+    rule = {"id": ids[d["question"]]}
+    if d["options"]:
+        rule["options"] = d["options"]
+    rule.update({k: d[k] for k in DEPENDENCY_KEYS if d.get(k) is not None})
+    return rule
+
+
 def _create_forms(forms, user):
     created = {}
     ordered = sorted(forms, key=lambda f: f["type"] == "monitoring")
     for spec in ordered:
         norm = normalize_form_definition(spec)
         # The Proposal orders by position; the import reads "order" only.
+        # Conditions name questions; the import reads ids, so each
+        # question gets one here, replaced when it is created.
+        ids = {}
         for gi, group in enumerate(norm["question_group"], 1):
             group["order"] = gi
             for qi, question in enumerate(group["question"], 1):
                 question["order"] = qi
+                question["id"] = ids[question["name"]] = len(ids) + 1
+        for group in norm["question_group"]:
+            for question in group["question"]:
+                question["dependency"] = [
+                    _dependency(d, ids)
+                    for d in question.get("dependency") or []
+                ] or None
         errors = [
             i for i in validate_form_definition(norm) if i["level"] == "error"
         ]
@@ -421,6 +440,7 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
             {"kind": c["kind"], "reason": c["reason"]} for c in b["causes"]
         ]} for b in blocked
     ]}
+    loaded = {}  # form key: records loaded
     records = {}  # form key: {row key: FormData}
     # Registration rows first, so visits can find their parent records.
     parent_of = {f["key"]: f["parent"] for f in proposal["forms"]}
@@ -442,11 +462,14 @@ def apply_proposal(proposal, path, file_name, tenant, user, forms=None,
                 logger.exception("Data Onboarding: row %s failed", line)
                 del rows.issues[issues:]
                 rows.issue(line, None, "skipped", ROW_FAILED)
-        report["forms"].append({
-            "key": spec["form"], "name": form.name, "form": form.id,
-            "loaded": rows.loaded,
-        })
+        loaded[spec["form"]] = rows.loaded
         report["issues"] += rows.issues
+    # Every form Apply created; a form definition's forms load nothing.
+    report["forms"] = [
+        {"key": key, "name": form.name, "form": form.id,
+         "loaded": loaded.get(key, 0)}
+        for key, form in forms.items()
+    ]
     try:
         refresh_materialized_data()
     except Exception:

@@ -140,6 +140,32 @@ describe("Data Onboarding", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a form definition's forms without a units section", async () => {
+    api.get.mockResolvedValue({
+      data: {
+        id: 8,
+        status: "proposed",
+        file_name: "survey.xlsx",
+        proposal: {
+          ...proposal,
+          administration: {
+            levels: [],
+            source: { sheet: null, columns: [] },
+            aliases: [],
+          },
+          data: [],
+        },
+        units: { new: [], outside: [] },
+      },
+    });
+    renderAt("/control-center/data-onboarding/8");
+
+    expect(await screen.findByText("Water sites")).toBeInTheDocument();
+    expect(screen.getAllByText("Water source").length).toBeGreaterThan(0);
+    expect(screen.queryByText(text.dataOnboardingUnits)).toBeNull();
+    expect(screen.queryByText(text.dataOnboardingNoUnits)).toBeNull();
+  });
+
   it("applies the Proposal, then shows the Onboarding Report", async () => {
     api.get
       .mockResolvedValueOnce({
