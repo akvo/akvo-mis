@@ -14,7 +14,7 @@ import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { BaseLayout, ConfirmDialog, EmptyState } from '../components';
+import { BaseLayout, ConfirmDialog, EmptyState, SyncButton } from '../components';
 import {
   FormState,
   UserState,
@@ -24,7 +24,7 @@ import {
   AuthState,
 } from '../store';
 import useTheme from '../lib/theme';
-import { crudForms, crudUsers } from '../database/crud';
+import { crudForms, crudUsers, crudDataPoints } from '../database/crud';
 import { api, cascades, i18n } from '../lib';
 import useVersionCheck from '../hooks/use-version-check';
 import crudJobs from '../database/crud/crud-jobs';
@@ -42,6 +42,7 @@ const Home = ({ navigation, route }) => {
   const [loading, setloading] = useState(true);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncDisabled, setSyncDisabled] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const locationIsGranted = UserState.useState((s) => s.locationIsGranted);
   const gpsAccuracyLevel = BuildParamsState.useState((s) => s.gpsAccuracyLevel);
@@ -68,17 +69,25 @@ const Home = ({ navigation, route }) => {
     handleSkip,
   } = useVersionCheck({ autoCheck: true });
 
-  const goToSubmission = (id) => {
-    const findForm = data.find((d) => d?.id === id);
+  // Shared by parent cards and sub-form cards: a sub-form row has the same shape
+  // (parentId, formId, json) so Submission opens it just like a registration form.
+  const openSubmissionForm = (form) => {
+    if (!form) {
+      return;
+    }
     FormState.update((s) => {
-      s.form = findForm;
+      s.form = form;
     });
     navigation.push('Submission', {
-      id,
-      name: findForm.name,
-      formId: findForm.formId,
-      draft: findForm?.draft,
+      id: form.id,
+      name: form.name,
+      formId: form.formId,
+      draft: form?.draft,
     });
+  };
+
+  const goToSubmission = (id) => {
+    openSubmissionForm(data.find((d) => d?.id === id));
   };
 
   const goToAddForm = () => {
@@ -210,6 +219,8 @@ const Home = ({ navigation, route }) => {
         const forms = results.filter((r) => r?.userId === currentUserId);
         setData(forms);
         setloading(false);
+        const pending = await crudDataPoints.countPendingSync(db, { user: currentUserId });
+        setPendingCount(pending);
       } catch (error) {
         setloading(false);
         Sentry.captureMessage("[Home] Unable to refresh user's forms");
@@ -224,6 +235,15 @@ const Home = ({ navigation, route }) => {
   useEffect(() => {
     getUserForms();
   }, [getUserForms]);
+
+  // Safeguard: refetch whenever Home regains focus (returning from Submission/FormPage),
+  // so the card counts and pending badge are never left stale by a missed refreshPage tick.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      getUserForms();
+    });
+    return unsubscribe;
+  }, [navigation, getUserForms]);
 
   useEffect(() => {
     if (!updateDialogVisible) {
@@ -243,25 +263,14 @@ const Home = ({ navigation, route }) => {
     }
   }, [loading, trans.downloadingData]);
 
+  // One flat list, filtered by name (APP-585): no Latest/Earlier split — a mobile
+  // assignment is never large enough to need it.
   const filteredData = useMemo(
     () =>
       data.filter(
         (d) => (search && d?.name?.toLowerCase().includes(search.toLowerCase())) || !search,
       ),
     [data, search],
-  );
-
-  // Split, each form once (A20): Latest = forms with data created in this app, newest
-  // first (A18); Earlier = the rest, in query order. ISO strings from toISOString, so
-  // string order is time order.
-  const [latestData, earlierData] = useMemo(
-    () => [
-      filteredData
-        .filter((d) => d?.lastActivityAt)
-        .sort((a, b) => (a.lastActivityAt < b.lastActivityAt ? 1 : -1)),
-      filteredData.filter((d) => !d?.lastActivityAt),
-    ],
-    [filteredData],
   );
 
   useEffect(() => {
@@ -317,6 +326,11 @@ const Home = ({ navigation, route }) => {
         }
         if (!inProgress) {
           setSyncLoading(false);
+          // A finished sync drains pending rows — refresh the badge.
+          crudDataPoints
+            .countPendingSync(db, { user: userId })
+            .then(setPendingCount)
+            .catch(() => {});
         }
       },
     );
@@ -324,7 +338,7 @@ const Home = ({ navigation, route }) => {
     return () => {
       unsubsDataSync();
     };
-  }, [syncLoading]);
+  }, [syncLoading, db, userId]);
 
   useEffect(() => {
     const unsubsNetwork = UIState.subscribe(
@@ -392,10 +406,7 @@ const Home = ({ navigation, route }) => {
     >
       <BaseLayout.Content
         action={goToSubmission}
-        sections={[
-          { key: 'latest', title: trans.latestSubmissionsTitle, data: latestData },
-          { key: 'earlier', title: trans.earlierSubmissionsTitle, data: earlierData },
-        ]}
+        data={filteredData}
         footer={
           canAddForms && (
             <TouchableOpacity
@@ -425,6 +436,12 @@ const Home = ({ navigation, route }) => {
           />
         )}
       </BaseLayout.Content>
+      <SyncButton
+        pending={pendingCount}
+        online={isOnline}
+        syncing={syncLoading}
+        onPress={handleOnSync}
+      />
       <ConfirmDialog
         visible={updateDialogVisible}
         title={trans.updateRequiredTitle}
