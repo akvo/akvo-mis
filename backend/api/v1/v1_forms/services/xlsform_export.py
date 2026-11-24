@@ -129,7 +129,7 @@ def _get_options_manager(question: Any) -> Optional[Any]:
 
 def _map_type(question: Any) -> Tuple[Optional[str], Optional[str]]:
     """
-    Maps Akvo MIS question type to (xlsform_type_str, appearance_or_None).
+    Maps AIMS question type to (xlsform_type_str, appearance_or_None).
     Returns (None, None) for skipped types (tree, table, autofield).
     """
     qtype = question.type
