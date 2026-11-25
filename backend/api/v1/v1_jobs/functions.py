@@ -40,6 +40,7 @@ class ValidationText(enum.Enum):
     error_validation = "VALIDATION ERROR"
     invalid_data_id = "--data_id-- is not a valid data id"
     duplicated_data_id = "--data_id-- is a duplicate data id"
+    geo_required = "geolocation is required and cannot be edited later"
     parent_id_required = "parent_id is required for monitoring data"
     invalid_parent_id = (
         "--parent_id-- is not a valid registration for this form")

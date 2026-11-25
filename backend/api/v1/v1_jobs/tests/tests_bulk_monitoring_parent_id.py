@@ -14,6 +14,7 @@ from api.v1.v1_jobs.models import Jobs
 from api.v1.v1_jobs.seed_data import (
     collect_answers,
     get_administration,
+    get_geo_value,
     seed_excel_data,
 )
 from api.v1.v1_jobs.validate_upload import validate, validate_administration
@@ -166,6 +167,66 @@ class BulkMonitoringParentIdTestCase(TestCase, ProfileTestHelperMixin):
         ]
         self.assertEqual(parent_msgs, [])
 
+    def _add_geo_question(self, form, name):
+        return Questions.objects.create(
+            form=form,
+            question_group=QuestionGroup.objects.filter(form=form).first(),
+            name=name,
+            type=QuestionTypes.geo,
+            order=97,
+        )
+
+    def test_validate_registration_requires_geolocation(self):
+        # JOB-580: a registration form with a geo question must reject a blank
+        # geolocation — the datapoint geo cannot be edited in the platform
+        # after insert.
+        self._add_geo_question(self.form, "gps")
+        path = self._write_sheet([{
+            "administration": "Indonesia|Jakarta",
+            "geolocation": None,
+        }])
+        errors = validate(
+            form=self.form.id,
+            administration=self.administration.id,
+            file=path,
+        )
+        required = ValidationText.geo_required.value
+        self.assertTrue(
+            any(e.get("error_message") == required for e in errors)
+        )
+
+    def test_validate_registration_valid_geolocation_ok(self):
+        self._add_geo_question(self.form, "gps")
+        path = self._write_sheet([{
+            "administration": "Indonesia|Jakarta",
+            "geolocation": "7.28, 168.82",
+        }])
+        errors = validate(
+            form=self.form.id,
+            administration=self.administration.id,
+            file=path,
+        )
+        required = ValidationText.geo_required.value
+        self.assertFalse(
+            any(e.get("error_message") == required for e in errors)
+        )
+
+    def test_validate_monitoring_geolocation_not_required(self):
+        # Child (monitoring) forms inherit geo from their parent, so a blank
+        # geolocation must NOT trigger geo_required even if the form has a geo
+        # question.
+        self._add_geo_question(self.child_form, "gps")
+        path = self._write_sheet([self._row(self.parent_dp.id)])
+        errors = validate(
+            form=self.child_form.id,
+            administration=self.administration.id,
+            file=path,
+        )
+        required = ValidationText.geo_required.value
+        self.assertFalse(
+            any(e.get("error_message") == required for e in errors)
+        )
+
     # ---- seed_excel_data() ---------------------------------------------
 
     def _seed(self, path):
@@ -204,6 +265,16 @@ class BulkMonitoringParentIdTestCase(TestCase, ProfileTestHelperMixin):
         err = validate_administration("Indonesia|DoesNotExist|AlsoNope", adm)
         self.assertIsInstance(err, dict)
         self.assertIn("error_message", err)
+
+    def test_get_geo_value_blank_normalises_to_none(self):
+        # Regression (JOB-580): an empty geolocation arrived as NaN (float)
+        # and Postgres rejected 'NaN'::json, aborting the whole bulk seed
+        # after the first blank-geo row (only the first row imported, no
+        # email). Blank must become None; a real pair must still parse.
+        self.assertIsNone(get_geo_value(float("nan")))
+        self.assertIsNone(get_geo_value(None))
+        self.assertIsNone(get_geo_value(""))
+        self.assertEqual(get_geo_value("7.28, 168.82"), [7.28, 168.82])
 
     def test_date_meta_question_populates_name(self):
         # Regression (JOB-580): collect_answers skipped meta date questions,

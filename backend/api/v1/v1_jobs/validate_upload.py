@@ -442,4 +442,36 @@ def validate(form: int, administration: int, file: str):
                 )
                 if errors:
                     data_error.append(errors)
+    elif form_obj and questions.filter(type=QuestionTypes.geo).exists():
+        # Registration (parent-less) forms with a geo question: the datapoint
+        # geolocation cannot be edited in the platform after insert, so it is
+        # required on every row. Monitoring child forms are exempt (handled by
+        # the `if parent_form_id` branch above) — they inherit geo from their
+        # registration parent (JOB-580).
+        if "geolocation" not in list(df):
+            header_error.append({
+                "error": ExcelError.header,
+                "cell": "geolocation",
+                "error_message": ValidationText.geo_required.value,
+            })
+        else:
+            geo_col = next(
+                c for c, h in excel_head.items() if h == "geolocation"
+            )
+            for i, g in enumerate(list(df["geolocation"])):
+                ix = i + 2
+                if pd.isnull(g) or not str(g).strip():
+                    data_error.append({
+                        "error": ExcelError.value,
+                        "cell": f"{geo_col}{ix}",
+                        "error_message": ValidationText.geo_required.value,
+                    })
+                    continue
+                err = validate_geo(g)
+                if err:
+                    data_error.append({
+                        "error": ExcelError.value,
+                        "cell": f"{geo_col}{ix}",
+                        **err,
+                    })
     return header_error + data_error

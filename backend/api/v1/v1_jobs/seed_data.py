@@ -33,9 +33,17 @@ from uuid import uuid4
 
 
 def get_geo_value(aw):
+    # Empty geolocation arrives as NaN (float, from pandas) or None. Postgres
+    # rejects NaN for a JSON field, which aborts the whole bulk seed after the
+    # first row with a blank geolocation, so normalise to None (JSON null)
+    # here where every caller routes through (JOB-580).
+    if aw is None or (isinstance(aw, float) and math.isnan(aw)):
+        return None
     geo = aw
     if isinstance(aw, str):
         aw = aw.strip().replace("|", ",")
+        if not aw:
+            return None
         geo = [float(g) for g in aw.split(",")]
     return geo
 
