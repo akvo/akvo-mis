@@ -6,8 +6,8 @@
   "dataSyncInterval": 30,
   "errorHandling": true,
   "loggingLevel": "verbose",
-  "appVersion": "5.0.2",
+  "appVersion": "5.0.3",
   "lang": "en",
   "gpsThreshold": 30,
-  "apkName": "Akvo MIS"
+  "apkName": "Akvo AIMS"
 }
