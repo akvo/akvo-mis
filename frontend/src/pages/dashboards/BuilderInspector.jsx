@@ -656,12 +656,12 @@ const BuilderInspector = ({
                 cx="12"
                 cy="12"
                 r="9"
-                stroke="#1651b6"
+                stroke="#404797"
                 strokeWidth="1.6"
               />
               <path
                 d="M12 11v5M12 8h.01"
-                stroke="#1651b6"
+                stroke="#404797"
                 strokeWidth="1.8"
                 strokeLinecap="round"
               />
@@ -894,12 +894,12 @@ const BuilderInspector = ({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
             <path
               d="M12 15a3 3 0 100-6 3 3 0 000 6z"
-              stroke="#1651b6"
+              stroke="#404797"
               strokeWidth="1.7"
             />
             <path
               d="M19 12a7 7 0 00-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1l-.4-2.5H10.6l-.4 2.5a7 7 0 00-1.7 1l-2.4-1-2 3.4 2 1.6a7 7 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.4 2.5h3.8l.4-2.5a7 7 0 001.7-1l2.4 1 2-3.4-2-1.6a7 7 0 00.1-1z"
-              stroke="#1651b6"
+              stroke="#404797"
               strokeWidth="1.4"
             />
           </svg>
@@ -1244,7 +1244,7 @@ const BuilderInspector = ({
                     style={{
                       border: "none",
                       background: "none",
-                      color: "#1651b6",
+                      color: "#404797",
                       cursor: "pointer",
                       textDecoration: "underline",
                       padding: 0,

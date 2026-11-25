@@ -3,6 +3,7 @@ import "../login/style.scss";
 import { Row, Col, Form, Input, Button } from "antd";
 import { Link } from "react-router-dom";
 import { baseDomain, workspaceUrl } from "../../util/tenant";
+import { useTranslation } from "../../lib/i18n";
 
 // The main site has no workspace, so it cannot sign anyone in — the
 // backend refuses a login here. What it can do is send someone to the
@@ -15,6 +16,7 @@ import { baseDomain, workspaceUrl } from "../../util/tenant";
 // it reveals only what the guesser already typed, and offers the way
 // back here as well as the way on to sign-up.
 const FindWorkspace = () => {
+  const c = useTranslation("findWorkspace");
   const onFinish = ({ subdomain }) => {
     window.location.href = workspaceUrl(subdomain.trim().toLowerCase());
   };
@@ -24,28 +26,26 @@ const FindWorkspace = () => {
       <Row className="wrapper" align="middle">
         <Col span={24} className="right-side">
           <div className="login-form-container">
-            <h1>Go to your workspace</h1>
-            <p className="disclaimer">
-              Each workspace has its own address. Enter yours to sign in.
-            </p>
+            <h1>{c.title}</h1>
+            <p className="disclaimer">{c.subtitle}</p>
             <Form name="find-workspace" layout="vertical" onFinish={onFinish}>
               <Form.Item
                 name="subdomain"
-                label="Workspace address"
-                rules={[
-                  { required: true, message: "Enter your workspace address" },
-                ]}
+                label={c.addressLabel}
+                rules={[{ required: true, message: c.addressRequired }]}
               >
-                <Input placeholder="acme" addonAfter={`.${baseDomain()}`} />
+                <Input
+                  placeholder={c.addressPlaceholder}
+                  addonAfter={`.${baseDomain()}`}
+                />
               </Form.Item>
               <Form.Item>
                 <Button type="primary" htmlType="submit" shape="round" block>
-                  Continue
+                  {c.submit}
                 </Button>
               </Form.Item>
               <p className="disclaimer">
-                Don&apos;t have one?{" "}
-                <Link to="/register">Create a workspace</Link>
+                {c.noWorkspace} <Link to="/">{c.create}</Link>
               </p>
             </Form>
           </div>

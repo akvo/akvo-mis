@@ -41,7 +41,6 @@ class FormDataSortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(self.data_a)
 
@@ -52,7 +51,6 @@ class FormDataSortingTestCase(TestCase, ProfileTestHelperMixin):
             created_by=self.user,
             updated_by=self.user,
             is_pending=False,
-            is_draft=False,
         )
         add_fake_answers(self.data_z)
 
@@ -66,7 +64,6 @@ class FormDataSortingTestCase(TestCase, ProfileTestHelperMixin):
                 created_by=self.user,
                 updated_by=self.user,
                 is_pending=False,
-                is_draft=False,
             )
             add_fake_answers(child)
 

@@ -176,12 +176,12 @@ const RolesPage = () => {
                   expanded ? (
                     <DownCircleOutlined
                       onClick={(e) => onExpand(record, e)}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   ) : (
                     <LeftCircleOutlined
                       onClick={(e) => onExpand(record, e)}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   ),
               }}

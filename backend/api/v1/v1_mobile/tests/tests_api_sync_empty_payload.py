@@ -63,6 +63,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 107: "photo.jpeg",
                 108: "2024-04-29",
                 109: 0.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -72,21 +73,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-
-        a_101 = Answers.objects.filter(
-            question_id=101, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_101)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_empty_required_number_type_of_question(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -100,12 +87,12 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             "answers": {
                 101: "John Doe",
                 102: ["male"],
-                103: 62723817,
                 104: mobile_adm.id,
                 105: [6.2088, 106.8456],
                 106: ["wife__husband__partner"],
                 107: "photo.jpeg",
                 108: "2024-04-29",
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -115,21 +102,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-
-        a_109 = Answers.objects.filter(
-            question_id=109, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_109)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_allowed_zero_required_number_type_of_question(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -150,6 +123,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 107: "photo.jpeg",
                 108: "2024-04-29",
                 109: 0,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -193,6 +167,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 107: "photo.jpeg",
                 108: "2024-04-29",
                 109: 0.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -202,21 +177,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-
-        a_102 = Answers.objects.filter(
-            question_id=102, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_102)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_empty_required_multiple_options_type_of_question(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -236,6 +197,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 107: "photo.jpeg",
                 108: "2024-04-29",
                 109: 0.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -245,20 +207,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-        a_106 = Answers.objects.filter(
-            question_id=106, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_106)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_empty_required_geo_type_of_question(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -278,6 +227,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 107: "photo.jpeg",
                 108: "2024-04-29",
                 109: 0.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -287,20 +237,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-        a_105 = Answers.objects.filter(
-            question_id=105, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_105)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_empty_non_required_autofield_type_of_question(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -321,6 +258,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 107: "photo.jpeg",
                 108: "2024-04-29",
                 109: 0.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -363,6 +301,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 106: ["wife__husband__partner"],
                 108: "2024-04-29",
                 109: 7.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -372,20 +311,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-        a_107 = Answers.objects.filter(
-            question_id=107, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_107)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_empty_required_date_type_of_question(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -405,6 +331,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 106: ["wife__husband__partner"],
                 107: "photo-123.jpeg",
                 109: 7.6,
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -414,20 +341,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
             content_type="application/json",
             **{"HTTP_AUTHORIZATION": f"Bearer {self.token}"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        pending_data = FormData.objects.last()
-        self.assertTrue(pending_data.id)
-        a_108 = Answers.objects.filter(
-            question_id=108, data_id=pending_data.id
-        ).first()
-        self.assertFalse(a_108)
-        total_null_answers = Answers.objects.filter(
-            data=pending_data,
-            name__isnull=True,
-            value__isnull=True,
-            options__isnull=True,
-        ).count()
-        self.assertEqual(total_null_answers, 0)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_valid_pending_answers_for_all_questions(self):
         mobile_adm = self.mobile_user.administrations.first()
@@ -449,6 +363,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
                 108: "2024-04-29",
                 109: 5.1,
                 111: "10.2",
+                114: ["no"],
             },
         }
         response = self.client.post(
@@ -461,7 +376,7 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         pending_data = FormData.objects.last()
         self.assertTrue(pending_data.id)
-        self.assertEqual(pending_data.data_answer.count(), 10)
+        self.assertEqual(pending_data.data_answer.count(), 11)
 
         a_101 = pending_data.data_answer.filter(
             question_id=101
@@ -493,6 +408,9 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
         a_111 = pending_data.data_answer.filter(
             question_id=111
         ).first()
+        a_114 = pending_data.data_answer.filter(
+            question_id=114
+        ).first()
         self.assertEqual(a_101.name, "Jane Doe")
         self.assertEqual(a_102.options, ["female"])
         self.assertEqual(a_103.value, 62723817)
@@ -503,3 +421,4 @@ class MobileAssignmentApiSyncEmptyPayloadTest(TestCase):
         self.assertEqual(a_108.name, "2024-04-29")
         self.assertEqual(a_109.value, 5.1)
         self.assertEqual(a_111.name, "10.2")
+        self.assertEqual(a_114.options, ["no"])

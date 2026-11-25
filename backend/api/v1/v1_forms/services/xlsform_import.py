@@ -810,7 +810,9 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                         leading_q_id = name_to_tmp_id[lq_name]
 
             # Check group-level relevant
-            grp_relevant = _get_cell_value(row, s_col_map, "relevant")
+            grp_relevant = _get_cell_value(
+                row, s_col_map, "relevant", "relevance"
+            )
             if grp_relevant:
                 warnings.append(
                     {
@@ -1034,7 +1036,9 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                 )
             q_options = base_opts
 
-        relevant_expr = _get_cell_value(row, s_col_map, "relevant")
+        relevant_expr = _get_cell_value(
+            row, s_col_map, "relevant", "relevance"
+        )
         deps: List[Dict[str, Any]] = []
         dep_rule = "AND"
         if relevant_expr:

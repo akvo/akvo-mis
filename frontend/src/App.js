@@ -2,9 +2,10 @@ import "./App.scss";
 import React, { useContext, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
-  Home,
+  Onboarding,
+  LandingHeader,
+  LandingFooter,
   Login,
-  Register,
   Activate,
   Configure,
   ControlCenterLayout,
@@ -47,11 +48,13 @@ import {
   DownloadEntitiesData,
   Roles,
   AddRole,
-  ManageDraft,
-  ManageDraftForm,
   FormBuilderList,
   FormBuilderCreate,
   FormBuilderEdit,
+  FormLibrary,
+  DataOnboardingCreate,
+  DataOnboardingDetail,
+  DataOnboardingList,
   FindWorkspace,
   WorkspaceNotFound,
   DashboardList,
@@ -62,6 +65,8 @@ import {
   Tenants,
   TenantDetail,
   Operators,
+  FormLibraryConsole,
+  PromoteTemplatePage,
 } from "./pages";
 import { useCookies } from "react-cookie";
 import { store, api, config } from "./lib";
@@ -161,6 +166,16 @@ const RouteList = () => {
           <Route path="tenants" element={<Tenants />} />
           <Route path="tenants/:id" element={<TenantDetail />} />
           <Route path="operators" element={<Operators />} />
+          <Route path="form-library" element={<FormLibraryConsole />} />
+          <Route
+            path="form-library/promote"
+            element={<PromoteTemplatePage />}
+          />
+          <Route path="form-library/create" element={<FormBuilderCreate />} />
+          <Route
+            path="form-library/:formId/edit"
+            element={<FormBuilderEdit />}
+          />
         </Route>
         <Route path="*" element={<Navigate to="/admin/tenants" replace />} />
       </Routes>
@@ -178,8 +193,11 @@ const RouteList = () => {
         exact
         path="/"
         element={
-          window?.appConfig?.showLandingPage ? (
-            <Home />
+          // "/" is the onboarding wizard on the base-domain host (and
+          // single-host installs); a tenant subdomain's "/" is the workspace app.
+          // (The marketing landing is owned by the marcomm team, off-app.)
+          onBaseDomainHost() ? (
+            <Onboarding />
           ) : authUser ? (
             <Navigate to="/control-center" />
           ) : (
@@ -195,11 +213,6 @@ const RouteList = () => {
       <Route exact path="/find-workspace" element={<FindWorkspace />} />
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
-      <Route
-        exact
-        path="/register"
-        element={onBaseDomainHost() ? <Register /> : <Navigate to="/" />}
-      />
       <Route exact path="/activate/:token" element={<Activate />} />
       {/* The console's one-time code becomes a session here. Reached
           holding nothing for this origin -- the code is the credential
@@ -211,7 +224,6 @@ const RouteList = () => {
           does its own redirects for the no-session and already-done
           cases. */}
       <Route exact path="/configure" element={<Configure />} />
-      <Route exact path="/data" element={<Home />} />
       <Route
         path="/control-center"
         element={
@@ -259,8 +271,30 @@ const RouteList = () => {
           element={<Private element={FormBuilderCreate} alias="form-builder" />}
         />
         <Route
+          path="form-builder/library"
+          element={<Private element={FormLibrary} alias="form-builder" />}
+        />
+        <Route
           path="form-builder/:formId/edit"
           element={<Private element={FormBuilderEdit} alias="form-builder" />}
+        />
+        <Route
+          path="data-onboarding"
+          element={
+            <Private element={DataOnboardingList} alias="data-onboarding" />
+          }
+        />
+        <Route
+          path="data-onboarding/create"
+          element={
+            <Private element={DataOnboardingCreate} alias="data-onboarding" />
+          }
+        />
+        <Route
+          path="data-onboarding/:id"
+          element={
+            <Private element={DataOnboardingDetail} alias="data-onboarding" />
+          }
         />
         <Route
           path="data"
@@ -353,14 +387,6 @@ const RouteList = () => {
         <Route
           path="data/submissions"
           element={<Private element={Submissions} alias="data" />}
-        />
-        <Route
-          path="data/draft"
-          element={<Private element={ManageDraft} alias="data" />}
-        />
-        <Route
-          path="data/draft/:formId"
-          element={<Private element={ManageDraftForm} alias="data" />}
         />
         <Route
           path="approvals"
@@ -675,16 +701,32 @@ const App = () => {
     }
   }, [authUser, tenant, tenantLoaded, public_state]);
 
-  // Only treat "/" as a public home (bypassing the auth loader) when the
-  // landing page is enabled. When it is disabled, "/" is an authenticated
-  // redirect target, so we must keep the loader until the profile fetch
-  // resolves — otherwise a valid session is wrongly redirected to /login.
-  const showLandingPage = window?.appConfig?.showLandingPage;
-  const isHome = location.pathname === "/" && showLandingPage;
+  // The base-domain "/" is the onboarding wizard, which renders its OWN
+  // LandingShell (brand, language switch, footer). Flag it so we bypass the auth
+  // loader and suppress the workspace app shell — otherwise a second header
+  // stacks on the wizard's and the loader hides a public page. (The official
+  // marketing landing is owned by the marcomm team, off-app.) A tenant
+  // subdomain's "/" is the workspace app.
+  const isPublicShell = location.pathname === "/" && onBaseDomainHost();
+
+  // Other base-domain public routes reuse the landing's header as their app
+  // shell: suppress the workspace header/chatbot/tour and render a fixed
+  // LandingHeader + LandingFooter instead. The `#login` pages already reserve the
+  // header's height, so the fixed bar drops into that slot with no layout change.
+  // "/" is intentionally NOT here: the onboarding wizard renders its own
+  // LandingShell (above), so adding this shell too would double the header/footer.
+  const publicShell =
+    onBaseDomainHost() && location.pathname === "/find-workspace";
 
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
     .filter((x) => x)?.length;
+
+  // Keep the activation route mounted even while a just-signed-in session is
+  // refetching forms: swapping in the loader unmounts <Activate/> and loses its
+  // one-shot guard, so bootstrap finishing before auto-configuration could
+  // remount it and fire overlapping activation/configuration requests.
+  const isActivate = location.pathname.startsWith("/activate");
 
   return (
     <AbilityContext.Provider value={ability(authUser)}>
@@ -700,20 +742,35 @@ const App = () => {
             workspace's published dashboards and its account menu links
             to /control-center. Neither exists on the console, which
             brings its own header in AdminLayout. */}
-        {!onAdminHost() && <Layout.Header />}
+        {publicShell ? (
+          <div id="landing">
+            <LandingHeader showCta={location.pathname !== "/"} />
+          </div>
+        ) : (
+          !onAdminHost() && !isPublicShell && <Layout.Header />
+        )}
         <Layout.Body>
-          {(loading || formsLoading) && !isHome && !isPublic ? (
+          {(loading || formsLoading) &&
+          !isPublicShell &&
+          !publicShell &&
+          !isPublic &&
+          !isActivate ? (
             <PageLoader message="Initializing. Please wait.." />
           ) : (
             <RouteList />
           )}
         </Layout.Body>
+        {publicShell && (
+          <div id="landing">
+            <LandingFooter />
+          </div>
+        )}
         {/* A workspace feature: it posts to a tenant-scoped endpoint
             and labels itself with the page it is on, so on the console
             it offers an assistant that can only fail. Same reason the
             header above is suppressed. */}
-        {!onAdminHost() && <ChatbotWidget />}
-        {!onAdminHost() && <OnboardingTour />}
+        {!onAdminHost() && !isPublicShell && !publicShell && <ChatbotWidget />}
+        {!onAdminHost() && !isPublicShell && !publicShell && <OnboardingTour />}
       </Layout>
     </AbilityContext.Provider>
   );

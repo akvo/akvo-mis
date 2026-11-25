@@ -1,75 +1,65 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, within } from '@testing-library/react-native';
 import Content from '../Content';
 
-describe('Content component', () => {
-  it('renders content correctly with 2 columns and has data', () => {
-    const data = [
-      {
-        id: 1,
-        name: 'HH Form 1',
-        subtitles: ['Submitted: 2', 'Draft: 1'],
-      },
-      {
-        id: 2,
-        name: 'HH Form 2',
-        subtitles: ['Submitted: 2', 'Draft: 0'],
-      },
-    ];
-    const { getByText, getByTestId } = render(<Content data={data} columns={2} />);
-    const dataName1 = getByText(data[0].name);
-    expect(dataName1).toBeDefined();
-    const dataName2 = getByText(data[1].name);
-    expect(dataName2).toBeDefined();
+const data = [
+  { id: 1, formId: 11, name: 'HH Form 1', version: '1.0.0', submitted: 2, draft: 1, synced: 2 },
+  { id: 2, formId: 12, name: 'HH Form 2', version: '1.0.1', submitted: 4, draft: 0, synced: 3 },
+];
 
-    const container = getByTestId('card-non-touchable-1');
-    expect(container.props.style).toEqual({
-      width: '50%',
-    });
+const sections = [
+  { key: 'latest', title: 'Latest submissions', data: [data[1]] },
+  { key: 'earlier', title: 'Earlier submissions', data: [data[0]] },
+];
+
+describe('Content component', () => {
+  it('renders each section as a counted, titled container with a card per form', () => {
+    const { getByText, getByTestId } = render(<Content sections={sections} />);
+    expect(getByText('Latest submissions')).toBeTruthy();
+    expect(getByText('Earlier submissions')).toBeTruthy();
+    expect(within(getByTestId('form-group-latest')).getByText('HH Form 2')).toBeTruthy();
+    expect(within(getByTestId('form-group-earlier')).getByText('HH Form 1')).toBeTruthy();
+    expect(within(getByTestId('section-header-latest')).getByText('1')).toBeTruthy();
   });
 
-  it('renders content correctly with single column and doesnt have data', () => {
-    const titleTest = 'Testing';
-    const data = [];
-    const { getByTestId, getByText } = render(
-      <Content data={data}>
-        <Text testID="text-test">{titleTest}</Text>
+  it('closes the last visible section with the footer', () => {
+    const footer = <Text>Add form</Text>;
+    const { getByTestId, rerender } = render(<Content sections={sections} footer={footer} />);
+    expect(within(getByTestId('form-group-earlier')).getByText('Add form')).toBeTruthy();
+    rerender(<Content sections={[sections[0], { ...sections[1], data: [] }]} footer={footer} />);
+    expect(within(getByTestId('form-group-latest')).getByText('Add form')).toBeTruthy();
+  });
+
+  it('leaves out a section without data', () => {
+    const { queryByText } = render(
+      <Content sections={[{ ...sections[0], data: [] }, sections[1]]} />,
+    );
+    expect(queryByText('Latest submissions')).toBeNull();
+    expect(queryByText('Earlier submissions')).toBeTruthy();
+  });
+
+  it('collapses one section from its header and keeps its count', () => {
+    const { getByTestId, queryByTestId } = render(<Content sections={sections} />);
+    fireEvent.press(getByTestId('section-header-latest'));
+    expect(queryByTestId('form-group-latest')).toBeNull();
+    expect(queryByTestId('form-group-earlier')).toBeTruthy();
+    expect(within(getByTestId('section-header-latest')).getByText('1')).toBeTruthy();
+  });
+
+  it('renders children when no section has data', () => {
+    const { getByText } = render(
+      <Content sections={[{ key: 'earlier', title: 'Earlier', data: [] }]}>
+        <Text>Nothing here</Text>
       </Content>,
     );
-    const titleElement = getByText(titleTest);
-    expect(titleElement).toBeDefined();
-
-    const container = getByTestId('text-test');
-    expect(container.props.style).toEqual({
-      width: '100%',
-    });
+    expect(getByText('Nothing here')).toBeTruthy();
   });
 
-  it('renders content correctly when doesnt have props', () => {
-    const { getByTestId } = render(<Content />);
-    const stackElement = getByTestId('stack-container');
-    expect(stackElement).toBeDefined();
-  });
-
-  test('calls onPress function when card is pressed', () => {
-    const data = [
-      {
-        id: 1,
-        name: 'HH Form 1',
-        subtitles: ['Submitted: 2', 'Draft: 1'],
-      },
-      {
-        id: 2,
-        name: 'HH Form 2',
-        subtitles: ['Submitted: 2', 'Draft: 0'],
-      },
-    ];
+  it('calls action with the form id when a card is pressed', () => {
     const onPressMock = jest.fn();
-    const { getByTestId } = render(<Content data={data} columns={2} action={onPressMock} />);
-    const cardItem = getByTestId('card-touchable-1');
-
-    fireEvent.press(cardItem);
-    expect(onPressMock).toHaveBeenCalledTimes(1);
+    const { getByTestId } = render(<Content sections={sections} action={onPressMock} />);
+    fireEvent.press(getByTestId('card-touchable-2'));
+    expect(onPressMock).toHaveBeenCalledWith(2);
   });
 });

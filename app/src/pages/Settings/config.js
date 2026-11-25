@@ -8,31 +8,27 @@ const imageQualityOptions = [
   { label: 'Original', value: 'original' },
 ];
 
+// `group` names the section a field sits in (a `ui-text` key), `unit` suffixes its value,
+// `levelKind` shows it as a LevelIcon chip, and a page's `note` is a `ui-text` key.
 export const config = [
   {
     id: 1,
-    name: 'Advanced',
+    name: 'Advanced Settings',
+    icon: 'settings-outline',
+    note: 'settingsSensitiveNote',
     translations: [
       {
         language: 'fr',
-        name: 'Avancée',
+        name: 'Paramètres avancés',
       },
     ],
-    description: {
-      name: 'Server URL, Auth Code, Sync Interval, Sync Wifi',
-      translations: [
-        {
-          language: 'fr',
-          name: "URL du serveur, code d'authentification, intervalle de synchronisation, synchronisation Wifi",
-        },
-      ],
-    },
     fields: [
       {
         id: 11,
         type: 'text',
         label: 'Server URL',
         name: 'serverURL',
+        group: 'settingsSectionServer',
         description: null,
         key: 'BuildParamsState.serverURL',
         editable: false,
@@ -48,6 +44,7 @@ export const config = [
         type: 'text',
         name: 'authenticationCode',
         label: 'Passcode',
+        group: 'settingsSectionServer',
         description: null,
         key: 'AuthState.authenticationCode',
         editable: false,
@@ -62,13 +59,15 @@ export const config = [
         id: 31,
         type: 'number',
         name: 'dataSyncInterval',
-        label: 'Sync interval',
+        label: 'Sync Interval',
+        group: 'settingsSectionSync',
+        unit: 's',
         description: {
-          name: 'Sync interval in seconds',
+          name: 'How often submissions are sent',
           translations: [
             {
               language: 'fr',
-              name: 'Intervalle de synchronisation en secondes',
+              name: "Fréquence d'envoi des soumissions",
             },
           ],
         },
@@ -84,14 +83,15 @@ export const config = [
       {
         id: 32,
         type: 'switch',
-        label: 'Sync Wifi',
+        label: 'Sync Wi-Fi',
         name: 'syncWifiOnly',
+        group: 'settingsSectionSync',
         description: {
-          name: 'Sync Wifi only',
+          name: 'Only sync when connected to Wi-Fi',
           translations: [
             {
               language: 'fr',
-              name: 'Synchroniser le Wi-Fi uniquement',
+              name: 'Synchroniser uniquement en Wi-Fi',
             },
           ],
         },
@@ -100,7 +100,7 @@ export const config = [
         translations: [
           {
             language: 'fr',
-            name: 'Synchroniser le Wi-Fi uniquement',
+            name: 'Synchronisation Wi-Fi',
           },
         ],
       },
@@ -108,28 +108,22 @@ export const config = [
   },
   {
     id: 2,
-    name: 'Geolocation',
+    name: 'Geolocation Settings',
+    icon: 'map-outline',
     translations: [
       {
         language: 'fr',
-        name: 'Géolocalisation',
+        name: 'Paramètres de géolocalisation',
       },
     ],
-    description: {
-      name: 'GPS threshold, Accuracy Level, Geolocation timeout',
-      translations: [
-        {
-          language: 'fr',
-          name: "Seuil GPS, Niveau de précision, Délai d'expiration de géolocalisation",
-        },
-      ],
-    },
     fields: [
       {
         id: 41,
         type: 'number',
         name: 'gpsThreshold',
         label: 'GPS threshold',
+        group: 'settingsSectionLocation',
+        unit: 'm',
         description: {
           name: 'GPS threshold in meters',
           translations: [
@@ -153,6 +147,8 @@ export const config = [
         type: 'dropdown',
         name: 'gpsAccuracyLevel',
         label: 'Accuracy level',
+        group: 'settingsSectionLocation',
+        levelKind: 'accuracy',
         description: {
           name: 'The level of location manager accuracy',
           translations: [
@@ -176,7 +172,9 @@ export const config = [
         id: 43,
         type: 'number',
         name: 'geoLocationTimeout',
-        label: 'Geolocation Timeout',
+        label: 'Geolocation timeout',
+        group: 'settingsSectionLocation',
+        unit: 's',
         description: {
           name: 'Timeout for taking points on geolocation questions in seconds',
           translations: [
@@ -200,27 +198,21 @@ export const config = [
   {
     id: 3,
     name: 'Image Quality',
+    icon: 'camera-outline',
     translations: [
       {
         language: 'fr',
         name: "Qualité de l'image",
       },
     ],
-    description: {
-      name: 'Image compression settings for sync',
-      translations: [
-        {
-          language: 'fr',
-          name: "Paramètres de compression d'image pour la synchronisation",
-        },
-      ],
-    },
     fields: [
       {
         id: 51,
         type: 'dropdown',
         name: 'imageQuality',
         label: 'Compression Level',
+        group: 'settingsSectionPhotos',
+        levelKind: 'imageQuality',
         description: {
           name: 'Higher compression = smaller files, faster sync',
           translations: [
@@ -245,6 +237,7 @@ export const config = [
         type: 'switch',
         name: 'saveToGallery',
         label: 'Save photos to gallery',
+        group: 'settingsSectionPhotos',
         description: {
           name: 'Keep a copy in the device gallery so a lost photo can be recovered',
           translations: [
@@ -267,6 +260,7 @@ export const config = [
   },
 ];
 
+// Also read by the in-form language menu (form/support/SaveDropdownMenu.js).
 export const langConfig = {
   type: 'dropdown',
   name: 'lang',
@@ -278,7 +272,7 @@ export const langConfig = {
       value: 'en',
     },
     {
-      label: 'French',
+      label: 'Français',
       value: 'fr',
     },
   ],

@@ -56,6 +56,7 @@ class MobileAssignmentApiSyncRepeatGroupTest(TestCase, ProfileTestHelperMixin):
         self.token = data["syncToken"]
 
     def test_success_save_repeated_values(self):
+        mobile_adm = self.mobile_user.administrations.first()
         payload = {
             "formId": self.form.id,
             "name": "data example-4 #1",
@@ -68,6 +69,7 @@ class MobileAssignmentApiSyncRepeatGroupTest(TestCase, ProfileTestHelperMixin):
                 443: "/attachment/screenshot_likes_uuid23323.jpeg",
                 444: "/attachments/my_works_uuid12333.pdf",
                 445: "/attachment/application_letter_2024-04-29.pdf",
+                446: mobile_adm.id,
                 551: "data:base64,examplesignature122323",
                 661: "Good Job",
                 "661-1": "Nice!",

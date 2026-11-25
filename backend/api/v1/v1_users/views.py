@@ -1,5 +1,7 @@
 # Create your views here.
 import datetime
+import logging
+import re
 from math import ceil
 from pathlib import Path
 
@@ -33,6 +35,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from api.v1.v1_forms.constants import FormStatus
+from api.v1.v1_forms.services.form_library import (
+    clone_family,
+    library_registration_qs,
+)
 from api.v1.v1_profile.constants import OrganisationTypes
 from api.v1.v1_profile.models import (
     Administration,
@@ -78,8 +85,14 @@ from utils.email_helper import send_email
 from utils.throttling import (
     EmailDispatchEmailThrottle,
     EmailDispatchIPThrottle,
+    FormLibraryIPThrottle,
     LoginEmailThrottle,
     LoginIPThrottle,
+    SubdomainCheckIPThrottle,
+)
+from utils.workspace_name import (
+    host_collision_reason,
+    self_service_reason,
 )
 from utils.email_helper import ListEmailTypeRequestSerializer, EmailTypes
 from utils.tenant_host import (
@@ -89,6 +102,8 @@ from utils.tenant_host import (
     tenant_may_embed,
     tenant_web_url,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def user_web_url(user):
@@ -476,6 +491,120 @@ def tenant_info(request, version):
     return Response(body, status=status.HTTP_200_OK)
 
 
+@extend_schema(tags=["Auth"])
+@api_view(["GET"])
+@throttle_classes([SubdomainCheckIPThrottle])
+def register_subdomain(request, version):
+    """Read-only availability for the onboarding address step.
+
+    Runs the same three checks the register POST runs -- format, reserved /
+    collision names, and uniqueness -- and creates nothing. The register POST
+    stays authoritative (it closes the TOCTOU race); this only spares the
+    visitor a round-trip to discover a taken or reserved name.
+    """
+    if not settings.SIGNUP_ENABLED or not is_base_domain(
+        request.get_host()
+    ):
+        return Response(
+            {"message": "Self-service sign-up is not available here"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    value = (request.query_params.get("value") or "").strip().lower()
+    if len(value) < 3:
+        return Response(
+            {
+                "available": False,
+                "reason": "Workspace name must be at least 3 characters",
+            }
+        )
+    # Apply the register serializer's 63-char max here, before the
+    # reserved-name checks: POST /register (RegexField max_length=63) always
+    # rejects a longer label, so it is never "available", and this keeps an
+    # oversized hyphenated value out of self_service_reason's profanity scan,
+    # whose token search assumes that bound and is costlier on this public GET.
+    if len(value) > 63:
+        return Response(
+            {
+                "available": False,
+                "reason": "Workspace name must be at most 63 characters",
+            }
+        )
+    if not re.fullmatch(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?", value):
+        return Response(
+            {
+                "available": False,
+                "reason": (
+                    "Only lowercase letters, digits and hyphens, and it "
+                    "cannot start or end with a hyphen"
+                ),
+            }
+        )
+    reason = host_collision_reason(value) or self_service_reason(value)
+    if reason:
+        return Response({"available": False, "reason": reason})
+    if Tenant.objects.filter(subdomain=value).exists():
+        return Response(
+            {"available": False, "reason": "That address is taken."}
+        )
+    return Response({"available": True, "reason": None})
+
+
+@extend_schema(tags=["Auth"])
+@api_view(["GET"])
+@throttle_classes([FormLibraryIPThrottle])
+def register_form_library(request, version):
+    """Public starter-forms catalogue for the onboarding wizard (LP-004).
+
+    Published registration templates grouped by their FormCategory, returned
+    as names / ids / monitoring counts only -- never question structure. A
+    category with no published template is omitted, and an uncategorised
+    template is not surfaced (the wizard groups by category). The register
+    POST remains the only write; this read only spares a pre-auth visitor a
+    login before they can see what they would be starting with.
+    """
+    # ponytail: throttled read, no response cache -- the catalogue is small and
+    # the query cheap; add a short-TTL cache only if traffic needs it.
+    if not settings.SIGNUP_ENABLED or not is_base_domain(
+        request.get_host()
+    ):
+        return Response(
+            {"message": "Self-service sign-up is not available here"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    templates = (
+        library_registration_qs()
+        .annotate(
+            monitoring_count=Count(
+                "children",
+                filter=Q(children__status=FormStatus.published),
+            )
+        )
+        .prefetch_related("categories")
+        .order_by("name")
+    )
+    by_category = {}
+    for tpl in templates:
+        for category in tpl.categories.all():
+            group = by_category.setdefault(
+                category.id,
+                {
+                    "id": category.id,
+                    "name": category.name,
+                    "slug": category.slug,
+                    "templates": [],
+                },
+            )
+            group["templates"].append(
+                {
+                    "id": tpl.id,
+                    "name": tpl.name,
+                    "monitoring_count": tpl.monitoring_count,
+                }
+            )
+    categories = sorted(by_category.values(), key=lambda c: c["name"])
+    return Response({"categories": categories})
+
+
 @extend_schema(
     request=RegisterSerializer,
     responses={200: UserSerializer, 400: DefaultResponseSerializer},
@@ -523,6 +652,7 @@ def register(request, version):
                 subdomain=validated["subdomain"],
                 name=tenant_name,
                 language=validated.get("language", "en"),
+                meta=validated.get("meta") or {},
             )
             user = SystemUser.objects.create_superuser(
                 email=validated["email"],
@@ -673,12 +803,72 @@ def configure_project(request, version):
             name=validated["root_unit_name"],
             tenant=user.tenant,
         )
+        # Seed the workspace's own organisation so a fresh tenant is not empty
+        # of organisations (LP-002: created here, after the tenant exists, from
+        # the onboarding answer the wizard staged in Tenant.meta). Fall back to
+        # Tenant.meta["org"] when the request omits it, so the wizard's answer
+        # is still used if auto-configure fails and the user completes the
+        # manual /configure form (which does not send an organisation).
+        organisation = (
+            validated.get("organisation")
+            or (user.tenant.meta or {}).get("org")
+            or ""
+        )
+        if organisation.strip():
+            Organisation.objects.get_or_create(
+                tenant=user.tenant, name=organisation.strip()
+            )
         if validated.get("logo"):
             user.tenant.logo = validated["logo"]
             user.tenant.save(update_fields=["logo"])
+    # Starter forms (LP-004): clone the library templates the wizard staged on
+    # Tenant.meta. Done AFTER (outside) the config transaction so a clone
+    # failure can never roll back a configured workspace -- the workspace is
+    # configured either way; the forms are a best-effort bonus.
+    _clone_starter_forms(user)
     return Response(
         UserSerializer(instance=user).data, status=status.HTTP_200_OK
     )
+
+
+def _clone_starter_forms(user):
+    """Clone the starter templates the wizard staged on `Tenant.meta`.
+
+    Ids come from server-side `Tenant.meta` (bounded at register), never the
+    configure request body, and are re-validated through the public library
+    query -- so a tampered meta can only ever clone published templates, and
+    arbitrary / cross-tenant ids are silently dropped. Each clone is isolated:
+    one failing template is logged and skipped, never failing configuration.
+    """
+    ids = (user.tenant.meta or {}).get("template_ids") or []
+    ids = ids[: RegisterSerializer.MAX_STARTER_FORMS]
+    if not ids:
+        return
+    # Clone in the visitor's selection order, not the database's:
+    # filter(pk__in) returns rows in an arbitrary order, so index them and
+    # walk `ids`. The library query is the security gate, so unknown,
+    # unpublished or cross-tenant ids simply fall out here.
+    by_id = {
+        form.id: form
+        for form in library_registration_qs().filter(pk__in=ids)
+    }
+    seen = set()
+    for template_id in ids:
+        template = by_id.get(template_id)
+        if template is None or template_id in seen:
+            continue
+        seen.add(template_id)
+        try:
+            # Starter forms seed a fresh workspace, so keep the template's real
+            # names rather than the " (Copy)" suffix (LP-004 review).
+            clone_family(template, user=user, preserve_names=True)
+        except Exception:
+            logger.exception(
+                "LP-004: starter-form clone failed for template %s "
+                "(tenant %s)",
+                template.id,
+                user.tenant_id,
+            )
 
 
 @extend_schema(

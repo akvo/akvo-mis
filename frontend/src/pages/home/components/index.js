@@ -1,9 +1,0 @@
-export { default as HeroBackground } from "./HeroBackground";
-export { default as HeroVisual } from "./HeroVisual";
-export { default as HeroSection } from "./HeroSection";
-export { default as MandateSection } from "./MandateSection";
-export { default as VideoSection } from "./VideoSection";
-export { default as RoleCard } from "./RoleCard";
-export { default as RolesSection } from "./RolesSection";
-export { default as HomeFooter } from "./HomeFooter";
-export { default as useHomeParallax } from "./useHomeParallax";

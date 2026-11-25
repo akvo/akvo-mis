@@ -70,9 +70,7 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
             conn.close()
 
     def test_generate_writes_only_own_tenant_rows(self):
-        file_name = generate_sqlite(
-            Administration, tenant=self.a["tenant"]
-        )
+        file_name = generate_sqlite(Administration, tenant=self.a["tenant"])
         names = self.read_names(file_name)
         self.assertIn("acme", names)
         self.assertNotIn("beta", names)
@@ -163,6 +161,8 @@ class SQLiteTenantIsolationTestCase(TenantIsolationTestCase):
 
     def test_download_generates_the_file_when_absent(self):
         path = sqlite_path(Administration, tenant=self.a["tenant"], test=True)
+        if os.path.exists(path):
+            os.remove(path)
         self.assertFalse(os.path.exists(path))
         res = self.client.get(
             "/api/v1/device/sqlite/administrator.sqlite",

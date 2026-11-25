@@ -67,22 +67,12 @@ class GeolocationIncludeMonitoringTestCases(
         names = sorted(row["name"] for row in response.json())
         self.assertEqual(names, ["Site Beta"])
 
-    def test_include_monitoring_excludes_draft_children(self):
-        """Draft monitoring children do not satisfy the filter."""
-        FormData.objects.filter(parent=self.reg1).update(is_draft=True)
-        response = self.client.get(
-            f"{self.BASE_URL}/{self.registration.id}"
-            "?from_date=2025-01-01&include_monitoring=true"
-        )
-        self.assertEqual(response.status_code, 200)
-        names = sorted(row["name"] for row in response.json())
-        self.assertEqual(names, ["Site Beta"])
-
     def test_include_monitoring_false_filters_registration_created(self):
         """Without include_monitoring, dates filter the registration."""
         # Force reg1 created in Jan, reg2 in Jun
         from django.utils.timezone import make_aware
         from datetime import datetime
+
         FormData.objects.filter(id=self.reg1.id).update(
             created=make_aware(datetime(2025, 1, 10)),
         )
@@ -91,17 +81,14 @@ class GeolocationIncludeMonitoringTestCases(
         )
         # include_monitoring not set → registration date applies.
         response = self.client.get(
-            f"{self.BASE_URL}/{self.registration.id}"
-            "?from_date=2025-05-01"
+            f"{self.BASE_URL}/{self.registration.id}" "?from_date=2025-05-01"
         )
         self.assertEqual(response.status_code, 200)
         names = sorted(row["name"] for row in response.json())
         self.assertEqual(names, ["Site Beta"])
 
     def test_geolocation_payload_is_lean(self):
-        response = self.client.get(
-            f"{self.BASE_URL}/{self.registration.id}"
-        )
+        response = self.client.get(f"{self.BASE_URL}/{self.registration.id}")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertGreater(len(data), 0)

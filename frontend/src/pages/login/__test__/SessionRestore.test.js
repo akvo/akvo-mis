@@ -34,16 +34,17 @@ const clearCookies = () => {
 };
 
 describe("Session restore on refresh", () => {
-  // setupTests enables the landing page, which makes App treat "/" — the only
-  // path jsdom's window.location ever reports — as public and skip the auth
-  // loader entirely. This deployment ships SHOW_LANDING_PAGE=false, so match
-  // it, or the harness exercises a path the browser never takes.
-  const landing = window.appConfig?.showLandingPage;
+  // "/" — the only path jsdom's window.location ever reports — renders the
+  // landing (and skips the auth loader) on the base-domain host. A workspace
+  // lives on a subdomain, where a refresh must restore the session instead.
+  // jsdom's hostname is "localhost"; point baseDomain elsewhere so the app
+  // treats this as a workspace host and runs the auth loader under test.
+  const prevConfig = window.appConfig;
   beforeAll(() => {
-    window.appConfig = { ...window.appConfig, showLandingPage: false };
+    window.appConfig = { ...window.appConfig, baseDomain: "akvo.test" };
   });
   afterAll(() => {
-    window.appConfig = { ...window.appConfig, showLandingPage: landing };
+    window.appConfig = prevConfig;
   });
 
   beforeEach(() => {

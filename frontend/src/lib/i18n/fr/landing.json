@@ -1,0 +1,246 @@
+{
+  "site": {
+    "name": null,
+    "title": "{brand} — le suivi en temps réel, simplifié",
+    "description": "{brand} est un système d'information de suivi en temps réel : collecte mobile hors ligne, une hiérarchie à plusieurs niveaux, des tableaux de bord et une visualisation assistée par IA — gratuit pour toujours."
+  },
+  "nav": {
+    "cta": "Essayez vous-même",
+    "closeMenu": "Fermer le menu des langues",
+    "login": "Se connecter"
+  },
+  "hero": {
+    "badge": "Gratuit pour toujours",
+    "title": "Bienvenue sur {brand}.",
+    "lead": "La plateforme puissante qui gère vos données avec aisance — et utilise l'IA pour les transformer en visualisations, automatiquement. Curieux ? Essayez par vous-même.",
+    "primaryCta": {
+      "label": "Essayez vous-même →",
+      "href": "/"
+    },
+    "secondaryCta": {
+      "label": "Parler à notre équipe",
+      "href": "mailto:info@akvo.org"
+    },
+    "demo": {
+      "brandLabel": "akvo",
+      "liveLabel": "en direct",
+      "syncedLabel": "synchronisé",
+      "demoBadge": "demo",
+      "caption": "Données illustratives — choisissez un secteur et voyez l'espace de travail réagir.",
+      "flipLabel": "Retourner la carte",
+      "mobileAlt": "L'application mobile {brand} synchronisant les envois hors ligne",
+      "chartTitle": "Fonctionnalité au fil du temps",
+      "chartNote": "Vue suggérée par l'IA",
+      "sectors": [
+        {
+          "name": "Eau et assainissement",
+          "metricLabel": "Points d'eau",
+          "metricValue": "1 284",
+          "metricNote": "suivis",
+          "rateLabel": "Fonctionnel",
+          "rateValue": "92 %",
+          "rateNote": "ce cycle",
+          "mapNote": "142 sites · 3 régions",
+          "trend": [40, 44, 42, 50, 58, 62, 70]
+        },
+        {
+          "name": "Centres de santé",
+          "metricLabel": "Centres",
+          "metricValue": "318",
+          "metricNote": "suivis",
+          "rateLabel": "Personnel complet",
+          "rateValue": "76 %",
+          "rateNote": "ce cycle",
+          "mapNote": "47 districts · 2 régions",
+          "trend": [30, 35, 40, 38, 52, 55, 60]
+        },
+        {
+          "name": "Agriculture",
+          "metricLabel": "Parcelles",
+          "metricValue": "2 640",
+          "metricNote": "suivies",
+          "rateLabel": "Irriguées",
+          "rateValue": "48 %",
+          "rateNote": "cette saison",
+          "mapNote": "312 villages · 5 régions",
+          "trend": [20, 28, 26, 34, 40, 46, 52]
+        },
+        {
+          "name": "Écoles",
+          "metricLabel": "Écoles",
+          "metricValue": "564",
+          "metricNote": "suivies",
+          "rateLabel": "Accès à l'eau",
+          "rateValue": "83 %",
+          "rateNote": "ce cycle",
+          "mapNote": "89 districts · 4 régions",
+          "trend": [50, 52, 55, 60, 64, 68, 74]
+        }
+      ]
+    }
+  },
+  "freeBand": {
+    "title": "Gratuit pour toujours. Toutes les fonctions de base, sans piège.",
+    "body": "Formulaires, collecte mobile hors ligne, tableaux de bord et visualisation IA — gratuits, pour de bon. Besoin de capacités avancées ou d'un développement sur mesure ? Une option payante existe pour cela."
+  },
+  "howItWorks": {
+    "heading": "Votre propre espace de travail, en trois étapes.",
+    "subtitle": "Une configuration en libre-service qui ressemble à une conversation, pas à un formulaire.",
+    "steps": [
+      {
+        "title": "Répondez à quelques questions",
+        "body": "Dites-nous ce que vous voulez suivre — une question à la fois."
+      },
+      {
+        "title": "Nous créons votre espace de travail",
+        "body": "Vos formulaires, votre hiérarchie de lieux et vos tableaux de bord sont créés automatiquement à partir de vos réponses."
+      },
+      {
+        "title": "Collectez et visualisez",
+        "body": "Collectez des données sur le web et en mobile hors ligne, puis laissez l'IA les transformer en tableaux de bord et en cartes."
+      }
+    ]
+  },
+  "why": {
+    "heading": "Le juste milieu pratique.",
+    "subtitle": "Plus structuré qu'un outil d'enquête, bien plus léger qu'un système d'information sanitaire complet.",
+    "cards": [
+      {
+        "icon": "offline",
+        "title": "Mobile hors ligne",
+        "body": "Une app native avec stockage local et synchronisation en arrière-plan pour le terrain."
+      },
+      {
+        "icon": "hierarchy",
+        "title": "Hiérarchie et suivi",
+        "body": "Des lieux à plusieurs niveaux et des formulaires de suivi de premier plan pour les visites répétées."
+      },
+      {
+        "icon": "ai",
+        "title": "Tableaux de bord IA",
+        "body": "Un générateur de tableaux de bord avec graphiques, cartes et visualisations suggérées par l'IA."
+      },
+      {
+        "icon": "free",
+        "title": "Gratuit au départ",
+        "body": "Toutes les fonctions de base, sans paliers. Devenez partenaire quand vous voulez aller plus loin."
+      }
+    ]
+  },
+  "benchmark": {
+    "heading": "Kobo, {brand}, DHIS2 — notre position.",
+    "subtitle": "Un regard honnête. {brand} se situe délibérément au milieu du spectre de complexité.",
+    "caption": "La voie intermédiaire — plus de structure et de suivi qu'un outil d'enquête, bien moins de poids opérationnel qu'un HIS complet. Brouillon — en attente de révision.",
+    "columns": [
+      {
+        "key": "capability",
+        "label": "Capacité"
+      },
+      {
+        "key": "kobo",
+        "label": "KoboToolbox"
+      },
+      {
+        "key": "akvo",
+        "label": "{brand}",
+        "highlight": true
+      },
+      {
+        "key": "dhis2",
+        "label": "DHIS2"
+      }
+    ],
+    "rows": [
+      {
+        "capability": "Objectif principal",
+        "kobo": "Enquête / collecte de données de terrain",
+        "akvo": "Suivi + information de gestion",
+        "dhis2": "HIS agrégé et de suivi à l'échelle nationale"
+      },
+      {
+        "capability": "Complexité de mise en place",
+        "kobo": "Faible",
+        "akvo": "Moyenne",
+        "dhis2": "Élevée"
+      },
+      {
+        "capability": "Collecte mobile hors ligne",
+        "kobo": "Oui (KoboCollect / Enketo)",
+        "akvo": "Oui (app native, synchro locale)",
+        "dhis2": "Oui (app Android)"
+      },
+      {
+        "capability": "Hiérarchie à plusieurs niveaux",
+        "kobo": "Limitée",
+        "akvo": "Intégrée, pilote les accès",
+        "dhis2": "Forte (conception centrale)"
+      },
+      {
+        "capability": "Suivi dans le temps",
+        "kobo": "Via groupes répétables, manuel",
+        "akvo": "Formulaires de suivi de premier plan",
+        "dhis2": "Suivi longitudinal"
+      },
+      {
+        "capability": "Tableaux de bord / visualisation",
+        "kobo": "Basique + export Excel",
+        "akvo": "Générateur : graphiques, cartes, KPI",
+        "dhis2": "Puissant, abrupt"
+      },
+      {
+        "capability": "Visualisation assistée par IA",
+        "kobo": "Non",
+        "akvo": "Oui",
+        "dhis2": "Via un outil externe"
+      },
+      {
+        "capability": "Assistant IA intégré",
+        "kobo": "Non",
+        "akvo": "Oui (chatbot)",
+        "dhis2": "Non"
+      },
+      {
+        "capability": "Courbe d'apprentissage",
+        "kobo": "Douce",
+        "akvo": "Modérée",
+        "dhis2": "Abrupte"
+      },
+      {
+        "capability": "Coût pour démarrer",
+        "kobo": "Gratuit (offre associative)",
+        "akvo": "Gratuit pour toujours (cœur)",
+        "dhis2": "Gratuit et open source (auto-hébergé)"
+      }
+    ]
+  },
+  "partner": {
+    "title": "Prêt à aller plus loin ?",
+    "body": "La plateforme de base est gratuite pour toujours. Pour des capacités avancées, des solutions sur mesure et un accompagnement durable, nous devenons votre partenaire.",
+    "cta": {
+      "label": "Parler à notre équipe",
+      "href": "mailto:info@akvo.org"
+    }
+  },
+  "finalCta": {
+    "title": "Vos données, au service de vous — dès aujourd'hui.",
+    "body": "Créez un espace de travail en quelques minutes. Gratuit pour toujours.",
+    "cta": {
+      "label": "Essayez vous-même →",
+      "href": "/"
+    }
+  },
+  "footer": {
+    "tagline": "Le suivi en temps réel, simplifié.",
+    "navLabel": "Pied de page",
+    "links": [
+      {
+        "label": "Documentation",
+        "href": "https://akvo-mis.readthedocs.io/"
+      },
+      {
+        "label": "Contact",
+        "href": "mailto:info@akvo.org"
+      }
+    ]
+  }
+}

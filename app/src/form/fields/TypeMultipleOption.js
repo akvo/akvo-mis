@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text } from 'react-native';
 import { MultiSelect } from 'react-native-element-dropdown';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { FieldLabel, OptionItem } from '../support';
-import styles from '../styles';
+import getStyles from '../styles';
 import { FormState } from '../../store';
 import { i18n } from '../../lib';
+import useTheme from '../../lib/theme';
+import useDropdownPlacement from '../lib/dropdown-placement';
 
 const TypeMultipleOption = ({
   onChange,
@@ -18,50 +20,94 @@ const TypeMultipleOption = ({
   disabled = false,
   option = [],
   tooltip = null,
+  hasError = false,
 }) => {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const showSearch = React.useMemo(() => option.length > 3, [option]);
+  const anchor = useRef(null);
+  const { placement, place } = useDropdownPlacement();
   const activeLang = FormState.useState((s) => s.lang);
   const trans = i18n.text(activeLang);
   const requiredValue = required ? requiredSign : null;
-  const style = disabled
-    ? { ...styles.dropdownField, ...styles.dropdownFieldDisabled }
-    : styles.dropdownField;
+  const style = {
+    ...styles.dropdownField,
+    ...(disabled ? styles.dropdownFieldDisabled : {}),
+    ...(hasError ? styles.inputFieldError : {}),
+  };
 
   return (
     <View style={styles.multipleOptionContainer}>
       <FieldLabel keyform={keyform} name={label} tooltip={tooltip} requiredSign={requiredValue} />
-      <MultiSelect
-        style={style}
-        selectedStyle={styles.dropdownSelectedList}
-        containerStyle={{ marginBottom: insets.bottom }}
-        activeColor="#ddd"
-        data={option}
-        search={showSearch}
-        maxHeight={300}
-        labelField="label"
-        valueField="value"
-        searchPlaceholder={trans.searchPlaceholder}
-        placeholder={trans.selectMultiItem}
-        value={value || []}
-        onChange={(v) => {
-          if (onChange) {
-            onChange(id, v);
-          }
-        }}
-        renderItem={OptionItem}
-        renderSelectedItem={({ color, label: labelText, name }) => {
-          const renderStyle = color ? { backgroundColor: color, fontWeight: 'bold' } : {};
-          return (
-            <View style={{ ...styles.optionSelectedList, ...renderStyle }}>
-              <Text style={{ color: color ? '#fff' : '#000' }}>{labelText || name}</Text>
-            </View>
-          );
-        }}
-        testID="type-multiple-option-dropdown"
-        confirmUnSelectItem
-        disable={disabled}
-      />
+      <View ref={anchor} collapsable={false}>
+        <MultiSelect
+          style={style}
+          dropdownPosition={placement.dropdownPosition}
+          onFocus={() => place(anchor)}
+          selectedStyle={styles.dropdownSelectedList}
+          containerStyle={{
+            backgroundColor: theme.bg.surfaceElevated1,
+            borderRadius: 12,
+          }}
+          activeColor={theme.bg.surfaceTranslucent}
+          data={option}
+          search={showSearch}
+          maxHeight={placement.maxHeight}
+          labelField="label"
+          valueField="value"
+          searchPlaceholder={trans.searchPlaceholder}
+          placeholder={trans.selectMultiItem}
+          placeholderStyle={{ color: theme.input.text }}
+          inputSearchStyle={{
+            borderRadius: 12,
+            backgroundColor: theme.bg.surfaceTertiary,
+            borderColor: 'transparent',
+            color: theme.text.primary,
+            paddingHorizontal: 12,
+          }}
+          value={value || []}
+          onChange={(v) => {
+            if (onChange) {
+              onChange(id, v);
+            }
+          }}
+          renderItem={(item, selected) => (
+            <OptionItem
+              label={item.label}
+              name={item.name}
+              color={item.color}
+              selected={selected}
+              isMulti
+            />
+          )}
+          renderSelectedItem={({ color, label: labelText, name }) => {
+            const bgColor = color || theme.bg.surfaceChip;
+            const textColor = color ? theme.buttonPrimary.text : theme.text.primary;
+            return (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: bgColor,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  marginLeft: 10,
+                  marginTop: 5,
+                  borderRadius: 12,
+                }}
+              >
+                <Text style={{ color: textColor, fontWeight: color ? 'bold' : 'normal' }}>
+                  {labelText || name}
+                </Text>
+                <Icon name="close-circle" size={14} color={textColor} style={{ marginLeft: 6 }} />
+              </View>
+            );
+          }}
+          testID="type-multiple-option-dropdown"
+          confirmUnSelectItem
+          disable={disabled}
+        />
+      </View>
     </View>
   );
 };

@@ -1,7 +1,9 @@
-export { default as Home } from "./home/Home";
+export { default as Landing } from "./landing/Landing";
+export { default as Onboarding } from "./onboarding/Onboarding";
+export { default as LandingHeader } from "./landing/LandingHeader";
+export { default as LandingFooter } from "./landing/LandingFooter";
 export { default as Forms } from "./forms/Forms";
 export { default as Login } from "./login/Login";
-export { default as Register } from "./register/Register";
 export { default as ControlCenterLayout } from "./control-center/ControlCenterLayout";
 export { default as ControlCenter } from "./control-center/ControlCenter";
 export { default as Users } from "./users/Users";
@@ -46,13 +48,24 @@ export { default as DownloadEntitiesData } from "./upload-administration-data/Do
 export { default as Roles } from "./roles/Roles";
 export { default as AddRole } from "./add-role/AddRole";
 export { default as EditProfile } from "./profile/EditProfile";
-export { default as ManageDraft } from "./manage-draft/ManageDraft";
-export { default as ManageDraftForm } from "./manage-draft/ManageDraftForm";
 export { default as FormBuilderList } from "./form-builder/FormBuilderList";
 export { default as FormBuilderCreate } from "./form-builder/FormBuilderCreate";
 export { default as FormBuilderEdit } from "./form-builder/FormBuilderEdit";
+export { default as FormLibrary } from "./form-library/FormLibrary";
+export {
+  DataOnboardingCreate,
+  DataOnboardingDetail,
+  DataOnboardingList,
+} from "./data-onboarding";
 export { default as DashboardList } from "./dashboards/DashboardList";
 export { default as DashboardBuilder } from "./dashboards/DashboardBuilder";
 export { default as DashboardViewer } from "./dashboards/DashboardViewer";
-export { AdminLayout, Tenants, TenantDetail, Operators } from "./admin";
+export {
+  AdminLayout,
+  Tenants,
+  TenantDetail,
+  Operators,
+  FormLibraryConsole,
+  PromoteTemplatePage,
+} from "./admin";
 export { default as Inspect } from "./inspect/Inspect";

@@ -1,3 +1,5 @@
+import json
+
 from django.contrib.auth.password_validation import validate_password
 from django.core import exceptions as django_exceptions
 from django.core import signing
@@ -830,6 +832,7 @@ class UserRoleListSerializer(serializers.ModelSerializer):
             "can_dashboard_edit",
             "can_dashboard_publish",
             "can_dashboard_delete",
+            "can_data_onboard",
         ]
 
 
@@ -861,6 +864,7 @@ class UserSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     configured = serializers.SerializerMethodField()
     subdomain = serializers.SerializerMethodField()
+    onboarding = serializers.SerializerMethodField()
     administration = serializers.SerializerMethodField()
     roles = serializers.SerializerMethodField()
     organisation = serializers.SerializerMethodField()
@@ -984,6 +988,12 @@ class UserSerializer(serializers.ModelSerializer):
         # own and is therefore never redirected.
         return instance.tenant.subdomain if instance.tenant_id else ""
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_onboarding(self, instance: SystemUser):
+        # The wizard's answers staged on Tenant.meta, so the activation page
+        # can auto-configure the workspace without asking again (LP-002 B5).
+        return instance.tenant.meta if instance.tenant_id else {}
+
     class Meta:
         model = SystemUser
         fields = [
@@ -1001,6 +1011,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "configured",
             "subdomain",
+            "onboarding",
             # The console's route guard reads this and has nothing else
             # to read: `is_superuser` is a workspace role (D-1), and a
             # tenant-less account's `subdomain` is "" for reasons that
@@ -1156,6 +1167,11 @@ class ConfigureSerializer(serializers.Serializer):
         max_length=255, required=False, allow_null=True, allow_blank=True,
         default=None
     )
+    # Optional: when the onboarding wizard drives configure it passes the
+    # workspace's organisation name so the first Organisation row is seeded.
+    organisation = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
 
 
 class TenantBrandingSerializer(serializers.Serializer):
@@ -1210,7 +1226,7 @@ class RegisterSerializer(serializers.Serializer):
         },
     )
     language = serializers.ChoiceField(
-        choices=["en", "fr"],
+        choices=["en", "es", "fr"],
         default="en",
         required=False,
     )
@@ -1229,6 +1245,55 @@ class RegisterSerializer(serializers.Serializer):
         write_only=True,
         max_length=2048,
     )
+    # Free-form onboarding context (the sector the workspace monitors, and any
+    # other wizard answers without a column of their own). Stored on
+    # `Tenant.meta`. Bounded in `validate_meta` because this endpoint is
+    # public: it is not a general-purpose store.
+    meta = serializers.JSONField(required=False, default=dict)
+
+    # Keep the public, free-form `meta` field from being abused as storage.
+    META_MAX_KEYS = 25
+    META_MAX_BYTES = 4096
+    # Starter forms (LP-004): the wizard stages the chosen library template ids
+    # in meta.template_ids; configure clones them. Capped because configure
+    # loops once per id, and re-validates every id against the public library
+    # query, so a tampered list can only ever clone published templates.
+    MAX_STARTER_FORMS = 10
+
+    def validate_meta(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Must be an object.")
+        if len(value) > self.META_MAX_KEYS:
+            raise serializers.ValidationError(
+                f"At most {self.META_MAX_KEYS} keys."
+            )
+        try:
+            size = len(json.dumps(value).encode("utf-8"))
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("Must be JSON-serialisable.")
+        if size > self.META_MAX_BYTES:
+            raise serializers.ValidationError("Too large.")
+        template_ids = value.get("template_ids")
+        if template_ids is not None and not self._valid_template_ids(
+            template_ids
+        ):
+            raise serializers.ValidationError(
+                "template_ids must be a list of up to "
+                f"{self.MAX_STARTER_FORMS} positive integers."
+            )
+        return value
+
+    def _valid_template_ids(self, ids):
+        # bool is an int subclass, so reject it explicitly -- True would
+        # otherwise read as the id 1.
+        return (
+            isinstance(ids, list)
+            and len(ids) <= self.MAX_STARTER_FORMS
+            and all(
+                isinstance(i, int) and not isinstance(i, bool) and i > 0
+                for i in ids
+            )
+        )
 
     def validate_subdomain(self, value):
         """Refuse a name sign-up may not claim.

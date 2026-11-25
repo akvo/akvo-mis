@@ -192,7 +192,7 @@ const DashboardList = () => {
                   width="8"
                   height="8"
                   rx="1.5"
-                  stroke="#1651b6"
+                  stroke="#404797"
                   strokeWidth="1.6"
                 />
                 <rect
@@ -201,7 +201,7 @@ const DashboardList = () => {
                   width="8"
                   height="5"
                   rx="1.5"
-                  stroke="#1651b6"
+                  stroke="#404797"
                   strokeWidth="1.6"
                 />
                 <rect
@@ -210,7 +210,7 @@ const DashboardList = () => {
                   width="8"
                   height="9"
                   rx="1.5"
-                  stroke="#1651b6"
+                  stroke="#404797"
                   strokeWidth="1.6"
                 />
                 <rect
@@ -219,7 +219,7 @@ const DashboardList = () => {
                   width="8"
                   height="6"
                   rx="1.5"
-                  stroke="#1651b6"
+                  stroke="#404797"
                   strokeWidth="1.6"
                 />
               </svg>

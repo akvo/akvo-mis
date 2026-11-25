@@ -259,7 +259,7 @@ const BuilderCanvas = ({
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M12 5v14M5 12h14"
-                  stroke="#1651b6"
+                  stroke="#404797"
                   strokeWidth="2.2"
                   strokeLinecap="round"
                 />

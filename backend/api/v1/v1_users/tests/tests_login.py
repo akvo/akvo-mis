@@ -69,6 +69,9 @@ class LoginUserTestCase(TestCase):
                 # The address this session belongs to, so the app can
                 # send a user who landed on the wrong host to their own.
                 "subdomain",
+                # The onboarding answers staged on the tenant (LP-002), so the
+                # activation page can auto-configure without re-asking.
+                "onboarding",
                 # Whether this session may enter the platform console.
                 # The console's route guard has nothing else to read.
                 "is_platform_admin",

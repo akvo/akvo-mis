@@ -38,6 +38,10 @@ const FormState = new Store({
   // draft and pressing back always prompted, because loading the answers looked the
   // same as entering them.
   hasUnsavedChanges: false,
+  activeGroup: 0,
+  totalGroup: 0,
+  activeGroupLabel: '',
+  scrollToQuestionId: null,
 });
 
 export default FormState;

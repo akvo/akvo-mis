@@ -29,7 +29,7 @@ const typeIcons = {
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
       <path
         d="M4 16l4-5 4 3 8-8"
-        stroke="#1651b6"
+        stroke="#404797"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -83,11 +83,11 @@ const typeIcons = {
   ),
   scatter: (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-      <circle cx="6" cy="16" r="2" fill="#1651b6" />
-      <circle cx="10" cy="10" r="2" fill="#1651b6" />
-      <circle cx="15" cy="13" r="2" fill="#1651b6" />
-      <circle cx="18" cy="7" r="2" fill="#1651b6" />
-      <circle cx="12" cy="17" r="2" fill="#1651b6" />
+      <circle cx="6" cy="16" r="2" fill="#404797" />
+      <circle cx="10" cy="10" r="2" fill="#404797" />
+      <circle cx="15" cy="13" r="2" fill="#404797" />
+      <circle cx="18" cy="7" r="2" fill="#404797" />
+      <circle cx="12" cy="17" r="2" fill="#404797" />
     </svg>
   ),
   section_title: (

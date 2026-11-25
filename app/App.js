@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import NetInfo from '@react-native-community/netinfo';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
@@ -10,7 +11,7 @@ import { SENTRY_DSN, SENTRY_ENV } from '@env';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import Navigation, { reactNavigationIntegration } from './src/navigation';
-import { UIState, AuthState, UserState, BuildParamsState } from './src/store';
+import { UIState, AuthState, UserState, BuildParamsState, FormState } from './src/store';
 import { crudUsers, crudConfig, crudDataPoints } from './src/database/crud';
 import { api } from './src/lib';
 import { StatusBanner, SyncService } from './src/components';
@@ -31,7 +32,7 @@ import {
 import { tables, openDatabase } from './src/database';
 import { recoverPendingSubmissions, refreshStorageWarning } from './src/lib/submission-fallback';
 import sql from './src/database/sql';
-import { m03, m04, m05, m06, m07, m08, m09, m10, m11, m12 } from './src/database/migrations';
+import { m03, m04, m05, m06, m07, m08, m09, m10, m11, m12, m13 } from './src/database/migrations';
 
 export const setNotificationHandler = () =>
   Notifications.setNotificationHandler({
@@ -178,6 +179,23 @@ const handleInitConfig = async (db) => {
     UserState.update((s) => {
       s.syncWifiOnly = configExist?.syncWifiOnly;
     });
+
+    // Saved by Settings > Language (APP-487); drives the interface and translated questions.
+    if (configExist.lang) {
+      UIState.update((s) => {
+        s.lang = configExist.lang;
+      });
+      FormState.update((s) => {
+        s.lang = configExist.lang;
+      });
+    }
+
+    // Saved by Settings > Appearance (APP-487); drives the light/dark theme.
+    if (configExist.darkModePreference) {
+      UIState.update((s) => {
+        s.darkModePreference = configExist.darkModePreference;
+      });
+    }
   }
 };
 
@@ -318,11 +336,30 @@ const migrateDbIfNeeded = async (db) => {
     });
     currentDbVersion = 12;
   }
+  if (currentDbVersion === 12) {
+    await sql.withTransaction(db, async (txDb) => {
+      await m13.up(txDb);
+      await txDb.execAsync('PRAGMA user_version = 13');
+    });
+    currentDbVersion = 13;
+  }
 
   // Every DATABASE_VERSION bump sends exactly one launch down this path. Without
   // this, the upgrade launch never sets the server URL, token or user id, and the
   // app looks logged out until it is restarted.
   await finishInit(db);
+};
+
+const BannerLayout = () => {
+  const bannerVisible = UIState.useState((s) => s.bannerVisible);
+  return (
+    <SafeAreaView style={{ flex: 1 }} edges={bannerVisible ? ['bottom'] : []}>
+      <View style={{ flex: 1 }}>
+        <Navigation />
+      </View>
+      <StatusBanner />
+    </SafeAreaView>
+  );
 };
 
 const App = () => {
@@ -402,8 +439,7 @@ const App = () => {
     <SafeAreaProvider>
       <Suspense fallback={null}>
         <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
-          <Navigation />
-          <StatusBanner />
+          <BannerLayout />
           <SyncService />
         </SQLiteProvider>
       </Suspense>

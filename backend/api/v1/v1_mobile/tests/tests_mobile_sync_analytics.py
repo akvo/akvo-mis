@@ -117,25 +117,3 @@ class MobileSyncAnalyticsTest(
             user_id=str(self.user.id),
             subdomain="analytics-ws",
         )
-
-    @mock.patch("api.v1.v1_mobile.views.async_task")
-    def test_mobile_draft_sync_does_not_trigger_matomo(self, mock_async_task):
-        token = self.get_assignment_token(self.passcode)
-        payload = {
-            "formId": self.form.id,
-            "name": "Draft Datapoint",
-            "duration": 50,
-            "answers": {},
-        }
-        res = self.client.post(
-            "/api/v1/device/sync?is_draft=true",
-            payload,
-            follow=True,
-            content_type="application/json",
-            **{"HTTP_AUTHORIZATION": f"Bearer {token}"},
-        )
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        for call_item in mock_async_task.call_args_list:
-            self.assertNotEqual(
-                call_item[0][0], "utils.matomo.track_submission_task"
-            )

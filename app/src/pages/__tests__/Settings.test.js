@@ -1,11 +1,13 @@
 import React from 'react';
 import { View } from 'react-native';
-import renderer from 'react-test-renderer';
 import { render, renderHook, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import SettingsPage from '../Settings';
 import { BuildParamsState } from '../../store';
+
+// background-task imports expo-task-manager, whose native module jest-expo can't load.
+jest.mock('../../lib/background-task', () => ({}));
 
 jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((cb) => {
   cb(18, 113, 357, 50);
@@ -13,7 +15,7 @@ jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((cb) => {
 
 describe('SettingsPage', () => {
   test('renders correctly', () => {
-    const tree = renderer.create(<SettingsPage />).toJSON();
+    const tree = render(<SettingsPage />).toJSON();
     expect(tree).toMatchSnapshot();
   });
 
@@ -27,7 +29,20 @@ describe('SettingsPage', () => {
     expect(advancedItem).toBeDefined();
     fireEvent.press(advancedItem);
 
-    expect(navigation.navigate).toHaveBeenCalledWith('SettingsForm', { id: 1, name: 'Advanced' });
+    expect(navigation.navigate).toHaveBeenCalledWith('SettingsForm', {
+      id: 1,
+      name: 'Advanced Settings',
+    });
+  });
+
+  it('should go to the language screen', () => {
+    const { result: navigationRef } = renderHook(() => useNavigation());
+    const navigation = navigationRef.current;
+    const { getByTestId } = render(<SettingsPage navigation={navigation} />);
+
+    fireEvent.press(getByTestId('settings-language'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('Language');
   });
 
   it('should not have add new form list if code_assignment set as auth type in build params', async () => {

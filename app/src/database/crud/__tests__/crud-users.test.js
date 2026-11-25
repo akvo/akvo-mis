@@ -1,68 +1,49 @@
 import crudUsers from '../crud-users';
+import { makeInMemoryDb } from '../../test-helpers/in-memory-db';
 
-jest.mock('expo-sqlite');
+let db;
 
-// Mock the hook instead of calling it directly
-jest.mock('expo-sqlite', () => ({
-  ...jest.requireActual('expo-sqlite'),
-  useSQLiteContext: jest.fn().mockReturnValue({
-    transaction: jest.fn(),
-    closeAsync: jest.fn(),
-  }),
-}));
+const addUser = ({ name, password = 'password', active = 0 }) =>
+  db.raw
+    .prepare('INSERT INTO users (name, password, active) VALUES (?,?,?)')
+    .run(name, password, active);
 
-const mockDb = {
-  transaction: jest.fn(),
-  closeAsync: jest.fn(),
-};
+beforeEach(() => {
+  db = makeInMemoryDb();
+  db.raw.exec(
+    'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, password TEXT, active INTEGER, lastSyncedAt TEXT)',
+  );
+});
 
-const users = [
-  {
-    id: 1,
-    name: 'John Doe',
-    password: 'password',
-    active: 1,
-  },
-  {
-    id: 2,
-    name: 'Jane Doe',
-    password: 'password',
-    active: 0,
-  },
-];
-
-describe('crudUsers function', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+describe('getActiveUser', () => {
+  it('returns null when no active user exists', async () => {
+    addUser({ name: 'Jane', active: 0 });
+    const result = await crudUsers.getActiveUser(db);
+    expect(result).toBeNull();
   });
 
-  describe('getActiveUser', () => {
-    it('should return false if active user does not exist', async () => {
-      const mockData = [];
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: mockData.length, _array: mockData } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudUsers.getActiveUser();
-      expect(result).toBe(false);
-    });
+  it('returns the active user', async () => {
+    addUser({ name: 'John', active: 1 });
+    addUser({ name: 'Jane', active: 0 });
+    const result = await crudUsers.getActiveUser(db);
+    expect(result).toMatchObject({ name: 'John', active: 1 });
+  });
+});
 
-    it('should return active user', async () => {
-      const mockData = users.filter((u) => u.active);
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: mockData.length, _array: mockData } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudUsers.getActiveUser();
-      expect(result).toEqual(mockData[0]);
-    });
+describe('addNew / checkPasscode', () => {
+  it('inserts a user and finds it by passcode', async () => {
+    const id = await crudUsers.addNew(db, { name: 'John', password: 'secret', active: 1 });
+    expect(id).toBeGreaterThan(0);
+    const found = await crudUsers.checkPasscode(db, 'secret');
+    expect(found).toMatchObject({ name: 'John' });
+  });
+});
+
+describe('updateLastSynced', () => {
+  it('stamps lastSyncedAt on the user', async () => {
+    addUser({ name: 'John', active: 1 });
+    await crudUsers.updateLastSynced(db, 1);
+    const row = db.raw.prepare('SELECT lastSyncedAt FROM users WHERE id = 1').get();
+    expect(row.lastSyncedAt).toBeTruthy();
   });
 });

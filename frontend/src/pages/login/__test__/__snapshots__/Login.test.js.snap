@@ -6,52 +6,6 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
     class="ant-row  layout"
   >
     <div
-      class="ant-row ant-row-space-between ant-row-middle header"
-    >
-      <div
-        class="ant-col"
-      >
-        <div
-          class="logo"
-        >
-          <a
-            href="/"
-          >
-            <div
-              class="logo-wrapper"
-            >
-              <img
-                alt="Akvo MIS"
-                class="small-logo"
-                src="/logo.svg"
-              />
-            </div>
-          </a>
-        </div>
-      </div>
-      <div
-        class="ant-col"
-      >
-        <div
-          class="account"
-        >
-          <a
-            href="/login"
-          >
-            <button
-              ant-click-animating-without-extra-node="false"
-              class="ant-btn ant-btn-round ant-btn-primary"
-              type="button"
-            >
-              <span>
-                Log in
-              </span>
-            </button>
-          </a>
-        </div>
-      </div>
-    </div>
-    <div
       class="body"
     >
       <div
@@ -168,7 +122,6 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
                               id="login-form_password"
                               placeholder="Password"
                               type="password"
-                              value=""
                             />
                             <span
                               class="ant-input-suffix"
@@ -246,7 +199,7 @@ exports[`Login and Registration test if the login form exists: LoginPage 1`] = `
                         >
                           <a
                             class="login-form-forgot"
-                            href="/register"
+                            href="/"
                           >
                             Create an account
                           </a>
@@ -298,51 +251,6 @@ exports[`Login and Registration test if the registration form exists: Registrati
   <div
     class="ant-row  layout"
   >
-    <div
-      class="ant-row ant-row-space-between ant-row-middle header"
-    >
-      <div
-        class="ant-col"
-      >
-        <div
-          class="logo"
-        >
-          <a
-            href="/"
-          >
-            <div
-              class="logo-wrapper"
-            >
-              <img
-                alt="John Doe Logo"
-                class="small-logo"
-                src="/logo.svg"
-              />
-            </div>
-          </a>
-        </div>
-      </div>
-      <div
-        class="ant-col"
-      >
-        <div
-          class="account"
-        >
-          <a
-            href="/login"
-          >
-            <button
-              class="ant-btn ant-btn-round ant-btn-primary"
-              type="button"
-            >
-              <span>
-                Log in
-              </span>
-            </button>
-          </a>
-        </div>
-      </div>
-    </div>
     <div
       class="body"
     >

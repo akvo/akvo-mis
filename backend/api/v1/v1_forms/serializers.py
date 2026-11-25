@@ -1,6 +1,7 @@
 import numpy as np
 from collections import OrderedDict
 
+from django.utils.text import slugify
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field, inline_serializer
 from rest_framework import serializers
@@ -8,6 +9,7 @@ from rest_framework import serializers
 from api.v1.v1_data.models import Answers
 from api.v1.v1_forms.constants import QuestionTypes, AttributeTypes, FormStatus
 from api.v1.v1_forms.models import (
+    FormCategory,
     FormPublishedVersion,
     Forms,
     QuestionGroup,
@@ -60,6 +62,12 @@ class ListQuestionSerializer(serializers.ModelSerializer):
     fn = serializers.SerializerMethodField()
     pre = serializers.SerializerMethodField()
     displayOnly = serializers.BooleanField(source="display_only")
+    addonBefore = serializers.CharField(
+        source="addon_before", allow_null=True, required=False
+    )
+    addonAfter = serializers.CharField(
+        source="addon_after", allow_null=True, required=False
+    )
 
     @extend_schema_field(ListOptionSerializer(many=True))
     def get_option(self, instance: Questions):
@@ -291,6 +299,8 @@ class ListQuestionSerializer(serializers.ModelSerializer):
             "fn",
             "pre",
             "displayOnly",
+            "addonBefore",
+            "addonAfter",
             "translations",
             "columns",
             "limit",
@@ -821,3 +831,73 @@ class XLSFormImportSerializer(serializers.Serializer):
         default="registration",
     )
     parent_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class FormCategorySerializer(serializers.ModelSerializer):
+    """FB-018: a managed library category. slug is derived from name on
+    create and kept stable afterwards (it is a URL key), so clients never
+    send a slug that could drift from the name.
+    """
+
+    slug = serializers.SlugField(read_only=True)
+
+    class Meta:
+        model = FormCategory
+        fields = ["id", "name", "slug"]
+
+    def create(self, validated_data):
+        validated_data["slug"] = slugify(validated_data["name"])
+        return super().create(validated_data)
+
+
+class LibraryFormSerializer(serializers.ModelSerializer):
+    """FB-018: a registration template (family root) for the browse list."""
+
+    categories = FormCategorySerializer(many=True, read_only=True)
+    monitoring_count = serializers.SerializerMethodField()
+    monitoring = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    source = serializers.SerializerMethodField()
+
+    def get_source(self, obj):
+        # Provenance of a promoted template (origin workspace + date); None
+        # for a template authored from scratch.
+        return (obj.meta or {}).get("source")
+
+    def get_monitoring_count(self, obj):
+        return obj.children.filter(
+            status=FormStatus.published, deleted_at__isnull=True
+        ).count()
+
+    def get_status(self, obj):
+        return FormStatus.FieldStr.get(obj.status, "draft")
+
+    def get_monitoring(self, obj):
+        # Every non-deleted monitoring child, for the console's collapsible
+        # sub-rows (the consumer card ignores this and uses monitoring_count).
+        children = obj.children.filter(deleted_at__isnull=True).order_by("id")
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "type": c.type,
+                "status": FormStatus.FieldStr.get(c.status, "draft"),
+            }
+            for c in children
+        ]
+
+    class Meta:
+        model = Forms
+        fields = [
+            "id",
+            "name",
+            "description",
+            "version",
+            "status",
+            "import_count",
+            "monitoring_count",
+            "monitoring",
+            "categories",
+            "source",
+            "updated",
+        ]

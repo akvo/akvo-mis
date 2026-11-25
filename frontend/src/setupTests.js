@@ -58,5 +58,4 @@ window.dbadm = [
 window.appConfig = {
   name: "Test App",
   shortName: "Test",
-  showLandingPage: true,
 };

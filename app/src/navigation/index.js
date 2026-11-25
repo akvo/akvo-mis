@@ -1,7 +1,10 @@
 import React, { useEffect } from 'react';
+import { BackHandler } from 'react-native';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { BackHandler } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Icon from 'react-native-vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import * as Sentry from '@sentry/react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -21,17 +24,87 @@ import {
   UsersPage,
   FormDataDetailsPage,
   AddNewForm,
+  LanguagePage,
   AboutPage,
   SubmissionPage,
   FormOptionsPage,
 } from '../pages';
 import { UIState, AuthState, FormState } from '../store';
-import { backgroundTask, notification } from '../lib';
+import { backgroundTask, notification, i18n } from '../lib';
+import useTheme from '../lib/theme';
 import { SYNC_FORM_SUBMISSION_TASK_NAME, SYNC_FORM_VERSION_TASK_NAME } from '../lib/constants';
 
 export const reactNavigationIntegration = Sentry.reactNavigationIntegration();
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// Placeholder component for the Sync tab (never rendered, tab press is intercepted)
+const TAB_ICON_SIZE = 22;
+
+const HomeTabIcon = ({ color }) => <Icon name="home-outline" size={TAB_ICON_SIZE} color={color} />;
+const SettingsTabIcon = ({ color }) => (
+  <Icon name="settings-outline" size={TAB_ICON_SIZE} color={color} />
+);
+
+const HomeTabs = () => {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const activeLang = UIState.useState((s) => s.lang);
+  const bannerVisible = UIState.useState((s) => s.bannerVisible);
+  const trans = i18n.text(activeLang);
+
+  const bottomPad = bannerVisible ? 10 : Math.max(insets.bottom, 10);
+
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: theme.bottomNav.bg,
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          paddingTop: 10,
+          paddingBottom: bottomPad,
+          height: 70 + bottomPad,
+        },
+        tabBarActiveTintColor: theme.bottomNav.selected,
+        tabBarInactiveTintColor: theme.bottomNav.deselected,
+        tabBarItemStyle: {
+          borderRadius: 16,
+          marginHorizontal: 8,
+          paddingVertical: 4,
+        },
+        tabBarActiveBackgroundColor: theme.bg.surfaceTranslucent,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '700',
+          marginTop: 4,
+        },
+      }}
+    >
+      <Tab.Screen
+        name="HomeTab"
+        component={HomePage}
+        options={{
+          tabBarLabel: trans.homePageTitle,
+          tabBarIcon: HomeTabIcon,
+          tabBarTestID: 'tab-home',
+        }}
+      />
+      <Tab.Screen
+        name="SettingsTab"
+        component={SettingsPage}
+        options={{
+          tabBarLabel: trans.settingsPageTitle,
+          tabBarIcon: SettingsTabIcon,
+          tabBarTestID: 'tab-settings',
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
 
 const RootNavigator = () => {
   const currentPage = UIState.useState((s) => s.currentPage);
@@ -40,7 +113,7 @@ const RootNavigator = () => {
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!token || !['Home', 'AddUser'].includes(currentPage)) {
+      if (!token || !['Home', 'HomeTab', 'AddUser'].includes(currentPage)) {
         // Allow navigation if user is not logged in
         return false;
       }
@@ -79,8 +152,7 @@ const RootNavigator = () => {
         </>
       ) : (
         <>
-          <Stack.Screen name="Home" component={HomePage} />
-          <Stack.Screen name="Settings" component={SettingsPage} />
+          <Stack.Screen name="Home" component={HomeTabs} />
           <Stack.Screen name="About" component={AboutPage} />
           <Stack.Screen name="SettingsForm" component={SettingsFormPage} />
           <Stack.Screen name="FormPage" component={FormPage} />
@@ -91,6 +163,7 @@ const RootNavigator = () => {
           <Stack.Screen name="Users" component={UsersPage} />
           <Stack.Screen name="FormDataDetails" component={FormDataDetailsPage} />
           <Stack.Screen name="AddNewForm" component={AddNewForm} />
+          <Stack.Screen name="Language" component={LanguagePage} />
           <Stack.Screen name="Submission" component={SubmissionPage} />
           <Stack.Screen name="FormOptions" component={FormOptionsPage} />
         </>
@@ -103,9 +176,15 @@ const Navigation = () => {
   const navigationRef = useNavigationContainerRef();
 
   const handleOnChangeNavigation = (state) => {
-    // listen to route change
-    const currentRoute = state.routes[state.routes.length - 1].name;
-    if (['Home'].includes(currentRoute)) {
+    if (!state) {
+      return;
+    }
+    // listen to route change — resolve nested tab navigators
+    const topRoute = state.routes[state.routes.length - 1];
+    const currentRoute = topRoute?.state
+      ? topRoute.state.routes[topRoute.state.index]?.name
+      : topRoute.name;
+    if (['Home', 'HomeTab'].includes(currentRoute)) {
       // reset form values
       FormState.update((s) => {
         s.currentValues = {};

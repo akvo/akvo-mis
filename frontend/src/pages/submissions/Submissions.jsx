@@ -105,6 +105,7 @@ const Submissions = () => {
 
   useEffect(() => {
     if (!selectedForm) {
+      setLoading(false);
       return () => {};
     }
     // A slow response for a previous tab/page must not overwrite the
@@ -369,7 +370,7 @@ const Submissions = () => {
                         );
                         onExpand(record, e);
                       }}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   ) : (
                     <LeftCircleOutlined
@@ -377,7 +378,7 @@ const Submissions = () => {
                         setExpandedKeys([record.id]);
                         onExpand(record, e);
                       }}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   );
                 },
