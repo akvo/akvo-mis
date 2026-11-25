@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BackHandler, ToastAndroid, View } from 'react-native';
+import { BackHandler } from 'react-native';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -29,14 +29,10 @@ import {
   SubmissionPage,
   FormOptionsPage,
 } from '../pages';
-import { UIState, AuthState, FormState, DatapointSyncState } from '../store';
+import { UIState, AuthState, FormState } from '../store';
 import { backgroundTask, notification, i18n } from '../lib';
 import useTheme from '../lib/theme';
-import {
-  SYNC_STATUS,
-  SYNC_FORM_SUBMISSION_TASK_NAME,
-  SYNC_FORM_VERSION_TASK_NAME,
-} from '../lib/constants';
+import { SYNC_FORM_SUBMISSION_TASK_NAME, SYNC_FORM_VERSION_TASK_NAME } from '../lib/constants';
 
 export const reactNavigationIntegration = Sentry.reactNavigationIntegration();
 
@@ -44,33 +40,18 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Placeholder component for the Sync tab (never rendered, tab press is intercepted)
-const SyncPlaceholder = () => <View />;
-
 const TAB_ICON_SIZE = 22;
 
 const HomeTabIcon = ({ color }) => <Icon name="home-outline" size={TAB_ICON_SIZE} color={color} />;
 const SettingsTabIcon = ({ color }) => (
   <Icon name="settings-outline" size={TAB_ICON_SIZE} color={color} />
 );
-const SyncTabIcon = () => {
-  const theme = useTheme();
-  const syncInProgress = DatapointSyncState.useState((s) => s.inProgress);
-  return (
-    <Icon
-      name="refresh-outline"
-      size={TAB_ICON_SIZE}
-      color={syncInProgress ? theme.status.success : theme.bottomNav.deselected}
-    />
-  );
-};
 
 const HomeTabs = () => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const activeLang = UIState.useState((s) => s.lang);
-  const isOnline = UIState.useState((s) => s.online);
   const bannerVisible = UIState.useState((s) => s.bannerVisible);
-  const syncInProgress = DatapointSyncState.useState((s) => s.inProgress);
   const trans = i18n.text(activeLang);
 
   const bottomPad = bannerVisible ? 10 : Math.max(insets.bottom, 10);
@@ -120,43 +101,6 @@ const HomeTabs = () => {
           tabBarIcon: SettingsTabIcon,
           tabBarTestID: 'tab-settings',
         }}
-      />
-      <Tab.Screen
-        name="SyncTab"
-        component={SyncPlaceholder}
-        options={{
-          tabBarLabel: syncInProgress ? trans.syncingText : trans.syncDataPointBtn,
-          tabBarIcon: SyncTabIcon,
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '700',
-            marginTop: 4,
-            color: syncInProgress ? theme.status.success : theme.bottomNav.deselected,
-          },
-          tabBarTestID: 'tab-sync',
-        }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            if (!isOnline) {
-              ToastAndroid.show(trans.offlineText, ToastAndroid.SHORT);
-              return;
-            }
-            if (syncInProgress) {
-              ToastAndroid.show(trans.syncingText, ToastAndroid.SHORT);
-              return;
-            }
-            UIState.update((s) => {
-              s.statusBar = {
-                type: SYNC_STATUS.on_progress,
-                bgColor: theme.banner.syncBg,
-                icon: 'sync',
-              };
-              s.triggerSync = true;
-            });
-            navigation.navigate('HomeTab');
-          },
-        })}
       />
     </Tab.Navigator>
   );

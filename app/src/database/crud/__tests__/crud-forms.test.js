@@ -1,150 +1,90 @@
+/**
+ * Real-SQL tests (better-sqlite3 in-memory). The crud layer takes `db` as its first arg and
+ * uses the async API (getAllAsync/runAsync); these tests seed real rows and assert behaviour.
+ * Deep count logic lives in crud-forms-counts.test.js.
+ */
 import crudForms from '../crud-forms';
+import { makeInMemoryDb, createCrudSchema } from '../../test-helpers/in-memory-db';
 
-jest.mock('expo-sqlite');
+let db;
 
-const mockDb = {
-  transaction: jest.fn(),
-  closeAsync: jest.fn(),
-};
+beforeEach(() => {
+  db = makeInMemoryDb();
+  createCrudSchema(db);
+});
 
-// Mock the hook instead of calling it directly
-jest.mock('expo-sqlite', () => ({
-  ...jest.requireActual('expo-sqlite'),
-  useSQLiteContext: jest.fn().mockReturnValue({
-    transaction: jest.fn(),
-    closeAsync: jest.fn(),
-  }),
-}));
+describe('addForm', () => {
+  it('inserts the form as the latest version', async () => {
+    const id = await crudForms.addForm(db, {
+      userId: 1,
+      id: 123,
+      version: '1.0.0',
+      formJSON: { id: 123, version: 1, name: 'Form 1' },
+    });
+    expect(id).toBeGreaterThan(0);
+    const row = db.raw.prepare('SELECT * FROM forms WHERE formId = 123').get();
+    expect(row.name).toBe('Form 1');
+    expect(row.latest).toBe(1);
+    expect(row.userId).toBe(1);
+  });
+});
 
-describe('crudForms function', () => {
+describe('selectLatestFormVersion', () => {
+  it('returns [] when the user has no forms', async () => {
+    const result = await crudForms.selectLatestFormVersion(db, { user: 99 });
+    expect(result).toEqual([]);
+  });
+
+  it('returns the latest parent form with zeroed counts when it has no datapoints', async () => {
+    db.raw
+      .prepare('INSERT INTO forms (id, formId, parentId, version, name, json, latest, userId) VALUES (?,?,?,?,?,?,?,?)')
+      .run(1, 123, null, '1.0.0', 'Form Test', '{}', 1, 1);
+    const [row] = await crudForms.selectLatestFormVersion(db, { user: 1 });
+    expect(row.formId).toBe(123);
+    expect(row.name).toBe('Form Test');
+    expect(row).toMatchObject({ draft: 0, submitted: 0, synced: 0, registered: 0, subFormCount: 0 });
+  });
+
+  it('skips non-latest versions', async () => {
+    db.raw
+      .prepare('INSERT INTO forms (id, formId, parentId, version, name, json, latest, userId) VALUES (?,?,?,?,?,?,?,?)')
+      .run(1, 123, null, '1.0.0', 'Old', '{}', 0, 1);
+    const result = await crudForms.selectLatestFormVersion(db, { user: 1 });
+    expect(result).toEqual([]);
+  });
+});
+
+describe('selectFormByIdAndVersion', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    db.raw
+      .prepare('INSERT INTO forms (id, formId, parentId, version, name, json, latest, userId) VALUES (?,?,?,?,?,?,?,?)')
+      .run(1, 123, null, '1.0.0', 'Form Test', '{}', 1, 1);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  it('returns [] when no matching version exists', async () => {
+    const result = await crudForms.selectFormByIdAndVersion(db, { id: 123, version: '1.0.1' });
+    expect(result).toEqual([]);
   });
 
-  describe('addForm', () => {
-    it('should insert the form', async () => {
-      const mockInsertSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rowsAffected: 1 });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockInsertSql,
-        });
-      });
-      const formId = 1;
-      const version = 1;
-      const formJSON = { id: 1, version: 1, name: 'Form 1' };
-      const result = await crudForms.addForm({ id: formId, version, formJSON });
-      expect(result).toEqual({ rowsAffected: 1 });
-    });
+  it('returns the matching form', async () => {
+    const result = await crudForms.selectFormByIdAndVersion(db, { id: 123, version: '1.0.0' });
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Form Test');
+  });
+});
+
+describe('selectFormById', () => {
+  it('returns the form for a valid local id', async () => {
+    db.raw
+      .prepare('INSERT INTO forms (id, formId, parentId, version, name, json, latest, userId) VALUES (?,?,?,?,?,?,?,?)')
+      .run(1, 123, null, '1.0.0', 'Form 1', '{"question_group":[]}', 1, 1);
+    const result = await crudForms.selectFormById(db, { id: 1 });
+    expect(result.name).toBe('Form 1');
+    expect(result.formId).toBe(123);
   });
 
-  describe('selectLatestFormVersion and selectFormByIdAndVersion', () => {
-    const formData = [
-      {
-        id: 1,
-        formId: 123,
-        name: 'Form Test',
-        latest: 1,
-        version: '1.0.0',
-        json: { id: 1, version: 1, name: 'Form 1' },
-      },
-    ];
-
-    test('selectLatestFormVersion should return [] if the latest form version does not exist', async () => {
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: 0, _array: [] } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudForms.selectLatestFormVersion({ user: 2 });
-      expect(result).toEqual([]);
-    });
-
-    test('selectFormByIdAndVersion should return false if the form does not exist', async () => {
-      const mockData = formData.filter((f) => f.id === 1 && f.version === '1.0.1');
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: mockData.length, _array: mockData } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudForms.selectFormByIdAndVersion({ id: 1, version: '1.0.1' });
-      expect(result).toBe(false);
-    });
-
-    test('selectLatestFormVersion should return the forms with stats if it exists', async () => {
-      const formTest = [
-        {
-          id: 1,
-          formId: 123,
-          name: 'Form Test',
-          latest: 1,
-          version: '1.0.0',
-          json: { id: 1, version: 1, name: 'Form 1' },
-          submitted: 2,
-          draft: 3,
-          synced: 1,
-        },
-      ];
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: formTest.length, _array: formTest } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudForms.selectLatestFormVersion({ user: 1 });
-      expect(result).toEqual(formTest);
-    });
-
-    test('selectFormByIdAndVersion should return the form if it exists', async () => {
-      const mockData = formData.filter((f) => f.id === 1 && f.version === '1.0.0');
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: mockData.length, _array: mockData } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudForms.selectFormByIdAndVersion({ id: 1, version: '1.0.0' });
-      expect(result).toEqual(mockData[0]);
-    });
-
-    test('selectFormById should return the correct form value when given a valid ID', async () => {
-      const mockData = [
-        {
-          id: 1,
-          version: 1,
-          name: 'Form 1',
-          json: JSON.stringify({ id: 1, version: 1, name: 'Form 1', question_group: [] }),
-        },
-      ];
-      const mockSelectSql = jest.fn((query, params, successCallback) => {
-        successCallback(null, { rows: { length: mockData.length, _array: mockData } });
-      });
-      mockDb.transaction.mockImplementation((transactionFunction) => {
-        transactionFunction({
-          executeSql: mockSelectSql,
-        });
-      });
-      const result = await crudForms.selectFormById({ id: 1 });
-      const mockResult = mockData[0];
-      expect(result).toEqual({
-        ...mockResult,
-        json: mockResult.json,
-      });
-    });
+  it('returns null for a missing id', async () => {
+    const result = await crudForms.selectFormById(db, { id: 404 });
+    expect(result).toBeNull();
   });
 });

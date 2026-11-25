@@ -55,6 +55,21 @@ const dataPointsQuery = () => ({
     );
     return rows;
   },
+  /**
+   * Device-wide count of submissions waiting to upload — the Home sync badge (APP-585).
+   * Spans every form, parent and monitoring alike, so it is not a sum of the parent-only
+   * card counts.
+   */
+  countPendingSync: async (db, { user }) => {
+    const rows = await sql.executeQuery(
+      db,
+      `SELECT COUNT(*) AS pending
+         FROM datapoints
+        WHERE submitted = 1 AND locallyCreated = 1 AND syncedAt IS NULL AND user = ?`,
+      [user],
+    );
+    return rows?.[0]?.pending || 0;
+  },
   saveDataPoint: async (
     db,
     {

@@ -1,41 +1,32 @@
 import crudSessions from '../crud-sessions';
+import { makeInMemoryDb } from '../../test-helpers/in-memory-db';
 
-jest.mock('expo-sqlite');
+let db;
 
-describe('crudSessions function', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+beforeEach(() => {
+  db = makeInMemoryDb();
+  db.raw.exec('CREATE TABLE sessions (id INTEGER PRIMARY KEY, token TEXT, passcode TEXT)');
+});
+
+describe('addSession', () => {
+  it('inserts the session and returns its id', async () => {
+    const id = await crudSessions.addSession(db, { token: 'Bearer abcefg', passcode: '123456' });
+    expect(id).toBeGreaterThan(0);
+    const row = db.raw.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
+    expect(row.token).toBe('Bearer abcefg');
+  });
+});
+
+describe('selectLastSession', () => {
+  it('returns undefined when no session exists', async () => {
+    const result = await crudSessions.selectLastSession(db);
+    expect(result).toBeUndefined();
   });
 
-  describe('addSession', () => {
-    it('should insert the session', async () => {
-      const result = await crudSessions.addSession({ token: 'Bearer abcefg', passcode: '123456' });
-      expect(result).toEqual({ rowsAffected: 1 });
-    });
-  });
-
-  describe('selectLastSession', () => {
-    it('should return false if session does not exist', async () => {
-      const result = await crudSessions.selectLastSession();
-      expect(result).toBe(false);
-    });
-
-    it('should return last session', async () => {
-      // Mock the result set for select
-      const sessions = [
-        {
-          token: 'Bearer 1',
-          passcode: '123',
-        },
-        {
-          token: 'Bearer 2',
-          passcode: '321',
-        },
-      ];
-      const mockSelectSql = jest.fn(() => sessions[1]);
-      crudSessions.selectLastSession = mockSelectSql;
-      const result = await crudSessions.selectLastSession();
-      expect(result).toEqual(sessions[1]);
-    });
+  it('returns the most recently inserted session', async () => {
+    await crudSessions.addSession(db, { token: 'Bearer 1', passcode: '123' });
+    await crudSessions.addSession(db, { token: 'Bearer 2', passcode: '321' });
+    const result = await crudSessions.selectLastSession(db);
+    expect(result).toMatchObject({ token: 'Bearer 2', passcode: '321' });
   });
 });
