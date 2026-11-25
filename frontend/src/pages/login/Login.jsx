@@ -6,6 +6,7 @@ import { LoginForm, RegistrationForm, ResetForm } from "./components";
 import { ContactForm } from "../../components";
 import { useParams } from "react-router-dom";
 import { api, store, uiText } from "../../lib";
+import AuthShell from "../landing/AuthShell";
 
 const ContactUsText = ({ text }) => (
   <p className="contact-text">
@@ -58,79 +59,81 @@ const Login = () => {
   }, [invitationId]);
 
   return (
-    <div id="login">
-      <Row className="wrapper" align="middle">
-        <Col span={24} className="right-side">
-          {location.pathname.includes("forgot-password") ? (
-            <div className="login-form-container">
-              <h1>{text.forgotTitle}</h1>
-              <p className="contact-text">{text.forgotDesc}</p>
-              <ResetForm />
-            </div>
-          ) : (
-            <>
-              {loading ? (
-                <div className="loading-container">
-                  <Spin />
-                  <h2>{text.loginLoadingTex}</h2>
-                </div>
-              ) : (
-                <>
-                  {invitationId ? (
-                    <div>
-                      {invitedUser ? (
-                        <div className="login-form-container">
-                          <div className="login-content">
-                            <h1 data-testid="welcome-title">
-                              {text.welcomeShort}, {invitedUser.name}
-                            </h1>
-                            <p className="contact-text">{text.resetHint}</p>
+    <AuthShell>
+      <div id="login">
+        <Row className="wrapper" align="middle">
+          <Col span={24} className="right-side">
+            {location.pathname.includes("forgot-password") ? (
+              <div className="login-form-container">
+                <h1>{text.forgotTitle}</h1>
+                <p className="contact-text">{text.forgotDesc}</p>
+                <ResetForm />
+              </div>
+            ) : (
+              <>
+                {loading ? (
+                  <div className="loading-container">
+                    <Spin />
+                    <h2>{text.loginLoadingTex}</h2>
+                  </div>
+                ) : (
+                  <>
+                    {invitationId ? (
+                      <div>
+                        {invitedUser ? (
+                          <div className="login-form-container">
+                            <div className="login-content">
+                              <h1 data-testid="welcome-title">
+                                {text.welcomeShort}, {invitedUser.name}
+                              </h1>
+                              <p className="contact-text">{text.resetHint}</p>
+                            </div>
+                            <RegistrationForm invite={invitedUser.invite} />
                           </div>
-                          <RegistrationForm invite={invitedUser.invite} />
-                        </div>
-                      ) : (
-                        <div>
-                          <h1>
-                            {text.invalidInviteTitle}
-                            <br />
-                            <small>{text.invalidInviteDesc}</small>
-                          </h1>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="login-form-container">
-                      <img
-                        src={tenant?.logo || "./logo-square.svg"}
-                        alt={
-                          tenant?.name ? `${tenant.name} Logo` : "login-logo"
-                        }
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = "./logo-square.svg";
-                        }}
-                      />
-                      <div className="login-content">
-                        <h1>{text.loginTitle}</h1>
-                        {/* No workspace name here. It was added so that
+                        ) : (
+                          <div>
+                            <h1>
+                              {text.invalidInviteTitle}
+                              <br />
+                              <small>{text.invalidInviteDesc}</small>
+                            </h1>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="login-form-container">
+                        <img
+                          src={tenant?.logo || "./logo-square.svg"}
+                          alt={
+                            tenant?.name ? `${tenant.name} Logo` : "login-logo"
+                          }
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "./logo-square.svg";
+                          }}
+                        />
+                        <div className="login-content">
+                          <h1>{text.loginTitle}</h1>
+                          {/* No workspace name here. It was added so that
                             someone with access to more than one could
                             tell them apart, but an account belongs to
                             exactly one workspace, so that reader never
                             existed — and the address bar already says
                             which workspace this is. */}
-                        <ContactUsText text={text} />
+                          <ContactUsText text={text} />
+                        </div>
+                        <LoginForm />
                       </div>
-                      <LoginForm />
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Col>
-      </Row>
-      <ContactForm />
-    </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </Col>
+        </Row>
+        <ContactForm />
+      </div>
+    </AuthShell>
   );
 };
 

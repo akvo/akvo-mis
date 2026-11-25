@@ -238,3 +238,40 @@
     }
   }
 }
+
+// Shared AuthShell layout. `.auth-shell-bg` (the #landing layer) is an absolute
+// deep-indigo dot backdrop; `.auth-shell-content` holds the card ABOVE it and
+// OUTSIDE #landing, so the #landing reset never strips the antd form's borders
+// or button colours. The shell flex-fills the full-bleed body so the indigo
+// reaches the viewport bottom with no gap. The card drops its own page
+// background + the negative bleed margins (body is full-bleed here) and stays
+// white above the dots.
+.auth-shell {
+  position: relative;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+
+  .auth-shell-bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .auth-shell-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 auto;
+  }
+}
+
+// The app's base card styles live under `#root #login` (two ids); match and beat
+// that specificity with `#root ...` so the card drops its own page background and
+// the negative bleed margins, letting the indigo backdrop show through. (Without
+// `#root`, this selector has only one id and loses to `#root #login`.)
+#root .auth-shell .auth-shell-content #login {
+  background-color: transparent;
+  margin: 0;
+}
