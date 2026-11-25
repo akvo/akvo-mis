@@ -1,7 +1,7 @@
 {
   "expo": {
     "newArchEnabled": true,
-    "name": "Akvo MIS",
+    "name": "AIMS",
     "slug": "akvo-mis-mobile",
     "version": "5.0.1",
     "orientation": "portrait",
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.akvo.akvo_mis",
+      "package": "com.akvo.aims",
       "versionCode": 5001
     },
     "web": {

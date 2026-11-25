@@ -11,7 +11,7 @@
 User Types & Basic principal
 -----------------------------
 
-The Akvo MIS platform uses role-based access control. There are two building
+The |app_name| platform uses role-based access control. There are two building
 blocks:
 
 - **Super Admin**: a system-wide administrator (the Django ``is_superuser``
@@ -51,7 +51,7 @@ Then fill in the required fields such as email, first name, last name, and passw
 Roles and Permissions principal
 --------------------------------
 
-Roles in Akvo MIS define the permissions and access per administration level. Each role can be assigned to users, allowing them to perform specific actions within the system. The roles are designed to ensure that users have the necessary permissions to carry out their tasks while maintaining security and data integrity.
+Roles in |app_name| define the permissions and access per administration level. Each role can be assigned to users, allowing them to perform specific actions within the system. The roles are designed to ensure that users have the necessary permissions to carry out their tasks while maintaining security and data integrity.
 
 .. _form_access:
 
@@ -71,7 +71,7 @@ Each role can have different permissions for form access, which include:
 User access
 =============
 
-User access in Akvo MIS is managed through roles and permissions. Each user can be assigned one or more roles, which determine their access level and the actions they can perform within the system. The user management interface allows administrators to add, modify, and delete users, as well as assign roles and permissions.
+User access in |app_name| is managed through roles and permissions. Each user can be assigned one or more roles, which determine their access level and the actions they can perform within the system. The user management interface allows administrators to add, modify, and delete users, as well as assign roles and permissions.
 
 - **Invite Users**: Administrators can invite new users to join the system by sending them an invitation email. The invited user will need to set up their account by creating a password.
 
@@ -137,7 +137,7 @@ Users who have been registered in the MIS platform will receive an invitation em
    :alt: Setup Email
    :width: 100%
 
-Make sure you are on your platform's URL (the address of your Akvo MIS
+Make sure you are on your platform's URL (the address of your |app_name|
 deployment). Set a strong password and click Set New Password to login to your
 account.
 
