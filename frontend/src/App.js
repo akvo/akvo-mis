@@ -4,7 +4,6 @@ import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
   Onboarding,
   LandingHeader,
-  LandingFooter,
   Login,
   Activate,
   Configure,
@@ -760,11 +759,8 @@ const App = () => {
             <RouteList />
           )}
         </Layout.Body>
-        {publicShell && (
-          <div id="landing">
-            <LandingFooter />
-          </div>
-        )}
+        {/* No footer on the public auth surface (find-workspace): it shares the
+            AuthShell backdrop with login/reset/activate, which show none. */}
         {/* A workspace feature: it posts to a tenant-scoped endpoint
             and labels itself with the page it is on, so on the console
             it offers an assistant that can only fail. Same reason the

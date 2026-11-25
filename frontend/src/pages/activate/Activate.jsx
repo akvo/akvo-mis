@@ -6,6 +6,7 @@ import { api, store, uiText } from "../../lib";
 import { useNotification, useResendActivation } from "../../util/hooks";
 import { reloadData } from "../../util/form";
 import { fetchLevels } from "../../util/level";
+import AuthShell from "../landing/AuthShell";
 
 const { Title, Text } = Typography;
 
@@ -110,15 +111,20 @@ const Activate = () => {
   };
 
   const frame = (children) => (
-    <div id="login">
-      <Row className="wrapper" align="middle">
-        <Col span={24} className="right-side">
-          <div className="login-form-container" style={{ textAlign: "center" }}>
-            {children}
-          </div>
-        </Col>
-      </Row>
-    </div>
+    <AuthShell>
+      <div id="login">
+        <Row className="wrapper" align="middle">
+          <Col span={24} className="right-side">
+            <div
+              className="login-form-container"
+              style={{ textAlign: "center" }}
+            >
+              {children}
+            </div>
+          </Col>
+        </Row>
+      </div>
+    </AuthShell>
   );
 
   if (verified) {

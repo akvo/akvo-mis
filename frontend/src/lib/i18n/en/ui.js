@@ -777,7 +777,7 @@ const en = {
   // Forgot Password
   forgotTitle: "Reset your password",
   forgotDesc:
-    "Enter the email associated with your account and we&apos;ll Send an email with instructions to reset your password",
+    "Enter the email associated with your account and we'll send an email with instructions to reset your password",
   instructionsMailed: "Instructions mailed successfully",
   sendInstructions: "Send Instructions",
   // Reset Password
