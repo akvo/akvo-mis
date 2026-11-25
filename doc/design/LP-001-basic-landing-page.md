@@ -6,6 +6,16 @@
 > **LP-001 (this)** landing page → existing sign-up · **[[LP-002]]** Typeform
 > wizard · **[[LP-003]]** AI-assisted onboarding.
 
+> **⚠️ Amendment (2026-11-24): the in-app landing is retired.** Per manager
+> direction, the **official marketing landing moves to the marcomm team**
+> (off-app). The base-domain `/` now serves the **[[LP-002]] onboarding wizard**
+> directly — not an in-app landing page. The `<Landing>` component stays in the
+> tree, **unrouted**, as a reference for marcomm (remove once they confirm).
+> Everything below describes the original in-app landing and is kept for history;
+> the scoped `#landing` Tailwind, the global i18n library (D-15/D-16) and the
+> `LandingShell` header/footer it introduced are still in use by the wizard. See
+> [[LP-002]] D-4d.
+
 ---
 
 ## Feature: Akvo MIS Public Landing Page (lead-gen funnel, phase 0)
@@ -198,6 +208,19 @@ now live in one CommonJS module, `frontend/src/lib/theme.js`, required by
 in `lib/` (not under `landing/`) so other pages can adopt the design system
 gradually, and under `src/` (not in the config) because CRA's ModuleScopePlugin
 forbids component imports from outside `src/`. Change a colour there, once.
+
+**Amendment (2026-11-24): primary blue → Akvo indigo `#404797`.** The platform
+primary was rebranded from the royal blue `#1651b6` to the **Akvo indigo
+`#404797`** (sampled from the Akvo *Impact Report 2025* cover; 8.2:1 on white).
+Applied app-wide (the user chose "whole app"): `variables.scss` `$blue`
+family and the `brand-*` scale in `lib/theme.js` were both re-derived as
+tints/shades of `#404797` (e.g. `brand-dark #363C7F`, `brand-deep #232652`,
+`brand-text #3A4088`, `brand-light #ECEDF5`, `brand-border #B6B9D7`,
+`brand-bright #9094C3`), and the ~50 inline `#1651b6` accents across the app
+(data-page icons, map shapes, dashboard chrome) were swept to `#404797`. **Left
+unchanged**: the dashboard **`COLOR_SWATCHES`** chart palette and the
+`viewerPreviewParity` test fixture — those are chart-colour *data*, not the app
+primary. `chatbot.scss` follows automatically via `var(--primary-color, #{$blue})`.
 
 ### D-9: All landing content from per-locale JSON files
 

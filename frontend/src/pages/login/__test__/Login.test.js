@@ -14,10 +14,15 @@ describe("Login and Registration", () => {
     axios.mockResolvedValue({ status: 200, data: [] });
   });
 
-  test("test if the login form exists", () => {
-    // Root "/" is the public landing page now; the sign-in form lives at
-    // /login (same entry the throttle test below uses).
-    const { asFragment } = render(<TestApp entryPoint="/login" />);
+  test("test if the login form exists", async () => {
+    // Root "/" is the onboarding wizard now; the sign-in form lives at /login
+    // (same entry the throttle test below uses). Wrap the render in act(): App's
+    // bootstrap effects (e.g. setFormsLoading after the /forms/published fetch
+    // resolves) settle state asynchronously, which otherwise warns.
+    let asFragment;
+    await act(async () => {
+      ({ asFragment } = render(<TestApp entryPoint="/login" />));
+    });
     expect(screen.getByText(/Welcome back/i)).toBeInTheDocument();
     expect(
       screen.getByText(/Please enter your account details/i)

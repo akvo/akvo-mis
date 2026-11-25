@@ -205,12 +205,12 @@ const PanelSubmissions = () => {
                   return expand.expanded ? (
                     <DownCircleOutlined
                       onClick={() => setExpandedKeys([])}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   ) : (
                     <LeftCircleOutlined
                       onClick={() => setExpandedKeys([expand.record.id])}
-                      style={{ color: "#1651B6", fontSize: "19px" }}
+                      style={{ color: "#404797", fontSize: "19px" }}
                     />
                   );
                 },

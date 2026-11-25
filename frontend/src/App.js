@@ -2,12 +2,10 @@ import "./App.scss";
 import React, { useContext, useEffect, useState } from "react";
 import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import {
-  Landing,
   Onboarding,
   LandingHeader,
   LandingFooter,
   Login,
-  Register,
   Activate,
   Configure,
   ControlCenterLayout,
@@ -195,10 +193,11 @@ const RouteList = () => {
         exact
         path="/"
         element={
-          // "/" is the landing page on the base-domain host (and single-host
-          // installs); a tenant subdomain's "/" is the workspace app.
+          // "/" is the onboarding wizard on the base-domain host (and
+          // single-host installs); a tenant subdomain's "/" is the workspace app.
+          // (The marketing landing is owned by the marcomm team, off-app.)
           onBaseDomainHost() ? (
-            <Landing />
+            <Onboarding />
           ) : authUser ? (
             <Navigate to="/control-center" />
           ) : (
@@ -214,17 +213,6 @@ const RouteList = () => {
       <Route exact path="/find-workspace" element={<FindWorkspace />} />
       <Route exact path="/login/:invitationId" element={<Login />} />
       <Route exact path="/forgot-password" element={<Login />} />
-      <Route
-        exact
-        path="/register"
-        element={onBaseDomainHost() ? <Register /> : <Navigate to="/" />}
-      />
-      {/* LP-002 guided onboarding wizard — base-domain only, like /register. */}
-      <Route
-        exact
-        path="/onboarding"
-        element={onBaseDomainHost() ? <Onboarding /> : <Navigate to="/" />}
-      />
       <Route exact path="/activate/:token" element={<Activate />} />
       {/* The console's one-time code becomes a session here. Reached
           holding nothing for this origin -- the code is the credential
@@ -713,22 +701,22 @@ const App = () => {
     }
   }, [authUser, tenant, tenantLoaded, public_state]);
 
-  // The public landing surface — the landing at "/" and the onboarding wizard at
-  // "/onboarding" — on the base-domain host (and single-host installs). Both
-  // render in their own LandingShell (brand, language switch), so they bypass the
-  // auth loader and suppress the workspace app shell; otherwise the two headers
-  // stack and the loader hides a public page. A tenant subdomain's "/" is the app.
-  const isPublicShell =
-    (location.pathname === "/" || location.pathname === "/onboarding") &&
-    onBaseDomainHost();
+  // The base-domain "/" is the onboarding wizard, which renders its OWN
+  // LandingShell (brand, language switch, footer). Flag it so we bypass the auth
+  // loader and suppress the workspace app shell — otherwise a second header
+  // stacks on the wizard's and the loader hides a public page. (The official
+  // marketing landing is owned by the marcomm team, off-app.) A tenant
+  // subdomain's "/" is the workspace app.
+  const isPublicShell = location.pathname === "/" && onBaseDomainHost();
 
-  // The other base-domain public routes reuse the landing's header as their
-  // app shell: suppress the workspace header/chatbot/tour and render a fixed
-  // LandingHeader instead. The `#login` pages already reserve the header's
-  // height, so the fixed bar drops into that slot with no layout change.
+  // Other base-domain public routes reuse the landing's header as their app
+  // shell: suppress the workspace header/chatbot/tour and render a fixed
+  // LandingHeader + LandingFooter instead. The `#login` pages already reserve the
+  // header's height, so the fixed bar drops into that slot with no layout change.
+  // "/" is intentionally NOT here: the onboarding wizard renders its own
+  // LandingShell (above), so adding this shell too would double the header/footer.
   const publicShell =
-    onBaseDomainHost() &&
-    ["/register", "/find-workspace"].includes(location.pathname);
+    onBaseDomainHost() && location.pathname === "/find-workspace";
 
   const isPublic = config.allowedGlobal
     .map((x) => location.pathname.includes(x))
@@ -756,7 +744,7 @@ const App = () => {
             brings its own header in AdminLayout. */}
         {publicShell ? (
           <div id="landing">
-            <LandingHeader showCta={location.pathname !== "/register"} />
+            <LandingHeader showCta={location.pathname !== "/"} />
           </div>
         ) : (
           !onAdminHost() && !isPublicShell && <Layout.Header />

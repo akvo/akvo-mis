@@ -81,7 +81,7 @@ const GeometryView = ({
         style={{ height, width: "100%" }}
       >
         <TileLayer url={OSM_URL} attribution={OSM_ATTRIBUTION} maxZoom={19} />
-        <Shape positions={points} pathOptions={{ color: "#1651b6" }} />
+        <Shape positions={points} pathOptions={{ color: "#404797" }} />
         {points.map(([lat, lng], index) => (
           <CircleMarker
             key={`${lat}-${lng}-${index}`}
@@ -90,7 +90,7 @@ const GeometryView = ({
             pathOptions={{
               color: "#ffffff",
               weight: 2,
-              fillColor: "#1651b6",
+              fillColor: "#404797",
               fillOpacity: 1,
             }}
           />

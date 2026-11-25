@@ -164,7 +164,7 @@ const LoginForm = () => {
       </Form.Item>
       {showRegister && (
         <Form.Item>
-          <Link className="login-form-forgot" to="/onboarding">
+          <Link className="login-form-forgot" to="/">
             {text.createAccount}
           </Link>
         </Form.Item>

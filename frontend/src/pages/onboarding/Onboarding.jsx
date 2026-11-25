@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api, store } from "../../lib";
 import { useTranslation, LANGS } from "../../lib/i18n";
-import { baseDomain } from "../../util/tenant";
+import { baseDomain, workspaceUrl } from "../../util/tenant";
 import LandingShell from "../landing/LandingShell";
 import HeroDotField from "../landing/HeroDotField";
 import Turnstile from "../../components/Turnstile";
@@ -85,7 +85,6 @@ const loadDraft = () => {
 const firstError = (value) => String(Array.isArray(value) ? value[0] : value);
 
 const Onboarding = () => {
-  const navigate = useNavigate();
   const c = useTranslation("onboarding");
   const activeLang = store.useState((s) => s.language.active);
   // Workspace language = the landing locale (en/es/fr all accepted, B6/D-10').
@@ -408,6 +407,37 @@ const Onboarding = () => {
     );
   };
 
+  // The wizard is the base-domain index "/", so there is nowhere to navigate to
+  // on finish/close — navigate("/") would just re-enter the wizard on the same
+  // screen (the old "return to landing" exit, now that the landing is off-app).
+  // Reset it in place instead: drop the saved draft and every entered answer,
+  // re-arm the single-use Turnstile, and return to a clean first step.
+  const reset = () => {
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+    } catch (err) {
+      // ignore storage failures
+    }
+    setData({ ...EMPTY });
+    setPassword("");
+    setErrors({});
+    setFormError("");
+    setAvail(null);
+    setCaptchaToken("");
+    setCaptchaNonce((n) => n + 1);
+    setStep(1);
+  };
+
+  // Done: leave the wizard for the workspace just created, rather than looping
+  // back into another sign-up. The tenant exists from the register step, so its
+  // host resolves; the person lands on its login (usable once they activate).
+  // A cross-host jump, so window.location — not the same-host SPA router (mirrors
+  // FindWorkspace.jsx).
+  const goToWorkspace = () => {
+    const sub = data.subdomain.trim().toLowerCase();
+    window.location.href = `${workspaceUrl(sub)}/login`;
+  };
+
   const pct = (displayStep / (totalSteps + 1)) * 100;
   const err = (key) =>
     errors[key] ? (
@@ -423,7 +453,7 @@ const Onboarding = () => {
       : "flex w-full items-center gap-3 rounded-xl border border-brand-border bg-bg-secondary px-4 py-3 text-left text-text-secondary hover:border-brand dark:bg-white/5 dark:text-gray-300";
 
   return (
-    <LandingShell showCta={false}>
+    <LandingShell showCta={false} showLogin>
       <section className="relative flex flex-1 items-center justify-center overflow-hidden bg-brand-deep px-4 py-12 sm:px-6">
         <HeroDotField interactive={false} />
         <div className="relative z-10 w-full max-w-xl rounded-2xl border border-brand-border/50 bg-white p-6 shadow-xl dark:bg-bg-dark sm:p-8">
@@ -437,7 +467,7 @@ const Onboarding = () => {
             <button
               type="button"
               aria-label={c.close}
-              onClick={() => navigate("/")}
+              onClick={reset}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-bg-secondary text-text-muted hover:bg-brand-light hover:text-brand-text dark:bg-white/10"
             >
               ✕
@@ -458,7 +488,7 @@ const Onboarding = () => {
                   <p className="mt-1 text-text-muted dark:text-gray-400">
                     {c.monitorHint}
                   </p>
-                  <div className="mt-5 space-y-3">
+                  <div className="mt-5 flex flex-col gap-3">
                     {categories.map((cat) => (
                       <button
                         key={cat.id}
@@ -502,7 +532,7 @@ const Onboarding = () => {
                     {c.formsHint}
                   </p>
                   {chosenTemplates.length > 0 ? (
-                    <div className="mt-5 space-y-3">
+                    <div className="mt-5 flex flex-col gap-3">
                       {chosenTemplates.map((t) => {
                         const ticked = data.template_ids.includes(t.id);
                         return (
@@ -636,7 +666,7 @@ const Onboarding = () => {
                   <p className="mt-1 text-text-muted dark:text-gray-400">
                     {c.languageHint}
                   </p>
-                  <div className="mt-5 space-y-3">
+                  <div className="mt-5 flex flex-col gap-3">
                     {LANGS.map((l) => (
                       <button
                         key={l.code}
@@ -770,7 +800,7 @@ const Onboarding = () => {
               </p>
               <button
                 type="button"
-                onClick={() => navigate("/")}
+                onClick={goToWorkspace}
                 className="mt-8 rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark"
               >
                 {c.done}

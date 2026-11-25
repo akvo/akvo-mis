@@ -11,7 +11,15 @@
 
 **Task ID**: LP-002
 **Author**: Iwan Firmawan
-**Date**: 2026-11-24 (rev. 6 — a dedicated **language step** (D-4b) raises the
+**Date**: 2026-11-24 (rev. 7 — **the wizard is now the base-domain index (`/`)**,
+not a separate `/onboarding` route: per manager direction the official marketing
+landing moves to the **marcomm team** (off-app), so the in-app `<Landing>` is
+retired from routing and `/` serves the wizard. The bare **`/register` page was
+removed** (the wizard is the only sign-up UI; the `POST /register` API is
+unchanged). All "create a workspace" links and the `?subdomain=` prefill target
+`/` (D-4d). Duplicate-footer fix: `/` is **not** in `App.js` `publicShell` (the
+wizard brings its own `LandingShell`), so header/footer render once —
+`isPublicShell` flags `/`. · rev. 6 — a dedicated **language step** (D-4b) raises the
 input steps to `INPUT_STEPS = 7`; the step machine is now **name-based** (an
 ordered `STEPS` list is the single source of truth — render/validate/navigate
 key off names, the done screen is derived); a returning-user **find-workspace**
@@ -221,6 +229,15 @@ that redirects to a workspace's own host) beneath the step controls on every
 input step. Presentation-only; reuses the existing route. Strings live in the
 `onboarding` i18n namespace (en/es/fr).
 
+**Addendum (2026-11-24): a "Log in" button in the header too.** The returning-user
+path was also given the conventional top-right placement: `LandingHeader` gained a
+`showLogin` prop (default off) that renders an outline-brand **"Log in"** button
+beside the language switch, linking to `/find-workspace` (there is no single
+base-domain login form — `/login` forwards there). The wizard turns it on
+(`<LandingShell showCta={false} showLogin>`); it stays **off** on `/find-workspace`
+itself (self-referential). Label in the `landing` namespace's `nav.login`
+(en/es/fr).
+
 ### D-4b: Workspace language is a dedicated step, defaulted from the header (2026-11-24)
 
 The shared-shell header EN/ES/FR switch always *set* the workspace language (the
@@ -243,6 +260,41 @@ too, so every "create a workspace" path leads to the wizard, not the dense form:
 - `FindWorkspace.jsx` — the "no workspace? create one" link under the lookup.
 - `WorkspaceNotFound.jsx` — the "Create this workspace" button, which also
   **carries the guessed address** as `/onboarding?subdomain=<x>`.
+
+### D-4d: The wizard becomes the base-domain index `/`; landing → marcomm; `/register` page removed (2026-11-24)
+
+**Manager decision**: the official marketing landing moves to the **marcomm team**
+(off-app). So the in-app `<Landing>` is retired from routing and the base-domain
+`/` now serves **the wizard itself** — there is no longer a separate
+`/onboarding` route. The bare **`/register` page was removed**: D-4's "keep the
+dense form as a safety net" rationale no longer holds once the wizard is the sole
+sign-up surface. The **`POST /register` API is unchanged** — the wizard still
+submits to it, and `/register/subdomain`, `/register/form-library`,
+`/register/configure` are untouched.
+
+- **Routing**: `App.js` `/` → `<Onboarding/>` on the base-domain host; the
+  `/onboarding` route and the `Register.jsx` page/route are gone. Every D-4c link
+  and the `?subdomain=` prefill now target **`/`** (e.g. `WorkspaceNotFound` →
+  `/?subdomain=<x>`).
+- **Shell (the duplicate-footer fix)**: the wizard renders its **own**
+  `LandingShell` (header + footer), so `/` must **not** also sit in `App.js`
+  `publicShell` — that branch adds a second `LandingHeader`/`LandingFooter`, and
+  since the header is `position: fixed` the two headers overlapped into one while
+  the two footers stacked visibly. `publicShell` is now **`/find-workspace` only**;
+  `isPublicShell` flags `/` to suppress the workspace shell + auth loader. The
+  wizard's `LandingShell` is the single source of chrome at `/`.
+- **Finish / close**: with `/` now being the wizard, `navigate("/")` just looped
+  back onto the same screen. So the two exits were split by intent:
+  - **Done** (after a successful submit) **redirects to the new workspace's
+    login** — `window.location.href = workspaceUrl(subdomain) + "/login"` (a
+    cross-host jump, mirroring `FindWorkspace.jsx`). The tenant exists from the
+    register step so its host resolves, and the person lands where they'll sign
+    in once they activate — no loop back into another sign-up.
+  - **✕** (cancel mid-flow) **resets the wizard in place** (drop the draft +
+    every answer, re-arm the single-use Turnstile, back to step 1); its
+    aria-label changed from "return to the landing page" to "Start over".
+- The `<Landing>` component and its `landing` i18n namespace stay in the tree
+  (unrouted) as a reference for marcomm; remove once they confirm.
 
 The wizard reads that `?subdomain=` query param on mount and **prefills the
 address step** from it (sanitised like the input, winning over any stale draft),
