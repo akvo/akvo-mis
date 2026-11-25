@@ -4,6 +4,7 @@ import { Row, Col, Form, Input, Button } from "antd";
 import { Link } from "react-router-dom";
 import { baseDomain, workspaceUrl } from "../../util/tenant";
 import { useTranslation } from "../../lib/i18n";
+import AuthShell from "../landing/AuthShell";
 
 // The main site has no workspace, so it cannot sign anyone in — the
 // backend refuses a login here. What it can do is send someone to the
@@ -22,36 +23,38 @@ const FindWorkspace = () => {
   };
 
   return (
-    <div id="login">
-      <Row className="wrapper" align="middle">
-        <Col span={24} className="right-side">
-          <div className="login-form-container">
-            <h1>{c.title}</h1>
-            <p className="disclaimer">{c.subtitle}</p>
-            <Form name="find-workspace" layout="vertical" onFinish={onFinish}>
-              <Form.Item
-                name="subdomain"
-                label={c.addressLabel}
-                rules={[{ required: true, message: c.addressRequired }]}
-              >
-                <Input
-                  placeholder={c.addressPlaceholder}
-                  addonAfter={`.${baseDomain()}`}
-                />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" shape="round" block>
-                  {c.submit}
-                </Button>
-              </Form.Item>
-              <p className="disclaimer">
-                {c.noWorkspace} <Link to="/">{c.create}</Link>
-              </p>
-            </Form>
-          </div>
-        </Col>
-      </Row>
-    </div>
+    <AuthShell>
+      <div id="login">
+        <Row className="wrapper" align="middle">
+          <Col span={24} className="right-side">
+            <div className="login-form-container">
+              <h1>{c.title}</h1>
+              <p className="disclaimer">{c.subtitle}</p>
+              <Form name="find-workspace" layout="vertical" onFinish={onFinish}>
+                <Form.Item
+                  name="subdomain"
+                  label={c.addressLabel}
+                  rules={[{ required: true, message: c.addressRequired }]}
+                >
+                  <Input
+                    placeholder={c.addressPlaceholder}
+                    addonAfter={`.${baseDomain()}`}
+                  />
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" shape="round" block>
+                    {c.submit}
+                  </Button>
+                </Form.Item>
+                <p className="disclaimer">
+                  {c.noWorkspace} <Link to="/">{c.create}</Link>
+                </p>
+              </Form>
+            </div>
+          </Col>
+        </Row>
+      </div>
+    </AuthShell>
   );
 };
 

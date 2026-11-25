@@ -2,6 +2,7 @@ import React from "react";
 import "../login/style.scss";
 import { Row, Col, Button, Typography } from "antd";
 import { baseDomainUrl } from "../../util/tenant";
+import AuthShell from "../landing/AuthShell";
 
 const { Title, Text } = Typography;
 
@@ -16,43 +17,48 @@ const { Title, Text } = Typography;
 const WorkspaceNotFound = () => {
   const requested = window.location.hostname.split(".")[0];
   return (
-    <div id="login">
-      <Row className="wrapper" align="middle">
-        <Col span={24} className="right-side">
-          <div className="login-form-container" style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 46, lineHeight: 1 }}>🧭</div>
-            <Title level={2} style={{ marginTop: 12 }}>
-              No workspace here
-            </Title>
-            <Text type="secondary">
-              Nothing is set up at <strong>{window.location.hostname}</strong>.
-              Check the address for a typo, or create this workspace.
-            </Text>
-            <div style={{ marginTop: 24 }}>
-              <Button
-                type="primary"
-                shape="round"
-                block
-                href={baseDomainUrl("/find-workspace")}
-              >
-                Try another address
-              </Button>
+    <AuthShell>
+      <div id="login">
+        <Row className="wrapper" align="middle">
+          <Col span={24} className="right-side">
+            <div
+              className="login-form-container"
+              style={{ textAlign: "center" }}
+            >
+              <div style={{ fontSize: 46, lineHeight: 1 }}>🧭</div>
+              <Title level={2} style={{ marginTop: 12 }}>
+                No workspace here
+              </Title>
+              <Text type="secondary">
+                Nothing is set up at <strong>{window.location.hostname}</strong>
+                . Check the address for a typo, or create this workspace.
+              </Text>
+              <div style={{ marginTop: 24 }}>
+                <Button
+                  type="primary"
+                  shape="round"
+                  block
+                  href={baseDomainUrl("/find-workspace")}
+                >
+                  Try another address
+                </Button>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <Button
+                  shape="round"
+                  block
+                  href={baseDomainUrl(
+                    `/?subdomain=${encodeURIComponent(requested)}`
+                  )}
+                >
+                  Create this workspace
+                </Button>
+              </div>
             </div>
-            <div style={{ marginTop: 12 }}>
-              <Button
-                shape="round"
-                block
-                href={baseDomainUrl(
-                  `/?subdomain=${encodeURIComponent(requested)}`
-                )}
-              >
-                Create this workspace
-              </Button>
-            </div>
-          </div>
-        </Col>
-      </Row>
-    </div>
+          </Col>
+        </Row>
+      </div>
+    </AuthShell>
   );
 };
 

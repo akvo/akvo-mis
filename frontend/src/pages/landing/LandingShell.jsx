@@ -1,6 +1,5 @@
 import PropTypes from "prop-types";
 import LandingHeader from "./LandingHeader";
-import LandingFooter from "./LandingFooter";
 import "./landing.css";
 
 // Shared public shell for the landing surface (LP-002 D-5): the scoped #landing
@@ -14,7 +13,6 @@ const LandingShell = ({ children, showCta = true, showLogin = false }) => (
     <div className="flex min-h-screen flex-col font-sans text-text-secondary antialiased dark:bg-bg-dark dark:text-gray-300">
       <LandingHeader showCta={showCta} showLogin={showLogin} />
       <main className="flex flex-1 flex-col pt-[70px]">{children}</main>
-      <LandingFooter />
     </div>
   </div>
 );

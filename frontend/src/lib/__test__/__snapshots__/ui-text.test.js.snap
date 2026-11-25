@@ -623,7 +623,7 @@ Object {
     "finish": "Finish",
     "finishSubmissionBatchBtn": "Finish and Go to Batch",
     "finishSubmissionBtn": "Finish and Go to Manage Data",
-    "forgotDesc": "Enter the email associated with your account and we&apos;ll Send an email with instructions to reset your password",
+    "forgotDesc": "Enter the email associated with your account and we'll send an email with instructions to reset your password",
     "forgotTitle": "Reset your password",
     "formAccess": "Form Access",
     "formAssignmentError": "You don't have any form assignment, please contact the administrator",

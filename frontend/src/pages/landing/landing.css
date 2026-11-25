@@ -53,6 +53,8 @@
    it matches the app's own `#root .layout .body` specificity.) */
 #root .layout .body.body-home {
   padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* MIS's Home styles give the page wrapper a navy background; the landing
