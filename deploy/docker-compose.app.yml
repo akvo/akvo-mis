@@ -75,18 +75,6 @@ services:
     depends_on:
       - backend
 
-  backend-cron:
-    container_name: backend-cron
-    build:
-      context: ../backend
-      dockerfile: Dockerfile.cron
-    env_file: "./app.env"
-    restart: unless-stopped
-    working_dir: /app
-    volumes:
-      - akvo-mis-data:/app/storage
-    network_mode: service:mainnetwork
-
 volumes:
   akvo-mis-data:
   traefik-certificates:

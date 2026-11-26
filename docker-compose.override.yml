@@ -18,7 +18,6 @@ services:
       - ${STORAGE_PATH}/datapoints:/app/public/datapoints:delegated
       - ${STORAGE_PATH}/apk:/app/public/apk:delegated
       - ${STORAGE_PATH}/master_data:/app/public/master_data:delegated
-      - ${STORAGE_PATH}/cronjob_results:/app/public/cronjob_results:delegated
     environment:
       - APP_NAME=$APP_NAME
       - APP_SHORT_NAME=$APP_SHORT_NAME
