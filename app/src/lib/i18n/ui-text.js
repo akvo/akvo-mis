@@ -238,7 +238,7 @@ const uiText = {
     viewDetails: 'View details',
     monitoringForms: 'Monitoring Forms',
     aboutAppDescription:
-      'Akvo MIS helps teams collect, sync and monitor field data, online or offline.',
+      'AIMS helps teams collect, sync and monitor field data, online or offline.',
     appVersionLabel: 'App Version',
     emptySubmissionMessageInfo: 'No data collected yet',
     emptySubmissionMessageAction: 'Click New Submission to begin',
@@ -516,7 +516,7 @@ const uiText = {
     monitoringForms: 'Formulaires de surveillance',
     about: 'À propos',
     aboutAppDescription:
-      'Akvo MIS aide les équipes à collecter, synchroniser et suivre les données de terrain, en ligne ou hors ligne.',
+      'AIMS aide les équipes à collecter, synchroniser et suivre les données de terrain, en ligne ou hors ligne.',
     appVersionLabel: 'Version de l’application',
     emptySubmissionMessageInfo: 'Aucune donnée collectée pour le moment',
     emptySubmissionMessageAction: 'Cliquez sur Nouvelle soumission pour commencer',

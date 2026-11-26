@@ -34,7 +34,7 @@ const ControlCenter = () => {
 
         <div className="profile-container">
           <h2>
-            {window?.appConfig?.name || "Akvo MIS"} {text.controlCenter}
+            {window?.appConfig?.name || "AIMS"} {text.controlCenter}
           </h2>
           <div className="profle-wrapper">
             <div>

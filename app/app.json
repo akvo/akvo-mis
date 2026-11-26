@@ -1,7 +1,7 @@
 {
   "expo": {
     "newArchEnabled": true,
-    "name": "Akvo MIS",
+    "name": "AIMS",
     "slug": "akvo-mis-mobile",
     "version": "5.0.1",
     "orientation": "portrait",
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.akvo.akvo_mis",
+      "package": "com.akvo.aims",
       "versionCode": 5001
     },
     "web": {
@@ -64,8 +64,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Akvo MIS saves a copy of each photo you take to your gallery, so it can be recovered if the app loses it.",
-          "savePhotosPermission": "Akvo MIS saves a copy of each photo you take to your gallery.",
+          "photosPermission": "AIMS saves a copy of each photo you take to your gallery, so it can be recovered if the app loses it.",
+          "savePhotosPermission": "AIMS saves a copy of each photo you take to your gallery.",
           "isAccessMediaLocationEnabled": false
         }
       ],

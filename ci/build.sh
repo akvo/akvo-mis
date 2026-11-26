@@ -60,6 +60,7 @@ dci() {
 
 documentation_build() {
     docker run -i --rm -v "$(pwd)/docs:/docs" \
+        -e APP_NAME="${APP_NAME:-AIMS}" \
         akvo/akvo-sphinx:20220525.082728.594558b make html
     cp -r docs/build/html frontend/public/documentation
 }

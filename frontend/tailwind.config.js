@@ -14,7 +14,10 @@ module.exports = {
   ],
   important: "#landing",
   corePlugins: { preflight: false },
-  darkMode: "media",
+  // Light only: "class" means `dark:` utilities apply solely under a `.dark`
+  // ancestor, which nothing adds — so the OS dark preference is ignored and
+  // the public pages always render light. (Was "media", which followed the OS.)
+  darkMode: "class",
   theme: {
     extend: {
       colors: {

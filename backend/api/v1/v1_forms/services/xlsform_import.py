@@ -41,7 +41,7 @@ _LOCALE_CODES_VALID_TAGS: frozenset = frozenset((
     "yav", "yo", "zgh", "zh", "zu",
 ))
 
-# Supported XLSForm types for Akvo MIS
+# Supported XLSForm types for AIMS
 _SUPPORTED_BASE_TYPES = {
     "text",
     "integer",
@@ -526,7 +526,7 @@ def _get_cell_value(
 
 
 def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
-    """Parse an XLSForm (.xlsx) workbook into Akvo MIS form representation.
+    """Parse an XLSForm (.xlsx) workbook into AIMS form representation.
 
     Parameters:
       file_or_stream: File object, bytes, or file path to .xlsx workbook.
@@ -647,7 +647,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                     "path": "settings",
                     "message": (
                         f"Language tag '{iso}' is not recognised by the"
-                        " Akvo MIS form viewer (locale-codes). Translations"
+                        " AIMS form viewer (locale-codes). Translations"
                         " for this language will be skipped. Check the"
                         f" XLSForm column header (e.g. 'label::{iso}')"
                         " and use a valid BCP-47 tag (e.g. 'nso' not 'ns')."
@@ -795,7 +795,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                         "path": f"row:{row_idx}",
                         "message": (
                             f"Repeat group '{q_name}' uses dynamic "
-                            f"repeat_count '{repeat_count_val}'. In Akvo MIS, "
+                            f"repeat_count '{repeat_count_val}'. In AIMS, "
                             "repeatable groups allow manual entry "
                             "('Add another') without a fixed programmatic "
                             "count."
@@ -820,7 +820,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                         "message": (
                             f"Group '{q_name}' has a 'relevant' condition "
                             f"('{grp_relevant}'). Group-level relevance is "
-                            "not natively supported in Akvo MIS; please "
+                            "not natively supported in AIMS; please "
                             "configure dependencies on individual questions "
                             "in the Form Editor."
                         ),
@@ -923,7 +923,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
             msg = f"Calculated field '{q_name}' (type: calculate"
             if calc_expr:
                 msg += f", calculation: '{calc_expr}'"
-            msg += ") is not supported in Akvo MIS — skipped"
+            msg += ") is not supported in AIMS — skipped"
             warn_obj = {
                 "path": f"row:{row_idx}",
                 "message": msg,
@@ -991,7 +991,7 @@ def parse_xlsform(file_or_stream: Any) -> Dict[str, Any]:
                     "path": f"row:{row_idx}",
                     "message": (
                         f"Question '{q_name}' has calculation '{calc_expr}'. "
-                        "Dynamic calculations are not evaluated in Akvo MIS."
+                        "Dynamic calculations are not evaluated in AIMS."
                     ),
                     "level": "warning",
                 }

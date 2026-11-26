@@ -80,12 +80,12 @@ One registration, many monitoring visits.
 Downloading and installing the app
 -----------------------------------
 
-The Akvo MIS mobile app is designed for Android devices (there is no iOS version). It is **not** distributed through the Google Play Store or Apple App Store. Instead, you download the installer package (``.apk``) directly from your MIS server.
+The |app_name| mobile app is designed for Android devices (there is no iOS version). It is **not** distributed through the Google Play Store or Apple App Store. Instead, you download the installer package (``.apk``) directly from your MIS server.
 
 There are two ways to get the app:
 
 **Method 1: From the Web Platform (Logged-in Users)**
-1. In the left navigation sidebar of the Akvo MIS web interface (at the bottom near Documentation), click **Download App** (Android icon).
+1. In the left navigation sidebar of the |app_name| web interface (at the bottom near Documentation), click **Download App** (Android icon).
 2. A popup modal will appear displaying:
 
    - A **QR Code** that you can scan directly using your phone's camera.

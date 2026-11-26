@@ -64,7 +64,7 @@ const merge = (base, override) => {
 };
 
 // Replace the {brand} token everywhere with the app-wide name (one knob for a
-// future rebrand); default to "Akvo MIS" if config has not loaded.
+// future rebrand); default to "AIMS" if config has not loaded.
 const applyBrand = (node, brand) => {
   if (typeof node === "string") {
     return node.split("{brand}").join(brand);
@@ -84,7 +84,7 @@ const applyBrand = (node, brand) => {
 
 // Read window live so a config.js that loads after this module (or a test
 // that sets window.appConfig) is reflected; appName is captured at import.
-export const brandName = () => window?.appConfig?.name || "Akvo MIS";
+export const brandName = () => window?.appConfig?.name || "AIMS";
 
 // Merge one namespace of the active locale over English and substitute {brand}.
 export const getContent = (namespace, code) => {

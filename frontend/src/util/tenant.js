@@ -113,7 +113,7 @@ export const fetchTenant = () =>
           ? rawTitle
           : `${rawTitle} MIS`;
       } else {
-        document.title = "Akvo MIS";
+        document.title = "AIMS";
       }
       return tenant;
     });
