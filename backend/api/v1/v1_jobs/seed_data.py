@@ -287,7 +287,15 @@ def save_data(
     if parent_id and not data_id:
         parent = FormData.objects.filter(pk=parent_id).first()
     if parent is None:
-        parent = FormData.objects.filter(uuid=data_uuid).first()
+        # Resolve the registration (parent-less) datapoint that shares this
+        # uuid. Monitoring children share their registration parent's uuid, so
+        # an unfiltered .first() could return a sibling child instead — on the
+        # non-superadmin edit path that sibling would become the new row's
+        # parent. parent__isnull=True pins it to the registration (JOB-580
+        # review).
+        parent = FormData.objects.filter(
+            uuid=data_uuid, parent__isnull=True
+        ).first()
     elif not data_id:
         # Inherit identity from the registration parent.
         data_uuid = parent.uuid
