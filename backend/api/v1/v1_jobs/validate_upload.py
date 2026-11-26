@@ -9,6 +9,7 @@ from api.v1.v1_data.models import FormData
 from api.v1.v1_forms.constants import QuestionTypes
 from api.v1.v1_forms.models import Questions, Forms
 from api.v1.v1_jobs.functions import ValidationText, HText
+from api.v1.v1_jobs.seed_data import get_decendants
 from api.v1.v1_profile.models import Administration
 
 
@@ -294,13 +295,18 @@ def validate_data_id(col, data_id, collect_data_ids=[]):
     return False
 
 
-def validate_parent_id(col, parent_id, parent_form_id, data_id=None):
+def validate_parent_id(col, parent_id, parent_form_id, data_id=None,
+                       subtree=None):
     # Monitoring rows link to their registration parent by parent_id. On a new
     # row (no data_id) the parent is required and must be a datapoint of the
     # parent form. Filtering on form_id=parent_form_id also enforces tenant
     # isolation: the parent form belongs to the uploading tenant, and this
     # check does not rely on the TenantManager thread-local (unset in the
-    # async worker). See JOB-580.
+    # async worker). `subtree` restricts the parent to the uploader's own
+    # administration subtree: save_data inherits the parent's administration
+    # and drops the row when it falls outside that subtree, so without this a
+    # cross-subtree parent_id passes validation and the row then vanishes
+    # silently. See JOB-580.
     default = {"error": ExcelError.value, "cell": col}
     if data_id:
         # Editing an existing row; parent is fixed at creation.
@@ -314,9 +320,10 @@ def validate_parent_id(col, parent_id, parent_form_id, data_id=None):
         pid = int(parent_id)
     except (ValueError, TypeError):
         pid = None
-    exists = pid is not None and FormData.objects.filter(
-        id=pid, form_id=parent_form_id
-    ).exists()
+    parent_qs = FormData.objects.filter(id=pid, form_id=parent_form_id)
+    if subtree is not None:
+        parent_qs = parent_qs.filter(administration_id__in=subtree)
+    exists = pid is not None and parent_qs.exists()
     if not exists:
         msg = ValidationText.invalid_parent_id.value.replace(
             "--parent_id--", str(parent_id)
@@ -363,8 +370,10 @@ def validate(form: int, administration: int, file: str):
     header_error = []
     data_error = []
 
-    adm = Administration.objects.get(id=administration)
-    adm = {"id": adm.id, "name": adm.name, "tenant_id": adm.tenant_id}
+    adm_obj = Administration.objects.get(id=administration)
+    adm = {
+        "id": adm_obj.id, "name": adm_obj.name, "tenant_id": adm_obj.tenant_id
+    }
     for col in excel_head:
         header = excel_head[col]
         errors = None
@@ -432,22 +441,27 @@ def validate(form: int, administration: int, file: str):
                 list(df["data_id"]) if "data_id" in list(df)
                 else [None] * len(parent_ids)
             )
+            # Restrict parents to the uploader's own administration subtree:
+            # save_data inherits the parent's administration and drops rows
+            # outside this subtree, so a cross-subtree parent_id would pass
+            # validation and then vanish silently (JOB-580 review).
+            subtree = get_decendants(adm_obj)
             for i, pid in enumerate(parent_ids):
                 ix = i + 2
                 pid = None if pd.isnull(pid) else pid
                 did = data_ids[i]
                 did = None if pd.isnull(did) else did
                 errors = validate_parent_id(
-                    f"{parent_col}{ix}", pid, parent_form_id, did
+                    f"{parent_col}{ix}", pid, parent_form_id, did, subtree
                 )
                 if errors:
                     data_error.append(errors)
     elif form_obj and questions.filter(type=QuestionTypes.geo).exists():
         # Registration (parent-less) forms with a geo question: the datapoint
         # geolocation cannot be edited in the platform after insert, so it is
-        # required on every row. Monitoring child forms are exempt (handled by
-        # the `if parent_form_id` branch above) — they inherit geo from their
-        # registration parent (JOB-580).
+        # required on every NEW row. Monitoring child forms are exempt
+        # (handled by the `if parent_form_id` branch above) — they inherit geo
+        # from their registration parent (JOB-580).
         if "geolocation" not in list(df):
             header_error.append({
                 "error": ExcelError.header,
@@ -458,14 +472,25 @@ def validate(form: int, administration: int, file: str):
             geo_col = next(
                 c for c, h in excel_head.items() if h == "geolocation"
             )
+            geo_data_ids = (
+                list(df["data_id"]) if "data_id" in list(df)
+                else [None] * df.shape[0]
+            )
             for i, g in enumerate(list(df["geolocation"])):
                 ix = i + 2
+                did = geo_data_ids[i]
+                did = None if pd.isnull(did) else did
                 if pd.isnull(g) or not str(g).strip():
-                    data_error.append({
-                        "error": ExcelError.value,
-                        "cell": f"{geo_col}{ix}",
-                        "error_message": ValidationText.geo_required.value,
-                    })
+                    # Only require geo on new rows. Edit rows (data_id set) may
+                    # legitimately carry a blank geo exported from a datapoint
+                    # that never had one, and rejecting them would block
+                    # "Update Existing" re-uploads (JOB-580 review).
+                    if did is None:
+                        data_error.append({
+                            "error": ExcelError.value,
+                            "cell": f"{geo_col}{ix}",
+                            "error_message": ValidationText.geo_required.value,
+                        })
                     continue
                 err = validate_geo(g)
                 if err:

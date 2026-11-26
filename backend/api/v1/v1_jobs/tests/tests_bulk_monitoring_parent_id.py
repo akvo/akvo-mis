@@ -150,6 +150,29 @@ class BulkMonitoringParentIdTestCase(TestCase, ProfileTestHelperMixin):
         )
         self.assertEqual(len(errors), 0)
 
+    def test_validate_parent_outside_uploader_subtree_errors(self):
+        # JOB-580 review: a parent_id whose datapoint is outside the uploader's
+        # administration subtree must be rejected at validation. save_data
+        # inherits the parent's administration and drops rows outside the
+        # subtree, so without this check the row passes validation then
+        # vanishes silently. Uploader scoped at Cawang (leaf); parent sits at
+        # its ancestor East Jakarta, which is not in Cawang's descendants.
+        ancestor = Administration.objects.get(name="East Jakarta")
+        outside_parent = FormData.objects.create(
+            name="Outside subtree",
+            form=self.form,
+            administration=ancestor,
+            created_by=self.user,
+        )
+        path = self._write_sheet([self._row(outside_parent.id)])
+        errors = validate(
+            form=self.child_form.id,
+            administration=self.administration.id,
+            file=path,
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn(str(outside_parent.id), errors[0]["error_message"])
+
     def test_validate_registration_form_unaffected(self):
         # Parent (registration) form has no parent → parent_id not required.
         path = self._write_sheet([{
@@ -211,6 +234,32 @@ class BulkMonitoringParentIdTestCase(TestCase, ProfileTestHelperMixin):
             any(e.get("error_message") == required for e in errors)
         )
 
+    def test_validate_registration_edit_row_blank_geo_ok(self):
+        # JOB-580 review: geo is required only on NEW rows. An edit row
+        # (data_id set) with a blank geolocation must pass — the datapoint may
+        # never have had a geo, and rejecting it would block "Update Existing".
+        self._add_geo_question(self.form, "gps")
+        existing = FormData.objects.create(
+            name="Existing",
+            form=self.form,
+            administration=self.administration,
+            created_by=self.user,
+        )
+        path = self._write_sheet([{
+            "id": existing.id,
+            "administration": "Indonesia|Jakarta",
+            "geolocation": None,
+        }])
+        errors = validate(
+            form=self.form.id,
+            administration=self.administration.id,
+            file=path,
+        )
+        required = ValidationText.geo_required.value
+        self.assertFalse(
+            any(e.get("error_message") == required for e in errors)
+        )
+
     def test_validate_monitoring_geolocation_not_required(self):
         # Child (monitoring) forms inherit geo from their parent, so a blank
         # geolocation must NOT trigger geo_required even if the form has a geo
@@ -243,13 +292,18 @@ class BulkMonitoringParentIdTestCase(TestCase, ProfileTestHelperMixin):
         )
         return seed_excel_data(job=job, test=True)
 
-    def test_get_administration_skipped_level_no_crash(self):
+    def test_get_administration_unresolvable_level_returns_none(self):
         # Regression (JOB-580): a name path whose middle level does not exist
-        # used to index adm_list by split position and raise IndexError,
-        # crashing the whole bulk seed. It must resolve as far as it can.
-        result = get_administration("Indonesia|DoesNotExist|AlsoNope")
-        self.assertIsNotNone(result)
-        self.assertEqual(result.name, "Indonesia")
+        # must reject the whole path (return None), not fall back to the
+        # deepest resolved ancestor — misfiling a datapoint under an ancestor
+        # is worse than rejecting the row. It must also never raise IndexError.
+        self.assertIsNone(
+            get_administration("Indonesia|DoesNotExist|AlsoNope")
+        )
+        # A fully-resolvable path still returns its deepest node.
+        self.assertEqual(
+            get_administration("Indonesia|Jakarta").name, "Jakarta"
+        )
 
     def test_validate_administration_unresolvable_level_no_crash(self):
         # Regression (JOB-580): validate_administration resolved the cascade

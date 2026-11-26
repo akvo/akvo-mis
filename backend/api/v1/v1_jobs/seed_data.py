@@ -49,15 +49,16 @@ def get_geo_value(aw):
 
 
 def get_administration(aw: str, tenant_id=None) -> Administration:
-    # Resolve an "A|B|C" name path to the deepest administration. The first
+    # Resolve an "A|B|C" name path to its deepest administration. The first
     # level is scoped to the form's tenant: in the async worker there is no
     # request context, so a bare name lookup can match another tenant's root
     # (e.g. several tenants named "Indonesia") and derail the whole chain
-    # (JOB-580). Each deeper level is chained from the LAST resolved parent,
-    # not the split index, so a skipped level cannot overrun adm_list.
+    # (JOB-580). A level that does not resolve rejects the WHOLE path
+    # (return None): falling back to the deepest ancestor would misfile the
+    # datapoint under that ancestor (e.g. a typo'd leaf saving the row one
+    # level up), which is worse than rejecting it.
     adms = aw.split("|")
     adm_list = []
-    adm = None
     for name in adms:
         if adm_list:
             find_adm = Administration.objects.filter(
@@ -68,11 +69,10 @@ def get_administration(aw: str, tenant_id=None) -> Administration:
             if tenant_id is not None:
                 root_qs = root_qs.filter(tenant_id=tenant_id)
             find_adm = root_qs.first()
-        if find_adm:
-            adm_list.append(find_adm)
-    if adm_list:
-        adm = adm_list[-1]
-    return adm
+        if not find_adm:
+            return None
+        adm_list.append(find_adm)
+    return adm_list[-1] if adm_list else None
 
 
 def collect_answers(user: SystemUser, dp: dict, qs: dict, data_id,
@@ -255,15 +255,14 @@ def save_data(
     qs: dict,
     form_id: int,
     batch: DataBatch = None,
+    form_tenant_id=None,
 ):
+    # form_tenant_id scopes administration-name resolution and the submitter's
+    # subtree in the async worker, which has no request context and therefore
+    # no tenant-filtered managers (JOB-580). It is the same for every row in a
+    # job, so seed_excel_data looks it up once and passes it in.
     is_super_admin = user.is_superuser
     data_id = None if pd.isnull(dp["data_id"]) else dp["data_id"]
-    # Form's tenant: used to scope administration-name resolution and the
-    # submitter's subtree in the async worker, which has no request context
-    # and therefore no tenant-filtered managers (JOB-580).
-    form_tenant_id = Forms.objects.filter(pk=form_id).values_list(
-        "tenant_id", flat=True
-    ).first()
     temp = collect_answers(
         user=user, dp=dp, qs=qs, data_id=data_id, tenant_id=form_tenant_id
     )
@@ -407,6 +406,9 @@ def seed_excel_data(job: Jobs, test: bool = False):
     questions = {}
     columns = {}
     form_id = job.info.get("form")
+    form_tenant_id = Forms.objects.filter(pk=form_id).values_list(
+        "tenant_id", flat=True
+    ).first()
     for q in list(df):
         question = Questions.objects.filter(name=q, form_id=form_id).first()
         if question:
@@ -431,6 +433,7 @@ def seed_excel_data(job: Jobs, test: bool = False):
             qs=questions,
             form_id=form_id,
             batch=batch,
+            form_tenant_id=form_tenant_id,
         )
         answer_count = data.data_answer.count() if data else 0
         if answer_count:
