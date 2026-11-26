@@ -19,228 +19,6 @@ exports[`FormPage component should render component correctly 1`] = `
 >
   <View
     style={
-      {
-        "alignItems": "center",
-        "backgroundColor": "#FFFFFF",
-        "borderBottomColor": "#f2f2f2",
-        "borderBottomWidth": 0,
-        "flexDirection": "row",
-        "justifyContent": "space-between",
-        "minHeight": 78,
-        "paddingHorizontal": 10,
-        "paddingVertical": 10,
-      }
-    }
-    testID="base-layout-page-title"
-  >
-    <RNCSafeAreaView
-      edges={
-        {
-          "bottom": "off",
-          "left": "additive",
-          "right": "additive",
-          "top": "additive",
-        }
-      }
-      style={
-        {
-          "flexDirection": "row",
-          "width": "100%",
-        }
-      }
-    >
-      <View
-        style={
-          {
-            "alignItems": "flex-start",
-            "flex": 1,
-            "justifyContent": "center",
-          }
-        }
-      >
-        <View
-          style={
-            [
-              {
-                "overflow": "hidden",
-              },
-              {
-                "borderRadius": 2,
-              },
-              undefined,
-              false,
-            ]
-          }
-          testID="RNE_BUTTON_WRAPPER"
-        >
-          <View
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": false,
-                "checked": undefined,
-                "disabled": false,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onClick={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "opacity": 1,
-              }
-            }
-            testID="arrow-back-button"
-          >
-            <View
-              style={
-                {
-                  "alignItems": "center",
-                  "backgroundColor": "transparent",
-                  "borderColor": "#2089dc",
-                  "borderRadius": 2,
-                  "borderWidth": 0,
-                  "flexDirection": "row",
-                  "justifyContent": "center",
-                  "padding": 8,
-                  "paddingHorizontal": 10,
-                }
-              }
-            >
-              <Text />
-            </View>
-          </View>
-        </View>
-      </View>
-      <View
-        style={
-          {
-            "alignItems": "center",
-            "flex": 2,
-            "justifyContent": "center",
-          }
-        }
-      >
-        <Text
-          accessibilityRole="text"
-          style={
-            {
-              "color": "#020617",
-              "fontSize": 18,
-              "textAlign": "left",
-            }
-          }
-          testID="page-title"
-        >
-          New Submission
-        </Text>
-      </View>
-      <View
-        style={
-          {
-            "alignItems": "flex-end",
-            "flex": 1,
-            "justifyContent": "center",
-          }
-        }
-      >
-        <View
-          collapsable={false}
-          testID="save-dropdown-menu"
-        >
-          <View
-            style={
-              [
-                {
-                  "overflow": "hidden",
-                },
-                {
-                  "borderRadius": 2,
-                },
-                undefined,
-                false,
-              ]
-            }
-            testID="RNE_BUTTON_WRAPPER"
-          >
-            <View
-              accessibilityRole="button"
-              accessibilityState={
-                {
-                  "busy": false,
-                  "checked": undefined,
-                  "disabled": false,
-                  "expanded": undefined,
-                  "selected": undefined,
-                }
-              }
-              accessibilityValue={
-                {
-                  "max": undefined,
-                  "min": undefined,
-                  "now": undefined,
-                  "text": undefined,
-                }
-              }
-              accessible={true}
-              collapsable={false}
-              focusable={true}
-              onClick={[Function]}
-              onResponderGrant={[Function]}
-              onResponderMove={[Function]}
-              onResponderRelease={[Function]}
-              onResponderTerminate={[Function]}
-              onResponderTerminationRequest={[Function]}
-              onStartShouldSetResponder={[Function]}
-              style={
-                {
-                  "opacity": 1,
-                }
-              }
-              testID="form-page-kebab-menu"
-            >
-              <View
-                style={
-                  {
-                    "alignItems": "center",
-                    "backgroundColor": "transparent",
-                    "borderColor": "#2089dc",
-                    "borderRadius": 2,
-                    "borderWidth": 0,
-                    "flexDirection": "row",
-                    "justifyContent": "center",
-                    "padding": 8,
-                    "paddingHorizontal": 10,
-                  }
-                }
-              >
-                <Text />
-              </View>
-            </View>
-          </View>
-        </View>
-      </View>
-    </RNCSafeAreaView>
-  </View>
-  <View
-    style={
       [
         {
           "borderBottomLeftRadius": 24,
@@ -258,35 +36,69 @@ exports[`FormPage component should render component correctly 1`] = `
     }
   >
     <Text
+      numberOfLines={2}
       style={
         [
           {
-            "fontSize": 24,
+            "fontSize": 15,
             "fontWeight": "400",
-          },
-          {
-            "color": "#020617",
-          },
-        ]
-      }
-    />
-    <Text
-      style={
-        [
-          {
-            "fontSize": 14,
-            "fontWeight": "400",
-            "marginTop": 4,
+            "lineHeight": 22,
           },
           {
             "color": "#333333",
           },
         ]
       }
+    />
+    <View
+      style={
+        [
+          {
+            "borderRadius": 14,
+            "justifyContent": "center",
+            "marginTop": 8,
+            "minHeight": 56,
+            "paddingHorizontal": 14,
+            "paddingVertical": 8,
+          },
+          {
+            "backgroundColor": "#EAEAEA",
+          },
+        ]
+      }
     >
-      Step 1 of 2
-       — Registration
-    </Text>
+      <Text
+        style={
+          [
+            {
+              "fontSize": 13,
+            },
+            {
+              "color": "#333333",
+            },
+          ]
+        }
+      >
+        Step 1 of 1
+      </Text>
+      <Text
+        numberOfLines={2}
+        style={
+          [
+            {
+              "fontSize": 17,
+              "fontWeight": "700",
+              "lineHeight": 22,
+            },
+            {
+              "color": "#020617",
+            },
+          ]
+        }
+      >
+        Registration
+      </Text>
+    </View>
   </View>
   <View
     style={
@@ -1067,6 +879,7 @@ exports[`FormPage component should render component correctly 1`] = `
                       </Text>
                     </View>
                     <View
+                      accessibilityRole="radiogroup"
                       style={
                         [
                           {
@@ -1082,10 +895,11 @@ exports[`FormPage component should render component correctly 1`] = `
                       }
                     >
                       <View
+                        accessibilityRole="radio"
                         accessibilityState={
                           {
                             "busy": undefined,
-                            "checked": undefined,
+                            "checked": false,
                             "disabled": false,
                             "expanded": undefined,
                             "selected": undefined,
@@ -1138,10 +952,11 @@ exports[`FormPage component should render component correctly 1`] = `
                         </Text>
                       </View>
                       <View
+                        accessibilityRole="radio"
                         accessibilityState={
                           {
                             "busy": undefined,
-                            "checked": undefined,
+                            "checked": false,
                             "disabled": false,
                             "expanded": undefined,
                             "selected": undefined,
@@ -1722,6 +1537,74 @@ exports[`FormPage component should render component correctly 1`] = `
       >
         Back
       </Text>
+    </View>
+    <View
+      style={
+        {
+          "flexShrink": 0,
+          "width": 68,
+        }
+      }
+    />
+    <View
+      pointerEvents="box-none"
+      style={
+        {
+          "alignItems": "center",
+          "left": 0,
+          "position": "absolute",
+          "right": 0,
+          "top": -24,
+        }
+      }
+    >
+      <View
+        accessibilityLabel="Question groups"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": false,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onClick={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "alignItems": "center",
+            "backgroundColor": "#EAEAEA",
+            "borderColor": "#FFFFFF",
+            "borderRadius": 32,
+            "borderWidth": 6,
+            "elevation": 6,
+            "height": 64,
+            "justifyContent": "center",
+            "opacity": 1,
+            "width": 64,
+          }
+        }
+        testID="form-nav-btn-groups"
+      >
+        <Text />
+      </View>
     </View>
     <View
       accessibilityState={

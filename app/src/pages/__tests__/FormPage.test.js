@@ -221,7 +221,8 @@ describe('FormPage component', () => {
   test('should render the FormPage with the correct form title and questions', async () => {
     const wrapper = render(<FormPage navigation={mockNavigation} route={mockRoute} />);
     await waitFor(() => {
-      expect(wrapper.getByText('Form Name')).toBeDefined();
+      // Form name now shows both as the header title and in the breadcrumb path.
+      expect(wrapper.getAllByText('Form Name').length).toBeGreaterThanOrEqual(1);
       expect(wrapper.queryByText('Your Name')).toBeDefined();
     });
   });
