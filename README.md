@@ -1,4 +1,4 @@
-# Akvo MIS
+# AIMS
 
 [![Build Status](https://github.com/akvo/akvo-mis/actions/workflows/main.yml/badge.svg)](https://github.com/akvo/akvo-mis/actions/workflows/main.yml?query=branch%3Amain) [![Build Status](https://github.com/akvo/akvo-mis/actions/workflows/apk-release.yml/badge.svg)](https://github.com/akvo/akvo-mis/actions/workflows/apk-release.yml?query=branch%3Amain) [![Repo Size](https://img.shields.io/github/repo-size/akvo/akvo-mis)](https://img.shields.io/github/repo-size/akvo/akvo-mis) [![Languages](https://img.shields.io/github/languages/count/akvo/akvo-mis)](https://img.shields.io/github/languages/count/akvo/akvo-mis) [![Issues](https://img.shields.io/github/issues/akvo/akvo-mis)](https://img.shields.io/github/issues/akvo/akvo-mis) [![Last Commit](https://img.shields.io/github/last-commit/akvo/akvo-mis/main)](https://img.shields.io/github/last-commit/akvo/akvo-mis/main) [![Coverage Status](https://coveralls.io/repos/github/akvo/akvo-mis/badge.svg)](https://coveralls.io/github/akvo/akvo-mis) [![Coverage Status](https://img.shields.io/readthedocs/akvo-mis?label=read%20the%20docs)](https://akvo-mis.readthedocs.io/en/latest)
 
@@ -20,7 +20,7 @@ Copy `env.example` to create a `.env` file. Here’s what it should look like:
 .env
 
 ```bash
-APP_NAME="Akvo MIS"
+APP_NAME="AIMS"
 APP_SHORT_NAME="akvo-mis"
 APK_NAME="MIS Mobile"
 APK_SHORT_NAME="mis-mobile"
@@ -867,7 +867,7 @@ Default fake user password: `Test#123`
 
 ### Akvo Flow
 
-The Akvo Flow Data Seeder enables you to migrate data from Akvo Flow to Akvo MIS. The process involves downloading forms and data, mapping administration and question data, and seeding the final data via Docker.
+The Akvo Flow Data Seeder enables you to migrate data from Akvo Flow to AIMS. The process involves downloading forms and data, mapping administration and question data, and seeding the final data via Docker.
 
 **Quick Start Steps:**
 
@@ -916,7 +916,7 @@ For comprehensive documentation covering environment setup, detailed command exp
 
 ## AI Assistant & Knowledge Base (Mira)
 
-Akvo MIS includes **Mira**, an in-app AI assistant powered by OpenAI Assistants API and Vector Stores (`file_search`). Mira provides contextual, grounded guidance across form design, data management, and system administration.
+AIMS includes **Mira**, an in-app AI assistant powered by OpenAI Assistants API and Vector Stores (`file_search`). Mira provides contextual, grounded guidance across form design, data management, and system administration.
 
 ### Environment Variables
 

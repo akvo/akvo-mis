@@ -87,7 +87,7 @@ class FormSeederFileSelectionTestCase(TestCase):
         fixtures too and die on "form id 2 already belongs to default",
         and it made the file set depend on the environment. The filename
         decides now: example-* for --test, *.prod.json for everything
-        else, which is also what job.sh globs.
+        else.
         """
         self.seed()
         self.assertTrue(Forms.objects.filter(pk=802).exists())

@@ -209,7 +209,7 @@ describe("tenant util", () => {
     axios.mockResolvedValue({ status: 204, data: "" });
     expect(await fetchTenant()).toBeNull();
     expect(store.getRawState().tenant).toBeNull();
-    expect(document.title).toBe("Akvo MIS");
+    expect(document.title).toBe("AIMS");
   });
 
   test("a 404 means this host serves no workspace at all", async () => {

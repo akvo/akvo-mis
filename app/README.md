@@ -1,3 +1,3 @@
-# Akvo MIS Mobile App
+# AIMS Mobile App
 
-This is the code repository for the Akvo MIS mobile application.
+This is the code repository for the AIMS mobile application.

@@ -65,11 +65,10 @@ class InitialFormDefinitionTest(TestCase):
         self.norm = normalize_form_definition(self.raw)
 
     def test_filename_matches_the_id_inside(self):
-        """job.sh and `form_seeder -f` both parse the id off the filename.
+        """`form_seeder -f` parses the id off the filename.
 
         `example.prod.json` yielded form_id "example", which is not a form
-        id, and `generate_excel_data example` is what the export cron
-        would have run.
+        id.
         """
         stem = os.path.basename(INITIAL_FORM_FILE).replace(".prod.json", "")
         self.assertEqual(int(stem), self.raw["id"])
