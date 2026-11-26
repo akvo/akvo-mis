@@ -475,7 +475,7 @@ describe('TypeImage component', () => {
       act(() => {
         BuildParamsState.update((s) => {
           s.saveToGallery = 1;
-          s.apkName = 'Akvo MIS';
+          s.apkName = 'AIMS';
         });
       });
       const { getByTestId } = renderField();
@@ -485,7 +485,7 @@ describe('TypeImage component', () => {
       await waitFor(() => {
         expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(true);
         expect(MediaLibrary.createAlbumAsync).toHaveBeenCalledWith(
-          'Akvo MIS',
+          'AIMS',
           expect.anything(),
           false,
         );

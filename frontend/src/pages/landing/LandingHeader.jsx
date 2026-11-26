@@ -73,11 +73,8 @@ const LandingHeader = ({ showCta, cta, showLogin }) => {
   return (
     <header className="fixed inset-x-0 top-0 z-[999] border-b border-brand-border/30 bg-white/90 backdrop-blur-sm dark:bg-bg-dark/90">
       <div className="mx-auto flex h-[70px] max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
-        <Link
-          to="/"
-          className="font-title text-xl font-bold text-text-primary dark:text-white"
-        >
-          {brandName()}
+        <Link to="/" aria-label={brandName()} className="flex items-center">
+          <img src="/logo.svg" alt={brandName()} className="h-8 w-auto" />
         </Link>
         <div className="flex-1" />
         <div

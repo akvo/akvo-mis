@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/react-native';
 import * as Location from 'expo-location';
 import { SENTRY_DSN, SENTRY_ENV } from '@env';
 import { SQLiteProvider } from 'expo-sqlite';
+import * as SplashScreen from 'expo-splash-screen';
 
 import Navigation, { reactNavigationIntegration } from './src/navigation';
 import { UIState, AuthState, UserState, BuildParamsState, FormState } from './src/store';
@@ -46,6 +47,12 @@ export const setNotificationHandler = () =>
 setNotificationHandler();
 defineSyncFormVersionTask();
 defineSyncDatapointBackgroundTask();
+
+// Hold the native splash up through the first launch's bootstrap (DB migrate,
+// config, session) and hide it in finishInit() once the app is ready to render.
+// Without this it auto-hides the instant React mounts, so the splash only
+// flickers and can't be seen.
+SplashScreen.preventAutoHideAsync();
 
 TaskManager.defineTask(SYNC_FORM_SUBMISSION_TASK_NAME, async () => {
   try {
@@ -232,6 +239,8 @@ const finishInit = async (db) => {
   await handleCheckSession(db);
   await recoverPendingSubmissions(db);
   await refreshStorageWarning();
+  // App is ready — reveal it. Swallow the rare "already hidden" rejection.
+  await SplashScreen.hideAsync().catch(() => {});
 };
 
 const migrateDbIfNeeded = async (db) => {

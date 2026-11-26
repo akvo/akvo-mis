@@ -2,6 +2,8 @@ import html
 import json
 import re
 
+from django.conf import settings
+
 # =========================================================
 # AI Prompts & JSON Schema Definitions (VIZ-AI-002)
 # =========================================================
@@ -9,7 +11,8 @@ import re
 MAX_USER_INTENT_LENGTH = 250
 
 DASHBOARD_DESIGN_SYSTEM_PROMPT = (
-    "You are an expert Data Visualization Architect for Akvo MIS.\n"
+    f"You are an expert Data Visualization Architect for {settings.APP_NAME}."
+    "\n"
     "Your task is to analyze the provided Form Family schema (a root "
     "registration form and optional child monitoring forms) and recommend a "
     "cohesive, insightful starter dashboard layout.\n\n"
@@ -133,7 +136,8 @@ DASHBOARD_DESIGN_SYSTEM_PROMPT = (
 )
 
 WIDGET_SUGGESTION_SYSTEM_PROMPT = (
-    "You are an expert Data Visualization Architect for Akvo MIS.\n"
+    f"You are an expert Data Visualization Architect for {settings.APP_NAME}."
+    "\n"
     "Your task is to analyze an existing dashboard canvas along with the "
     "form family schema and recommend 3 to 5 complementary widgets based on "
     "user intent.\n\n"

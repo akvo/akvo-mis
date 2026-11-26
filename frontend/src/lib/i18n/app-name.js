@@ -3,5 +3,5 @@
 // /config.js bootstrap script, read while the bundle is still evaluating;
 // dereference defensively so a missing config.js degrades to a default
 // name instead of taking the app down.
-export const appName = window?.appConfig?.name || "Akvo MIS";
+export const appName = window?.appConfig?.name || "AIMS";
 export const apkName = window?.appConfig?.apkName || appName;
