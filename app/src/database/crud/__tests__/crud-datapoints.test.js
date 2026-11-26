@@ -130,3 +130,59 @@ describe('selectSubmissionToSync', () => {
     expect(rows).toEqual([]);
   });
 });
+
+describe('family status queries (APP-596)', () => {
+  const addFamForm = (id, formId, parentId, name) =>
+    db.raw
+      .prepare('INSERT INTO forms (id, formId, parentId, name, latest, userId) VALUES (?,?,?,?,1,1)')
+      .run(id, formId, parentId, name);
+  const addDp = ({ id, form, user = 1, submitted, synced = false, lc = 1 }) =>
+    db.raw
+      .prepare(
+        'INSERT INTO datapoints (id, form, user, submitted, syncedAt, locallyCreated, createdAt) VALUES (?,?,?,?,?,?,?)',
+      )
+      .run(id, form, user, submitted, synced ? '2026-01-01' : null, lc, '2026-01-01');
+
+  beforeEach(() => {
+    addFamForm(10, 100, null, 'Registration'); // registration form
+    addFamForm(20, 200, 100, 'Monitoring'); // monitoring child
+    addDp({ id: 1, form: 10, submitted: 0 }); // reg draft
+    addDp({ id: 2, form: 10, submitted: 1, synced: false }); // reg pending
+    addDp({ id: 3, form: 10, submitted: 1, synced: true }); // reg synced
+    addDp({ id: 4, form: 10, submitted: 1, synced: true, lc: 0 }); // reg MASTER (downloaded)
+    addDp({ id: 5, form: 20, submitted: 1, synced: true }); // monitoring synced
+    addDp({ id: 6, form: 20, submitted: 0 }); // monitoring draft
+    addDp({ id: 7, form: 10, user: 2, submitted: 1, synced: true }); // other user
+  });
+
+  it('countFamilyByStatus counts registration + monitoring, excluding master data and other users', async () => {
+    const res = await crudDataPoints.countFamilyByStatus(db, {
+      formDbId: 10,
+      backendFormId: 100,
+      user: 1,
+    });
+    expect(res).toEqual({ draft: 2, pending: 1, synced: 2 });
+  });
+
+  it('getFamilyByStatus(synced) returns family synced rows with group info, registration first', async () => {
+    const rows = await crudDataPoints.getFamilyByStatus(db, {
+      formDbId: 10,
+      backendFormId: 100,
+      user: 1,
+      status: 'synced',
+    });
+    expect(rows.map((r) => r.id).sort()).toEqual([3, 5]); // not master (4) nor other user (7)
+    expect(rows[0].groupParentId).toBeNull(); // registration group first
+    expect(rows.find((r) => r.id === 5)).toMatchObject({ groupName: 'Monitoring', groupParentId: 100 });
+  });
+
+  it('getFamilyByStatus(draft) includes monitoring drafts', async () => {
+    const rows = await crudDataPoints.getFamilyByStatus(db, {
+      formDbId: 10,
+      backendFormId: 100,
+      user: 1,
+      status: 'draft',
+    });
+    expect(rows.map((r) => r.id).sort()).toEqual([1, 6]);
+  });
+});

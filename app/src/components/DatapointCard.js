@@ -13,21 +13,31 @@ const getStatus = (item) => {
   if (item.submitted === 0) {
     return 'draft';
   }
-  return item.isSynced ? 'synced' : 'pending';
+  if (!item.isSynced) {
+    return 'pending';
+  }
+  // Only the user's own uploads get the green check. Registrations downloaded from the server
+  // (locallyCreated 0) are master data — no badge (APP-586).
+  return item.locallyCreated === 1 ? 'synced' : 'master';
 };
 
-const STATUS_ICONS = {
-  missing: { name: 'alert-circle', color: (t) => t.status.error, label: 'photoMissingText' },
-  draft: { name: 'pencil', color: (t) => t.status.draft, label: 'draftText' },
-  pending: { name: 'time', color: (t) => t.status.warning, label: 'legendPending' },
-  synced: { name: 'checkmark-circle', color: (t) => t.status.success, label: 'legendSynced' },
+/**
+ * Badge colors reuse the APP-585 tile tokens: the solid badge fill is the tile's `fg`, the glyph
+ * is the tile's `bg` — the pairing already clears 4.5:1 in both themes. `missing` is the one
+ * status without a tile, so it uses the error color with a white glyph.
+ */
+const BADGE = {
+  missing: { icon: 'alert', fill: (t) => t.status.error, glyph: () => '#FFFFFF', label: 'photoMissingText' },
+  draft: { icon: 'pencil', fill: (t) => t.tile.draft.fg, glyph: (t) => t.tile.draft.bg, label: 'draftText' },
+  pending: { icon: 'time', fill: (t) => t.tile.pending.fg, glyph: (t) => t.tile.pending.bg, label: 'legendPending' },
+  synced: { icon: 'checkmark', fill: (t) => t.tile.synced.fg, glyph: (t) => t.tile.synced.bg, label: 'legendSynced' },
 };
 
-/** Name, one meta line and a status icon. Row touch/swipe stays with the caller. */
-const DatapointCard = ({ item, meta, trans }) => {
+/** Name, one meta line, an optional distance line, and a circular status badge. */
+const DatapointCard = ({ item, meta, distance = null, trans }) => {
   const theme = useTheme();
   const status = getStatus(item);
-  const icon = STATUS_ICONS[status];
+  const badge = BADGE[status];
   return (
     <View
       style={[
@@ -42,35 +52,42 @@ const DatapointCard = ({ item, meta, trans }) => {
         <Text style={[styles.meta, { color: theme.text.tertiary }]} numberOfLines={1}>
           {meta}
         </Text>
+        {distance ? (
+          <View style={styles.distanceRow}>
+            <Icon name="location" size={13} color={theme.text.highlight} />
+            <Text style={[styles.distance, { color: theme.text.highlight }]} numberOfLines={1}>
+              {distance}
+            </Text>
+          </View>
+        ) : null}
       </View>
-      <Icon
-        name={icon.name}
-        size={20}
-        color={icon.color(theme)}
-        testID={`status-${status}-${item.id}`}
-        accessibilityLabel={trans[icon.label]}
-      />
+      {badge ? (
+        <View
+          style={[styles.badge, { backgroundColor: badge.fill(theme) }]}
+          testID={`status-${status}-${item.id}`}
+          accessibilityRole="image"
+          accessibilityLabel={trans[badge.label]}
+        >
+          <Icon name={badge.icon} size={18} color={badge.glyph(theme)} />
+        </View>
+      ) : null}
     </View>
   );
 };
 
-/** Explains every status icon `items` shows, in STATUS_ICONS order (A24). */
+/** Explains every status badge `items` show, in BADGE order (A24). */
 const DatapointLegend = ({ trans, items = [] }) => {
   const theme = useTheme();
   const shown = new Set(items.map(getStatus));
   return (
     <View style={styles.legend} testID="status-legend">
-      {Object.keys(STATUS_ICONS)
+      {Object.keys(BADGE)
         .filter((status) => shown.has(status))
         .map((status) => (
           <View key={status} style={styles.legendRow}>
-            <Icon
-              name={STATUS_ICONS[status].name}
-              size={16}
-              color={STATUS_ICONS[status].color(theme)}
-            />
+            <Icon name={BADGE[status].icon} size={16} color={BADGE[status].fill(theme)} />
             <Text style={[styles.legendText, { color: theme.text.tertiary }]}>
-              {trans[STATUS_ICONS[status].label]}
+              {trans[BADGE[status].label]}
             </Text>
           </View>
         ))}
@@ -102,6 +119,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 16,
+  },
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  distance: {
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  badge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   legend: {
     gap: 4,

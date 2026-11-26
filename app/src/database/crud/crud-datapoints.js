@@ -1,5 +1,14 @@
 import sql from '../sql';
 
+// Status → WHERE clause for family (registration + its monitoring forms) datapoint queries
+// (APP-586). Pending/Synced require locallyCreated = 1 (the user's own work); server-downloaded
+// master data is excluded, matching Home's tile semantics. Keys are fixed, never user input.
+const FAMILY_STATUS_SQL = {
+  draft: 'dp.submitted = 0',
+  pending: 'dp.submitted = 1 AND dp.locallyCreated = 1 AND dp.syncedAt IS NULL',
+  synced: 'dp.submitted = 1 AND dp.locallyCreated = 1 AND dp.syncedAt IS NOT NULL',
+};
+
 /**
  * Parse the stored answers column. A row can carry NULL (a datapoint whose
  * JSON file was missing on the server when it synced) or a corrupt string;
@@ -377,37 +386,44 @@ const dataPointsQuery = () => ({
    * json is deliberately excluded: it is large and only needed for the one row the
    * user opens, which crudForms.selectFormById fetches on tap.
    */
-  getFamilyDrafts: async (db, { formDbId, backendFormId, user }) => {
+  /**
+   * Family (registration + all its monitoring forms, across versions) datapoints of one status,
+   * as rows grouped by form — backs a Submission status chip on a registration list (APP-586).
+   * The form json is excluded (large; only the opened row needs it, via selectFormById).
+   */
+  getFamilyByStatus: async (db, { formDbId, backendFormId, user, status }) => {
+    const statusClause = FAMILY_STATUS_SQL[status] || FAMILY_STATUS_SQL.draft;
     const rows = await sql.safeExecuteQuery(
       db,
       `SELECT dp.*, f.formId AS groupFormId, f.name AS groupName, f.parentId AS groupParentId
         FROM datapoints dp
         JOIN forms f ON dp.form = f.id
-        WHERE dp.submitted = 0 AND dp.user = ?
+        WHERE ${statusClause} AND dp.user = ?
           AND (f.id = ? OR f.parentId = ?)
         ORDER BY f.parentId IS NULL DESC, f.name ASC, dp.createdAt DESC`,
       [user, formDbId, backendFormId],
-      'getFamilyDrafts',
+      'getFamilyByStatus',
     );
     return rows;
   },
   /**
-   * Total unfinished drafts in one form family. Same scope as getFamilyDrafts, but
-   * independent of whichever list query is currently loaded — the checkbox label has
-   * to show the family total even while the list is showing submissions only.
+   * Draft / pending / synced totals for one form family in a single pass, for the chip badges —
+   * independent of whichever list query is currently loaded.
    */
-  countFamilyDrafts: async (db, { formDbId, backendFormId, user }) => {
+  countFamilyByStatus: async (db, { formDbId, backendFormId, user }) => {
     const res = await sql.safeGetFirstRow(
       db,
-      `SELECT COUNT(*) AS total
+      `SELECT
+          SUM(CASE WHEN ${FAMILY_STATUS_SQL.draft} THEN 1 ELSE 0 END) AS draft,
+          SUM(CASE WHEN ${FAMILY_STATUS_SQL.pending} THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN ${FAMILY_STATUS_SQL.synced} THEN 1 ELSE 0 END) AS synced
         FROM datapoints dp
         JOIN forms f ON dp.form = f.id
-        WHERE dp.submitted = 0 AND dp.user = ?
-          AND (f.id = ? OR f.parentId = ?)`,
+        WHERE dp.user = ? AND (f.id = ? OR f.parentId = ?)`,
       [user, formDbId, backendFormId],
-      'countFamilyDrafts',
+      'countFamilyByStatus',
     );
-    return res?.total || 0;
+    return { draft: res?.draft || 0, pending: res?.pending || 0, synced: res?.synced || 0 };
   },
   countSyncedByFormId: async (db, backendFormId) => {
     const res = await sql.safeGetFirstRow(
