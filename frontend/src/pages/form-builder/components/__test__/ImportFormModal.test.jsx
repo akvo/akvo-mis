@@ -65,7 +65,7 @@ describe("ImportFormModal XLSForm Review Messaging", () => {
     // Verify main body text
     expect(
       screen.getByText(
-        /Your XLSForm was imported successfully, but Kobo and Akvo MIS don't work identically/i
+        /Your XLSForm was imported successfully, but Kobo and AIMS don't work identically/i
       )
     ).toBeInTheDocument();
 

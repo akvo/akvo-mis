@@ -641,7 +641,7 @@ const fr = {
   brandingNoLogo: "Aucun logo personnalisé (logo Akvo par défaut)",
 
   // Onboarding Tour
-  tourWelcomeTitle: "Bienvenue sur Akvo MIS",
+  tourWelcomeTitle: "Bienvenue sur AIMS",
   tourWelcomeSubtitle:
     "Que souhaitez-vous faire en premier ? Nous vous guidons en moins d'une minute.",
   tourGoalRecommended: "Recommandé",
@@ -1108,7 +1108,7 @@ const fr = {
   formBuilderImportXlsformNoticeDesc: (
     <div style={{ textAlign: "left", fontSize: 13, lineHeight: 1.5 }}>
       <p style={{ margin: "4px 0 8px 0", textAlign: "left" }}>
-        Votre XLSForm a été importé avec succès, mais Kobo et Akvo MIS ne
+        Votre XLSForm a été importé avec succès, mais Kobo et AIMS ne
         fonctionnent pas de manière identique et une partie de la logique du
         formulaire peut nécessiter un ajustement manuel pour correspondre
         pleinement à votre original. Veuillez examiner les avertissements

@@ -17,7 +17,7 @@ import { downloadDatapointsJson } from '../sync-datapoints';
 jest.mock('../../database/sql');
 jest.mock('../api');
 
-const SPA_HTML = '<!doctype html><html><head><title>Akvo MIS</title></head><body></body></html>';
+const SPA_HTML = '<!doctype html><html><head><title>AIMS</title></head><body></body></html>';
 const db = {};
 const formCache = new Map([[42, { dbRecord: { id: 8, formId: 42 }, parsedGroups: [] }]]);
 const info = {

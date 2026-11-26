@@ -735,7 +735,7 @@ Object {
           }
         }
       >
-        Your XLSForm was imported successfully, but Kobo and Akvo MIS don't work identically and some form logic may need manual adjustment to fully match your original. Please review the warnings below and test the form before publishing.
+        Your XLSForm was imported successfully, but Kobo and AIMS don't work identically and some form logic may need manual adjustment to fully match your original. Please review the warnings below and test the form before publishing.
       </p>
       <p
         style={
@@ -1309,7 +1309,7 @@ Object {
     "tourStepOf": "STEP {current} OF {total}",
     "tourUserManagement": "Magni provident aliquam harum cupiditate iste",
     "tourWelcomeSubtitle": "What do you want to do first? We’ll show you around in under a minute.",
-    "tourWelcomeTitle": "Welcome to Akvo MIS",
+    "tourWelcomeTitle": "Welcome to AIMS",
     "upcomingEventText": "Upcoming Events",
     "updateDataButton": "Update data",
     "updateDataError": "Unable to update data",
@@ -2100,7 +2100,7 @@ Object {
           }
         }
       >
-        Su XLSForm se importó correctamente, pero Kobo y Akvo MIS no funcionan de forma idéntica y es posible que alguna lógica del formulario necesite ajustes manuales para coincidir completamente con el original. Por favor, revise las advertencias a continuación y pruebe el formulario antes de publicarlo.
+        Su XLSForm se importó correctamente, pero Kobo y AIMS no funcionan de forma idéntica y es posible que alguna lógica del formulario necesite ajustes manuales para coincidir completamente con el original. Por favor, revise las advertencias a continuación y pruebe el formulario antes de publicarlo.
       </p>
       <p
         style={
@@ -2673,7 +2673,7 @@ Object {
     "tourStepOf": "PASO {current} DE {total}",
     "tourUserManagement": "Magni provident aliquam harum cupiditate iste",
     "tourWelcomeSubtitle": "¿Qué le gustaría hacer primero? Le guiamos en menos de un minuto.",
-    "tourWelcomeTitle": "Bienvenido a Akvo MIS",
+    "tourWelcomeTitle": "Bienvenido a AIMS",
     "upcomingEventText": "Próximos eventos",
     "updateDataButton": "Actualizar datos",
     "updateDataError": "No se pudieron actualizar los datos",
@@ -3470,7 +3470,7 @@ Object {
           }
         }
       >
-        Votre XLSForm a été importé avec succès, mais Kobo et Akvo MIS ne fonctionnent pas de manière identique et une partie de la logique du formulaire peut nécessiter un ajustement manuel pour correspondre pleinement à votre original. Veuillez examiner les avertissements ci-dessous et tester le formulaire avant de le publier.
+        Votre XLSForm a été importé avec succès, mais Kobo et AIMS ne fonctionnent pas de manière identique et une partie de la logique du formulaire peut nécessiter un ajustement manuel pour correspondre pleinement à votre original. Veuillez examiner les avertissements ci-dessous et tester le formulaire avant de le publier.
       </p>
       <p
         style={
@@ -4043,7 +4043,7 @@ Object {
     "tourStepOf": "ÉTAPE {current} SUR {total}",
     "tourUserManagement": "Magni provident aliquam harum cupiditate iste",
     "tourWelcomeSubtitle": "Que souhaitez-vous faire en premier ? Nous vous guidons en moins d'une minute.",
-    "tourWelcomeTitle": "Bienvenue sur Akvo MIS",
+    "tourWelcomeTitle": "Bienvenue sur AIMS",
     "upcomingEventText": "Événements à venir",
     "updateDataButton": "Mettre à jour les données",
     "updateDataError": "Impossible de mettre à jour les données",

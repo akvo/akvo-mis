@@ -1,3 +1,5 @@
+import os
+
 from pickle import TRUE
 # import sphinx_rtd_theme
 
@@ -20,9 +22,29 @@ from pickle import TRUE
 
 # -- Project information -----------------------------------------------------
 
-project = 'Akvo MIS'
+def _resolve_app_name():
+    """Brand name from APP_NAME env, else repo-root .env, else 'AIMS'."""
+    env = os.environ.get("APP_NAME")
+    if env:
+        return env.strip().strip('"').strip("'")
+    dotenv = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+    try:
+        with open(dotenv) as fh:
+            for line in fh:
+                key, sep, value = line.partition("=")
+                if sep and key.strip() == "APP_NAME":
+                    return value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return "AIMS"
+
+
+project = _resolve_app_name()
 copyright = '2022, Akvo'
 author = 'Akvo'
+
+# |app_name| substitution for RST body text (does NOT expand in headings).
+rst_prolog = f".. |app_name| replace:: {project}\n"
 
 
 # -- General configuration ---------------------------------------------------

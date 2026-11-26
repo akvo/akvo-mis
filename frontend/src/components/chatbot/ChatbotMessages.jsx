@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import { RobotOutlined, UserOutlined } from "@ant-design/icons";
+import { appName } from "../../lib/i18n/app-name";
 
 const getSuggestions = (pageLabel) => {
   const lower = (pageLabel || "").toLowerCase();
@@ -28,7 +29,7 @@ const getSuggestions = (pageLabel) => {
   return [
     "What can I do on this page?",
     "How do I create a form?",
-    "What question types are available in Akvo MIS?",
+    `What question types are available in ${appName}?`,
   ];
 };
 
@@ -56,7 +57,7 @@ const ChatbotMessages = ({
           </div>
           <h4>Hi! I&apos;m Mira 👋</h4>
           <p>
-            Your Akvo MIS assistant. Ask me anything about{" "}
+            Your {appName} assistant. Ask me anything about{" "}
             <strong>{pageLabel}</strong> or general platform features!
           </p>
           <div className="chatbot-suggestions">

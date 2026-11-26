@@ -205,7 +205,7 @@ const TenantDetail = () => {
     Modal.confirm({
       title: `Remove logo for ${tenant.subdomain}?`,
       content:
-        "The workspace will revert to displaying the default Akvo MIS logo on its header and login page.",
+        "The workspace will revert to displaying the default AIMS logo on its header and login page.",
       okText: text.consoleRemoveLogo || "Remove logo",
       okButtonProps: { danger: true },
       onOk: () => {

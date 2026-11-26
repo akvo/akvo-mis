@@ -1,7 +1,7 @@
 import PropTypes from "prop-types";
 import { motion, useReducedMotion } from "framer-motion";
 
-// Front face of the hero flip card: the Akvo MIS mobile app in a phone frame,
+// Front face of the hero flip card: the AIMS mobile app in a phone frame,
 // playing the "offline sync" walkthrough GIF. The frame sits at a 3D tilt and
 // gently rocks + floats so it feels alive (a product-shot angle rather than a
 // flat screenshot). Under prefers-reduced-motion it holds a static tilt and
