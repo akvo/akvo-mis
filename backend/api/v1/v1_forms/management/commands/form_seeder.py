@@ -19,8 +19,7 @@ from api.v1.v1_data.models import (
     Answers, AnswerHistory, FormData)
 from utils.tenant_command import resolve_tenant
 
-# A seedable form definition. `--file <id>` builds the same name, and
-# job.sh globs for it to decide which forms get an Excel export.
+# A seedable form definition. `--file <id>` builds the same name.
 PROD_SUFFIX = ".prod.json"
 
 
@@ -215,8 +214,7 @@ class Command(BaseCommand):
                 and json_file.endswith('.json'))
         ]
         # The filename says what a file is for. `--test` takes the bundled
-        # example-* fixtures; every other run takes *.prod.json, which is
-        # the same set job.sh globs for its Excel exports and the same
+        # example-* fixtures; every other run takes *.prod.json, the same
         # convention `--file <id>` assumes.
         #
         # This used to be gated on settings.PROD, which meant a local
