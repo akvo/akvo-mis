@@ -1,5 +1,5 @@
 /**
- * Tour configuration & role routing engine for Akvo MIS onboarding tour.
+ * Tour configuration & role routing engine for AIMS onboarding tour.
  * Corresponds to [#561] TOUR-001 specification.
  */
 

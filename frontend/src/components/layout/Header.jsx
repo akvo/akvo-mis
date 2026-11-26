@@ -84,7 +84,7 @@ const Header = ({ className = "header", ...props }) => {
               <img
                 className="small-logo"
                 src={tenant?.logo || config.siteLogo}
-                alt={tenant?.name ? `${tenant.name} Logo` : "Akvo MIS"}
+                alt={tenant?.name ? `${tenant.name} Logo` : "AIMS"}
                 onError={(e) => {
                   e.target.onerror = null;
                   e.target.src = config.siteLogo;

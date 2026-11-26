@@ -162,7 +162,7 @@ import:
   previously exported ``.json`` file or an XLSForm (``.xlsx`` / ``.xls``) to create the form.
 
 .. note::
-   **XLSForm Compatibility.** Akvo MIS supports core XLSForm question types,
+   **XLSForm Compatibility.** |app_name| supports core XLSForm question types,
    choices, multi-language translations, min/max numerical constraints, and
    skip-logic dependencies. Follow-up text questions for "Other" choices are
    preserved as separate dependent questions (which you can optionally merge

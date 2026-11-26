@@ -3,7 +3,7 @@
 # =========================================================
 # Generates high-quality, schema-valid dashboard widgets without
 # requiring an active OpenAI connection. Serves as the primary offline
-# fallback and baseline rule engine for Akvo MIS.
+# fallback and baseline rule engine for AIMS.
 
 from typing import Dict, List, Optional
 from api.v1.v1_forms.constants import QuestionTypes

@@ -569,7 +569,7 @@ def validate_and_sanitize_widgets(
             config.pop("stack_by", None)
 
         # Map widget question sanitization:
-        # In Akvo MIS, registration forms provide coordinates automatically.
+        # In AIMS, registration forms provide coordinates automatically.
         # A map widget's `question` field is ONLY for optional thematic
         # coloring (option/number) or None (point mode). It must NEVER be a
         # `geo` question ID.
@@ -813,7 +813,7 @@ def calculate_ai_timeout(
 
 
 class AISuggestionService:
-    """Core recommendation orchestrator for Akvo MIS dashboards."""
+    """Core recommendation orchestrator for AIMS dashboards."""
 
     @classmethod
     def _call_openai(

@@ -282,7 +282,7 @@ describe("Tenant detail", () => {
       userEvent.click(screen.getByRole("button", { name: /remove logo/i }));
     });
     expect(
-      await screen.findByText(/revert to displaying the default akvo mis logo/i)
+      await screen.findByText(/revert to displaying the default aims logo/i)
     ).toBeInTheDocument();
   });
 

@@ -19,7 +19,7 @@ describe("Header component", () => {
         <Header />
       </BrowserRouter>
     );
-    const logoImg = screen.getByRole("img", { name: "Akvo MIS" });
+    const logoImg = screen.getByRole("img", { name: "AIMS" });
     expect(logoImg).toBeInTheDocument();
     expect(logoImg.getAttribute("src")).toBe(config.siteLogo);
   });
