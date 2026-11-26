@@ -22,7 +22,12 @@ import { persistSubmission, refreshStorageWarning } from '../lib/submission-fall
 import useTheme from '../lib/theme';
 
 import { UserState, UIState, FormState } from '../store';
-import { generateDataPointName, getDurationInMinutes, transformAnswers } from '../form/lib';
+import {
+  generateDataPointName,
+  getDurationInMinutes,
+  resolveSubmissionName,
+  transformAnswers,
+} from '../form/lib';
 import { i18n } from '../lib';
 import crudJobs from '../database/crud/crud-jobs';
 import { SYNC_FORM_SUBMISSION_TASK_NAME, QUESTION_TYPES, jobStatus } from '../lib/constants';
@@ -39,6 +44,7 @@ const geoshapeIdsByName = (json) =>
 
 const FormPage = ({ navigation, route }) => {
   const selectedForm = FormState.useState((s) => s.form);
+  const previousForm = FormState.useState((s) => s.previousForm);
   const surveyDuration = FormState.useState((s) => s.surveyDuration);
   const surveyStart = FormState.useState((s) => s.surveyStart);
   const currentValues = FormState.useState((s) => s.currentValues);
@@ -60,6 +66,10 @@ const FormPage = ({ navigation, route }) => {
   // continue saved submission
   const savedDataPointId = route?.params?.dataPointId;
   const isNewSubmission = route?.params?.newSubmission;
+  // A monitoring form has a non-null parentId; its parent datapoint name rides in on
+  // route.params.subTitle (set by FormOptions when the monitoring form is opened).
+  const isMonitoring = !!selectedForm?.parentId;
+  const parentDatapointName = route?.params?.subTitle;
   const [currentDataPoint, setCurrentDataPoint] = useState({});
   const [loading, setLoading] = useState(false);
   const db = SQLite.useSQLiteContext();
@@ -272,7 +282,12 @@ const FormPage = ({ navigation, route }) => {
       const saveData = {
         form: currentFormId,
         user: userId,
-        name: dpName || trans.untitled,
+        name: resolveSubmissionName({
+          dpName,
+          isMonitoring,
+          parentName: parentDatapointName,
+          untitledText: trans.untitled,
+        }),
         submitted: 0,
         duration: surveyDuration,
         json: jsonAnswers,
@@ -326,7 +341,12 @@ const FormPage = ({ navigation, route }) => {
     try {
       const answers = transformAnswers(values.answers, formJSON);
 
-      const datapoitName = values?.name || trans.untitled;
+      const datapoitName = resolveSubmissionName({
+        dpName: values?.name,
+        isMonitoring,
+        parentName: parentDatapointName,
+        untitledText: trans.untitled,
+      });
       const submitData = {
         form: currentFormId,
         user: userId,
@@ -451,9 +471,27 @@ const FormPage = ({ navigation, route }) => {
     fetchSavedSubmission();
   }, [fetchSavedSubmission]);
 
+  // Header identity (APP-598). Title = the datapoint's own name; a monitoring submission
+  // shows its parent datapoint name, a registration falls back to the form name until a
+  // meta question produces a name. The breadcrumb is parent-form › this-form for monitoring,
+  // or just the form name for a registration.
+  const liveDpName = generateDataPointName(formJSON, currentValues, cascades)?.dpName;
+  const formName = route?.params?.name;
+  const headerTitle = isMonitoring
+    ? parentDatapointName || liveDpName || formName
+    : liveDpName || formName;
+  const breadcrumb =
+    isMonitoring && previousForm?.name ? `${previousForm.name} › ${formName}` : formName;
+  // Progress counts the GROUPS the user actually navigates (D-6). transformForm can collapse
+  // or expand the raw JSON by dependencies, so we take totalGroup minus the synthetic Overview
+  // step — the same count the groups sheet shows — instead of the raw formJSON group count,
+  // which can differ (e.g. 12 raw vs 4 navigable) and left the header disagreeing with the sheet.
+  const questionGroupCount = totalGroupCount > 0 ? totalGroupCount - 1 : 0;
+  const isOverviewStep = totalGroupCount > 0 && activeGroupIndex >= questionGroupCount;
+
   return (
     <BaseLayout
-      title={trans.newSubmissionText}
+      title={headerTitle}
       headerBg={theme.bg.surfaceElevated3}
       leftComponent={
         <Button type="clear" onPress={handleOnPressArrowBackButton} testID="arrow-back-button">
@@ -488,14 +526,24 @@ const FormPage = ({ navigation, route }) => {
           },
         ]}
       >
-        <Text style={[styles.formName, { color: theme.topNav.text }]}>{route?.params?.name}</Text>
-        {totalGroupCount > 0 && (
-          <Text style={[styles.stepIndicator, { color: theme.text.secondary }]}>
-            {`${trans.stepLabel || 'Step'} ${activeGroupIndex + 1} ${
-              trans.ofLabel || 'of'
-            } ${totalGroupCount}`}
-            {activeGroupLabel ? ` — ${activeGroupLabel}` : ''}
-          </Text>
+        <Text style={[styles.breadcrumb, { color: theme.text.secondary }]} numberOfLines={2}>
+          {breadcrumb}
+        </Text>
+        {questionGroupCount > 0 && (
+          <View style={[styles.stepCard, { backgroundColor: theme.bg.surfaceTertiary }]}>
+            {!isOverviewStep && (
+              <Text style={[styles.stepCardStep, { color: theme.text.secondary }]}>
+                {`${trans.stepLabel || 'Step'} ${activeGroupIndex + 1} ${
+                  trans.ofLabel || 'of'
+                } ${questionGroupCount}`}
+              </Text>
+            )}
+            {activeGroupLabel ? (
+              <Text style={[styles.stepCardGroup, { color: theme.topNav.text }]} numberOfLines={2}>
+                {activeGroupLabel}
+              </Text>
+            ) : null}
+          </View>
         )}
       </View>
       {!loading ? (
@@ -551,14 +599,26 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
-  formName: {
-    fontSize: 24,
+  breadcrumb: {
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: '400',
   },
-  stepIndicator: {
-    fontSize: 14,
-    fontWeight: '400',
-    marginTop: 4,
+  stepCard: {
+    minHeight: 56,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    justifyContent: 'center',
+  },
+  stepCardStep: {
+    fontSize: 13,
+  },
+  stepCardGroup: {
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   loadingContainer: {
     flex: 1,
