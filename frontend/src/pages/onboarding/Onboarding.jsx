@@ -89,7 +89,7 @@ const Onboarding = () => {
   const activeLang = store.useState((s) => s.language.active);
   // Workspace language = the landing locale (en/es/fr all accepted, B6/D-10').
   const language = ["es", "fr"].includes(activeLang) ? activeLang : "en";
-  const domain = baseDomain() || "mis.akvo.org";
+  const domain = baseDomain() || "aims.akvo.org";
 
   const [step, setStep] = useState(1); // 1..6 inputs · 7 done
   const [data, setData] = useState(loadDraft);
