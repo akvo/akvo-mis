@@ -100,6 +100,7 @@ jobs:
 
       - name: Build and test
         env:
+          APP_NAME: ${{ secrets.APP_NAME }}
           APP_SHORT_NAME: ${{ secrets.APP_SHORT_NAME }}
           CI_COMMIT: ${{ env.COMMIT_SHORT_SHA }}
           CI_BRANCH: ${{ github.ref_name }}

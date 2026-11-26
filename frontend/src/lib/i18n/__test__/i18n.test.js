@@ -69,6 +69,6 @@ describe("i18n", () => {
     window.appConfig = { name: "AMIS" };
     expect(getContent("landing", "en").hero.title).toBe("Welcome to AMIS.");
     delete window.appConfig;
-    expect(getContent("landing", "en").hero.title).toBe("Welcome to Akvo MIS.");
+    expect(getContent("landing", "en").hero.title).toBe("Welcome to AIMS.");
   });
 });

@@ -54,7 +54,7 @@ describe("OnboardingTour Component", () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText("Welcome to Akvo MIS")).toBeInTheDocument();
+    expect(screen.getByText("Welcome to AIMS")).toBeInTheDocument();
     expect(screen.getByText(/STEP 1 OF 5/i)).toBeInTheDocument();
     expect(screen.getByText("Set up a data collection")).toBeInTheDocument();
     expect(screen.getByText("Review and approve data")).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe("OnboardingTour Component", () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText("Welcome to Akvo MIS")).toBeInTheDocument();
+    expect(screen.getByText("Welcome to AIMS")).toBeInTheDocument();
     expect(screen.getByText("Explore data and dashboards")).toBeInTheDocument();
     expect(
       screen.queryByText("Set up a data collection")

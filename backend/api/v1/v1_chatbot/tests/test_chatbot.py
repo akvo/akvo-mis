@@ -155,7 +155,7 @@ class ChatbotTestCase(TestCase):
         mock_response = MagicMock()
         mock_content = MagicMock()
         mock_content.type = "output_text"
-        mock_content.text = "Grounded response about Akvo MIS."
+        mock_content.text = "Grounded response about AIMS."
         mock_output = MagicMock()
         mock_output.type = "message"
         mock_output.content = [mock_content]

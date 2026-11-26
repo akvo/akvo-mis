@@ -86,7 +86,7 @@ describe("Matomo Analytics Utility", () => {
 
   it("tracks page views with custom url and title", () => {
     window._paq = [];
-    document.title = "Akvo MIS - Sleman";
+    document.title = "AIMS - Sleman";
 
     trackPageView("/control-center/data");
 
@@ -94,10 +94,7 @@ describe("Matomo Analytics Utility", () => {
       "setCustomUrl",
       "/control-center/data",
     ]);
-    expect(window._paq).toContainEqual([
-      "setDocumentTitle",
-      "Akvo MIS - Sleman",
-    ]);
+    expect(window._paq).toContainEqual(["setDocumentTitle", "AIMS - Sleman"]);
     expect(window._paq).toContainEqual(["trackPageView"]);
     expect(window._paq).toContainEqual(["enableLinkTracking"]);
   });

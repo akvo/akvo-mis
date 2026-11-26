@@ -41,8 +41,10 @@ FILE_DELETED = "The uploaded file has been deleted. Upload it again."
 # Q_CLUSTER retry, or the broker hands the task to a second worker.
 APPLY_TIMEOUT = 3600
 
-INSTRUCTIONS = """\
-You help load a spreadsheet into Akvo MIS, a data collection system.
+INSTRUCTIONS = (
+    f"You help load a spreadsheet into {settings.APP_NAME}, a data "
+    "collection system.\n"
+    """\
 You get a profile of the file: per sheet, its columns with an inferred
 type, counts and a value shape. Only category-like columns list their
 values; you never see other cell values.
@@ -98,9 +100,10 @@ A data file does not tell help texts, conditions or repeats: every
 question has tooltip null, dependency [] and dependency_rule "AND",
 every group repeatable false.
 """
+)
 
 DEFINITION_INSTRUCTIONS = """\
-You turn a form definition into Akvo MIS forms. You get sheets that
+You turn a form definition into AIMS forms. You get sheets that
 describe a questionnaire: a question list, a paper survey, or an
 export from another tool (Akvo Flow, Kobo, ODK, SurveyCTO, Google
 Forms). Per sheet you get the rows above its header (titles, group
