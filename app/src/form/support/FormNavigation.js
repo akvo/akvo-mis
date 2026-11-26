@@ -7,6 +7,7 @@ import {
   ToastAndroid,
   ActivityIndicator,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { UIState, FormState } from '../../store';
 import i18n from '../../lib/i18n';
 import { generateValidationSchemaFieldLevel, onFilterDependency } from '../lib';
@@ -20,6 +21,7 @@ const FormNavigation = ({
   setActiveGroup,
   totalGroup,
   showQuestionGroupList,
+  setShowQuestionGroupList,
   setShowDialogMenu,
 }) => {
   const theme = useTheme();
@@ -195,6 +197,22 @@ const FormNavigation = ({
         </Text>
       </TouchableOpacity>
 
+      <View style={styles.fabSpacer} />
+      <View pointerEvents="box-none" style={styles.fabWrap}>
+        <TouchableOpacity
+          style={[
+            styles.fab,
+            { backgroundColor: theme.topNav.bg, borderColor: theme.bg.surfaceElevated3 },
+          ]}
+          onPress={() => setShowQuestionGroupList(true)}
+          disabled={showQuestionGroupList || submitting}
+          accessibilityLabel={trans.questionGroups || 'Question groups'}
+          testID="form-nav-btn-groups"
+        >
+          <Icon name="list" size={26} color={theme.topNav.icon} />
+        </TouchableOpacity>
+      </View>
+
       {isOverviewStep ? (
         <TouchableOpacity
           style={[styles.nextButton, { backgroundColor: theme.buttonPrimary.bg }]}
@@ -246,6 +264,28 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  fabSpacer: {
+    width: 68,
+    flexShrink: 0,
+  },
+  // Full-width overlay so the FAB centers on the whole bar regardless of the Back/Next
+  // widths or the bar's horizontal padding; box-none lets touches reach the buttons under it.
+  fabWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: -24,
+    alignItems: 'center',
+  },
+  fab: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
   },
   nextButton: {
     flex: 1,
