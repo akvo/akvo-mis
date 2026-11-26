@@ -3,6 +3,8 @@ export { default as BaseLayout } from './BaseLayout';
 export { default as FormCard } from './FormCard';
 export { default as SyncButton } from './SyncButton';
 export { default as DatapointCard, DatapointLegend } from './DatapointCard';
+export { default as StatusChips } from './StatusChips';
+export { default as SortControl } from './SortControl';
 export { default as SectionLabel } from './SectionLabel';
 export { default as SectionHeader } from './SectionHeader';
 export { default as SettingRow } from './SettingRow';
