@@ -108,7 +108,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   centerContainer: {
-    flex: 2,
+    // Wider than the RNEUI default (flex 2) so long titles like form names fit on
+    // one line; the side icon containers only need room for a single 44dp button.
+    flex: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },

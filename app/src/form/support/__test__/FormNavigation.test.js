@@ -357,4 +357,23 @@ describe('FormNavigation component', () => {
       });
     });
   });
+
+  it('opens the question groups sheet from the center FAB', () => {
+    const setShowQuestionGroupList = jest.fn();
+    const { getByTestId } = render(
+      <FormNavigation
+        currentGroup={firstGroup}
+        activeGroup={0}
+        setActiveGroup={jest.fn()}
+        onSubmit={jest.fn()}
+        totalGroup={2}
+        showQuestionGroupList={false}
+        setShowQuestionGroupList={setShowQuestionGroupList}
+        setShowDialogMenu={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(getByTestId('form-nav-btn-groups'));
+    expect(setShowQuestionGroupList).toHaveBeenCalledWith(true);
+  });
 });

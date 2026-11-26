@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  SectionList,
+  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,7 +10,7 @@ import {
   ToastAndroid,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { CheckBox, ListItem } from '@rneui/themed';
+import { ListItem } from '@rneui/themed';
 import * as FileSystem from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import * as Sentry from '@sentry/react-native';
@@ -24,108 +24,336 @@ import {
   DatapointCard,
   DatapointLegend,
   EmptyState,
-  SectionHeader,
+  SortControl,
+  StatusChips,
 } from '../components';
 import useTheme from '../lib/theme';
 import { getCurrentTimestamp } from '../form/lib';
 import { crudDataPoints, crudForms } from '../database/crud';
 import { refreshStorageWarning } from '../lib/submission-fallback';
+import { parseGeo, geoFromAnswers, haversineMeters, formatDistance } from '../lib/distance';
+import { QUESTION_TYPES } from '../lib/constants';
+
+// Direction a sort mode opens on; re-tapping the active mode flips it (APP-586 D-4).
+const DEFAULT_DIR = { name: 'asc', date: 'desc', distance: 'asc' };
+
+// Pending/Synced count THIS device's own submissions (locallyCreated = 1), matching Home's
+// tile semantics (crud-forms.selectLatestFormVersion). Registrations downloaded from the
+// server are master data, not the user's synced work, so they are excluded from both.
+const matchesStatus = (d, filter) => {
+  if (filter === 'draft') {
+    return d.submitted === 0;
+  }
+  if (filter === 'pending') {
+    return d.submitted === 1 && !d.isSynced && d.locallyCreated === 1;
+  }
+  if (filter === 'synced') {
+    return d.submitted === 1 && d.isSynced && d.locallyCreated === 1;
+  }
+  return true; // 'all'
+};
 
 const Submission = ({ navigation, route }) => {
   const [search, setSearch] = useState('');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [draftsOnly, setDraftsOnly] = useState(false);
-  // Per-section collapse, held for the screen's lifetime only (A14).
-  const [collapsed, setCollapsed] = useState({});
   const [confirmAction, setConfirmAction] = useState(null);
+  // APP-586: status chip, sort mode + direction, family counts and lazily-loaded family rows
+  // (registration + monitoring submissions) per status.
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortMode, setSortMode] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
+  const [familyRows, setFamilyRows] = useState({});
+  const [familyCounts, setFamilyCounts] = useState({ draft: 0, pending: 0, synced: 0 });
   // Armed only by openFamilyDraft, which is the one place that swaps the active form.
-  // A bare 'focus' listener would also fire on this screen's FIRST focus — and
-  // FormOptions sets previousForm before pushing here, so the monitoring list would
-  // restore the registration form onto itself the moment it opened.
   const restoreFormOnFocusRef = useRef(false);
 
   const previousForm = FormState.useState((s) => s.previousForm);
   const activeForm = FormState.useState((s) => s.form);
   const activeLang = UIState.useState((s) => s.lang);
   const { id: activeUserId } = UserState.useState((s) => s);
+  const currentLocation = UserState.useState((s) => s.currentLocation);
   const trans = i18n.text(activeLang);
   const theme = useTheme();
   const styles = getStyles(theme);
   const db = SQLite.useSQLiteContext();
   const refreshPage = UIState.useState((s) => s.refreshPage);
 
-  // The registration list is the only place monitoring rollups make sense: a
-  // monitoring list is already scoped to one uuid and has no children of its own.
+  // The registration list is the only place family drafts and distance make sense: a
+  // monitoring list is already scoped to one uuid, whose rows share the registration location.
   const isRegistrationList = !activeForm?.parentId && !route?.params?.uuid;
-  // Checked on the registration list, the query widens to the whole form family.
-  const isFamilyDraftView = draftsOnly && isRegistrationList;
-
-  // Replaces the red dot the removed header icon carried: the same signal, with the
-  // number the dot could never show. Counted by its own query rather than derived
-  // from `data` — until the box is checked the list holds registration rows only, so
-  // deriving it would undercount by every monitoring draft and then jump on check.
-  const [draftCount, setDraftCount] = useState(0);
-
-  const datapoints = useMemo(
+  const origin = useMemo(
     () =>
-      data.filter((d) => {
-        const matchSearch = !search || d?.name?.toLowerCase().includes(search.toLowerCase());
-        // Checked shows drafts ALONE — the same view the removed header icon gave, and
-        // the only way to find a handful of unfinished drafts among hundreds of rows.
-        const matchDraft = draftsOnly ? d.submitted === 0 : d.submitted === 1;
-        return matchSearch && matchDraft;
+      currentLocation?.coords
+        ? { lat: currentLocation.coords.latitude, lng: currentLocation.coords.longitude }
+        : null,
+    [currentLocation],
+  );
+  const canDistance = isRegistrationList && !!origin;
+  // Guard: if Distance is selected but location is lost, fall back to Date (and hide the toggle).
+  const effectiveSortMode = sortMode === 'distance' && !canDistance ? 'date' : sortMode;
+  // On a registration list, any status chip (Draft/Pending/Synced) is a family view: it shows the
+  // registration form's AND its monitoring forms' submissions of that status, grouped by form.
+  const usingFamily = statusFilter !== 'all' && isRegistrationList;
+
+  // Question ids of the form's geo (GPS point) questions, for the distance fallback when a
+  // datapoint's `geo` column is empty (server-downloaded master data keeps GPS only in answers).
+  const geoQuestionIds = useMemo(() => {
+    try {
+      const form = activeForm?.json ? JSON.parse(activeForm.json) : null;
+      return (form?.question_group || [])
+        .flatMap((g) => g?.question || [])
+        .filter((q) => q?.type === QUESTION_TYPES.geo)
+        .map((q) => `${q.id}`);
+    } catch (e) {
+      return [];
+    }
+  }, [activeForm?.json]);
+
+  const annotateRow = useCallback(async (res, statsByUuid) => {
+    const createdAt = moment(res.createdAt).format('DD/MM/YYYY hh:mm A');
+    const syncedAt = res.syncedAt ? moment(res.syncedAt).format('DD/MM/YYYY hh:mm A') : '-';
+    // Flag unsynced rows whose local photo files no longer exist — they will never upload
+    // until the user retakes the photo.
+    let needsRetake = false;
+    if (!res.syncedAt && res.json) {
+      try {
+        const values = JSON.parse(res.json.replace(/''/g, "'"));
+        const fileUris = Object.values(values).filter(
+          (v) => typeof v === 'string' && v.startsWith('file://'),
+        );
+        const filesExist = await Promise.all(
+          fileUris.map((uri) =>
+            FileSystem.getInfoAsync(uri)
+              .then((info) => info.exists)
+              .catch(() => false),
+          ),
+        );
+        needsRetake = filesExist.some((exists) => !exists);
+      } catch (error) {
+        Sentry.captureMessage(`[Submission] unreadable answers on datapoint ${res.id}`);
+        Sentry.captureException(error);
+        needsRetake = false;
+      }
+    }
+    const monitoring = statsByUuid?.get(res.uuid);
+    const toMs = (x) => {
+      const ms = x ? moment(x).valueOf() : 0;
+      return Number.isNaN(ms) ? 0 : ms;
+    };
+    // "Latest first" uses the family's most recent activity: the registration's own date OR its
+    // newest monitoring submission, so a plot with recent monitoring rises to the top (APP-586).
+    const regMs = res.locallyCreated
+      ? toMs(res.submittedAt) || toMs(res.createdAt)
+      : toMs(res.syncedAt) || toMs(res.createdAt);
+    const monMs = toMs(monitoring?.lastSubmissionAt);
+    return {
+      ...res,
+      createdAt,
+      syncedAt,
+      createdTs: toMs(res.createdAt),
+      activityTs: Math.max(regMs, monMs),
+      isSynced: !!res.syncedAt,
+      needsRetake,
+      monitoringDrafts: monitoring?.draftCount || 0,
+      monitoringSubmissions: monitoring?.submissionCount || 0,
+      lastMonitoringAt: monitoring?.lastSubmissionAt || null,
+    };
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (!activeForm?.id) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const registrationList = !activeForm?.parentId && !route?.params?.uuid;
+      if (registrationList) {
+        setFamilyCounts(
+          await crudDataPoints.countFamilyByStatus(db, {
+            formDbId: activeForm.id,
+            backendFormId: activeForm.formId,
+            user: activeUserId,
+          }),
+        );
+      }
+      const stats = registrationList
+        ? await crudDataPoints.getMonitoringStats(db, activeForm.formId, activeUserId)
+        : [];
+      const statsByUuid = new Map(stats.map((st) => [st.uuid, st]));
+      const baseRows = await crudDataPoints.selectDataPointsByFormAndSubmitted(db, {
+        form: activeForm.id,
+        user: activeUserId,
+        uuid: route?.params?.uuid || null,
+      });
+      const rows = await Promise.all(baseRows.map((res) => annotateRow(res, statsByUuid)));
+      setData(rows);
+    } catch (error) {
+      Sentry.captureMessage('[Submission] Unable to fetch data points');
+      Sentry.captureException(error);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`SQL: ${error}`, ToastAndroid.LONG);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [activeForm?.id, activeForm?.formId, activeForm?.parentId, activeUserId, db, route?.params?.uuid, annotateRow]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Lazily load the family rows for the active status chip on a registration list (APP-586):
+  // Draft/Pending/Synced each fetch the family (registration + monitoring) submissions of that
+  // status, grouped by form. Cached per status until invalidated (refresh / delete).
+  useEffect(() => {
+    if (!usingFamily || familyRows[statusFilter] || !activeForm?.id) {
+      return undefined;
+    }
+    let cancelled = false;
+    crudDataPoints
+      .getFamilyByStatus(db, {
+        formDbId: activeForm.id,
+        backendFormId: activeForm.formId,
+        user: activeUserId,
+        status: statusFilter,
+      })
+      .then((rows) => {
+        if (cancelled) {
+          return;
+        }
+        const annotated = rows.map((r) => ({
+          ...r,
+          createdAt: moment(r.createdAt).format('DD/MM/YYYY hh:mm A'),
+          createdTs: moment(r.createdAt).valueOf(),
+          isSynced: !!r.syncedAt,
+        }));
+        setFamilyRows((prev) => ({ ...prev, [statusFilter]: annotated }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [usingFamily, statusFilter, familyRows, db, activeForm?.id, activeForm?.formId, activeUserId]);
+
+  useEffect(() => {
+    if (refreshPage) {
+      setFamilyRows({});
+      fetchData();
+      UIState.update((s) => {
+        s.refreshPage = false;
+      });
+    }
+  }, [refreshPage, activeForm?.id, fetchData]);
+
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', () => {
+        if (previousForm) {
+          FormState.update((s) => {
+            s.form = previousForm;
+            s.previousForm = null;
+          });
+        }
       }),
-    [data, search, draftsOnly],
+    [navigation, previousForm],
   );
 
-  const sections = useMemo(() => {
-    let groups;
-    if (isFamilyDraftView) {
-      // Grouped by BACKEND formId so multiple versions of one form collapse into a
-      // single section instead of repeating the name. The SQL already orders
-      // registration first then monitoring forms, and Map preserves insertion order.
-      const byForm = datapoints.reduce((acc, d) => {
-        const key = `${d.groupFormId}`;
-        if (!acc.has(key)) {
-          acc.set(key, { key, title: d.groupName, testID: `section-${d.groupName}`, rows: [] });
+  useEffect(
+    () =>
+      navigation.addListener('focus', () => {
+        if (!restoreFormOnFocusRef.current) {
+          return;
         }
-        acc.get(key).rows.push(d);
-        return acc;
-      }, new Map());
-      groups = [...byForm.values()];
-    } else {
-      // Split as on Home, each row once (A19, A20). sortAt is the newest activity
-      // created in this app — the row itself or its monitoring data (A18); 0 is none.
-      groups = [
-        {
-          key: 'latest',
-          title: trans.latestSubmissionsTitle,
-          rows: datapoints.filter((d) => d.sortAt > 0).sort((a, b) => b.sortAt - a.sortAt),
-        },
-        {
-          key: 'earlier',
-          title: trans.earlierSubmissionsTitle,
-          rows: datapoints.filter((d) => !(d.sortAt > 0)),
-        },
-      ];
+        restoreFormOnFocusRef.current = false;
+        if (previousForm) {
+          FormState.update((s) => {
+            s.form = previousForm;
+            s.previousForm = null;
+          });
+        }
+      }),
+    [navigation, previousForm],
+  );
+
+  // On a registration list the chip counts are family-wide (registration + monitoring), matching
+  // Home; on a monitoring list they are derived from the loaded rows for that uuid.
+  const counts = useMemo(() => {
+    if (isRegistrationList) {
+      return { all: data.length, ...familyCounts };
     }
-    // Empty sections are hidden. A collapsed one keeps its header and count (A21) but
-    // drops its rows, so a long list stays virtualized.
-    return groups
-      .filter((g) => g.rows.length)
-      .map((g, gx) => ({
-        ...g,
-        testID: g.testID || `section-header-${g.key}`,
-        spaced: gx > 0,
-        data: collapsed[g.key] ? [] : g.rows,
-      }));
+    return {
+      all: data.length,
+      draft: data.filter((d) => d.submitted === 0).length,
+      pending: data.filter((d) => d.submitted === 1 && !d.isSynced && d.locallyCreated === 1).length,
+      synced: data.filter((d) => d.submitted === 1 && d.isSynced && d.locallyCreated === 1).length,
+    };
+  }, [data, familyCounts, isRegistrationList]);
+
+  const filteredRows = useMemo(() => {
+    // A status chip on a registration list reads the family rows for that status (already filtered
+    // by the query); otherwise filter the loaded rows by the chip.
+    const source = usingFamily ? familyRows[statusFilter] || [] : data;
+    const q = search.trim().toLowerCase();
+    return source.filter((d) => {
+      const byStatus = usingFamily || statusFilter === 'all' || matchesStatus(d, statusFilter);
+      const bySearch = !q || d?.name?.toLowerCase().includes(q);
+      return byStatus && bySearch;
+    });
+  }, [data, familyRows, usingFamily, statusFilter, search]);
+
+  // Rows → FlatList data, with labeled group-header sentinels for the two grouped cases
+  // (family-draft per-form names, and the distance "No location recorded" group). (APP-586 D-1)
+  const listData = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    // Date sort uses the family activity timestamp when present (registration rows), so a plot
+    // with recent monitoring sorts first; family submission rows fall back to their own createdTs.
+    const dateKey = (d) => (d.activityTs ?? d.createdTs) || 0;
+    const byNameOrDate = (a, b) =>
+      effectiveSortMode === 'name'
+        ? (a.name || '').localeCompare(b.name || '') * dir
+        : (dateKey(a) - dateKey(b)) * dir;
+
+    if (usingFamily) {
+      const groups = new Map();
+      filteredRows.forEach((d) => {
+        const key = `${d.groupFormId}`;
+        if (!groups.has(key)) {
+          groups.set(key, { title: d.groupName, rows: [] });
+        }
+        groups.get(key).rows.push(d);
+      });
+      const out = [];
+      [...groups.values()].forEach((g) => {
+        out.push({ header: `fam-${g.title}`, title: g.title });
+        [...g.rows].sort(byNameOrDate).forEach((r) => out.push(r));
+      });
+      return out;
+    }
+
+    if (effectiveSortMode === 'distance') {
+      const annotated = filteredRows.map((d) => {
+        const coord = parseGeo(d.geo) || geoFromAnswers(d.json, geoQuestionIds);
+        return { ...d, distanceM: coord ? haversineMeters(origin, coord) : null };
+      });
+      const located = annotated
+        .filter((d) => d.distanceM != null)
+        .sort((a, b) => (a.distanceM - b.distanceM) * dir);
+      const noLoc = annotated.filter((d) => d.distanceM == null);
+      return noLoc.length
+        ? [...located, { header: 'no-location', title: trans.noLocationGroup }, ...noLoc]
+        : located;
+    }
+
+    return [...filteredRows].sort(byNameOrDate);
   }, [
-    datapoints,
-    isFamilyDraftView,
-    collapsed,
-    trans.earlierSubmissionsTitle,
-    trans.latestSubmissionsTitle,
+    filteredRows,
+    usingFamily,
+    effectiveSortMode,
+    sortDir,
+    origin,
+    geoQuestionIds,
+    trans.noLocationGroup,
   ]);
 
   const goToNewForm = () => {
@@ -133,19 +361,27 @@ const Submission = ({ navigation, route }) => {
       s.surveyStart = getCurrentTimestamp();
       s.prevAdmAnswer = null;
     });
-    navigation.push('FormPage', {
-      ...route?.params,
-      newSubmission: true,
-    });
+    navigation.push('FormPage', { ...route?.params, newSubmission: true });
   };
 
-  const goToDetails = (item) => {
+  const goToDetails = async (item) => {
     const { json: valuesJSON, name: dataPointName } = item;
-
+    // A family row from another form (a monitoring submission opened from a registration-list
+    // family view) must be read against ITS OWN form definition. Load it and remember the current
+    // form so the focus/beforeRemove listeners restore it on the way back, like openFamilyDraft.
+    if (item.form && item.form !== activeForm?.id) {
+      const targetForm = await crudForms.selectFormById(db, { id: item.form });
+      if (targetForm) {
+        FormState.update((s) => {
+          s.previousForm = activeForm;
+          s.form = targetForm;
+        });
+        restoreFormOnFocusRef.current = true;
+      }
+    }
     FormState.update((s) => {
       s.currentValues = typeof valuesJSON === 'string' ? JSON.parse(valuesJSON) : valuesJSON;
     });
-
     navigation.push('FormDataDetails', {
       name: dataPointName,
       id: item.id,
@@ -160,12 +396,7 @@ const Submission = ({ navigation, route }) => {
         s.repeats = JSON.parse(repeats);
       });
     }
-    navigation.push('FormOptions', {
-      id,
-      name,
-      uuid,
-      formId: activeForm.formId,
-    });
+    navigation.push('FormOptions', { id, name, uuid, formId: activeForm.formId });
   };
 
   const onClickItem = (selectedData) => {
@@ -182,7 +413,9 @@ const Submission = ({ navigation, route }) => {
       });
       return;
     }
-    if (activeForm?.parentId) {
+    // A monitoring submission shown in a family view (groupParentId set) opens its own detail,
+    // not the registration's options.
+    if (activeForm?.parentId || selectedData?.groupParentId) {
       goToDetails(selectedData);
     } else {
       goToFormOptions(selectedData);
@@ -190,9 +423,8 @@ const Submission = ({ navigation, route }) => {
   };
 
   const openFamilyDraft = async (item) => {
-    // A row from another form in the family: load that form first, exactly as
-    // FormOptions does, and remember the registration form so the existing
-    // beforeRemove listener restores it on the way back.
+    // A row from another form in the family: load that form first, exactly as FormOptions does,
+    // and remember the registration form so the existing listeners restore it on the way back.
     if (item.form === activeForm?.id) {
       onClickItem(item);
       return;
@@ -222,172 +454,7 @@ const Submission = ({ navigation, route }) => {
     });
   };
 
-  const fetchData = useCallback(async () => {
-    if (!activeForm?.id) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const registrationList = !activeForm?.parentId && !route?.params?.uuid;
-      const familyView = draftsOnly && registrationList;
-
-      // The label total, counted independently of the list query above: on the
-      // registration list it spans the whole family, on a monitoring list just that
-      // form and datapoint.
-      setDraftCount(
-        registrationList
-          ? await crudDataPoints.countFamilyDrafts(db, {
-              formDbId: activeForm.id,
-              backendFormId: activeForm.formId,
-              user: activeUserId,
-            })
-          : await crudDataPoints.totalSavedData(db, activeForm.id, route?.params?.uuid || null),
-      );
-
-      const stats = registrationList
-        ? await crudDataPoints.getMonitoringStats(db, activeForm.formId, activeUserId)
-        : [];
-      const statsByUuid = new Map(stats.map((st) => [st.uuid, st]));
-
-      let rows = familyView
-        ? await crudDataPoints.getFamilyDrafts(db, {
-            formDbId: activeForm.id,
-            backendFormId: activeForm.formId,
-            user: activeUserId,
-          })
-        : await crudDataPoints.selectDataPointsByFormAndSubmitted(db, {
-            form: activeForm.id,
-            user: activeUserId,
-            uuid: route?.params?.uuid || null,
-          });
-      rows = await Promise.all(
-        rows.map(async (res) => {
-          const createdAt = moment(res.createdAt).format('DD/MM/YYYY hh:mm A');
-          const syncedAt = res.syncedAt ? moment(res.syncedAt).format('DD/MM/YYYY hh:mm A') : '-';
-          // Flag unsynced rows whose local photo files no longer exist —
-          // they will never upload until the user retakes the photo
-          let needsRetake = false;
-          if (!res.syncedAt && res.json) {
-            try {
-              const values = JSON.parse(res.json.replace(/''/g, "'"));
-              const fileUris = Object.values(values).filter(
-                (v) => typeof v === 'string' && v.startsWith('file://'),
-              );
-              const filesExist = await Promise.all(
-                fileUris.map((uri) =>
-                  FileSystem.getInfoAsync(uri)
-                    .then((info) => info.exists)
-                    .catch(() => false),
-                ),
-              );
-              needsRetake = filesExist.some((exists) => !exists);
-            } catch (error) {
-              // A row whose answers will not parse cannot be checked for missing
-              // files. Reported rather than swallowed: it also means the detail
-              // screen and the delete cleanup will not see those files either.
-              Sentry.captureMessage(`[Submission] unreadable answers on datapoint ${res.id}`);
-              Sentry.captureException(error);
-              needsRetake = false;
-            }
-          }
-
-          const monitoring = statsByUuid.get(res.uuid);
-          // Computed from the RAW columns: createdAt above is already a display string.
-          // A downloaded row's own dates are the download time, so only its monitoring
-          // activity counts (APP-481 A18).
-          const ownTimes = res.locallyCreated ? [res.submittedAt, res.createdAt] : [];
-          const timestamps = [...ownTimes, monitoring?.lastSubmissionAt]
-            .filter(Boolean)
-            .map((d) => moment(d).valueOf())
-            .filter((ms) => !Number.isNaN(ms));
-
-          return {
-            ...res,
-            createdAt,
-            syncedAt,
-            isSynced: !!res.syncedAt,
-            needsRetake,
-            monitoringDrafts: monitoring?.draftCount || 0,
-            monitoringSubmissions: monitoring?.submissionCount || 0,
-            lastMonitoringAt: monitoring?.lastSubmissionAt || null,
-            sortAt: timestamps.length ? Math.max(...timestamps) : 0,
-          };
-        }),
-      );
-      setData(rows);
-    } catch (error) {
-      Sentry.captureMessage('[Submission] Unable to fetch data points');
-      Sentry.captureException(error);
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(`SQL: ${error}`, ToastAndroid.LONG);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    activeForm?.id,
-    activeForm?.formId,
-    activeForm?.parentId,
-    activeUserId,
-    db,
-    draftsOnly,
-    route?.params?.uuid,
-  ]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useEffect(() => {
-    if (refreshPage) {
-      fetchData();
-      UIState.update((s) => {
-        s.refreshPage = false;
-      });
-    }
-  }, [refreshPage, activeForm?.id, fetchData]);
-
-  useEffect(
-    () =>
-      // Restore the form the user came from, then let the navigation proceed on its
-      // own. Nothing calls e.preventDefault() here, so re-dispatching e.data.action
-      // would fire the same action a second time — and once this screen is gone the
-      // duplicate has no navigator left to handle it ("GO_BACK was not handled").
-      navigation.addListener('beforeRemove', () => {
-        if (previousForm) {
-          FormState.update((s) => {
-            s.form = previousForm;
-            s.previousForm = null;
-          });
-        }
-      }),
-    [navigation, previousForm],
-  );
-
-  useEffect(
-    () =>
-      // Returning from a form opened by openFamilyDraft focuses this screen without
-      // unmounting it, so the swapped form has to be undone here or the registration
-      // list reloads itself as a monitoring list. Gated on the ref: this also fires on
-      // first focus, when previousForm belongs to the screen that pushed us — and
-      // restoring then would swap the monitoring list onto the registration form.
-      navigation.addListener('focus', () => {
-        if (!restoreFormOnFocusRef.current) {
-          return;
-        }
-        restoreFormOnFocusRef.current = false;
-        if (previousForm) {
-          FormState.update((s) => {
-            s.form = previousForm;
-            s.previousForm = null;
-          });
-        }
-      }),
-    [navigation, previousForm],
-  );
-
-  // A URI is only safe to delete when no other row references it, or the surviving
-  // row is left showing a broken preview.
+  // A URI is only safe to delete when no other row references it.
   const removeLocalFiles = async (item) => {
     if (!item?.json) {
       return;
@@ -406,8 +473,6 @@ const Submission = ({ navigation, route }) => {
           try {
             await FileSystem.deleteAsync(uri, { idempotent: true });
           } catch (error) {
-            // Best effort, but reported: a failed delete leaves an orphan file,
-            // which is a storage leak worth knowing about.
             Sentry.captureMessage(`[Submission] orphaned file after draft delete: ${uri}`);
             Sentry.captureException(error);
           }
@@ -427,24 +492,19 @@ const Submission = ({ navigation, route }) => {
     }
     try {
       if (type === 'delete') {
-        // Atomic: the server copy goes first, and the local row only follows if that
-        // succeeded. Either both disappear or neither does — a half-deleted draft
-        // that comes back on the next sync is harder to explain than a failure.
-        // The device route, not the web one: /draft-submission requires
-        // IsAuthenticated, which a MobileAssignmentToken can never satisfy.
+        // Atomic: the server copy goes first, and the local row only follows if that succeeded.
         if (item.draftId) {
           await api.delete(`/draft-list/${item.draftId}`);
         }
         await removeLocalFiles(item);
         await crudDataPoints.deleteDataPoint(db, item.id);
         await refreshStorageWarning();
-        // Home stays mounted underneath and computes its Submitted/Draft/Synced
-        // counts once, so without this its card still counts the deleted draft
-        // until something else happens to refresh it.
+        setFamilyRows({});
         UIState.update((s) => {
           s.refreshPage = true;
         });
       }
+      setFamilyRows({});
       await fetchData();
     } catch (error) {
       Sentry.captureMessage('[Submission] Unable to apply draft action');
@@ -459,10 +519,8 @@ const Submission = ({ navigation, route }) => {
     setConfirmAction({ type: 'delete', item });
   };
 
-  // One line under the name (Figma): the date, plus the monitoring count on the
-  // registration list. The card truncates it rather than wrapping.
+  // One line under the name: the date, plus the monitoring count on the registration list.
   const getMeta = (item) => {
-    // Downloaded rows: syncedAt is the server's last_updated; createdAt is the download time.
     const date = (item.locallyCreated ? item.createdAt : item.syncedAt).split(' ')[0];
     const created = (item.submitted === 0 ? trans.createdOn : trans.registeredOn).replace(
       '{date}',
@@ -474,9 +532,25 @@ const Submission = ({ navigation, route }) => {
     return `${created} · ${trans.monitoringCount.replace('{count}', item.monitoringSubmissions)}`;
   };
 
+  const onPickSort = (nextMode) => {
+    if (nextMode === effectiveSortMode) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortMode(nextMode);
+    setSortDir(DEFAULT_DIR[nextMode]);
+  };
+
   const renderItem = ({ item }) => {
-    // Submitted rows have nothing to swipe to — keep them plain so the gesture only
-    // exists where it does something.
+    if (item.header) {
+      return (
+        <Text style={styles.groupHeader} testID={`group-${item.header}`}>
+          {item.title}
+        </Text>
+      );
+    }
+    const distanceLabel = item.distanceM != null ? formatDistance(item.distanceM, trans) : null;
+    // Submitted rows have nothing to swipe to — keep them plain.
     if (item.submitted !== 0) {
       return (
         <TouchableOpacity
@@ -485,7 +559,7 @@ const Submission = ({ navigation, route }) => {
           style={styles.item}
           activeOpacity={0.6}
         >
-          <DatapointCard item={item} meta={getMeta(item)} trans={trans} />
+          <DatapointCard item={item} meta={getMeta(item)} distance={distanceLabel} trans={trans} />
         </TouchableOpacity>
       );
     }
@@ -508,27 +582,12 @@ const Submission = ({ navigation, route }) => {
           </View>
         }
       >
-        {/*
-          One child only: RNEUI's PadView inserts an unkeyed spacer View between
-          siblings, which triggers a "unique key" warning from inside the library.
-        */}
-        <DatapointCard item={item} meta={getMeta(item)} trans={trans} />
+        <DatapointCard item={item} meta={getMeta(item)} distance={distanceLabel} trans={trans} />
       </ListItem.Swipeable>
     );
   };
 
-  const toggleSection = (key) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const renderSectionHeader = ({ section }) => (
-    <SectionHeader
-      title={section.title}
-      count={section.rows.length}
-      collapsed={!!collapsed[section.key]}
-      onToggle={() => toggleSection(section.key)}
-      testID={section.testID}
-      style={section.spaced ? styles.spacedHeader : null}
-    />
-  );
+  const keyExtractor = (item) => (item.header ? item.header : `${item.id}`);
 
   const renderEmptyState = () =>
     loading ? (
@@ -541,14 +600,13 @@ const Submission = ({ navigation, route }) => {
         </View>
       </View>
     ) : (
-      // Figma's arrow position: its tip lands on the full-width action bar (A25).
       <EmptyState
         title={trans.emptySubmissionMessageInfo}
         body={trans.emptySubmissionMessageAction}
         testID="submission-empty-state"
       />
     );
-
+  
   return (
     <BaseLayout
       title={route?.params?.name}
@@ -562,36 +620,34 @@ const Submission = ({ navigation, route }) => {
     >
       <BaseLayout.Content>
         <View style={styles.container}>
-          <View style={styles.filterBar}>
-            <CheckBox
-              checked={draftsOnly}
-              onPress={() => setDraftsOnly((prev) => !prev)}
-              title={`${trans.showDraftsOnlyLabel}${draftCount ? ` (${draftCount})` : ''}`}
-              testID="show-drafts-checkbox"
-              containerStyle={styles.filterCheckbox}
-              textStyle={styles.filterCheckboxText}
-            />
-          </View>
-          {draftsOnly && datapoints.length > 0 && (
+          <StatusChips counts={counts} active={statusFilter} onSelect={setStatusFilter} trans={trans} />
+          <SortControl
+            mode={effectiveSortMode}
+            dir={sortDir}
+            onPick={onPickSort}
+            showDistance={canDistance}
+            trans={trans}
+          />
+          {statusFilter === 'draft' && filteredRows.length > 0 && (
             <Text style={styles.swipeHint} testID="swipe-hint">
               {trans.swipeHintText}
             </Text>
           )}
           <View style={styles.listSection}>
-            <SectionList
-              sections={sections}
+            <FlatList
+              data={listData}
               renderItem={renderItem}
-              renderSectionHeader={renderSectionHeader}
-              keyExtractor={(item) => `${item.id}`}
+              keyExtractor={keyExtractor}
               testID="submission-list"
-              stickySectionHeadersEnabled={false}
               contentContainerStyle={[
                 styles.flatListContent,
-                datapoints.length === 0 && styles.emptyListContent,
+                listData.length === 0 && styles.emptyListContent,
               ]}
               ListEmptyComponent={renderEmptyState}
               ListFooterComponent={
-                datapoints.length > 0 ? <DatapointLegend trans={trans} items={datapoints} /> : null
+                filteredRows.length > 0 ? (
+                  <DatapointLegend trans={trans} items={filteredRows} />
+                ) : null
               }
             />
           </View>
@@ -644,25 +700,14 @@ const getStyles = (theme) =>
     emptyListContent: {
       flexGrow: 1,
     },
-    filterBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-    },
-    filterCheckbox: {
-      backgroundColor: 'transparent',
-      borderWidth: 0,
-      padding: 0,
-      margin: 0,
-    },
-    filterCheckboxText: {
-      fontSize: 14,
-      fontWeight: 'normal',
-      color: theme.text.secondary,
-    },
-    spacedHeader: {
-      marginTop: 16,
+    groupHeader: {
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+      color: theme.text.tertiary,
+      paddingTop: 12,
+      paddingBottom: 4,
     },
     swipeHint: {
       fontSize: 14,
@@ -674,7 +719,6 @@ const getStyles = (theme) =>
     item: {
       marginBottom: 8,
     },
-    // The card draws itself; the swipe container only has to get out of its way.
     swipeItem: {
       padding: 0,
       marginBottom: 8,

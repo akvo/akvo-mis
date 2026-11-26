@@ -358,16 +358,6 @@ const FormContainer = ({
         />
       );
     }
-    if (showQuestionGroupList) {
-      return (
-        <QuestionGroupList
-          form={formDefinition}
-          activeQuestionGroup={activeGroup}
-          setActiveQuestionGroup={setActiveGroup}
-          setShowQuestionGroupList={setShowQuestionGroupList}
-        />
-      );
-    }
     return <QuestionGroup group={currentGroup} activeQuestions={activeQuestions} />;
   };
 
@@ -384,7 +374,15 @@ const FormContainer = ({
         setActiveGroup={handleOnActiveGroup}
         totalGroup={totalGroup}
         showQuestionGroupList={showQuestionGroupList}
+        setShowQuestionGroupList={setShowQuestionGroupList}
         setShowDialogMenu={setShowDialogMenu}
+      />
+      <QuestionGroupList
+        visible={showQuestionGroupList}
+        form={formDefinition}
+        activeQuestionGroup={activeGroup}
+        setActiveQuestionGroup={handleOnActiveGroup}
+        setShowQuestionGroupList={setShowQuestionGroupList}
       />
     </>
   );

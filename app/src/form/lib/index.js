@@ -508,6 +508,29 @@ export const generateDataPointName = (forms, currentValues, cascades = {}, datap
   return { dpName, dpGeo };
 };
 
+export const formatShortDateTime = (date = new Date()) => {
+  const pad = (n) => `${n}`.padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+};
+
+/**
+ * Name persisted for a submission. A monitoring submission with no generated name
+ * of its own borrows its parent datapoint's name plus a timestamp, so it is never
+ * the anonymous "Untitled" and repeated monitoring rounds stay distinguishable.
+ */
+export const resolveSubmissionName = ({ dpName, isMonitoring, parentName, untitledText }) => {
+  const trimmed = typeof dpName === 'string' ? dpName.trim() : dpName;
+  if (trimmed) {
+    return trimmed;
+  }
+  if (isMonitoring && parentName) {
+    return `${parentName} — ${formatShortDateTime()}`;
+  }
+  return untitledText;
+};
+
 export const getCurrentTimestamp = () => Math.floor(Date.now() / 1000);
 
 export const getDurationInMinutes = (startTime) => {

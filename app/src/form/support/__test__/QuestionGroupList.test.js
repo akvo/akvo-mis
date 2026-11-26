@@ -1,190 +1,86 @@
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import QuestionGroupList from '../QuestionGroupList';
+import QuestionGroupList, { countValidRequiredQuestions } from '../QuestionGroupList';
 
 jest.useFakeTimers();
 jest.mock('expo-font');
 jest.mock('expo-asset');
 
+// Transformed-form shape (label present, as transformForm would produce): three groups with
+// 1, 2 and 1 required questions respectively (Q5 is optional).
 const example = {
   name: 'Testing Form',
-  languages: ['en', 'id'],
-  defaultLanguage: 'en',
-  translations: [
-    {
-      name: 'Formulir untuk Testing',
-      language: 'id',
-    },
-  ],
   question_group: [
     {
       id: 1,
-      name: 'Group 1',
-      order: 1,
-      translations: [
-        {
-          name: 'Grup 1',
-          language: 'id',
-        },
-      ],
-      question: [
-        {
-          id: 1,
-          name: 'Your Name',
-          order: 1,
-          type: 'input',
-          required: true,
-          meta: true,
-          translations: [
-            {
-              name: 'Nama Anda',
-              language: 'id',
-            },
-          ],
-        },
-      ],
+      label: 'Group 1',
+      question: [{ id: 1, name: 'q1', label: 'Q1', type: 'input', required: true }],
     },
     {
       id: 2,
-      name: 'Group 2',
-      order: 2,
-      translations: [
-        {
-          name: 'Grup 2',
-          language: 'id',
-        },
-      ],
+      label: 'Group 2',
       question: [
-        {
-          id: 2,
-          name: 'Birth Date',
-          order: 2,
-          type: 'date',
-          required: true,
-          translations: [
-            {
-              name: 'Tanggal Lahir',
-              language: 'id',
-            },
-          ],
-        },
-        {
-          id: 3,
-          name: 'Age',
-          order: 3,
-          type: 'number',
-          required: true,
-          translations: [
-            {
-              name: 'Umur',
-              language: 'id',
-            },
-          ],
-        },
+        { id: 2, name: 'q2', label: 'Q2', type: 'input', required: true },
+        { id: 3, name: 'q3', label: 'Q3', type: 'number', required: true },
       ],
     },
     {
       id: 3,
-      name: 'Group 3',
-      order: 3,
-      translations: [
-        {
-          name: 'Grup 3',
-          language: 'id',
-        },
-      ],
+      label: 'Group 3',
       question: [
-        {
-          id: 4,
-          name: 'Gender',
-          order: 4,
-          type: 'option',
-          required: true,
-          option: [
-            {
-              id: 1,
-              name: 'Male',
-              order: 1,
-            },
-            {
-              id: 2,
-              name: 'Female',
-              order: 2,
-            },
-          ],
-          meta: true,
-          translations: [
-            {
-              name: 'Jenis Kelamin',
-              language: 'id',
-            },
-          ],
-        },
-        {
-          id: 5,
-          name: 'Comment',
-          order: 5,
-          type: 'text',
-          required: false,
-          meta: false,
-          translations: [
-            {
-              name: 'Komentar',
-              language: 'id',
-            },
-          ],
-        },
+        { id: 4, name: 'q4', label: 'Q4', type: 'input', required: true },
+        { id: 5, name: 'q5', label: 'Q5', type: 'text', required: false },
       ],
     },
   ],
 };
 
-const mockQuestionGroupList = jest.fn();
-const mockQuestionGroupListItem = jest.fn();
+describe('countValidRequiredQuestions (APP-598 per-group tally)', () => {
+  it('counts required questions per group and overall, none filled when empty', async () => {
+    const res = await countValidRequiredQuestions(example, {});
+    expect(res.totalRequired).toBe(4);
+    expect(res.groups.map((g) => g.required)).toEqual([1, 2, 1]);
+    expect(res.totalFilled).toBe(0);
+    expect(res.groups.every((g) => g.filled === 0)).toBe(true);
+  });
 
-jest.mock(
-  '../QuestionGroupList',
-  () =>
-    ({ form, values = {}, activeQuestionGroup, dataPointNameText }) => {
-      mockQuestionGroupList(form, values, activeQuestionGroup, dataPointNameText);
-      return (
-        <mock-QuestionGroupList>
-          <mock-Text testID="datapoint-name">{dataPointNameText}</mock-Text>
-        </mock-QuestionGroupList>
-      );
-    },
-);
-
-jest.mock('../QuestionGroupListItem', () => ({ name, active, completedQuestionGroup = false }) => {
-  mockQuestionGroupListItem(name, active, completedQuestionGroup);
-  return <mock-QuestionGroupListItem />;
+  it('counts a satisfied required question as filled in its own group', async () => {
+    const res = await countValidRequiredQuestions(example, { 1: 'Galih' });
+    expect(res.groups[0].filled).toBe(1);
+    expect(res.groups[1].filled).toBe(0);
+    expect(res.totalFilled).toBe(1);
+  });
 });
 
-describe('QuestionGroupList', () => {
-  afterEach(() => {
-    jest.clearAllMocks();
+describe('QuestionGroupList sheet', () => {
+  it('renders the header and numbered group names when visible', () => {
+    const { getByText, getAllByTestId } = render(
+      <QuestionGroupList
+        form={example}
+        activeQuestionGroup={0}
+        setActiveQuestionGroup={jest.fn()}
+        setShowQuestionGroupList={jest.fn()}
+        visible
+      />,
+    );
+    expect(getByText('Question groups')).toBeDefined();
+    expect(getByText('1 · Group 1')).toBeDefined();
+    expect(getByText('2 · Group 2')).toBeDefined();
+    expect(getByText('3 · Group 3')).toBeDefined();
+    expect(getAllByTestId('question-group-list-item-wrapper')).toHaveLength(3);
   });
 
-  it('Should read form json', () => {
-    render(<QuestionGroupList form={example} activeQuestionGroup={1} />);
-    expect(mockQuestionGroupList.mock.calls[0][0]).toEqual(example);
-  });
-
-  it('Should read datapoint name', () => {
-    render(
+  it('marks the active group as Current', () => {
+    const { getByText } = render(
       <QuestionGroupList
         form={example}
         activeQuestionGroup={1}
-        values={{ 1: 'Galih' }}
-        dataPointNameText="Galih"
+        setActiveQuestionGroup={jest.fn()}
+        setShowQuestionGroupList={jest.fn()}
+        visible
       />,
     );
-    expect(mockQuestionGroupList.mock.calls[0][3]).toEqual('Galih');
-  });
-
-  it('Should read formik values', () => {
-    render(<QuestionGroupList form={example} values={{ 1: 'Galih' }} activeQuestionGroup={1} />);
-    expect(mockQuestionGroupList.mock.calls[0][1]).toEqual({ 1: 'Galih' });
+    expect(getByText('Current')).toBeDefined();
   });
 });
