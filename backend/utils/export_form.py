@@ -112,6 +112,7 @@ def generate_definition_sheet(
     writer: pd.ExcelWriter,
     form: Forms,
     child_form_ids: list = [],
+    parent_hint: bool = False,
 ):
     definitions = get_definition(form=form)
     if len(child_form_ids):
@@ -130,6 +131,23 @@ def generate_definition_sheet(
     ]
     df_questions = df[question_columns]
     df_questions = df_questions.drop_duplicates()
+    if parent_hint:
+        # Monitoring template: explain the parent_id meta column (JOB-580).
+        hint = pd.DataFrame([{
+            "form_name": form.name,
+            "name": "parent_id",
+            "label": (
+                "Registration datapoint id this monitoring record "
+                "belongs to (required)"
+            ),
+            "type": "meta",
+            "required": True,
+            "rule": None,
+            "dependency": None,
+        }])
+        df_questions = pd.concat(
+            [hint, df_questions], ignore_index=True
+        )
     df_questions.to_excel(writer, sheet_name="questions", index=False)
     df_options = df[["name", "option", "option_label"]]
     df_options = df_options.dropna(subset=["option"])
@@ -144,11 +162,11 @@ def generate_definition_sheet(
     df_options.to_excel(writer, sheet_name="options", index=False)
 
 
-def rearrange_definition_columns(col_names: list):
-    col_question = list(filter(lambda x: x not in meta_columns, col_names))
+def rearrange_definition_columns(col_names: list, meta: list = meta_columns):
+    col_question = list(filter(lambda x: x not in meta, col_names))
     if len(col_question) == len(col_names):
         return col_question
-    col_names = meta_columns + col_question
+    col_names = meta + col_question
     return col_names
 
 
@@ -158,11 +176,16 @@ def blank_data_template(form: Forms, writer: pd.ExcelWriter):
         .order_by("question_group__order", "order")
         .all()
     )
+    # Child (monitoring) forms carry a parent_id column so bulk upload can
+    # link each row to its registration parent (JOB-580). It stays empty in a
+    # blank template; the questions sheet explains it.
+    is_monitoring = form.parent_id is not None
+    columns = monitoring_meta_columns if is_monitoring else meta_columns
     data = pd.DataFrame(
-        columns=[q.name for q in questions] + meta_columns, index=[0]
+        columns=[q.name for q in questions] + columns, index=[0]
     )
     cols = list(data)
-    col_names = rearrange_definition_columns(cols)
+    col_names = rearrange_definition_columns(cols, meta=columns)
     data = data[col_names]
     data.to_excel(
         writer, sheet_name="data", startrow=1, header=False, index=False
@@ -174,4 +197,6 @@ def blank_data_template(form: Forms, writer: pd.ExcelWriter):
     )
     for col_num, value in enumerate(data.columns.values):
         worksheet.write(0, col_num, value, header_format)
-    generate_definition_sheet(form=form, writer=writer)
+    generate_definition_sheet(
+        form=form, writer=writer, parent_hint=is_monitoring
+    )

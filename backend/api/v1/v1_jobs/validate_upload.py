@@ -7,8 +7,9 @@ from django.conf import settings
 from string import ascii_uppercase
 from api.v1.v1_data.models import FormData
 from api.v1.v1_forms.constants import QuestionTypes
-from api.v1.v1_forms.models import Questions
+from api.v1.v1_forms.models import Questions, Forms
 from api.v1.v1_jobs.functions import ValidationText, HText
+from api.v1.v1_jobs.seed_data import get_decendants
 from api.v1.v1_profile.models import Administration
 
 
@@ -105,13 +106,27 @@ def validate_administration(answer, adm):
             "error_message": ValidationText.administration_validation.value
         }
     path = []
+    # In the async worker there is no request/tenant context, so a bare
+    # name lookup grabs the global first match (usually tenant 1). Scope the
+    # root level to the selected administration's tenant; descend by parent.
+    tenant_id = adm.get("tenant_id")
     for i, a in enumerate(aw):
         if not i:
-            administration = Administration.objects.filter(name=a).first()
+            root_qs = Administration.objects.filter(name=a)
+            if tenant_id is not None:
+                root_qs = root_qs.filter(tenant_id=tenant_id)
+            administration = root_qs.first()
         else:
             administration = Administration.objects.filter(
                 name=a, parent_id=path[-1]
             ).first()
+        if administration is None:
+            # Unresolvable level → not a valid administration path (and must
+            # never crash the whole bulk validation on None.id).
+            msg = ValidationText.administration_not_part_of.value.replace(
+                "--answer--", str(aw[-1])
+            ).replace("--administration--", name)
+            return {"error_message": msg}
         path.append(administration.id)
 
     if adm["id"] not in path:
@@ -280,6 +295,44 @@ def validate_data_id(col, data_id, collect_data_ids=[]):
     return False
 
 
+def validate_parent_id(col, parent_id, parent_form_id, data_id=None,
+                       subtree=None):
+    # Monitoring rows link to their registration parent by parent_id. On a new
+    # row (no data_id) the parent is required and must be a datapoint of the
+    # parent form. Filtering on form_id=parent_form_id also enforces tenant
+    # isolation: the parent form belongs to the uploading tenant, and this
+    # check does not rely on the TenantManager thread-local (unset in the
+    # async worker). `subtree` restricts the parent to the uploader's own
+    # administration subtree: save_data inherits the parent's administration
+    # and drops the row when it falls outside that subtree, so without this a
+    # cross-subtree parent_id passes validation and the row then vanishes
+    # silently. See JOB-580.
+    default = {"error": ExcelError.value, "cell": col}
+    if data_id:
+        # Editing an existing row; parent is fixed at creation.
+        return False
+    if parent_id is None:
+        default.update(
+            {"error_message": ValidationText.parent_id_required.value}
+        )
+        return default
+    try:
+        pid = int(parent_id)
+    except (ValueError, TypeError):
+        pid = None
+    parent_qs = FormData.objects.filter(id=pid, form_id=parent_form_id)
+    if subtree is not None:
+        parent_qs = parent_qs.filter(administration_id__in=subtree)
+    exists = pid is not None and parent_qs.exists()
+    if not exists:
+        msg = ValidationText.invalid_parent_id.value.replace(
+            "--parent_id--", str(parent_id)
+        )
+        default.update({"error_message": msg})
+        return default
+    return False
+
+
 def validate(form: int, administration: int, file: str):
     sheet_names = validate_sheet_name(file)
     template_sheets = ["data", "questions", "options"]
@@ -317,8 +370,10 @@ def validate(form: int, administration: int, file: str):
     header_error = []
     data_error = []
 
-    adm = Administration.objects.get(id=administration)
-    adm = {"id": adm.id, "name": adm.name}
+    adm_obj = Administration.objects.get(id=administration)
+    adm = {
+        "id": adm_obj.id, "name": adm_obj.name, "tenant_id": adm_obj.tenant_id
+    }
     for col in excel_head:
         header = excel_head[col]
         errors = None
@@ -363,4 +418,85 @@ def validate(form: int, administration: int, file: str):
                     )
                     if errors:
                         data_error.append(errors)
+
+    # Monitoring (child) forms: every new row must carry a valid parent_id.
+    # `form` may arrive as an id or a Forms instance (callers differ).
+    form_obj = form if isinstance(form, Forms) else (
+        Forms.objects.filter(pk=form).first()
+    )
+    parent_form_id = form_obj.parent_id if form_obj else None
+    if parent_form_id:
+        if "parent_id" not in list(df):
+            header_error.append({
+                "error": ExcelError.header,
+                "cell": "parent_id",
+                "error_message": ValidationText.parent_id_required.value,
+            })
+        else:
+            parent_col = next(
+                c for c, h in excel_head.items() if h == "parent_id"
+            )
+            parent_ids = list(df["parent_id"])
+            data_ids = (
+                list(df["data_id"]) if "data_id" in list(df)
+                else [None] * len(parent_ids)
+            )
+            # Restrict parents to the uploader's own administration subtree:
+            # save_data inherits the parent's administration and drops rows
+            # outside this subtree, so a cross-subtree parent_id would pass
+            # validation and then vanish silently (JOB-580 review).
+            subtree = get_decendants(adm_obj)
+            for i, pid in enumerate(parent_ids):
+                ix = i + 2
+                pid = None if pd.isnull(pid) else pid
+                did = data_ids[i]
+                did = None if pd.isnull(did) else did
+                errors = validate_parent_id(
+                    f"{parent_col}{ix}", pid, parent_form_id, did, subtree
+                )
+                if errors:
+                    data_error.append(errors)
+    elif form_obj and questions.filter(type=QuestionTypes.geo).exists():
+        # Registration (parent-less) forms with a geo question: the datapoint
+        # geolocation cannot be edited in the platform after insert, so it is
+        # required on every NEW row. Monitoring child forms are exempt
+        # (handled by the `if parent_form_id` branch above) — they inherit geo
+        # from their registration parent (JOB-580).
+        if "geolocation" not in list(df):
+            header_error.append({
+                "error": ExcelError.header,
+                "cell": "geolocation",
+                "error_message": ValidationText.geo_required.value,
+            })
+        else:
+            geo_col = next(
+                c for c, h in excel_head.items() if h == "geolocation"
+            )
+            geo_data_ids = (
+                list(df["data_id"]) if "data_id" in list(df)
+                else [None] * df.shape[0]
+            )
+            for i, g in enumerate(list(df["geolocation"])):
+                ix = i + 2
+                did = geo_data_ids[i]
+                did = None if pd.isnull(did) else did
+                if pd.isnull(g) or not str(g).strip():
+                    # Only require geo on new rows. Edit rows (data_id set) may
+                    # legitimately carry a blank geo exported from a datapoint
+                    # that never had one, and rejecting them would block
+                    # "Update Existing" re-uploads (JOB-580 review).
+                    if did is None:
+                        data_error.append({
+                            "error": ExcelError.value,
+                            "cell": f"{geo_col}{ix}",
+                            "error_message": ValidationText.geo_required.value,
+                        })
+                    continue
+                err = validate_geo(g)
+                if err:
+                    data_error.append({
+                        "error": ExcelError.value,
+                        "cell": f"{geo_col}{ix}",
+                        **err,
+                    })
     return header_error + data_error

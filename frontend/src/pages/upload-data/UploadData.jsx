@@ -82,17 +82,25 @@ const UploadData = () => {
       });
   };
 
+  const selectedForm = useMemo(
+    () => forms.find((f) => f.id === formId),
+    [forms, formId]
+  );
+  // Monitoring (child) forms inherit administration from their registration
+  // parent, so no administration selection is required to upload.
+  const isMonitoring = Boolean(selectedForm?.content?.parent);
   const selectedAdministration = takeRight(administration, 1)[0]?.name;
-  // Do not allow to bulk upload without selecting atleast one admin level
-  const allowBulkUpload =
-    formId && takeRight(administration, 1)[0]?.level !== 0;
+  // The administration dropdown only scopes the "Update Existing" recent-data
+  // export; the upload itself derives administration server-side (file cascade
+  // + user scope). So show it only in that flow, and never gate upload on it.
+  const showAdministration = updateExisting && !isMonitoring;
+  const allowBulkUpload = Boolean(formId);
 
   useEffect(() => {
-    if (formId && selectedAdministration && user) {
+    if (formId && user) {
       const date = moment().format("YYYYMMDD");
-      setFileName(
-        [date, formId, selectedAdministration, snakeCase(user.name)].join("-")
-      );
+      const admPart = selectedAdministration || "data";
+      setFileName([date, formId, admPart, snakeCase(user.name)].join("-"));
     }
   }, [user, selectedAdministration, formId]);
 
@@ -297,7 +305,7 @@ const UploadData = () => {
                       </Option>
                     ))}
                   </Select>
-                  <AdministrationDropdown />
+                  {showAdministration && <AdministrationDropdown />}
                 </Space>
                 <div className="upload-wrap">
                   <Dragger {...props}>
